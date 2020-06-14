@@ -49,5 +49,4 @@ export async function create(name: string, signature: Signature): Promise<void> 
   // Create the "Hello World!" page
   await Fs.promises.writeFile(Path.join(path, 'pages', 'home.json'), '{"title": "Your home page", "content": "Lorem Ipsum dolor..."}');
   await Util.git.commit(repository, signature, Path.join(path, 'pages', 'home.json'), 'Added home page');
-  console.log(await Util.git.status(repository));
 }

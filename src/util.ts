@@ -71,5 +71,11 @@ export const git = {
       await repository.createBranch(name, await repository.getHeadCommit());
     }
     return repository.checkoutBranch(name);
+  },
+  open: (path: string): Promise<Git.Repository> => {
+    return Git.Repository.open(path);
+  },
+  discover: (path: string): Promise<Git.Buf> => {
+    return Git.Repository.discover(path, 0, '');
   }
 };
