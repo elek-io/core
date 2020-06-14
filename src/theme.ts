@@ -1,7 +1,7 @@
 import Path from 'path';
 import * as Util from './util';
 
-export async function change(projectSlug: string, themeUrl: string) {
+export async function change(projectSlug: string, themeUrl: string): Promise<void> {
   const path = Path.join(Util.pathTo.projects, projectSlug, 'theme');
 
   // Remove the current theme
@@ -16,7 +16,7 @@ export async function change(projectSlug: string, themeUrl: string) {
   await Util.git.clone(themeUrl, path);
 }
 
-export async function update(projectSlug: string) {
+export async function update(projectSlug: string): Promise<void> {
   const path = Path.join(Util.pathTo.projects, projectSlug, 'theme');
 
   // Update the theme by pulling

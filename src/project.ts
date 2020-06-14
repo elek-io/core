@@ -20,7 +20,7 @@ theme/
 !/**/.gitkeep
 `;
 
-export async function create(name: string, signature: Signature) {
+export async function create(name: string, signature: Signature): Promise<void> {
   const slug = Util.slugify(name);
   const path = Path.join(Util.pathTo.projects, slug);
 

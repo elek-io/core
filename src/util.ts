@@ -12,7 +12,7 @@ export const pathTo = {
   projects: Path.join(workingDirectory, 'projects'),
 };
 
-export function slugify(string: string) {
+export function slugify(string: string): string {
   return Slugify(string, {
     replacement: '-',  // replace spaces with replacement character, defaults to `-`
     remove: undefined, // remove characters that match regex, defaults to `undefined`
@@ -21,22 +21,22 @@ export function slugify(string: string) {
   });
 }
 
-export function mkdir(path: string) {
+export function mkdir(path: string): Promise<string | undefined> {
   return Mkdirp(path);
 }
 
-export function rmrf(path: string) {
+export function rmrf(path: string): Promise<void> {
   return Util.promisify(Rimraf)(path);
 }
 
 export const git = {
-  init: (path: string) => {
+  init: (path: string): Promise<Git.Repository> => {
     return Git.Repository.init(path, 0);
   },
-  clone: (url: string, localPath: string, options?: Git.CloneOptions) => {
+  clone: (url: string, localPath: string, options?: Git.CloneOptions): Promise<Git.Repository> => {
     return Git.Clone.clone(url, localPath, options);
   },
-  pull: async (repository: Git.Repository | string) => {
+  pull: async (repository: Git.Repository | string): Promise<Git.Oid> => {
     // Check if we need to resolve that repository
     if (typeof repository === 'string') {
       repository = await Git.Repository.open(repository);
@@ -45,7 +45,7 @@ export const git = {
     await repository.fetchAll();
     return repository.mergeBranches('master', 'origin/master');
   },
-  commit: async (repository: Git.Repository, signature: Git.Signature, files: string | string[], message: string, isInit = false) => {
+  commit: async (repository: Git.Repository, signature: Git.Signature, files: string | string[], message: string, isInit = false): Promise<Git.Oid> => {
     const index = await repository.refreshIndex();
     await index.addAll(files);
     index.write();
@@ -63,10 +63,10 @@ export const git = {
 
     return repository.createCommit('HEAD', signature, signature, message, oid, [parent]);
   },
-  status: (repository: Git.Repository) => {
+  status: (repository: Git.Repository): Promise<Git.StatusFile[]> => {
     return repository.getStatus();
   },
-  checkout: async (repository: Git.Repository, name: string, isNew = false) => {
+  checkout: async (repository: Git.Repository, name: string, isNew = false): Promise<Git.Reference> => {
     if (isNew === true) {
       await repository.createBranch(name, await repository.getHeadCommit());
     }
