@@ -1,52 +1,158 @@
-import Path from 'path';
 import Fs from 'fs';
-import { Signature } from 'nodegit';
+import Path from 'path';
 import * as Util from './util';
-import * as Theme from './theme';
+import Theme from './theme';
+import { Repository, Signature } from 'nodegit';
 
-const folders = [
-  'theme',
-  'media',
-  'pages',
-  'blocks'
-];
+interface ProjectConfig {
+  name: string;
+  description: string;
+  version: string;
+  status: string;
+}
 
-const gitignore = `
-.DS_Store
+export default class Project {
+  // Using definite assignment assertion here
+  // because values are assigned by the create and load methods
+  private _id!: string;
+  private _name!: string;
+  private _path!: string;
+  private _config!: ProjectConfig;
+  private _repository!: Repository;
+  private _theme!: Theme;
+
+  public get id(): string {
+    return this._id;
+  }
+  
+  public get name(): string {
+    return this._name;
+  }
+
+  public set name(value: string) {
+    this._config.name = value;
+    this._name = value;
+  }
+
+  public get path(): string {
+    return this._path;
+  }
+
+  public get config(): ProjectConfig {
+    // Private property acts like a cache
+    if (this._config) {
+      return this._config;
+    }
+
+    const file = Fs.readFileSync(Path.join(this._path, Util.configNameOf.project));
+    this._config = JSON.parse(file.toString());
+    return this._config;
+  }
+
+  public get repository(): Repository {
+    return this._repository;
+  }
+
+  public get theme(): Theme {
+    return this._theme;
+  }
+
+  /**
+   * Creates a new project on disk
+   */
+  public async create(name: string, signature: Signature): Promise<Project> {
+    this._id = Util.uuid();
+    this._path = Path.join(Util.pathTo.projects, this.id);
+    this._name = name;
+
+    // Initialize the Git repository
+    this._repository = await Util.git.init(this.path);
+
+    // Create the folder structure, root .gitignore and config file
+    await this.createFolderStructure();
+    await this.writeGitignore();
+    await this.writeConfig();
+
+    // Download default theme
+    this._theme = await new Theme(this.id).use('https://github.com/elek-io/starter-theme.git');
+
+    // Create an initial commit
+    await Util.git.commit(this.repository, signature, '*', `:tada: Created new elek.io project "${name}"`, true);
+
+    // Now create and switch to the "stage" branch
+    await Util.git.checkout(this.repository, 'stage', true);
+
+    // @todo: Create the "Hello World!" page
+
+    return this;
+  }
+
+  /**
+   * Loads a project by it's ID
+   */
+  public async load(id: string): Promise<Project> {
+    // Do not allow reloading
+    if (this.id) { throw new Error('A project cannot be reloaded. Please delete the old and then create a new one instead.'); }
+
+    this._id = id;
+    this._path = Path.join(Util.pathTo.projects, id);
+    this._name = this.config.name;
+    this._repository = await Util.git.open(this.path);
+
+    // Load it's theme
+    this._theme = await new Theme(this.id).load();
+    
+    return this;
+  }
+
+  /**
+   * Deletes this project from disk
+   */
+  public async delete(): Promise<void> {
+    // Only if an ID is present
+    if (!this.id) { throw new Error('Project cannot be deleted because it was never created nor loaded.'); }
+
+    await Util.rmrf(this.path);
+  }
+
+  /**
+   * Saves the project's files on disk and creates a commit
+   */
+  public async save(signature: Signature, message: string): Promise<void> {
+    // Write config to disk
+    Fs.writeFileSync(Path.join(this.path, Util.configNameOf.project), JSON.stringify(this.config, null, 2));
+    // Commit changes
+    Util.git.commit(this.repository, signature, '*', message);
+  }
+
+  private async writeGitignore(): Promise<void> {
+    const content = `.DS_Store
 theme/
 
 # Keep directories with .gitkeep files in them
 # even if the directory itself is ignored
-!/**/.gitkeep
-`;
+!/**/.gitkeep`;
+    await Fs.promises.writeFile(Path.join(this.path, '.gitignore'), content);
+  }
 
-export async function create(name: string, signature: Signature): Promise<void> {
-  const slug = Util.slugify(name);
-  const path = Path.join(Util.pathTo.projects, slug);
+  private async writeConfig(): Promise<void> {
+    const content/*: ProjectConfig*/ = {
+      name: this.name
+    };
+    await Fs.promises.writeFile(Path.join(this._path, Util.configNameOf.project), JSON.stringify(content, null, 2));
+  }
 
-  // Create a new Git repository
-  // Path is created recursively
-  const repository = await Util.git.init(path);
+  private async createFolderStructure(): Promise<void> {
+    const folders = [
+      'theme',
+      'media',
+      'pages',
+      'blocks'
+    ];
 
-  // Create a .gitignore file
-  await Fs.promises.writeFile(Path.join(path, '.gitignore'), gitignore);
-
-  // Create the folder structure with .gitkeep files inside them
-  await Promise.all(folders.map(async (folder) => {
-    await Util.mkdir(Path.join(path, folder));
-    await Fs.promises.writeFile(Path.join(path, folder, '.gitkeep'), '');
-  }));
-
-  // Download the default theme
-  await Theme.change(slug, 'https://github.com/Nils-Kolvenbach/website.git');
-
-  // Create an initial commit
-  await Util.git.commit(repository, signature, '*', `:tada: Created new elek.io project "${name}"`, true);
-
-  // Now create and switch to the "stage" branch
-  await Util.git.checkout(repository, 'stage', true);
-
-  // Create the "Hello World!" page
-  await Fs.promises.writeFile(Path.join(path, 'pages', 'home.json'), '{"title": "Your home page", "content": "Lorem Ipsum dolor..."}');
-  await Util.git.commit(repository, signature, Path.join(path, 'pages', 'home.json'), 'Added home page');
+    await Promise.all(folders.map(async (folder) => {
+      await Util.mkdir(Path.join(this.path, folder));
+      await Fs.promises.writeFile(Path.join(this.path, folder, '.gitkeep'), '');
+    }));
+  }
 }

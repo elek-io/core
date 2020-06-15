@@ -1,16 +1,26 @@
 import Os from 'os';
 import Util from 'util';
 import Path from 'path';
+import { v4 as Uuid } from 'uuid';
 import Slugify from 'slugify';
 import Rimraf from 'rimraf';
 import Mkdirp from 'mkdirp';
 import Git from 'nodegit';
 
-const workingDirectory = Os.homedir();
+const workingDirectory = Path.join(Os.homedir(), 'elek.io');
 
 export const pathTo = {
   projects: Path.join(workingDirectory, 'projects'),
 };
+
+export const configNameOf = {
+  project: 'elek.project.json',
+  theme: 'elek.theme.json'
+};
+
+export function uuid(): string {
+  return Uuid();
+}
 
 export function slugify(string: string): string {
   return Slugify(string, {
