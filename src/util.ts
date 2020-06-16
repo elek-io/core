@@ -7,38 +7,62 @@ import Rimraf from 'rimraf';
 import Mkdirp from 'mkdirp';
 import Git from 'nodegit';
 
+/**
+ * The directory in which everything is stored and will be worked in
+ */
 const workingDirectory = Path.join(Os.homedir(), 'elek.io');
 
+/**
+ * A collection of often used paths
+ */
 export const pathTo = {
   projects: Path.join(workingDirectory, 'projects'),
 };
 
+/**
+ * A collection of config file names
+ */
 export const configNameOf = {
   project: 'elek.project.json',
   theme: 'elek.theme.json'
 };
 
+/**
+ * Returns a new UUID
+ */
 export function uuid(): string {
   return Uuid();
 }
 
-export function slugify(string: string): string {
+/**
+ * Returns the slug of given string
+ */
+export function slug(string: string): string {
   return Slugify(string, {
     replacement: '-',  // replace spaces with replacement character, defaults to `-`
     remove: undefined, // remove characters that match regex, defaults to `undefined`
     lower: true,       // convert to lower case, defaults to `false`
-    strict: true,     // strip special characters except replacement, defaults to `false`
+    strict: true       // strip special characters except replacement, defaults to `false`
   });
 }
 
-export function mkdir(path: string): Promise<string | undefined> {
-  return Mkdirp(path);
+/**
+ * Creates given directory recusively like consoles `mkdir -p`
+ */
+export function mkdir(directory: string): Promise<string | undefined> {
+  return Mkdirp(directory);
 }
 
-export function rmrf(path: string): Promise<void> {
-  return Util.promisify(Rimraf)(path);
+/**
+ * Deletes given directory with all it's content like consoles `rm -rf`
+ */
+export function rmrf(directory: string): Promise<void> {
+  return Util.promisify(Rimraf)(directory);
 }
 
+/**
+ * A collection of useful Git commands
+ */
 export const git = {
   init: (path: string): Promise<Git.Repository> => {
     return Git.Repository.init(path, 0);
