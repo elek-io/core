@@ -91,8 +91,8 @@ export default class Project {
    * Loads a project by it's ID
    */
   public async load(id: string): Promise<Project> {
-    // Do not allow reloading
-    if (this.id) { throw new Error('A project cannot be reloaded. Please delete the old and then create a new one instead.'); }
+    // Do not allow reloading an already initialized project
+    if (this.id) { throw new Error('A project cannot be reloaded. Please delete the old and then initialize a new one instead.'); }
 
     this._id = id;
     this._path = Path.join(Util.pathTo.projects, id);

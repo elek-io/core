@@ -21,7 +21,6 @@ export const projects = {
       projects.push(new Project().load(possibleProjectDirectory.name).then((project) => {
         return project;
       }).catch((error) => {
-        console.log('Unable to load possible project: ' + error);
         // Because the error parameter could be anything, 
         // we need to specifically call an Error 
         return new Error(error);
