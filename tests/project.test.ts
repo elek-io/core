@@ -1,5 +1,4 @@
-import * as Elek from '../src/index';
-import * as Util from '../src/util';
+import Elek from '../src/index';
 import { Signature } from 'nodegit';
 
 const signature = Signature.now('John Doe', 'john.doe@domain.com');
@@ -7,8 +6,8 @@ const signature = Signature.now('John Doe', 'john.doe@domain.com');
 let firstProjectId: string;
 
 beforeAll(async () => {
-  await Util.rmrf(Util.pathTo.projects);
-  await Util.mkdir(Util.pathTo.projects);
+  await Elek.util.rmrf(Elek.util.pathTo.projects);
+  await Elek.util.mkdir(Elek.util.pathTo.projects);
 });
 
 describe('project module', () => {

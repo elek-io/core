@@ -10,7 +10,7 @@ import Git from 'nodegit';
 /**
  * The directory in which everything is stored and will be worked in
  */
-const workingDirectory = Path.join(Os.homedir(), 'elek.io');
+export const workingDirectory = Path.join(Os.homedir(), 'elek.io');
 
 /**
  * A collection of often used paths

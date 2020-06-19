@@ -1,24 +1,24 @@
 {
-  "name": "elek-io-core",
+  "name": "@elek.io/core",
   "description": "",
   "version": "0.0.2",
   "main": "dist/index.js",
   "files": [
     "dist/**/*"
   ],
-  "types": "lib/index.d.ts",
+  "types": "dist/index.d.ts",
   "homepage": "https://github.com/elek-io/core",
   "repository": "git@github.com:elek-io/core.git",
   "bugs": "https://github.com/elek-io/core/issues",
   "author": "Nils Kolvenbach <info@nils-kolvenbach.de>",
   "license": "",
   "scripts": {
-    "test": "npm run test:lint && npm run test:unit",
+    "test": "yarn test:lint && yarn test:unit",
     "test:lint": "eslint ./tests ./src",
     "test:unit": "jest --config=jest.config.js",
-    "build": "tsc",
-    "prepare": "npm run build",
-    "preversion": "npm run test"
+    "build": "rm -rf ./dist && tsc",
+    "prepare": "yarn build",
+    "preversion": "yarn test"
   },
   "devDependencies": {
     "@types/jest": "^26.0.0",

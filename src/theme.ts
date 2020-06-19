@@ -3,7 +3,7 @@ import Path from 'path';
 import * as Util from './util';
 import { Repository } from 'nodegit';
 
-interface ThemeConfig {
+export interface ThemeConfig {
   name: string;
   description: string;
   url: string;

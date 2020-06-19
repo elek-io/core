@@ -2,9 +2,7 @@ import Fs from 'fs';
 import * as Util from './util';
 import Project from './project';
 
-export const project = Project;
-
-export const projects = {
+const projects = {
   /**
    * Returns a list of all local projects
    */
@@ -50,4 +48,10 @@ export const projects = {
     const projects: Project[] = [];
     return await Promise.all(projects);
   }
+};
+
+export default {
+  project: Project,
+  projects,
+  util: Util
 };

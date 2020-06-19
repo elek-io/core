@@ -4,7 +4,7 @@ import * as Util from './util';
 import Theme from './theme';
 import { Repository, Signature } from 'nodegit';
 
-interface ProjectConfig {
+export interface ProjectConfig {
   name: string;
   description: string;
   version: string;
