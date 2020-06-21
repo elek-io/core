@@ -41,10 +41,12 @@ export function uuid(): string {
  * JSON file helper
  */
 export const json = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   read: (path: string): any => {
     const content = Fs.readFileSync(path);
     return JSON.parse(content.toString());
   },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
   write: (path: string, content: any): void => {
     Fs.writeFileSync(path, JSON.stringify(content, null, 2));
   }
