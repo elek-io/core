@@ -44,8 +44,7 @@ export default class Project {
       return this._config;
     }
 
-    const file = Fs.readFileSync(Path.join(this._path, Util.configNameOf.project));
-    this._config = JSON.parse(file.toString());
+    this._config = Util.config.read.project(this.id);
     return this._config;
   }
 
@@ -70,8 +69,8 @@ export default class Project {
 
     // Create the folder structure, root .gitignore and config file
     await this.createFolderStructure();
-    await this.writeGitignore();
-    await this.writeConfig();
+    await this.createGitignore();
+    await this.createConfig();
 
     // Download default theme
     this._theme = await new Theme(this.id).use('https://github.com/elek-io/starter-theme.git');
@@ -120,14 +119,15 @@ export default class Project {
    */
   public async save(signature: Signature, message: string): Promise<void> {
     // Write config to disk
-    Fs.writeFileSync(Path.join(this.path, Util.configNameOf.project), JSON.stringify(this.config, null, 2));
+    Util.config.write.project(this.id, this.config);
     // Commit changes
-    Util.git.commit(this.repository, signature, '*', message);
+    await Util.git.commit(this.repository, signature, '*', message);
   }
 
-  private async writeGitignore(): Promise<void> {
+  private async createGitignore(): Promise<void> {
     const content = `.DS_Store
 theme/
+public/
 
 # Keep directories with .gitkeep files in them
 # even if the directory itself is ignored
@@ -135,11 +135,14 @@ theme/
     await Fs.promises.writeFile(Path.join(this.path, '.gitignore'), content);
   }
 
-  private async writeConfig(): Promise<void> {
-    const content/*: ProjectConfig*/ = {
-      name: this.name
+  private async createConfig(): Promise<void> {
+    const content: ProjectConfig = {
+      name: this.name,
+      description: '',
+      version: '1.0.0',
+      status: ''
     };
-    await Fs.promises.writeFile(Path.join(this._path, Util.configNameOf.project), JSON.stringify(content, null, 2));
+    Util.config.write.project(this.id, content);
   }
 
   private async createFolderStructure(): Promise<void> {
@@ -147,7 +150,8 @@ theme/
       'theme',
       'media',
       'pages',
-      'blocks'
+      'blocks',
+      'public'
     ];
 
     await Promise.all(folders.map(async (folder) => {

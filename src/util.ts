@@ -1,4 +1,5 @@
 import Os from 'os';
+import Fs from 'fs';
 import Util from 'util';
 import Path from 'path';
 import { v4 as Uuid } from 'uuid';
@@ -6,6 +7,8 @@ import Slugify from 'slugify';
 import Rimraf from 'rimraf';
 import Mkdirp from 'mkdirp';
 import Git from 'nodegit';
+import { ProjectConfig } from './project';
+import { ThemeConfig } from './theme';
 
 /**
  * The directory in which everything is stored and will be worked in
@@ -33,6 +36,41 @@ export const configNameOf = {
 export function uuid(): string {
   return Uuid();
 }
+
+/**
+ * JSON file helper
+ */
+export const json = {
+  read: (path: string): any => {
+    const content = Fs.readFileSync(path);
+    return JSON.parse(content.toString());
+  },
+  write: (path: string, content: any): void => {
+    Fs.writeFileSync(path, JSON.stringify(content, null, 2));
+  }
+};
+
+/**
+ * Configuration file helper
+ */
+export const config = {
+  read: {
+    project: (projectId: string): ProjectConfig => {
+      return json.read(Path.join(pathTo.projects, projectId, configNameOf.project));
+    },
+    theme: (projectId: string): ThemeConfig => {
+      return json.read(Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme));
+    }
+  },
+  write: {
+    project: (projectId: string, content: ProjectConfig): void => {
+      json.write(Path.join(pathTo.projects, projectId, configNameOf.project), content);
+    },
+    theme: (projectId: string, content: ThemeConfig): void => {
+      json.write(Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme), content);
+    }
+  }
+};
 
 /**
  * Returns the slug of given string

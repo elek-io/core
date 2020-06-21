@@ -1,4 +1,3 @@
-import Fs from 'fs';
 import Path from 'path';
 import * as Util from './util';
 import { Repository } from 'nodegit';
@@ -43,8 +42,7 @@ export default class Theme {
       return this._config;
     }
 
-    const file = Fs.readFileSync(Path.join(this._path, Util.configNameOf.theme));
-    this._config = JSON.parse(file.toString());
+    this._config = Util.config.read.theme(this.projectId);
     return this._config;
   }
 
