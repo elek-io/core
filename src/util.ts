@@ -63,6 +63,7 @@ export const json = {
  * Returns true if the "value" object has all keys of "source",
  * otherwise an array of missing keys
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function hasKeysOf(value: any, source: any): true | string[] {
   const missingKeys: string[] = [];
   Object.keys(source).forEach((key) => {

@@ -66,8 +66,10 @@ describe('project module', () => {
     // warns us about us telling the TS-linter to shutup.
     // So this test is basically a thrid tripwire before writing
     // invalid config files.
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error
-    expect(Elek.util.config.write.project(firstProjectId, invalidConfig)).toThrowError();
+    expect(() => {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-expect-error
+      Elek.util.config.write.project(firstProjectId, invalidConfig);
+    }).toThrowError();
   });
 });
