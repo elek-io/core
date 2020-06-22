@@ -4,11 +4,11 @@ import * as Util from './util';
 import Theme from './theme';
 import { Repository, Signature } from 'nodegit';
 
-export interface ProjectConfig {
-  name: string;
-  description: string;
-  version: string;
-  status: string;
+export class ProjectConfig {
+  public name = '';
+  public description= '';
+  public version= '1.0.0';
+  public status= '';
 }
 
 export default class Project {
@@ -136,12 +136,8 @@ public/
   }
 
   private async createConfig(): Promise<void> {
-    const content: ProjectConfig = {
-      name: this.name,
-      description: '',
-      version: '1.0.0',
-      status: ''
-    };
+    const content = new ProjectConfig();
+    content.name = this.name;
     Util.config.write.project(this.id, content);
   }
 

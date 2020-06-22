@@ -32,6 +32,7 @@ export const configNameOf = {
 
 /**
  * Returns a new UUID
+ * @todo remove once ID is returned from API
  */
 export function uuid(): string {
   return Uuid();
@@ -41,11 +42,17 @@ export function uuid(): string {
  * JSON file helper
  */
 export const json = {
+  /**
+   * Reads the content of given file and returnes parsed JSON
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   read: (path: string): any => {
     const content = Fs.readFileSync(path);
     return JSON.parse(content.toString());
   },
+  /**
+   * Writes JSON in human readable format to given file
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
   write: (path: string, content: any): void => {
     Fs.writeFileSync(path, JSON.stringify(content, null, 2));
@@ -53,22 +60,72 @@ export const json = {
 };
 
 /**
+ * Returns true if the "value" object has all keys of "source",
+ * otherwise an array of missing keys
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function hasKeysOf(value: any, source: any): true | string[] {
+  const missingKeys: string[] = [];
+  Object.keys(source).forEach((key) => {
+    if (Object.keys(value).includes(key) === false) {
+      missingKeys.push(key);
+    }
+  });
+  if (missingKeys.length > 0) {
+    return missingKeys;
+  }
+  return true;
+}
+
+/**
  * Configuration file helper
  */
 export const config = {
   read: {
+    /**
+     * Reads the project config file and returns it's JSON
+     */
     project: (projectId: string): ProjectConfig => {
-      return json.read(Path.join(pathTo.projects, projectId, configNameOf.project));
+      const path = Path.join(pathTo.projects, projectId, configNameOf.project);
+      const content = json.read(path);
+      const missingKeys = hasKeysOf(content, new ProjectConfig());
+      if (missingKeys !== true) {
+        throw new Error(`Project config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
+      }
+      return content;
     },
+    /**
+     * Reads the theme config file and returns it's JSON
+     */
     theme: (projectId: string): ThemeConfig => {
-      return json.read(Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme));
+      const path = Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme);
+      const content = json.read(path);
+      const missingKeys = hasKeysOf(content, new ThemeConfig());
+      if (missingKeys !== true) {
+        throw new Error(`Theme config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
+      }
+      return content;
     }
   },
   write: {
+    /**
+     * Writes to the project's config file
+     */
     project: (projectId: string, content: ProjectConfig): void => {
+      const missingKeys = hasKeysOf(content, new ProjectConfig());
+      if (missingKeys !== true) {
+        throw new Error(`Tried to write invalid project config. Missing required keys: ${missingKeys.join(', ')}`);
+      }
       json.write(Path.join(pathTo.projects, projectId, configNameOf.project), content);
     },
+    /**
+     * Writes to the theme's config file
+     */
     theme: (projectId: string, content: ThemeConfig): void => {
+      const missingKeys = hasKeysOf(content, new ThemeConfig());
+      if (missingKeys !== true) {
+        throw new Error(`Tried to write invalid theme config. Missing required keys: ${missingKeys.join(', ')}`);
+      }
       json.write(Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme), content);
     }
   }

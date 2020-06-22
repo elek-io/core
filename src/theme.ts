@@ -2,12 +2,10 @@ import Path from 'path';
 import * as Util from './util';
 import { Repository } from 'nodegit';
 
-export interface ThemeConfig {
-  name: string;
-  description: string;
-  url: string;
-  version: string;
-  status: string;
+export class ThemeConfig {
+  public name = '';
+  public description = '';
+  public version = '1.0.0';
 }
 
 export default class Theme {
@@ -78,7 +76,6 @@ export default class Theme {
   public async load(): Promise<Theme> {
     this._repository = await Util.git.open(this.path);
     this._name = this.config.name;
-    this._url = this.config.url;
     return this;
   }
 
