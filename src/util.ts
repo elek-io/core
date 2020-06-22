@@ -9,6 +9,7 @@ import Mkdirp from 'mkdirp';
 import Git from 'nodegit';
 import { ProjectConfig } from './project';
 import { ThemeConfig } from './theme';
+import { PageConfig } from './page';
 
 /**
  * The directory in which everything is stored and will be worked in
@@ -83,7 +84,7 @@ function hasKeysOf(value: any, source: any): true | string[] {
 export const config = {
   read: {
     /**
-     * Reads the project config file and returns it's JSON
+     * Reads a project config file and returns it's JSON
      */
     project: (projectId: string): ProjectConfig => {
       const path = Path.join(pathTo.projects, projectId, configNameOf.project);
@@ -95,7 +96,7 @@ export const config = {
       return content;
     },
     /**
-     * Reads the theme config file and returns it's JSON
+     * Reads a theme config file and returns it's JSON
      */
     theme: (projectId: string): ThemeConfig => {
       const path = Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme);
@@ -105,11 +106,23 @@ export const config = {
         throw new Error(`Theme config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
       }
       return content;
+    },
+    /**
+     * Reads a page config file and returns it's JSON
+     */
+    page: (projectId: string, pageId: string): PageConfig => {
+      const path = Path.join(pathTo.projects, projectId, 'pages', pageId);
+      const content = json.read(path);
+      const missingKeys = hasKeysOf(content, new PageConfig());
+      if (missingKeys !== true) {
+        throw new Error(`Page config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
+      }
+      return content;
     }
   },
   write: {
     /**
-     * Writes to the project's config file
+     * Writes to a project's config file
      */
     project: (projectId: string, content: ProjectConfig): void => {
       const missingKeys = hasKeysOf(content, new ProjectConfig());
@@ -119,7 +132,7 @@ export const config = {
       json.write(Path.join(pathTo.projects, projectId, configNameOf.project), content);
     },
     /**
-     * Writes to the theme's config file
+     * Writes to a theme's config file
      */
     theme: (projectId: string, content: ThemeConfig): void => {
       const missingKeys = hasKeysOf(content, new ThemeConfig());
@@ -127,6 +140,16 @@ export const config = {
         throw new Error(`Tried to write invalid theme config. Missing required keys: ${missingKeys.join(', ')}`);
       }
       json.write(Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme), content);
+    },
+    /**
+     * Writes to a page's config file
+     */
+    page: (projectId: string, pageId: string, content: PageConfig): void => {
+      const missingKeys = hasKeysOf(content, new PageConfig());
+      if (missingKeys !== true) {
+        throw new Error(`Tried to write invalid page config. Missing required keys: ${missingKeys.join(', ')}`);
+      }
+      json.write(Path.join(pathTo.projects, projectId, 'pages', pageId), content);
     }
   }
 };

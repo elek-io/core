@@ -18,12 +18,12 @@ describe('project module', () => {
     const projects = await Elek.projects.local();
     expect(projects.length).toBe(1);
     expect(projects[0]).not.toBeUndefined();
-    expect(projects[0].name).toBe('My first project');
+    expect(projects[0].config.name).toBe('My first project');
   });
 
   it('should be able to load the existing project "My first project"', async () => {
     const project = await new Elek.project().load(firstProjectId);
-    expect(project.name).toBe('My first project');
+    expect(project.config.name).toBe('My first project');
   });
 
   it('should not be able to reload an already initialized project', async () => {
@@ -33,16 +33,16 @@ describe('project module', () => {
 
   it('should be able to save changes to disk', async () => {
     const project = await new Elek.project().load(firstProjectId);
-    project.name = 'The first project';
+    project.config.name = 'The first project';
     await project.save(signature, 'Changed the projects name');
     // Test the object itself
-    expect(project.name).toBe('The first project');
+    expect(project.config.name).toBe('The first project');
     // This should affect the config too
     expect(project.config.name).toBe('The first project');
     // Load the same project again but now from disk
     const projectAgain = await new Elek.project().load(firstProjectId);
     // And check again if the changes are still present
-    expect(projectAgain.name).toBe('The first project');
+    expect(projectAgain.config.name).toBe('The first project');
     expect(projectAgain.config.name).toBe('The first project');
   });
 

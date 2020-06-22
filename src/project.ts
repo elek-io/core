@@ -15,23 +15,13 @@ export default class Project {
   // Using definite assignment assertion here
   // because values are assigned by the create and load methods
   private _id!: string;
-  private _name!: string;
   private _path!: string;
   private _config!: ProjectConfig;
-  private _repository!: Repository;
+  private _localRepository!: Repository;
   private _theme!: Theme;
 
   public get id(): string {
     return this._id;
-  }
-  
-  public get name(): string {
-    return this._name;
-  }
-
-  public set name(value: string) {
-    this._config.name = value;
-    this._name = value;
   }
 
   public get path(): string {
@@ -48,8 +38,12 @@ export default class Project {
     return this._config;
   }
 
-  public get repository(): Repository {
-    return this._repository;
+  public set config(value: ProjectConfig) {
+    this._config = value;
+  }
+
+  public get localRepository(): Repository {
+    return this._localRepository;
   }
 
   public get theme(): Theme {
@@ -62,26 +56,28 @@ export default class Project {
   public async create(name: string, signature: Signature): Promise<Project> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.id);
-    this._name = name;
 
     // Initialize the Git repository
-    this._repository = await Util.git.init(this.path);
+    this._localRepository = await Util.git.init(this.path);
 
     // Create the folder structure, root .gitignore and config file
     await this.createFolderStructure();
     await this.createGitignore();
-    await this.createConfig();
+    await this.createConfig(name);
 
     // Download default theme
-    this._theme = await new Theme(this.id).use('https://github.com/elek-io/starter-theme.git');
+    this._theme = await new Theme(this).use('https://github.com/elek-io/starter-theme.git');
 
     // Create an initial commit
-    await Util.git.commit(this.repository, signature, '*', `:tada: Created new elek.io project "${name}"`, true);
+    await Util.git.commit(this.localRepository, signature, '*', `:tada: Created new elek.io project "${name}"`, true);
 
     // Now create and switch to the "stage" branch
-    await Util.git.checkout(this.repository, 'stage', true);
+    await Util.git.checkout(this.localRepository, 'stage', true);
 
     // @todo: Create the "Hello World!" page
+
+    // Load the config file
+    this._config = Util.config.read.project(this.id);
 
     return this;
   }
@@ -95,11 +91,11 @@ export default class Project {
 
     this._id = id;
     this._path = Path.join(Util.pathTo.projects, id);
-    this._name = this.config.name;
-    this._repository = await Util.git.open(this.path);
+    this._localRepository = await Util.git.open(this.path);
+    this._config = Util.config.read.project(this.id);
 
     // Load it's theme
-    this._theme = await new Theme(this.id).load();
+    this._theme = await new Theme(this).load();
     
     return this;
   }
@@ -121,7 +117,7 @@ export default class Project {
     // Write config to disk
     Util.config.write.project(this.id, this.config);
     // Commit changes
-    await Util.git.commit(this.repository, signature, '*', message);
+    await Util.git.commit(this.localRepository, signature, '*', message);
   }
 
   private async createGitignore(): Promise<void> {
@@ -135,9 +131,9 @@ public/
     await Fs.promises.writeFile(Path.join(this.path, '.gitignore'), content);
   }
 
-  private async createConfig(): Promise<void> {
+  private async createConfig(name: string): Promise<void> {
     const content = new ProjectConfig();
-    content.name = this.name;
+    content.name = name;
     Util.config.write.project(this.id, content);
   }
 
