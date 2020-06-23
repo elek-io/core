@@ -79,6 +79,64 @@ function hasKeysOf(value: any, source: any): true | string[] {
 }
 
 /**
+ * Returns all subdirectories of given directory
+ */
+export async function subdirectories(path: string): Promise<Fs.Dirent[]> {
+  const dirent = await Fs.promises.readdir(path, { withFileTypes: true });
+  return dirent.filter((dirent) => {
+    return dirent.isDirectory();
+  });
+}
+
+/**
+ * Returns all files of given directory which can be filtered by extension
+ */
+export async function files(path: string, extension = 'all'): Promise<Fs.Dirent[]> {
+  const dirent = await Fs.promises.readdir(path, { withFileTypes: true });
+  return dirent.filter((dirent) => {
+    if (extension !== 'all' && dirent.isFile() === true) {
+      if (dirent.name.endsWith(extension)) {
+        return true;
+      }
+      return false;
+    }
+    return dirent.isFile();
+  });
+}
+
+/**
+ * Basically a Promise.all() without rejecting if one promise fails to resolve
+ */
+export async function returnResolved<T>(promises: Promise<T>[]): Promise<T[]> {
+  const toCheck: Promise<T | Error>[] = [];
+  promises.forEach((promise) => {
+    // Here comes the trick:
+    // By using "then" and "catch" we are able to create an array of Project and Error types
+    // without throwing and stopping the later Promise.all() call prematurely
+    toCheck.push(promise.then((result) => {
+      return result;
+    }).catch((error) => {
+      // Because the error parameter could be anything, 
+      // we need to specifically call an Error 
+      return new Error(error);
+    }));
+  });
+  // Resolve all promises
+  // Here we do not expect any error to fail the call to Promise.all()
+  // because we catched it earlier and returning an Error type instead of throwing it
+  const checked = await Promise.all(toCheck);
+  // This way we can easily filter out any Error types
+  // and are able to return only initialized projects 
+  // that did not throw an error.
+  // Note that we also need to use a User-Defined Type Guard here,
+  // because otherwise TS does not recognize we are filtering the errors out
+  //                         >       |        < 
+  return checked.filter((item): item is T => {
+    return item instanceof Error !== true;
+  });
+}
+
+/**
  * Configuration file helper
  */
 export const config = {
@@ -111,7 +169,7 @@ export const config = {
      * Reads a page config file and returns it's JSON
      */
     page: (projectId: string, pageId: string): PageConfig => {
-      const path = Path.join(pathTo.projects, projectId, 'pages', pageId);
+      const path = Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`);
       const content = json.read(path);
       const missingKeys = hasKeysOf(content, new PageConfig());
       if (missingKeys !== true) {
@@ -149,7 +207,7 @@ export const config = {
       if (missingKeys !== true) {
         throw new Error(`Tried to write invalid page config. Missing required keys: ${missingKeys.join(', ')}`);
       }
-      json.write(Path.join(pathTo.projects, projectId, 'pages', pageId), content);
+      json.write(Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`), content);
     }
   }
 };

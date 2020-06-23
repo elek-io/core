@@ -1,8 +1,9 @@
 import Fs from 'fs';
 import Path from 'path';
+import { Repository, Signature } from 'nodegit';
 import * as Util from './util';
 import Theme from './theme';
-import { Repository, Signature } from 'nodegit';
+import Page from './page';
 
 export class ProjectConfig {
   public name = '';
@@ -19,6 +20,7 @@ export default class Project {
   private _config!: ProjectConfig;
   private _localRepository!: Repository;
   private _theme!: Theme;
+  private _pages: Page[] = [];
 
   public get id(): string {
     return this._id;
@@ -50,6 +52,10 @@ export default class Project {
     return this._theme;
   }
 
+  public get pages(): Page[] {
+    return this._pages;
+  }
+
   /**
    * Creates a new project on disk
    */
@@ -74,7 +80,8 @@ export default class Project {
     // Now create and switch to the "stage" branch
     await Util.git.checkout(this.localRepository, 'stage', true);
 
-    // @todo: Create the "Hello World!" page
+    // Create a first page
+    this._pages.push(await new Page(this).create());
 
     // Load the config file
     this._config = Util.config.read.project(this.id);
@@ -96,6 +103,9 @@ export default class Project {
 
     // Load it's theme
     this._theme = await new Theme(this).load();
+
+    // Load it's pages
+    this.loadPages();
     
     return this;
   }
@@ -149,6 +159,15 @@ public/
     await Promise.all(folders.map(async (folder) => {
       await Util.mkdir(Path.join(this.path, folder));
       await Fs.promises.writeFile(Path.join(this.path, folder, '.gitkeep'), '');
+    }));
+  }
+
+  private async loadPages(): Promise<void> {
+    // Get all files from the pages folder that have an .json extension
+    const possiblePages = await Util.files(Path.join(this.path, 'pages'), '.json');
+    // Return all pages we are able to resolve without throwing errors
+    this._pages = await Util.returnResolved(possiblePages.map((possiblePage) => {
+      return new Page(this).load(possiblePage.name);
     }));
   }
 }

@@ -1,4 +1,3 @@
-import Fs from 'fs';
 import Path from 'path';
 import * as Util from './util';
 import Project from './project';
@@ -68,5 +67,33 @@ export default class Page {
 
   public set config(value: PageConfig) {
     this._config = value;
+  }
+
+  constructor(project: Project) {
+    this._project = project;
+  }
+
+  public async create(): Promise<Page> {
+    this._id = Util.uuid();
+    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
+    await this.createConfig();
+    this._config = Util.config.read.page(this.project.id, this.id);
+
+    return this;
+  }
+
+  /**
+   * Loads the current theme
+   */
+  public async load(fileName: string): Promise<Page> {
+    this._config = Util.config.read.page(this.project.id, this.id);
+    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', fileName);
+    this._id = fileName.split('.json')[0];
+    return this;
+  }
+
+  private async createConfig(): Promise<void> {
+    const content = new PageConfig();
+    Util.config.write.page(this.project.id, this.id, content);
   }
 }
