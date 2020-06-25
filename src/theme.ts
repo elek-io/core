@@ -30,12 +30,6 @@ export default class Theme {
   }
 
   public get config(): ThemeConfig {
-    // Private property acts like a cache
-    if (this._config) {
-      return this._config;
-    }
-
-    this._config = Util.config.read.theme(this.project.id);
     return this._config;
   }
 
@@ -51,16 +45,15 @@ export default class Theme {
   /**
    * Changes the theme by cloning it's repository
    */
-  public async use(repository: string): Promise<Theme> {
+  public async use(repository: string, useCache = true): Promise<Theme> {
     await this.delete();
     // Unfortunately there is no shallow clone integration
     // in nodegit and the underlying libgit2 yet.
     // See: https://github.com/libgit2/libgit2/issues/3058
     // Otherwise we could just clone the current version
     // without the history overhead
-    await Util.git.clone(repository, this.path);
-    this._localRepository = await Util.git.open(this.path);
-    this._config = Util.config.read.theme(this.project.id);
+    this._localRepository = await Util.git.clone(repository, this.path, useCache);
+    this._config = await Util.config.read.theme(this.project.id);
     return this;
   }
 
@@ -69,7 +62,7 @@ export default class Theme {
    */
   public async load(): Promise<Theme> {
     this._localRepository = await Util.git.open(this.path);
-    this._config = Util.config.read.theme(this.project.id);
+    this._config = await Util.config.read.theme(this.project.id);
     return this;
   }
 

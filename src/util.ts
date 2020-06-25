@@ -1,5 +1,5 @@
 import Os from 'os';
-import Fs from 'fs';
+import Fs from 'fs-extra';
 import Util from 'util';
 import Path from 'path';
 import { v4 as Uuid } from 'uuid';
@@ -21,6 +21,7 @@ export const workingDirectory = Path.join(Os.homedir(), 'elek.io');
  */
 export const pathTo = {
   projects: Path.join(workingDirectory, 'projects'),
+  cache: Path.join(workingDirectory, 'cache')
 };
 
 /**
@@ -47,16 +48,16 @@ export const json = {
    * Reads the content of given file and returnes parsed JSON
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  read: (path: string): any => {
-    const content = Fs.readFileSync(path);
+  read: async (path: string): Promise<any> => {
+    const content = await Fs.readFile(path);
     return JSON.parse(content.toString());
   },
   /**
    * Writes JSON in human readable format to given file
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
-  write: (path: string, content: any): void => {
-    Fs.writeFileSync(path, JSON.stringify(content, null, 2));
+  write: async (path: string, content: any): Promise<void> => {
+    await Fs.writeFile(path, JSON.stringify(content, null, 2));
   }
 };
 
@@ -144,9 +145,9 @@ export const config = {
     /**
      * Reads a project config file and returns it's JSON
      */
-    project: (projectId: string): ProjectConfig => {
+    project: async (projectId: string): Promise<ProjectConfig> => {
       const path = Path.join(pathTo.projects, projectId, configNameOf.project);
-      const content = json.read(path);
+      const content = await json.read(path);
       const missingKeys = hasKeysOf(content, new ProjectConfig());
       if (missingKeys !== true) {
         throw new Error(`Project config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
@@ -156,9 +157,9 @@ export const config = {
     /**
      * Reads a theme config file and returns it's JSON
      */
-    theme: (projectId: string): ThemeConfig => {
+    theme: async (projectId: string): Promise<ThemeConfig> => {
       const path = Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme);
-      const content = json.read(path);
+      const content = await json.read(path);
       const missingKeys = hasKeysOf(content, new ThemeConfig());
       if (missingKeys !== true) {
         throw new Error(`Theme config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
@@ -168,9 +169,9 @@ export const config = {
     /**
      * Reads a page config file and returns it's JSON
      */
-    page: (projectId: string, pageId: string): PageConfig => {
+    page: async (projectId: string, pageId: string): Promise<PageConfig> => {
       const path = Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`);
-      const content = json.read(path);
+      const content = await json.read(path);
       const missingKeys = hasKeysOf(content, new PageConfig());
       if (missingKeys !== true) {
         throw new Error(`Page config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
@@ -182,32 +183,32 @@ export const config = {
     /**
      * Writes to a project's config file
      */
-    project: (projectId: string, content: ProjectConfig): void => {
+    project: async (projectId: string, content: ProjectConfig): Promise<void> => {
       const missingKeys = hasKeysOf(content, new ProjectConfig());
       if (missingKeys !== true) {
         throw new Error(`Tried to write invalid project config. Missing required keys: ${missingKeys.join(', ')}`);
       }
-      json.write(Path.join(pathTo.projects, projectId, configNameOf.project), content);
+      await json.write(Path.join(pathTo.projects, projectId, configNameOf.project), content);
     },
     /**
      * Writes to a theme's config file
      */
-    theme: (projectId: string, content: ThemeConfig): void => {
+    theme: async (projectId: string, content: ThemeConfig): Promise<void> => {
       const missingKeys = hasKeysOf(content, new ThemeConfig());
       if (missingKeys !== true) {
         throw new Error(`Tried to write invalid theme config. Missing required keys: ${missingKeys.join(', ')}`);
       }
-      json.write(Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme), content);
+      await json.write(Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme), content);
     },
     /**
      * Writes to a page's config file
      */
-    page: (projectId: string, pageId: string, content: PageConfig): void => {
+    page: async (projectId: string, pageId: string, content: PageConfig): Promise<void> => {
       const missingKeys = hasKeysOf(content, new PageConfig());
       if (missingKeys !== true) {
         throw new Error(`Tried to write invalid page config. Missing required keys: ${missingKeys.join(', ')}`);
       }
-      json.write(Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`), content);
+      await json.write(Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`), content);
     }
   }
 };
@@ -238,6 +239,31 @@ export function rmrf(directory: string): Promise<void> {
   return Util.promisify(Rimraf)(directory);
 }
 
+export const cache = {
+  isHit: async (folderOrFileName: string): Promise<boolean> => {
+    // Assure that the cache directory exists
+    await mkdir(pathTo.cache);
+    const dirent = await Fs.promises.readdir(pathTo.cache, { withFileTypes: true });
+    const cacheMatch = dirent.find((directory) => {
+      return directory.name === folderOrFileName;
+    });
+    if (cacheMatch) {
+      return true;
+    }
+    return false;
+  },
+  copy: async (folderOrFileName: string, destination: string): Promise<void> => {
+    // Assure that the cache directory exists
+    await mkdir(pathTo.cache);
+    await Fs.copy(Path.join(pathTo.cache, folderOrFileName), destination);
+  },
+  add: async (path: string, name: string): Promise<void> => {
+    // Assure that the cache directory exists
+    await mkdir(pathTo.cache);
+    await Fs.copy(path, Path.join(pathTo.cache, name));
+  }
+};
+
 /**
  * A collection of useful Git commands
  */
@@ -245,8 +271,17 @@ export const git = {
   init: (path: string): Promise<Git.Repository> => {
     return Git.Repository.init(path, 0);
   },
-  clone: (url: string, localPath: string, options?: Git.CloneOptions): Promise<Git.Repository> => {
-    return Git.Clone.clone(url, localPath, options);
+  clone: async (url: string, localPath: string, useCache = true, options?: Git.CloneOptions): Promise<Git.Repository> => {
+    // if (useCache && await cache.isHit(url) === true) {
+    //   await cache.copy(url, localPath);
+    // } else {
+    //   // Clone it
+    //   await Git.Clone.clone(url, localPath, options);
+    //   // Now add it to cache for later use
+    //   await cache.add(localPath, url);
+    // }
+    await Git.Clone.clone(url, localPath, options);
+    return git.open(localPath);
   },
   pull: async (repository: Git.Repository | string): Promise<Git.Oid> => {
     // Check if we need to resolve that repository
@@ -257,23 +292,40 @@ export const git = {
     await repository.fetchAll();
     return repository.mergeBranches('master', 'origin/master');
   },
+  /**
+   * @todo check if pathspec could be used to only get the status of given files
+   */
   commit: async (repository: Git.Repository, signature: Git.Signature, files: string | string[], message: string, isInit = false): Promise<Git.Oid> => {
+    // Check if all files should be committed
+    if (files !== '*') {
+      // If not, we only want to commit changes
+      // So first we need to get the status of given files
+      const status = await repository.getStatus();
+      files = status.filter((file) => {
+        // Filter out any files that are modified but not included in the files we want to commit
+        return files.includes(file.path());
+      }).map((file) => {
+        // Now return the path
+        return file.path();
+      });
+    }
+    
+    // Add the files to the staging area
     const index = await repository.refreshIndex();
     await index.addAll(files);
     index.write();
     const oid = await index.writeTree();
 
-    if (isInit === true) {
-      // Since we're creating an inital commit, it has no parents. Note that unlike
-      // normal we don't get the head either, because there isn't one yet.
-      return repository.createCommit('HEAD', signature, signature, message, oid, []);
+    // If we're creating an inital commit, it has no parents. Note that unlike
+    // normal we don't get the head either, because there isn't one yet.
+    const parents: Git.Commit[] = [];
+    if (isInit !== true) {
+      // For normal commits we need the current HEAD as a parent
+      parents.push(await repository.getHeadCommit());
     }
-
-    // For normal commits we need the current HEAD as a parent
-    // const head = await Git.Reference.nameToId(repository, 'HEAD');
-    const parent = await repository.getHeadCommit();
-
-    return repository.createCommit('HEAD', signature, signature, message, oid, [parent]);
+    
+    // Now create the commit
+    return repository.createCommit('HEAD', signature, signature, message, oid, parents);
   },
   status: (repository: Git.Repository): Promise<Git.StatusFile[]> => {
     return repository.getStatus();

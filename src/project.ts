@@ -1,4 +1,4 @@
-import Fs from 'fs';
+import Fs from 'fs-extra';
 import Path from 'path';
 import { Repository, Signature } from 'nodegit';
 import * as Util from './util';
@@ -31,12 +31,6 @@ export default class Project {
   }
 
   public get config(): ProjectConfig {
-    // Private property acts like a cache
-    if (this._config) {
-      return this._config;
-    }
-
-    this._config = Util.config.read.project(this.id);
     return this._config;
   }
 
@@ -81,10 +75,14 @@ export default class Project {
     await Util.git.checkout(this.localRepository, 'stage', true);
 
     // Create a first page
-    this._pages.push(await new Page(this).create());
+    this._pages.push(await new Page(this).create(signature, {
+      name: 'My first page',
+      slug: Util.slug('My first page'),
+      stage: 'wip'
+    }));
 
     // Load the config file
-    this._config = Util.config.read.project(this.id);
+    this._config = await Util.config.read.project(this.id);
 
     return this;
   }
@@ -99,7 +97,7 @@ export default class Project {
     this._id = id;
     this._path = Path.join(Util.pathTo.projects, id);
     this._localRepository = await Util.git.open(this.path);
-    this._config = Util.config.read.project(this.id);
+    this._config = await Util.config.read.project(this.id);
 
     // Load it's theme
     this._theme = await new Theme(this).load();
@@ -122,12 +120,17 @@ export default class Project {
 
   /**
    * Saves the project's files on disk and creates a commit
+   * @todo rewrite this method to call each pages save() method instead
+   * for better commit messages
    */
-  public async save(signature: Signature, message: string): Promise<void> {
+  public async save(signature: Signature): Promise<void> {
     // Write config to disk
     Util.config.write.project(this.id, this.config);
-    // Commit changes
-    await Util.git.commit(this.localRepository, signature, '*', message);
+    await Util.git.commit(this.localRepository, signature, Path.join(this.path, Util.configNameOf.project), ':wrench: Updated project config');
+    // Save each page
+    this.pages.forEach(async (page) => {
+      await page.save(signature, ':wrench: Updated page config');
+    });
   }
 
   private async createGitignore(): Promise<void> {
@@ -167,7 +170,7 @@ public/
     const possiblePages = await Util.files(Path.join(this.path, 'pages'), '.json');
     // Return all pages we are able to resolve without throwing errors
     this._pages = await Util.returnResolved(possiblePages.map((possiblePage) => {
-      return new Page(this).load(possiblePage.name);
+      return new Page(this).load(possiblePage.name.replace('.json', ''));
     }));
   }
 }

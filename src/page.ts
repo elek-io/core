@@ -1,6 +1,7 @@
 import Path from 'path';
 import * as Util from './util';
 import Project from './project';
+import { Signature } from 'nodegit';
 
 export class PageConfig {
   public name = '';
@@ -56,12 +57,6 @@ export default class Page {
   }
 
   public get config(): PageConfig {
-    // Private property acts like a cache
-    if (this._config) {
-      return this._config;
-    }
-
-    this._config = Util.config.read.page(this.project.id, this.id);
     return this._config;
   }
 
@@ -73,27 +68,45 @@ export default class Page {
     this._project = project;
   }
 
-  public async create(): Promise<Page> {
+  /**
+   * Creates a new page on disk
+   */
+  public async create(signature: Signature, config?: PageConfig): Promise<Page> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
-    await this.createConfig();
-    this._config = Util.config.read.page(this.project.id, this.id);
+
+    // Create the page config file
+    if (!config) {
+      config = new PageConfig();
+    }
+    Util.config.write.page(this.project.id, this.id, config);
+
+    // Load the file into this object
+    this._config = await Util.config.read.page(this.project.id, this.id);
+
+    // Create a new commit
+    this.save(signature, `:heavy_plus_sign: Created new page "${config.name}"`);
 
     return this;
   }
 
   /**
-   * Loads the current theme
+   * Loads a page by it's ID
    */
-  public async load(fileName: string): Promise<Page> {
-    this._config = Util.config.read.page(this.project.id, this.id);
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', fileName);
-    this._id = fileName.split('.json')[0];
+  public async load(id: string): Promise<Page> {
+    this._id = id;
+    this._config = await Util.config.read.page(this.project.id, this.id);
+    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
     return this;
   }
 
-  private async createConfig(): Promise<void> {
-    const content = new PageConfig();
-    Util.config.write.page(this.project.id, this.id, content);
+  /**
+   * Saves the page's files on disk and creates a commit
+   */
+  public async save(signature: Signature, message: string): Promise<void> {
+    // Write config to disk
+    Util.config.write.page(this.project.id, this.id, this.config);
+    // Commit changes
+    await Util.git.commit(this.project.localRepository, signature, this.path, message);
   }
 }

@@ -21,6 +21,7 @@
     "preversion": "yarn test"
   },
   "devDependencies": {
+    "@types/fs-extra": "^9.0.1",
     "@types/jest": "^26.0.0",
     "@types/mkdirp": "^1.0.1",
     "@types/node": "^14.0.13",
@@ -35,6 +36,7 @@
     "typescript": "^3.9.5"
   },
   "dependencies": {
+    "fs-extra": "^9.0.1",
     "mkdirp": "^1.0.4",
     "nodegit": "^0.26.5",
     "rimraf": "^3.0.2",
