@@ -4,6 +4,7 @@ import { Repository, Signature } from 'nodegit';
 import * as Util from './util';
 import Theme from './theme';
 import Page, { PageConfig, PageConfigKey } from './page';
+import Block, { BlockConfig, BlockConfigKey } from './block';
 
 export class ProjectConfig {
   public name = '';
@@ -21,6 +22,7 @@ export default class Project {
   private _localRepository!: Repository;
   private _theme!: Theme;
   private _pages: Page[] = [];
+  private _blocks: Block[] = [];
 
   public get id(): string {
     return this._id;
@@ -48,6 +50,10 @@ export default class Project {
 
   public get pages(): Page[] {
     return this._pages;
+  }
+
+  public get blocks(): Block[] {
+    return this._blocks;
   }
 
   /**
@@ -104,6 +110,9 @@ export default class Project {
 
     // Load it's pages
     await this.loadPages();
+
+    // Load it's blocks
+    await this.loadBlocks();
     
     return this;
   }
@@ -125,6 +134,10 @@ export default class Project {
     // Write config to disk
     Util.config.write.project(this.id, this.config);
     await Util.git.commit(this.localRepository, signature, Path.join(this.path, Util.configNameOf.project), ':wrench: Updated project config');
+    // Save each block
+    this.blocks.forEach(async (block) => {
+      await block.save(signature, ':wrench: Updated block config');
+    });
     // Save each page
     this.pages.forEach(async (page) => {
       await page.save(signature, ':wrench: Updated page config');
@@ -190,6 +203,15 @@ public/
     // Return all pages we are able to resolve without throwing errors
     this._pages = await Util.returnResolved(possiblePages.map((possiblePage) => {
       return new Page(this).load(possiblePage.name.replace('.json', ''));
+    }));
+  }
+
+  private async loadBlocks(): Promise<void> {
+    // Get all files from the blocks folder that have an .json extension
+    const possibleBlocks = await Util.files(Path.join(this.path, 'blocks'), '.json');
+    // Return all pages we are able to resolve without throwing errors
+    this._blocks = await Util.returnResolved(possibleBlocks.map((possibleBlock) => {
+      return new Block(this).load(possibleBlock.name.replace('.json', ''));
     }));
   }
 }

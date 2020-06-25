@@ -10,6 +10,7 @@ import Git from 'nodegit';
 import { ProjectConfig } from './project';
 import { ThemeConfig } from './theme';
 import { PageConfig } from './page';
+import { BlockConfig } from './block';
 
 /**
  * The directory in which everything is stored and will be worked in
@@ -176,6 +177,18 @@ export const config = {
         throw new Error(`Page config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
       }
       return content;
+    },
+    /**
+     * Reads a block config file and returns it's JSON
+     */
+    block: async (projectId: string, blockId: string): Promise<BlockConfig> => {
+      const path = Path.join(pathTo.projects, projectId, 'blocks', `${blockId}.json`);
+      const content = await json.read(path);
+      const missingKeys = hasKeysOf(content, new BlockConfig());
+      if (missingKeys !== true) {
+        throw new Error(`Block config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
+      }
+      return content;
     }
   },
   write: {
@@ -208,6 +221,16 @@ export const config = {
         throw new Error(`Tried to write invalid page config. Missing required keys: ${missingKeys.join(', ')}`);
       }
       await json.write(Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`), content);
+    },
+    /**
+     * Writes to a block's config file
+     */
+    block: async (projectId: string, blockId: string, content: BlockConfig): Promise<void> => {
+      const missingKeys = hasKeysOf(content, new BlockConfig());
+      if (missingKeys !== true) {
+        throw new Error(`Tried to write invalid block config. Missing required keys: ${missingKeys.join(', ')}`);
+      }
+      await json.write(Path.join(pathTo.projects, projectId, 'blocks', `${blockId}.json`), content);
     }
   }
 };
