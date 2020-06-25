@@ -50,4 +50,18 @@ describe('project module', () => {
     expect(project.pages.length).toBe(3);
   });
 
+  it('should be able to find a page', async () => {
+    const project = await new Elek.project().load(firstProjectId);
+    const firstPage = await project.page.find('id', project.pages[0].id);
+    expect(firstPage).toBeDefined();
+    if (firstPage) {
+      expect(firstPage.id).toBe(project.pages[0].id);
+    }
+    const secondPage = await project.page.find('name', 'Foo bar');
+    expect(secondPage).toBeDefined();
+    if (secondPage) {
+      expect(secondPage.config.name).toBe('Foo bar');
+    }
+  });
+
 });

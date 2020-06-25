@@ -103,7 +103,7 @@ export default class Project {
     this._theme = await new Theme(this).load();
 
     // Load it's pages
-    this.loadPages();
+    await this.loadPages();
     
     return this;
   }
