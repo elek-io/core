@@ -32,6 +32,7 @@ export enum PageStageEnum {
   'published'
 }
 export const PageStageArray = <PageStage[]>Object.keys(PageStageEnum).filter((key) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return typeof PageStageEnum[key as any] === 'number';
 });
 export type PageStage = keyof typeof PageStageEnum;

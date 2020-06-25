@@ -20,8 +20,7 @@ export const workingDirectory = Path.join(Os.homedir(), 'elek.io');
  * A collection of often used paths
  */
 export const pathTo = {
-  projects: Path.join(workingDirectory, 'projects'),
-  cache: Path.join(workingDirectory, 'cache')
+  projects: Path.join(workingDirectory, 'projects')
 };
 
 /**
@@ -239,31 +238,6 @@ export function rmrf(directory: string): Promise<void> {
   return Util.promisify(Rimraf)(directory);
 }
 
-export const cache = {
-  isHit: async (folderOrFileName: string): Promise<boolean> => {
-    // Assure that the cache directory exists
-    await mkdir(pathTo.cache);
-    const dirent = await Fs.promises.readdir(pathTo.cache, { withFileTypes: true });
-    const cacheMatch = dirent.find((directory) => {
-      return directory.name === folderOrFileName;
-    });
-    if (cacheMatch) {
-      return true;
-    }
-    return false;
-  },
-  copy: async (folderOrFileName: string, destination: string): Promise<void> => {
-    // Assure that the cache directory exists
-    await mkdir(pathTo.cache);
-    await Fs.copy(Path.join(pathTo.cache, folderOrFileName), destination);
-  },
-  add: async (path: string, name: string): Promise<void> => {
-    // Assure that the cache directory exists
-    await mkdir(pathTo.cache);
-    await Fs.copy(path, Path.join(pathTo.cache, name));
-  }
-};
-
 /**
  * A collection of useful Git commands
  */
@@ -271,15 +245,7 @@ export const git = {
   init: (path: string): Promise<Git.Repository> => {
     return Git.Repository.init(path, 0);
   },
-  clone: async (url: string, localPath: string, useCache = true, options?: Git.CloneOptions): Promise<Git.Repository> => {
-    // if (useCache && await cache.isHit(url) === true) {
-    //   await cache.copy(url, localPath);
-    // } else {
-    //   // Clone it
-    //   await Git.Clone.clone(url, localPath, options);
-    //   // Now add it to cache for later use
-    //   await cache.add(localPath, url);
-    // }
+  clone: async (url: string, localPath: string, options?: Git.CloneOptions): Promise<Git.Repository> => {
     await Git.Clone.clone(url, localPath, options);
     return git.open(localPath);
   },
