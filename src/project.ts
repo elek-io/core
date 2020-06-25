@@ -3,7 +3,7 @@ import Path from 'path';
 import { Repository, Signature } from 'nodegit';
 import * as Util from './util';
 import Theme from './theme';
-import Page from './page';
+import Page, { PageConfig, PageConfigKey } from './page';
 
 export class ProjectConfig {
   public name = '';
@@ -120,8 +120,6 @@ export default class Project {
 
   /**
    * Saves the project's files on disk and creates a commit
-   * @todo rewrite this method to call each pages save() method instead
-   * for better commit messages
    */
   public async save(signature: Signature): Promise<void> {
     // Write config to disk
@@ -132,6 +130,27 @@ export default class Project {
       await page.save(signature, ':wrench: Updated page config');
     });
   }
+
+  /**
+   * Helper methods for working with pages
+   */
+  public page = {
+    create: async (signature: Signature, config?: PageConfig): Promise<Page> => {
+      const page = await new Page(this).create(signature, config);
+      this._pages.push(page);
+      return page;
+    },
+    find: async (key: 'id' | PageConfigKey, value: string): Promise<Page | undefined> => {
+      return this.pages.find((page) => {
+        // Find by ID
+        if (key === 'id') {
+          return page[key] === value;
+        }
+        // Find by config key
+        return page.config[key] === value;
+      });
+    }
+  };
 
   private async createGitignore(): Promise<void> {
     const content = `.DS_Store

@@ -8,6 +8,7 @@ export class PageConfig {
   public slug = '';
   public stage: PageStage = 'wip';
 }
+export type PageConfigKey = keyof PageConfig;
 
 export enum PageStageEnum {
   /**
@@ -76,17 +77,19 @@ export default class Page {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
 
-    // Create the page config file
+    // Page can be initialized with a custom config
+    // if it's not, default will be used
     if (!config) {
       config = new PageConfig();
     }
-    Util.config.write.page(this.project.id, this.id, config);
+    // Create the page config file
+    await Util.config.write.page(this.project.id, this.id, config);
 
     // Load the file into this object
     this._config = await Util.config.read.page(this.project.id, this.id);
 
     // Create a new commit
-    this.save(signature, `:heavy_plus_sign: Created new page "${config.name}"`);
+    await this.save(signature, ':heavy_plus_sign: Created new page');
 
     return this;
   }

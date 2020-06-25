@@ -76,7 +76,7 @@ export default class Theme {
   /**
    * Deletes this theme from disk
    */
-  public async delete(): Promise<void> {
+  private async delete(): Promise<void> {
     await Util.rmrf(this.path);
     await Util.mkdir(this.path);
   }

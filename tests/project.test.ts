@@ -35,4 +35,19 @@ describe('project module', () => {
     expect(projectAgain.config.name).toBe('The first project');
   });
 
+  it('should be able to create new pages', async () => {
+    const project = await new Elek.project().load(firstProjectId);
+    await project.page.create(signature, {
+      name: 'Another page',
+      slug: 'another-page',
+      stage: 'wip'
+    });
+    await project.page.create(signature, {
+      name: 'Foo bar',
+      slug: 'foo-bar',
+      stage: 'private'
+    });
+    expect(project.pages.length).toBe(3);
+  });
+
 });
