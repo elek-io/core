@@ -35,7 +35,7 @@ describe('util module', () => {
     };
     // Using the JSON helper directly to avoid the check in config.write
     // like in the test before
-    Elek.util.json.write(Path.join(project.path, Elek.util.configNameOf.project), invalidConfig);
+    await Elek.util.json.write(Path.join(project.path, Elek.util.configNameOf.project), invalidConfig);
     // Load the project again to trigger loading the config file
     await expect(new Elek.project().load(firstProjectId)).rejects.toThrowError();
   });
