@@ -204,7 +204,7 @@ export const read = {
     }
     return {
       config: header,
-      content: content.toString().replace(header, '')
+      content: content.toString().substring(content.toString().lastIndexOf('---') + 3)
     };
   }
 };

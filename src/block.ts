@@ -6,8 +6,13 @@ import Markdown from 'markdown-it';
 import Highlight from 'highlight.js';
 
 export class BlockConfig {
-  public only: BlockType[] = [];
-  public not: BlockType[] = [];
+  public language = 'en';
+}
+export type BlockConfigKey = keyof BlockConfig;
+
+export class BlockRestriction {
+  public only: BlockRule[] = [];
+  public not: BlockRule[] = [];
   public minimum = 0;
   public maximum = 0;
   public inline = false;
@@ -16,13 +21,13 @@ export class BlockConfig {
   public highlightCode = false;
   public repeatable = false;
 }
-export type BlockConfigKey = keyof BlockConfig;
+export type BlockRestrictionKey = keyof BlockRestriction;
 
 /**
  * @todo may be changed to represent all supported markdown-it rules
  * @see https://github.com/markdown-it/markdown-it#manage-rules
  */
-export enum BlockTypeEnum {
+export enum BlockRuleEnum {
   'header',
   'unorderedList',
   'orderedList',
@@ -39,11 +44,11 @@ export enum BlockTypeEnum {
   'horizontalRule',
   'lineBreak'
 }
-export const BlockTypeArray = <BlockType[]>Object.keys(BlockTypeEnum).filter((key) => {
+export const BlockRuleArray = <BlockRule[]>Object.keys(BlockRuleEnum).filter((key) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return typeof BlockTypeEnum[key as any] === 'number';
+  return typeof BlockRuleEnum[key as any] === 'number';
 });
-export type BlockType = keyof typeof BlockTypeEnum;
+export type BlockRule = keyof typeof BlockRuleEnum;
 
 export default class Block {
   // Using definite assignment assertion here
@@ -102,6 +107,8 @@ export default class Block {
     this._config = block.config;
     this._content = block.content;
 
+    console.log(this.config, this.content);
+
     // Create a new commit
     await this.save(signature, ':heavy_plus_sign: Created new block');
 
@@ -130,13 +137,18 @@ export default class Block {
     await Util.git.commit(this.project.localRepository, signature, this.path, message);
   }
 
-  public async render(): Promise<string> {
-    // Configure the Markdown renderer based on the block's config
+  /**
+   * Returns HTML of the rendered block content
+   * 
+   * @param restriction restriction object of the theme in use
+   */
+  public async render(restriction: BlockRestriction): Promise<string> {
+    // Configure the Markdown renderer based on the block's restriction
     const md = new Markdown({
       /**
        * Enable HTML tags in source
        */
-      html: this.config.html,
+      html: restriction.html,
       /**
        * Use '/' to close single tags (<br />).
        * This is only for full CommonMark compatibility.
@@ -145,7 +157,7 @@ export default class Block {
       /**
        * Convert '\n' in paragraphs into <br>
        */
-      breaks: this.config.breaks,
+      breaks: restriction.breaks,
       /**
        * CSS language prefix for fenced blocks. Can be
        * useful for external highlighters.
@@ -173,7 +185,7 @@ export default class Block {
        * If result starts with <pre... internal wrapper is skipped.
        */
       highlight: (str, lang) => {
-        if (this.config.highlightCode === true && lang && Highlight.getLanguage(lang)) {
+        if (restriction.highlightCode === true && lang && Highlight.getLanguage(lang)) {
           try {
             return Highlight.highlight(lang, str).value;
           } catch (error) {
@@ -184,9 +196,9 @@ export default class Block {
       }
     })
       // Enable specific rules
-      .enable(this.config.only)
+      .enable(restriction.only)
       // Disable specific rules
-      .disable(this.config.not);
+      .disable(restriction.not);
 
     // Return rendered HTML as string
     return md.render(this.content);
