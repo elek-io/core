@@ -3,10 +3,16 @@ import * as Util from './util';
 import Project from './project';
 import { Signature } from 'nodegit';
 
+export class PageContent {
+  public themeBlockId = '';
+  public blockId = '';
+}
+
 export class PageConfig {
   public name = '';
   public slug = '';
   public stage: PageStage = 'wip';
+  public content: PageContent[] = [];
 }
 export type PageConfigKey = keyof PageConfig;
 
@@ -83,10 +89,10 @@ export default class Page {
       config = new PageConfig();
     }
     // Create the page config file
-    await Util.config.write.page(this.project.id, this.id, config);
+    await Util.write.page(this.project.id, this.id, config);
 
     // Load the file into this object
-    this._config = await Util.config.read.page(this.project.id, this.id);
+    this._config = await Util.read.page(this.project.id, this.id);
 
     // Create a new commit
     await this.save(signature, ':heavy_plus_sign: Created new page');
@@ -99,7 +105,7 @@ export default class Page {
    */
   public async load(id: string): Promise<Page> {
     this._id = id;
-    this._config = await Util.config.read.page(this.project.id, this.id);
+    this._config = await Util.read.page(this.project.id, this.id);
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
     return this;
   }
@@ -109,7 +115,7 @@ export default class Page {
    */
   public async save(signature: Signature, message: string): Promise<void> {
     // Write config to disk
-    Util.config.write.page(this.project.id, this.id, this.config);
+    await Util.write.page(this.project.id, this.id, this.config);
     // Commit changes
     await Util.git.commit(this.project.localRepository, signature, this.path, message);
   }

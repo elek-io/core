@@ -84,11 +84,12 @@ export default class Project {
     this._pages.push(await new Page(this).create(signature, {
       name: 'My first page',
       slug: Util.slug('My first page'),
-      stage: 'wip'
+      stage: 'wip',
+      content: []
     }));
 
     // Load the config file
-    this._config = await Util.config.read.project(this.id);
+    this._config = await Util.read.project(this.id);
 
     return this;
   }
@@ -103,7 +104,7 @@ export default class Project {
     this._id = id;
     this._path = Path.join(Util.pathTo.projects, id);
     this._localRepository = await Util.git.open(this.path);
-    this._config = await Util.config.read.project(this.id);
+    this._config = await Util.read.project(this.id);
 
     // Load it's theme
     this._theme = await new Theme(this).load();
@@ -132,7 +133,7 @@ export default class Project {
    */
   public async save(signature: Signature): Promise<void> {
     // Write config to disk
-    Util.config.write.project(this.id, this.config);
+    await Util.write.project(this.id, this.config);
     await Util.git.commit(this.localRepository, signature, Path.join(this.path, Util.configNameOf.project), ':wrench: Updated project config');
     // Save each block
     this.blocks.forEach(async (block) => {
@@ -154,13 +155,35 @@ export default class Project {
       return page;
     },
     find: async (key: 'id' | PageConfigKey, value: string): Promise<Page | undefined> => {
-      return this.pages.find((page) => {
+      return this.pages.find((page: Page) => {
         // Find by ID
         if (key === 'id') {
           return page[key] === value;
         }
         // Find by config key
         return page.config[key] === value;
+      });
+    }
+  };
+
+  /**
+   * Helper methods for working with blocks
+   */
+  public block = {
+    create: async (signature: Signature, config?: BlockConfig, content?: string): Promise<Block> => {
+      const block = await new Block(this).create(signature, config, content);
+      this._blocks.push(block);
+      return block;
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    find: async (key: 'id' | BlockConfigKey, value: any): Promise<Block | undefined> => {
+      return this.blocks.find((block: Block) => {
+        // Find by ID
+        if (key === 'id') {
+          return block[key] === value;
+        }
+        // Find by config key
+        return block.config[key] === value;
       });
     }
   };
@@ -179,7 +202,7 @@ public/
   private async createConfig(name: string): Promise<void> {
     const content = new ProjectConfig();
     content.name = name;
-    Util.config.write.project(this.id, content);
+    await Util.write.project(this.id, content);
   }
 
   private async createFolderStructure(): Promise<void> {

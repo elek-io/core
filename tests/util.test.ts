@@ -25,7 +25,7 @@ describe('util module', () => {
     // invalid config files.
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-expect-error
-    await expect(Elek.util.config.write.project(firstProjectId, invalidConfig)).rejects.toThrowError();
+    await expect(Elek.util.write.project(firstProjectId, invalidConfig)).rejects.toThrowError();
   });
 
   it('should throw an error if reading an invalid config file', async () => {

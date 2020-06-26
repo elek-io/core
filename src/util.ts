@@ -53,6 +53,23 @@ export const json = {
     return JSON.parse(content.toString());
   },
   /**
+   * Reads the header of given buffer and returnes parsed JSON
+   * 
+   * Used to extract JSON headers from markdown files
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readHeader: async (buffer: Buffer): Promise<any | undefined> => {
+    const content = buffer.toString();
+    if (content.startsWith('---') === false) {
+      throw new Error('File contained no JSON header');
+    }
+    const header = content.substring(
+      content.lastIndexOf('---') + 3, 
+      content.lastIndexOf('---')
+    );
+    return JSON.parse(header);
+  },
+  /**
    * Writes JSON in human readable format to given file
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
@@ -92,10 +109,10 @@ export async function subdirectories(path: string): Promise<Fs.Dirent[]> {
 /**
  * Returns all files of given directory which can be filtered by extension
  */
-export async function files(path: string, extension = 'all'): Promise<Fs.Dirent[]> {
+export async function files(path: string, extension?: string): Promise<Fs.Dirent[]> {
   const dirent = await Fs.promises.readdir(path, { withFileTypes: true });
   return dirent.filter((dirent) => {
-    if (extension !== 'all' && dirent.isFile() === true) {
+    if (extension && dirent.isFile() === true) {
       if (dirent.name.endsWith(extension)) {
         return true;
       }
@@ -138,100 +155,108 @@ export async function returnResolved<T>(promises: Promise<T>[]): Promise<T[]> {
 }
 
 /**
- * Configuration file helper
+ * Read file helper
  */
-export const config = {
-  read: {
-    /**
-     * Reads a project config file and returns it's JSON
-     */
-    project: async (projectId: string): Promise<ProjectConfig> => {
-      const path = Path.join(pathTo.projects, projectId, configNameOf.project);
-      const content = await json.read(path);
-      const missingKeys = hasKeysOf(content, new ProjectConfig());
-      if (missingKeys !== true) {
-        throw new Error(`Project config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
-      }
-      return content;
-    },
-    /**
-     * Reads a theme config file and returns it's JSON
-     */
-    theme: async (projectId: string): Promise<ThemeConfig> => {
-      const path = Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme);
-      const content = await json.read(path);
-      const missingKeys = hasKeysOf(content, new ThemeConfig());
-      if (missingKeys !== true) {
-        throw new Error(`Theme config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
-      }
-      return content;
-    },
-    /**
-     * Reads a page config file and returns it's JSON
-     */
-    page: async (projectId: string, pageId: string): Promise<PageConfig> => {
-      const path = Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`);
-      const content = await json.read(path);
-      const missingKeys = hasKeysOf(content, new PageConfig());
-      if (missingKeys !== true) {
-        throw new Error(`Page config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
-      }
-      return content;
-    },
-    /**
-     * Reads a block config file and returns it's JSON
-     */
-    block: async (projectId: string, blockId: string): Promise<BlockConfig> => {
-      const path = Path.join(pathTo.projects, projectId, 'blocks', `${blockId}.json`);
-      const content = await json.read(path);
-      const missingKeys = hasKeysOf(content, new BlockConfig());
-      if (missingKeys !== true) {
-        throw new Error(`Block config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
-      }
-      return content;
+export const read = {
+  /**
+   * Reads a project config file and returns it's JSON
+   */
+  project: async (projectId: string): Promise<ProjectConfig> => {
+    const path = Path.join(pathTo.projects, projectId, configNameOf.project);
+    const content = await json.read(path);
+    const missingKeys = hasKeysOf(content, new ProjectConfig());
+    if (missingKeys !== true) {
+      throw new Error(`Project config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
     }
+    return content;
   },
-  write: {
-    /**
-     * Writes to a project's config file
-     */
-    project: async (projectId: string, content: ProjectConfig): Promise<void> => {
-      const missingKeys = hasKeysOf(content, new ProjectConfig());
-      if (missingKeys !== true) {
-        throw new Error(`Tried to write invalid project config. Missing required keys: ${missingKeys.join(', ')}`);
-      }
-      await json.write(Path.join(pathTo.projects, projectId, configNameOf.project), content);
-    },
-    /**
-     * Writes to a theme's config file
-     */
-    theme: async (projectId: string, content: ThemeConfig): Promise<void> => {
-      const missingKeys = hasKeysOf(content, new ThemeConfig());
-      if (missingKeys !== true) {
-        throw new Error(`Tried to write invalid theme config. Missing required keys: ${missingKeys.join(', ')}`);
-      }
-      await json.write(Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme), content);
-    },
-    /**
-     * Writes to a page's config file
-     */
-    page: async (projectId: string, pageId: string, content: PageConfig): Promise<void> => {
-      const missingKeys = hasKeysOf(content, new PageConfig());
-      if (missingKeys !== true) {
-        throw new Error(`Tried to write invalid page config. Missing required keys: ${missingKeys.join(', ')}`);
-      }
-      await json.write(Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`), content);
-    },
-    /**
-     * Writes to a block's config file
-     */
-    block: async (projectId: string, blockId: string, content: BlockConfig): Promise<void> => {
-      const missingKeys = hasKeysOf(content, new BlockConfig());
-      if (missingKeys !== true) {
-        throw new Error(`Tried to write invalid block config. Missing required keys: ${missingKeys.join(', ')}`);
-      }
-      await json.write(Path.join(pathTo.projects, projectId, 'blocks', `${blockId}.json`), content);
+  /**
+   * Reads a theme config file and returns it's JSON
+   */
+  theme: async (projectId: string): Promise<ThemeConfig> => {
+    const path = Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme);
+    const content = await json.read(path);
+    const missingKeys = hasKeysOf(content, new ThemeConfig());
+    if (missingKeys !== true) {
+      throw new Error(`Theme config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
     }
+    return content;
+  },
+  /**
+   * Reads a page config file and returns it's JSON
+   */
+  page: async (projectId: string, pageId: string): Promise<PageConfig> => {
+    const path = Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`);
+    const content = await json.read(path);
+    const missingKeys = hasKeysOf(content, new PageConfig());
+    if (missingKeys !== true) {
+      throw new Error(`Page config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
+    }
+    return content;
+  },
+  block: async (projectId: string, blockId: string): Promise<{config: BlockConfig, content: string}> => {
+    const path = Path.join(pathTo.projects, projectId, 'blocks', `${blockId}.md`);
+    const content = await Fs.readFile(path);
+    const header = await json.readHeader(content);
+    const missingKeys = hasKeysOf(header, new BlockConfig());
+    if (missingKeys !== true) {
+      throw new Error(`Block config "${path}" is missing required keys: ${missingKeys.join(', ')}`);
+    }
+    return {
+      config: header,
+      content: content.toString().replace(header, '')
+    };
+  }
+};
+
+/**
+ * Write file helper
+ */
+export const write = {
+  /**
+   * Writes to a project's config file
+   */
+  project: async (projectId: string, config: ProjectConfig): Promise<void> => {
+    const missingKeys = hasKeysOf(config, new ProjectConfig());
+    if (missingKeys !== true) {
+      throw new Error(`Tried to write invalid project config. Missing required keys: ${missingKeys.join(', ')}`);
+    }
+    await json.write(Path.join(pathTo.projects, projectId, configNameOf.project), config);
+  },
+  /**
+   * Writes to a theme's config file
+   */
+  theme: async (projectId: string, config: ThemeConfig): Promise<void> => {
+    const missingKeys = hasKeysOf(config, new ThemeConfig());
+    if (missingKeys !== true) {
+      throw new Error(`Tried to write invalid theme config. Missing required keys: ${missingKeys.join(', ')}`);
+    }
+    await json.write(Path.join(pathTo.projects, projectId, 'theme', configNameOf.theme), config);
+  },
+  /**
+   * Writes to a page's config file
+   */
+  page: async (projectId: string, pageId: string, config: PageConfig): Promise<void> => {
+    const missingKeys = hasKeysOf(config, new PageConfig());
+    if (missingKeys !== true) {
+      throw new Error(`Tried to write invalid page config. Missing required keys: ${missingKeys.join(', ')}`);
+    }
+    await json.write(Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`), config);
+  },
+  /**
+   * Writes to a block's config header and content
+   */
+  block: async (projectId: string, blockId: string, config: BlockConfig, content?: string): Promise<void> => {
+    const path = Path.join(pathTo.projects, projectId, 'blocks', `${blockId}.md`);
+    const missingKeys = hasKeysOf(config, new BlockConfig());
+    if (missingKeys !== true) {
+      throw new Error(`Tried to write invalid block config. Missing required keys: ${missingKeys.join(', ')}`);
+    }
+    // Now write the file with header and given content
+    await Fs.writeFile(path, `---
+${JSON.stringify(config, null, 2)}
+---
+${content}`);
   }
 };
 

@@ -53,7 +53,7 @@ export default class Theme {
     // Otherwise we could just clone the current version
     // without the history overhead
     this._localRepository = await Util.git.clone(repository, this.path);
-    this._config = await Util.config.read.theme(this.project.id);
+    this._config = await Util.read.theme(this.project.id);
     return this;
   }
 
@@ -62,7 +62,7 @@ export default class Theme {
    */
   public async load(): Promise<Theme> {
     this._localRepository = await Util.git.open(this.path);
-    this._config = await Util.config.read.theme(this.project.id);
+    this._config = await Util.read.theme(this.project.id);
     return this;
   }
 

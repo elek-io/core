@@ -40,12 +40,14 @@ describe('project module', () => {
     await project.page.create(signature, {
       name: 'Another page',
       slug: 'another-page',
-      stage: 'wip'
+      stage: 'wip',
+      content: []
     });
     await project.page.create(signature, {
       name: 'Foo bar',
       slug: 'foo-bar',
-      stage: 'private'
+      stage: 'private',
+      content: []
     });
     expect(project.pages.length).toBe(3);
   });
