@@ -75,7 +75,7 @@ export default class Project {
     this._theme = await new Theme(this).use('https://github.com/elek-io/starter-theme.git');
 
     // Create an initial commit
-    await Util.git.commit(this.localRepository, signature, '*', `:tada: Created new elek.io project "${name}"`, true);
+    await Util.git.commit(this.localRepository, signature, '*', ':tada: Created this new elek.io project', true);
 
     // Now create and switch to the "stage" branch
     await Util.git.checkout(this.localRepository, 'stage', true);
