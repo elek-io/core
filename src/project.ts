@@ -80,12 +80,24 @@ export default class Project {
     // Now create and switch to the "stage" branch
     await Util.git.checkout(this.localRepository, 'stage', true);
 
-    // Create a first page
+    // Create the first block of content
+    this._blocks.push(await new Block(this).create(signature, `# Hello World!
+Lorem impsum dolor...
+
+- Lorem
+- ipsum
+- dolor
+`));
+
+    // Create a first page with a reference to the content block
     this._pages.push(await new Page(this).create(signature, {
       name: 'My first page',
       slug: Util.slug('My first page'),
       stage: 'wip',
-      content: []
+      content: [{
+        themeBlockId: 'test-theme-id',
+        blockId: this.blocks[0].id
+      }]
     }));
 
     // Load the config file
@@ -171,7 +183,7 @@ export default class Project {
    */
   public block = {
     create: async (signature: Signature, config?: BlockConfig, content?: string): Promise<Block> => {
-      const block = await new Block(this).create(signature, config, content);
+      const block = await new Block(this).create(signature, content, config);
       this._blocks.push(block);
       return block;
     },

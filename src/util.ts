@@ -64,7 +64,7 @@ export const json = {
       throw new Error('File contained no JSON header');
     }
     const header = content.substring(
-      content.lastIndexOf('---') + 3, 
+      content.indexOf('---') + 3, 
       content.lastIndexOf('---')
     );
     return JSON.parse(header);

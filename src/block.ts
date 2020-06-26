@@ -85,7 +85,7 @@ export default class Block {
   /**
    * Creates a new block on disk
    */
-  public async create(signature: Signature, config?: BlockConfig, content?: string): Promise<Block> {
+  public async create(signature: Signature, content?: string, config?: BlockConfig): Promise<Block> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.md`);
 
