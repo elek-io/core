@@ -24,25 +24,21 @@ export class BlockRestriction {
 export type BlockRestrictionKey = keyof BlockRestriction;
 
 /**
- * @todo may be changed to represent all supported markdown-it rules
+ * Represents some supported markdown-it rules
  * @see https://github.com/markdown-it/markdown-it#manage-rules
  */
 export enum BlockRuleEnum {
   'heading',
-  'unorderedList',
-  'orderedList',
-  'paragraph',
-  'italic',
-  'bold',
-  'strikethrough',
-  'link',
-  'image',
-  'video',
-  'code',
   'table',
+  'code',
   'blockquote',
-  'horizontalRule',
-  'lineBreak'
+  'hr',
+  'list',
+  'paragraph',
+  'strikethrough',
+  'emphasis',
+  'link',
+  'image'
 }
 export const BlockRuleArray = <BlockRule[]>Object.keys(BlockRuleEnum).filter((key) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
