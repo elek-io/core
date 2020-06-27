@@ -28,7 +28,7 @@ export type BlockRestrictionKey = keyof BlockRestriction;
  * @see https://github.com/markdown-it/markdown-it#manage-rules
  */
 export enum BlockRuleEnum {
-  'header',
+  'heading',
   'unorderedList',
   'orderedList',
   'paragraph',
@@ -83,6 +83,10 @@ export default class Block {
     return this._content;
   }
 
+  public set content(value: string) {
+    this._content = value;
+  }
+
   constructor(project: Project) {
     this._project = project;
   }
@@ -90,7 +94,7 @@ export default class Block {
   /**
    * Creates a new block on disk
    */
-  public async create(signature: Signature, content?: string, config?: BlockConfig): Promise<Block> {
+  public async create(signature: Signature, config: BlockConfig, content?: string): Promise<Block> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.md`);
 
@@ -106,8 +110,6 @@ export default class Block {
     const block = await Util.read.block(this.project.id, this.id);
     this._config = block.config;
     this._content = block.content;
-
-    console.log(this.config, this.content);
 
     // Create a new commit
     await this.save(signature, ':heavy_plus_sign: Created new block');
@@ -130,7 +132,7 @@ export default class Block {
   /**
    * Saves the block's files on disk and creates a commit
    */
-  public async save(signature: Signature, message: string): Promise<void> {
+  public async save(signature: Signature, message = ':wrench: Updated block'): Promise<void> {
     // Write block to disk
     await Util.write.block(this.project.id, this.id, this.config, this.content);
     // Commit changes
@@ -142,7 +144,9 @@ export default class Block {
    * 
    * @param restriction restriction object of the theme in use
    */
-  public async render(restriction: BlockRestriction): Promise<string> {
+  public async render(partialRestriction: Partial<BlockRestriction>): Promise<string> {
+    const restriction = Util.assignDefaultIfMissing(partialRestriction, new BlockRestriction());
+
     // Configure the Markdown renderer based on the block's restriction
     const md = new Markdown({
       /**

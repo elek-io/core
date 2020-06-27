@@ -113,7 +113,7 @@ export default class Page {
   /**
    * Saves the page's files on disk and creates a commit
    */
-  public async save(signature: Signature, message: string): Promise<void> {
+  public async save(signature: Signature, message = ':wrench: Updated page config'): Promise<void> {
     // Write config to disk
     await Util.write.page(this.project.id, this.id, this.config);
     // Commit changes

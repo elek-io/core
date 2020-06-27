@@ -81,7 +81,9 @@ export default class Project {
     await Util.git.checkout(this.localRepository, 'stage', true);
 
     // Create the first block of content
-    this._blocks.push(await new Block(this).create(signature, `# Hello World!
+    this._blocks.push(await new Block(this).create(signature, {
+      language: 'en'
+    }, `# Hello World!
 Lorem impsum dolor...
 
 - Lorem
@@ -143,17 +145,17 @@ Lorem impsum dolor...
   /**
    * Saves the project's files on disk and creates a commit
    */
-  public async save(signature: Signature): Promise<void> {
+  public async save(signature: Signature, message = ':wrench: Updated project config'): Promise<void> {
     // Write config to disk
     await Util.write.project(this.id, this.config);
-    await Util.git.commit(this.localRepository, signature, Path.join(this.path, Util.configNameOf.project), ':wrench: Updated project config');
+    await Util.git.commit(this.localRepository, signature, Path.join(this.path, Util.configNameOf.project), message);
     // Save each block
     this.blocks.forEach(async (block) => {
-      await block.save(signature, ':wrench: Updated block config');
+      await block.save(signature);
     });
     // Save each page
     this.pages.forEach(async (page) => {
-      await page.save(signature, ':wrench: Updated page config');
+      await page.save(signature);
     });
   }
 
@@ -182,8 +184,8 @@ Lorem impsum dolor...
    * Helper methods for working with blocks
    */
   public block = {
-    create: async (signature: Signature, config?: BlockConfig, content?: string): Promise<Block> => {
-      const block = await new Block(this).create(signature, content, config);
+    create: async (signature: Signature, config: BlockConfig, content?: string): Promise<Block> => {
+      const block = await new Block(this).create(signature, config, content);
       this._blocks.push(block);
       return block;
     },
