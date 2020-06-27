@@ -1,0 +1,48 @@
+import Elek from '../src/index';
+import { Signature } from 'nodegit';
+import Project from '../src/project';
+import Block from '../src/block';
+
+const signature = Signature.now('John Doe', 'john.doe@domain.com');
+
+let project: Project;
+let block: Block;
+
+beforeAll(async () => {
+  project = await new Elek.project().create('My first project', signature);
+});
+
+describe('block module', () => {
+
+  it('should be able to load all blocks of a project', async () => {
+    expect(project.blocks.length).toBe(1);
+  });
+
+  it('should be able to create a new block', async () => {
+    block = await project.block.create(signature, {
+      language: 'en'
+    }, '# Hello World!');
+    expect(project.blocks.length).toBe(2);
+    expect(block.config.language).toBe('en');
+    expect(block.content).toContain('# Hello World!');
+  });
+
+  it('should be able to update an existing block', async () => {
+    block.config.language = 'de';
+    block.content = '# Hallo Welt!';
+    await block.save(signature);
+    expect(block.config.language).toBe('de');
+    expect(block.content).toContain('# Hallo Welt!');
+  });
+
+  it('should be able to render an existing block', async () => {
+    const html = await block.render({});
+    expect(html).toContain('<h1>Hallo Welt!</h1>');
+  });
+
+  it('should be able to render an existing block with restrictions', async () => {
+    const html = await block.render({not: ['heading']});
+    expect(html).toContain('<p># Hallo Welt!</p>');
+  });
+
+});

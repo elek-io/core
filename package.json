@@ -1,0 +1,50 @@
+{
+  "name": "@elek.io/core",
+  "description": "",
+  "version": "0.0.3",
+  "main": "dist/index.js",
+  "files": [
+    "dist/**/*"
+  ],
+  "types": "dist/index.d.ts",
+  "homepage": "https://github.com/elek-io/core",
+  "repository": "git@github.com:elek-io/core.git",
+  "bugs": "https://github.com/elek-io/core/issues",
+  "author": "Nils Kolvenbach <info@nils-kolvenbach.de>",
+  "license": "",
+  "scripts": {
+    "test": "yarn test:lint && yarn test:unit",
+    "test:lint": "eslint ./tests ./src",
+    "test:unit": "jest --config=jest.config.js",
+    "build": "rm -rf ./dist && tsc",
+    "prepare": "yarn build",
+    "preversion": "yarn test"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^9.0.1",
+    "@types/highlight.js": "^9.12.4",
+    "@types/jest": "^26.0.0",
+    "@types/markdown-it": "^10.0.1",
+    "@types/mkdirp": "^1.0.1",
+    "@types/node": "^14.0.13",
+    "@types/nodegit": "^0.26.5",
+    "@types/rimraf": "^3.0.0",
+    "@types/uuid": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^3.2.0",
+    "@typescript-eslint/parser": "^3.2.0",
+    "eslint": "^7.2.0",
+    "jest": "^26.0.1",
+    "ts-jest": "^26.1.0",
+    "typescript": "^3.9.5"
+  },
+  "dependencies": {
+    "fs-extra": "^9.0.1",
+    "highlight.js": "^10.1.1",
+    "markdown-it": "^11.0.0",
+    "mkdirp": "^1.0.4",
+    "nodegit": "^0.26.5",
+    "rimraf": "^3.0.2",
+    "slugify": "^1.4.0",
+    "uuid": "^8.1.0"
+  }
+}
