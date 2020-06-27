@@ -2,6 +2,11 @@ import Fs from 'fs-extra';
 import Path from 'path';
 import Elek from '../src/index';
 
+beforeAll(async () => {
+  await Fs.remove(Elek.util.workingDirectory);
+  await Elek.init();
+});
+
 describe('index module', () => {
 
   it('should not produce errors when there are subdirectories inside the local projects directory, that are not used as a project', async () => {

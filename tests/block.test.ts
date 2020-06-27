@@ -1,3 +1,4 @@
+import Fs from 'fs-extra';
 import Elek from '../src/index';
 import { Signature } from 'nodegit';
 import Project from '../src/project';
@@ -9,6 +10,8 @@ let project: Project;
 let block: Block;
 
 beforeAll(async () => {
+  await Fs.remove(Elek.util.workingDirectory);
+  await Elek.init();
   project = await new Elek.project().create('My first project', signature);
 });
 

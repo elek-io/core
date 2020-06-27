@@ -15,7 +15,7 @@
   "scripts": {
     "test": "yarn test:lint && yarn test:unit",
     "test:lint": "eslint ./tests ./src",
-    "test:unit": "jest --config=jest.config.js",
+    "test:unit": "jest --verbose --runInBand --config=jest.config.js",
     "build": "rm -rf ./dist && tsc",
     "prepare": "yarn build",
     "preversion": "yarn test"

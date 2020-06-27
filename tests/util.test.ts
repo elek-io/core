@@ -1,3 +1,4 @@
+import Fs from 'fs-extra';
 import Path from 'path';
 import Elek from '../src/index';
 import { Signature } from 'nodegit';
@@ -7,6 +8,8 @@ const signature = Signature.now('John Doe', 'john.doe@domain.com');
 let firstProjectId: string;
 
 beforeAll(async () => {
+  await Fs.remove(Elek.util.workingDirectory);
+  await Elek.init();
   const project = await new Elek.project().create('My first project', signature);
   firstProjectId = project.id;
 });
