@@ -3,7 +3,7 @@ import * as Util from './util';
 import Project from './project';
 import { Signature } from 'nodegit';
 import Markdown from 'markdown-it';
-import Highlight from 'highlight.js';
+import Code from 'highlight.js';
 
 export class BlockConfig {
   public language = 'en';
@@ -184,10 +184,10 @@ export default class Block {
        * or '' if the source string is not changed and should be escaped externally.
        * If result starts with <pre... internal wrapper is skipped.
        */
-      highlight: (str, lang) => {
-        if (restriction.highlightCode === true && lang && Highlight.getLanguage(lang)) {
+      highlight: (code, language) => {
+        if (restriction.highlightCode === true && language && Code.getLanguage(language)) {
           try {
-            return Highlight.highlight(lang, str).value;
+            return Code.highlight(language, code).value;
           } catch (error) {
             console.log(error);
           }
