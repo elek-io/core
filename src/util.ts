@@ -1,11 +1,8 @@
 import Os from 'os';
 import Fs from 'fs-extra';
-import Util from 'util';
 import Path from 'path';
 import { v4 as Uuid } from 'uuid';
 import Slugify from 'slugify';
-import Rimraf from 'rimraf';
-import Mkdirp from 'mkdirp';
 import Git from 'nodegit';
 import { ProjectConfig } from './project';
 import { ThemeConfig } from './theme';
@@ -277,20 +274,6 @@ export function slug(string: string): string {
     lower: true,       // convert to lower case, defaults to `false`
     strict: true       // strip special characters except replacement, defaults to `false`
   });
-}
-
-/**
- * Creates given directory recusively like consoles `mkdir -p`
- */
-export function mkdir(directory: string): Promise<string | undefined> {
-  return Mkdirp(directory);
-}
-
-/**
- * Deletes given directory with all it's content like consoles `rm -rf`
- */
-export function rmrf(directory: string): Promise<void> {
-  return Util.promisify(Rimraf)(directory);
 }
 
 /**

@@ -1,3 +1,4 @@
+import Fs from 'fs-extra';
 import Path from 'path';
 import * as Util from './util';
 import { Repository } from 'nodegit';
@@ -77,7 +78,6 @@ export default class Theme {
    * Deletes this theme from disk
    */
   private async delete(): Promise<void> {
-    await Util.rmrf(this.path);
-    await Util.mkdir(this.path);
+    await Fs.emptyDir(this.path);
   }
 }

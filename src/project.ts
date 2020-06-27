@@ -139,7 +139,7 @@ Lorem impsum dolor...
     // Only if an ID is present
     if (!this.id) { throw new Error('Project cannot be deleted because it was never created nor loaded.'); }
 
-    await Util.rmrf(this.path);
+    await Fs.remove(this.path);
   }
 
   /**
@@ -210,7 +210,7 @@ public/
 # Keep directories with .gitkeep files in them
 # even if the directory itself is ignored
 !/**/.gitkeep`;
-    await Fs.promises.writeFile(Path.join(this.path, '.gitignore'), content);
+    await Fs.writeFile(Path.join(this.path, '.gitignore'), content);
   }
 
   private async createConfig(name: string): Promise<void> {
@@ -229,8 +229,8 @@ public/
     ];
 
     await Promise.all(folders.map(async (folder) => {
-      await Util.mkdir(Path.join(this.path, folder));
-      await Fs.promises.writeFile(Path.join(this.path, folder, '.gitkeep'), '');
+      await Fs.mkdir(Path.join(this.path, folder));
+      await Fs.writeFile(Path.join(this.path, folder, '.gitkeep'), '');
     }));
   }
 
