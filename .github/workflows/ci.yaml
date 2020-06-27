@@ -5,11 +5,11 @@ jobs:
     name: Linting, testing and publishing code coverage
     runs-on: ubuntu-latest
     steps:
-      - name: Install dependencies
-        uses: actions/checkout@v2
-        uses: actions/setup-node@v1
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
         with:
           node-version: '12.x'
+      - name: Install dependencies
         run: yarn install
       - name: Lint
         run: yarn test:lint
