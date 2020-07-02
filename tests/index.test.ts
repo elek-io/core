@@ -3,8 +3,11 @@ import Path from 'path';
 import Elek from '../src/index';
 
 beforeAll(async () => {
-  await Fs.remove(Elek.util.workingDirectory);
   await Elek.init();
+});
+
+afterAll(async () => {
+  await Fs.remove(Path.join(Elek.util.pathTo.projects, 'some-other-folder'));
 });
 
 describe('index module', () => {

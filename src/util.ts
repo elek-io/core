@@ -284,8 +284,7 @@ export const git = {
     return Git.Repository.init(path, 0);
   },
   clone: async (url: string, localPath: string, options?: Git.CloneOptions): Promise<Git.Repository> => {
-    await Git.Clone.clone(url, localPath, options);
-    return git.open(localPath);
+    return Git.Clone.clone(url, localPath, options);
   },
   pull: async (repository: Git.Repository | string): Promise<Git.Oid> => {
     // Check if we need to resolve that repository

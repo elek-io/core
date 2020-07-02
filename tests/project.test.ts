@@ -7,8 +7,11 @@ const signature = Signature.now('John Doe', 'john.doe@domain.com');
 let firstProjectId: string;
 
 beforeAll(async () => {
-  await Fs.remove(Elek.util.workingDirectory);
   await Elek.init();
+});
+
+afterAll(async () => {
+  await (await new Elek.project().load(firstProjectId)).delete();
 });
 
 describe('project module', () => {

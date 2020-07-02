@@ -10,9 +10,12 @@ let project: Project;
 let block: Block;
 
 beforeAll(async () => {
-  await Fs.remove(Elek.util.workingDirectory);
   await Elek.init();
   project = await new Elek.project().create('My first project', signature);
+});
+
+afterAll(async () => {
+  await project.delete();
 });
 
 describe('block module', () => {
