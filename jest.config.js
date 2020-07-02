@@ -46,7 +46,7 @@ module.exports = {
   // dependencyExtractor: undefined,
 
   // Make calling deprecated APIs throw helpful error messages
-  // errorOnDeprecated: false,
+  errorOnDeprecated: true,
 
   // Force coverage collection from ignored files using an array of glob patterns
   // forceCoverageMatch: [],
@@ -115,9 +115,9 @@ module.exports = {
   // rootDir: undefined,
 
   // A list of paths to directories that Jest should use to search for files in
-  // roots: [
-  //   "<rootDir>"
-  // ],
+  roots: [
+    'tests'
+  ],
 
   // Allows you to use a custom runner instead of Jest's default test runner
   // runner: "jest-runner",
@@ -138,7 +138,7 @@ module.exports = {
   // testEnvironmentOptions: {},
 
   // Adds a location field to test results
-  // testLocationInResults: false,
+  testLocationInResults: true,
 
   // The glob patterns Jest uses to detect test files
   // testMatch: [
