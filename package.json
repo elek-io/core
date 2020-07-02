@@ -21,6 +21,7 @@
     "preversion": "yarn test"
   },
   "devDependencies": {
+    "@types/cheerio": "^0.22.18",
     "@types/fs-extra": "^9.0.1",
     "@types/highlight.js": "^9.12.4",
     "@types/jest": "^26.0.0",
@@ -36,6 +37,7 @@
     "typescript": "^3.9.5"
   },
   "dependencies": {
+    "cheerio": "^1.0.0-rc.3",
     "fs-extra": "^9.0.1",
     "highlight.js": "^10.1.1",
     "markdown-it": "^11.0.0",

@@ -10,7 +10,7 @@ export class BlockConfig {
 }
 export type BlockConfigKey = keyof BlockConfig;
 
-export class BlockRestriction {
+export class BlockRestrictions {
   public only: BlockRule[] = [];
   public not: BlockRule[] = [];
   public minimum = 0;
@@ -21,7 +21,7 @@ export class BlockRestriction {
   public highlightCode = false;
   public repeatable = false;
 }
-export type BlockRestrictionKey = keyof BlockRestriction;
+export type BlockRestrictionsKey = keyof BlockRestrictions;
 
 /**
  * Represents some supported markdown-it rules
@@ -140,8 +140,8 @@ export default class Block {
    * 
    * @param restriction restriction object of the theme in use
    */
-  public async render(partialRestriction: Partial<BlockRestriction>): Promise<string> {
-    const restriction = Util.assignDefaultIfMissing(partialRestriction, new BlockRestriction());
+  public async render(partialRestriction: Partial<BlockRestrictions>): Promise<string> {
+    const restriction = Util.assignDefaultIfMissing(partialRestriction, new BlockRestrictions());
 
     // Configure the Markdown renderer based on the block's restriction
     const md = new Markdown({

@@ -1,8 +1,10 @@
 import Fs from 'fs-extra';
 import Path from 'path';
+import Cheerio from 'cheerio';
 import * as Util from './util';
 import { Repository } from 'nodegit';
 import Project from './project';
+import { BlockRestrictions } from './block';
 
 export class ThemeConfig {
   public name = '';
@@ -12,6 +14,22 @@ export class ThemeConfig {
   public repository = '';
   public author = '';
   public license = '';
+  public layouts: ThemeLayout[] = [];
+}
+
+export class ThemeLayout {
+  public id!: string;
+  public type!: string;
+  public name!: string;
+  public description!: string;
+  public path!: string;
+  public children: ThemeLayout[] = [];
+}
+
+export class ThemeBlockPosition {
+  public id!: string;
+  public layout!: ThemeLayout;
+  public restrictions!: BlockRestrictions;
 }
 
 export default class Theme {
@@ -21,6 +39,7 @@ export default class Theme {
   private _path!: string;
   private _config!: ThemeConfig;
   private _localRepository!: Repository;
+  private _blockPositions!: ThemeBlockPosition[];
 
   public get project(): Project {
     return this._project;
@@ -36,6 +55,10 @@ export default class Theme {
 
   public get localRepository(): Repository {
     return this._localRepository;
+  }
+
+  public get blockPositions(): ThemeBlockPosition[] {
+    return this._blockPositions;
   }
 
   constructor(project: Project) {
@@ -79,5 +102,25 @@ export default class Theme {
    */
   private async delete(): Promise<void> {
     await Fs.emptyDir(this.path);
+  }
+
+  /**
+   * Looks for custom elek.io elements in every layout of the theme and parses them
+   */
+  private async parse(): Promise<void> {
+    this.config.layouts.forEach(async (layout) => {
+      // Check if it contains custom elek.io elements
+      const $ = Cheerio.load(await Fs.readFile(Path.join(this.path, layout.path)));
+      // Get all content blocks
+      $('elek.io:block').map((index, element) => {
+        this._blockPositions.push({
+          id: element.attribs['id'],
+          layout,
+          restrictions: Util.assignDefaultIfMissing({
+            // @todo
+          }, new BlockRestrictions)
+        });
+      });
+    });
   }
 }
