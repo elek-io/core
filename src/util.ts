@@ -131,7 +131,8 @@ export async function files(path: string, extension?: string): Promise<Fs.Dirent
  */
 export async function returnResolved<T>(promises: Promise<T>[]): Promise<T[]> {
   const toCheck: Promise<T | Error>[] = [];
-  promises.forEach((promise) => {
+  for (let index = 0; index < promises.length; index++) {
+    const promise = promises[index];
     // Here comes the trick:
     // By using "then" and "catch" we are able to create an array of Project and Error types
     // without throwing and stopping the later Promise.all() call prematurely
@@ -142,7 +143,7 @@ export async function returnResolved<T>(promises: Promise<T>[]): Promise<T[]> {
       // we need to specifically call an Error 
       return new Error(error);
     }));
-  });
+  }
   // Resolve all promises
   // Here we do not expect any error to fail the call to Promise.all()
   // because we catched it earlier and returning an Error type instead of throwing it

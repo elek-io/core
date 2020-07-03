@@ -150,13 +150,15 @@ Lorem impsum dolor...
     await Util.write.project(this.id, this.config);
     await Util.git.commit(this.localRepository, signature, Path.join(this.path, Util.configNameOf.project), message);
     // Save each block
-    this.blocks.forEach(async (block) => {
+    for (let index = 0; index < this.blocks.length; index++) {
+      const block = this.blocks[index];
       await block.save(signature);
-    });
+    }
     // Save each page
-    this.pages.forEach(async (page) => {
+    for (let index = 0; index < this.pages.length; index++) {
+      const page = this.pages[index];
       await page.save(signature);
-    });
+    }
   }
 
   /**
