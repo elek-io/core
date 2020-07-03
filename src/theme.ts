@@ -113,14 +113,17 @@ export default class Theme {
     for (let index = 0; index < this.config.layouts.length; index++) {
       const layout = this.config.layouts[index];
       // Check if it contains custom elek.io elements
-      const $ = Cheerio.load(await Fs.readFile(Path.join(this.path, layout.path)));
+      const content = await Fs.readFile(Path.join(this.path, layout.path));
+      const $ = Cheerio.load(content, {
+        // Needed to parse uppercase / lowercase combinations used in frameworks like Vue.js
+        xmlMode: true
+      });
       // Get all content blocks
       const block = $('elek-io-block');
       for (let index = 0; index < block.length; index++) {
         const element = block[index];
         const partialRestrictions = await this.parseRestrictions(element.attribs);
         const restrictions = Util.assignDefaultIfMissing(partialRestrictions, new BlockRestrictions);
-        console.log(JSON.parse(JSON.stringify(restrictions)));
         this._blockPositions.push({
           id: element.attribs['id'],
           layout,
@@ -132,37 +135,35 @@ export default class Theme {
 
   private async parseRestrictions(attributes: CheerioElement['attribs']) {
     const restrictions: Partial<BlockRestrictions> = {};
-
+    
     for (const key in attributes) {
       const attribute = attributes[key];
-      if (Object.keys(BlockRestrictions).includes(key)) {
 
-        // BlockRules
-        if (key === 'only' || key === 'not') {
-          restrictions[key] = attribute.split(',').filter((value): value is BlockRule => {
-            return BlockRuleArray.includes(<BlockRule>value.trim());
-          });
-        }
+      // BlockRules
+      if (key === 'only' || key === 'not') {
+        restrictions[key] = attribute.split(',').filter((value): value is BlockRule => {
+          return BlockRuleArray.includes(<BlockRule>value.trim());
+        });
+      }
 
-        // Numbers
-        if (key === 'minimum' || key === 'maximum') {
-          const value = parseInt(attribute);
-          if (value < 0) {
-            throw new Error(`Found negative value "${value}" for restriction "${key}"`);
-          }
-          restrictions[key] = value;
+      // Numbers
+      if (key === 'minimum' || key === 'maximum') {
+        const value = parseInt(attribute);
+        if (value < 0) {
+          throw new Error(`Found negative value "${value}" for restriction "${key}"`);
         }
+        restrictions[key] = value;
+      }
 
-        // Booleans
-        if (key === 'inline' || key === 'breaks' || key === 'html' || key === 'highlightCode' || key === 'repeatable') {
-          if (attribute !== 'true' && attribute !== 'false') {
-            throw new Error(`Expected boolean value for restriction "${key}", got "${attribute}"`);
-          }
-          if (attribute === 'true') {
-            restrictions[key] = true;
-          }
-          restrictions[key] = false;
+      // Booleans
+      if (key === 'inline' || key === 'breaks' || key === 'html' || key === 'highlightCode' || key === 'repeatable') {
+        if (attribute !== 'true' && attribute !== 'false') {
+          throw new Error(`Expected boolean value for restriction "${key}", got "${attribute}"`);
         }
+        if (attribute === 'true') {
+          restrictions[key] = true;
+        }
+        restrictions[key] = false;
       }
     }
 
