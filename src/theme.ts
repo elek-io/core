@@ -4,7 +4,7 @@ import Cheerio from 'cheerio';
 import * as Util from './util';
 import { Repository } from 'nodegit';
 import Project from './project';
-import { BlockRestrictions } from './block';
+import { BlockRestrictions, BlockRuleArray, BlockRule } from './block';
 
 export class ThemeConfig {
   public name = '';
@@ -39,7 +39,7 @@ export default class Theme {
   private _path!: string;
   private _config!: ThemeConfig;
   private _localRepository!: Repository;
-  private _blockPositions!: ThemeBlockPosition[];
+  private _blockPositions: ThemeBlockPosition[] = [];
 
   public get project(): Project {
     return this._project;
@@ -78,6 +78,7 @@ export default class Theme {
     // without the history overhead
     this._localRepository = await Util.git.clone(repository, this.path);
     this._config = await Util.read.theme(this.project.id);
+    await this.parse();
     return this;
   }
 
@@ -87,6 +88,7 @@ export default class Theme {
   public async load(): Promise<Theme> {
     this._localRepository = await Util.git.open(this.path);
     this._config = await Util.read.theme(this.project.id);
+    await this.parse();
     return this;
   }
 
@@ -108,19 +110,62 @@ export default class Theme {
    * Looks for custom elek.io elements in every layout of the theme and parses them
    */
   private async parse(): Promise<void> {
-    this.config.layouts.forEach(async (layout) => {
+    for (let index = 0; index < this.config.layouts.length; index++) {
+      const layout = this.config.layouts[index];
       // Check if it contains custom elek.io elements
       const $ = Cheerio.load(await Fs.readFile(Path.join(this.path, layout.path)));
       // Get all content blocks
-      $('elek.io:block').map((index, element) => {
+      const block = $('elek-io-block');
+      for (let index = 0; index < block.length; index++) {
+        const element = block[index];
+        const partialRestrictions = await this.parseRestrictions(element.attribs);
+        const restrictions = Util.assignDefaultIfMissing(partialRestrictions, new BlockRestrictions);
+        console.log(JSON.parse(JSON.stringify(restrictions)));
         this._blockPositions.push({
           id: element.attribs['id'],
           layout,
-          restrictions: Util.assignDefaultIfMissing({
-            // @todo
-          }, new BlockRestrictions)
+          restrictions
         });
-      });
-    });
+      }
+    }
+  }
+
+  private async parseRestrictions(attributes: CheerioElement['attribs']) {
+    const restrictions: Partial<BlockRestrictions> = {};
+
+    for (const key in attributes) {
+      const attribute = attributes[key];
+      if (Object.keys(BlockRestrictions).includes(key)) {
+
+        // BlockRules
+        if (key === 'only' || key === 'not') {
+          restrictions[key] = attribute.split(',').filter((value): value is BlockRule => {
+            return BlockRuleArray.includes(<BlockRule>value.trim());
+          });
+        }
+
+        // Numbers
+        if (key === 'minimum' || key === 'maximum') {
+          const value = parseInt(attribute);
+          if (value < 0) {
+            throw new Error(`Found negative value "${value}" for restriction "${key}"`);
+          }
+          restrictions[key] = value;
+        }
+
+        // Booleans
+        if (key === 'inline' || key === 'breaks' || key === 'html' || key === 'highlightCode' || key === 'repeatable') {
+          if (attribute !== 'true' && attribute !== 'false') {
+            throw new Error(`Expected boolean value for restriction "${key}", got "${attribute}"`);
+          }
+          if (attribute === 'true') {
+            restrictions[key] = true;
+          }
+          restrictions[key] = false;
+        }
+      }
+    }
+
+    return restrictions;
   }
 }
