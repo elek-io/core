@@ -12,6 +12,7 @@ export class PageConfig {
   public name = '';
   public slug = '';
   public stage: PageStage = 'wip';
+  public layoutId = '';
   public content: PageContent[] = [];
 }
 export type PageConfigKey = keyof PageConfig;

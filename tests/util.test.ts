@@ -1,4 +1,3 @@
-import Fs from 'fs-extra';
 import Path from 'path';
 import Elek from '../src/index';
 import { Signature } from 'nodegit';

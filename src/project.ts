@@ -81,7 +81,7 @@ export default class Project {
     await Util.git.checkout(this.localRepository, 'stage', true);
 
     // Create the first block of content
-    this._blocks.push(await new Block(this).create(signature, {
+    const block = await new Block(this).create(signature, {
       language: 'en'
     }, `# Hello World!
 Lorem impsum dolor...
@@ -89,16 +89,18 @@ Lorem impsum dolor...
 - Lorem
 - ipsum
 - dolor
-`));
+`);
+    this._blocks.push(block);
 
     // Create a first page with a reference to the content block
     this._pages.push(await new Page(this).create(signature, {
       name: 'My first page',
       slug: Util.slug('My first page'),
       stage: 'wip',
+      layoutId: 'homepage',
       content: [{
-        themeBlockId: 'test-theme-id',
-        blockId: this.blocks[0].id
+        themeBlockId: 'welcome-message',
+        blockId: block.id
       }]
     }));
 

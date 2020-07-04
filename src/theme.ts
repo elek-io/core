@@ -133,6 +133,9 @@ export default class Theme {
     }
   }
 
+  /**
+   * Parses given HTML attributes and returns an partial BlockRestrictions object
+   */
   private async parseRestrictions(attributes: CheerioElement['attribs']) {
     const restrictions: Partial<BlockRestrictions> = {};
     

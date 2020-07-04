@@ -1,4 +1,3 @@
-import Fs from 'fs-extra';
 import Elek from '../src/index';
 import { Signature } from 'nodegit';
 import Project from '../src/project';
@@ -12,9 +11,9 @@ beforeAll(async () => {
   project = await new Elek.project().create('My first project', signature);
 });
 
-afterAll(async () => {
-  await project.delete();
-});
+// afterAll(async () => {
+//   await project.delete();
+// });
 
 describe('project module', () => {
 
@@ -42,12 +41,14 @@ describe('project module', () => {
       name: 'Another page',
       slug: 'another-page',
       stage: 'wip',
+      layoutId: 'about',
       content: []
     });
     await project.page.create(signature, {
       name: 'Foo bar',
       slug: 'foo-bar',
       stage: 'private',
+      layoutId: 'about',
       content: []
     });
     expect(project.pages.length).toBe(3);
