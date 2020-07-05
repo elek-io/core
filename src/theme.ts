@@ -15,6 +15,10 @@ export class ThemeConfig {
   public author = '';
   public license = '';
   public layouts: ThemeLayout[] = [];
+  public scripts!: {
+    serve: string;
+    build: string;
+  };
 }
 
 export class ThemeLayout {
@@ -156,8 +160,10 @@ export default class Theme {
 
       // BlockRules
       if (key === 'only' || key === 'not') {
-        restrictions[key] = attribute.split(',').filter((value): value is BlockRule => {
+        restrictions[key] = attribute.split(',').filter((value) => {
           return BlockRuleArray.includes(<BlockRule>value.trim());
+        }).map((value) => {
+          return <BlockRule>value.trim();
         });
       }
 

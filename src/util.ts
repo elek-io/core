@@ -26,7 +26,7 @@ export const pathTo = {
  */
 export const configNameOf = {
   project: 'elek.project.json',
-  theme: 'elek.theme.json'
+  theme: 'package.json'
 };
 
 /**

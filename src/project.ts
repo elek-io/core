@@ -1,5 +1,6 @@
 import Fs from 'fs-extra';
 import Path from 'path';
+// import { spawn } from 'child_process';
 import { Repository, Signature } from 'nodegit';
 import * as Util from './util';
 import Theme from './theme';
@@ -207,18 +208,89 @@ Lorem impsum dolor...
   };
   
   public async export() {
+
+    // Get all published pages of the project
+    const pages = await Promise.all(this.pages.filter((page) => {
+      // return page.config.stage === 'published';
+      return true;
+    }).map(async (page) => {
+      return page.export();
+    }));
+
+    // Get the themes config
+    const theme = await this.theme.export();
+
     return {
-      id: this.id,
-      path: this.path,
-      config: this.config,
-      theme: await this.theme.export(),
-      pages: await Promise.all(this.pages.map(async (page) => {
-        return page.export();
+      ...this.config,
+      routes: pages.map((page) => {
+        return {
+          name: page.config.name,
+          path: page.config.path
+        };
+      }),
+      pages: await Promise.all(pages.map(async (page) => {
+        return {
+          name: page.config.name,
+          path: page.config.path,
+          blocks: await Promise.all(page.config.content.map(async (content) => {
+            // Find the block of this content
+            // We get the actual block object instead of it's export
+            // to use the render() method below
+            const block = this.blocks.find((block) => {
+              return block.id === content.blockId;
+            });
+
+            if (block) {
+              // Get the blocks restrictions
+              const blockPosition = theme.blockPositions.find((blockPosition) => {
+                return blockPosition.id === content.themeBlockId;
+              });
+
+              if (blockPosition) {
+                console.log(blockPosition.restrictions.only);
+                return {
+                  id: content.themeBlockId,
+                  ...block.config,
+                  content: await block.render(blockPosition.restrictions)
+                };
+              }
+            }
+          }))
+        };
       })),
-      blocks: await Promise.all(this.blocks.map(async (block) => {
-        return block.export();
-      }))
+      theme: {
+        ...theme.config
+      }
     };
+  }
+
+  public async build(): Promise<void> {
+    // Export the projects data to it's themes ".elek.io" directory
+    await Util.json.write(Path.join(this.path, 'theme', '.elek.io', 'project.json'), await this.export());
+    
+    // // Install the themes dependencies
+    // const install = spawn('npm install');
+    // install.stderr.on('data', (data) => {
+    //   throw new Error(data);
+    // });
+    // install.stdout.on('data', (data) => {
+    //   console.log(data);
+    // });
+    // install.on('close', (code) => {
+    //   console.log(`Installing dependencies exited with code ${code}`);
+
+    //   // Run the themes build script which uses the exported json
+    //   const build = spawn(this.theme.config.scripts.build);
+    //   build.stderr.on('data', (data) => {
+    //     throw new Error(data);
+    //   });
+    //   build.stdout.on('data', (data) => {
+    //     console.log(data);
+    //   });
+    //   build.on('close', (code) => {
+    //     console.log(`Build exited with code ${code}`);
+    //   });
+    // });
   }
 
   private async createGitignore(): Promise<void> {
@@ -269,17 +341,5 @@ public/
     this._blocks = await Util.returnResolved(possibleBlocks.map((possibleBlock) => {
       return new Block(this).load(possibleBlock.name.replace('.json', ''));
     }));
-  }
-
-  private async build() {
-    // ?Copy the theme over to a tmp directory
-    // - Create a route structure from all of the project pages
-    //   which structure is tied to the used framework of the theme
-    // - Iterate through all files of the theme and
-    //   replace "const elekIoRoutes;" with "const elekIoRoutes = [...];"
-    // - Run the build process of the theme
-    // - The client now loads the build theme which includes 
-    // Iterate over all project pages
-    // 
   }
 }

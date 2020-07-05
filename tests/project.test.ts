@@ -1,3 +1,4 @@
+import Path from 'path';
 import Elek from '../src/index';
 import { Signature } from 'nodegit';
 import Project from '../src/project';
@@ -38,7 +39,7 @@ describe('project module', () => {
 
   it('should be able to create new pages', async () => {
     await project.page.create(signature, {
-      name: '',
+      name: 'Another page',
       path: `/${Elek.util.slug('Another page')}`,
       stage: 'wip',
       layoutId: 'about',
@@ -68,9 +69,16 @@ describe('project module', () => {
   });
 
   it('should be able to export', async () => {
-    const obj = await project.export();
-    console.log(JSON.parse(JSON.stringify(obj)));
-    expect(obj).toBeDefined();
+    const data = await project.export();
+    expect(data).toBeDefined();
+    expect(data.name).toBe(project.config.name);
+  });
+
+  it('should be able to build', async () => {
+    await project.build();
+    const data = await Elek.util.json.read(Path.join(project.path, 'theme', '.elek.io', 'project.json'));
+    expect(data).toBeDefined();
+    expect(data.name).toBe(project.config.name);
   });
 
 });
