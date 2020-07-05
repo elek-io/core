@@ -67,4 +67,10 @@ describe('project module', () => {
     }
   });
 
+  it('should be able to export', async () => {
+    const obj = await project.export();
+    console.log(JSON.parse(JSON.stringify(obj)));
+    expect(obj).toBeDefined();
+  });
+
 });
