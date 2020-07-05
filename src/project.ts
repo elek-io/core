@@ -95,7 +95,7 @@ Lorem impsum dolor...
     // Create a first page with a reference to the content block
     this._pages.push(await new Page(this).create(signature, {
       name: 'My first page',
-      slug: Util.slug('My first page'),
+      path: `/${Util.slug('My first page')}`,
       stage: 'wip',
       layoutId: 'homepage',
       content: [{

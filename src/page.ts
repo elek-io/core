@@ -10,7 +10,7 @@ export class PageContent {
 
 export class PageConfig {
   public name = '';
-  public slug = '';
+  public path = '';
   public stage: PageStage = 'wip';
   public layoutId = '';
   public content: PageContent[] = [];

@@ -38,15 +38,15 @@ describe('project module', () => {
 
   it('should be able to create new pages', async () => {
     await project.page.create(signature, {
-      name: 'Another page',
-      slug: 'another-page',
+      name: '',
+      path: `/${Elek.util.slug('Another page')}`,
       stage: 'wip',
       layoutId: 'about',
       content: []
     });
     await project.page.create(signature, {
       name: 'Foo bar',
-      slug: 'foo-bar',
+      path: `/foo/bar/${Elek.util.slug('Foo bar')}`,
       stage: 'private',
       layoutId: 'about',
       content: []
