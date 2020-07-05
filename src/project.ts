@@ -229,9 +229,19 @@ Lorem impsum dolor...
         };
       }),
       pages: await Promise.all(pages.map(async (page) => {
+        const layout = theme.config.layouts.find((layout) => {
+          return layout.id === page.config.layoutId;
+        });
+        if (!layout) {
+          throw new Error(`Layout with ID ${page.config.layoutId} could not be found`);
+        }
         return {
           name: page.config.name,
           path: page.config.path,
+          layout: {
+            id: layout.id,
+            path: layout.path
+          },
           blocks: await Promise.all(page.config.content.map(async (content) => {
             // Find the block of this content
             // We get the actual block object instead of it's export
