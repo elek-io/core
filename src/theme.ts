@@ -99,6 +99,18 @@ export default class Theme {
     await Util.git.pull(this._localRepository);
   }
 
+  public async export(): Promise<{
+    path: string;
+    config: ThemeConfig;
+    blockPositions: ThemeBlockPosition[];
+  }> {
+    return {
+      path: this.path,
+      config: this.config,
+      blockPositions: this.blockPositions
+    };
+  }
+
   /**
    * Deletes this theme from disk
    */

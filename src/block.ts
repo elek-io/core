@@ -203,4 +203,18 @@ export default class Block {
     // Return rendered HTML as string
     return md.render(this.content);
   }
+
+  public async export(): Promise<{
+    id: string;
+    path: string;
+    config: BlockConfig;
+    content: string;
+  }> {
+    return {
+      id: this.id,
+      path: this.path,
+      config: this.config,
+      content: this.content
+    };
+  }
 }

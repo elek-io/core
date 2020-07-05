@@ -205,6 +205,21 @@ Lorem impsum dolor...
       });
     }
   };
+  
+  public async export() {
+    return {
+      id: this.id,
+      path: this.path,
+      config: this.config,
+      theme: await this.theme.export(),
+      pages: await Promise.all(this.pages.map(async (page) => {
+        return page.export();
+      })),
+      blocks: await Promise.all(this.blocks.map(async (block) => {
+        return block.export();
+      }))
+    };
+  }
 
   private async createGitignore(): Promise<void> {
     const content = `.DS_Store
@@ -254,5 +269,17 @@ public/
     this._blocks = await Util.returnResolved(possibleBlocks.map((possibleBlock) => {
       return new Block(this).load(possibleBlock.name.replace('.json', ''));
     }));
+  }
+
+  private async build() {
+    // ?Copy the theme over to a tmp directory
+    // - Create a route structure from all of the project pages
+    //   which structure is tied to the used framework of the theme
+    // - Iterate through all files of the theme and
+    //   replace "const elekIoRoutes;" with "const elekIoRoutes = [...];"
+    // - Run the build process of the theme
+    // - The client now loads the build theme which includes 
+    // Iterate over all project pages
+    // 
   }
 }

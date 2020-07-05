@@ -120,4 +120,16 @@ export default class Page {
     // Commit changes
     await Util.git.commit(this.project.localRepository, signature, this.path, message);
   }
+
+  public async export(): Promise<{
+    id: string;
+    path: string;
+    config: PageConfig;
+  }> {
+    return {
+      id: this.id,
+      path: this.path,
+      config: this.config
+    };
+  }
 }
