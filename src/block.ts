@@ -15,6 +15,7 @@ export class BlockRestrictions {
   public not: BlockRule[] = [];
   public minimum = 0;
   public maximum = 0;
+  public required = false;
   public inline = false;
   public breaks = false;
   public html = false;
