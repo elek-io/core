@@ -1,6 +1,5 @@
 import Fs from 'fs-extra';
 import Path from 'path';
-// import { spawn } from 'child_process';
 import { Repository, Signature } from 'nodegit';
 import * as Util from './util';
 import Theme from './theme';
@@ -257,7 +256,6 @@ Lorem impsum dolor...
               });
 
               if (blockPosition) {
-                console.log(blockPosition.restrictions.only);
                 return {
                   id: content.themeBlockId,
                   ...block.config,
@@ -274,33 +272,30 @@ Lorem impsum dolor...
     };
   }
 
-  public async build(): Promise<void> {
+  public async build(): Promise<string> {
+    let buildLog = '';
+
     // Export the projects data to it's themes ".elek.io" directory
     await Util.json.write(Path.join(this.path, 'theme', '.elek.io', 'project.json'), await this.export());
     
-    // // Install the themes dependencies
-    // const install = spawn('npm install');
-    // install.stderr.on('data', (data) => {
-    //   throw new Error(data);
-    // });
-    // install.stdout.on('data', (data) => {
-    //   console.log(data);
-    // });
-    // install.on('close', (code) => {
-    //   console.log(`Installing dependencies exited with code ${code}`);
+    // Install the themes dependencies
+    buildLog += await Util.spawnChildProcess('npm', ['install'], {
+      cwd: Path.join(this.path, 'theme')
+    });
 
-    //   // Run the themes build script which uses the exported json
-    //   const build = spawn(this.theme.config.scripts.build);
-    //   build.stderr.on('data', (data) => {
-    //     throw new Error(data);
-    //   });
-    //   build.stdout.on('data', (data) => {
-    //     console.log(data);
-    //   });
-    //   build.on('close', (code) => {
-    //     console.log(`Build exited with code ${code}`);
-    //   });
-    // });
+    // Run the build script which uses the exported json
+    // @todo check how to prevent remote code execution here, 
+    // since running a user defined command is generally a very bad idea...
+    buildLog += await Util.spawnChildProcess('npm', ['run', 'build'], {
+      cwd: Path.join(this.path, 'theme')
+    });
+
+    // Copy the contents of themes "buildDir" to the projects public directory
+    // where it's available from outside
+    await Fs.emptyDir(Path.join(this.path, 'public'));
+    await Fs.copy(Path.join(this.path, 'theme', this.theme.config.buildDir), Path.join(this.path, 'public'));
+
+    return buildLog;
   }
 
   private async createGitignore(): Promise<void> {

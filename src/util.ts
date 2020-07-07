@@ -1,6 +1,7 @@
 import Os from 'os';
 import Fs from 'fs-extra';
 import Path from 'path';
+import { spawn, SpawnOptionsWithoutStdio } from 'child_process';
 import { v4 as Uuid } from 'uuid';
 import Slugify from 'slugify';
 import Git from 'nodegit';
@@ -347,3 +348,35 @@ export const git = {
     return Git.Repository.discover(path, 0, '');
   }
 };
+
+/**
+ * Custom async typescript ready implementation of Node.js child_process
+ * 
+ * @see https://nodejs.org/api/child_process.html
+ * @see https://github.com/ralphtheninja/await-spawn
+ */
+export function spawnChildProcess(command: string, args: ReadonlyArray<string>, options?: SpawnOptionsWithoutStdio): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn(command, args, options);
+    let log = '';
+
+    childProcess.stdout.on('data', (data) => {
+      log += data;
+    });
+
+    childProcess.stderr.on('data', (data) => {
+      log += data;
+    });
+
+    childProcess.on('error', (error) => {
+      throw error;
+    });
+
+    childProcess.on('exit', (code) => {
+      if (code === 0) {
+        return resolve(log);
+      }
+      return reject(log);
+    });
+  });
+}

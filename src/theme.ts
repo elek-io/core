@@ -19,6 +19,7 @@ export class ThemeConfig {
     serve: string;
     build: string;
   };
+  public buildDir = '';
 }
 
 export class ThemeLayout {
@@ -135,7 +136,7 @@ export default class Theme {
         xmlMode: true
       });
       // Get all content blocks
-      const block = $('elek-io-block');
+      const block = $('[elek-io][type="block"]');
       for (let index = 0; index < block.length; index++) {
         const element = block[index];
         const partialRestrictions = await this.parseRestrictions(element.attribs);
