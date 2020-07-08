@@ -21,6 +21,8 @@ describe('project module', () => {
   it('should be able to load the existing project "My first project"', async () => {
     const loadedProject = await new Elek.project().load(project.id);
     expect(loadedProject.config.name).toBe('My first project');
+    expect(loadedProject.blocks.length).toBe(1);
+    expect(loadedProject.pages.length).toBe(1);
   });
 
   it('should not be able to reload an already initialized project', async () => {
@@ -56,15 +58,25 @@ describe('project module', () => {
   });
 
   it('should be able to find a page', async () => {
+    // Find by ID
     const firstPage = await project.page.find('id', project.pages[0].id);
     expect(firstPage).toBeDefined();
     if (firstPage) {
       expect(firstPage.id).toBe(project.pages[0].id);
     }
+    // Find by name
     const secondPage = await project.page.find('name', 'Foo bar');
     expect(secondPage).toBeDefined();
     if (secondPage) {
       expect(secondPage.config.name).toBe('Foo bar');
+    }
+  });
+
+  it('should be able to find a block', async () => {
+    const block = await project.block.find('id', project.blocks[0].id);
+    expect(block).toBeDefined();
+    if (block) {
+      expect(block.id).toBe(project.blocks[0].id);
     }
   });
 
@@ -77,5 +89,4 @@ describe('project module', () => {
   it('should be able to build', async () => {
     console.log(await project.build());
   }, 300000);
-
 });

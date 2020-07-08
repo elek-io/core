@@ -83,20 +83,21 @@ export default class Project {
     // Create the first block of content
     const block = await new Block(this).create(signature, {
       language: 'en'
-    }, `# Hello World!
-Lorem impsum dolor...
+    }, `We are very happy to have you on board. This page was created for you. 
+You can use it as a starting point or delete it. If you need help, consider visiting one of these pages: 
 
-- Lorem
-- ipsum
-- dolor
+- [An introduction to the elek.io client](https://elek.io)
+- [Working with pages](https://elek.io)
+- [Choosing a theme](https://elek.io)
+- [Deploying yout first project](https://elek.io)
 `);
     this._blocks.push(block);
 
     // Create a first page with a reference to the content block
     this._pages.push(await new Page(this).create(signature, {
-      name: 'My first page',
-      path: `/${Util.slug('My first page')}`,
-      stage: 'wip',
+      name: 'Welcome to elek.io!',
+      path: '/',
+      stage: 'published',
       layoutId: 'homepage',
       content: [{
         themeBlockId: 'welcome-message',
@@ -206,8 +207,12 @@ Lorem impsum dolor...
     }
   };
   
+  /**
+   * Returns an JSON object containing relevant information about this project,
+   * which can be consumed by themes and plugins
+   */
+  // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
   public async export() {
-
     // Get all published pages of the project
     const pages = await Promise.all(this.pages.filter((page) => {
       // return page.config.stage === 'published';
@@ -272,6 +277,12 @@ Lorem impsum dolor...
     };
   }
 
+  /**
+   * Builds the project by hydrating the theme with this projects information 
+   * and saving the outcome to the projects "public" directory
+   * 
+   * @todo check how to prevent remote code execution here, since running a user defined command is generally a very bad idea...
+   */
   public async build(): Promise<string> {
     let buildLog = '';
 
@@ -284,8 +295,7 @@ Lorem impsum dolor...
     });
 
     // Run the build script which uses the exported json
-    // @todo check how to prevent remote code execution here, 
-    // since running a user defined command is generally a very bad idea...
+    // to hydrate the themes content
     buildLog += await Util.spawnChildProcess('npm', ['run', 'build'], {
       cwd: Path.join(this.path, 'theme')
     });
@@ -298,6 +308,9 @@ Lorem impsum dolor...
     return buildLog;
   }
 
+  /**
+   * Writes the projects main .gitignore file to disk
+   */
   private async createGitignore(): Promise<void> {
     const content = `.DS_Store
 theme/
@@ -309,12 +322,20 @@ public/
     await Fs.writeFile(Path.join(this.path, '.gitignore'), content);
   }
 
+  /**
+   * Creates the projects initial config and writes it to disk
+   */
   private async createConfig(name: string): Promise<void> {
-    const content = new ProjectConfig();
-    content.name = name;
-    await Util.write.project(this.id, content);
+    const config = new ProjectConfig();
+    config.name = name;
+    await Util.write.project(this.id, config);
   }
 
+  /**
+   * Creates the projects folder structure and makes sure to 
+   * write empty .gitkeep files inside them to ensure they are 
+   * committed
+   */
   private async createFolderStructure(): Promise<void> {
     const folders = [
       'theme',
@@ -330,6 +351,10 @@ public/
     }));
   }
 
+  /**
+   * Loads the projects pages from disk by trying to load every JSON file inside 
+   * the "pages" directory
+   */
   private async loadPages(): Promise<void> {
     // Get all files from the pages folder that have an .json extension
     const possiblePages = await Util.files(Path.join(this.path, 'pages'), '.json');
@@ -339,12 +364,16 @@ public/
     }));
   }
 
+  /**
+   * Loads the projects blocks from disk by trying to load every Markdown file inside 
+   * the "blocks" directory
+   */
   private async loadBlocks(): Promise<void> {
-    // Get all files from the blocks folder that have an .json extension
-    const possibleBlocks = await Util.files(Path.join(this.path, 'blocks'), '.json');
+    // Get all files from the blocks folder that have an .md extension
+    const possibleBlocks = await Util.files(Path.join(this.path, 'blocks'), '.md');
     // Return all pages we are able to resolve without throwing errors
     this._blocks = await Util.returnResolved(possibleBlocks.map((possibleBlock) => {
-      return new Block(this).load(possibleBlock.name.replace('.json', ''));
+      return new Block(this).load(possibleBlock.name.replace('.md', ''));
     }));
   }
 }
