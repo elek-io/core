@@ -70,12 +70,10 @@ export default class Theme {
    */
   public async use(repository: string): Promise<Theme> {
     await this.delete();
-    // Unfortunately there is no shallow clone integration
-    // in nodegit and the underlying libgit2 yet.
-    // See: https://github.com/libgit2/libgit2/issues/3058
-    // Otherwise we could just clone the current version
-    // without the history overhead
-    await Util.git.clone(repository, this.path);
+    await Util.git.clone(repository, this.path, {
+      singleBranch: true,
+      depth: 1
+    });
     this._config = await Util.read.theme(this.project.id);
     await this.parse();
     return this;
