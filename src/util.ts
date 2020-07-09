@@ -294,50 +294,44 @@ export const git = {
   /**
    * Initializes a new repository
    */
-  init: (localPath: string, options: Partial<Parameters<typeof Git.init>[0]>): Promise<void> => {
-    const defaultOptions = {
+  init: (localPath: string, options?: Partial<Parameters<typeof Git.init>[0]>): Promise<void> => {
+    return Git.init(assignDefaultIfMissing(options || {}, {
       fs: Fs,
       dir: localPath
-    };
-    return Git.init(assignDefaultIfMissing(options, defaultOptions));
+    }));
   },
   /**
    * Clones a repository
    */
-  clone: async (url: string, localPath: string, options: Partial<Parameters<typeof Git.clone>[0]>): Promise<void> => {
-    const defaultOptions = {
+  clone: async (url: string, localPath: string, options?: Partial<Parameters<typeof Git.clone>[0]>): Promise<void> => {
+    return Git.clone(assignDefaultIfMissing(options || {}, {
       fs: Fs,
       http: Http,
       url: url,
       dir: localPath
-    };
-    return Git.clone(assignDefaultIfMissing(options, defaultOptions));
+    }));
   },
   /**
    * Fetches and merges commits from a remote repository
    */
-  pull: async (localPath: string, options: Partial<Parameters<typeof Git.pull>[0]>): Promise<void> => {
-    const defaultOptions = {
+  pull: async (localPath: string, options?: Partial<Parameters<typeof Git.pull>[0]>): Promise<void> => {
+    return Git.pull(assignDefaultIfMissing(options || {}, {
       fs: Fs,
       http: Http,
       dir: localPath
-    };
-    return Git.pull(assignDefaultIfMissing(options, defaultOptions));
+    }));
   },
   /**
    * Adds and commits given files
    */
-  commit: async (localPath: string, signature: GitSignature, files: string | string[], message: string, options: Partial<Parameters<typeof Git.commit>[0]>): Promise<string> => {
-    const defaultCommitOptions = {
-      fs: Fs,
-      dir: localPath,
-      author: signature,
-      message: message
-    };
+  commit: async (localPath: string, signature: GitSignature, files: string | string[], message: string, options?: Partial<Parameters<typeof Git.commit>[0]>): Promise<string> => {
 
     // Support the * (add and commit everything) syntax
     if (files === '*') {
-      files = await Globby([Path.join(localPath, '/**'), Path.join(localPath, '/**/.*')], { gitignore: true });
+      files = await Globby(['./**', './**/.*'], {
+        cwd: localPath,
+        gitignore: true
+      });
     }
 
     // Convert single string to string array for ease of use
@@ -345,24 +339,41 @@ export const git = {
       files = [files];
     }
 
+    // The .add() method only accepts relative paths
+    // so we need to remove the localPath part of it if needed
+    files = files.map((file) => {
+      if (file.includes(localPath)) {
+        return file.replace(localPath + '/', '');
+      }
+      return file;
+    });
+
     // Only commit changed files, not all of them again and again
-    files.filter(async (file) => {
+    files = files.filter(async (file) => {
       const status = await Git.status({
         fs: Fs,
         dir: localPath,
         filepath: file
       });
       return status === '*added' || status === '*modified' || status === '*deleted';
-    }).map(async (file) => {
+    });
+
+    await Promise.all(files.map(async (file) => {
       // Add all changed files to the staging area
-      await Git.add({
+      return Git.add({
         fs: Fs,
         dir: localPath,
         filepath: file
       });
-    });
+    }));
+
     // Now create the commit
-    return Git.commit(assignDefaultIfMissing(options, defaultCommitOptions));
+    return Git.commit(assignDefaultIfMissing(options || {}, {
+      fs: Fs,
+      dir: localPath,
+      author: signature,
+      message: message
+    }));
   },
   /**
    * Checkout a branch
@@ -370,17 +381,20 @@ export const git = {
    * If the branch already exists it will check out that branch. 
    * Otherwise, it will create a new remote tracking branch set to track the remote branch of that name.
    */
-  checkout: async (localPath: string, name: string, options: Partial<Parameters<typeof Git.checkout>[0]>): Promise<void> => {
+  checkout: async (localPath: string, name: string, isNew = false, options?: Partial<Parameters<typeof Git.checkout>[0]>): Promise<void> => {
     if (isNew === true) {
-      await repository.createBranch(name, await repository.getHeadCommit());
+      await Git.branch({
+        fs: Fs,
+        dir: localPath,
+        ref: name
+      });
     }
-    return repository.checkoutBranch(name);
-  },
-  open: (path: string): Promise<Git.Repository> => {
-    return Git.Repository.open(path);
-  },
-  discover: (path: string): Promise<Git.Buf> => {
-    return Git.Repository.discover(path, 0, '');
+
+    return Git.checkout(assignDefaultIfMissing(options || {}, {
+      fs: Fs,
+      dir: localPath,
+      ref: name
+    }));
   }
 };
 

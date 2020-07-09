@@ -1,9 +1,10 @@
-import Path from 'path';
 import Elek from '../src/index';
-import { Signature } from 'nodegit';
 import Project from '../src/project';
 
-const signature = Signature.now('John Doe', 'john.doe@domain.com');
+const signature = {
+  name: 'John Doe', 
+  email: 'john.doe@domain.com'
+};
 
 let project: Project;
 

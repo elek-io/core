@@ -1,7 +1,6 @@
 import Path from 'path';
 import * as Util from './util';
 import Project from './project';
-import { Signature } from 'nodegit';
 import Markdown from 'markdown-it';
 import Code from 'highlight.js';
 
@@ -91,7 +90,7 @@ export default class Block {
   /**
    * Creates a new block on disk
    */
-  public async create(signature: Signature, config: BlockConfig, content?: string): Promise<Block> {
+  public async create(signature: Util.GitSignature, config: BlockConfig, content?: string): Promise<Block> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.md`);
 
@@ -129,11 +128,11 @@ export default class Block {
   /**
    * Saves the block's files on disk and creates a commit
    */
-  public async save(signature: Signature, message = ':wrench: Updated block'): Promise<void> {
+  public async save(signature: Util.GitSignature, message = ':wrench: Updated block'): Promise<void> {
     // Write block to disk
     await Util.write.block(this.project.id, this.id, this.config, this.content);
     // Commit changes
-    await Util.git.commit(this.project.localRepository, signature, this.path, message);
+    await Util.git.commit(this.project.path, signature, this.path, message);
   }
 
   /**

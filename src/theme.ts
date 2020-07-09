@@ -2,7 +2,6 @@ import Fs from 'fs-extra';
 import Path from 'path';
 import Cheerio from 'cheerio';
 import * as Util from './util';
-import { Repository } from 'nodegit';
 import Project from './project';
 import { BlockRestrictions, BlockRuleArray, BlockRule } from './block';
 
@@ -43,7 +42,6 @@ export default class Theme {
   private _project!: Project;
   private _path!: string;
   private _config!: ThemeConfig;
-  private _localRepository!: Repository;
   private _blockPositions: ThemeBlockPosition[] = [];
 
   public get project(): Project {
@@ -56,10 +54,6 @@ export default class Theme {
 
   public get config(): ThemeConfig {
     return this._config;
-  }
-
-  public get localRepository(): Repository {
-    return this._localRepository;
   }
 
   public get blockPositions(): ThemeBlockPosition[] {
@@ -81,7 +75,7 @@ export default class Theme {
     // See: https://github.com/libgit2/libgit2/issues/3058
     // Otherwise we could just clone the current version
     // without the history overhead
-    this._localRepository = await Util.git.clone(repository, this.path);
+    await Util.git.clone(repository, this.path);
     this._config = await Util.read.theme(this.project.id);
     await this.parse();
     return this;
@@ -91,7 +85,6 @@ export default class Theme {
    * Loads the current theme
    */
   public async load(): Promise<Theme> {
-    this._localRepository = await Util.git.open(this.path);
     this._config = await Util.read.theme(this.project.id);
     await this.parse();
     return this;
@@ -101,7 +94,7 @@ export default class Theme {
    * Updates the theme by pulling from it's repository
    */
   public async update(): Promise<void> {
-    await Util.git.pull(this._localRepository);
+    await Util.git.pull(this.path);
   }
 
   public async export(): Promise<{
