@@ -1,6 +1,5 @@
 import Fs from 'fs-extra';
 import Path from 'path';
-import { Repository, Signature } from 'nodegit';
 import * as Util from './util';
 import Theme from './theme';
 import Page, { PageConfig, PageConfigKey } from './page';
@@ -19,7 +18,6 @@ export default class Project {
   private _id!: string;
   private _path!: string;
   private _config!: ProjectConfig;
-  private _localRepository!: Repository;
   private _theme!: Theme;
   private _pages: Page[] = [];
   private _blocks: Block[] = [];
@@ -40,10 +38,6 @@ export default class Project {
     this._config = value;
   }
 
-  public get localRepository(): Repository {
-    return this._localRepository;
-  }
-
   public get theme(): Theme {
     return this._theme;
   }
@@ -59,12 +53,12 @@ export default class Project {
   /**
    * Creates a new project on disk
    */
-  public async create(name: string, signature: Signature): Promise<Project> {
+  public async create(name: string, signature: Util.GitSignature): Promise<Project> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.id);
 
     // Initialize the Git repository
-    this._localRepository = await Util.git.init(this.path);
+    await Util.git.init(this.path);
 
     // Create the folder structure, root .gitignore and config file
     await this.createFolderStructure();
@@ -75,10 +69,10 @@ export default class Project {
     this._theme = await new Theme(this).use('https://github.com/elek-io/starter-theme.git');
 
     // Create an initial commit
-    await Util.git.commit(this.localRepository, signature, '*', ':tada: Created this new elek.io project', true);
+    await Util.git.commit(this.path, signature, '*', ':tada: Created this new elek.io project');
 
     // Now create and switch to the "stage" branch
-    await Util.git.checkout(this.localRepository, 'stage', true);
+    await Util.git.checkout(this.path, 'stage', true);
 
     // Create the first block of content
     const block = await new Block(this).create(signature, {
@@ -120,7 +114,6 @@ You can use it as a starting point or delete it. If you need help, consider visi
 
     this._id = id;
     this._path = Path.join(Util.pathTo.projects, id);
-    this._localRepository = await Util.git.open(this.path);
     this._config = await Util.read.project(this.id);
 
     // Load it's theme
@@ -148,10 +141,10 @@ You can use it as a starting point or delete it. If you need help, consider visi
   /**
    * Saves the project's files on disk and creates a commit
    */
-  public async save(signature: Signature, message = ':wrench: Updated project config'): Promise<void> {
+  public async save(signature: Util.GitSignature, message = ':wrench: Updated project config'): Promise<void> {
     // Write config to disk
     await Util.write.project(this.id, this.config);
-    await Util.git.commit(this.localRepository, signature, Path.join(this.path, Util.configNameOf.project), message);
+    await Util.git.commit(this.path, signature, Util.configNameOf.project, message);
     // Save each block
     for (let index = 0; index < this.blocks.length; index++) {
       const block = this.blocks[index];
@@ -168,7 +161,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with pages
    */
   public page = {
-    create: async (signature: Signature, config?: PageConfig): Promise<Page> => {
+    create: async (signature: Util.GitSignature, config?: PageConfig): Promise<Page> => {
       const page = await new Page(this).create(signature, config);
       this._pages.push(page);
       return page;
@@ -189,7 +182,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with blocks
    */
   public block = {
-    create: async (signature: Signature, config: BlockConfig, content?: string): Promise<Block> => {
+    create: async (signature: Util.GitSignature, config: BlockConfig, content?: string): Promise<Block> => {
       const block = await new Block(this).create(signature, config, content);
       this._blocks.push(block);
       return block;
