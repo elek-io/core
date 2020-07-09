@@ -18,13 +18,10 @@ jobs:
           node-version: 12
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install production dependencies
-        run: yarn install --production
+      - name: Install dependencies
+        run: yarn install
 
-      - name: Build
-        run: yarn build
-
-      - name: Publish
+      - name: Build, test & publish
         run: yarn publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
