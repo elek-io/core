@@ -5,8 +5,8 @@ on:
     types: [ created ]
 
 jobs:
-  build:
-    name: Build the source code
+  publish:
+    name: Build the source code & publish a new version to NPM
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the code
@@ -16,6 +16,7 @@ jobs:
         uses: actions/setup-node@v1
         with:
           node-version: 12
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install production dependencies
         run: yarn install --production
@@ -23,5 +24,7 @@ jobs:
       - name: Build
         run: yarn build
 
-  # publish:
-  #   needs: build
+      - name: Publish
+        run: yarn publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
