@@ -13,9 +13,9 @@ beforeAll(async () => {
   project = await new Elek.project().create('My first project', signature);
 });
 
-// afterAll(async () => {
-//   await project.delete();
-// });
+afterAll(async () => {
+  await project.delete();
+});
 
 describe('project module', () => {
 
