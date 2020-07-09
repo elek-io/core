@@ -1,7 +1,6 @@
 import Path from 'path';
 import * as Util from './util';
 import Project from './project';
-import { Signature } from 'nodegit';
 
 export class PageContent {
   public themeBlockId = '';
@@ -10,8 +9,9 @@ export class PageContent {
 
 export class PageConfig {
   public name = '';
-  public slug = '';
+  public path = '';
   public stage: PageStage = 'wip';
+  public layoutId = '';
   public content: PageContent[] = [];
 }
 export type PageConfigKey = keyof PageConfig;
@@ -79,7 +79,7 @@ export default class Page {
   /**
    * Creates a new page on disk
    */
-  public async create(signature: Signature, config?: PageConfig): Promise<Page> {
+  public async create(signature: Util.GitSignature, config?: PageConfig): Promise<Page> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
 
@@ -113,10 +113,22 @@ export default class Page {
   /**
    * Saves the page's files on disk and creates a commit
    */
-  public async save(signature: Signature, message = ':wrench: Updated page config'): Promise<void> {
+  public async save(signature: Util.GitSignature, message = ':wrench: Updated page config'): Promise<void> {
     // Write config to disk
     await Util.write.page(this.project.id, this.id, this.config);
     // Commit changes
-    await Util.git.commit(this.project.localRepository, signature, this.path, message);
+    await Util.git.commit(this.project.path, signature, this.path, message);
+  }
+
+  public async export(): Promise<{
+    id: string;
+    path: string;
+    config: PageConfig;
+  }> {
+    return {
+      id: this.id,
+      path: this.path,
+      config: this.config
+    };
   }
 }

@@ -1,7 +1,6 @@
 import Path from 'path';
 import * as Util from './util';
 import Project from './project';
-import { Signature } from 'nodegit';
 import Markdown from 'markdown-it';
 import Code from 'highlight.js';
 
@@ -10,18 +9,19 @@ export class BlockConfig {
 }
 export type BlockConfigKey = keyof BlockConfig;
 
-export class BlockRestriction {
+export class BlockRestrictions {
   public only: BlockRule[] = [];
   public not: BlockRule[] = [];
   public minimum = 0;
   public maximum = 0;
+  public required = false;
   public inline = false;
   public breaks = false;
   public html = false;
   public highlightCode = false;
   public repeatable = false;
 }
-export type BlockRestrictionKey = keyof BlockRestriction;
+export type BlockRestrictionsKey = keyof BlockRestrictions;
 
 /**
  * Represents some supported markdown-it rules
@@ -90,7 +90,7 @@ export default class Block {
   /**
    * Creates a new block on disk
    */
-  public async create(signature: Signature, config: BlockConfig, content?: string): Promise<Block> {
+  public async create(signature: Util.GitSignature, config: BlockConfig, content?: string): Promise<Block> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.md`);
 
@@ -128,11 +128,11 @@ export default class Block {
   /**
    * Saves the block's files on disk and creates a commit
    */
-  public async save(signature: Signature, message = ':wrench: Updated block'): Promise<void> {
+  public async save(signature: Util.GitSignature, message = ':wrench: Updated block'): Promise<void> {
     // Write block to disk
     await Util.write.block(this.project.id, this.id, this.config, this.content);
     // Commit changes
-    await Util.git.commit(this.project.localRepository, signature, this.path, message);
+    await Util.git.commit(this.project.path, signature, this.path, message);
   }
 
   /**
@@ -140,8 +140,8 @@ export default class Block {
    * 
    * @param restriction restriction object of the theme in use
    */
-  public async render(partialRestriction: Partial<BlockRestriction>): Promise<string> {
-    const restriction = Util.assignDefaultIfMissing(partialRestriction, new BlockRestriction());
+  public async render(partialRestriction: Partial<BlockRestrictions>): Promise<string> {
+    const restriction = Util.assignDefaultIfMissing(partialRestriction, new BlockRestrictions());
 
     // Configure the Markdown renderer based on the block's restriction
     const md = new Markdown({
@@ -202,5 +202,19 @@ export default class Block {
 
     // Return rendered HTML as string
     return md.render(this.content);
+  }
+
+  public async export(): Promise<{
+    id: string;
+    path: string;
+    config: BlockConfig;
+    content: string;
+  }> {
+    return {
+      id: this.id,
+      path: this.path,
+      config: this.config,
+      content: this.content
+    };
   }
 }

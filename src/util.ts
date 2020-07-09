@@ -1,16 +1,18 @@
 import Os from 'os';
 import Fs from 'fs-extra';
-import Util from 'util';
 import Path from 'path';
+import { spawn, SpawnOptionsWithoutStdio } from 'child_process';
 import { v4 as Uuid } from 'uuid';
 import Slugify from 'slugify';
-import Rimraf from 'rimraf';
-import Mkdirp from 'mkdirp';
-import Git from 'nodegit';
+import Globby from 'globby';
+import Git from 'isomorphic-git';
+import Http from 'isomorphic-git/http/node';
 import { ProjectConfig } from './project';
 import { ThemeConfig } from './theme';
 import { PageConfig } from './page';
 import { BlockConfig } from './block';
+import { sign } from 'crypto';
+import { stat } from 'fs';
 
 /**
  * The directory in which everything is stored and will be worked in
@@ -29,7 +31,7 @@ export const pathTo = {
  */
 export const configNameOf = {
   project: 'elek.project.json',
-  theme: 'elek.theme.json'
+  theme: 'package.json'
 };
 
 /**
@@ -134,7 +136,8 @@ export async function files(path: string, extension?: string): Promise<Fs.Dirent
  */
 export async function returnResolved<T>(promises: Promise<T>[]): Promise<T[]> {
   const toCheck: Promise<T | Error>[] = [];
-  promises.forEach((promise) => {
+  for (let index = 0; index < promises.length; index++) {
+    const promise = promises[index];
     // Here comes the trick:
     // By using "then" and "catch" we are able to create an array of Project and Error types
     // without throwing and stopping the later Promise.all() call prematurely
@@ -145,7 +148,7 @@ export async function returnResolved<T>(promises: Promise<T>[]): Promise<T[]> {
       // we need to specifically call an Error 
       return new Error(error);
     }));
-  });
+  }
   // Resolve all promises
   // Here we do not expect any error to fail the call to Promise.all()
   // because we catched it earlier and returning an Error type instead of throwing it
@@ -279,88 +282,150 @@ export function slug(string: string): string {
   });
 }
 
-/**
- * Creates given directory recusively like consoles `mkdir -p`
- */
-export function mkdir(directory: string): Promise<string | undefined> {
-  return Mkdirp(directory);
-}
-
-/**
- * Deletes given directory with all it's content like consoles `rm -rf`
- */
-export function rmrf(directory: string): Promise<void> {
-  return Util.promisify(Rimraf)(directory);
+export interface GitSignature {
+  name: string;
+  email: string;
 }
 
 /**
  * A collection of useful Git commands
  */
 export const git = {
-  init: (path: string): Promise<Git.Repository> => {
-    return Git.Repository.init(path, 0);
-  },
-  clone: async (url: string, localPath: string, options?: Git.CloneOptions): Promise<Git.Repository> => {
-    await Git.Clone.clone(url, localPath, options);
-    return git.open(localPath);
-  },
-  pull: async (repository: Git.Repository | string): Promise<Git.Oid> => {
-    // Check if we need to resolve that repository
-    if (typeof repository === 'string') {
-      repository = await Git.Repository.open(repository);
-    }
-
-    await repository.fetchAll();
-    return repository.mergeBranches('master', 'origin/master');
+  /**
+   * Initializes a new repository
+   */
+  init: (localPath: string, options?: Partial<Parameters<typeof Git.init>[0]>): Promise<void> => {
+    return Git.init(assignDefaultIfMissing(options || {}, {
+      fs: Fs,
+      dir: localPath
+    }));
   },
   /**
-   * @todo check if pathspec could be used to only get the status of given files
+   * Clones a repository
    */
-  commit: async (repository: Git.Repository, signature: Git.Signature, files: string | string[], message: string, isInit = false): Promise<Git.Oid> => {
-    // Check if all files should be committed
-    if (files !== '*') {
-      // If not, we only want to commit changes
-      // So first we need to get the status of given files
-      const status = await repository.getStatus();
-      files = status.filter((file) => {
-        // Filter out any files that are modified but not included in the files we want to commit
-        return files.includes(file.path());
-      }).map((file) => {
-        // Now return the path
-        return file.path();
+  clone: async (url: string, localPath: string, options?: Partial<Parameters<typeof Git.clone>[0]>): Promise<void> => {
+    return Git.clone(assignDefaultIfMissing(options || {}, {
+      fs: Fs,
+      http: Http,
+      url: url,
+      dir: localPath
+    }));
+  },
+  /**
+   * Fetches and merges commits from a remote repository
+   */
+  pull: async (localPath: string, options?: Partial<Parameters<typeof Git.pull>[0]>): Promise<void> => {
+    return Git.pull(assignDefaultIfMissing(options || {}, {
+      fs: Fs,
+      http: Http,
+      dir: localPath
+    }));
+  },
+  /**
+   * Adds and commits given files
+   */
+  commit: async (localPath: string, signature: GitSignature, files: string | string[], message: string, options?: Partial<Parameters<typeof Git.commit>[0]>): Promise<string> => {
+
+    // Support the * (add and commit everything) syntax
+    if (files === '*') {
+      files = await Globby(['./**', './**/.*'], {
+        cwd: localPath,
+        gitignore: true
       });
     }
-    
-    // Add the files to the staging area
-    const index = await repository.refreshIndex();
-    await index.addAll(files);
-    index.write();
-    const oid = await index.writeTree();
 
-    // If we're creating an inital commit, it has no parents. Note that unlike
-    // normal we don't get the head either, because there isn't one yet.
-    const parents: Git.Commit[] = [];
-    if (isInit !== true) {
-      // For normal commits we need the current HEAD as a parent
-      parents.push(await repository.getHeadCommit());
+    // Convert single string to string array for ease of use
+    if (typeof files === 'string') {
+      files = [files];
     }
-    
+
+    // The .add() method only accepts relative paths
+    // so we need to remove the localPath part of it if needed
+    files = files.map((file) => {
+      if (file.includes(localPath)) {
+        return file.replace(localPath + '/', '');
+      }
+      return file;
+    });
+
+    // Only commit changed files, not all of them again and again
+    files = files.filter(async (file) => {
+      const status = await Git.status({
+        fs: Fs,
+        dir: localPath,
+        filepath: file
+      });
+      return status === '*added' || status === '*modified' || status === '*deleted';
+    });
+
+    await Promise.all(files.map(async (file) => {
+      // Add all changed files to the staging area
+      return Git.add({
+        fs: Fs,
+        dir: localPath,
+        filepath: file
+      });
+    }));
+
     // Now create the commit
-    return repository.createCommit('HEAD', signature, signature, message, oid, parents);
+    return Git.commit(assignDefaultIfMissing(options || {}, {
+      fs: Fs,
+      dir: localPath,
+      author: signature,
+      message: message
+    }));
   },
-  status: (repository: Git.Repository): Promise<Git.StatusFile[]> => {
-    return repository.getStatus();
-  },
-  checkout: async (repository: Git.Repository, name: string, isNew = false): Promise<Git.Reference> => {
+  /**
+   * Checkout a branch
+   * 
+   * If the branch already exists it will check out that branch. 
+   * Otherwise, it will create a new remote tracking branch set to track the remote branch of that name.
+   */
+  checkout: async (localPath: string, name: string, isNew = false, options?: Partial<Parameters<typeof Git.checkout>[0]>): Promise<void> => {
     if (isNew === true) {
-      await repository.createBranch(name, await repository.getHeadCommit());
+      await Git.branch({
+        fs: Fs,
+        dir: localPath,
+        ref: name
+      });
     }
-    return repository.checkoutBranch(name);
-  },
-  open: (path: string): Promise<Git.Repository> => {
-    return Git.Repository.open(path);
-  },
-  discover: (path: string): Promise<Git.Buf> => {
-    return Git.Repository.discover(path, 0, '');
+
+    return Git.checkout(assignDefaultIfMissing(options || {}, {
+      fs: Fs,
+      dir: localPath,
+      ref: name
+    }));
   }
 };
+
+/**
+ * Custom async typescript ready implementation of Node.js child_process
+ * 
+ * @see https://nodejs.org/api/child_process.html
+ * @see https://github.com/ralphtheninja/await-spawn
+ */
+export function spawnChildProcess(command: string, args: ReadonlyArray<string>, options?: SpawnOptionsWithoutStdio): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const childProcess = spawn(command, args, options);
+    let log = '';
+
+    childProcess.stdout.on('data', (data) => {
+      log += data;
+    });
+
+    childProcess.stderr.on('data', (data) => {
+      log += data;
+    });
+
+    childProcess.on('error', (error) => {
+      throw error;
+    });
+
+    childProcess.on('exit', (code) => {
+      if (code === 0) {
+        return resolve(log);
+      }
+      return reject(log);
+    });
+  });
+}

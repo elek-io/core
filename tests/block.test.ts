@@ -1,15 +1,22 @@
 import Elek from '../src/index';
-import { Signature } from 'nodegit';
 import Project from '../src/project';
 import Block from '../src/block';
 
-const signature = Signature.now('John Doe', 'john.doe@domain.com');
+const signature = {
+  name: 'John Doe', 
+  email: 'john.doe@domain.com'
+};
 
 let project: Project;
 let block: Block;
 
 beforeAll(async () => {
+  await Elek.init();
   project = await new Elek.project().create('My first project', signature);
+});
+
+afterAll(async () => {
+  await project.delete();
 });
 
 describe('block module', () => {

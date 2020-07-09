@@ -1,6 +1,5 @@
 import Fs from 'fs-extra';
 import Path from 'path';
-import { Repository, Signature } from 'nodegit';
 import * as Util from './util';
 import Theme from './theme';
 import Page, { PageConfig, PageConfigKey } from './page';
@@ -19,7 +18,6 @@ export default class Project {
   private _id!: string;
   private _path!: string;
   private _config!: ProjectConfig;
-  private _localRepository!: Repository;
   private _theme!: Theme;
   private _pages: Page[] = [];
   private _blocks: Block[] = [];
@@ -40,10 +38,6 @@ export default class Project {
     this._config = value;
   }
 
-  public get localRepository(): Repository {
-    return this._localRepository;
-  }
-
   public get theme(): Theme {
     return this._theme;
   }
@@ -59,12 +53,12 @@ export default class Project {
   /**
    * Creates a new project on disk
    */
-  public async create(name: string, signature: Signature): Promise<Project> {
+  public async create(name: string, signature: Util.GitSignature): Promise<Project> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.id);
 
     // Initialize the Git repository
-    this._localRepository = await Util.git.init(this.path);
+    await Util.git.init(this.path);
 
     // Create the folder structure, root .gitignore and config file
     await this.createFolderStructure();
@@ -75,30 +69,33 @@ export default class Project {
     this._theme = await new Theme(this).use('https://github.com/elek-io/starter-theme.git');
 
     // Create an initial commit
-    await Util.git.commit(this.localRepository, signature, '*', ':tada: Created this new elek.io project', true);
+    await Util.git.commit(this.path, signature, '*', ':tada: Created this new elek.io project');
 
     // Now create and switch to the "stage" branch
-    await Util.git.checkout(this.localRepository, 'stage', true);
+    await Util.git.checkout(this.path, 'stage', true);
 
     // Create the first block of content
-    this._blocks.push(await new Block(this).create(signature, {
+    const block = await new Block(this).create(signature, {
       language: 'en'
-    }, `# Hello World!
-Lorem impsum dolor...
+    }, `We are very happy to have you on board. This page was created for you. 
+You can use it as a starting point or delete it. If you need help, consider visiting one of these pages: 
 
-- Lorem
-- ipsum
-- dolor
-`));
+- [An introduction to the elek.io client](https://elek.io)
+- [Working with pages](https://elek.io)
+- [Choosing a theme](https://elek.io)
+- [Deploying yout first project](https://elek.io)
+`);
+    this._blocks.push(block);
 
     // Create a first page with a reference to the content block
     this._pages.push(await new Page(this).create(signature, {
-      name: 'My first page',
-      slug: Util.slug('My first page'),
-      stage: 'wip',
+      name: 'Welcome to elek.io!',
+      path: '/',
+      stage: 'published',
+      layoutId: 'homepage',
       content: [{
-        themeBlockId: 'test-theme-id',
-        blockId: this.blocks[0].id
+        themeBlockId: 'welcome-message',
+        blockId: block.id
       }]
     }));
 
@@ -117,7 +114,6 @@ Lorem impsum dolor...
 
     this._id = id;
     this._path = Path.join(Util.pathTo.projects, id);
-    this._localRepository = await Util.git.open(this.path);
     this._config = await Util.read.project(this.id);
 
     // Load it's theme
@@ -139,31 +135,33 @@ Lorem impsum dolor...
     // Only if an ID is present
     if (!this.id) { throw new Error('Project cannot be deleted because it was never created nor loaded.'); }
 
-    await Util.rmrf(this.path);
+    await Fs.remove(this.path);
   }
 
   /**
    * Saves the project's files on disk and creates a commit
    */
-  public async save(signature: Signature, message = ':wrench: Updated project config'): Promise<void> {
+  public async save(signature: Util.GitSignature, message = ':wrench: Updated project config'): Promise<void> {
     // Write config to disk
     await Util.write.project(this.id, this.config);
-    await Util.git.commit(this.localRepository, signature, Path.join(this.path, Util.configNameOf.project), message);
+    await Util.git.commit(this.path, signature, Util.configNameOf.project, message);
     // Save each block
-    this.blocks.forEach(async (block) => {
+    for (let index = 0; index < this.blocks.length; index++) {
+      const block = this.blocks[index];
       await block.save(signature);
-    });
+    }
     // Save each page
-    this.pages.forEach(async (page) => {
+    for (let index = 0; index < this.pages.length; index++) {
+      const page = this.pages[index];
       await page.save(signature);
-    });
+    }
   }
 
   /**
    * Helper methods for working with pages
    */
   public page = {
-    create: async (signature: Signature, config?: PageConfig): Promise<Page> => {
+    create: async (signature: Util.GitSignature, config?: PageConfig): Promise<Page> => {
       const page = await new Page(this).create(signature, config);
       this._pages.push(page);
       return page;
@@ -184,7 +182,7 @@ Lorem impsum dolor...
    * Helper methods for working with blocks
    */
   public block = {
-    create: async (signature: Signature, config: BlockConfig, content?: string): Promise<Block> => {
+    create: async (signature: Util.GitSignature, config: BlockConfig, content?: string): Promise<Block> => {
       const block = await new Block(this).create(signature, config, content);
       this._blocks.push(block);
       return block;
@@ -201,7 +199,111 @@ Lorem impsum dolor...
       });
     }
   };
+  
+  /**
+   * Returns an JSON object containing relevant information about this project,
+   * which can be consumed by themes and plugins
+   */
+  // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+  public async export() {
+    // Get all published pages of the project
+    const pages = await Promise.all(this.pages.filter((page) => {
+      // return page.config.stage === 'published';
+      return true;
+    }).map(async (page) => {
+      return page.export();
+    }));
 
+    // Get the themes config
+    const theme = await this.theme.export();
+
+    return {
+      ...this.config,
+      routes: pages.map((page) => {
+        return {
+          name: page.config.name,
+          path: page.config.path
+        };
+      }),
+      pages: await Promise.all(pages.map(async (page) => {
+        const layout = theme.config.layouts.find((layout) => {
+          return layout.id === page.config.layoutId;
+        });
+        if (!layout) {
+          throw new Error(`Layout with ID ${page.config.layoutId} could not be found`);
+        }
+        return {
+          name: page.config.name,
+          path: page.config.path,
+          layout: {
+            id: layout.id,
+            path: layout.path
+          },
+          blocks: await Promise.all(page.config.content.map(async (content) => {
+            // Find the block of this content
+            // We get the actual block object instead of it's export
+            // to use the render() method below
+            const block = this.blocks.find((block) => {
+              return block.id === content.blockId;
+            });
+
+            if (block) {
+              // Get the blocks restrictions
+              const blockPosition = theme.blockPositions.find((blockPosition) => {
+                return blockPosition.id === content.themeBlockId;
+              });
+
+              if (blockPosition) {
+                return {
+                  id: content.themeBlockId,
+                  ...block.config,
+                  content: await block.render(blockPosition.restrictions)
+                };
+              }
+            }
+          }))
+        };
+      })),
+      theme: {
+        ...theme.config
+      }
+    };
+  }
+
+  /**
+   * Builds the project by hydrating the theme with this projects information 
+   * and saving the outcome to the projects "public" directory
+   * 
+   * @todo check how to prevent remote code execution here, since running a user defined command is generally a very bad idea...
+   */
+  public async build(): Promise<string> {
+    let buildLog = '';
+
+    // Export the projects data to it's themes ".elek.io" directory
+    await Util.json.write(Path.join(this.path, 'theme', '.elek.io', 'project.json'), await this.export());
+    
+    // Install the themes dependencies
+    buildLog += await Util.spawnChildProcess('npm', ['install'], {
+      cwd: Path.join(this.path, 'theme')
+    });
+
+    // Run the build script which uses the exported json
+    // to hydrate the themes content
+    buildLog += await Util.spawnChildProcess('npm', ['run', 'build'], {
+      cwd: Path.join(this.path, 'theme')
+    });
+
+    // Copy the contents of themes "buildDir" to the projects public directory
+    // where it's available from outside
+    await Fs.emptyDir(Path.join(this.path, 'public'));
+    await Fs.copy(Path.join(this.path, 'theme', this.theme.config.buildDir), Path.join(this.path, 'public'));
+
+    return buildLog;
+  }
+
+  /**
+   * Writes the projects main .gitignore file to disk
+   */
   private async createGitignore(): Promise<void> {
     const content = `.DS_Store
 theme/
@@ -210,15 +312,23 @@ public/
 # Keep directories with .gitkeep files in them
 # even if the directory itself is ignored
 !/**/.gitkeep`;
-    await Fs.promises.writeFile(Path.join(this.path, '.gitignore'), content);
+    await Fs.writeFile(Path.join(this.path, '.gitignore'), content);
   }
 
+  /**
+   * Creates the projects initial config and writes it to disk
+   */
   private async createConfig(name: string): Promise<void> {
-    const content = new ProjectConfig();
-    content.name = name;
-    await Util.write.project(this.id, content);
+    const config = new ProjectConfig();
+    config.name = name;
+    await Util.write.project(this.id, config);
   }
 
+  /**
+   * Creates the projects folder structure and makes sure to 
+   * write empty .gitkeep files inside them to ensure they are 
+   * committed
+   */
   private async createFolderStructure(): Promise<void> {
     const folders = [
       'theme',
@@ -229,11 +339,15 @@ public/
     ];
 
     await Promise.all(folders.map(async (folder) => {
-      await Util.mkdir(Path.join(this.path, folder));
-      await Fs.promises.writeFile(Path.join(this.path, folder, '.gitkeep'), '');
+      await Fs.mkdir(Path.join(this.path, folder));
+      await Fs.writeFile(Path.join(this.path, folder, '.gitkeep'), '');
     }));
   }
 
+  /**
+   * Loads the projects pages from disk by trying to load every JSON file inside 
+   * the "pages" directory
+   */
   private async loadPages(): Promise<void> {
     // Get all files from the pages folder that have an .json extension
     const possiblePages = await Util.files(Path.join(this.path, 'pages'), '.json');
@@ -243,12 +357,16 @@ public/
     }));
   }
 
+  /**
+   * Loads the projects blocks from disk by trying to load every Markdown file inside 
+   * the "blocks" directory
+   */
   private async loadBlocks(): Promise<void> {
-    // Get all files from the blocks folder that have an .json extension
-    const possibleBlocks = await Util.files(Path.join(this.path, 'blocks'), '.json');
+    // Get all files from the blocks folder that have an .md extension
+    const possibleBlocks = await Util.files(Path.join(this.path, 'blocks'), '.md');
     // Return all pages we are able to resolve without throwing errors
     this._blocks = await Util.returnResolved(possibleBlocks.map((possibleBlock) => {
-      return new Block(this).load(possibleBlock.name.replace('.json', ''));
+      return new Block(this).load(possibleBlock.name.replace('.md', ''));
     }));
   }
 }

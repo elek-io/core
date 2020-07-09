@@ -1,0 +1,27 @@
+name: CD
+
+on: 
+  release:
+    types: [ created ]
+
+jobs:
+  build:
+    name: Build the source code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: 12
+
+      - name: Install production dependencies
+        run: yarn install --production
+
+      - name: Build
+        run: yarn build
+
+  # publish:
+  #   needs: build
