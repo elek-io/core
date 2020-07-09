@@ -4,11 +4,15 @@ import Path from 'path';
 import { spawn, SpawnOptionsWithoutStdio } from 'child_process';
 import { v4 as Uuid } from 'uuid';
 import Slugify from 'slugify';
-import Git from 'nodegit';
+import Globby from 'globby';
+import Git from 'isomorphic-git';
+import Http from 'isomorphic-git/http/node';
 import { ProjectConfig } from './project';
 import { ThemeConfig } from './theme';
 import { PageConfig } from './page';
 import { BlockConfig } from './block';
+import { sign } from 'crypto';
+import { stat } from 'fs';
 
 /**
  * The directory in which everything is stored and will be worked in
@@ -278,64 +282,95 @@ export function slug(string: string): string {
   });
 }
 
+export interface GitSignature {
+  name: string;
+  email: string;
+}
+
 /**
  * A collection of useful Git commands
  */
 export const git = {
-  init: (path: string): Promise<Git.Repository> => {
-    return Git.Repository.init(path, 0);
-  },
-  clone: async (url: string, localPath: string, options?: Git.CloneOptions): Promise<Git.Repository> => {
-    return Git.Clone.clone(url, localPath, options);
-  },
-  pull: async (repository: Git.Repository | string): Promise<Git.Oid> => {
-    // Check if we need to resolve that repository
-    if (typeof repository === 'string') {
-      repository = await Git.Repository.open(repository);
-    }
-
-    await repository.fetchAll();
-    return repository.mergeBranches('master', 'origin/master');
+  /**
+   * Initializes a new repository
+   */
+  init: (localPath: string, options: Partial<Parameters<typeof Git.init>[0]>): Promise<void> => {
+    const defaultOptions = {
+      fs: Fs,
+      dir: localPath
+    };
+    return Git.init(assignDefaultIfMissing(options, defaultOptions));
   },
   /**
-   * @todo check if pathspec could be used to only get the status of given files
+   * Clones a repository
    */
-  commit: async (repository: Git.Repository, signature: Git.Signature, files: string | string[], message: string, isInit = false): Promise<Git.Oid> => {
-    // Check if all files should be committed
-    if (files !== '*') {
-      // If not, we only want to commit changes
-      // So first we need to get the status of given files
-      const status = await repository.getStatus();
-      files = status.filter((file) => {
-        // Filter out any files that are modified but not included in the files we want to commit
-        return files.includes(file.path());
-      }).map((file) => {
-        // Now return the path
-        return file.path();
-      });
-    }
-    
-    // Add the files to the staging area
-    const index = await repository.refreshIndex();
-    await index.addAll(files);
-    index.write();
-    const oid = await index.writeTree();
+  clone: async (url: string, localPath: string, options: Partial<Parameters<typeof Git.clone>[0]>): Promise<void> => {
+    const defaultOptions = {
+      fs: Fs,
+      http: Http,
+      url: url,
+      dir: localPath
+    };
+    return Git.clone(assignDefaultIfMissing(options, defaultOptions));
+  },
+  /**
+   * Fetches and merges commits from a remote repository
+   */
+  pull: async (localPath: string, options: Partial<Parameters<typeof Git.pull>[0]>): Promise<void> => {
+    const defaultOptions = {
+      fs: Fs,
+      http: Http,
+      dir: localPath
+    };
+    return Git.pull(assignDefaultIfMissing(options, defaultOptions));
+  },
+  /**
+   * Adds and commits given files
+   */
+  commit: async (localPath: string, signature: GitSignature, files: string | string[], message: string, options: Partial<Parameters<typeof Git.commit>[0]>): Promise<string> => {
+    const defaultCommitOptions = {
+      fs: Fs,
+      dir: localPath,
+      author: signature,
+      message: message
+    };
 
-    // If we're creating an inital commit, it has no parents. Note that unlike
-    // normal we don't get the head either, because there isn't one yet.
-    const parents: Git.Commit[] = [];
-    if (isInit !== true) {
-      // For normal commits we need the current HEAD as a parent
-      parents.push(await repository.getHeadCommit());
+    // Support the * (add and commit everything) syntax
+    if (files === '*') {
+      files = await Globby([Path.join(localPath, '/**'), Path.join(localPath, '/**/.*')], { gitignore: true });
     }
-    
+
+    // Convert single string to string array for ease of use
+    if (typeof files === 'string') {
+      files = [files];
+    }
+
+    // Only commit changed files, not all of them again and again
+    files.filter(async (file) => {
+      const status = await Git.status({
+        fs: Fs,
+        dir: localPath,
+        filepath: file
+      });
+      return status === '*added' || status === '*modified' || status === '*deleted';
+    }).map(async (file) => {
+      // Add all changed files to the staging area
+      await Git.add({
+        fs: Fs,
+        dir: localPath,
+        filepath: file
+      });
+    });
     // Now create the commit
-    return repository.createCommit('HEAD', signature, signature, message, oid, parents);
+    return Git.commit(assignDefaultIfMissing(options, defaultCommitOptions));
   },
-  status: (repository: Git.Repository): Promise<Git.StatusFile[]> => {
-    return repository.getStatus();
-  },
-  checkout: async (repository: Git.Repository, name: string, isNew = false): Promise<Git.Reference> => {
+  /**
+   * Checkout a branch
+   * 
+   * If the branch already exists it will check out that branch. 
+   * Otherwise, it will create a new remote tracking branch set to track the remote branch of that name.
+   */
+  checkout: async (localPath: string, name: string, options: Partial<Parameters<typeof Git.checkout>[0]>): Promise<void> => {
     if (isNew === true) {
       await repository.createBranch(name, await repository.getHeadCommit());
     }
