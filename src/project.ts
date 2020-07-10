@@ -1,6 +1,7 @@
 import Fs from 'fs-extra';
 import Path from 'path';
-import * as Util from './util';
+import Util from './util';
+import { GitSignature } from './util/git';
 import Theme from './theme';
 import Page, { PageConfig, PageConfigKey } from './page';
 import Block, { BlockConfig, BlockConfigKey } from './block';
@@ -53,7 +54,7 @@ export default class Project {
   /**
    * Creates a new project on disk
    */
-  public async create(name: string, signature: Util.GitSignature): Promise<Project> {
+  public async create(name: string, signature: GitSignature): Promise<Project> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.id);
 
@@ -141,7 +142,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
   /**
    * Saves the project's files on disk and creates a commit
    */
-  public async save(signature: Util.GitSignature, message = ':wrench: Updated project config'): Promise<void> {
+  public async save(signature: GitSignature, message = ':wrench: Updated project config'): Promise<void> {
     // Write config to disk
     await Util.write.project(this.id, this.config);
     await Util.git.commit(this.path, signature, Util.configNameOf.project, message);
@@ -161,7 +162,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with pages
    */
   public page = {
-    create: async (signature: Util.GitSignature, config?: PageConfig): Promise<Page> => {
+    create: async (signature: GitSignature, config?: PageConfig): Promise<Page> => {
       const page = await new Page(this).create(signature, config);
       this._pages.push(page);
       return page;
@@ -182,7 +183,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with blocks
    */
   public block = {
-    create: async (signature: Util.GitSignature, config: BlockConfig, content?: string): Promise<Block> => {
+    create: async (signature: GitSignature, config: BlockConfig, content?: string): Promise<Block> => {
       const block = await new Block(this).create(signature, config, content);
       this._blocks.push(block);
       return block;

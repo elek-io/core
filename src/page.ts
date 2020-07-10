@@ -1,5 +1,6 @@
 import Path from 'path';
-import * as Util from './util';
+import Util from './util';
+import { GitSignature } from './util/git';
 import Project from './project';
 
 export class PageContent {
@@ -79,7 +80,7 @@ export default class Page {
   /**
    * Creates a new page on disk
    */
-  public async create(signature: Util.GitSignature, config?: PageConfig): Promise<Page> {
+  public async create(signature: GitSignature, config?: PageConfig): Promise<Page> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
 
@@ -113,7 +114,7 @@ export default class Page {
   /**
    * Saves the page's files on disk and creates a commit
    */
-  public async save(signature: Util.GitSignature, message = ':wrench: Updated page config'): Promise<void> {
+  public async save(signature: GitSignature, message = ':wrench: Updated page config'): Promise<void> {
     // Write config to disk
     await Util.write.page(this.project.id, this.id, this.config);
     // Commit changes
