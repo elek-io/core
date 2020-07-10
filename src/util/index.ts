@@ -1,9 +1,9 @@
-import * as general from './general';
-import * as file from './file';
-import * as git from './git';
+import * as General from './general';
+import * as File from './file';
+import * as Git from './git';
 
 export default {
-  ...general,
-  ...file,
-  git
+  ...General,
+  ...File,
+  git: Git
 };
