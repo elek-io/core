@@ -205,7 +205,7 @@ export default class Block {
     return md.render(this.content);
   }
 
-  public async export(): Promise<{
+  public async export(partialRestriction: Partial<BlockRestrictions>): Promise<{
     id: string;
     path: string;
     config: BlockConfig;
@@ -215,7 +215,7 @@ export default class Block {
       id: this.id,
       path: this.path,
       config: this.config,
-      content: this.content
+      content: await this.render(partialRestriction)
     };
   }
 }

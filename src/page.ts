@@ -2,10 +2,24 @@ import Path from 'path';
 import Util from './util';
 import { GitSignature } from './util/git';
 import Project from './project';
+import { ThemeBlockPosition, ThemeLayout } from './theme';
+import Block, { BlockConfig } from './block';
 
-export class PageContent {
-  public themeBlockId = '';
-  public blockId = '';
+/**
+ * Reference of this pages content to the themes block position ID 
+ * and the actual block ID saved inside the pages config
+ */
+export interface PageContentReference {
+  positionId: string;
+  blockId: string;
+}
+
+/**
+ * The actual position and block objects
+ */
+export interface PageContent {
+  position: ThemeBlockPosition;
+  block: Block;
 }
 
 export class PageConfig {
@@ -13,7 +27,7 @@ export class PageConfig {
   public path = '';
   public stage: PageStage = 'wip';
   public layoutId = '';
-  public content: PageContent[] = [];
+  public content: PageContentReference[] = [];
 }
 export type PageConfigKey = keyof PageConfig;
 
@@ -52,6 +66,8 @@ export default class Page {
   private _project!: Project;
   private _path!: string;
   private _config!: PageConfig;
+  private _layout!: ThemeLayout;
+  private _content: PageContent[] = [];
 
   public get id(): string {
     return this._id;
@@ -71,6 +87,14 @@ export default class Page {
 
   public set config(value: PageConfig) {
     this._config = value;
+  }
+
+  public get layout(): ThemeLayout {
+    return this._layout;
+  }
+
+  public get content(): PageContent[] {
+    return this._content;
   }
 
   constructor(project: Project) {
@@ -95,6 +119,9 @@ export default class Page {
     // Load the file into this object
     this._config = await Util.read.page(this.project.id, this.id);
 
+    // Load the pages layout
+    await this.loadLayout();
+
     // Create a new commit
     await this.save(signature, ':heavy_plus_sign: Created new page');
 
@@ -108,6 +135,13 @@ export default class Page {
     this._id = id;
     this._config = await Util.read.page(this.project.id, this.id);
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
+
+    // Load the pages layout
+    await this.loadLayout();
+
+    // Populate the content property by loading the objects references
+    await this.loadContentByReferences();
+
     return this;
   }
 
@@ -123,13 +157,63 @@ export default class Page {
 
   public async export(): Promise<{
     id: string;
+    name: string;
     path: string;
-    config: PageConfig;
+    stage: PageStage;
+    layout: ThemeLayout;
+    content: {
+      id: string;
+      // position: ThemeBlockPosition;
+      // block: {
+      //   id: string;
+      //   path: string;
+      //   config: BlockConfig;
+      //   content: string;
+      // },
+      html: string;
+    }[]
   }> {
+    await this.loadContentByReferences();
     return {
       id: this.id,
-      path: this.path,
-      config: this.config
+      name: this.config.name,
+      path: this.config.path,
+      stage: this.config.stage,
+      layout: this.layout,
+      content: await Promise.all(this.content.map(async (pageContent) => {
+        const block = await pageContent.block.export(pageContent.position.restrictions);
+        return {
+          id: pageContent.position.id,
+          // position: pageContent.position,
+          ...block.config,
+          html: block.content
+        };
+      }))
     };
+  }
+
+  private async loadContentByReferences() {
+    this._content = await Promise.all(this._config.content.map(async (contentReference) => {
+      const position = this.project.theme.blockPositions.find((position) => {
+        return position.id === contentReference.positionId;
+      });
+      if (!position) {
+        throw new Error(`Could not find themes block position "${contentReference.positionId}"`);
+      }
+      const block = await new Block(this.project).load(contentReference.blockId);
+      return {
+        position,
+        block
+      };
+    }));
+  }
+
+  private async loadLayout() {
+    const layout = this.project.theme.config.layouts.find((layout) => {
+      return layout.id === this.config.layoutId;
+    });
+    if (layout) {
+      this._layout = layout;
+    }
   }
 }
