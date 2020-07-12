@@ -18,7 +18,8 @@ export class ThemeConfig {
     serve: string;
     build: string;
   };
-  public buildDir = '';
+  public exportFile = '.elek.io/project.json';
+  public buildDir = 'dist';
 }
 
 export class ThemeLayout {
@@ -152,34 +153,46 @@ export default class Theme {
 
       // BlockRules
       if (key === 'only' || key === 'not') {
-        restrictions[key] = attribute.split(',').filter((value) => {
-          return BlockRuleArray.includes(<BlockRule>value.trim());
-        }).map((value) => {
-          return <BlockRule>value.trim();
-        });
+        restrictions[key] = await this.parseBlockRule(attribute);
       }
 
       // Numbers
       if (key === 'minimum' || key === 'maximum') {
-        const value = parseInt(attribute);
-        if (value < 0) {
-          throw new Error(`Found negative value "${value}" for restriction "${key}"`);
-        }
-        restrictions[key] = value;
+        restrictions[key] = await this.parseNumber(attribute, key);
       }
 
       // Booleans
       if (key === 'inline' || key === 'breaks' || key === 'html' || key === 'highlightCode' || key === 'repeatable') {
-        if (attribute !== 'true' && attribute !== 'false') {
-          throw new Error(`Expected boolean value for restriction "${key}", got "${attribute}"`);
-        }
-        if (attribute === 'true') {
-          restrictions[key] = true;
-        }
-        restrictions[key] = false;
+        restrictions[key] = await this.parseBoolean(attribute, key);
       }
     }
 
     return restrictions;
+  }
+
+  private async parseBlockRule(attribute: string) {
+    return attribute.split(',').filter((value) => {
+      return BlockRuleArray.includes(<BlockRule>value.trim());
+    }).map((value) => {
+      return <BlockRule>value.trim();
+    });
+  }
+
+  private async parseNumber(attribute: string, key: string) {
+    const value = parseInt(attribute);
+    if (value < 0) {
+      throw new Error(`Found negative value "${value}" for restriction "${key}"`);
+    }
+    return value;
+  }
+
+  private async parseBoolean(attribute: string, key: string) {
+    if (attribute !== 'true' && attribute !== 'false') {
+      throw new Error(`Expected boolean value for restriction "${key}", got "${attribute}"`);
+    }
+    if (attribute === 'true') {
+      return true;
+    }
+    return false;
   }
 }
