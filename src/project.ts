@@ -80,7 +80,7 @@ export default class Project {
     await Util.git.checkout(this.path, 'stage', true);
 
     // Create the first block of content
-    const block = await new Block(this).create(signature, {
+    const block = await this.block.create(signature, {
       language: 'en'
     }, `We are very happy to have you on board. This page was created for you. 
 You can use it as a starting point or delete it. If you need help, consider visiting one of these pages: 
@@ -90,10 +90,9 @@ You can use it as a starting point or delete it. If you need help, consider visi
 - [Choosing a theme](https://elek.io)
 - [Deploying yout first project](https://elek.io)
 `);
-    this._blocks.push(block);
 
     // Create a first page with a reference to the content block
-    this._pages.push(await new Page(this).create(signature, {
+    await this.page.create(signature, {
       name: 'Welcome to elek.io!',
       path: '/',
       stage: 'published',
@@ -102,7 +101,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
         positionId: 'welcome-message',
         blockId: block.id
       }]
-    }));
+    });
 
     // Load the config file
     this._config = await Util.read.project(this.id);
@@ -229,8 +228,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
   public async build(): Promise<string> {
     let buildLog = '';
 
-    // Export the projects data to it's themes ".elek.io" directory
-    await Util.json.write(Path.join(this.path, 'theme', '.elek.io', 'project.json'), await this.export());
+    // Export the projects data to the export file, defined by the theme
+    await Util.json.write(Path.join(this.path, 'theme', this.theme.config.exportFile), await this.export());
     
     // Install the themes dependencies
     buildLog += await Util.spawnChildProcess('npm', ['install'], {
