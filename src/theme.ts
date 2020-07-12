@@ -1,7 +1,7 @@
 import Fs from 'fs-extra';
 import Path from 'path';
 import Cheerio from 'cheerio';
-import * as Util from './util';
+import Util from './util';
 import Project from './project';
 import { BlockRestrictions, BlockRuleArray, BlockRule } from './block';
 

@@ -1,6 +1,7 @@
 import Fs from 'fs-extra';
 import Path from 'path';
-import * as Util from './util';
+import Util from './util';
+import { GitSignature } from './util/git';
 import Theme from './theme';
 import Page, { PageConfig, PageConfigKey } from './page';
 import Block, { BlockConfig, BlockConfigKey } from './block';
@@ -46,6 +47,10 @@ export default class Project {
     return this._pages;
   }
 
+  /**
+   * Returning a list of all blocks this project has available,
+   * including blocks that are not assigned to a page yet
+   */
   public get blocks(): Block[] {
     return this._blocks;
   }
@@ -53,7 +58,7 @@ export default class Project {
   /**
    * Creates a new project on disk
    */
-  public async create(name: string, signature: Util.GitSignature): Promise<Project> {
+  public async create(name: string, signature: GitSignature): Promise<Project> {
     this._id = Util.uuid();
     this._path = Path.join(Util.pathTo.projects, this.id);
 
@@ -94,7 +99,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
       stage: 'published',
       layoutId: 'homepage',
       content: [{
-        themeBlockId: 'welcome-message',
+        positionId: 'welcome-message',
         blockId: block.id
       }]
     }));
@@ -113,17 +118,14 @@ You can use it as a starting point or delete it. If you need help, consider visi
     if (this.id) { throw new Error('A project cannot be reloaded. Please delete the old and then initialize a new one instead.'); }
 
     this._id = id;
-    this._path = Path.join(Util.pathTo.projects, id);
+    this._path = Path.join(Util.pathTo.projects, this.id);
     this._config = await Util.read.project(this.id);
 
     // Load it's theme
     this._theme = await new Theme(this).load();
 
-    // Load it's pages
-    await this.loadPages();
-
-    // Load it's blocks
-    await this.loadBlocks();
+    // Load it's pages and blocks
+    await this.loadChildren();
     
     return this;
   }
@@ -141,7 +143,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
   /**
    * Saves the project's files on disk and creates a commit
    */
-  public async save(signature: Util.GitSignature, message = ':wrench: Updated project config'): Promise<void> {
+  public async save(signature: GitSignature, message = ':wrench: Updated project config'): Promise<void> {
     // Write config to disk
     await Util.write.project(this.id, this.config);
     await Util.git.commit(this.path, signature, Util.configNameOf.project, message);
@@ -161,7 +163,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with pages
    */
   public page = {
-    create: async (signature: Util.GitSignature, config?: PageConfig): Promise<Page> => {
+    create: async (signature: GitSignature, config?: PageConfig): Promise<Page> => {
       const page = await new Page(this).create(signature, config);
       this._pages.push(page);
       return page;
@@ -182,7 +184,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with blocks
    */
   public block = {
-    create: async (signature: Util.GitSignature, config: BlockConfig, content?: string): Promise<Block> => {
+    create: async (signature: GitSignature, config: BlockConfig, content?: string): Promise<Block> => {
       const block = await new Block(this).create(signature, config, content);
       this._blocks.push(block);
       return block;
@@ -206,67 +208,15 @@ You can use it as a starting point or delete it. If you need help, consider visi
    */
   // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
   public async export() {
-    // Get all published pages of the project
-    const pages = await Promise.all(this.pages.filter((page) => {
-      // return page.config.stage === 'published';
-      return true;
-    }).map(async (page) => {
-      return page.export();
-    }));
-
-    // Get the themes config
-    const theme = await this.theme.export();
-
     return {
       ...this.config,
-      routes: pages.map((page) => {
-        return {
-          name: page.config.name,
-          path: page.config.path
-        };
-      }),
-      pages: await Promise.all(pages.map(async (page) => {
-        const layout = theme.config.layouts.find((layout) => {
-          return layout.id === page.config.layoutId;
-        });
-        if (!layout) {
-          throw new Error(`Layout with ID ${page.config.layoutId} could not be found`);
-        }
-        return {
-          name: page.config.name,
-          path: page.config.path,
-          layout: {
-            id: layout.id,
-            path: layout.path
-          },
-          blocks: await Promise.all(page.config.content.map(async (content) => {
-            // Find the block of this content
-            // We get the actual block object instead of it's export
-            // to use the render() method below
-            const block = this.blocks.find((block) => {
-              return block.id === content.blockId;
-            });
-
-            if (block) {
-              // Get the blocks restrictions
-              const blockPosition = theme.blockPositions.find((blockPosition) => {
-                return blockPosition.id === content.themeBlockId;
-              });
-
-              if (blockPosition) {
-                return {
-                  id: content.themeBlockId,
-                  ...block.config,
-                  content: await block.render(blockPosition.restrictions)
-                };
-              }
-            }
-          }))
-        };
+      pages: await Promise.all(this.pages.filter((page) => {
+        // return page.config.stage === 'published';
+        return true;
+      }).map(async (page) => {
+        return page.export();
       })),
-      theme: {
-        ...theme.config
-      }
+      theme: await this.theme.export()
     };
   }
 
@@ -345,28 +295,34 @@ public/
   }
 
   /**
-   * Loads the projects pages from disk by trying to load every JSON file inside 
-   * the "pages" directory
+   * Loads given child objects like pages and blocks from disk 
+   * into the corresponding projects property
    */
-  private async loadPages(): Promise<void> {
-    // Get all files from the pages folder that have an .json extension
-    const possiblePages = await Util.files(Path.join(this.path, 'pages'), '.json');
-    // Return all pages we are able to resolve without throwing errors
-    this._pages = await Util.returnResolved(possiblePages.map((possiblePage) => {
-      return new Page(this).load(possiblePage.name.replace('.json', ''));
-    }));
-  }
+  private async loadChildren(): Promise<void> {
+    const objects = [
+      {
+        name: 'blocks',
+        extension: '.md'
+      },
+      {
+        name: 'pages',
+        extension: '.json'
+      }
+    ];
 
-  /**
-   * Loads the projects blocks from disk by trying to load every Markdown file inside 
-   * the "blocks" directory
-   */
-  private async loadBlocks(): Promise<void> {
-    // Get all files from the blocks folder that have an .md extension
-    const possibleBlocks = await Util.files(Path.join(this.path, 'blocks'), '.md');
-    // Return all pages we are able to resolve without throwing errors
-    this._blocks = await Util.returnResolved(possibleBlocks.map((possibleBlock) => {
-      return new Block(this).load(possibleBlock.name.replace('.md', ''));
+    // Get all files from the pages and blocks folder that have the appropriate extension
+    const possibleObjects = await Promise.all([
+      await Util.files(Path.join(this.path, objects[0].name), objects[0].extension),
+      await Util.files(Path.join(this.path, objects[1].name), objects[1].extension)
+    ]);
+    
+    // Return all objects we are able to resolve without throwing errors
+    this._blocks = await Util.returnResolved(possibleObjects[0].map((possibleBlock) => {
+      return new Block(this).load(possibleBlock.name.replace(objects[0].extension, ''));
+    }));
+
+    this._pages = await Util.returnResolved(possibleObjects[1].map((possiblePage) => {
+      return new Page(this).load(possiblePage.name.replace(objects[1].extension, ''));
     }));
   }
 }

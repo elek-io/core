@@ -1,5 +1,5 @@
 import Fs from 'fs-extra';
-import * as Util from './util';
+import Util from './util';
 import Project from './project';
 
 export default {

@@ -9,7 +9,7 @@
       "args": [
         "--runInBand",
         "--config",
-        "jest.config.js"
+        "jest.config.json"
       ],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
@@ -27,7 +27,7 @@
         "--runInBand",
         "${fileBasenameNoExtension}",
         "--config",
-        "jest.config.js"
+        "jest.config.json"
       ],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
