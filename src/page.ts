@@ -63,6 +63,7 @@ export default class Page {
   // Using definite assignment assertion here
   // because values are assigned by the create and load methods
   private _id!: string;
+  private _language!: string;
   private _project!: Project;
   private _path!: string;
   private _config!: PageConfig;
@@ -71,6 +72,10 @@ export default class Page {
 
   public get id(): string {
     return this._id;
+  }
+
+  public get language(): string {
+    return this._language;
   }
 
   public get project(): Project {
@@ -104,9 +109,10 @@ export default class Page {
   /**
    * Creates a new page on disk
    */
-  public async create(signature: GitSignature, config?: PageConfig): Promise<Page> {
+  public async create(signature: GitSignature, language: string, config?: PageConfig): Promise<Page> {
     this._id = Util.uuid();
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
+    this._language = language;
+    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.${this.language}.json`);
 
     // Page can be initialized with a custom config
     // if it's not, default will be used
@@ -114,10 +120,10 @@ export default class Page {
       config = new PageConfig();
     }
     // Create the page config file
-    await Util.write.page(this.project.id, this.id, config);
+    await Util.write.page(this.project.id, this.id, this.language, config);
 
     // Load the file into this object
-    this._config = await Util.read.page(this.project.id, this.id);
+    this._config = await Util.read.page(this.project.id, this.id, this.language);
 
     // Load the pages layout
     await this.loadLayout();
@@ -131,10 +137,11 @@ export default class Page {
   /**
    * Loads a page by it's ID
    */
-  public async load(id: string): Promise<Page> {
+  public async load(id: string, language: string): Promise<Page> {
     this._id = id;
-    this._config = await Util.read.page(this.project.id, this.id);
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
+    this._language = language;
+    this._config = await Util.read.page(this.project.id, this.id, this.language);
+    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.${this.language}.json`);
 
     // Load the pages layout
     await this.loadLayout();
@@ -150,7 +157,7 @@ export default class Page {
    */
   public async save(signature: GitSignature, message = ':wrench: Updated page config'): Promise<void> {
     // Write config to disk
-    await Util.write.page(this.project.id, this.id, this.config);
+    await Util.write.page(this.project.id, this.id, this.language, this.config);
     // Commit changes
     await Util.git.commit(this.project.path, signature, this.path, message);
   }
@@ -158,6 +165,7 @@ export default class Page {
   public async export(): Promise<{
     id: string;
     name: string;
+    language: string;
     path: string;
     stage: PageStage;
     layout: ThemeLayout;
@@ -177,6 +185,7 @@ export default class Page {
     return {
       id: this.id,
       name: this.config.name,
+      language: this.language,
       path: this.config.path,
       stage: this.config.stage,
       layout: this.layout,
@@ -200,7 +209,7 @@ export default class Page {
       if (!position) {
         throw new Error(`Could not find themes block position "${contentReference.positionId}"`);
       }
-      const block = await new Block(this.project).load(contentReference.blockId);
+      const block = await new Block(this.project).load(contentReference.blockId, this.language);
       return {
         position,
         block

@@ -80,9 +80,7 @@ export default class Project {
     await Util.git.checkout(this.path, 'stage', true);
 
     // Create the first block of content
-    const block = await this.block.create(signature, {
-      language: 'en'
-    }, `We are very happy to have you on board. This page was created for you. 
+    const block = await this.block.create(signature, 'en-US', {}, `We are very happy to have you on board. This page was created for you. 
 You can use it as a starting point or delete it. If you need help, consider visiting one of these pages: 
 
 - [An introduction to the elek.io client](https://elek.io)
@@ -92,7 +90,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
 `);
 
     // Create a first page with a reference to the content block
-    await this.page.create(signature, {
+    await this.page.create(signature, 'en-US', {
       name: 'Welcome to elek.io!',
       path: '/',
       stage: 'published',
@@ -162,8 +160,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with pages
    */
   public page = {
-    create: async (signature: GitSignature, config?: PageConfig): Promise<Page> => {
-      const page = await new Page(this).create(signature, config);
+    create: async (signature: GitSignature, language: string, config?: PageConfig): Promise<Page> => {
+      const page = await new Page(this).create(signature, language, config);
       this._pages.push(page);
       return page;
     },
@@ -183,8 +181,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with blocks
    */
   public block = {
-    create: async (signature: GitSignature, config: BlockConfig, content?: string): Promise<Block> => {
-      const block = await new Block(this).create(signature, config, content);
+    create: async (signature: GitSignature, language: string, config: BlockConfig, content?: string): Promise<Block> => {
+      const block = await new Block(this).create(signature, language, config, content);
       this._blocks.push(block);
       return block;
     },
@@ -317,11 +315,13 @@ public/
     
     // Return all objects we are able to resolve without throwing errors
     this._blocks = await Util.returnResolved(possibleObjects[0].map((possibleBlock) => {
-      return new Block(this).load(possibleBlock.name.replace(objects[0].extension, ''));
+      const fileNameArray = possibleBlock.name.replace(objects[0].extension, '').split('.');
+      return new Block(this).load(fileNameArray[0], fileNameArray[1]);
     }));
 
     this._pages = await Util.returnResolved(possibleObjects[1].map((possiblePage) => {
-      return new Page(this).load(possiblePage.name.replace(objects[1].extension, ''));
+      const fileNameArray = possiblePage.name.replace(objects[1].extension, '').split('.');
+      return new Page(this).load(fileNameArray[0], fileNameArray[1]);
     }));
   }
 }

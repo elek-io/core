@@ -5,9 +5,7 @@ import Project from './project';
 import Markdown from 'markdown-it';
 import Code from 'highlight.js';
 
-export class BlockConfig {
-  public language = 'en';
-}
+export class BlockConfig {}
 export type BlockConfigKey = keyof BlockConfig;
 
 export class BlockRestrictions {
@@ -52,6 +50,7 @@ export default class Block {
   // because values are assigned by the create and load methods
   private _id!: string;
   private _project!: Project;
+  private _language!: string;
   private _path!: string;
   private _config!: BlockConfig;
   private _content!: string;
@@ -62,6 +61,10 @@ export default class Block {
 
   public get project(): Project {
     return this._project;
+  }
+
+  public get language(): string {
+    return this._language;
   }
 
   public get path(): string {
@@ -91,9 +94,10 @@ export default class Block {
   /**
    * Creates a new block on disk
    */
-  public async create(signature: GitSignature, config: BlockConfig, content?: string): Promise<Block> {
+  public async create(signature: GitSignature, language: string, config: BlockConfig, content?: string): Promise<Block> {
     this._id = Util.uuid();
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.md`);
+    this._language = language;
+    this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.${this.language}.md`);
 
     // Block can be initialized with a custom config
     // if it's not, default will be used
@@ -101,10 +105,10 @@ export default class Block {
       config = new BlockConfig();
     }
     // Create the block file
-    await Util.write.block(this.project.id, this.id, config, content);
+    await Util.write.block(this.project.id, this.id, this.language, config, content);
 
     // Load the file into this object
-    const block = await Util.read.block(this.project.id, this.id);
+    const block = await Util.read.block(this.project.id, this.id, this.language);
     this._config = block.config;
     this._content = block.content;
 
@@ -117,12 +121,13 @@ export default class Block {
   /**
    * Loads a block by it's ID
    */
-  public async load(id: string): Promise<Block> {
+  public async load(id: string, language: string): Promise<Block> {
     this._id = id;
-    const block = await Util.read.block(this.project.id, this.id);
+    this._language = language;
+    const block = await Util.read.block(this.project.id, this.id, this.language);
     this._config = block.config;
     this._content = block.content;
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.md`);
+    this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.${this.language}.md`);
     return this;
   }
 
@@ -131,7 +136,7 @@ export default class Block {
    */
   public async save(signature: GitSignature, message = ':wrench: Updated block'): Promise<void> {
     // Write block to disk
-    await Util.write.block(this.project.id, this.id, this.config, this.content);
+    await Util.write.block(this.project.id, this.id, this.language, this.config, this.content);
     // Commit changes
     await Util.git.commit(this.project.path, signature, this.path, message);
   }
