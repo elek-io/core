@@ -141,9 +141,6 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Saves the project's files on disk and creates a commit
    */
   public async save(signature: GitSignature, message = ':wrench: Updated project config'): Promise<void> {
-    // Write config to disk
-    await Util.write.project(this.id, this.config);
-    await Util.git.commit(this.path, signature, Util.configNameOf.project, message);
     // Save each block
     for (let index = 0; index < this.blocks.length; index++) {
       const block = this.blocks[index];
@@ -154,6 +151,9 @@ You can use it as a starting point or delete it. If you need help, consider visi
       const page = this.pages[index];
       await page.save(signature);
     }
+    // Write config to disk
+    await Util.write.project(this.id, this.config);
+    await Util.git.commit(this.path, signature, Util.configNameOf.project, message);
   }
 
   /**
@@ -164,16 +164,6 @@ You can use it as a starting point or delete it. If you need help, consider visi
       const page = await new Page(this).create(signature, language, config);
       this._pages.push(page);
       return page;
-    },
-    find: async (key: 'id' | PageConfigKey, value: string): Promise<Page | undefined> => {
-      return this.pages.find((page: Page) => {
-        // Find by ID
-        if (key === 'id') {
-          return page[key] === value;
-        }
-        // Find by config key
-        return page.config[key] === value;
-      });
     }
   };
 
@@ -185,17 +175,6 @@ You can use it as a starting point or delete it. If you need help, consider visi
       const block = await new Block(this).create(signature, language, config, content);
       this._blocks.push(block);
       return block;
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
-    find: async (key: 'id' | BlockConfigKey, value: any): Promise<Block | undefined> => {
-      return this.blocks.find((block: Block) => {
-        // Find by ID
-        if (key === 'id') {
-          return block[key] === value;
-        }
-        // Find by config key
-        return block.config[key] === value;
-      });
     }
   };
   
