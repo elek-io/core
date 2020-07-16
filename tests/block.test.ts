@@ -21,7 +21,7 @@ afterAll(async () => {
 
 describe('block module', () => {
 
-  it('should be able to load all blocks of a project', async () => {
+  it('should be able to access all blocks of a project', async () => {
     expect(project.blocks.length).toBe(1);
   });
 
@@ -46,6 +46,11 @@ describe('block module', () => {
   it('should be able to render an existing block with restrictions', async () => {
     const html = await block.render({not: ['heading']});
     expect(html).toContain('<p># Lorem Ipsum!</p>');
+  });
+
+  it('should be able to delete an existing block', async () => {
+    await block.delete(signature);
+    expect(project.blocks.length).toBe(1);
   });
 
 });

@@ -154,13 +154,15 @@ export default class Block {
   }
 
   /**
-   * Deletes the block's files from disk, creates a commit and removes it from the project
+   * Deletes the block's files from disk, creates a commit and removes it's reference from the project
    */
   public async delete(signature: GitSignature, message = ':fire: Deleted block'): Promise<void> {
     // Remove block from disk
     await Fs.remove(this.path);
+    
     // Commit changes
     await Util.git.commit(this.project.path, signature, this.path, message);
+    
     // Remove it from the project
     const blockIndex = this.project.blocks.findIndex((block) => {
       return block.id === this.id;

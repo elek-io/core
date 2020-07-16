@@ -47,8 +47,8 @@ export async function pull(localPath: string, options?: Partial<Parameters<typeo
  */
 export async function commit(localPath: string, signature: GitSignature, files: string | string[], message: string, options?: Partial<Parameters<typeof Git.commit>[0]>): Promise<string> {
 
-  // Support the * (add and commit everything) syntax
-  if (files === '*') {
+  // Support the * and . (add and commit everything) syntax
+  if (files === '*' || files === '.') {
     files = await Globby(['./**', './**/.*'], {
       cwd: localPath,
       gitignore: true
@@ -60,32 +60,46 @@ export async function commit(localPath: string, signature: GitSignature, files: 
     files = [files];
   }
 
-  // The .add() method only accepts relative paths
-  // so we need to remove the localPath part of it if needed
-  files = files.map((file) => {
+  // Get the status of each file
+  const fileStatus = await Promise.all(files.map(async (file) => {
+    // The .add() and .remove() methods only accept relative paths
+    // so we need to remove the localPath part of it if needed
     if (file.includes(localPath)) {
-      return file.replace(localPath + '/', '');
+      file = file.replace(localPath + '/', '');
     }
-    return file;
-  });
+    return {
+      path: file,
+      status: await Git.status({
+        fs: Fs,
+        dir: localPath,
+        filepath: file
+      })
+    };
+  }));
 
-  // Only commit changed files, not all of them again and again
-  files = files.filter(async (file) => {
-    const status = await Git.status({
-      fs: Fs,
-      dir: localPath,
-      filepath: file
-    });
-    return status === '*added' || status === '*modified' || status === '*deleted';
-  });
-
-  await Promise.all(files.map(async (file) => {
-    // Add all changed files to the staging area
-    return Git.add({
-      fs: Fs,
-      dir: localPath,
-      filepath: file
-    });
+  // Add all changes to the staging area
+  await Promise.all(fileStatus.map(async (file) => {
+    /**
+     * The explicit removal of a deleted but not yet staged file 
+     * is not needed via git CLI. 
+     * 
+     * If this will be handled by isomorphic-git in the future,
+     * this can be simplified.
+     * @see https://github.com/isomorphic-git/isomorphic-git/issues/1099#issuecomment-659700768
+     */
+    if (file.status === '*deleted') {
+      await Git.remove({
+        fs: Fs,
+        dir: localPath,
+        filepath: file.path
+      });
+    } else if (file.status === '*added' || file.status === '*modified') {
+      await Git.add({
+        fs: Fs,
+        dir: localPath,
+        filepath: file.path
+      });
+    }
   }));
 
   // Now create the commit

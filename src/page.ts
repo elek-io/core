@@ -166,7 +166,7 @@ export default class Page {
   /**
    * Saves the page's files on disk and creates a commit
    */
-  public async save(signature: GitSignature, message = ':wrench: Updated page config'): Promise<void> {
+  public async save(signature: GitSignature, message = ':wrench: Updated page'): Promise<void> {
     // Write config to disk
     await Util.write.page(this.project.id, this.id, this.language, this.config);
     // Commit changes
@@ -174,9 +174,9 @@ export default class Page {
   }
 
   /**
-   * Deletes the page's files from disk, creates a commit and removes it from the project
+   * Deletes the page's files from disk, creates a commit and removes it's reference from the project
    */
-  public async delete(signature: GitSignature, message = ':fire: Deleted page config'): Promise<void> {
+  public async delete(signature: GitSignature, message = ':fire: Deleted page'): Promise<void> {
     // Remove config from disk
     await Fs.remove(this.path);
     // Commit changes
