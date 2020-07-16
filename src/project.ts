@@ -161,9 +161,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    */
   public page = {
     create: async (signature: GitSignature, language: string, config?: PageConfig): Promise<Page> => {
-      const page = await new Page(this).create(signature, language, config);
-      this._pages.push(page);
-      return page;
+      return await new Page(this).create(signature, language, config);
     }
   };
 
@@ -172,9 +170,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    */
   public block = {
     create: async (signature: GitSignature, language: string, config: BlockConfig, content?: string): Promise<Block> => {
-      const block = await new Block(this).create(signature, language, config, content);
-      this._blocks.push(block);
-      return block;
+      return await new Block(this).create(signature, language, config, content);
     }
   };
   
@@ -293,12 +289,12 @@ public/
     ]);
     
     // Return all objects we are able to resolve without throwing errors
-    this._blocks = await Util.returnResolved(possibleObjects[0].map((possibleBlock) => {
+    await Util.returnResolved(possibleObjects[0].map((possibleBlock) => {
       const fileNameArray = possibleBlock.name.replace(objects[0].extension, '').split('.');
       return new Block(this).load(fileNameArray[0], fileNameArray[1]);
     }));
 
-    this._pages = await Util.returnResolved(possibleObjects[1].map((possiblePage) => {
+    await Util.returnResolved(possibleObjects[1].map((possiblePage) => {
       const fileNameArray = possiblePage.name.replace(objects[1].extension, '').split('.');
       return new Page(this).load(fileNameArray[0], fileNameArray[1]);
     }));

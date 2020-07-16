@@ -101,7 +101,7 @@ export async function commit(localPath: string, signature: GitSignature, files: 
  * Checkout a branch
  * 
  * If the branch already exists it will check out that branch. 
- * Otherwise, it will create a new remote tracking branch set to track the remote branch of that name.
+ * Otherwise, it will create it locally and check it out after that.
  */
 export async function checkout(localPath: string, name: string, isNew = false, options?: Partial<Parameters<typeof Git.checkout>[0]>): Promise<void> {
   if (isNew === true) {
@@ -116,5 +116,22 @@ export async function checkout(localPath: string, name: string, isNew = false, o
     fs: Fs,
     dir: localPath,
     ref: name
+  }));
+}
+
+/**
+ * Creates an annotated tag
+ * @param id The SHA-1 object id the tag points to
+ * @param name Name of the new tag
+ * @param message Message describing the tag
+ */
+export async function tag(localPath: string, signature: GitSignature, id: string, name: string, message: string, options?: Partial<Parameters<typeof Git.annotatedTag>[0]>): Promise<void> {
+  return Git.annotatedTag(assignDefaultIfMissing(options || {}, {
+    fs: Fs,
+    dir: localPath,
+    ref: name,
+    message,
+    tagger: signature,
+    object: id
   }));
 }

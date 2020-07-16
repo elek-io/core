@@ -1,3 +1,4 @@
+import Fs from 'fs-extra';
 import Path from 'path';
 import Util from './util';
 import { GitSignature } from './util/git';
@@ -64,7 +65,7 @@ export default class Page {
   // because values are assigned by the create and load methods
   private _id!: string;
   private _language!: string;
-  private _project!: Project;
+  private _project: Project;
   private _path!: string;
   private _config!: PageConfig;
   private _layout: ThemeLayout | null = null;
@@ -131,11 +132,14 @@ export default class Page {
     // Create a new commit
     await this.save(signature, ':heavy_plus_sign: Created new page');
 
+    // Add this page to the project
+    this.project.pages.push(this);
+
     return this;
   }
 
   /**
-   * Loads a page by it's ID
+   * Loads a page by it's ID and language
    */
   public async load(id: string, language: string): Promise<Page> {
     this._id = id;
@@ -149,6 +153,13 @@ export default class Page {
     // Populate the content property by loading the objects references
     await this.loadContentByReferences();
 
+    // Push the page to the project if it's not already there
+    if (!this.project.pages.find((page) => {
+      return page.id === this.id;
+    })) {
+      this.project.pages.push(this);
+    }
+
     return this;
   }
 
@@ -160,6 +171,24 @@ export default class Page {
     await Util.write.page(this.project.id, this.id, this.language, this.config);
     // Commit changes
     await Util.git.commit(this.project.path, signature, this.path, message);
+  }
+
+  /**
+   * Deletes the page's files from disk, creates a commit and removes it from the project
+   */
+  public async delete(signature: GitSignature, message = ':fire: Deleted page config'): Promise<void> {
+    // Remove config from disk
+    await Fs.remove(this.path);
+    // Commit changes
+    await Util.git.commit(this.project.path, signature, this.path, message);
+    // Remove it from the project
+    const pageIndex = this.project.pages.findIndex((page) => {
+      return page.id === this.id;
+    });
+    if (pageIndex === -1) {
+      throw new Error('Tried removing an not existing page from the project');
+    }
+    this.project.pages.splice(pageIndex, 1);
   }
 
   public async export(): Promise<{

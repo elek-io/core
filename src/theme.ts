@@ -40,7 +40,7 @@ export class ThemeBlockPosition {
 export default class Theme {
   // Using definite assignment assertion here
   // because values are assigned by the create and load methods
-  private _project!: Project;
+  private _project: Project;
   private _path!: string;
   private _config!: ThemeConfig;
   private _blockPositions: ThemeBlockPosition[] = [];

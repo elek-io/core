@@ -1,3 +1,4 @@
+import Fs from 'fs-extra';
 import Path from 'path';
 import Util from './util';
 import { GitSignature } from './util/git';
@@ -49,7 +50,7 @@ export default class Block {
   // Using definite assignment assertion here
   // because values are assigned by the create and load methods
   private _id!: string;
-  private _project!: Project;
+  private _project: Project;
   private _language!: string;
   private _path!: string;
   private _config!: BlockConfig;
@@ -115,6 +116,9 @@ export default class Block {
     // Create a new commit
     await this.save(signature, ':heavy_plus_sign: Created new block');
 
+    // Add this block to the project
+    this.project.blocks.push(this);
+
     return this;
   }
 
@@ -128,6 +132,14 @@ export default class Block {
     this._config = block.config;
     this._content = block.content;
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.${this.language}.md`);
+
+    // Push the block to the project if it's not already there
+    if (!this.project.blocks.find((block) => {
+      return block.id === this.id;
+    })) {
+      this.project.blocks.push(this);
+    }
+
     return this;
   }
 
@@ -139,6 +151,24 @@ export default class Block {
     await Util.write.block(this.project.id, this.id, this.language, this.config, this.content);
     // Commit changes
     await Util.git.commit(this.project.path, signature, this.path, message);
+  }
+
+  /**
+   * Deletes the block's files from disk, creates a commit and removes it from the project
+   */
+  public async delete(signature: GitSignature, message = ':fire: Deleted block'): Promise<void> {
+    // Remove block from disk
+    await Fs.remove(this.path);
+    // Commit changes
+    await Util.git.commit(this.project.path, signature, this.path, message);
+    // Remove it from the project
+    const blockIndex = this.project.blocks.findIndex((block) => {
+      return block.id === this.id;
+    });
+    if (blockIndex === -1) {
+      throw new Error('Tried removing an not existing block from the project');
+    }
+    this.project.blocks.splice(blockIndex, 1);
   }
 
   /**
