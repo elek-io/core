@@ -68,15 +68,23 @@ export default class Theme {
 
   /**
    * Changes the theme by cloning it's repository
+   * 
+   * @todo implement logic to map between both themes layouts
    */
   public async use(repository: string): Promise<Theme> {
     await this.delete();
+    // Clone only the main branch with a history depth of 1
+    // to save resources and time
     await Util.git.clone(repository, this.path, {
       singleBranch: true,
       depth: 1
     });
     this._config = await Util.read.theme(this.project.id);
     await this.parse();
+
+    // Implement logic to map the layouts of all current pages
+    // to the layouts of the new theme here
+
     return this;
   }
 
@@ -91,6 +99,8 @@ export default class Theme {
 
   /**
    * Updates the theme by pulling from it's repository
+   * 
+   * @todo implement logic to check for layout ID changes and maybe map between both versions if needed
    */
   public async update(): Promise<void> {
     await Util.git.pull(this.path);
@@ -116,7 +126,7 @@ export default class Theme {
   }
 
   /**
-   * Looks for custom elek.io elements in every layout of the theme and parses them
+   * Looks for elek.io blocks in every layout of the theme and parses their restrictions
    */
   private async parse(): Promise<void> {
     for (let index = 0; index < this.config.layouts.length; index++) {
