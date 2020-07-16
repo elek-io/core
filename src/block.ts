@@ -119,7 +119,7 @@ export default class Block {
   }
 
   /**
-   * Loads a block by it's ID
+   * Loads a block by it's ID and language
    */
   public async load(id: string, language: string): Promise<Block> {
     this._id = id;
@@ -195,7 +195,7 @@ export default class Block {
           try {
             return Code.highlight(language, code).value;
           } catch (error) {
-            console.log(error);
+            throw new Error(error);
           }
         }
         return '';
