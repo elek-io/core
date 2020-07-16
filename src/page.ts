@@ -67,7 +67,7 @@ export default class Page {
   private _project!: Project;
   private _path!: string;
   private _config!: PageConfig;
-  private _layout!: ThemeLayout;
+  private _layout: ThemeLayout | null = null;
   private _content: PageContent[] = [];
 
   public get id(): string {
@@ -94,7 +94,7 @@ export default class Page {
     this._config = value;
   }
 
-  public get layout(): ThemeLayout {
+  public get layout(): ThemeLayout | null {
     return this._layout;
   }
 
@@ -168,7 +168,7 @@ export default class Page {
     language: string;
     path: string;
     stage: PageStage;
-    layout: ThemeLayout;
+    layout: ThemeLayout | null;
     content: {
       id: string;
       // position: ThemeBlockPosition;
@@ -201,15 +201,29 @@ export default class Page {
     };
   }
 
+  /**
+   * Loads all content references inside the pages config into objects 
+   * and populates the content property with them
+   */
   private async loadContentByReferences() {
-    this._content = await Promise.all(this._config.content.map(async (contentReference) => {
+    this._content = await Util.returnResolved(this._config.content.map(async (contentReference, contentReferenceIndex) => {
+      // Find the position by reference
       const position = this.project.theme.blockPositions.find((position) => {
         return position.id === contentReference.positionId;
       });
-      if (!position) {
-        throw new Error(`Could not find themes block position "${contentReference.positionId}"`);
+      // Find the block by reference
+      const block = this.project.blocks.find((block) => {
+        return block.id === contentReference.blockId;
+      });
+      if (!position || !block) {
+        // Remove the invalid content reference from this pages config
+        delete this._config.content[contentReferenceIndex];
+        if (!position) {
+          throw new Error(`Could not find the themes block position by ID (${contentReference.positionId}) to resolve a pages content`);
+        } else if (!block) {
+          throw new Error(`Could not find the block by ID (${contentReference.blockId}) to resolve a pages content`);
+        }
       }
-      const block = await new Block(this.project).load(contentReference.blockId, this.language);
       return {
         position,
         block
@@ -217,12 +231,29 @@ export default class Page {
     }));
   }
 
+  /**
+   * Loads the specified layout of this page from the theme in use
+   */
   private async loadLayout() {
+    // If there is no layout for this page selected yet, that's fine
+    if (!this.config.layoutId) {
+      this._layout = null;
+      return;
+    }
+    // Else, try to load the layout of this page
     const layout = this.project.theme.config.layouts.find((layout) => {
       return layout.id === this.config.layoutId;
     });
-    if (layout) {
-      this._layout = layout;
+    // If the specified layout cannot be found inside the current theme, 
+    // which can be the case if the project uses a different theme
+    // and something inside the wizard failed,
+    // reset the layout of this page and inside the pages config
+    if (!layout) {
+      this.config.layoutId = '';
+      this._layout = null;
+      return;
     }
+    // Assign the found layout to this page
+    this._layout = layout;
   }
 }
