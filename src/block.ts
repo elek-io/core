@@ -126,6 +126,9 @@ export default class Block {
    * Loads a block by it's ID and language
    */
   public async load(id: string, language: string): Promise<Block> {
+    // Do not allow reloading an already initialized block
+    if (this.id) { throw new Error('A block cannot be reloaded. Please delete the old and then initialize a new one instead.'); }
+    
     this._id = id;
     this._language = language;
     const block = await Util.read.block(this.project.id, this.id, this.language);

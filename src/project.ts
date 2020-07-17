@@ -3,8 +3,9 @@ import Path from 'path';
 import Util from './util';
 import { GitSignature } from './util/git';
 import Theme from './theme';
-import Page, { PageConfig, PageConfigKey } from './page';
-import Block, { BlockConfig, BlockConfigKey } from './block';
+import Page, { PageConfig } from './page';
+import Block, { BlockConfig } from './block';
+import Snapshot from './snapshot';
 
 export class ProjectConfig {
   public name = '';
@@ -22,6 +23,7 @@ export default class Project {
   private _theme!: Theme;
   private _pages: Page[] = [];
   private _blocks: Block[] = [];
+  private _snapshots: Snapshot[] = [];
 
   public get id(): string {
     return this._id;
@@ -53,6 +55,10 @@ export default class Project {
    */
   public get blocks(): Block[] {
     return this._blocks;
+  }
+
+  public get snapshots(): Snapshot[] {
+    return this._snapshots;
   }
 
   /**
@@ -173,6 +179,15 @@ You can use it as a starting point or delete it. If you need help, consider visi
       return await new Block(this).create(signature, language, config, content);
     }
   };
+
+  /**
+   * Helper methods for working with snapshots
+   */
+  public snapshot = {
+    create: async (signature: GitSignature, name: string, target?: string): Promise<Snapshot> => {
+      return await new Snapshot(this).create(signature, name, target);
+    }
+  };
   
   /**
    * Returns an JSON object containing relevant information about this project,
@@ -182,7 +197,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
   public async export() {
     return {
       ...this.config,
-      pages: await Promise.all(this.pages.filter((page) => {
+      pages: await Promise.all(this.pages.filter(() => {
         // return page.config.stage === 'published';
         return true;
       }).map(async (page) => {
@@ -297,6 +312,12 @@ public/
     await Util.returnResolved(possibleObjects[1].map((possiblePage) => {
       const fileNameArray = possiblePage.name.replace(objects[1].extension, '').split('.');
       return new Page(this).load(fileNameArray[0], fileNameArray[1]);
+    }));
+
+    // Load all available snapshots
+    const tagList = await Util.git.tag.list(this.path);
+    Promise.all(tagList.map((tag) => {
+      return new Snapshot(this).load(tag.oid);
     }));
   }
 }

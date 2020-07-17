@@ -4,7 +4,7 @@ import Util from './util';
 import { GitSignature } from './util/git';
 import Project from './project';
 import { ThemeBlockPosition, ThemeLayout } from './theme';
-import Block, { BlockConfig } from './block';
+import Block from './block';
 
 /**
  * Reference of this pages content to the themes block position ID 
@@ -142,6 +142,9 @@ export default class Page {
    * Loads a page by it's ID and language
    */
   public async load(id: string, language: string): Promise<Page> {
+    // Do not allow reloading an already initialized page
+    if (this.id) { throw new Error('A page cannot be reloaded. Please delete the old and then initialize a new one instead.'); }
+
     this._id = id;
     this._language = language;
     this._config = await Util.read.page(this.project.id, this.id, this.language);

@@ -1,3 +1,4 @@
+import Fs from 'fs-extra';
 import Elek from '../src/index';
 import Project from '../src/project';
 import Block from '../src/block';
@@ -50,6 +51,7 @@ describe('block module', () => {
 
   it('should be able to delete an existing block', async () => {
     await block.delete(signature);
+    expect(await Fs.pathExists(block.path)).toBe(false);
     expect(project.blocks.length).toBe(1);
   });
 

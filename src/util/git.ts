@@ -1,6 +1,6 @@
 import Fs from 'fs-extra';
 import Globby from 'globby';
-import Git from 'isomorphic-git';
+import Git, { ReadTagResult } from 'isomorphic-git';
 import Http from 'isomorphic-git/http/node';
 import { assignDefaultIfMissing } from './general';
 
@@ -133,19 +133,51 @@ export async function checkout(localPath: string, name: string, isNew = false, o
   }));
 }
 
-/**
- * Creates an annotated tag
- * @param id The SHA-1 object id the tag points to
- * @param name Name of the new tag
- * @param message Message describing the tag
- */
-export async function tag(localPath: string, signature: GitSignature, id: string, name: string, message: string, options?: Partial<Parameters<typeof Git.annotatedTag>[0]>): Promise<void> {
-  return Git.annotatedTag(assignDefaultIfMissing(options || {}, {
-    fs: Fs,
-    dir: localPath,
-    ref: name,
-    message,
-    tagger: signature,
-    object: id
-  }));
-}
+export const tag = {
+  /**
+   * Creates an annotated tag
+   * 
+   * @param id A self specified ID (e.g. Uuid v4) which needs to meet the same criteria of a slug
+   * @param name Name of the new tag (internally handled as the tag's message)
+   */
+  create: async (localPath: string, signature: GitSignature, id: string, name: string, options?: Partial<Parameters<typeof Git.annotatedTag>[0]>): Promise<ReadTagResult> => {
+    await Git.annotatedTag(assignDefaultIfMissing(options || {}, {
+      fs: Fs,
+      dir: localPath,
+      ref: id,
+      message: name,
+      tagger: signature
+    }));
+    return tag.load(localPath, id);
+  },
+  load: async (localPath: string, id: string): Promise<ReadTagResult> => {
+    // Resolve the oid by the tag's reference (in our case a self specified ID)
+    const tagObjectId = await Git.resolveRef({
+      fs: Fs,
+      ref: id
+    });
+    // Use this oid to get the tag's full information
+    return Git.readTag({
+      fs: Fs,
+      dir: localPath,
+      oid: tagObjectId
+    });
+  },
+  list: async (localPath: string): Promise<ReadTagResult[]> => {
+    const tagIds = await Git.listTags({
+      fs: Fs,
+      dir: localPath
+    });
+
+    return Promise.all(tagIds.map(async (id) => {
+      return tag.load(localPath, id);
+    }));
+  },
+  delete: (localPath: string, id: string): Promise<void> => {
+    return Git.deleteTag({
+      fs: Fs,
+      dir: localPath,
+      ref: id
+    });
+  }
+};
