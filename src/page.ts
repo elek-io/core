@@ -1,9 +1,10 @@
+import Fs from 'fs-extra';
 import Path from 'path';
 import Util from './util';
 import { GitSignature } from './util/git';
 import Project from './project';
 import { ThemeBlockPosition, ThemeLayout } from './theme';
-import Block, { BlockConfig } from './block';
+import Block from './block';
 
 /**
  * Reference of this pages content to the themes block position ID 
@@ -63,14 +64,19 @@ export default class Page {
   // Using definite assignment assertion here
   // because values are assigned by the create and load methods
   private _id!: string;
-  private _project!: Project;
+  private _language!: string;
+  private _project: Project;
   private _path!: string;
   private _config!: PageConfig;
-  private _layout!: ThemeLayout;
+  private _layout: ThemeLayout | null = null;
   private _content: PageContent[] = [];
 
   public get id(): string {
     return this._id;
+  }
+
+  public get language(): string {
+    return this._language;
   }
 
   public get project(): Project {
@@ -89,7 +95,7 @@ export default class Page {
     this._config = value;
   }
 
-  public get layout(): ThemeLayout {
+  public get layout(): ThemeLayout | null {
     return this._layout;
   }
 
@@ -104,9 +110,10 @@ export default class Page {
   /**
    * Creates a new page on disk
    */
-  public async create(signature: GitSignature, config?: PageConfig): Promise<Page> {
+  public async create(signature: GitSignature, language: string, config?: PageConfig): Promise<Page> {
     this._id = Util.uuid();
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
+    this._language = language;
+    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.${this.language}.json`);
 
     // Page can be initialized with a custom config
     // if it's not, default will be used
@@ -114,10 +121,10 @@ export default class Page {
       config = new PageConfig();
     }
     // Create the page config file
-    await Util.write.page(this.project.id, this.id, config);
+    await Util.write.page(this.project.id, this.id, this.language, config);
 
     // Load the file into this object
-    this._config = await Util.read.page(this.project.id, this.id);
+    this._config = await Util.read.page(this.project.id, this.id, this.language);
 
     // Load the pages layout
     await this.loadLayout();
@@ -125,16 +132,23 @@ export default class Page {
     // Create a new commit
     await this.save(signature, ':heavy_plus_sign: Created new page');
 
+    // Add this page to the project
+    this.project.pages.push(this);
+
     return this;
   }
 
   /**
-   * Loads a page by it's ID
+   * Loads a page by it's ID and language
    */
-  public async load(id: string): Promise<Page> {
+  public async load(id: string, language: string): Promise<Page> {
+    // Do not allow reloading an already initialized page
+    if (this.id) { throw new Error('A page cannot be reloaded. Please delete the old and then initialize a new one instead.'); }
+
     this._id = id;
-    this._config = await Util.read.page(this.project.id, this.id);
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.json`);
+    this._language = language;
+    this._config = await Util.read.page(this.project.id, this.id, this.language);
+    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.${this.language}.json`);
 
     // Load the pages layout
     await this.loadLayout();
@@ -142,25 +156,51 @@ export default class Page {
     // Populate the content property by loading the objects references
     await this.loadContentByReferences();
 
+    // Push the page to the project if it's not already there
+    if (!this.project.pages.find((page) => {
+      return page.id === this.id;
+    })) {
+      this.project.pages.push(this);
+    }
+
     return this;
   }
 
   /**
    * Saves the page's files on disk and creates a commit
    */
-  public async save(signature: GitSignature, message = ':wrench: Updated page config'): Promise<void> {
+  public async save(signature: GitSignature, message = ':wrench: Updated page'): Promise<void> {
     // Write config to disk
-    await Util.write.page(this.project.id, this.id, this.config);
+    await Util.write.page(this.project.id, this.id, this.language, this.config);
     // Commit changes
     await Util.git.commit(this.project.path, signature, this.path, message);
+  }
+
+  /**
+   * Deletes the page's files from disk, creates a commit and removes it's reference from the project
+   */
+  public async delete(signature: GitSignature, message = ':fire: Deleted page'): Promise<void> {
+    // Remove config from disk
+    await Fs.remove(this.path);
+    // Commit changes
+    await Util.git.commit(this.project.path, signature, this.path, message);
+    // Remove it from the project
+    const pageIndex = this.project.pages.findIndex((page) => {
+      return page.id === this.id;
+    });
+    if (pageIndex === -1) {
+      throw new Error('Tried removing an not existing page from the project');
+    }
+    this.project.pages.splice(pageIndex, 1);
   }
 
   public async export(): Promise<{
     id: string;
     name: string;
+    language: string;
     path: string;
     stage: PageStage;
-    layout: ThemeLayout;
+    layout: ThemeLayout | null;
     content: {
       id: string;
       // position: ThemeBlockPosition;
@@ -177,6 +217,7 @@ export default class Page {
     return {
       id: this.id,
       name: this.config.name,
+      language: this.language,
       path: this.config.path,
       stage: this.config.stage,
       layout: this.layout,
@@ -192,15 +233,29 @@ export default class Page {
     };
   }
 
+  /**
+   * Loads all content references inside the pages config into objects 
+   * and populates the content property with them
+   */
   private async loadContentByReferences() {
-    this._content = await Promise.all(this._config.content.map(async (contentReference) => {
+    this._content = await Util.returnResolved(this._config.content.map(async (contentReference, contentReferenceIndex) => {
+      // Find the position by reference
       const position = this.project.theme.blockPositions.find((position) => {
         return position.id === contentReference.positionId;
       });
-      if (!position) {
-        throw new Error(`Could not find themes block position "${contentReference.positionId}"`);
+      // Find the block by reference
+      const block = this.project.blocks.find((block) => {
+        return block.id === contentReference.blockId;
+      });
+      if (!position || !block) {
+        // Remove the invalid content reference from this pages config
+        delete this._config.content[contentReferenceIndex];
+        if (!position) {
+          throw new Error(`Could not find the themes block position by ID (${contentReference.positionId}) to resolve a pages content`);
+        } else if (!block) {
+          throw new Error(`Could not find the block by ID (${contentReference.blockId}) to resolve a pages content`);
+        }
       }
-      const block = await new Block(this.project).load(contentReference.blockId);
       return {
         position,
         block
@@ -208,12 +263,29 @@ export default class Page {
     }));
   }
 
+  /**
+   * Loads the specified layout of this page from the theme in use
+   */
   private async loadLayout() {
+    // If there is no layout for this page selected yet, that's fine
+    if (!this.config.layoutId) {
+      this._layout = null;
+      return;
+    }
+    // Else, try to load the layout of this page
     const layout = this.project.theme.config.layouts.find((layout) => {
       return layout.id === this.config.layoutId;
     });
-    if (layout) {
-      this._layout = layout;
+    // If the specified layout cannot be found inside the current theme, 
+    // which can be the case if the project uses a different theme
+    // and something inside the wizard failed,
+    // reset the layout of this page and inside the pages config
+    if (!layout) {
+      this.config.layoutId = '';
+      this._layout = null;
+      return;
     }
+    // Assign the found layout to this page
+    this._layout = layout;
   }
 }

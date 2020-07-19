@@ -13,9 +13,9 @@ beforeAll(async () => {
   project = await new Elek.project().create('My first project', signature);
 });
 
-// afterAll(async () => {
-//   await project.delete();
-// });
+afterAll(async () => {
+  await project.delete();
+});
 
 describe('project module', () => {
 
@@ -41,14 +41,14 @@ describe('project module', () => {
   });
 
   it('should be able to create new pages', async () => {
-    await project.page.create(signature, {
+    await project.page.create(signature, 'en-US', {
       name: 'Another page',
       path: `/${Elek.util.slug('Another page')}`,
       stage: 'wip',
       layoutId: 'about',
       content: []
     });
-    await project.page.create(signature, {
+    await project.page.create(signature, 'en-US', {
       name: 'Foo bar',
       path: `/foo/bar/${Elek.util.slug('Foo bar')}`,
       stage: 'private',
@@ -60,13 +60,17 @@ describe('project module', () => {
 
   it('should be able to find a page', async () => {
     // Find by ID
-    const firstPage = await project.page.find('id', project.pages[0].id);
+    const firstPage = project.pages.find((page) => {
+      return page.id === project.pages[0].id;
+    });
     expect(firstPage).toBeDefined();
     if (firstPage) {
       expect(firstPage.id).toBe(project.pages[0].id);
     }
     // Find by name
-    const secondPage = await project.page.find('name', 'Foo bar');
+    const secondPage = project.pages.find((page) => {
+      return page.config.name === 'Foo bar';
+    });
     expect(secondPage).toBeDefined();
     if (secondPage) {
       expect(secondPage.config.name).toBe('Foo bar');
@@ -74,7 +78,9 @@ describe('project module', () => {
   });
 
   it('should be able to find a block', async () => {
-    const block = await project.block.find('id', project.blocks[0].id);
+    const block = project.blocks.find((block) => {
+      return block.id === project.blocks[0].id;
+    });
     expect(block).toBeDefined();
     if (block) {
       expect(block.id).toBe(project.blocks[0].id);

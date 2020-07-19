@@ -3,8 +3,9 @@ import Path from 'path';
 import Util from './util';
 import { GitSignature } from './util/git';
 import Theme from './theme';
-import Page, { PageConfig, PageConfigKey } from './page';
-import Block, { BlockConfig, BlockConfigKey } from './block';
+import Page, { PageConfig } from './page';
+import Block, { BlockConfig } from './block';
+import Snapshot from './snapshot';
 
 export class ProjectConfig {
   public name = '';
@@ -22,6 +23,7 @@ export default class Project {
   private _theme!: Theme;
   private _pages: Page[] = [];
   private _blocks: Block[] = [];
+  private _snapshots: Snapshot[] = [];
 
   public get id(): string {
     return this._id;
@@ -55,6 +57,10 @@ export default class Project {
     return this._blocks;
   }
 
+  public get snapshots(): Snapshot[] {
+    return this._snapshots;
+  }
+
   /**
    * Creates a new project on disk
    */
@@ -80,9 +86,7 @@ export default class Project {
     await Util.git.checkout(this.path, 'stage', true);
 
     // Create the first block of content
-    const block = await new Block(this).create(signature, {
-      language: 'en'
-    }, `We are very happy to have you on board. This page was created for you. 
+    const block = await this.block.create(signature, 'en-US', {}, `We are very happy to have you on board. This page was created for you. 
 You can use it as a starting point or delete it. If you need help, consider visiting one of these pages: 
 
 - [An introduction to the elek.io client](https://elek.io)
@@ -90,10 +94,9 @@ You can use it as a starting point or delete it. If you need help, consider visi
 - [Choosing a theme](https://elek.io)
 - [Deploying yout first project](https://elek.io)
 `);
-    this._blocks.push(block);
 
     // Create a first page with a reference to the content block
-    this._pages.push(await new Page(this).create(signature, {
+    await this.page.create(signature, 'en-US', {
       name: 'Welcome to elek.io!',
       path: '/',
       stage: 'published',
@@ -102,7 +105,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
         positionId: 'welcome-message',
         blockId: block.id
       }]
-    }));
+    });
 
     // Load the config file
     this._config = await Util.read.project(this.id);
@@ -125,7 +128,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
     this._theme = await new Theme(this).load();
 
     // Load it's pages and blocks
-    await this.loadChildren();
+    await this.refresh();
     
     return this;
   }
@@ -144,9 +147,6 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Saves the project's files on disk and creates a commit
    */
   public async save(signature: GitSignature, message = ':wrench: Updated project config'): Promise<void> {
-    // Write config to disk
-    await Util.write.project(this.id, this.config);
-    await Util.git.commit(this.path, signature, Util.configNameOf.project, message);
     // Save each block
     for (let index = 0; index < this.blocks.length; index++) {
       const block = this.blocks[index];
@@ -157,26 +157,17 @@ You can use it as a starting point or delete it. If you need help, consider visi
       const page = this.pages[index];
       await page.save(signature);
     }
+    // Write config to disk
+    await Util.write.project(this.id, this.config);
+    await Util.git.commit(this.path, signature, Util.configNameOf.project, message);
   }
 
   /**
    * Helper methods for working with pages
    */
   public page = {
-    create: async (signature: GitSignature, config?: PageConfig): Promise<Page> => {
-      const page = await new Page(this).create(signature, config);
-      this._pages.push(page);
-      return page;
-    },
-    find: async (key: 'id' | PageConfigKey, value: string): Promise<Page | undefined> => {
-      return this.pages.find((page: Page) => {
-        // Find by ID
-        if (key === 'id') {
-          return page[key] === value;
-        }
-        // Find by config key
-        return page.config[key] === value;
-      });
+    create: async (signature: GitSignature, language: string, config?: PageConfig): Promise<Page> => {
+      return await new Page(this).create(signature, language, config);
     }
   };
 
@@ -184,21 +175,17 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with blocks
    */
   public block = {
-    create: async (signature: GitSignature, config: BlockConfig, content?: string): Promise<Block> => {
-      const block = await new Block(this).create(signature, config, content);
-      this._blocks.push(block);
-      return block;
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
-    find: async (key: 'id' | BlockConfigKey, value: any): Promise<Block | undefined> => {
-      return this.blocks.find((block: Block) => {
-        // Find by ID
-        if (key === 'id') {
-          return block[key] === value;
-        }
-        // Find by config key
-        return block.config[key] === value;
-      });
+    create: async (signature: GitSignature, language: string, config: BlockConfig, content?: string): Promise<Block> => {
+      return await new Block(this).create(signature, language, config, content);
+    }
+  };
+
+  /**
+   * Helper methods for working with snapshots
+   */
+  public snapshot = {
+    create: async (signature: GitSignature, name: string, target?: string): Promise<Snapshot> => {
+      return await new Snapshot(this).create(signature, name, target);
     }
   };
   
@@ -210,7 +197,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
   public async export() {
     return {
       ...this.config,
-      pages: await Promise.all(this.pages.filter((page) => {
+      pages: await Promise.all(this.pages.filter(() => {
         // return page.config.stage === 'published';
         return true;
       }).map(async (page) => {
@@ -229,8 +216,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
   public async build(): Promise<string> {
     let buildLog = '';
 
-    // Export the projects data to it's themes ".elek.io" directory
-    await Util.json.write(Path.join(this.path, 'theme', '.elek.io', 'project.json'), await this.export());
+    // Export the projects data to the export file, defined by the theme
+    await Util.json.write(Path.join(this.path, 'theme', this.theme.config.exportFile), await this.export());
     
     // Install the themes dependencies
     buildLog += await Util.spawnChildProcess('npm', ['install'], {
@@ -249,6 +236,51 @@ You can use it as a starting point or delete it. If you need help, consider visi
     await Fs.copy(Path.join(this.path, 'theme', this.theme.config.buildDir), Path.join(this.path, 'public'));
 
     return buildLog;
+  }
+
+  /**
+   * Loads all child objects like pages and blocks from disk 
+   * into the corresponding projects property
+   */
+  public async refresh(): Promise<void> {
+    this._blocks = [];
+    this._pages = [];
+    this._snapshots = [];
+    this._theme = await this.theme.load();
+
+    const objects = [
+      {
+        name: 'blocks',
+        extension: '.md'
+      },
+      {
+        name: 'pages',
+        extension: '.json'
+      }
+    ];
+
+    // Get all files from the pages and blocks folder that have the appropriate extension
+    const possibleObjects = await Promise.all([
+      await Util.files(Path.join(this.path, objects[0].name), objects[0].extension),
+      await Util.files(Path.join(this.path, objects[1].name), objects[1].extension)
+    ]);
+    
+    // Return all objects we are able to resolve without throwing errors
+    await Util.returnResolved(possibleObjects[0].map((possibleBlock) => {
+      const fileNameArray = possibleBlock.name.replace(objects[0].extension, '').split('.');
+      return new Block(this).load(fileNameArray[0], fileNameArray[1]);
+    }));
+
+    await Util.returnResolved(possibleObjects[1].map((possiblePage) => {
+      const fileNameArray = possiblePage.name.replace(objects[1].extension, '').split('.');
+      return new Page(this).load(fileNameArray[0], fileNameArray[1]);
+    }));
+
+    // Load all available snapshots
+    const tagList = await Util.git.tag.list(this.path);
+    Promise.all(tagList.map((tag) => {
+      return new Snapshot(this).load(tag.tag.tag);
+    }));
   }
 
   /**
@@ -291,38 +323,6 @@ public/
     await Promise.all(folders.map(async (folder) => {
       await Fs.mkdir(Path.join(this.path, folder));
       await Fs.writeFile(Path.join(this.path, folder, '.gitkeep'), '');
-    }));
-  }
-
-  /**
-   * Loads given child objects like pages and blocks from disk 
-   * into the corresponding projects property
-   */
-  private async loadChildren(): Promise<void> {
-    const objects = [
-      {
-        name: 'blocks',
-        extension: '.md'
-      },
-      {
-        name: 'pages',
-        extension: '.json'
-      }
-    ];
-
-    // Get all files from the pages and blocks folder that have the appropriate extension
-    const possibleObjects = await Promise.all([
-      await Util.files(Path.join(this.path, objects[0].name), objects[0].extension),
-      await Util.files(Path.join(this.path, objects[1].name), objects[1].extension)
-    ]);
-    
-    // Return all objects we are able to resolve without throwing errors
-    this._blocks = await Util.returnResolved(possibleObjects[0].map((possibleBlock) => {
-      return new Block(this).load(possibleBlock.name.replace(objects[0].extension, ''));
-    }));
-
-    this._pages = await Util.returnResolved(possibleObjects[1].map((possiblePage) => {
-      return new Page(this).load(possiblePage.name.replace(objects[1].extension, ''));
     }));
   }
 }

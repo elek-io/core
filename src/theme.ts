@@ -18,7 +18,8 @@ export class ThemeConfig {
     serve: string;
     build: string;
   };
-  public buildDir = '';
+  public exportFile = '.elek.io/project.json';
+  public buildDir = 'dist';
 }
 
 export class ThemeLayout {
@@ -39,7 +40,7 @@ export class ThemeBlockPosition {
 export default class Theme {
   // Using definite assignment assertion here
   // because values are assigned by the create and load methods
-  private _project!: Project;
+  private _project: Project;
   private _path!: string;
   private _config!: ThemeConfig;
   private _blockPositions: ThemeBlockPosition[] = [];
@@ -67,15 +68,23 @@ export default class Theme {
 
   /**
    * Changes the theme by cloning it's repository
+   * 
+   * @todo implement logic to map between both themes layouts
    */
   public async use(repository: string): Promise<Theme> {
     await this.delete();
+    // Clone only the main branch with a history depth of 1
+    // to save resources and time
     await Util.git.clone(repository, this.path, {
       singleBranch: true,
       depth: 1
     });
     this._config = await Util.read.theme(this.project.id);
     await this.parse();
+
+    // Implement logic to map the layouts of all current pages
+    // to the layouts of the new theme here
+
     return this;
   }
 
@@ -90,6 +99,8 @@ export default class Theme {
 
   /**
    * Updates the theme by pulling from it's repository
+   * 
+   * @todo implement logic to check for layout ID changes and maybe map between both versions if needed
    */
   public async update(): Promise<void> {
     await Util.git.pull(this.path);
@@ -115,7 +126,7 @@ export default class Theme {
   }
 
   /**
-   * Looks for custom elek.io elements in every layout of the theme and parses them
+   * Looks for elek.io blocks in every layout of the theme and parses their restrictions
    */
   private async parse(): Promise<void> {
     for (let index = 0; index < this.config.layouts.length; index++) {
@@ -152,34 +163,46 @@ export default class Theme {
 
       // BlockRules
       if (key === 'only' || key === 'not') {
-        restrictions[key] = attribute.split(',').filter((value) => {
-          return BlockRuleArray.includes(<BlockRule>value.trim());
-        }).map((value) => {
-          return <BlockRule>value.trim();
-        });
+        restrictions[key] = await this.parseBlockRule(attribute);
       }
 
       // Numbers
       if (key === 'minimum' || key === 'maximum') {
-        const value = parseInt(attribute);
-        if (value < 0) {
-          throw new Error(`Found negative value "${value}" for restriction "${key}"`);
-        }
-        restrictions[key] = value;
+        restrictions[key] = await this.parseNumber(attribute, key);
       }
 
       // Booleans
       if (key === 'inline' || key === 'breaks' || key === 'html' || key === 'highlightCode' || key === 'repeatable') {
-        if (attribute !== 'true' && attribute !== 'false') {
-          throw new Error(`Expected boolean value for restriction "${key}", got "${attribute}"`);
-        }
-        if (attribute === 'true') {
-          restrictions[key] = true;
-        }
-        restrictions[key] = false;
+        restrictions[key] = await this.parseBoolean(attribute, key);
       }
     }
 
     return restrictions;
+  }
+
+  private async parseBlockRule(attribute: string) {
+    return attribute.split(',').filter((value) => {
+      return BlockRuleArray.includes(<BlockRule>value.trim());
+    }).map((value) => {
+      return <BlockRule>value.trim();
+    });
+  }
+
+  private async parseNumber(attribute: string, key: string) {
+    const value = parseInt(attribute);
+    if (value < 0) {
+      throw new Error(`Found negative value "${value}" for restriction "${key}"`);
+    }
+    return value;
+  }
+
+  private async parseBoolean(attribute: string, key: string) {
+    if (attribute !== 'true' && attribute !== 'false') {
+      throw new Error(`Expected boolean value for restriction "${key}", got "${attribute}"`);
+    }
+    if (attribute === 'true') {
+      return true;
+    }
+    return false;
   }
 }

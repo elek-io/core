@@ -1,6 +1,6 @@
 import Fs from 'fs-extra';
 import Globby from 'globby';
-import Git from 'isomorphic-git';
+import Git, { ReadTagResult } from 'isomorphic-git';
 import Http from 'isomorphic-git/http/node';
 import { assignDefaultIfMissing } from './general';
 
@@ -47,8 +47,8 @@ export async function pull(localPath: string, options?: Partial<Parameters<typeo
  */
 export async function commit(localPath: string, signature: GitSignature, files: string | string[], message: string, options?: Partial<Parameters<typeof Git.commit>[0]>): Promise<string> {
 
-  // Support the * (add and commit everything) syntax
-  if (files === '*') {
+  // Support the * and . (add and commit everything) syntax
+  if (files === '*' || files === '.') {
     files = await Globby(['./**', './**/.*'], {
       cwd: localPath,
       gitignore: true
@@ -60,32 +60,46 @@ export async function commit(localPath: string, signature: GitSignature, files: 
     files = [files];
   }
 
-  // The .add() method only accepts relative paths
-  // so we need to remove the localPath part of it if needed
-  files = files.map((file) => {
+  // Get the status of each file
+  const fileStatus = await Promise.all(files.map(async (file) => {
+    // The .add() and .remove() methods only accept relative paths
+    // so we need to remove the localPath part of it if needed
     if (file.includes(localPath)) {
-      return file.replace(localPath + '/', '');
+      file = file.replace(localPath + '/', '');
     }
-    return file;
-  });
+    return {
+      path: file,
+      status: await Git.status({
+        fs: Fs,
+        dir: localPath,
+        filepath: file
+      })
+    };
+  }));
 
-  // Only commit changed files, not all of them again and again
-  files = files.filter(async (file) => {
-    const status = await Git.status({
-      fs: Fs,
-      dir: localPath,
-      filepath: file
-    });
-    return status === '*added' || status === '*modified' || status === '*deleted';
-  });
-
-  await Promise.all(files.map(async (file) => {
-    // Add all changed files to the staging area
-    return Git.add({
-      fs: Fs,
-      dir: localPath,
-      filepath: file
-    });
+  // Add all changes to the staging area
+  await Promise.all(fileStatus.map(async (file) => {
+    /**
+     * The explicit removal of a deleted but not yet staged file 
+     * is not needed via git CLI. 
+     * 
+     * If this will be handled by isomorphic-git in the future,
+     * this can be simplified.
+     * @see https://github.com/isomorphic-git/isomorphic-git/issues/1099#issuecomment-659700768
+     */
+    if (file.status === '*deleted') {
+      await Git.remove({
+        fs: Fs,
+        dir: localPath,
+        filepath: file.path
+      });
+    } else if (file.status === '*added' || file.status === '*modified') {
+      await Git.add({
+        fs: Fs,
+        dir: localPath,
+        filepath: file.path
+      });
+    }
   }));
 
   // Now create the commit
@@ -101,7 +115,7 @@ export async function commit(localPath: string, signature: GitSignature, files: 
  * Checkout a branch
  * 
  * If the branch already exists it will check out that branch. 
- * Otherwise, it will create a new remote tracking branch set to track the remote branch of that name.
+ * Otherwise, it will create it locally and check it out after that.
  */
 export async function checkout(localPath: string, name: string, isNew = false, options?: Partial<Parameters<typeof Git.checkout>[0]>): Promise<void> {
   if (isNew === true) {
@@ -118,3 +132,53 @@ export async function checkout(localPath: string, name: string, isNew = false, o
     ref: name
   }));
 }
+
+export const tag = {
+  /**
+   * Creates an annotated tag
+   * 
+   * @param id A self specified ID (e.g. Uuid v4) which needs to meet the same criteria of a slug
+   * @param name Name of the new tag (internally handled as the tag's message)
+   */
+  create: async (localPath: string, signature: GitSignature, id: string, name: string, options?: Partial<Parameters<typeof Git.annotatedTag>[0]>): Promise<ReadTagResult> => {
+    await Git.annotatedTag(assignDefaultIfMissing(options || {}, {
+      fs: Fs,
+      dir: localPath,
+      ref: id,
+      message: name,
+      tagger: signature
+    }));
+    return tag.load(localPath, id);
+  },
+  load: async (localPath: string, id: string): Promise<ReadTagResult> => {
+    // Resolve the oid by the tag's reference (in our case a self specified ID)
+    const tagObjectId = await Git.resolveRef({
+      fs: Fs,
+      dir: localPath,
+      ref: id
+    });
+    // Use this oid to get the tag's full information
+    return Git.readTag({
+      fs: Fs,
+      dir: localPath,
+      oid: tagObjectId
+    });
+  },
+  list: async (localPath: string): Promise<ReadTagResult[]> => {
+    const tagIds = await Git.listTags({
+      fs: Fs,
+      dir: localPath
+    });
+
+    return Promise.all(tagIds.map(async (id) => {
+      return tag.load(localPath, id);
+    }));
+  },
+  delete: (localPath: string, id: string): Promise<void> => {
+    return Git.deleteTag({
+      fs: Fs,
+      dir: localPath,
+      ref: id
+    });
+  }
+};

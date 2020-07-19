@@ -1,3 +1,4 @@
+import Fs from 'fs-extra';
 import Path from 'path';
 import Util from './util';
 import { GitSignature } from './util/git';
@@ -5,9 +6,7 @@ import Project from './project';
 import Markdown from 'markdown-it';
 import Code from 'highlight.js';
 
-export class BlockConfig {
-  public language = 'en';
-}
+export class BlockConfig {}
 export type BlockConfigKey = keyof BlockConfig;
 
 export class BlockRestrictions {
@@ -51,7 +50,8 @@ export default class Block {
   // Using definite assignment assertion here
   // because values are assigned by the create and load methods
   private _id!: string;
-  private _project!: Project;
+  private _project: Project;
+  private _language!: string;
   private _path!: string;
   private _config!: BlockConfig;
   private _content!: string;
@@ -62,6 +62,10 @@ export default class Block {
 
   public get project(): Project {
     return this._project;
+  }
+
+  public get language(): string {
+    return this._language;
   }
 
   public get path(): string {
@@ -91,9 +95,10 @@ export default class Block {
   /**
    * Creates a new block on disk
    */
-  public async create(signature: GitSignature, config: BlockConfig, content?: string): Promise<Block> {
+  public async create(signature: GitSignature, language: string, config: BlockConfig, content?: string): Promise<Block> {
     this._id = Util.uuid();
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.md`);
+    this._language = language;
+    this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.${this.language}.md`);
 
     // Block can be initialized with a custom config
     // if it's not, default will be used
@@ -101,28 +106,43 @@ export default class Block {
       config = new BlockConfig();
     }
     // Create the block file
-    await Util.write.block(this.project.id, this.id, config, content);
+    await Util.write.block(this.project.id, this.id, this.language, config, content);
 
     // Load the file into this object
-    const block = await Util.read.block(this.project.id, this.id);
+    const block = await Util.read.block(this.project.id, this.id, this.language);
     this._config = block.config;
     this._content = block.content;
 
     // Create a new commit
     await this.save(signature, ':heavy_plus_sign: Created new block');
 
+    // Add this block to the project
+    this.project.blocks.push(this);
+
     return this;
   }
 
   /**
-   * Loads a block by it's ID
+   * Loads a block by it's ID and language
    */
-  public async load(id: string): Promise<Block> {
+  public async load(id: string, language: string): Promise<Block> {
+    // Do not allow reloading an already initialized block
+    if (this.id) { throw new Error('A block cannot be reloaded. Please delete the old and then initialize a new one instead.'); }
+    
     this._id = id;
-    const block = await Util.read.block(this.project.id, this.id);
+    this._language = language;
+    const block = await Util.read.block(this.project.id, this.id, this.language);
     this._config = block.config;
     this._content = block.content;
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.md`);
+    this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.${this.language}.md`);
+
+    // Push the block to the project if it's not already there
+    if (!this.project.blocks.find((block) => {
+      return block.id === this.id;
+    })) {
+      this.project.blocks.push(this);
+    }
+
     return this;
   }
 
@@ -131,9 +151,29 @@ export default class Block {
    */
   public async save(signature: GitSignature, message = ':wrench: Updated block'): Promise<void> {
     // Write block to disk
-    await Util.write.block(this.project.id, this.id, this.config, this.content);
+    await Util.write.block(this.project.id, this.id, this.language, this.config, this.content);
     // Commit changes
     await Util.git.commit(this.project.path, signature, this.path, message);
+  }
+
+  /**
+   * Deletes the block's files from disk, creates a commit and removes it's reference from the project
+   */
+  public async delete(signature: GitSignature, message = ':fire: Deleted block'): Promise<void> {
+    // Remove block from disk
+    await Fs.remove(this.path);
+    
+    // Commit changes
+    await Util.git.commit(this.project.path, signature, this.path, message);
+    
+    // Remove it from the project
+    const blockIndex = this.project.blocks.findIndex((block) => {
+      return block.id === this.id;
+    });
+    if (blockIndex === -1) {
+      throw new Error('Tried removing an not existing block from the project');
+    }
+    this.project.blocks.splice(blockIndex, 1);
   }
 
   /**
@@ -190,7 +230,7 @@ export default class Block {
           try {
             return Code.highlight(language, code).value;
           } catch (error) {
-            console.log(error);
+            throw new Error(error);
           }
         }
         return '';

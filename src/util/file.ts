@@ -2,6 +2,7 @@ import Os from 'os';
 import Fs from 'fs-extra';
 import Path from 'path';
 import { hasKeysOf } from './general';
+import { locale } from './validate';
 import { ProjectConfig } from '../project';
 import { ThemeConfig } from '../theme';
 import { PageConfig } from '../page';
@@ -96,8 +97,11 @@ export const read = {
   /**
    * Reads a page config file and returns it's JSON
    */
-  page: async (projectId: string, pageId: string): Promise<PageConfig> => {
-    const path = Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`);
+  page: async (projectId: string, pageId: string, language: string): Promise<PageConfig> => {
+    if (locale(language) !== true) {
+      throw new Error(`Tried to read an page with invalid language tag "${language}"`);
+    }
+    const path = Path.join(pathTo.projects, projectId, 'pages', `${pageId}.${language}.json`);
     const content = await json.read(path);
     const missingKeys = hasKeysOf(content, new PageConfig());
     if (missingKeys !== true) {
@@ -105,8 +109,11 @@ export const read = {
     }
     return content;
   },
-  block: async (projectId: string, blockId: string): Promise<{ config: BlockConfig, content: string }> => {
-    const path = Path.join(pathTo.projects, projectId, 'blocks', `${blockId}.md`);
+  block: async (projectId: string, blockId: string, language: string): Promise<{ config: BlockConfig, content: string }> => {
+    if (locale(language) !== true) {
+      throw new Error(`Tried to read an block with invalid language tag "${language}"`);
+    }
+    const path = Path.join(pathTo.projects, projectId, 'blocks', `${blockId}.${language}.md`);
     const content = await Fs.readFile(path);
     const header = await json.readHeader(content);
     const missingKeys = hasKeysOf(header, new BlockConfig());
@@ -147,23 +154,29 @@ export const write = {
   /**
    * Writes to a page's config file
    */
-  page: async (projectId: string, pageId: string, config: PageConfig): Promise<void> => {
+  page: async (projectId: string, pageId: string, language: string, config: PageConfig): Promise<void> => {
+    if (locale(language) !== true) {
+      throw new Error(`Tried to write an page with invalid language tag "${language}"`);
+    }
     const missingKeys = hasKeysOf(config, new PageConfig());
     if (missingKeys !== true) {
       throw new Error(`Tried to write invalid page config. Missing required keys: ${missingKeys.join(', ')}`);
     }
-    await json.write(Path.join(pathTo.projects, projectId, 'pages', `${pageId}.json`), config);
+    await json.write(Path.join(pathTo.projects, projectId, 'pages', `${pageId}.${language}.json`), config);
   },
   /**
    * Writes to a block's config header and content
    */
-  block: async (projectId: string, blockId: string, config: BlockConfig, content?: string): Promise<void> => {
-    const path = Path.join(pathTo.projects, projectId, 'blocks', `${blockId}.md`);
+  block: async (projectId: string, blockId: string, language: string, config: BlockConfig, content?: string): Promise<void> => {
+    if (locale(language) !== true) {
+      throw new Error(`Tried to write an block with invalid language tag "${language}"`);
+    }
     const missingKeys = hasKeysOf(config, new BlockConfig());
     if (missingKeys !== true) {
       throw new Error(`Tried to write invalid block config. Missing required keys: ${missingKeys.join(', ')}`);
     }
     // Now write the file with header and given content
+    const path = Path.join(pathTo.projects, projectId, 'blocks', `${blockId}.${language}.md`);
     await Fs.writeFile(path, `---
 ${JSON.stringify(config, null, 2)}
 ---
