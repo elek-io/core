@@ -128,7 +128,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
     this._theme = await new Theme(this).load();
 
     // Load it's pages and blocks
-    await this.loadChildren();
+    await this.refresh();
     
     return this;
   }
@@ -239,6 +239,51 @@ You can use it as a starting point or delete it. If you need help, consider visi
   }
 
   /**
+   * Loads all child objects like pages and blocks from disk 
+   * into the corresponding projects property
+   */
+  public async refresh(): Promise<void> {
+    this._blocks = [];
+    this._pages = [];
+    this._snapshots = [];
+    this._theme = await this.theme.load();
+
+    const objects = [
+      {
+        name: 'blocks',
+        extension: '.md'
+      },
+      {
+        name: 'pages',
+        extension: '.json'
+      }
+    ];
+
+    // Get all files from the pages and blocks folder that have the appropriate extension
+    const possibleObjects = await Promise.all([
+      await Util.files(Path.join(this.path, objects[0].name), objects[0].extension),
+      await Util.files(Path.join(this.path, objects[1].name), objects[1].extension)
+    ]);
+    
+    // Return all objects we are able to resolve without throwing errors
+    await Util.returnResolved(possibleObjects[0].map((possibleBlock) => {
+      const fileNameArray = possibleBlock.name.replace(objects[0].extension, '').split('.');
+      return new Block(this).load(fileNameArray[0], fileNameArray[1]);
+    }));
+
+    await Util.returnResolved(possibleObjects[1].map((possiblePage) => {
+      const fileNameArray = possiblePage.name.replace(objects[1].extension, '').split('.');
+      return new Page(this).load(fileNameArray[0], fileNameArray[1]);
+    }));
+
+    // Load all available snapshots
+    const tagList = await Util.git.tag.list(this.path);
+    Promise.all(tagList.map((tag) => {
+      return new Snapshot(this).load(tag.tag.tag);
+    }));
+  }
+
+  /**
    * Writes the projects main .gitignore file to disk
    */
   private async createGitignore(): Promise<void> {
@@ -278,46 +323,6 @@ public/
     await Promise.all(folders.map(async (folder) => {
       await Fs.mkdir(Path.join(this.path, folder));
       await Fs.writeFile(Path.join(this.path, folder, '.gitkeep'), '');
-    }));
-  }
-
-  /**
-   * Loads given child objects like pages and blocks from disk 
-   * into the corresponding projects property
-   */
-  private async loadChildren(): Promise<void> {
-    const objects = [
-      {
-        name: 'blocks',
-        extension: '.md'
-      },
-      {
-        name: 'pages',
-        extension: '.json'
-      }
-    ];
-
-    // Get all files from the pages and blocks folder that have the appropriate extension
-    const possibleObjects = await Promise.all([
-      await Util.files(Path.join(this.path, objects[0].name), objects[0].extension),
-      await Util.files(Path.join(this.path, objects[1].name), objects[1].extension)
-    ]);
-    
-    // Return all objects we are able to resolve without throwing errors
-    await Util.returnResolved(possibleObjects[0].map((possibleBlock) => {
-      const fileNameArray = possibleBlock.name.replace(objects[0].extension, '').split('.');
-      return new Block(this).load(fileNameArray[0], fileNameArray[1]);
-    }));
-
-    await Util.returnResolved(possibleObjects[1].map((possiblePage) => {
-      const fileNameArray = possiblePage.name.replace(objects[1].extension, '').split('.');
-      return new Page(this).load(fileNameArray[0], fileNameArray[1]);
-    }));
-
-    // Load all available snapshots
-    const tagList = await Util.git.tag.list(this.path);
-    Promise.all(tagList.map((tag) => {
-      return new Snapshot(this).load(tag.oid);
     }));
   }
 }

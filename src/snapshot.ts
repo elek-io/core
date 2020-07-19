@@ -50,7 +50,7 @@ export default class Snapshot {
   /**
    * Creates a new snapshot of given project
    */
-  public async create(signature: GitSignature, name: string, target = 'HEAD'): Promise<Snapshot> {
+  public async create(signature: GitSignature, name: string, target?: string): Promise<Snapshot> {
     this._id = Util.uuid();
     this._signature = signature;
     this._name = name;
@@ -70,7 +70,6 @@ export default class Snapshot {
     return this;
   }
 
-
   public async load(id: string): Promise<Snapshot> {
     // Do not allow reloading an already initialized snapshot
     if (this.id) { throw new Error('A snapshot cannot be reloaded. Please delete the old and then initialize a new one instead.'); }
@@ -83,7 +82,7 @@ export default class Snapshot {
       name: tag.tag.tagger.name,
       email: tag.tag.tagger.email
     };
-    this._name = tag.tag.tag; // That property names tho...
+    this._name = tag.tag.message; // Name of the snapshot is internally handled as the tag's message
     this._timestamp = tag.tag.tagger.timestamp;
     this._timezoneOffset = tag.tag.tagger.timezoneOffset;
 
@@ -99,23 +98,31 @@ export default class Snapshot {
 
   /**
    * Reverts the projects state back to when this snapshot was created
-   * 
-   * @todo check how the detached HEAD state affects further commits and merges
    */
-  public async revert(force = false): Promise<void> {
-    await Util.git.checkout(this.project.path, this.id, false, {force});
+  public async revert(signature: GitSignature, force = false): Promise<void> {
+    // Checkout the git tag of this snapshot without updating the HEAD
+    // This way only the working directory changes
+    await Util.git.checkout(this.project.path, this.id, false, {
+      noUpdateHead: true,
+      force
+    });
+    // Now commit the changes, which are interestingly already added
+    await Util.git.commit(this.project.path, signature, [], `:rewind: Reverted to snapshot "${this.name}"`);
+    // Because the files on disk have probably changed now,
+    // we need to refresh all objects in memory by reloading them
+    await this.project.refresh();
   }
 
   public async delete(): Promise<void> {
-    await Util.git.tag.delete(this.project.path, this.id);
-
     // Remove it from the project
     const snapshotIndex = this.project.snapshots.findIndex((snapshot) => {
       return snapshot.id === this.id;
     });
     if (snapshotIndex === -1) {
-      throw new Error('Tried removing an not existing snapshot from the project');
+      throw new Error('Tried removing non existing snapshot from the project');
     }
     this.project.snapshots.splice(snapshotIndex, 1);
+    // And delete the git tag
+    await Util.git.tag.delete(this.project.path, this.id);
   }
 }

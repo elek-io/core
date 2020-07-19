@@ -154,6 +154,7 @@ export const tag = {
     // Resolve the oid by the tag's reference (in our case a self specified ID)
     const tagObjectId = await Git.resolveRef({
       fs: Fs,
+      dir: localPath,
       ref: id
     });
     // Use this oid to get the tag's full information
