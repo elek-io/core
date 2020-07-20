@@ -14,6 +14,7 @@ export class ThemeConfig {
   public repository = '';
   public author = '';
   public license = '';
+  public navigations: ThemeNavigation[] = [];
   public layouts: ThemeLayout[] = [];
   public scripts!: {
     serve: string;
@@ -21,6 +22,24 @@ export class ThemeConfig {
   };
   public exportFile = '.elek.io/project.json';
   public buildDir = 'dist';
+}
+
+export class ThemeNavigation {
+  public id!: string;
+  public items?: {
+    minimum?: number;
+    maximum?: number;
+  } = {
+    minimum: 0,
+    maximum: 0
+  };
+  public subitems?: {
+    allowed?: boolean;
+    levels?: number;
+  } = {
+    allowed: true,
+    levels: 1
+  }
 }
 
 export class ThemeLayout {
