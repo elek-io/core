@@ -23,11 +23,29 @@ export interface PageContent {
   block: Block;
 }
 
+export interface PageTaxonomyOption {
+  id: string;
+  value: string;
+}
+
+export type PageTaxonomy = {
+  id: string;
+  type: 'select';
+  options: PageTaxonomyOption[];
+  value: string;
+} | {
+  id: string;
+  type: 'multiselect';
+  options: PageTaxonomyOption[];
+  value: string[];
+}
+
 export class PageConfig {
   public name = '';
   public path = '';
   public stage: PageStage = 'wip';
   public layoutId = '';
+  public taxonomies: PageTaxonomy[] = [];
   public content: PageContentReference[] = [];
 }
 export type PageConfigKey = keyof PageConfig;
@@ -110,16 +128,15 @@ export default class Page {
   /**
    * Creates a new page on disk
    */
-  public async create(signature: GitSignature, language: string, config?: PageConfig): Promise<Page> {
+  public async create(signature: GitSignature, language: string, partialConfig?: Partial<PageConfig>): Promise<Page> {
     this._id = Util.uuid();
     this._language = language;
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.${this.language}.json`);
 
     // Page can be initialized with a custom config
     // if it's not, default will be used
-    if (!config) {
-      config = new PageConfig();
-    }
+    const config = Util.assignDefaultIfMissing(partialConfig || {}, new PageConfig());
+
     // Create the page config file
     await Util.write.page(this.project.id, this.id, this.language, config);
 

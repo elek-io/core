@@ -166,8 +166,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with pages
    */
   public page = {
-    create: async (signature: GitSignature, language: string, config?: PageConfig): Promise<Page> => {
-      return await new Page(this).create(signature, language, config);
+    create: async (signature: GitSignature, language: string, partialConfig?: Partial<PageConfig>): Promise<Page> => {
+      return await new Page(this).create(signature, language, partialConfig);
     }
   };
 
@@ -175,8 +175,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with blocks
    */
   public block = {
-    create: async (signature: GitSignature, language: string, config: BlockConfig, content?: string): Promise<Block> => {
-      return await new Block(this).create(signature, language, config, content);
+    create: async (signature: GitSignature, language: string, partialConfig?: Partial<BlockConfig>, content?: string): Promise<Block> => {
+      return await new Block(this).create(signature, language, partialConfig, content);
     }
   };
 
@@ -277,9 +277,9 @@ You can use it as a starting point or delete it. If you need help, consider visi
     }));
 
     // Load all available snapshots
-    const tagList = await Util.git.tag.list(this.path);
-    Promise.all(tagList.map((tag) => {
-      return new Snapshot(this).load(tag.tag.tag);
+    const tagResultList = await Util.git.tag.list(this.path);
+    Promise.all(tagResultList.map((tagResult) => {
+      return new Snapshot(this).load(tagResult.tag.tag);
     }));
   }
 

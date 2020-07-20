@@ -95,16 +95,15 @@ export default class Block {
   /**
    * Creates a new block on disk
    */
-  public async create(signature: GitSignature, language: string, config: BlockConfig, content?: string): Promise<Block> {
+  public async create(signature: GitSignature, language: string, partialConfig?: Partial<BlockConfig>, content?: string): Promise<Block> {
     this._id = Util.uuid();
     this._language = language;
     this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.${this.language}.md`);
 
     // Block can be initialized with a custom config
     // if it's not, default will be used
-    if (!config) {
-      config = new BlockConfig();
-    }
+    const config = Util.assignDefaultIfMissing(partialConfig || {}, new BlockConfig());
+
     // Create the block file
     await Util.write.block(this.project.id, this.id, this.language, config, content);
 
