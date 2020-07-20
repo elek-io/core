@@ -4,6 +4,7 @@ import Cheerio from 'cheerio';
 import Util from './util';
 import Project from './project';
 import { BlockRestrictions, BlockRuleArray, BlockRule } from './block';
+import { PageTaxonomy } from './page';
 
 export class ThemeConfig {
   public name = '';
@@ -28,6 +29,7 @@ export class ThemeLayout {
   public name!: string;
   public description!: string;
   public path!: string;
+  public taxonomies: PageTaxonomy[] = [];
   public children: ThemeLayout[] = [];
 }
 

@@ -31,12 +31,12 @@ export interface PageTaxonomyOption {
 export type PageTaxonomy = {
   id: string;
   type: 'select';
-  options: PageTaxonomyOption[];
+  options?: PageTaxonomyOption[];
   value: string;
 } | {
   id: string;
   type: 'multiselect';
-  options: PageTaxonomyOption[];
+  options?: PageTaxonomyOption[];
   value: string[];
 }
 
