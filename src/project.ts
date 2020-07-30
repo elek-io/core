@@ -1,13 +1,14 @@
 import Fs from 'fs-extra';
 import Path from 'path';
+import ProjectFile from './file/projectFile';
 import Util from './util';
 import { GitSignature } from './util/git';
 import Theme from './theme';
-import Page, { PageConfig } from './page';
-import Block, { BlockConfig } from './block';
+import Page, { PageFileContent } from './page';
+import Block, { BlockFileHeader } from './block';
 import Snapshot from './snapshot';
 
-export class ProjectConfig {
+export class ProjectFileContent {
   public name = '';
   public description= '';
   public version= '1.0.0';
@@ -18,8 +19,8 @@ export default class Project {
   // Using definite assignment assertion here
   // because values are assigned by the create and load methods
   private _id!: string;
-  private _path!: string;
-  private _config!: ProjectConfig;
+  private _file!: ProjectFile;
+  private _config!: ProjectFileContent;
   private _theme!: Theme;
   private _pages: Page[] = [];
   private _blocks: Block[] = [];
@@ -29,15 +30,11 @@ export default class Project {
     return this._id;
   }
 
-  public get path(): string {
-    return this._path;
-  }
-
-  public get config(): ProjectConfig {
+  public get config(): ProjectFileContent {
     return this._config;
   }
 
-  public set config(value: ProjectConfig) {
+  public set config(value: ProjectFileContent) {
     this._config = value;
   }
 
@@ -66,10 +63,10 @@ export default class Project {
    */
   public async create(name: string, signature: GitSignature): Promise<Project> {
     this._id = Util.uuid();
-    this._path = Path.join(Util.pathTo.projects, this.id);
+    this._file = new ProjectFile(this._id);
 
     // Initialize the Git repository
-    await Util.git.init(this.path);
+    await Util.git.init(Util.pathTo.project(this._id));
 
     // Create the folder structure, root .gitignore and config file
     await this.createFolderStructure();
@@ -80,10 +77,10 @@ export default class Project {
     this._theme = await new Theme(this).use('https://github.com/elek-io/starter-theme.git');
 
     // Create an initial commit
-    await Util.git.commit(this.path, signature, '*', ':tada: Created this new elek.io project');
+    await Util.git.commit(Util.pathTo.project(this._id), signature, '*', ':tada: Created this new elek.io project');
 
     // Now create and switch to the "stage" branch
-    await Util.git.checkout(this.path, 'stage', true);
+    await Util.git.checkout(Util.pathTo.project(this._id), 'stage', true);
 
     // Create the first block of content
     const block = await this.block.create(signature, 'en-US', {}, `We are very happy to have you on board. This page was created for you. 
@@ -108,7 +105,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
     });
 
     // Load the config file
-    this._config = await Util.read.project(this.id);
+    this._config = await this._file.load();
 
     return this;
   }
@@ -121,8 +118,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
     if (this.id) { throw new Error('A project cannot be reloaded. Please delete the old and then initialize a new one instead.'); }
 
     this._id = id;
-    this._path = Path.join(Util.pathTo.projects, this.id);
-    this._config = await Util.read.project(this.id);
+    this._file = new ProjectFile(this._id);
+    this._config = await this._file.load();
 
     // Load it's theme
     this._theme = await new Theme(this).load();
@@ -140,7 +137,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
     // Only if an ID is present
     if (!this.id) { throw new Error('Project cannot be deleted because it was never created nor loaded.'); }
 
-    await Fs.remove(this.path);
+    await Fs.remove(Util.pathTo.project(this._id));
   }
 
   /**
@@ -158,15 +155,15 @@ You can use it as a starting point or delete it. If you need help, consider visi
       await page.save(signature);
     }
     // Write config to disk
-    await Util.write.project(this.id, this.config);
-    await Util.git.commit(this.path, signature, Util.configNameOf.project, message);
+    await this._file.save(this._config);
+    await Util.git.commit(Util.pathTo.project(this._id), signature, this._file.path, message);
   }
 
   /**
    * Helper methods for working with pages
    */
   public page = {
-    create: async (signature: GitSignature, language: string, partialConfig?: Partial<PageConfig>): Promise<Page> => {
+    create: async (signature: GitSignature, language: string, partialConfig?: Partial<PageFileContent>): Promise<Page> => {
       return await new Page(this).create(signature, language, partialConfig);
     }
   };
@@ -175,7 +172,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with blocks
    */
   public block = {
-    create: async (signature: GitSignature, language: string, partialConfig?: Partial<BlockConfig>, content?: string): Promise<Block> => {
+    create: async (signature: GitSignature, language: string, partialConfig?: Partial<BlockFileHeader>, content?: string): Promise<Block> => {
       return await new Block(this).create(signature, language, partialConfig, content);
     }
   };
@@ -217,23 +214,23 @@ You can use it as a starting point or delete it. If you need help, consider visi
     let buildLog = '';
 
     // Export the projects data to the export file, defined by the theme
-    await Util.json.write(Path.join(this.path, 'theme', this.theme.config.exportFile), await this.export());
+    await Fs.writeFile(Path.join(Util.pathTo.theme(this._id), this.theme.config.exportFile), JSON.stringify(await this.export(), null, 2));
     
     // Install the themes dependencies
     buildLog += await Util.spawnChildProcess('npm', ['install'], {
-      cwd: Path.join(this.path, 'theme')
+      cwd: Path.join(Util.pathTo.theme(this._id))
     });
 
     // Run the build script which uses the exported json
     // to hydrate the themes content
     buildLog += await Util.spawnChildProcess('npm', ['run', 'build'], {
-      cwd: Path.join(this.path, 'theme')
+      cwd: Path.join(Util.pathTo.theme(this._id))
     });
 
     // Copy the contents of themes "buildDir" to the projects public directory
     // where it's available from outside
-    await Fs.emptyDir(Path.join(this.path, 'public'));
-    await Fs.copy(Path.join(this.path, 'theme', this.theme.config.buildDir), Path.join(this.path, 'public'));
+    await Fs.emptyDir(Util.pathTo.public(this._id));
+    await Fs.copy(Path.join(Util.pathTo.theme(this._id), this.theme.config.buildDir), Util.pathTo.public(this._id));
 
     return buildLog;
   }
@@ -261,8 +258,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
 
     // Get all files from the pages and blocks folder that have the appropriate extension
     const possibleObjects = await Promise.all([
-      await Util.files(Path.join(this.path, objects[0].name), objects[0].extension),
-      await Util.files(Path.join(this.path, objects[1].name), objects[1].extension)
+      await Util.files(Path.join(Util.pathTo.project(this._id), objects[0].name), objects[0].extension),
+      await Util.files(Path.join(Util.pathTo.project(this._id), objects[1].name), objects[1].extension)
     ]);
     
     // Return all objects we are able to resolve without throwing errors
@@ -277,7 +274,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
     }));
 
     // Load all available snapshots
-    const tagResultList = await Util.git.tag.list(this.path);
+    const tagResultList = await Util.git.tag.list(Util.pathTo.project(this._id));
     Promise.all(tagResultList.map((tagResult) => {
       return new Snapshot(this).load(tagResult.tag.tag);
     }));
@@ -294,16 +291,16 @@ public/
 # Keep directories with .gitkeep files in them
 # even if the directory itself is ignored
 !/**/.gitkeep`;
-    await Fs.writeFile(Path.join(this.path, '.gitignore'), content);
+    await Fs.writeFile(Path.join(Util.pathTo.project(this._id), '.gitignore'), content);
   }
 
   /**
    * Creates the projects initial config and writes it to disk
    */
   private async createConfig(name: string): Promise<void> {
-    const config = new ProjectConfig();
+    const config = new ProjectFileContent();
     config.name = name;
-    await Util.write.project(this.id, config);
+    await this._file.save(config);
   }
 
   /**
@@ -321,8 +318,8 @@ public/
     ];
 
     await Promise.all(folders.map(async (folder) => {
-      await Fs.mkdir(Path.join(this.path, folder));
-      await Fs.writeFile(Path.join(this.path, folder, '.gitkeep'), '');
+      await Fs.mkdir(Path.join(Util.pathTo.project(this._id), folder));
+      await Fs.writeFile(Path.join(Util.pathTo.project(this._id), folder, '.gitkeep'), '');
     }));
   }
 }

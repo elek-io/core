@@ -56,7 +56,7 @@ export default class Snapshot {
     this._name = name;
 
     // Create the tag
-    const tag = await Util.git.tag.create(this.project.path, this.signature, this.id, this.name, {
+    const tag = await Util.git.tag.create(Util.pathTo.project(this._project.id), this.signature, this.id, this.name, {
       object: target
     });
 
@@ -75,7 +75,7 @@ export default class Snapshot {
     if (this.id) { throw new Error('A snapshot cannot be reloaded. Please delete the old and then initialize a new one instead.'); }
 
     // Get the tag by ID
-    const tag = await Util.git.tag.load(this.project.path, id);
+    const tag = await Util.git.tag.load(Util.pathTo.project(this._project.id), id);
 
     this._id = id;
     this._signature = {
@@ -102,12 +102,12 @@ export default class Snapshot {
   public async revert(signature: GitSignature, force = false): Promise<void> {
     // Checkout the git tag of this snapshot without updating the HEAD
     // This way only the working directory changes
-    await Util.git.checkout(this.project.path, this.id, false, {
+    await Util.git.checkout(Util.pathTo.project(this._project.id), this.id, false, {
       noUpdateHead: true,
       force
     });
     // Now commit the changes, which are interestingly already added
-    await Util.git.commit(this.project.path, signature, [], `:rewind: Reverted to snapshot "${this.name}"`);
+    await Util.git.commit(Util.pathTo.project(this._project.id), signature, [], `:rewind: Reverted to snapshot "${this.name}"`);
     // Because the files on disk have probably changed now,
     // we need to refresh all objects in memory by reloading them
     await this.project.refresh();
@@ -123,6 +123,6 @@ export default class Snapshot {
     }
     this.project.snapshots.splice(snapshotIndex, 1);
     // And delete the git tag
-    await Util.git.tag.delete(this.project.path, this.id);
+    await Util.git.tag.delete(Util.pathTo.project(this._project.id), this.id);
   }
 }

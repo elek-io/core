@@ -1,3 +1,4 @@
+import Fs from 'fs-extra';
 import Elek from '../src/index';
 import Project from '../src/project';
 
@@ -36,8 +37,8 @@ describe('project module', () => {
     // Test the config in memory
     expect(project.config.name).toBe('The first project');
     // And check again if the changes are also present on disk
-    const projectConfig = await Elek.util.read.project(project.id);
-    expect(projectConfig.name).toBe('The first project');
+    const projectConfig = await Fs.readFile(Elek.util.pathTo.projectConfig(project.id));
+    expect(JSON.parse(projectConfig.toString()).name).toBe('The first project');
   });
 
   it('should be able to create new pages', async () => {
