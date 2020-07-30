@@ -51,7 +51,7 @@ describe('block module', () => {
 
   it('should be able to delete an existing block', async () => {
     await block.delete(signature);
-    expect(await Fs.pathExists(block.path)).toBe(false);
+    expect(await Fs.pathExists(Elek.util.pathTo.block(project.id, block.id, block.language))).toBe(false);
     expect(project.blocks.length).toBe(1);
   });
 

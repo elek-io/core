@@ -1,5 +1,4 @@
-import Fs from 'fs-extra';
-import Path from 'path';
+import PageFile from './file/pageFile';
 import Util from './util';
 import { GitSignature } from './util/git';
 import Project from './project';
@@ -23,14 +22,32 @@ export interface PageContent {
   block: Block;
 }
 
-export class PageConfig {
+export interface PageTaxonomyOption {
+  id: string;
+  value: string;
+}
+
+export type PageTaxonomy = {
+  id: string;
+  type: 'select';
+  options?: PageTaxonomyOption[];
+  value: string;
+} | {
+  id: string;
+  type: 'multiselect';
+  options?: PageTaxonomyOption[];
+  value: string[];
+}
+
+export class PageFileContent {
   public name = '';
   public path = '';
   public stage: PageStage = 'wip';
   public layoutId = '';
+  public taxonomies: PageTaxonomy[] = [];
   public content: PageContentReference[] = [];
 }
-export type PageConfigKey = keyof PageConfig;
+export type PageFileContentKey = keyof PageFileContent;
 
 export enum PageStageEnum {
   /**
@@ -66,8 +83,8 @@ export default class Page {
   private _id!: string;
   private _language!: string;
   private _project: Project;
-  private _path!: string;
-  private _config!: PageConfig;
+  private _file!: PageFile;
+  private _config!: PageFileContent;
   private _layout: ThemeLayout | null = null;
   private _content: PageContent[] = [];
 
@@ -83,16 +100,8 @@ export default class Page {
     return this._project;
   }
 
-  public get path(): string {
-    return this._path;
-  }
-
-  public get config(): PageConfig {
+  public get config(): PageFileContent {
     return this._config;
-  }
-
-  public set config(value: PageConfig) {
-    this._config = value;
   }
 
   public get layout(): ThemeLayout | null {
@@ -110,21 +119,16 @@ export default class Page {
   /**
    * Creates a new page on disk
    */
-  public async create(signature: GitSignature, language: string, config?: PageConfig): Promise<Page> {
+  public async create(signature: GitSignature, language: string, partialPageFileContent?: Partial<PageFileContent>): Promise<Page> {
     this._id = Util.uuid();
     this._language = language;
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.${this.language}.json`);
+    this._file = new PageFile(this.project.id, this.id, this.language);
 
-    // Page can be initialized with a custom config
-    // if it's not, default will be used
-    if (!config) {
-      config = new PageConfig();
-    }
-    // Create the page config file
-    await Util.write.page(this.project.id, this.id, this.language, config);
+    // The pages file will be initialized with a default that can be overwritten
+    this._config = Util.assignDefaultIfMissing(partialPageFileContent || {}, new PageFileContent());
 
-    // Load the file into this object
-    this._config = await Util.read.page(this.project.id, this.id, this.language);
+    // Create the pages file
+    await this._file.save(this._config);
 
     // Load the pages layout
     await this.loadLayout();
@@ -147,8 +151,8 @@ export default class Page {
 
     this._id = id;
     this._language = language;
-    this._config = await Util.read.page(this.project.id, this.id, this.language);
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'pages', `${this.id}.${this.language}.json`);
+    this._file = new PageFile(this.project.id, this.id, this.language);
+    this._config = await this._file.load();
 
     // Load the pages layout
     await this.loadLayout();
@@ -158,7 +162,7 @@ export default class Page {
 
     // Push the page to the project if it's not already there
     if (!this.project.pages.find((page) => {
-      return page.id === this.id;
+      return page.id === this.id && page.language === this._language;
     })) {
       this.project.pages.push(this);
     }
@@ -171,9 +175,9 @@ export default class Page {
    */
   public async save(signature: GitSignature, message = ':wrench: Updated page'): Promise<void> {
     // Write config to disk
-    await Util.write.page(this.project.id, this.id, this.language, this.config);
+    await this._file.save(this._config);
     // Commit changes
-    await Util.git.commit(this.project.path, signature, this.path, message);
+    await Util.git.commit(Util.pathTo.project(this._project.id), signature, this._file.path, message);
   }
 
   /**
@@ -181,12 +185,12 @@ export default class Page {
    */
   public async delete(signature: GitSignature, message = ':fire: Deleted page'): Promise<void> {
     // Remove config from disk
-    await Fs.remove(this.path);
+    await this._file.delete();
     // Commit changes
-    await Util.git.commit(this.project.path, signature, this.path, message);
+    await Util.git.commit(Util.pathTo.project(this._project.id), signature, this._file.path, message);
     // Remove it from the project
     const pageIndex = this.project.pages.findIndex((page) => {
-      return page.id === this.id;
+      return page.id === this.id && page.language === this._language;
     });
     if (pageIndex === -1) {
       throw new Error('Tried removing an not existing page from the project');
@@ -216,10 +220,10 @@ export default class Page {
     await this.loadContentByReferences();
     return {
       id: this.id,
-      name: this.config.name,
+      name: this._config.name,
       language: this.language,
-      path: this.config.path,
-      stage: this.config.stage,
+      path: this._config.path,
+      stage: this._config.stage,
       layout: this.layout,
       content: await Promise.all(this.content.map(async (pageContent) => {
         const block = await pageContent.block.export(pageContent.position.restrictions);
@@ -268,20 +272,20 @@ export default class Page {
    */
   private async loadLayout() {
     // If there is no layout for this page selected yet, that's fine
-    if (!this.config.layoutId) {
+    if (!this._config.layoutId) {
       this._layout = null;
       return;
     }
     // Else, try to load the layout of this page
     const layout = this.project.theme.config.layouts.find((layout) => {
-      return layout.id === this.config.layoutId;
+      return layout.id === this._config.layoutId;
     });
     // If the specified layout cannot be found inside the current theme, 
     // which can be the case if the project uses a different theme
     // and something inside the wizard failed,
     // reset the layout of this page and inside the pages config
     if (!layout) {
-      this.config.layoutId = '';
+      this._config.layoutId = '';
       this._layout = null;
       return;
     }

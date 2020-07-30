@@ -1,11 +1,11 @@
 import * as General from './general';
-import * as File from './file';
 import * as Git from './git';
 import * as Validate from './validate';
+import Log from './log';
 
 export default {
   ...General,
-  ...File,
   git: Git,
-  validate: Validate
+  validate: Validate,
+  log: Log
 };

@@ -1,13 +1,12 @@
-import Fs from 'fs-extra';
-import Path from 'path';
 import Util from './util';
 import { GitSignature } from './util/git';
 import Project from './project';
+import BlockFile from './file/blockFile';
 import Markdown from 'markdown-it';
 import Code from 'highlight.js';
 
-export class BlockConfig {}
-export type BlockConfigKey = keyof BlockConfig;
+export class BlockFileHeader {}
+export type BlockFileHeaderKey = keyof BlockFileHeader;
 
 export class BlockRestrictions {
   public only: BlockRule[] = [];
@@ -52,8 +51,8 @@ export default class Block {
   private _id!: string;
   private _project: Project;
   private _language!: string;
-  private _path!: string;
-  private _config!: BlockConfig;
+  private _file!: BlockFile;
+  private _config!: BlockFileHeader;
   private _content!: string;
 
   public get id(): string {
@@ -68,15 +67,11 @@ export default class Block {
     return this._language;
   }
 
-  public get path(): string {
-    return this._path;
-  }
-
-  public get config(): BlockConfig {
+  public get config(): BlockFileHeader {
     return this._config;
   }
 
-  public set config(value: BlockConfig) {
+  public set config(value: BlockFileHeader) {
     this._config = value;
   }
 
@@ -95,23 +90,22 @@ export default class Block {
   /**
    * Creates a new block on disk
    */
-  public async create(signature: GitSignature, language: string, config: BlockConfig, content?: string): Promise<Block> {
+  public async create(signature: GitSignature, language: string, partialConfig?: Partial<BlockFileHeader>, content?: string): Promise<Block> {
     this._id = Util.uuid();
     this._language = language;
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.${this.language}.md`);
 
-    // Block can be initialized with a custom config
+    this._file = new BlockFile(this._project.id, this._id, this._language);
+
+    // Block can be initialized with a custom config and content
     // if it's not, default will be used
-    if (!config) {
-      config = new BlockConfig();
-    }
-    // Create the block file
-    await Util.write.block(this.project.id, this.id, this.language, config, content);
+    this._config = Util.assignDefaultIfMissing(partialConfig || {}, new BlockFileHeader());
+    this._content = content || '';
 
-    // Load the file into this object
-    const block = await Util.read.block(this.project.id, this.id, this.language);
-    this._config = block.config;
-    this._content = block.content;
+    // Create the block file
+    await this._file.save({
+      header: this._config,
+      body: this._content
+    });
 
     // Create a new commit
     await this.save(signature, ':heavy_plus_sign: Created new block');
@@ -131,14 +125,17 @@ export default class Block {
     
     this._id = id;
     this._language = language;
-    const block = await Util.read.block(this.project.id, this.id, this.language);
-    this._config = block.config;
-    this._content = block.content;
-    this._path = Path.join(Util.pathTo.projects, this.project.id, 'blocks', `${this.id}.${this.language}.md`);
+
+    this._file = new BlockFile(this._project.id, this._id, this._language);
+
+    const block = await this._file.load();
+
+    this._config = block.header;
+    this._content = block.body;
 
     // Push the block to the project if it's not already there
     if (!this.project.blocks.find((block) => {
-      return block.id === this.id;
+      return block.id === this.id && block.language === this._language;
     })) {
       this.project.blocks.push(this);
     }
@@ -151,9 +148,12 @@ export default class Block {
    */
   public async save(signature: GitSignature, message = ':wrench: Updated block'): Promise<void> {
     // Write block to disk
-    await Util.write.block(this.project.id, this.id, this.language, this.config, this.content);
+    await this._file.save({
+      header: this._config,
+      body: this._content
+    });
     // Commit changes
-    await Util.git.commit(this.project.path, signature, this.path, message);
+    await Util.git.commit(Util.pathTo.project(this._project.id), signature, this._file.path, message);
   }
 
   /**
@@ -161,14 +161,12 @@ export default class Block {
    */
   public async delete(signature: GitSignature, message = ':fire: Deleted block'): Promise<void> {
     // Remove block from disk
-    await Fs.remove(this.path);
-    
+    await this._file.delete();
     // Commit changes
-    await Util.git.commit(this.project.path, signature, this.path, message);
-    
+    await Util.git.commit(Util.pathTo.project(this._project.id), signature, this._file.path, message);
     // Remove it from the project
     const blockIndex = this.project.blocks.findIndex((block) => {
-      return block.id === this.id;
+      return block.id === this.id && block.language === this._language;
     });
     if (blockIndex === -1) {
       throw new Error('Tried removing an not existing block from the project');
@@ -247,13 +245,11 @@ export default class Block {
 
   public async export(partialRestriction: Partial<BlockRestrictions>): Promise<{
     id: string;
-    path: string;
-    config: BlockConfig;
+    config: BlockFileHeader;
     content: string;
   }> {
     return {
       id: this.id,
-      path: this.path,
       config: this.config,
       content: await this.render(partialRestriction)
     };

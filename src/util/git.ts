@@ -13,7 +13,7 @@ export interface GitSignature {
  * Initializes a new repository
  */
 export async function init(localPath: string, options?: Partial<Parameters<typeof Git.init>[0]>): Promise<void> {
-  return Git.init(assignDefaultIfMissing(options || {}, {
+  return await Git.init(assignDefaultIfMissing(options || {}, {
     fs: Fs,
     dir: localPath
   }));
@@ -23,7 +23,7 @@ export async function init(localPath: string, options?: Partial<Parameters<typeo
  * Clones a repository
  */
 export async function clone(url: string, localPath: string, options?: Partial<Parameters<typeof Git.clone>[0]>): Promise<void> {
-  return Git.clone(assignDefaultIfMissing(options || {}, {
+  return await Git.clone(assignDefaultIfMissing(options || {}, {
     fs: Fs,
     http: Http,
     url: url,
@@ -35,7 +35,7 @@ export async function clone(url: string, localPath: string, options?: Partial<Pa
  * Fetches and merges commits from a remote repository
  */
 export async function pull(localPath: string, options?: Partial<Parameters<typeof Git.pull>[0]>): Promise<void> {
-  return Git.pull(assignDefaultIfMissing(options || {}, {
+  return await Git.pull(assignDefaultIfMissing(options || {}, {
     fs: Fs,
     http: Http,
     dir: localPath
@@ -103,7 +103,7 @@ export async function commit(localPath: string, signature: GitSignature, files: 
   }));
 
   // Now create the commit
-  return Git.commit(assignDefaultIfMissing(options || {}, {
+  return await Git.commit(assignDefaultIfMissing(options || {}, {
     fs: Fs,
     dir: localPath,
     author: signature,
@@ -126,7 +126,7 @@ export async function checkout(localPath: string, name: string, isNew = false, o
     });
   }
 
-  return Git.checkout(assignDefaultIfMissing(options || {}, {
+  return await Git.checkout(assignDefaultIfMissing(options || {}, {
     fs: Fs,
     dir: localPath,
     ref: name
@@ -148,7 +148,7 @@ export const tag = {
       message: name,
       tagger: signature
     }));
-    return tag.load(localPath, id);
+    return await tag.load(localPath, id);
   },
   load: async (localPath: string, id: string): Promise<ReadTagResult> => {
     // Resolve the oid by the tag's reference (in our case a self specified ID)
@@ -158,7 +158,7 @@ export const tag = {
       ref: id
     });
     // Use this oid to get the tag's full information
-    return Git.readTag({
+    return await Git.readTag({
       fs: Fs,
       dir: localPath,
       oid: tagObjectId
@@ -170,12 +170,12 @@ export const tag = {
       dir: localPath
     });
 
-    return Promise.all(tagIds.map(async (id) => {
+    return await Promise.all(tagIds.map(async (id) => {
       return tag.load(localPath, id);
     }));
   },
-  delete: (localPath: string, id: string): Promise<void> => {
-    return Git.deleteTag({
+  delete: async (localPath: string, id: string): Promise<void> => {
+    return await Git.deleteTag({
       fs: Fs,
       dir: localPath,
       ref: id

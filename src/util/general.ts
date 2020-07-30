@@ -1,28 +1,62 @@
+import Os from 'os';
+import Fs from 'fs-extra';
+import Path from 'path';
 import { v4 as Uuid } from 'uuid';
 import Slugify from 'slugify';
 import { spawn, SpawnOptionsWithoutStdio } from 'child_process';
 
 /**
- * Returns true if the "value" object has all keys of "source",
- * otherwise an array of missing keys
+ * The directory in which everything is stored and will be worked in
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
-export function hasKeysOf(value: any, source: any): true | string[] {
-  const missingKeys: string[] = [];
-  Object.keys(source).forEach((key) => {
-    if (Object.keys(value).includes(key) === false) {
-      missingKeys.push(key);
+export const workingDirectory = Path.join(Os.homedir(), 'elek.io');
+
+/**
+ * A collection of often used paths
+ */
+export const pathTo = {
+  projects: Path.join(workingDirectory, 'projects'),
+  tmp: Path.join(workingDirectory, 'tmp'),
+  project: (projectId: string): string => {
+    return Path.join(pathTo.projects, projectId);
+  },
+  projectConfig: (projectId: string): string => {
+    return Path.join(pathTo.project(projectId), 'elek.project.json');
+  },
+  pages: (projectId: string): string => {
+    return Path.join(pathTo.projects, projectId, 'pages');
+  },
+  page: (projectId: string, pageId: string, language: string): string => {
+    return Path.join(pathTo.pages(projectId), `${pageId}.${language}.json`);
+  },
+  blocks: (projectId: string): string => {
+    return Path.join(pathTo.projects, projectId, 'blocks');
+  },
+  block: (projectId: string, blockId: string, language: string): string => {
+    return Path.join(pathTo.blocks(projectId), `${blockId}.${language}.md`);
+  },
+  theme: (projectId: string): string => {
+    return Path.join(pathTo.projects, projectId, 'theme');
+  },
+  themeConfig: (projectId: string): string => {
+    const defaultPath = Path.join(pathTo.theme(projectId), 'elek.theme.json');
+    const alternativePath = Path.join(pathTo.theme(projectId), 'package.json');
+
+    if (Fs.existsSync(defaultPath)) {
+      return defaultPath;
     }
-  });
-  if (missingKeys.length > 0) {
-    return missingKeys;
+
+    return alternativePath;
+  },
+  public: (projectId: string): string => {
+    return Path.join(pathTo.projects, projectId, 'public');
+  },
+  media: (projectId: string): string => {
+    return Path.join(pathTo.projects, projectId, 'media');
   }
-  return true;
-}
+};
 
 /**
  * Returns a new UUID
- * @todo remove once ID is returned from API
  */
 export function uuid(): string {
   return Uuid();
@@ -30,6 +64,8 @@ export function uuid(): string {
 
 /**
  * Returns a complete default type, hydrated with the partials of value
+ * 
+ * @todo switch to lodash
  */
 export function assignDefaultIfMissing<T>(value: Partial<T>, defaultsTo: T): T {
   return Object.assign(defaultsTo, value);
@@ -69,9 +105,7 @@ export async function returnResolved<T>(promises: Promise<T>[]): Promise<T[]> {
   // Here we do not expect any error to fail the call to Promise.all()
   // because we catched it earlier and returning an Error type instead of throwing it
   const checked = await Promise.all(toCheck);
-  // This way we can easily filter out any Error types
-  // and are able to return only initialized projects 
-  // that did not throw an error.
+  // This way we can easily filter out any Errors by type
   // Note that we also need to use a User-Defined Type Guard here,
   // because otherwise TS does not recognize we are filtering the errors out
   //                         >       |        < 
@@ -109,5 +143,31 @@ export function spawnChildProcess(command: string, args: ReadonlyArray<string>, 
       }
       return reject(log);
     });
+  });
+}
+
+/**
+ * Returns all subdirectories of given directory
+ */
+export async function subdirectories(path: string): Promise<Fs.Dirent[]> {
+  const dirent = await Fs.promises.readdir(path, { withFileTypes: true });
+  return dirent.filter((dirent) => {
+    return dirent.isDirectory();
+  });
+}
+
+/**
+ * Returns all files of given directory which can be filtered by extension
+ */
+export async function files(path: string, extension?: string): Promise<Fs.Dirent[]> {
+  const dirent = await Fs.promises.readdir(path, { withFileTypes: true });
+  return dirent.filter((dirent) => {
+    if (extension && dirent.isFile() === true) {
+      if (dirent.name.endsWith(extension)) {
+        return true;
+      }
+      return false;
+    }
+    return dirent.isFile();
   });
 }

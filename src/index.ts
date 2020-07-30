@@ -4,8 +4,15 @@ import Project from './project';
 
 export default {
   init: async (): Promise<void> => {
+    Util.log.debug('[Init]: started');
     // Make sure the basic file structure is given
-    await Fs.mkdirp(Util.pathTo.projects);
+    await Promise.all([
+      Fs.mkdirp(Util.pathTo.projects),
+      Fs.mkdirp(Util.pathTo.tmp)
+    ]);
+    // Empty the tmp directory
+    await Fs.emptyDir(Util.pathTo.tmp);
+    Util.log.debug('[Init]: done');
   },
   project: Project,
   projects: {
