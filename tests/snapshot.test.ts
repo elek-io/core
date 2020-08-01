@@ -19,7 +19,7 @@ afterAll(async () => {
   await project.delete();
 });
 
-describe('snapshot module', () => {
+describe('Snapshot module', () => {
 
   it('should be able to create a new snapshot', async () => {
     snapshot = await project.snapshot.create(signature, 'My first snapshot');

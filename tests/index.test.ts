@@ -10,7 +10,7 @@ afterAll(async () => {
   await Fs.remove(Path.join(Elek.util.pathTo.projects, 'some-other-folder'));
 });
 
-describe('index module', () => {
+describe('Index module', () => {
 
   it('should not produce errors when there are subdirectories inside the local projects directory, that are not used as a project', async () => {
     await Fs.mkdirp(Path.join(Elek.util.pathTo.projects, 'some-other-folder'));

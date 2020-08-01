@@ -18,7 +18,7 @@ afterAll(async () => {
   await project.delete();
 });
 
-describe('project module', () => {
+describe('Project module', () => {
 
   it('should be able to load the existing project "My first project"', async () => {
     const loadedProject = await new Elek.project().load(project.id);

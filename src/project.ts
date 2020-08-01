@@ -7,6 +7,8 @@ import Theme from './theme';
 import Page, { PageFileContent } from './page';
 import Block, { BlockFileHeader } from './block';
 import Snapshot from './snapshot';
+import Asset from './asset';
+import { AssetFileConfig } from './file/assetFile';
 
 export class ProjectFileContent {
   public name = '';
@@ -25,6 +27,7 @@ export default class Project {
   private _pages: Page[] = [];
   private _blocks: Block[] = [];
   private _snapshots: Snapshot[] = [];
+  private _assets: Asset[] = [];
 
   public get id(): string {
     return this._id;
@@ -56,6 +59,10 @@ export default class Project {
 
   public get snapshots(): Snapshot[] {
     return this._snapshots;
+  }
+
+  public get assets(): Asset[] {
+    return this._assets;
   }
 
   /**
@@ -154,6 +161,11 @@ You can use it as a starting point or delete it. If you need help, consider visi
       const page = this.pages[index];
       await page.save(signature);
     }
+    // Save each asset
+    for (let index = 0; index < this.assets.length; index++) {
+      const asset = this.assets[index];
+      await asset.save(signature);
+    }
     // Write config to disk
     await this._file.save(this._config);
     await Util.git.commit(Util.pathTo.project(this._id), signature, this._file.path, message);
@@ -163,8 +175,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with pages
    */
   public page = {
-    create: async (signature: GitSignature, language: string, partialConfig?: Partial<PageFileContent>): Promise<Page> => {
-      return await new Page(this).create(signature, language, partialConfig);
+    create: async (signature: GitSignature, language: string, partialPageFileContent?: Partial<PageFileContent>): Promise<Page> => {
+      return await new Page(this).create(signature, language, partialPageFileContent);
     }
   };
 
@@ -172,8 +184,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with blocks
    */
   public block = {
-    create: async (signature: GitSignature, language: string, partialConfig?: Partial<BlockFileHeader>, content?: string): Promise<Block> => {
-      return await new Block(this).create(signature, language, partialConfig, content);
+    create: async (signature: GitSignature, language: string, partialBlockFileHeader?: Partial<BlockFileHeader>, content?: string): Promise<Block> => {
+      return await new Block(this).create(signature, language, partialBlockFileHeader, content);
     }
   };
 
@@ -183,6 +195,15 @@ You can use it as a starting point or delete it. If you need help, consider visi
   public snapshot = {
     create: async (signature: GitSignature, name: string, target?: string): Promise<Snapshot> => {
       return await new Snapshot(this).create(signature, name, target);
+    }
+  };
+
+  /**
+   * Helper methods for working with assets
+   */
+  public asset = {
+    create: async (signature: GitSignature, language: string, partialAssetFileContent?: Partial<AssetFileConfig>): Promise<Asset> => {
+      return await new Asset(this).create(signature, language, partialAssetFileContent);
     }
   };
   
@@ -311,7 +332,7 @@ public/
   private async createFolderStructure(): Promise<void> {
     const folders = [
       'theme',
-      'media',
+      'assets',
       'pages',
       'blocks',
       'public'

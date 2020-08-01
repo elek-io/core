@@ -65,7 +65,7 @@ export default class File {
       _.forEach(excessKeys, (key) => {
         delete content[key];
       });
-      Log.warn({
+      Log.info({
         removed: excessKeys
       }, `Removed excess keys of file "${this._path}" while ${action} it`);
     }

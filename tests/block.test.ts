@@ -20,7 +20,7 @@ afterAll(async () => {
   await project.delete();
 });
 
-describe('block module', () => {
+describe('Block module', () => {
 
   it('should be able to access all blocks of a project', async () => {
     expect(project.blocks.length).toBe(1);
