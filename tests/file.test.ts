@@ -5,6 +5,8 @@ import PageFile from '../src/file/pageFile';
 import { PageFileContent } from '../src/page';
 import BlockFile from '../src/file/blockFile';
 import { BlockFileHeader } from '../src/block';
+import AssetFile, { AssetFileContent } from '../src/file/assetFile';
+import Asset from '../src/asset';
 
 const signature = {
   name: 'John Doe', 
@@ -14,6 +16,7 @@ const signature = {
 let project: Project;
 let pageFile: PageFile;
 let blockFile: BlockFile;
+let assetFile: AssetFile;
 
 const invalidContent = {
   foo: 'bar',
@@ -35,6 +38,8 @@ beforeAll(async () => {
   project = await new Elek.project().create('My first project', signature);
   pageFile = new PageFile(project.id, project.pages[0].id, project.pages[0].language);
   blockFile = new BlockFile(project.id, project.blocks[0].id, project.blocks[0].language);
+  await new Asset(project).create(signature, 'en-US');
+  assetFile = new AssetFile(project.id, project.assets[0].id, project.assets[0].language);
 });
 
 afterAll(async () => {
@@ -97,6 +102,38 @@ describe('Block file module', () => {
     const result = await blockFile.load();
     expect(result.header).toMatchObject(validBlockFileHeader);
     expect(result.body).toContain('# Hello World!');
+  });
+
+});
+
+describe('Asset file module', () => {
+
+  it('should thrrow an error when used language is not valid', async () => {
+    expect(() => new AssetFile(project.id, project.assets[0].id, 'invalid language')).toThrowError();
+  });
+
+  it('should be able to save a new asset on disk', async () => {
+    const rawData = (await Fs.readFile('./tests/assets/300.png')).toString();
+    
+    await assetFile.save({
+      name: Elek.util.slug('My first file'),
+      description: 'A picture showing elek.io',
+      data: rawData,
+      mimeType: 'image/png'
+    });
+
+    const result: AssetFileContent = JSON.parse((await Fs.readFile(assetFile.path)).toString());
+    expect(result.name).toBe(Elek.util.slug('My first file'));
+    expect(result.data).toBe(Buffer.from(rawData).toString('base64'));
+  });
+
+  it('should be able to load a file from disk', async () => {
+    const rawData = (await Fs.readFile('./tests/assets/300.png')).toString();
+
+    const result = await assetFile.load();
+
+    expect(result.name).toBe(Elek.util.slug('My first file'));
+    expect(result.data).toBe(rawData);
   });
 
 });

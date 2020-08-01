@@ -50,8 +50,11 @@ export const pathTo = {
   public: (projectId: string): string => {
     return Path.join(pathTo.projects, projectId, 'public');
   },
-  media: (projectId: string): string => {
-    return Path.join(pathTo.projects, projectId, 'media');
+  assets: (projectId: string): string => {
+    return Path.join(pathTo.projects, projectId, 'assets');
+  },
+  asset: (projectId: string, assetId: string, language: string): string => {
+    return Path.join(pathTo.assets(projectId), `${assetId}.${language}.json`);
   }
 };
 

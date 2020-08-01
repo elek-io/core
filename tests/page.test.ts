@@ -19,7 +19,7 @@ afterAll(async () => {
   await project.delete();
 });
 
-describe('page module', () => {
+describe('Page module', () => {
 
   it('should be able to access all pages of a project', async () => {
     expect(project.pages.length).toBe(1);
