@@ -4,6 +4,7 @@ import Project from './project';
 import BlockFile from './file/blockFile';
 import Markdown from 'markdown-it';
 import Code from 'highlight.js';
+import Base from './base';
 
 export class BlockFileHeader {}
 export type BlockFileHeaderKey = keyof BlockFileHeader;
@@ -45,30 +46,22 @@ export const BlockRuleArray = <BlockRule[]>Object.keys(BlockRuleEnum).filter((ke
 });
 export type BlockRule = keyof typeof BlockRuleEnum;
 
-export default class Block {
-  // Using definite assignment assertion here
-  // because values are assigned by the create and load methods
-  private _id!: string;
-  private _project: Project;
-  private _language!: string;
-  private _file!: BlockFile;
-  private _config!: BlockFileHeader;
-  private _content!: string;
-
-  public get id(): string {
-    return this._id;
-  }
-
-  public get project(): Project {
-    return this._project;
-  }
+export default class Block extends Base {
+  private _language: string | null = null;
+  private _file: BlockFile | null = null;
+  private _config: BlockFileHeader | null = null;
+  private _content: string | null = null;
 
   public get language(): string {
-    return this._language;
+    return this.checkInitialization(this._language);
+  }
+
+  private get file(): BlockFile {
+    return this.checkInitialization(this._file);
   }
 
   public get config(): BlockFileHeader {
-    return this._config;
+    return this.checkInitialization(this._config);
   }
 
   public set config(value: BlockFileHeader) {
@@ -76,7 +69,7 @@ export default class Block {
   }
 
   public get content(): string {
-    return this._content;
+    return this.checkInitialization(this._content);
   }
 
   public set content(value: string) {
@@ -84,17 +77,18 @@ export default class Block {
   }
 
   constructor(project: Project) {
-    this._project = project;
+    super(project);
   }
 
   /**
    * Creates a new block on disk
    */
   public async create(signature: GitSignature, language: string, partialConfig?: Partial<BlockFileHeader>, content?: string): Promise<Block> {
+    super.checkReinitialization();
+    
     this._id = Util.uuid();
     this._language = language;
-
-    this._file = new BlockFile(this._project.id, this._id, this._language);
+    this._file = new BlockFile(this.project.id, this._id, this._language);
 
     // Block can be initialized with a custom config and content
     // if it's not, default will be used
@@ -120,13 +114,11 @@ export default class Block {
    * Loads a block by it's ID and language
    */
   public async load(id: string, language: string): Promise<Block> {
-    // Do not allow reloading an already initialized block
-    if (this.id) { throw new Error('A block cannot be reloaded. Please delete the old and then initialize a new one instead.'); }
+    super.checkReinitialization();
     
     this._id = id;
     this._language = language;
-
-    this._file = new BlockFile(this._project.id, this._id, this._language);
+    this._file = new BlockFile(this.project.id, this._id, this._language);
 
     const block = await this._file.load();
 
@@ -148,12 +140,12 @@ export default class Block {
    */
   public async save(signature: GitSignature, message = ':wrench: Updated block'): Promise<void> {
     // Write block to disk
-    await this._file.save({
-      header: this._config,
-      body: this._content
+    await this.file.save({
+      header: this.config,
+      body: this.content
     });
     // Commit changes
-    await Util.git.commit(Util.pathTo.project(this._project.id), signature, this._file.path, message);
+    await Util.git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
   }
 
   /**
@@ -161,9 +153,9 @@ export default class Block {
    */
   public async delete(signature: GitSignature, message = ':fire: Deleted block'): Promise<void> {
     // Remove block from disk
-    await this._file.delete();
+    await this.file.delete();
     // Commit changes
-    await Util.git.commit(Util.pathTo.project(this._project.id), signature, this._file.path, message);
+    await Util.git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
     // Remove it from the project
     const blockIndex = this.project.blocks.findIndex((block) => {
       return block.id === this.id && block.language === this._language;
