@@ -1,9 +1,11 @@
 import Fs from 'fs-extra';
 import _ from 'lodash';
-import Log from '../util/log';
 
 /**
  * Represents a file on disk
+ * 
+ * @todo check how to use the projects logger here
+ * instead of using the console
  */
 export default class File {
   protected readonly _path: string;
@@ -65,23 +67,19 @@ export default class File {
       _.forEach(excessKeys, (key) => {
         delete content[key];
       });
-      Log.info({
-        removed: excessKeys
-      }, `Removed excess keys of file "${this._path}" while ${action} it`);
+      console.info(`Removed excess keys of file "${this._path}" while ${action} it`, excessKeys);
     }
 
     if (missingKeys.length > 0) {
       _.forEach(missingKeys as Array<keyof Partial<T>>, ((key) => {
         content[key] = reference[key];
       }));
-      Log.warn({
-        added: _.map(missingKeys as Array<keyof Partial<T>>, (key) => {
-          return {
-            key,
-            value: reference[key]
-          };
-        })
-      }, `Added missing keys of file "${this._path}" while ${action} it`);
+      console.warn(`Added missing keys of file "${this._path}" while ${action} it`, _.map(missingKeys as Array<keyof Partial<T>>, (key) => {
+        return {
+          key,
+          value: reference[key]
+        };
+      }));
     }
     
     return content as T;

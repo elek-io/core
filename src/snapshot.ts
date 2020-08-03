@@ -1,8 +1,8 @@
 // import Fs from 'fs-extra';
 // import Path from 'path';
-import Util from './util';
+import * as Util from './util';
 import Project from './project';
-import { GitSignature } from './util/git';
+import * as Git from './git';
 import ProjectChild from './projectChild';
 
 /**
@@ -12,7 +12,7 @@ import ProjectChild from './projectChild';
  */
 export default class Snapshot extends ProjectChild {
   private _name: string | null = null;
-  private _signature: GitSignature | null = null;
+  private _signature: Git.GitSignature | null = null;
   private _timestamp: number | null = null;
   private _timezoneOffset: number | null = null;
 
@@ -20,7 +20,7 @@ export default class Snapshot extends ProjectChild {
     return this.checkInitialization(this._name);
   }
 
-  public get signature(): GitSignature {
+  public get signature(): Git.GitSignature {
     return this.checkInitialization(this._signature);
   }
 
@@ -39,7 +39,7 @@ export default class Snapshot extends ProjectChild {
   /**
    * Creates a new snapshot of given project
    */
-  public async create(signature: GitSignature, name: string, target?: string): Promise<Snapshot> {
+  public async create(signature: Git.GitSignature, name: string, target?: string): Promise<Snapshot> {
     this.checkReinitialization();
 
     this._id = Util.uuid();
@@ -47,7 +47,7 @@ export default class Snapshot extends ProjectChild {
     this._name = name;
 
     // Create the tag
-    const tag = await Util.git.tag.create(Util.pathTo.project(this.project.id), this.signature, this.id, this.name, {
+    const tag = await Git.tag.create(Util.pathTo.project(this.project.id), this.signature, this.id, this.name, {
       object: target
     });
 
@@ -65,7 +65,7 @@ export default class Snapshot extends ProjectChild {
     this.checkReinitialization();
 
     // Get the tag by ID
-    const tag = await Util.git.tag.load(Util.pathTo.project(this.project.id), id);
+    const tag = await Git.tag.load(Util.pathTo.project(this.project.id), id);
 
     this._id = id;
     this._signature = {
@@ -89,15 +89,15 @@ export default class Snapshot extends ProjectChild {
   /**
    * Reverts the projects state back to when this snapshot was created
    */
-  public async revert(signature: GitSignature, force = false): Promise<void> {
+  public async revert(signature: Git.GitSignature, force = false): Promise<void> {
     // Checkout the git tag of this snapshot without updating the HEAD
     // This way only the working directory changes
-    await Util.git.checkout(Util.pathTo.project(this.project.id), this.id, false, {
+    await Git.checkout(Util.pathTo.project(this.project.id), this.id, false, {
       noUpdateHead: true,
       force
     });
     // Now commit the changes, which are interestingly already added
-    await Util.git.commit(Util.pathTo.project(this.project.id), signature, [], `:rewind: Reverted to snapshot "${this.name}"`);
+    await Git.commit(Util.pathTo.project(this.project.id), signature, [], `:rewind: Reverted to snapshot "${this.name}"`);
     // Because the files on disk have probably changed now,
     // we need to refresh all objects in memory by reloading them
     await this.project.refresh();
@@ -105,7 +105,7 @@ export default class Snapshot extends ProjectChild {
 
   public async delete(): Promise<void> {
     // And delete the git tag
-    await Util.git.tag.delete(Util.pathTo.project(this.project.id), this.id);
+    await Git.tag.delete(Util.pathTo.project(this.project.id), this.id);
     // Remove it from the project
     this.removeFromProject();
   }

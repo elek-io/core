@@ -8,6 +8,8 @@ import { BlockFileHeader } from '../src/block';
 import AssetFile, { AssetFileContent } from '../src/file/assetFile';
 import Asset from '../src/asset';
 
+const elek = new Elek();
+
 const signature = {
   name: 'John Doe', 
   email: 'john.doe@domain.com'
@@ -34,8 +36,8 @@ const validPageFileContent = new PageFileContent();
 const validBlockFileHeader = new BlockFileHeader();
 
 beforeAll(async () => {
-  await Elek.init();
-  project = await new Elek.project().create('My first project', signature);
+  await elek.init();
+  project = await elek.project.create('My first project', signature);
   pageFile = new PageFile(project.id, project.pages[0].id, project.pages[0].language);
   blockFile = new BlockFile(project.id, project.blocks[0].id, project.blocks[0].language);
   await new Asset(project).create(signature, 'en-US');
@@ -116,14 +118,14 @@ describe('Asset file module', () => {
     const rawData = (await Fs.readFile('./tests/assets/300.png')).toString();
     
     await assetFile.save({
-      name: Elek.util.slug('My first file'),
+      name: elek.util.slug('My first file'),
       description: 'A picture showing elek.io',
       data: rawData,
       mimeType: 'image/png'
     });
 
     const result: AssetFileContent = JSON.parse((await Fs.readFile(assetFile.path)).toString());
-    expect(result.name).toBe(Elek.util.slug('My first file'));
+    expect(result.name).toBe(elek.util.slug('My first file'));
     expect(result.data).toBe(Buffer.from(rawData).toString('base64'));
   });
 
@@ -132,7 +134,7 @@ describe('Asset file module', () => {
 
     const result = await assetFile.load();
 
-    expect(result.name).toBe(Elek.util.slug('My first file'));
+    expect(result.name).toBe(elek.util.slug('My first file'));
     expect(result.data).toBe(rawData);
   });
 

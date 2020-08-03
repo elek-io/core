@@ -16,11 +16,15 @@ export const workingDirectory = Path.join(Os.homedir(), 'elek.io');
 export const pathTo = {
   projects: Path.join(workingDirectory, 'projects'),
   tmp: Path.join(workingDirectory, 'tmp'),
+  logs: Path.join(workingDirectory, 'logs'),
   project: (projectId: string): string => {
     return Path.join(pathTo.projects, projectId);
   },
   projectConfig: (projectId: string): string => {
     return Path.join(pathTo.project(projectId), 'elek.project.json');
+  },
+  projectLogs: (projectId: string): string => {
+    return Path.join(pathTo.projects, projectId, 'logs');
   },
   pages: (projectId: string): string => {
     return Path.join(pathTo.projects, projectId, 'pages');

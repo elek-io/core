@@ -1,6 +1,6 @@
 import JsonFile from './jsonFile';
-import { pathTo } from '../util/general';
-import { locale } from '../util/validate';
+import * as Util from '../util';
+import { locale } from '../validate';
 
 export class AssetFileConfig {
   public name = '';
@@ -24,7 +24,7 @@ export default class AssetFile extends JsonFile {
   public readonly defaultContent: AssetFileContent = new AssetFileContent();
 
   constructor(projectId: string, assetId: string, language: string) {
-    super(pathTo.asset(projectId, assetId, language));
+    super(Util.pathTo.asset(projectId, assetId, language));
     if (locale(language) !== true) {
       throw new Error(`Provided language tag "${language}" is not BCP 47 compliant`);
     }

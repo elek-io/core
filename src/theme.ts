@@ -1,7 +1,8 @@
 import Fs from 'fs-extra';
 import Path from 'path';
 import Cheerio from 'cheerio';
-import Util from './util';
+import * as Util from './util';
+import * as Git from './git';
 import Project from './project';
 import ProjectChild from './projectChild';
 import ThemeFile from './file/themeFile';
@@ -86,7 +87,7 @@ export default class Theme extends ProjectChild {
     await this.delete();
     // Clone only the main branch with a history depth of 1
     // to save resources and time
-    await Util.git.clone(repository, Util.pathTo.theme(this.project.id), {
+    await Git.clone(repository, Util.pathTo.theme(this.project.id), {
       singleBranch: true,
       depth: 1
     });
@@ -127,7 +128,7 @@ export default class Theme extends ProjectChild {
    * @todo implement logic to check for layout ID changes and maybe map between both versions if needed
    */
   public async update(): Promise<void> {
-    await Util.git.pull(Util.pathTo.theme(this.project.id));
+    await Git.pull(Util.pathTo.theme(this.project.id));
   }
 
   public async export(): Promise<{

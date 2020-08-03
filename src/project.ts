@@ -1,8 +1,8 @@
 import Fs from 'fs-extra';
 import Path from 'path';
 import ProjectFile from './file/projectFile';
-import Util from './util';
-import { GitSignature } from './util/git';
+import * as Util from './util';
+import * as Git from './git';
 import Theme from './theme';
 import Page, { PageFileContent } from './page';
 import Block, { BlockFileHeader } from './block';
@@ -69,12 +69,12 @@ export default class Project {
   /**
    * Creates a new project on disk
    */
-  public async create(name: string, signature: GitSignature): Promise<Project> {
+  public async create(name: string, signature: Git.GitSignature): Promise<Project> {
     this._id = Util.uuid();
     this._file = new ProjectFile(this._id);
 
     // Initialize the Git repository
-    await Util.git.init(Util.pathTo.project(this._id));
+    await Git.init(Util.pathTo.project(this._id));
 
     // Create the folder structure, root .gitignore and config file
     await this.createFolderStructure();
@@ -85,10 +85,10 @@ export default class Project {
     this._theme = await new Theme(this).use('https://github.com/elek-io/starter-theme.git');
 
     // Create an initial commit
-    await Util.git.commit(Util.pathTo.project(this._id), signature, '*', ':tada: Created this new elek.io project');
+    await Git.commit(Util.pathTo.project(this._id), signature, '*', ':tada: Created this new elek.io project');
 
     // Now create and switch to the "stage" branch
-    await Util.git.checkout(Util.pathTo.project(this._id), 'stage', true);
+    await Git.checkout(Util.pathTo.project(this._id), 'stage', true);
 
     // Create the first block of content
     const block = await this.block.create(signature, 'en-US', {}, `We are very happy to have you on board. This page was created for you. 
@@ -151,7 +151,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
   /**
    * Saves the project's files on disk and creates a commit
    */
-  public async save(signature: GitSignature, message = ':wrench: Updated project config'): Promise<void> {
+  public async save(signature: Git.GitSignature, message = ':wrench: Updated project config'): Promise<void> {
     // Save each block
     for (let index = 0; index < this.blocks.length; index++) {
       const block = this.blocks[index];
@@ -169,14 +169,14 @@ You can use it as a starting point or delete it. If you need help, consider visi
     }
     // Write config to disk
     await this._file.save(this._config);
-    await Util.git.commit(Util.pathTo.project(this._id), signature, this._file.path, message);
+    await Git.commit(Util.pathTo.project(this._id), signature, this._file.path, message);
   }
 
   /**
    * Helper methods for working with pages
    */
   public page = {
-    create: async (signature: GitSignature, language: string, partialPageFileContent?: Partial<PageFileContent>): Promise<Page> => {
+    create: async (signature: Git.GitSignature, language: string, partialPageFileContent?: Partial<PageFileContent>): Promise<Page> => {
       return await new Page(this).create(signature, language, partialPageFileContent);
     }
   };
@@ -185,7 +185,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with blocks
    */
   public block = {
-    create: async (signature: GitSignature, language: string, partialBlockFileHeader?: Partial<BlockFileHeader>, content?: string): Promise<Block> => {
+    create: async (signature: Git.GitSignature, language: string, partialBlockFileHeader?: Partial<BlockFileHeader>, content?: string): Promise<Block> => {
       return await new Block(this).create(signature, language, partialBlockFileHeader, content);
     }
   };
@@ -194,7 +194,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with snapshots
    */
   public snapshot = {
-    create: async (signature: GitSignature, name: string, target?: string): Promise<Snapshot> => {
+    create: async (signature: Git.GitSignature, name: string, target?: string): Promise<Snapshot> => {
       return await new Snapshot(this).create(signature, name, target);
     }
   };
@@ -203,7 +203,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with assets
    */
   public asset = {
-    create: async (signature: GitSignature, language: string, partialAssetFileContent?: Partial<AssetFileConfig>): Promise<Asset> => {
+    create: async (signature: Git.GitSignature, language: string, partialAssetFileContent?: Partial<AssetFileConfig>): Promise<Asset> => {
       return await new Asset(this).create(signature, language, partialAssetFileContent);
     }
   };
@@ -296,7 +296,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
     }));
 
     // Load all available snapshots
-    const tagResultList = await Util.git.tag.list(Util.pathTo.project(this._id));
+    const tagResultList = await Git.tag.list(Util.pathTo.project(this._id));
     Promise.all(tagResultList.map((tagResult) => {
       return new Snapshot(this).load(tagResult.tag.tag);
     }));
@@ -336,7 +336,8 @@ public/
       'assets',
       'pages',
       'blocks',
-      'public'
+      'public',
+      'logs'
     ];
 
     await Promise.all(folders.map(async (folder) => {

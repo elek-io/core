@@ -1,6 +1,6 @@
 import AssetFile, { AssetFileConfig } from './file/assetFile';
-import Util from './util';
-import { GitSignature } from './util/git';
+import * as Util from './util';
+import * as Git from './git';
 import Project from './project';
 import ProjectChild from './projectChild';
 
@@ -36,7 +36,7 @@ export default class Asset extends ProjectChild {
   /**
    * Creates a new asset on disk
    */
-  public async create(signature: GitSignature, language: string, partialAssetFileConfig?: Partial<AssetFileConfig>, content?: string): Promise<Asset> {
+  public async create(signature: Git.GitSignature, language: string, partialAssetFileConfig?: Partial<AssetFileConfig>, content?: string): Promise<Asset> {
     this.checkReinitialization();
     
     this._id = Util.uuid();
@@ -91,24 +91,24 @@ export default class Asset extends ProjectChild {
   /**
    * Saves the asset's files on disk and creates a commit
    */
-  public async save(signature: GitSignature, message = ':wrench: Updated asset'): Promise<void> {
+  public async save(signature: Git.GitSignature, message = ':wrench: Updated asset'): Promise<void> {
     // Write config to disk
     await this.file.save({
       ...this.config,
       data: this.content
     });
     // Commit changes
-    await Util.git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
+    await Git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
   }
 
   /**
    * Deletes the asset's files from disk, creates a commit and removes it's reference from the project
    */
-  public async delete(signature: GitSignature, message = ':fire: Deleted asset'): Promise<void> {
+  public async delete(signature: Git.GitSignature, message = ':fire: Deleted asset'): Promise<void> {
     // Remove config from disk
     await this.file.delete();
     // Commit changes
-    await Util.git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
+    await Git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
     // Remove it from the project
     this.removeFromProject();
   }

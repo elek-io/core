@@ -1,5 +1,5 @@
-import Util from './util';
-import { GitSignature } from './util/git';
+import * as Util from './util';
+import * as Git from './git';
 import Project from './project';
 import BlockFile from './file/blockFile';
 import Markdown from 'markdown-it';
@@ -82,7 +82,7 @@ export default class Block extends ProjectChild {
   /**
    * Creates a new block on disk
    */
-  public async create(signature: GitSignature, language: string, partialConfig?: Partial<BlockFileHeader>, content?: string): Promise<Block> {
+  public async create(signature: Git.GitSignature, language: string, partialConfig?: Partial<BlockFileHeader>, content?: string): Promise<Block> {
     this.checkReinitialization();
     
     this._id = Util.uuid();
@@ -137,24 +137,24 @@ export default class Block extends ProjectChild {
   /**
    * Saves the block's files on disk and creates a commit
    */
-  public async save(signature: GitSignature, message = ':wrench: Updated block'): Promise<void> {
+  public async save(signature: Git.GitSignature, message = ':wrench: Updated block'): Promise<void> {
     // Write block to disk
     await this.file.save({
       header: this.config,
       body: this.content
     });
     // Commit changes
-    await Util.git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
+    await Git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
   }
 
   /**
    * Deletes the block's files from disk, creates a commit and removes it's reference from the project
    */
-  public async delete(signature: GitSignature, message = ':fire: Deleted block'): Promise<void> {
+  public async delete(signature: Git.GitSignature, message = ':fire: Deleted block'): Promise<void> {
     // Remove block from disk
     await this.file.delete();
     // Commit changes
-    await Util.git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
+    await Git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
     // Remove it from the project
     this.removeFromProject();
   }

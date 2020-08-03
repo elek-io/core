@@ -1,7 +1,7 @@
 import MdFile, { MarkdownFileContent } from './mdFile';
 import { BlockFileHeader } from '../block';
-import { pathTo } from '../util/general';
-import { locale } from '../util/validate';
+import * as Util from '../util';
+import { locale } from '../validate';
 
 export interface BlockFileContent extends MarkdownFileContent {
   header: BlockFileHeader,
@@ -12,7 +12,7 @@ export default class BlockFile extends MdFile {
   public readonly defaultHeader: BlockFileHeader = new BlockFileHeader();
 
   constructor(projectId: string, blockId: string, language: string) {
-    super(pathTo.block(projectId, blockId, language));
+    super(Util.pathTo.block(projectId, blockId, language));
     if (locale(language) !== true) {
       throw new Error(`Provided language tag "${language}" is not BCP 47 compliant`);
     }

@@ -3,6 +3,8 @@ import Elek from '../src/index';
 import Project from '../src/project';
 import Asset from '../src/asset';
 
+const elek = new Elek();
+
 const signature = {
   name: 'John Doe', 
   email: 'john.doe@domain.com'
@@ -12,8 +14,8 @@ let project: Project;
 let asset: Asset;
 
 beforeAll(async () => {
-  await Elek.init();
-  project = await new Elek.project().create('My first project', signature);
+  await elek.init();
+  project = await elek.project.create('My first project', signature);
 });
 
 afterAll(async () => {

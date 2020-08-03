@@ -3,6 +3,8 @@ import Elek from '../src/index';
 import Project from '../src/project';
 import Block from '../src/block';
 
+const elek = new Elek();
+
 const signature = {
   name: 'John Doe', 
   email: 'john.doe@domain.com'
@@ -12,8 +14,8 @@ let project: Project;
 let block: Block;
 
 beforeAll(async () => {
-  await Elek.init();
-  project = await new Elek.project().create('My first project', signature);
+  await elek.init();
+  project = await elek.project.create('My first project', signature);
 });
 
 afterAll(async () => {
@@ -51,7 +53,7 @@ describe('Block module', () => {
 
   it('should be able to delete an existing block', async () => {
     await block.delete(signature);
-    expect(await Fs.pathExists(Elek.util.pathTo.block(project.id, block.id, block.language))).toBe(false);
+    expect(await Fs.pathExists(elek.util.pathTo.block(project.id, block.id, block.language))).toBe(false);
     expect(project.blocks.length).toBe(1);
   });
 
