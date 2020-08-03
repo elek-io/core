@@ -4,7 +4,7 @@ import Project from './project';
 import BlockFile from './file/blockFile';
 import Markdown from 'markdown-it';
 import Code from 'highlight.js';
-import Base from './base';
+import ProjectChild from './projectChild';
 
 export class BlockFileHeader {}
 export type BlockFileHeaderKey = keyof BlockFileHeader;
@@ -46,8 +46,7 @@ export const BlockRuleArray = <BlockRule[]>Object.keys(BlockRuleEnum).filter((ke
 });
 export type BlockRule = keyof typeof BlockRuleEnum;
 
-export default class Block extends Base {
-  private _language: string | null = null;
+export default class Block extends ProjectChild {
   private _file: BlockFile | null = null;
   private _config: BlockFileHeader | null = null;
   private _content: string | null = null;
@@ -77,14 +76,14 @@ export default class Block extends Base {
   }
 
   constructor(project: Project) {
-    super(project);
+    super(project, 'block');
   }
 
   /**
    * Creates a new block on disk
    */
   public async create(signature: GitSignature, language: string, partialConfig?: Partial<BlockFileHeader>, content?: string): Promise<Block> {
-    super.checkReinitialization();
+    this.checkReinitialization();
     
     this._id = Util.uuid();
     this._language = language;
@@ -114,7 +113,7 @@ export default class Block extends Base {
    * Loads a block by it's ID and language
    */
   public async load(id: string, language: string): Promise<Block> {
-    super.checkReinitialization();
+    this.checkReinitialization();
     
     this._id = id;
     this._language = language;
@@ -157,13 +156,7 @@ export default class Block extends Base {
     // Commit changes
     await Util.git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
     // Remove it from the project
-    const blockIndex = this.project.blocks.findIndex((block) => {
-      return block.id === this.id && block.language === this._language;
-    });
-    if (blockIndex === -1) {
-      throw new Error('Tried removing an not existing block from the project');
-    }
-    this.project.blocks.splice(blockIndex, 1);
+    this.removeFromProject();
   }
 
   /**

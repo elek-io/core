@@ -2,7 +2,7 @@ import PageFile from './file/pageFile';
 import Util from './util';
 import { GitSignature } from './util/git';
 import Project from './project';
-import Base from './base';
+import ProjectChild from './projectChild';
 import { ThemeBlockPosition, ThemeLayout } from './theme';
 import Block from './block';
 
@@ -78,8 +78,7 @@ export const PageStageArray = <PageStage[]>Object.keys(PageStageEnum).filter((ke
 });
 export type PageStage = keyof typeof PageStageEnum;
 
-export default class Page extends Base {
-  private _language: string | null = null;
+export default class Page extends ProjectChild {
   private _file: PageFile | null = null;
   private _config: PageFileContent | null = null;
   private _layout: ThemeLayout | null = null;
@@ -106,14 +105,14 @@ export default class Page extends Base {
   }
 
   constructor(project: Project) {
-    super(project);
+    super(project, 'page');
   }
 
   /**
    * Creates a new page on disk
    */
   public async create(signature: GitSignature, language: string, partialPageFileContent?: Partial<PageFileContent>): Promise<Page> {
-    super.checkReinitialization();
+    this.checkReinitialization();
 
     this._id = Util.uuid();
     this._language = language;
@@ -141,7 +140,7 @@ export default class Page extends Base {
    * Loads a page by it's ID and language
    */
   public async load(id: string, language: string): Promise<Page> {
-    super.checkReinitialization();
+    this.checkReinitialization();
 
     this._id = id;
     this._language = language;
@@ -183,13 +182,7 @@ export default class Page extends Base {
     // Commit changes
     await Util.git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
     // Remove it from the project
-    const pageIndex = this.project.pages.findIndex((page) => {
-      return page.id === this.id && page.language === this._language;
-    });
-    if (pageIndex === -1) {
-      throw new Error('Tried removing an not existing page from the project');
-    }
-    this.project.pages.splice(pageIndex, 1);
+    this.removeFromProject();
   }
 
   public async export(): Promise<{

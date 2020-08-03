@@ -3,6 +3,7 @@ import Path from 'path';
 import Cheerio from 'cheerio';
 import Util from './util';
 import Project from './project';
+import ProjectChild from './projectChild';
 import ThemeFile from './file/themeFile';
 import { BlockRestrictions, BlockRuleArray, BlockRule } from './block';
 import { PageTaxonomy } from './page';
@@ -59,20 +60,13 @@ export class ThemeBlockPosition {
   public restrictions!: BlockRestrictions;
 }
 
-export default class Theme {
-  // Using definite assignment assertion here
-  // because values are assigned by the create and load methods
-  private _project: Project;
-  private _file!: ThemeFile;
-  private _config!: ThemeFileContent;
+export default class Theme extends ProjectChild {
+  private _file: ThemeFile | null = null;
+  private _config: ThemeFileContent | null = null;
   private _blockPositions: ThemeBlockPosition[] = [];
 
-  public get project(): Project {
-    return this._project;
-  }
-
   public get config(): ThemeFileContent {
-    return this._config;
+    return this.checkInitialization(this._config);
   }
 
   public get blockPositions(): ThemeBlockPosition[] {
@@ -80,7 +74,7 @@ export default class Theme {
   }
 
   constructor(project: Project) {
-    this._project = project;
+    super(project, 'theme');
   }
 
   /**
@@ -92,11 +86,11 @@ export default class Theme {
     await this.delete();
     // Clone only the main branch with a history depth of 1
     // to save resources and time
-    await Util.git.clone(repository, Util.pathTo.theme(this._project.id), {
+    await Util.git.clone(repository, Util.pathTo.theme(this.project.id), {
       singleBranch: true,
       depth: 1
     });
-    this._file = new ThemeFile(this._project.id);
+    this._file = new ThemeFile(this.project.id);
     this._config = await this._file.load();
     await this.parse();
 
@@ -108,11 +102,22 @@ export default class Theme {
 
   /**
    * Loads the current theme
+   * 
+   * @todo decide where the themes ID comes from. 
+   * Of course from the elek.io cloud but how do we map 
+   * the theme with it's ID?
    */
   public async load(): Promise<Theme> {
-    this._file = new ThemeFile(this._project.id);
+    this.checkReinitialization();
+
+    this._file = new ThemeFile(this.project.id);
     this._config = await this._file.load();
+
+    // This is a placeholder for @todo
+    this._id = this._config.name;
+
     await this.parse();
+
     return this;
   }
 
@@ -122,7 +127,7 @@ export default class Theme {
    * @todo implement logic to check for layout ID changes and maybe map between both versions if needed
    */
   public async update(): Promise<void> {
-    await Util.git.pull(Util.pathTo.theme(this._project.id));
+    await Util.git.pull(Util.pathTo.theme(this.project.id));
   }
 
   public async export(): Promise<{
@@ -144,7 +149,7 @@ export default class Theme {
    * while switching to another one.
    */
   private async delete(): Promise<void> {
-    await Fs.emptyDir(Util.pathTo.theme(this._project.id));
+    await Fs.emptyDir(Util.pathTo.theme(this.project.id));
   }
 
   /**
@@ -154,7 +159,7 @@ export default class Theme {
     for (let index = 0; index < this.config.layouts.length; index++) {
       const layout = this.config.layouts[index];
       // Check if it contains custom elek.io elements
-      const content = await Fs.readFile(Path.join(Util.pathTo.theme(this._project.id), layout.path));
+      const content = await Fs.readFile(Path.join(Util.pathTo.theme(this.project.id), layout.path));
       const $ = Cheerio.load(content, {
         // Needed to parse uppercase / lowercase combinations used in frameworks like Vue.js
         xmlMode: true

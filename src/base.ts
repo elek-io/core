@@ -1,21 +1,14 @@
-import Project from './project';
 import ClassNotInitializedError from './error/classNotInitialized';
 import ClassReinitializedError from './error/classReinitialized';
 
+/**
+ * Base class that that can be extended on
+ */
 export default class Base {
   protected _id: string | null = null;
-  private _project: Project;
 
   public get id(): string {
     return this.checkInitialization(this._id);
-  }
-
-  public get project(): Project {
-    return this._project;
-  }
-
-  constructor(project: Project) {
-    this._project = project;
   }
 
   /**
@@ -26,7 +19,7 @@ export default class Base {
    */
   protected checkInitialization<T>(value: T): NonNullable<T> {
     if (value === undefined || value === null) {
-      throw new ClassNotInitializedError('Tried accessing class member before using create or load methods');
+      throw new ClassNotInitializedError('Tried accessing class member before using create() or load() methods');
     }
     return value as NonNullable<T>;
   }
@@ -36,7 +29,7 @@ export default class Base {
    */
   protected checkReinitialization(): void {
     if (this._id) {
-      throw new ClassReinitializedError('Already initialized. Reinitialization is not allowed. Please delete the old and then initialize a new one instead.');
+      throw new ClassReinitializedError('Already initialized. Reinitialization is not allowed. Please delete() the old and then create() a new one instead.');
     }
   }
 }

@@ -3,14 +3,14 @@
 import Util from './util';
 import Project from './project';
 import { GitSignature } from './util/git';
-import Base from './base';
+import ProjectChild from './projectChild';
 
 /**
  * References a point in time of given project
  * 
  * Internally handled by git via tags
  */
-export default class Snapshot extends Base {
+export default class Snapshot extends ProjectChild {
   private _name: string | null = null;
   private _signature: GitSignature | null = null;
   private _timestamp: number | null = null;
@@ -33,14 +33,14 @@ export default class Snapshot extends Base {
   }
 
   constructor(project: Project) {
-    super(project);
+    super(project, 'snapshot');
   }
 
   /**
    * Creates a new snapshot of given project
    */
   public async create(signature: GitSignature, name: string, target?: string): Promise<Snapshot> {
-    super.checkReinitialization();
+    this.checkReinitialization();
 
     this._id = Util.uuid();
     this._signature = signature;
@@ -62,7 +62,7 @@ export default class Snapshot extends Base {
   }
 
   public async load(id: string): Promise<Snapshot> {
-    super.checkReinitialization();
+    this.checkReinitialization();
 
     // Get the tag by ID
     const tag = await Util.git.tag.load(Util.pathTo.project(this.project.id), id);
@@ -104,15 +104,9 @@ export default class Snapshot extends Base {
   }
 
   public async delete(): Promise<void> {
-    // Remove it from the project
-    const snapshotIndex = this.project.snapshots.findIndex((snapshot) => {
-      return snapshot.id === this.id;
-    });
-    if (snapshotIndex === -1) {
-      throw new Error('Tried removing non existing snapshot from the project');
-    }
-    this.project.snapshots.splice(snapshotIndex, 1);
     // And delete the git tag
     await Util.git.tag.delete(Util.pathTo.project(this.project.id), this.id);
+    // Remove it from the project
+    this.removeFromProject();
   }
 }

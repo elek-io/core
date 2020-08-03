@@ -2,10 +2,9 @@ import AssetFile, { AssetFileConfig } from './file/assetFile';
 import Util from './util';
 import { GitSignature } from './util/git';
 import Project from './project';
-import Base from './base';
+import ProjectChild from './projectChild';
 
-export default class Asset extends Base {
-  private _language: string | null = null;
+export default class Asset extends ProjectChild {
   private _file: AssetFile | null = null;
   private _config: AssetFileConfig | null = null;
   private _content: string | null = null;
@@ -31,14 +30,14 @@ export default class Asset extends Base {
   }
 
   constructor(project: Project) {
-    super(project);
+    super(project, 'asset');
   }
 
   /**
    * Creates a new asset on disk
    */
   public async create(signature: GitSignature, language: string, partialAssetFileConfig?: Partial<AssetFileConfig>, content?: string): Promise<Asset> {
-    super.checkReinitialization();
+    this.checkReinitialization();
     
     this._id = Util.uuid();
     this._language = language;
@@ -67,7 +66,7 @@ export default class Asset extends Base {
    * Loads a asset by it's ID and language
    */
   public async load(id: string, language: string): Promise<Asset> {
-    super.checkReinitialization();
+    this.checkReinitialization();
 
     this._id = id;
     this._language = language;
@@ -111,13 +110,7 @@ export default class Asset extends Base {
     // Commit changes
     await Util.git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
     // Remove it from the project
-    const assetIndex = this.project.assets.findIndex((asset) => {
-      return asset.id === this.id && asset.language === this._language;
-    });
-    if (assetIndex === -1) {
-      throw new Error('Tried removing an not existing asset from the project');
-    }
-    this.project.assets.splice(assetIndex, 1);
+    this.removeFromProject();
   }
 
   public async export(): Promise<{

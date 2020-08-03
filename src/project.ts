@@ -9,6 +9,7 @@ import Block, { BlockFileHeader } from './block';
 import Snapshot from './snapshot';
 import Asset from './asset';
 import { AssetFileConfig } from './file/assetFile';
+import Base from './base';
 
 export class ProjectFileContent {
   public name = '';
