@@ -1,5 +1,8 @@
 import Fs from 'fs-extra';
 import _ from 'lodash';
+import * as Util from '../util';
+import * as Validate from '../validate';
+import Logger from '../logger';
 
 /**
  * Represents a file on disk
@@ -8,15 +11,48 @@ import _ from 'lodash';
  * instead of using the console
  */
 export default class File {
-  protected readonly _path: string;
-  // private _id!: string;
+  private _path: string;
+  private _relativePath: string;
+  private _name!: string;
+  private _extension: string | null = null;
+  private _projectId: string | null = null;
+  private _logger!: Logger;
 
+  /**
+   * Absolute path, potentially including some user information
+   */
   public get path(): string {
     return this._path;
   }
 
+  /**
+   * Relative path from the elek.io working directory
+   */
+  public get relativePath(): string {
+    return this._relativePath;
+  }
+
+  public get name(): string {
+    return this._name;
+  }
+
+  public get extension(): string | null {
+    return this._extension;
+  }
+
+  public get projectId(): string | null {
+    return this._projectId;
+  }
+
+  public get logger(): Logger {
+    return this._logger;
+  }
+
   constructor(path: string) {
     this._path = path;
+    this._relativePath = this._path.replace(Util.workingDirectory, '');
+    
+    this.parsePath();
   }
 
   /**
@@ -67,21 +103,66 @@ export default class File {
       _.forEach(excessKeys, (key) => {
         delete content[key];
       });
-      console.info(`Removed excess keys of file "${this._path}" while ${action} it`, excessKeys);
+      this.logger.log.info(excessKeys, `Removed excess keys of file "${this._path}" while ${action} it`);
     }
 
     if (missingKeys.length > 0) {
       _.forEach(missingKeys as Array<keyof Partial<T>>, ((key) => {
         content[key] = reference[key];
       }));
-      console.warn(`Added missing keys of file "${this._path}" while ${action} it`, _.map(missingKeys as Array<keyof Partial<T>>, (key) => {
+      this.logger.log.warn(_.map(missingKeys as Array<keyof Partial<T>>, (key) => {
         return {
           key,
           value: reference[key]
         };
-      }));
+      }), `Added missing keys of file "${this._path}" while ${action} it`);
     }
     
     return content as T;
+  }
+
+  /**
+   * Parses the full path and populates this objects properties
+   * with additional information
+   */
+  private parsePath() {
+    // Filter out empty strings from parts and reverse the array,
+    // so that the file itself is first
+    // @example relativePath could be "projects/758359ae-e8d0-49ef-bdc1-8a22f3d4907c/theme/package.json"
+    const pathArray = this._relativePath.split('/').filter((part) => {
+      if (part.trim() !== '') {
+        return true;
+      }
+      return false;
+    }).reverse();
+
+    // Extract the files name and extension if available
+    if (pathArray[0].includes('.')) {
+      const fileArray = pathArray[0].split('.');
+      this._name = fileArray[0];
+      this._extension = fileArray[1];
+    } else {
+      this._name = pathArray[0];
+    }
+    // Remove this part from the array
+    pathArray.shift();
+
+    // Iterate over all parts and check for potential UUIDs
+    for (let index = 0; index < pathArray.length; index++) {
+      const part = pathArray[index];
+      if (Validate.uuid(part)) {
+        // First ID should be the project ID
+        if (!this._projectId) {
+          this._projectId = part;
+          // Log to project
+          this._logger = new Logger(this._projectId);
+        }
+      }
+    }
+
+    // Log to global if no project ID was found
+    if (!this._projectId) {
+      this._logger = new Logger();
+    }
   }
 }
