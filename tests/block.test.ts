@@ -1,9 +1,9 @@
 import Fs from 'fs-extra';
-import Elek from '../src/index';
+import ElekIoCore from '../src/index';
 import Project from '../src/project';
 import Block from '../src/block';
 
-const elek = new Elek();
+const core = new ElekIoCore();
 
 const signature = {
   name: 'John Doe', 
@@ -14,8 +14,8 @@ let project: Project;
 let block: Block;
 
 beforeAll(async () => {
-  await elek.init();
-  project = await elek.project.create('My first project', signature);
+  await core.init();
+  project = await core.project.create('My first project', signature);
 });
 
 afterAll(async () => {
@@ -53,7 +53,7 @@ describe('Block module', () => {
 
   it('should be able to delete an existing block', async () => {
     await block.delete(signature);
-    expect(await Fs.pathExists(elek.util.pathTo.block(project.id, block.id, block.language))).toBe(false);
+    expect(await Fs.pathExists(core.util.pathTo.block(project.id, block.id, block.language))).toBe(false);
     expect(project.blocks.length).toBe(1);
   });
 

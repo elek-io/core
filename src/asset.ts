@@ -41,7 +41,7 @@ export default class Asset extends ProjectChild {
     
     this._id = Util.uuid();
     this._language = language;
-    this._file = new AssetFile(this.project.id, this.id, this.language);
+    this._file = new AssetFile(this.project.id, this.id, this.language, this.project.logger);
 
     // The asset file will be initialized with a default that can be overwritten
     this._config = Util.assignDefaultIfMissing(partialAssetFileConfig || {}, new AssetFileConfig());
@@ -70,7 +70,7 @@ export default class Asset extends ProjectChild {
 
     this._id = id;
     this._language = language;
-    this._file = new AssetFile(this.project.id, this.id, this.language);
+    this._file = new AssetFile(this.project.id, this.id, this.language, this.project.logger);
 
     const assetFileContent = await this._file.load();
 

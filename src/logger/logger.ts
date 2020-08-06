@@ -1,42 +1,29 @@
 import Fs from 'fs-extra';
-import Path from 'path';
 import Pino from 'pino';
 import SonicBoom from 'sonic-boom';
-import * as Util from './util';
 
 /**
- * Logger
- * 
- * @todo check how to write to the log file without prettyPrint
- * while not in production environment
+ * Base Logger to extend on
  */
 export default class Logger {
   public log: Pino.Logger;
   private _options: Pino.LoggerOptions = {};
   private _destination: SonicBoom;
 
-  constructor(projectId?: string) {
-    // Can be a logger for a specific project in which case the logs
-    // will be written to the projects "logs" directory
-    let destinationPath = '';
-    if (projectId) {
-      destinationPath = Path.join(Util.pathTo.projectLogs(projectId), 'core.log');
-    } else {
-      destinationPath = Path.join(Util.pathTo.logs, 'core.log');
-    }
+  constructor(filePath: string) {
 
     // Assure the log file exists
-    Fs.ensureFileSync(destinationPath);
+    Fs.ensureFileSync(filePath);
 
     // Assign the file destination
-    this._destination = Pino.destination(destinationPath);
+    this._destination = Pino.destination(filePath);
 
     // Pretty print when not in production
-    if (process.env.NODE_ENV !== 'production') {
-      this._options = {
-        prettyPrint: true
-      };
-    }
+    // if (process.env.NODE_ENV !== 'production') {
+    //   this._options = {
+    //     prettyPrint: true
+    //   };
+    // }
 
     this.log = Pino(this._options, this._destination);
 

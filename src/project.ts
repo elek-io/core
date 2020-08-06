@@ -10,6 +10,7 @@ import Snapshot from './snapshot';
 import Asset from './asset';
 import { AssetFileConfig } from './file/assetFile';
 import Base from './base';
+import ProjectLogger from './logger/projectLogger';
 
 export class ProjectFileContent {
   public name = '';
@@ -19,6 +20,7 @@ export class ProjectFileContent {
 }
 
 export default class Project extends Base {
+  private _logger: ProjectLogger | null = null;
   private _file: ProjectFile | null = null;
   private _config: ProjectFileContent | null = null;
   private _theme: Theme | null = null;
@@ -26,6 +28,10 @@ export default class Project extends Base {
   private _blocks: Block[] = [];
   private _snapshots: Snapshot[] = [];
   private _assets: Asset[] = [];
+
+  public get logger(): ProjectLogger {
+    return this.checkInitialization(this._logger);
+  }
 
   private get file(): ProjectFile {
     return this.checkInitialization(this._file);
@@ -70,7 +76,8 @@ export default class Project extends Base {
     this.checkReinitialization();
 
     this._id = Util.uuid();
-    this._file = new ProjectFile(this._id);
+    this._logger = new ProjectLogger(this.id);
+    this._file = new ProjectFile(this._id, this._logger);
 
     // Initialize the Git repository
     await Git.init(Util.pathTo.project(this._id));
@@ -124,15 +131,13 @@ You can use it as a starting point or delete it. If you need help, consider visi
     this.checkReinitialization();
 
     this._id = id;
-    this._file = new ProjectFile(this._id);
+    this._logger = new ProjectLogger(this.id);
+    this._file = new ProjectFile(this._id, this._logger);
     this._config = await this._file.load();
 
-    // Load it's theme
-    this._theme = await new Theme(this).load();
-
-    // Load it's pages and blocks
+    // Load it's theme, pages and blocks
     await this.refresh();
-    
+
     return this;
   }
 
@@ -260,7 +265,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
     this._blocks = [];
     this._pages = [];
     this._snapshots = [];
-    this._theme = await this.theme.load();
+    this._theme = await new Theme(this).load();
 
     const objects = [
       {
@@ -336,7 +341,7 @@ public/
     ];
 
     await Promise.all(folders.map(async (folder) => {
-      await Fs.mkdir(Path.join(Util.pathTo.project(this.id), folder));
+      await Fs.mkdirp(Path.join(Util.pathTo.project(this.id), folder));
       await Fs.writeFile(Path.join(Util.pathTo.project(this.id), folder, '.gitkeep'), '');
     }));
   }

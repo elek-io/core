@@ -1,22 +1,22 @@
 import Fs from 'fs-extra';
 import Path from 'path';
-import Elek from '../src/index';
+import ElekIoCore from '../src/index';
 
-const elek = new Elek();
+const core = new ElekIoCore();
 
 beforeAll(async () => {
-  await elek.init();
+  await core.init();
 });
 
 afterAll(async () => {
-  await Fs.remove(Path.join(elek.util.pathTo.projects, 'some-other-folder'));
+  await Fs.remove(Path.join(core.util.pathTo.projects, 'some-other-folder'));
 });
 
 describe('Index module', () => {
 
   it('should not produce errors when there are subdirectories inside the local projects directory, that are not used as a project', async () => {
-    await Fs.mkdirp(Path.join(elek.util.pathTo.projects, 'some-other-folder'));
-    await expect(elek.reloadProjects()).resolves.not.toThrowError();
+    await Fs.mkdirp(Path.join(core.util.pathTo.projects, 'some-other-folder'));
+    await expect(core.reloadProjects()).resolves.not.toThrowError();
   });
   
 });

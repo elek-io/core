@@ -1,9 +1,9 @@
 import Fs from 'fs-extra';
-import Elek from '../src/index';
+import ElekIoCore from '../src/index';
 import Project from '../src/project';
 import Asset from '../src/asset';
 
-const elek = new Elek();
+const core = new ElekIoCore();
 
 const signature = {
   name: 'John Doe', 
@@ -14,8 +14,8 @@ let project: Project;
 let asset: Asset;
 
 beforeAll(async () => {
-  await elek.init();
-  project = await elek.project.create('My first project', signature);
+  await core.init();
+  project = await core.project.create('My first project', signature);
 });
 
 afterAll(async () => {

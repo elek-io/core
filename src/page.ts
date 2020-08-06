@@ -116,7 +116,7 @@ export default class Page extends ProjectChild {
 
     this._id = Util.uuid();
     this._language = language;
-    this._file = new PageFile(this.project.id, this.id, this.language);
+    this._file = new PageFile(this.project.id, this.id, this.language, this.project.logger);
 
     // The pages file will be initialized with a default that can be overwritten
     this._config = Util.assignDefaultIfMissing(partialPageFileContent || {}, new PageFileContent());
@@ -144,7 +144,7 @@ export default class Page extends ProjectChild {
 
     this._id = id;
     this._language = language;
-    this._file = new PageFile(this.project.id, this.id, this.language);
+    this._file = new PageFile(this.project.id, this.id, this.language, this.project.logger);
     this._config = await this._file.load();
 
     // Load the pages layout

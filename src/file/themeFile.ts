@@ -1,6 +1,7 @@
 import JsonFile from './jsonFile';
 import { ThemeFileContent } from '../theme';
 import * as Util from '../util';
+import Logger from '../logger/logger';
 
 /**
  * Represents a file on disk that contains information about the used theme
@@ -8,8 +9,8 @@ import * as Util from '../util';
 export default class ThemeFile extends JsonFile {
   public readonly defaultContent: ThemeFileContent = new ThemeFileContent();
 
-  constructor(projectId: string) {
-    super(Util.pathTo.themeConfig(projectId));
+  constructor(projectId: string, logger: Logger) {
+    super(Util.pathTo.themeConfig(projectId), logger);
   }
 
   public async load(): Promise<ThemeFileContent> {

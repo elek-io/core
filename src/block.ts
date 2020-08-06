@@ -87,7 +87,7 @@ export default class Block extends ProjectChild {
     
     this._id = Util.uuid();
     this._language = language;
-    this._file = new BlockFile(this.project.id, this._id, this._language);
+    this._file = new BlockFile(this.project.id, this._id, this._language, this.project.logger);
 
     // Block can be initialized with a custom config and content
     // if it's not, default will be used
@@ -117,7 +117,7 @@ export default class Block extends ProjectChild {
     
     this._id = id;
     this._language = language;
-    this._file = new BlockFile(this.project.id, this._id, this._language);
+    this._file = new BlockFile(this.project.id, this._id, this._language, this.project.logger);
 
     const block = await this._file.load();
 

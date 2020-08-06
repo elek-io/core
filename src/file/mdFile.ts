@@ -1,4 +1,5 @@
 import File from './file';
+import Logger from '../logger/logger';
 
 export interface MarkdownFileContent {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -11,8 +12,8 @@ export interface MarkdownFileContent {
  */
 export default class MdFile extends File {
 
-  constructor(path: string) {
-    super(path);
+  constructor(path: string, logger: Logger) {
+    super(path, logger);
   }
 
   /**

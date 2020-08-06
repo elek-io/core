@@ -1,17 +1,21 @@
 import Fs from 'fs-extra';
 import * as Util from './util';
 import Project from './project';
-import Logger from './logger';
+import GlobalLogger from './logger/globalLogger';
 import { GitSignature } from './git';
+
+export interface ElekIoCoreOptions {
+  foo: string;
+}
 
 /**
  * elek.io core class
  */
-export default class Elek {
+export default class ElekIoCore {
   /**
    * The global logger for everything not project related
    */
-  public logger = new Logger();
+  public logger: GlobalLogger;
   /**
    * Utilities
    */
@@ -26,6 +30,10 @@ export default class Elek {
 
   public get projects(): Project[] {
     return this._projects;
+  }
+
+  constructor(options?: Partial<ElekIoCoreOptions>) {
+    this.logger = new GlobalLogger();
   }
 
   public async init(): Promise<void> {

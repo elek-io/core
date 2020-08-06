@@ -1,8 +1,8 @@
 import Fs from 'fs-extra';
-import Elek from '../src/index';
+import ElekIoCore from '../src/index';
 import Project from '../src/project';
 
-const elek = new Elek();
+const core = new ElekIoCore();
 
 const signature = {
   name: 'John Doe', 
@@ -12,8 +12,8 @@ const signature = {
 let project: Project;
 
 beforeAll(async () => {
-  await elek.init();
-  project = await elek.project.create('My first project', signature);
+  await core.init();
+  project = await core.project.create('My first project', signature);
 });
 
 afterAll(async () => {
@@ -32,20 +32,20 @@ describe('Project module', () => {
     // Test the config in memory
     expect(project.config.name).toBe('The first project');
     // And check again if the changes are also present on disk
-    const projectConfig = await Fs.readFile(elek.util.pathTo.projectConfig(project.id));
+    const projectConfig = await Fs.readFile(core.util.pathTo.projectConfig(project.id));
     expect(JSON.parse(projectConfig.toString()).name).toBe('The first project');
   });
 
   it('should be able to create new pages', async () => {
     await project.page.create(signature, 'en-US', {
       name: 'Another page',
-      path: `/${elek.util.slug('Another page')}`,
+      path: `/${core.util.slug('Another page')}`,
       stage: 'wip',
       layoutId: 'about'
     });
     await project.page.create(signature, 'en-US', {
       name: 'Foo bar',
-      path: `/foo/bar/${elek.util.slug('Foo bar')}`,
+      path: `/foo/bar/${core.util.slug('Foo bar')}`,
       stage: 'private',
       layoutId: 'about'
     });

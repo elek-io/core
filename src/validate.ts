@@ -23,9 +23,9 @@ export function locale(value: string): boolean {
  * 
  * @see https://github.com/DefinitelyTyped/DefinitelyTyped/pull/46395
  */
-export function uuid(value: string): boolean {
-  if (Uuid.validate(value) && Uuid.version(value) === 4) {
-    return true;
-  }
-  return false;
-}
+// export function uuid(value: string): boolean {
+//   if (Uuid.validate(value) && Uuid.version(value) === 4) {
+//     return true;
+//   }
+//   return false;
+// }

@@ -1,6 +1,7 @@
 import JsonFile from './jsonFile';
 import { ProjectFileContent } from '../project';
 import * as Util from '../util';
+import Logger from '../logger/logger';
 
 /**
  * Represents a file on disk that contains information about a project
@@ -8,8 +9,8 @@ import * as Util from '../util';
 export default class ProjectFile extends JsonFile {
   public readonly defaultContent: ProjectFileContent = new ProjectFileContent();
 
-  constructor(projectId: string) {
-    super(Util.pathTo.projectConfig(projectId));
+  constructor(projectId: string, logger: Logger) {
+    super(Util.pathTo.projectConfig(projectId), logger);
   }
 
   public async load(): Promise<ProjectFileContent> {

@@ -2,21 +2,17 @@ import Fs from 'fs-extra';
 import _ from 'lodash';
 import * as Util from '../util';
 import * as Validate from '../validate';
-import Logger from '../logger';
+import Logger from '../logger/logger';
 
 /**
  * Represents a file on disk
- * 
- * @todo check how to use the projects logger here
- * instead of using the console
  */
 export default class File {
   private _path: string;
   private _relativePath: string;
-  private _name!: string;
+  private _name: string;
   private _extension: string | null = null;
-  private _projectId: string | null = null;
-  private _logger!: Logger;
+  private _logger: Logger;
 
   /**
    * Absolute path, potentially including some user information
@@ -40,19 +36,39 @@ export default class File {
     return this._extension;
   }
 
-  public get projectId(): string | null {
-    return this._projectId;
-  }
-
-  public get logger(): Logger {
+  protected get logger(): Logger {
     return this._logger;
   }
 
-  constructor(path: string) {
+  constructor(path: string, logger: Logger) {
     this._path = path;
-    this._relativePath = this._path.replace(Util.workingDirectory, '');
+    this._logger = logger;
+
+    this._relativePath = this.getRelativePath();
+    const pathArray = this._relativePath.split('/');
+    const lastPart = pathArray[pathArray.length - 1];
     
-    this.parsePath();
+    // Extract the files name and extension if available
+    if (lastPart.includes('.')) {
+      const fileArray = lastPart.split('.');
+      switch (fileArray.length) {
+      case 1:
+        this._name = fileArray[0];
+        break;
+      case 2:
+        this._name = fileArray[0];
+        this._extension = fileArray[1];
+        break;
+      case 3:
+        this._name = fileArray[0];
+        this._extension = fileArray[2];
+        break;
+      default:
+        throw new Error();
+      }
+    } else {
+      this._name = lastPart;
+    }
   }
 
   /**
@@ -74,10 +90,6 @@ export default class File {
   public async delete(): Promise<void> {
     await Fs.remove(this._path);
   }
-
-  // public async isLocked(): Promise<boolean> {
-  //   return false;
-  // }
 
   /**
    * Heals given content by removing excess and adding missing keys
@@ -121,48 +133,11 @@ export default class File {
     return content as T;
   }
 
-  /**
-   * Parses the full path and populates this objects properties
-   * with additional information
-   */
-  private parsePath() {
-    // Filter out empty strings from parts and reverse the array,
-    // so that the file itself is first
-    // @example relativePath could be "projects/758359ae-e8d0-49ef-bdc1-8a22f3d4907c/theme/package.json"
-    const pathArray = this._relativePath.split('/').filter((part) => {
-      if (part.trim() !== '') {
-        return true;
-      }
-      return false;
-    }).reverse();
-
-    // Extract the files name and extension if available
-    if (pathArray[0].includes('.')) {
-      const fileArray = pathArray[0].split('.');
-      this._name = fileArray[0];
-      this._extension = fileArray[1];
-    } else {
-      this._name = pathArray[0];
+  private getRelativePath(): string {
+    let relativePath = this._path.replace(Util.workingDirectory, '');
+    if (relativePath.startsWith('/')) {
+      relativePath = relativePath.substr(1);
     }
-    // Remove this part from the array
-    pathArray.shift();
-
-    // Iterate over all parts and check for potential UUIDs
-    for (let index = 0; index < pathArray.length; index++) {
-      const part = pathArray[index];
-      if (Validate.uuid(part)) {
-        // First ID should be the project ID
-        if (!this._projectId) {
-          this._projectId = part;
-          // Log to project
-          this._logger = new Logger(this._projectId);
-        }
-      }
-    }
-
-    // Log to global if no project ID was found
-    if (!this._projectId) {
-      this._logger = new Logger();
-    }
+    return relativePath;
   }
 }

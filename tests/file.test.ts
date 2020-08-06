@@ -1,5 +1,5 @@
 import Fs from 'fs-extra';
-import Elek from '../src/index';
+import ElekIoCore from '../src/index';
 import Project from '../src/project';
 import PageFile from '../src/file/pageFile';
 import { PageFileContent } from '../src/page';
@@ -8,7 +8,7 @@ import { BlockFileHeader } from '../src/block';
 import AssetFile, { AssetFileContent } from '../src/file/assetFile';
 import Asset from '../src/asset';
 
-const elek = new Elek();
+const core = new ElekIoCore();
 
 const signature = {
   name: 'John Doe', 
@@ -36,12 +36,12 @@ const validPageFileContent = new PageFileContent();
 const validBlockFileHeader = new BlockFileHeader();
 
 beforeAll(async () => {
-  await elek.init();
-  project = await elek.project.create('My first project', signature);
-  pageFile = new PageFile(project.id, project.pages[0].id, project.pages[0].language);
-  blockFile = new BlockFile(project.id, project.blocks[0].id, project.blocks[0].language);
+  await core.init();
+  project = await core.project.create('My first project', signature);
+  pageFile = new PageFile(project.id, project.pages[0].id, project.pages[0].language, project.logger);
+  blockFile = new BlockFile(project.id, project.blocks[0].id, project.blocks[0].language, project.logger);
   await new Asset(project).create(signature, 'en-US');
-  assetFile = new AssetFile(project.id, project.assets[0].id, project.assets[0].language);
+  assetFile = new AssetFile(project.id, project.assets[0].id, project.assets[0].language, project.logger);
 });
 
 afterAll(async () => {
@@ -51,7 +51,7 @@ afterAll(async () => {
 describe('Page file module', () => {
 
   it('should thrrow an error when used language is not valid', async () => {
-    expect(() => new PageFile(project.id, project.pages[0].id, 'invalid language')).toThrowError();
+    expect(() => new PageFile(project.id, project.pages[0].id, 'invalid language', project.logger)).toThrowError();
   });
 
   it('should be able to save a new file on disk', async () => {
@@ -87,7 +87,7 @@ describe('Page file module', () => {
 describe('Block file module', () => {
 
   it('should thrrow an error when used language is not valid', async () => {
-    expect(() => new BlockFile(project.id, project.blocks[0].id, 'invalid language')).toThrowError();
+    expect(() => new BlockFile(project.id, project.blocks[0].id, 'invalid language', project.logger)).toThrowError();
   });
 
   it('should be able to save a new file on disk', async () => {
@@ -111,21 +111,21 @@ describe('Block file module', () => {
 describe('Asset file module', () => {
 
   it('should thrrow an error when used language is not valid', async () => {
-    expect(() => new AssetFile(project.id, project.assets[0].id, 'invalid language')).toThrowError();
+    expect(() => new AssetFile(project.id, project.assets[0].id, 'invalid language', project.logger)).toThrowError();
   });
 
   it('should be able to save a new asset on disk', async () => {
     const rawData = (await Fs.readFile('./tests/assets/300.png')).toString();
     
     await assetFile.save({
-      name: elek.util.slug('My first file'),
-      description: 'A picture showing elek.io',
+      name: core.util.slug('My first file'),
+      description: 'A picture showing core.io',
       data: rawData,
       mimeType: 'image/png'
     });
 
     const result: AssetFileContent = JSON.parse((await Fs.readFile(assetFile.path)).toString());
-    expect(result.name).toBe(elek.util.slug('My first file'));
+    expect(result.name).toBe(core.util.slug('My first file'));
     expect(result.data).toBe(Buffer.from(rawData).toString('base64'));
   });
 
@@ -134,7 +134,7 @@ describe('Asset file module', () => {
 
     const result = await assetFile.load();
 
-    expect(result.name).toBe(elek.util.slug('My first file'));
+    expect(result.name).toBe(core.util.slug('My first file'));
     expect(result.data).toBe(rawData);
   });
 

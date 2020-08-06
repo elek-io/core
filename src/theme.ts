@@ -91,8 +91,9 @@ export default class Theme extends ProjectChild {
       singleBranch: true,
       depth: 1
     });
-    this._file = new ThemeFile(this.project.id);
+    this._file = new ThemeFile(this.project.id, this.project.logger);
     this._config = await this._file.load();
+
     await this.parse();
 
     // Implement logic to map the layouts of all current pages
@@ -111,11 +112,8 @@ export default class Theme extends ProjectChild {
   public async load(): Promise<Theme> {
     this.checkReinitialization();
 
-    this._file = new ThemeFile(this.project.id);
+    this._file = new ThemeFile(this.project.id, this.project.logger);
     this._config = await this._file.load();
-
-    // This is a placeholder for @todo
-    this._id = this._config.name;
 
     await this.parse();
 
