@@ -1,13 +1,13 @@
 import Fs from 'fs-extra';
 import _ from 'lodash';
-import * as Util from '../util';
-import * as Validate from '../validate';
+import * as Util from '../util/general';
+import * as Validate from '../util/validate';
 import Logger from '../logger/logger';
 
 /**
  * Represents a file on disk
  */
-export default class File {
+export default abstract class File {
   private _path: string;
   private _relativePath: string;
   private _name: string;

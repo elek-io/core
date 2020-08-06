@@ -1,8 +1,8 @@
 import Fs from 'fs-extra';
 import Path from 'path';
 import Cheerio from 'cheerio';
-import * as Util from './util';
-import * as Git from './git';
+import * as Util from './util/general';
+import * as Git from './util/git';
 import Project from './project';
 import ProjectChild from './projectChild';
 import ThemeFile from './file/themeFile';

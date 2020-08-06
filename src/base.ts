@@ -1,10 +1,10 @@
-import ClassNotInitializedError from './error/classNotInitialized';
-import ClassReinitializedError from './error/classReinitialized';
+import ClassNotInitializedError from './error/classNotInitializedError';
+import ClassReinitializedError from './error/classReinitializedError';
 
 /**
  * Base class that that can be extended on
  */
-export default class Base {
+export default abstract class Base {
   protected _id: string | null = null;
 
   public get id(): string {

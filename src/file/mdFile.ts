@@ -10,7 +10,7 @@ export interface MarkdownFileContent {
 /**
  * Represents a file on disk that contains Markdown and an optional JSON header
  */
-export default class MdFile extends File {
+export default abstract class MdFile extends File {
 
   constructor(path: string, logger: Logger) {
     super(path, logger);

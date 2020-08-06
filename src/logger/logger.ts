@@ -5,7 +5,7 @@ import SonicBoom from 'sonic-boom';
 /**
  * Base Logger to extend on
  */
-export default class Logger {
+export default abstract class Logger {
   public log: Pino.Logger;
   private _options: Pino.LoggerOptions = {};
   private _destination: SonicBoom;

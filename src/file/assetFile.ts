@@ -1,6 +1,6 @@
 import JsonFile from './jsonFile';
-import * as Util from '../util';
-import { locale } from '../validate';
+import * as Util from '../util/general';
+import { locale } from '../util/validate';
 import Logger from '../logger/logger';
 
 export class AssetFileConfig {

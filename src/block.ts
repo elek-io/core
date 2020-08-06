@@ -1,5 +1,5 @@
-import * as Util from './util';
-import * as Git from './git';
+import * as Util from './util/general';
+import * as Git from './util/git';
 import Project from './project';
 import BlockFile from './file/blockFile';
 import Markdown from 'markdown-it';

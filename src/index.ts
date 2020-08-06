@@ -1,8 +1,8 @@
 import Fs from 'fs-extra';
-import * as Util from './util';
+import Util from './util';
 import Project from './project';
 import GlobalLogger from './logger/globalLogger';
-import { GitSignature } from './git';
+import { GitSignature } from './util/git';
 
 export interface ElekIoCoreOptions {
   foo: string;
@@ -17,7 +17,7 @@ export default class ElekIoCore {
    */
   public logger: GlobalLogger;
   /**
-   * Utilities
+   * Utility functions
    */
   public util = Util;
 

@@ -1,8 +1,8 @@
 // import Fs from 'fs-extra';
 // import Path from 'path';
-import * as Util from './util';
+import * as Util from './util/general';
 import Project from './project';
-import * as Git from './git';
+import * as Git from './util/git';
 import ProjectChild from './projectChild';
 
 /**

@@ -4,7 +4,7 @@ import Logger from '../logger/logger';
 /**
  * Represents a file on disk that contains JSON
  */
-export default class JsonFile extends File {
+export default abstract class JsonFile extends File {
 
   constructor(path: string, logger: Logger) {
     super(path, logger);

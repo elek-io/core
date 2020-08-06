@@ -1,8 +1,8 @@
 import Fs from 'fs-extra';
 import Path from 'path';
 import ProjectFile from './file/projectFile';
-import * as Util from './util';
-import * as Git from './git';
+import * as Util from './util/general';
+import * as Git from './util/git';
 import Theme from './theme';
 import Page, { PageFileContent } from './page';
 import Block, { BlockFileHeader } from './block';

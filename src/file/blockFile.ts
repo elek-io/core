@@ -1,7 +1,7 @@
 import MdFile, { MarkdownFileContent } from './mdFile';
 import { BlockFileHeader } from '../block';
-import * as Util from '../util';
-import { locale } from '../validate';
+import * as Util from '../util/general';
+import { locale } from '../util/validate';
 import Logger from '../logger/logger';
 
 export interface BlockFileContent extends MarkdownFileContent {

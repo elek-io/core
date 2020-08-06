@@ -1,7 +1,7 @@
 import JsonFile from './jsonFile';
 import { PageFileContent } from '../page';
-import * as Util from '../util';
-import * as Validate from '../validate';
+import * as Util from '../util/general';
+import * as Validate from '../util/validate';
 import Logger from '../logger/logger';
 
 /**

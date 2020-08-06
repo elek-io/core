@@ -1,5 +1,5 @@
 import Path from 'path';
-import * as Util from '../util';
+import * as Util from '../util/general';
 import Logger from './logger';
 
 /**

@@ -1,6 +1,6 @@
 import JsonFile from './jsonFile';
 import { ProjectFileContent } from '../project';
-import * as Util from '../util';
+import * as Util from '../util/general';
 import Logger from '../logger/logger';
 
 /**

@@ -7,7 +7,7 @@ import Page from './page';
 
 export type ProjectChildType = 'asset' | 'block' | 'page' | 'snapshot' | 'theme';
 
-export default class ProjectChild extends Base {
+export default abstract class ProjectChild extends Base {
   private _project: Project;
   private _type: ProjectChildType;
   protected _language: string | null = null;

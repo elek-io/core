@@ -1,6 +1,6 @@
 import PageFile from './file/pageFile';
-import * as Util from './util';
-import * as Git from './git';
+import * as Util from './util/general';
+import * as Git from './util/git';
 import Project from './project';
 import ProjectChild from './projectChild';
 import { ThemeBlockPosition, ThemeLayout } from './theme';
