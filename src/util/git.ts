@@ -43,10 +43,10 @@ export async function pull(localPath: string, options?: Partial<Parameters<typeo
 }
 
 /**
- * Adds and commits given files
+ * Normalizes given files into string array and 
+ * adds support for "*" and "." patterns
  */
-export async function commit(localPath: string, signature: GitSignature, files: string | string[], message: string, options?: Partial<Parameters<typeof Git.commit>[0]>): Promise<string> {
-
+async function parseFileInput(localPath: string, files: string | string[]): Promise<string[]> {
   // Support the * and . (add and commit everything) syntax
   if (files === '*' || files === '.') {
     files = await Globby(['./**', './**/.*'], {
@@ -60,13 +60,30 @@ export async function commit(localPath: string, signature: GitSignature, files: 
     files = [files];
   }
 
+  return files;
+}
+
+/**
+ * Returns a relative path by removing the localPath from file 
+ */
+function getRelativePath(localPath: string, file: string): string {
+  if (file.includes(localPath)) {
+    file = file.replace(localPath + '/', '');
+  }
+  return file;
+}
+
+/**
+ * Adds and commits given files
+ */
+export async function commit(localPath: string, signature: GitSignature, files: string | string[], message: string, options?: Partial<Parameters<typeof Git.commit>[0]>): Promise<string> {
+  files = await parseFileInput(localPath, files);
+  
   // Get the status of each file
   const fileStatus = await Promise.all(files.map(async (file) => {
     // The .add() and .remove() methods only accept relative paths
     // so we need to remove the localPath part of it if needed
-    if (file.includes(localPath)) {
-      file = file.replace(localPath + '/', '');
-    }
+    file = getRelativePath(localPath, file);
     return {
       path: file,
       status: await Git.status({
@@ -131,6 +148,32 @@ export async function checkout(localPath: string, name: string, isNew = false, o
     dir: localPath,
     ref: name
   }));
+}
+
+/**
+ * 
+ * 
+ * @param localPath 
+ * @param files 
+ * @param filter 
+ */
+export async function status(localPath: string, files: string | string[]) {
+  files = await parseFileInput(localPath, files);
+
+  const filesStatus = await Promise.all(files.map(async (file) => {
+    // The status() method only accept relative paths
+    // so we need to remove the localPath part of it if needed
+    return {
+      path: file,
+      status: await Git.status({
+        fs: Fs,
+        dir: localPath,
+        filepath: getRelativePath(localPath, file)
+      })
+    };
+  }));
+
+  return filesStatus;
 }
 
 export const tag = {

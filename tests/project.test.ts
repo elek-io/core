@@ -81,6 +81,10 @@ describe('Project module', () => {
     }
   });
 
+  it('should be able get the status', async () => {
+    await project.status();
+  });
+
   it('should be able to export', async () => {
     const data = await project.export();
     expect(data).toBeDefined();
@@ -88,6 +92,6 @@ describe('Project module', () => {
   });
 
   it('should be able to build', async () => {
-    console.log(await project.build());
+    await project.build();
   }, 300000);
 });

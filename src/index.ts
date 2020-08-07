@@ -10,6 +10,8 @@ export interface ElekIoCoreOptions {
 
 /**
  * elek.io core class
+ * 
+ * Provides access to the global logger, utilities and projects.
  */
 export default class ElekIoCore {
   /**
@@ -36,6 +38,13 @@ export default class ElekIoCore {
     this.logger = new GlobalLogger();
   }
 
+  /**
+   * Initializes elek.io core by assuring the basic requirements are met.
+   * 
+   * Checks if the "NODE_ENV" variable is available, 
+   * assures the directory structure is there,
+   * empties the tmp directory and loads all projects.
+   */
   public async init(): Promise<void> {
     if (!process.env.NODE_ENV) {
       throw new Error('Environment variable "NODE_ENV" is not set');

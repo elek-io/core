@@ -173,6 +173,13 @@ You can use it as a starting point or delete it. If you need help, consider visi
   }
 
   /**
+   * Returns the status of all files inside the project
+   */
+  public async status() {
+    return await Git.status(Util.pathTo.project(this.id), '*');
+  }
+
+  /**
    * Helper methods for working with pages
    */
   public page = {

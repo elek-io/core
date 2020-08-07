@@ -19,4 +19,7 @@ describe('Index module', () => {
     await expect(core.reloadProjects()).resolves.not.toThrowError();
   });
   
+  it('should be able to access all utility objects', async () => {
+    core.util.git.status(core.util.pathTo.projects, '*');
+  });
 });
