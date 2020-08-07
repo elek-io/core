@@ -1,20 +1,74 @@
 import Fs from 'fs-extra';
 import _ from 'lodash';
-import Log from '../util/log';
+import * as Util from '../util/general';
+import * as Validate from '../util/validate';
+import Logger from '../logger/logger';
 
 /**
  * Represents a file on disk
  */
-export default class File {
-  protected readonly _path: string;
-  // private _id!: string;
+export default abstract class File {
+  private _path: string;
+  private _relativePath: string;
+  private _name: string;
+  private _extension: string | null = null;
+  private _logger: Logger;
 
+  /**
+   * Absolute path, potentially including some user information
+   */
   public get path(): string {
     return this._path;
   }
 
-  constructor(path: string) {
+  /**
+   * Relative path from the elek.io working directory
+   */
+  public get relativePath(): string {
+    return this._relativePath;
+  }
+
+  public get name(): string {
+    return this._name;
+  }
+
+  public get extension(): string | null {
+    return this._extension;
+  }
+
+  protected get logger(): Logger {
+    return this._logger;
+  }
+
+  constructor(path: string, logger: Logger) {
     this._path = path;
+    this._logger = logger;
+
+    this._relativePath = this.getRelativePath();
+    const pathArray = this._relativePath.split('/');
+    const lastPart = pathArray[pathArray.length - 1];
+    
+    // Extract the files name and extension if available
+    if (lastPart.includes('.')) {
+      const fileArray = lastPart.split('.');
+      switch (fileArray.length) {
+      case 1:
+        this._name = fileArray[0];
+        break;
+      case 2:
+        this._name = fileArray[0];
+        this._extension = fileArray[1];
+        break;
+      case 3:
+        this._name = fileArray[0];
+        this._extension = fileArray[2];
+        break;
+      default:
+        throw new Error();
+      }
+    } else {
+      this._name = lastPart;
+    }
   }
 
   /**
@@ -36,10 +90,6 @@ export default class File {
   public async delete(): Promise<void> {
     await Fs.remove(this._path);
   }
-
-  // public async isLocked(): Promise<boolean> {
-  //   return false;
-  // }
 
   /**
    * Heals given content by removing excess and adding missing keys
@@ -65,25 +115,29 @@ export default class File {
       _.forEach(excessKeys, (key) => {
         delete content[key];
       });
-      Log.info({
-        removed: excessKeys
-      }, `Removed excess keys of file "${this._path}" while ${action} it`);
+      this.logger.log.info(excessKeys, `Removed excess keys of file "${this._path}" while ${action} it`);
     }
 
     if (missingKeys.length > 0) {
       _.forEach(missingKeys as Array<keyof Partial<T>>, ((key) => {
         content[key] = reference[key];
       }));
-      Log.warn({
-        added: _.map(missingKeys as Array<keyof Partial<T>>, (key) => {
-          return {
-            key,
-            value: reference[key]
-          };
-        })
-      }, `Added missing keys of file "${this._path}" while ${action} it`);
+      this.logger.log.warn(_.map(missingKeys as Array<keyof Partial<T>>, (key) => {
+        return {
+          key,
+          value: reference[key]
+        };
+      }), `Added missing keys of file "${this._path}" while ${action} it`);
     }
     
     return content as T;
+  }
+
+  private getRelativePath(): string {
+    let relativePath = this._path.replace(Util.workingDirectory, '');
+    if (relativePath.startsWith('/')) {
+      relativePath = relativePath.substr(1);
+    }
+    return relativePath;
   }
 }

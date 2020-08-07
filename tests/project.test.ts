@@ -1,6 +1,8 @@
 import Fs from 'fs-extra';
-import Elek from '../src/index';
+import ElekIoCore from '../src/index';
 import Project from '../src/project';
+
+const core = new ElekIoCore();
 
 const signature = {
   name: 'John Doe', 
@@ -10,8 +12,8 @@ const signature = {
 let project: Project;
 
 beforeAll(async () => {
-  await Elek.init();
-  project = await new Elek.project().create('My first project', signature);
+  await core.init();
+  project = await core.project.create('My first project', signature);
 });
 
 afterAll(async () => {
@@ -19,13 +21,6 @@ afterAll(async () => {
 });
 
 describe('Project module', () => {
-
-  it('should be able to load the existing project "My first project"', async () => {
-    const loadedProject = await new Elek.project().load(project.id);
-    expect(loadedProject.config.name).toBe('My first project');
-    expect(loadedProject.blocks.length).toBe(1);
-    expect(loadedProject.pages.length).toBe(1);
-  });
 
   it('should not be able to reload an already initialized project', async () => {
     await expect(project.load(project.id)).rejects.toThrowError();
@@ -37,20 +32,20 @@ describe('Project module', () => {
     // Test the config in memory
     expect(project.config.name).toBe('The first project');
     // And check again if the changes are also present on disk
-    const projectConfig = await Fs.readFile(Elek.util.pathTo.projectConfig(project.id));
+    const projectConfig = await Fs.readFile(core.util.pathTo.projectConfig(project.id));
     expect(JSON.parse(projectConfig.toString()).name).toBe('The first project');
   });
 
   it('should be able to create new pages', async () => {
     await project.page.create(signature, 'en-US', {
       name: 'Another page',
-      path: `/${Elek.util.slug('Another page')}`,
+      path: `/${core.util.slug('Another page')}`,
       stage: 'wip',
       layoutId: 'about'
     });
     await project.page.create(signature, 'en-US', {
       name: 'Foo bar',
-      path: `/foo/bar/${Elek.util.slug('Foo bar')}`,
+      path: `/foo/bar/${core.util.slug('Foo bar')}`,
       stage: 'private',
       layoutId: 'about'
     });
@@ -86,6 +81,10 @@ describe('Project module', () => {
     }
   });
 
+  it('should be able get the status', async () => {
+    await project.status();
+  });
+
   it('should be able to export', async () => {
     const data = await project.export();
     expect(data).toBeDefined();
@@ -93,6 +92,6 @@ describe('Project module', () => {
   });
 
   it('should be able to build', async () => {
-    console.log(await project.build());
+    await project.build();
   }, 300000);
 });

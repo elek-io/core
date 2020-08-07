@@ -1,7 +1,8 @@
 import JsonFile from './jsonFile';
 import { PageFileContent } from '../page';
-import { pathTo } from '../util/general';
-import { locale } from '../util/validate';
+import * as Util from '../util/general';
+import * as Validate from '../util/validate';
+import Logger from '../logger/logger';
 
 /**
  * Represents a file on disk that contains information about a page
@@ -9,9 +10,9 @@ import { locale } from '../util/validate';
 export default class PageFile extends JsonFile {
   public readonly defaultContent: PageFileContent = new PageFileContent();
 
-  constructor(projectId: string, pageId: string, language: string) {
-    super(pathTo.page(projectId, pageId, language));
-    if (locale(language) !== true) {
+  constructor(projectId: string, pageId: string, language: string, logger: Logger) {
+    super(Util.pathTo.page(projectId, pageId, language), logger);
+    if (Validate.locale(language) !== true) {
       throw new Error(`Provided language tag "${language}" is not BCP 47 compliant`);
     }
   }

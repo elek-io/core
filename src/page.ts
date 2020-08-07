@@ -1,7 +1,8 @@
 import PageFile from './file/pageFile';
-import Util from './util';
-import { GitSignature } from './util/git';
+import * as Util from './util/general';
+import * as Git from './util/git';
 import Project from './project';
+import ProjectChild from './projectChild';
 import { ThemeBlockPosition, ThemeLayout } from './theme';
 import Block from './block';
 
@@ -77,31 +78,22 @@ export const PageStageArray = <PageStage[]>Object.keys(PageStageEnum).filter((ke
 });
 export type PageStage = keyof typeof PageStageEnum;
 
-export default class Page {
-  // Using definite assignment assertion here
-  // because values are assigned by the create and load methods
-  private _id!: string;
-  private _language!: string;
-  private _project: Project;
-  private _file!: PageFile;
-  private _config!: PageFileContent;
+export default class Page extends ProjectChild {
+  private _file: PageFile | null = null;
+  private _config: PageFileContent | null = null;
   private _layout: ThemeLayout | null = null;
   private _content: PageContent[] = [];
 
-  public get id(): string {
-    return this._id;
-  }
-
   public get language(): string {
-    return this._language;
+    return this.checkInitialization(this._language);
   }
 
-  public get project(): Project {
-    return this._project;
+  private get file(): PageFile {
+    return this.checkInitialization(this._file);
   }
 
   public get config(): PageFileContent {
-    return this._config;
+    return this.checkInitialization(this._config);
   }
 
   public get layout(): ThemeLayout | null {
@@ -113,16 +105,18 @@ export default class Page {
   }
 
   constructor(project: Project) {
-    this._project = project;
+    super(project, 'page');
   }
 
   /**
    * Creates a new page on disk
    */
-  public async create(signature: GitSignature, language: string, partialPageFileContent?: Partial<PageFileContent>): Promise<Page> {
+  public async create(signature: Git.GitSignature, language: string, partialPageFileContent?: Partial<PageFileContent>): Promise<Page> {
+    this.checkReinitialization();
+
     this._id = Util.uuid();
     this._language = language;
-    this._file = new PageFile(this.project.id, this.id, this.language);
+    this._file = new PageFile(this.project.id, this.id, this.language, this.project.logger);
 
     // The pages file will be initialized with a default that can be overwritten
     this._config = Util.assignDefaultIfMissing(partialPageFileContent || {}, new PageFileContent());
@@ -146,12 +140,11 @@ export default class Page {
    * Loads a page by it's ID and language
    */
   public async load(id: string, language: string): Promise<Page> {
-    // Do not allow reloading an already initialized page
-    if (this.id) { throw new Error('A page cannot be reloaded. Please delete the old and then initialize a new one instead.'); }
+    this.checkReinitialization();
 
     this._id = id;
     this._language = language;
-    this._file = new PageFile(this.project.id, this.id, this.language);
+    this._file = new PageFile(this.project.id, this.id, this.language, this.project.logger);
     this._config = await this._file.load();
 
     // Load the pages layout
@@ -173,29 +166,23 @@ export default class Page {
   /**
    * Saves the page's files on disk and creates a commit
    */
-  public async save(signature: GitSignature, message = ':wrench: Updated page'): Promise<void> {
+  public async save(signature: Git.GitSignature, message = ':wrench: Updated page'): Promise<void> {
     // Write config to disk
-    await this._file.save(this._config);
+    await this.file.save(this.config);
     // Commit changes
-    await Util.git.commit(Util.pathTo.project(this._project.id), signature, this._file.path, message);
+    await Git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
   }
 
   /**
    * Deletes the page's files from disk, creates a commit and removes it's reference from the project
    */
-  public async delete(signature: GitSignature, message = ':fire: Deleted page'): Promise<void> {
+  public async delete(signature: Git.GitSignature, message = ':fire: Deleted page'): Promise<void> {
     // Remove config from disk
-    await this._file.delete();
+    await this.file.delete();
     // Commit changes
-    await Util.git.commit(Util.pathTo.project(this._project.id), signature, this._file.path, message);
+    await Git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
     // Remove it from the project
-    const pageIndex = this.project.pages.findIndex((page) => {
-      return page.id === this.id && page.language === this._language;
-    });
-    if (pageIndex === -1) {
-      throw new Error('Tried removing an not existing page from the project');
-    }
-    this.project.pages.splice(pageIndex, 1);
+    this.removeFromProject();
   }
 
   public async export(): Promise<{
@@ -207,29 +194,21 @@ export default class Page {
     layout: ThemeLayout | null;
     content: {
       id: string;
-      // position: ThemeBlockPosition;
-      // block: {
-      //   id: string;
-      //   path: string;
-      //   config: BlockConfig;
-      //   content: string;
-      // },
       html: string;
     }[]
   }> {
     await this.loadContentByReferences();
     return {
       id: this.id,
-      name: this._config.name,
+      name: this.config.name,
       language: this.language,
-      path: this._config.path,
-      stage: this._config.stage,
+      path: this.config.path,
+      stage: this.config.stage,
       layout: this.layout,
       content: await Promise.all(this.content.map(async (pageContent) => {
         const block = await pageContent.block.export(pageContent.position.restrictions);
         return {
           id: pageContent.position.id,
-          // position: pageContent.position,
           ...block.config,
           html: block.content
         };
@@ -242,7 +221,7 @@ export default class Page {
    * and populates the content property with them
    */
   private async loadContentByReferences() {
-    this._content = await Util.returnResolved(this._config.content.map(async (contentReference, contentReferenceIndex) => {
+    this._content = await Util.returnResolved(this.config.content.map(async (contentReference, contentReferenceIndex) => {
       // Find the position by reference
       const position = this.project.theme.blockPositions.find((position) => {
         return position.id === contentReference.positionId;
@@ -253,7 +232,7 @@ export default class Page {
       });
       if (!position || !block) {
         // Remove the invalid content reference from this pages config
-        delete this._config.content[contentReferenceIndex];
+        delete this.config.content[contentReferenceIndex];
         if (!position) {
           throw new Error(`Could not find the themes block position by ID (${contentReference.positionId}) to resolve a pages content`);
         } else if (!block) {
@@ -272,20 +251,20 @@ export default class Page {
    */
   private async loadLayout() {
     // If there is no layout for this page selected yet, that's fine
-    if (!this._config.layoutId) {
+    if (!this.config.layoutId) {
       this._layout = null;
       return;
     }
     // Else, try to load the layout of this page
     const layout = this.project.theme.config.layouts.find((layout) => {
-      return layout.id === this._config.layoutId;
+      return layout.id === this.config.layoutId;
     });
     // If the specified layout cannot be found inside the current theme, 
     // which can be the case if the project uses a different theme
     // and something inside the wizard failed,
     // reset the layout of this page and inside the pages config
     if (!layout) {
-      this._config.layoutId = '';
+      this.config.layoutId = '';
       this._layout = null;
       return;
     }

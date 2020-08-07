@@ -1,6 +1,8 @@
-import Elek from '../src/index';
+import ElekIoCore from '../src/index';
 import Project from '../src/project';
 import Page from '../src/page';
+
+const core = new ElekIoCore();
 
 const signature = {
   name: 'John Doe', 
@@ -11,8 +13,8 @@ let project: Project;
 let page: Page;
 
 beforeAll(async () => {
-  await Elek.init();
-  project = await new Elek.project().create('My first project', signature);
+  await core.init();
+  project = await core.project.create('My first project', signature);
 });
 
 afterAll(async () => {
