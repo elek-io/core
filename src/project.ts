@@ -272,34 +272,25 @@ You can use it as a starting point or delete it. If you need help, consider visi
     this._blocks = [];
     this._pages = [];
     this._snapshots = [];
+    this._assets = [];
     this._theme = await new Theme(this).load();
 
-    const objects = [
-      {
-        name: 'blocks',
-        extension: '.md'
-      },
-      {
-        name: 'pages',
-        extension: '.json'
-      }
-    ];
-
-    // Get all files from the pages and blocks folder that have the appropriate extension
-    const possibleObjects = await Promise.all([
-      await Util.files(Path.join(Util.pathTo.project(this.id), objects[0].name), objects[0].extension),
-      await Util.files(Path.join(Util.pathTo.project(this.id), objects[1].name), objects[1].extension)
-    ]);
-    
-    // Return all objects we are able to resolve without throwing errors
-    await Util.returnResolved(possibleObjects[0].map((possibleBlock) => {
-      const fileNameArray = possibleBlock.name.replace(objects[0].extension, '').split('.');
-      return new Block(this).load(fileNameArray[0], fileNameArray[1]);
+    // Load all blocks
+    await Util.returnResolved((await this.allFilesFromFolder('blocks', '.md')).map(async (blockFile) => {
+      const fileNameArray = blockFile.name.split('.');
+      return await new Block(this).load(fileNameArray[0], fileNameArray[1]);
     }));
 
-    await Util.returnResolved(possibleObjects[1].map((possiblePage) => {
-      const fileNameArray = possiblePage.name.replace(objects[1].extension, '').split('.');
-      return new Page(this).load(fileNameArray[0], fileNameArray[1]);
+    // Load all pages
+    await Util.returnResolved((await this.allFilesFromFolder('pages', '.json')).map(async (pageFile) => {
+      const fileNameArray = pageFile.name.split('.');
+      return await new Page(this).load(fileNameArray[0], fileNameArray[1]);
+    }));
+
+    // Load all assets
+    await Util.returnResolved((await this.allFilesFromFolder('assets', '.json')).map(async (assetFile) => {
+      const fileNameArray = assetFile.name.split('.');
+      return await new Asset(this).load(fileNameArray[0], fileNameArray[1]);
     }));
 
     // Load all available snapshots
@@ -307,6 +298,14 @@ You can use it as a starting point or delete it. If you need help, consider visi
     Promise.all(tagResultList.map((tagResult) => {
       return new Snapshot(this).load(tagResult.tag.tag);
     }));
+  }
+
+  /**
+   * Returns a list of files from given folder inside this project.
+   * Can be filtered by extension.
+   */
+  private async allFilesFromFolder(folder: string, extension: string) {
+    return await Util.files(Path.join(Util.pathTo.project(this.id), folder), extension);
   }
 
   /**
