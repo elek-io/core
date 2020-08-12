@@ -50,7 +50,9 @@ export default class ElekIoCore {
       throw new Error('Environment variable "NODE_ENV" is not set');
     }
 
-    this.logger.log.info(`Initializing inside an "${process.env.NODE_ENV}" environment`);
+    if (process.env.NODE_ENV !== 'production') {
+      this.logger.log.info(`Initializing inside an "${process.env.NODE_ENV}" environment`);
+    }
 
     // Make sure the basic file structure is given
     await Promise.all([
