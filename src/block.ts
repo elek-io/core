@@ -94,12 +94,6 @@ export default class Block extends ProjectChild {
     this._config = Util.assignDefaultIfMissing(partialConfig || {}, new BlockFileHeader());
     this._content = content || '';
 
-    // Create the block file
-    await this._file.save({
-      header: this._config,
-      body: this._content
-    });
-
     // Create a new commit
     await this.save(signature, ':heavy_plus_sign: Created new block');
 
