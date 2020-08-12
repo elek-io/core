@@ -56,7 +56,7 @@ export default class Snapshot extends ProjectChild {
     this._timezoneOffset = tag.tag.tagger.timezoneOffset;
 
     // Push the now created snapshot to the project
-    this.project.snapshots.push(this);
+    this.addToProject();
 
     return this;
   }
@@ -76,12 +76,7 @@ export default class Snapshot extends ProjectChild {
     this._timestamp = tag.tag.tagger.timestamp;
     this._timezoneOffset = tag.tag.tagger.timezoneOffset;
 
-    // Push the snapshot to the project if it's not already there
-    if (!this.project.snapshots.find((snapshot) => {
-      return snapshot.id === this.id;
-    })) {
-      this.project.snapshots.push(this);
-    }
+    this.addToProject();
 
     return this;
   }

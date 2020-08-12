@@ -131,7 +131,7 @@ export default class Page extends ProjectChild {
     await this.save(signature, ':heavy_plus_sign: Created new page');
 
     // Add this page to the project
-    this.project.pages.push(this);
+    this.addToProject();
 
     return this;
   }
@@ -153,12 +153,7 @@ export default class Page extends ProjectChild {
     // Populate the content property by loading the objects references
     await this.loadContentByReferences();
 
-    // Push the page to the project if it's not already there
-    if (!this.project.pages.find((page) => {
-      return page.id === this.id && page.language === this._language;
-    })) {
-      this.project.pages.push(this);
-    }
+    this.addToProject();
 
     return this;
   }

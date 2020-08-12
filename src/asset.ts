@@ -57,7 +57,7 @@ export default class Asset extends ProjectChild {
     await this.save(signature, ':heavy_plus_sign: Created new asset');
 
     // Add this asset to the project
-    this.project.assets.push(this);
+    this.addToProject();
 
     return this;
   }
@@ -78,12 +78,7 @@ export default class Asset extends ProjectChild {
     delete assetFileContent.data;
     this._config = assetFileContent as AssetFileConfig;
 
-    // Push the asset to the project if it's not already there
-    if (!this.project.assets.find((asset) => {
-      return asset.id === this.id && asset.language === this._language;
-    })) {
-      this.project.assets.push(this);
-    }
+    this.addToProject();
 
     return this;
   }

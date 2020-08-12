@@ -29,10 +29,39 @@ export default abstract class ProjectChild extends Base {
     this._project = project;
     this._type = type;
   }
+
+  /**
+   * Adds the current project child object (this) to the project
+   * if it does not exist there yet
+   * 
+   * @todo find a typescript valid solution for this functionality
+   */
+  protected addToProject(): void {
+    const list = this.getListOfType();
+    const listIndex = this.findIndexOfChildObject();
+    if (listIndex === -1) {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      list.push(this);
+    }
+  }
   
+  /**
+   * Removes the current project child object (this) from the project
+   * and throws an error if it does not exist
+   */
   protected removeFromProject(): void {
     const list = this.getListOfType();
-    const listIndex = list.findIndex((listItem: Asset | Block | Page | Snapshot) => {
+    const listIndex = this.findIndexOfChildObject();
+    if (listIndex === -1) {
+      throw new Error(`Tried removing an non existing ${this._type} from the project`);
+    }
+    list.splice(listIndex, 1);
+  }
+
+  private findIndexOfChildObject(): number {
+    const list = this.getListOfType();
+    return list.findIndex((listItem: Asset | Block | Page | Snapshot) => {
       // If language is available, the object is only uniquely identifiable
       // when the language is checked too
       if (this._language) {
@@ -40,10 +69,6 @@ export default abstract class ProjectChild extends Base {
       }
       return listItem.id === this.id;
     });
-    if (listIndex === -1) {
-      throw new Error(`Tried removing an non existing ${this._type} from the project`);
-    }
-    list.splice(listIndex, 1);
   }
 
   private getListOfType() {

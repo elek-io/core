@@ -98,7 +98,7 @@ export default class Block extends ProjectChild {
     await this.save(signature, ':heavy_plus_sign: Created new block');
 
     // Add this block to the project
-    this.project.blocks.push(this);
+    this.addToProject();
 
     return this;
   }
@@ -118,12 +118,7 @@ export default class Block extends ProjectChild {
     this._config = block.header;
     this._content = block.body;
 
-    // Push the block to the project if it's not already there
-    if (!this.project.blocks.find((block) => {
-      return block.id === this.id && block.language === this._language;
-    })) {
-      this.project.blocks.push(this);
-    }
+    this.addToProject();
 
     return this;
   }
