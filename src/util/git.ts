@@ -77,25 +77,10 @@ function getRelativePath(localPath: string, file: string): string {
  * Adds and commits given files
  */
 export async function commit(localPath: string, signature: GitSignature, files: string | string[], message: string, options?: Partial<Parameters<typeof Git.commit>[0]>): Promise<string> {
-  files = await parseFileInput(localPath, files);
-  
-  // Get the status of each file
-  const fileStatus = await Promise.all(files.map(async (file) => {
-    // The .add() and .remove() methods only accept relative paths
-    // so we need to remove the localPath part of it if needed
-    file = getRelativePath(localPath, file);
-    return {
-      path: file,
-      status: await Git.status({
-        fs: Fs,
-        dir: localPath,
-        filepath: file
-      })
-    };
-  }));
+  const filesStatus = await status(localPath, files);
 
   // Add all changes to the staging area
-  await Promise.all(fileStatus.map(async (file) => {
+  await Promise.all(filesStatus.map(async (file) => {
     /**
      * The explicit removal of a deleted but not yet staged file 
      * is not needed via git CLI. 
@@ -151,29 +136,25 @@ export async function checkout(localPath: string, name: string, isNew = false, o
 }
 
 /**
- * 
- * 
- * @param localPath 
- * @param files 
- * @param filter 
+ * Returns the absolute path of given files together with their git status
  */
 export async function status(localPath: string, files: string | string[]) {
   files = await parseFileInput(localPath, files);
-
-  const filesStatus = await Promise.all(files.map(async (file) => {
-    // The status() method only accept relative paths
+  
+  // Get the status of each file
+  return await Promise.all(files.map(async (file) => {
+    // The .status() method only accepts relative paths
     // so we need to remove the localPath part of it if needed
+    file = getRelativePath(localPath, file);
     return {
       path: file,
       status: await Git.status({
         fs: Fs,
         dir: localPath,
-        filepath: getRelativePath(localPath, file)
+        filepath: file
       })
     };
   }));
-
-  return filesStatus;
 }
 
 export const tag = {
