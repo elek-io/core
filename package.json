@@ -1,7 +1,7 @@
 {
   "name": "@elek.io/core",
   "description": "",
-  "version": "0.0.7-alpha",
+  "version": "0.0.10-alpha",
   "main": "dist/index.js",
   "files": [
     "dist/**/*"
@@ -13,42 +13,43 @@
   "author": "Nils Kolvenbach <info@nils-kolvenbach.de>",
   "license": "",
   "scripts": {
-    "test": "yarn build && yarn test:lint && yarn test:unit",
+    "test": "echo \"Running tests for version $npm_package_version...\" && yarn build && yarn test:lint && yarn test:unit",
     "test:lint": "eslint ./tests ./src",
     "test:unit": "jest --runInBand --config=jest.config.json",
     "build": "rm -rf ./dist && tsc",
     "prepare": "yarn build",
-    "preversion": "yarn test"
+    "preversion": "yarn test",
+    "postversion": "git push --tags && yarn publish . --tag $npm_package_version && git push && echo \"Successfully released version $npm_package_version!\""
   },
   "devDependencies": {
-    "@types/cheerio": "^0.22.18",
-    "@types/fs-extra": "^9.0.1",
+    "@types/cheerio": "^0.22.22",
+    "@types/fs-extra": "^9.0.2",
     "@types/highlight.js": "^9.12.4",
-    "@types/jest": "^26.0.0",
-    "@types/lodash": "^4.14.158",
-    "@types/markdown-it": "^10.0.1",
-    "@types/node": "^14.0.13",
-    "@types/pino": "^6.3.0",
+    "@types/jest": "^26.0.14",
+    "@types/lodash": "^4.14.162",
+    "@types/markdown-it": "^10.0.2",
+    "@types/node": "^14.11.8",
+    "@types/pino": "^6.3.2",
     "@types/sonic-boom": "^0.7.0",
-    "@types/uuid": "^8.0.0",
-    "@typescript-eslint/eslint-plugin": "^3.2.0",
-    "@typescript-eslint/parser": "^3.2.0",
-    "eslint": "^7.2.0",
-    "jest": "^26.0.1",
-    "pino-pretty": "^4.1.0",
-    "ts-jest": "^26.1.0",
-    "typescript": "^3.9.5"
+    "@types/uuid": "^8.3.0",
+    "@typescript-eslint/eslint-plugin": "^4.4.1",
+    "@typescript-eslint/parser": "^4.4.1",
+    "eslint": "^7.11.0",
+    "jest": "^26.5.3",
+    "pino-pretty": "^4.3.0",
+    "ts-jest": "^26.4.1",
+    "typescript": "^4.0.3"
   },
   "dependencies": {
     "cheerio": "^1.0.0-rc.3",
     "fs-extra": "^9.0.1",
     "globby": "^11.0.1",
-    "highlight.js": "^10.1.1",
-    "isomorphic-git": "^1.7.0",
-    "lodash": "^4.17.19",
-    "markdown-it": "^11.0.0",
-    "pino": "^6.4.1",
+    "highlight.js": "^10.2.1",
+    "isomorphic-git": "^1.7.8",
+    "lodash": "^4.17.20",
+    "markdown-it": "^11.0.1",
+    "pino": "^6.7.0",
     "slugify": "^1.4.0",
-    "uuid": "^8.1.0"
+    "uuid": "^8.3.1"
   }
 }

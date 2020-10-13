@@ -181,7 +181,7 @@ export default class Theme extends ProjectChild {
   /**
    * Parses given HTML attributes and returns an partial BlockRestrictions object
    */
-  private async parseRestrictions(attributes: CheerioElement['attribs']) {
+  private async parseRestrictions(attributes: cheerio.Element['attribs']) {
     const restrictions: Partial<BlockRestrictions> = {};
     
     for (const key in attributes) {
