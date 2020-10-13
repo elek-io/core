@@ -13,12 +13,13 @@
   "author": "Nils Kolvenbach <info@nils-kolvenbach.de>",
   "license": "",
   "scripts": {
-    "test": "yarn build && yarn test:lint && yarn test:unit",
+    "test": "echo \"Running tests for version $npm_package_version...\" && yarn build && yarn test:lint && yarn test:unit",
     "test:lint": "eslint ./tests ./src",
     "test:unit": "jest --runInBand --config=jest.config.json",
     "build": "rm -rf ./dist && tsc",
     "prepare": "yarn build",
-    "preversion": "yarn test"
+    "preversion": "yarn test",
+    "postversion": "git push --tags && yarn publish . --tag $npm_package_version && git push && echo \"Successfully released version $npm_package_version!\""
   },
   "devDependencies": {
     "@types/cheerio": "^0.22.22",
