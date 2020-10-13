@@ -75,8 +75,11 @@ export default class Asset extends ProjectChild {
     const assetFileContent = await this._file.load();
 
     this._content = assetFileContent.data;
-    delete assetFileContent.data;
-    this._config = assetFileContent as AssetFileConfig;
+    this._config = {
+      name: assetFileContent.name,
+      description: assetFileContent.description,
+      mimeType: assetFileContent.mimeType
+    };
 
     this.addToProject();
 
