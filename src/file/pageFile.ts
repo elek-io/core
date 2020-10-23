@@ -1,7 +1,7 @@
 import JsonFile from './jsonFile';
 import { PageFileContent } from '../page';
 import * as Util from '../util/general';
-import * as Validate from '../util/validate';
+import * as Validator from '../util/validator';
 import Logger from '../logger/logger';
 
 /**
@@ -12,9 +12,7 @@ export default class PageFile extends JsonFile {
 
   constructor(projectId: string, pageId: string, language: string, logger: Logger) {
     super(Util.pathTo.page(projectId, pageId, language), logger);
-    if (Validate.locale(language) !== true) {
-      throw new Error(`Provided language tag "${language}" is not BCP 47 compliant`);
-    }
+    Validator.checkLanguageTag(language);
   }
 
   public async load(): Promise<PageFileContent> {

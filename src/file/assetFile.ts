@@ -1,6 +1,6 @@
 import JsonFile from './jsonFile';
 import * as Util from '../util/general';
-import { locale } from '../util/validate';
+import * as Validator from '../util/validator';
 import Logger from '../logger/logger';
 
 export class AssetFileConfig {
@@ -26,9 +26,7 @@ export default class AssetFile extends JsonFile {
 
   constructor(projectId: string, assetId: string, language: string, logger: Logger) {
     super(Util.pathTo.asset(projectId, assetId, language), logger);
-    if (locale(language) !== true) {
-      throw new Error(`Provided language tag "${language}" is not BCP 47 compliant`);
-    }
+    Validator.checkLanguageTag(language);
   }
 
   public async load(): Promise<AssetFileContent> {

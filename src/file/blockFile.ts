@@ -1,7 +1,7 @@
 import MdFile, { MarkdownFileContent } from './mdFile';
 import { BlockFileHeader } from '../block';
 import * as Util from '../util/general';
-import { locale } from '../util/validate';
+import * as Validator from '../util/validator';
 import Logger from '../logger/logger';
 
 export interface BlockFileContent extends MarkdownFileContent {
@@ -14,9 +14,7 @@ export default class BlockFile extends MdFile {
 
   constructor(projectId: string, blockId: string, language: string, logger: Logger) {
     super(Util.pathTo.block(projectId, blockId, language), logger);
-    if (locale(language) !== true) {
-      throw new Error(`Provided language tag "${language}" is not BCP 47 compliant`);
-    }
+    Validator.checkLanguageTag(language);
   }
 
   public async load(): Promise<BlockFileContent> {
