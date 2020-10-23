@@ -4,7 +4,7 @@ import Cheerio from 'cheerio';
 import * as Util from './util/general';
 import * as Git from './util/git';
 import Project from './project';
-import ProjectChild from './projectChild';
+import ProjectItem from './projectItem';
 import ThemeFile from './file/themeFile';
 import { BlockRestrictions, BlockRuleArray, BlockRule } from './block';
 import { PageTaxonomy } from './page';
@@ -61,7 +61,7 @@ export class ThemeBlockPosition {
   public restrictions!: BlockRestrictions;
 }
 
-export default class Theme extends ProjectChild {
+export default class Theme extends ProjectItem {
   private _file: ThemeFile | null = null;
   private _config: ThemeFileContent | null = null;
   private _blockPositions: ThemeBlockPosition[] = [];

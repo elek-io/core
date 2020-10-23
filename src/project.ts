@@ -11,6 +11,8 @@ import Asset from './asset';
 import { AssetFileConfig } from './file/assetFile';
 import Base from './base';
 import ProjectLogger from './logger/projectLogger';
+import ProjectItemFactory from './projectItemFactory';
+import { ProjectItemTypeAsString } from './projectItem';
 
 export class ProjectFileContent {
   public name = '';
@@ -28,6 +30,7 @@ export default class Project extends Base {
   private _blocks: Block[] = [];
   private _snapshots: Snapshot[] = [];
   private _assets: Asset[] = [];
+  private _itemFactory: ProjectItemFactory | null = null;
 
   public get logger(): ProjectLogger {
     return this.checkInitialization(this._logger);
@@ -69,6 +72,10 @@ export default class Project extends Base {
     return this._assets;
   }
 
+  protected get itemFactory(): ProjectItemFactory {
+    return this.checkInitialization(this._itemFactory);
+  }
+
   /**
    * Creates a new project on disk
    */
@@ -78,6 +85,7 @@ export default class Project extends Base {
     this._id = Util.uuid();
     this._logger = new ProjectLogger(this.id);
     this._file = new ProjectFile(this._id, this._logger);
+    this._itemFactory = new ProjectItemFactory(this);
 
     // Initialize the Git repository
     await Git.init(Util.pathTo.project(this._id));
@@ -134,6 +142,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
     this._logger = new ProjectLogger(this.id);
     this._file = new ProjectFile(this._id, this._logger);
     this._config = await this._file.load();
+    this._itemFactory = new ProjectItemFactory(this);
 
     // Load it's theme, pages and blocks
     await this.refresh();
@@ -265,7 +274,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
   }
 
   /**
-   * Loads all child objects like pages and blocks from disk 
+   * Loads all project item objects like pages and blocks from disk 
    * into the corresponding projects property
    */
   public async refresh(): Promise<void> {
@@ -275,23 +284,24 @@ You can use it as a starting point or delete it. If you need help, consider visi
     this._assets = [];
     this._theme = await new Theme(this).load();
 
-    // Load all blocks
-    await Util.returnResolved((await this.allFilesFromFolder('blocks', '.md')).map(async (blockFile) => {
-      const fileNameArray = blockFile.name.split('.');
-      return await new Block(this).load(fileNameArray[0], fileNameArray[1]);
-    }));
+    const itemMapping: {
+      folder: string,
+      extension: string,
+      type: ProjectItemTypeAsString
+    }[] = [
+      {folder: 'blocks', extension: '.md', type: 'block'},
+      {folder: 'pages', extension: '.json', type: 'page'},
+      {folder: 'assets', extension: '.json', type: 'asset'}
+    ];
 
-    // Load all pages
-    await Util.returnResolved((await this.allFilesFromFolder('pages', '.json')).map(async (pageFile) => {
-      const fileNameArray = pageFile.name.split('.');
-      return await new Page(this).load(fileNameArray[0], fileNameArray[1]);
-    }));
-
-    // Load all assets
-    await Util.returnResolved((await this.allFilesFromFolder('assets', '.json')).map(async (assetFile) => {
-      const fileNameArray = assetFile.name.split('.');
-      return await new Asset(this).load(fileNameArray[0], fileNameArray[1]);
-    }));
+    // Load all available items except the theme and snapshots
+    itemMapping.forEach(async (item) => {
+      await Util.returnResolved((await this.allFilesFromFolder(item.folder, item.extension)).map(async (file) => {
+        const fileNameArray = file.name.split('.');
+        const itemInstance = this.itemFactory.create(item.type);
+        return await itemInstance.load(fileNameArray[0], fileNameArray[1]);
+      }));
+    });
 
     // Load all available snapshots
     const tagResultList = await Git.tag.list(Util.pathTo.project(this.id));

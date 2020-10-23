@@ -4,7 +4,7 @@ import Project from './project';
 import BlockFile from './file/blockFile';
 import Markdown from 'markdown-it';
 import Code from 'highlight.js';
-import ProjectChild from './projectChild';
+import ProjectItem from './projectItem';
 
 export class BlockFileHeader {}
 export type BlockFileHeaderKey = keyof BlockFileHeader;
@@ -46,7 +46,7 @@ export const BlockRuleArray = <BlockRule[]>Object.keys(BlockRuleEnum).filter((ke
 });
 export type BlockRule = keyof typeof BlockRuleEnum;
 
-export default class Block extends ProjectChild {
+export default class Block extends ProjectItem {
   private _file: BlockFile | null = null;
   private _config: BlockFileHeader | null = null;
   private _content: string | null = null;

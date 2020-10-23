@@ -3,14 +3,14 @@
 import * as Util from './util/general';
 import Project from './project';
 import * as Git from './util/git';
-import ProjectChild from './projectChild';
+import ProjectItem from './projectItem';
 
 /**
  * References a point in time of given project
  * 
  * Internally handled by git via tags
  */
-export default class Snapshot extends ProjectChild {
+export default class Snapshot extends ProjectItem {
   private _name: string | null = null;
   private _signature: Git.GitSignature | null = null;
   private _timestamp: number | null = null;

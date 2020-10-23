@@ -6,7 +6,7 @@ This folder contains a collection of classes containing most application logic.
 ├── index.ts
 ├── base.ts (abstract)
 │   ├── project.ts
-│   ├── projectChild.ts (abstract)
+│   ├── projectItem.ts (abstract)
 │   │   ├── asset.ts
 │   │   ├── block.ts
 │   │   ├── page.ts

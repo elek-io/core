@@ -1,10 +1,10 @@
 import AssetFile, { AssetFileConfig } from './file/assetFile';
 import Util from './util';
 import Project from './project';
-import ProjectChild from './projectChild';
+import ProjectItem from './projectItem';
 import { GitSignature } from './util/git';
 
-export default class Asset extends ProjectChild {
+export default class Asset extends ProjectItem {
   private _file: AssetFile | null = null;
   private _config: AssetFileConfig | null = null;
   private _content: string | null = null;

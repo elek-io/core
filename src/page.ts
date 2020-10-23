@@ -2,7 +2,7 @@ import PageFile from './file/pageFile';
 import * as Util from './util/general';
 import * as Git from './util/git';
 import Project from './project';
-import ProjectChild from './projectChild';
+import ProjectItem from './projectItem';
 import { ThemeBlockPosition, ThemeLayout } from './theme';
 import Block from './block';
 
@@ -78,7 +78,7 @@ export const PageStageArray = <PageStage[]>Object.keys(PageStageEnum).filter((ke
 });
 export type PageStage = keyof typeof PageStageEnum;
 
-export default class Page extends ProjectChild {
+export default class Page extends ProjectItem {
   private _file: PageFile | null = null;
   private _config: PageFileContent | null = null;
   private _layout: ThemeLayout | null = null;
