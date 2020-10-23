@@ -13,11 +13,13 @@ export default class ProjectItemFactory {
     this._project = project;
   }
 
-  // public create(type: 'asset'): Asset;
-  // public create(type: 'block'): Block;
-  // public create(type: 'page'): Page;
-  // public create(type: 'snapshot'): Snapshot;
-  // public create(type: 'theme'): Theme;
+  /**
+   * Instantiates a new project item by given type in string representation
+   * 
+   * @todo can we return a specific type by overloading?
+   * 
+   * @param type string representation of the project items type
+   */
   public create(type: ProjectItemTypeAsString): ProjectItemType {
     switch (type) {
     case 'asset':
