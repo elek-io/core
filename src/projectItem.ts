@@ -5,7 +5,6 @@ import Snapshot from './snapshot';
 import Block from './block';
 import Page from './page';
 import Theme from './theme';
-import ProjectItemFactory from './projectItemFactory';
 
 export type ProjectItemType = Asset | Block | Page | Snapshot | Theme;
 export type ProjectItemTypeAsString = 'asset' | 'block' | 'page' | 'snapshot' | 'theme';
