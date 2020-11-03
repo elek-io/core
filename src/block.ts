@@ -91,7 +91,7 @@ export default class Block extends ProjectItem {
 
     // Block can be initialized with a custom config and content
     // if it's not, default will be used
-    this._config = Util.assignDefaultIfMissing(partialConfig || {}, new BlockFileHeader());
+    this._config = Util.assignDefaultIfMissing(partialConfig, new BlockFileHeader());
     this._content = content || '';
 
     // Create a new commit

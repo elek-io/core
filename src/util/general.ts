@@ -74,7 +74,7 @@ export function uuid(): string {
  * 
  * @todo switch to lodash
  */
-export function assignDefaultIfMissing<T>(value: Partial<T>, defaultsTo: T): T {
+export function assignDefaultIfMissing<T>(value: Partial<T> | undefined | null, defaultsTo: T): T {
   return Object.assign(defaultsTo, value);
 }
 

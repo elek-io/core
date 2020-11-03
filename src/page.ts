@@ -119,7 +119,7 @@ export default class Page extends ProjectItem {
     this._file = new PageFile(this.project.id, this.id, this.language, this.project.logger);
 
     // The pages file will be initialized with a default that can be overwritten
-    this._config = Util.assignDefaultIfMissing(partialPageFileContent || {}, new PageFileContent());
+    this._config = Util.assignDefaultIfMissing(partialPageFileContent, new PageFileContent());
 
     // Create the pages file
     await this._file.save(this._config);

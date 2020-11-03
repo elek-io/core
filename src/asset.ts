@@ -44,7 +44,7 @@ export default class Asset extends ProjectItem {
     this._file = new AssetFile(this.project.id, this.id, this.language, this.project.logger);
 
     // The asset file will be initialized with a default that can be overwritten
-    this._config = Util.assignDefaultIfMissing(partialAssetFileConfig || {}, new AssetFileConfig());
+    this._config = Util.assignDefaultIfMissing(partialAssetFileConfig, new AssetFileConfig());
     this._content = content || '';
 
     // Create the asset file
