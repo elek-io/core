@@ -42,8 +42,8 @@ export default abstract class File {
   constructor(path: string, logger: Logger) {
     this._path = path;
     this._logger = logger;
-
-    this._relativePath = this.getRelativePath();
+    this._relativePath = Util.getRelativePath(this._path);
+    
     const pathArray = this._relativePath.split('/');
     const lastPart = pathArray[pathArray.length - 1];
     
@@ -130,13 +130,5 @@ export default abstract class File {
     }
     
     return content as T;
-  }
-
-  private getRelativePath(): string {
-    let relativePath = this._path.replace(Util.workingDirectory, '');
-    if (relativePath.startsWith('/')) {
-      relativePath = relativePath.substr(1);
-    }
-    return relativePath;
   }
 }

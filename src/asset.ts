@@ -1,4 +1,6 @@
-import AssetFile, { AssetFileConfig } from './file/assetFile';
+import Fs from 'fs-extra';
+import Path from 'path';
+import AssetFile, { AssetFileContent } from './file/assetFile';
 import Util from './util';
 import Project from './project';
 import ProjectItem from './projectItem';
@@ -6,8 +8,7 @@ import { GitSignature } from './util/git';
 
 export default class Asset extends ProjectItem {
   private _file: AssetFile | null = null;
-  private _config: AssetFileConfig | null = null;
-  private _content: string | null = null;
+  private _config: AssetFileContent | null = null;
 
   public get language(): string {
     return this.checkInitialization(this._language);
@@ -17,16 +18,8 @@ export default class Asset extends ProjectItem {
     return this.checkInitialization(this._file);
   }
 
-  public get config(): AssetFileConfig {
+  public get config(): AssetFileContent {
     return this.checkInitialization(this._config);
-  }
-
-  public get content(): string {
-    return this.checkInitialization(this._content);
-  }
-
-  public set content(value: string) {
-    this._content = value;
   }
 
   constructor(project: Project) {
@@ -36,7 +29,7 @@ export default class Asset extends ProjectItem {
   /**
    * Creates a new asset on disk
    */
-  public async create(signature: GitSignature, language: string, partialAssetFileConfig?: Partial<AssetFileConfig>, content?: string): Promise<Asset> {
+  public async create(signature: GitSignature, language: string, filePath: string, partialAssetFileContent: Optional<AssetFileContent, 'description' | 'path'>): Promise<Asset> {
     this.checkReinitialization();
     
     this._id = Util.uuid();
@@ -44,14 +37,14 @@ export default class Asset extends ProjectItem {
     this._file = new AssetFile(this.project.id, this.id, this.language, this.project.logger);
 
     // The asset file will be initialized with a default that can be overwritten
-    this._config = Util.assignDefaultIfMissing(partialAssetFileConfig, new AssetFileConfig());
-    this._content = content || '';
+    this._config = Util.assignDefaultIfMissing(partialAssetFileContent, new AssetFileContent());
+
+    // Copy the new file to our LFS store and
+    // alter the config to reflect it's new path
+    this._config.path = await this.copyFileToLfs(filePath);
 
     // Create the asset file
-    await this._file.save({
-      ...this._config,
-      data: this._content
-    });
+    await this._file.save(this._config);
 
     // Create a new commit
     await this.save(signature, ':heavy_plus_sign: Created new asset');
@@ -72,14 +65,7 @@ export default class Asset extends ProjectItem {
     this._language = language;
     this._file = new AssetFile(this.project.id, this.id, this.language, this.project.logger);
 
-    const assetFileContent = await this._file.load();
-
-    this._content = assetFileContent.data;
-    this._config = {
-      name: assetFileContent.name,
-      description: assetFileContent.description,
-      mimeType: assetFileContent.mimeType
-    };
+    this._config = await this._file.load();
 
     this.addToProject();
 
@@ -91,10 +77,7 @@ export default class Asset extends ProjectItem {
    */
   public async save(signature: GitSignature, message = ':wrench: Updated asset'): Promise<void> {
     // Write config to disk
-    await this.file.save({
-      ...this.config,
-      data: this.content
-    });
+    await this.file.save(this.config);
     // Commit changes
     await Util.git.commit(Util.pathTo.project(this.project.id), signature, this.file.path, message);
   }
@@ -103,6 +86,8 @@ export default class Asset extends ProjectItem {
    * Deletes the asset's files from disk, creates a commit and removes it's reference from the project
    */
   public async delete(signature: GitSignature, message = ':fire: Deleted asset'): Promise<void> {
+    // Remove actual asset from LFS
+    await Fs.remove(Path.join(Util.workingDirectory, this.config.path));
     // Remove config from disk
     await this.file.delete();
     // Commit changes
@@ -123,5 +108,16 @@ export default class Asset extends ProjectItem {
       description: this.config.description,
       language: this.language
     };
+  }
+
+  /**
+   * Copies given file to the projects LFS
+   * and returns it's new relative path
+   */
+  private async copyFileToLfs(filePath: string) {
+    const destination = Path.join(Util.pathTo.lfs(this.project.id), `${Util.uuid()}${Path.extname(filePath)}`);
+    const relativePath = Util.getRelativePath(destination);
+    await Fs.copyFile(filePath, destination);
+    return relativePath;
   }
 }

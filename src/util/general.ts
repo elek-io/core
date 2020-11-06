@@ -59,7 +59,10 @@ export const pathTo = {
   },
   asset: (projectId: string, assetId: string, language: string): string => {
     return Path.join(pathTo.assets(projectId), `${assetId}.${language}.json`);
-  }
+  },
+  lfs: (projectId: string): string => {
+    return Path.join(pathTo.projects, projectId, 'lfs');
+  },
 };
 
 /**
@@ -177,4 +180,16 @@ export async function files(path: string, extension?: string): Promise<Fs.Dirent
     }
     return dirent.isFile();
   });
+}
+
+/**
+ * Returns the relative path for given path 
+ * by stripping out everything up to the working directory
+ */
+export function getRelativePath(path: string): string {
+  let relativePath = path.replace(workingDirectory, '');
+  if (relativePath.startsWith('/')) {
+    relativePath = relativePath.substr(1);
+  }
+  return relativePath;
 }

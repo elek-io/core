@@ -12,6 +12,9 @@ export interface ElekIoCoreOptions {
  * elek.io core class
  * 
  * Provides access to the global logger, utilities and projects.
+ * 
+ * @todo Add "element" as new ProjectItem. Like a "block" but for a specific single element,
+ * which meta information can be accessed individually. E.g. an image with path and alt.
  */
 export default class ElekIoCore {
   /**

@@ -8,7 +8,7 @@ import Page, { PageFileContent } from './page';
 import Block, { BlockFileHeader } from './block';
 import Snapshot from './snapshot';
 import Asset from './asset';
-import { AssetFileConfig } from './file/assetFile';
+import { AssetFileContent } from './file/assetFile';
 import Base from './base';
 import ProjectLogger from './logger/projectLogger';
 import ProjectItemFactory from './projectItemFactory';
@@ -120,10 +120,12 @@ You can use it as a starting point or delete it. If you need help, consider visi
       path: '/',
       stage: 'published',
       layoutId: 'homepage',
-      content: [{
-        positionId: 'welcome-message',
-        blockId: block.id
-      }]
+      content: [
+        {
+          positionId: 'welcome-message',
+          blockId: block.id
+        }
+      ]
     });
 
     // Load the config file
@@ -219,8 +221,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Helper methods for working with assets
    */
   public asset = {
-    create: async (signature: Git.GitSignature, language: string, partialAssetFileContent?: Partial<AssetFileConfig>): Promise<Asset> => {
-      return await new Asset(this).create(signature, language, partialAssetFileContent);
+    create: async (signature: Git.GitSignature, language: string, filePath: string, partialAssetFileContent: Optional<AssetFileContent, 'description' | 'path'>): Promise<Asset> => {
+      return await new Asset(this).create(signature, language, filePath, partialAssetFileContent);
     }
   };
   
@@ -325,6 +327,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
     const content = `.DS_Store
 theme/
 public/
+lfs/
 
 # Keep directories with .gitkeep files in them
 # even if the directory itself is ignored
@@ -353,7 +356,8 @@ public/
       'pages',
       'blocks',
       'public',
-      'logs'
+      'logs',
+      'lfs'
     ];
 
     await Promise.all(folders.map(async (folder) => {

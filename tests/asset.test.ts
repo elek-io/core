@@ -1,4 +1,3 @@
-import Fs from 'fs-extra';
 import ElekIoCore from '../src/index';
 import Project from '../src/project';
 import Asset from '../src/asset';
@@ -25,7 +24,7 @@ afterAll(async () => {
 describe('Asset module', () => {
 
   it('should be able to create a new asset', async () => {
-    asset = await project.asset.create(signature, 'en-US');
+    asset = await project.asset.create(signature, 'en-US', './tests/assets/300.png', {name: 'Test file'});
     expect(project.assets.length).toBe(1);
     expect(asset.language).toBe('en-US');
   });
@@ -35,14 +34,10 @@ describe('Asset module', () => {
   });
 
   it('should be able to update an existing asset', async () => {
-    const rawData = (await Fs.readFile('./tests/assets/300.png')).toString();
-
     asset.config.name = 'Another asset';
-    asset.content = rawData;
 
     await asset.save(signature);
     expect(asset.config.name).toContain('Another asset');
-    expect(asset.content).toBe(rawData);
   });
 
   it('should be able to load an existing asset', async () => {
