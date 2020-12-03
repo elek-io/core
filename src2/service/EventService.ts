@@ -1,12 +1,16 @@
 import { Subject } from 'rxjs';
+import { ElekIoCoreEvent } from '../../types';
 import AbstractService from './AbstractService';
+import LogService from './LogService';
 
 export default class EventService extends AbstractService {
   public readonly events = new Subject<ElekIoCoreEvent>();
+  private logService: LogService;
 
-  constructor() {
+  constructor(logService: LogService) {
     super('event');
 
+    this.logService = logService;
     this.events.subscribe(this.onEvent);
   }
 
@@ -17,6 +21,10 @@ export default class EventService extends AbstractService {
    * @param event The event that was triggered
    */
   private onEvent(event: ElekIoCoreEvent) {
-    console.log(`Event "${event.id}":`, event.data);
+    if (event.project) {
+      this.logService.project(event.project.id).log.info(event);
+    } else {
+      this.logService.global.log.info(event);
+    }
   }
 }

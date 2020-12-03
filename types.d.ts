@@ -1,3 +1,6 @@
+import Project from './src2/model/Project';
+
+
 interface CrudMethods<T> {
   create(model: T): Promise<T>;
   read(model: Partial<T>): Promise<T>;
@@ -5,26 +8,30 @@ interface CrudMethods<T> {
   delete(model: T): Promise<void>;
 }
 
-interface ElekIoCoreEvent {
+type ElekIoCoreEvent = {
   /**
    * ID describing the event divided by colons
    * 
-   * E.g.: "project:create"
+   * E.g.: "page:create"
    */
   id: string;
   /**
    * Translatable string divided by dots
    * 
-   * E.g.: project.created.title
+   * E.g.: page.created.title
    */
   title: string;
+  /**
+   * The project this event was triggered from
+   */
+  project?: Project;
   /**
    * Additional object all subscribers have access to
    */
   data?: Record<string, unknown>;
 }
 
-interface MdFileContent {
+type MdFileContent = {
   jsonHeader: any;
   mdBody: string;
 }
@@ -35,5 +42,14 @@ interface MdFileContent {
 type Optional<T, K extends keyof T> = Omit<T, K> & Partial<T>;
 
 type ProjectStatus = 'todo' | 'foo' | 'bar';
-type ServiceType = 'project' | 'asset' | 'event' | 'file' | 'jsonFile' | 'mdFile';
+type ServiceType = 'log' | 'project' | 'asset' | 'event' | 'file' | 'jsonFile' | 'mdFile';
 type ModelType = 'project' | 'asset';
+
+type GitSignature = {
+  name: string;
+  email: string;
+}
+
+type ElekIoCoreOptions = {
+  signature: GitSignature;
+}

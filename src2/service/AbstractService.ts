@@ -1,3 +1,5 @@
+import { ServiceType } from '../../types';
+
 /**
  * A base service that provides properties for all other services
  */

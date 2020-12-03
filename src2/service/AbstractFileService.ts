@@ -1,4 +1,5 @@
 import Fs from 'fs-extra';
+import { ServiceType } from '../../types';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
 

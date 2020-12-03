@@ -25,8 +25,7 @@ export default class AssetService extends AbstractService {
     // const path = await this.copyFileToLfs(filePath, project, id);
     const asset = new Asset(id, language, name, description, path);
     await this.jsonFileService.create(asset, Util.pathTo.asset(project.id, asset.id, asset.language));
-    this.eventService.events.next({ id: `${this.type}:create`, title: 'some.translatable.string', data: {
-      project,
+    this.eventService.events.next({ id: `${this.type}:create`, title: 'some.translatable.string', project, data: {
       asset
     }});
     return asset;
@@ -44,8 +43,7 @@ export default class AssetService extends AbstractService {
    */
   public async read(project: Project, id: string, language: string): Promise<Asset> {
     const asset: Asset = await this.jsonFileService.read(Util.pathTo.asset(project.id, id, language));
-    this.eventService.events.next({ id: `${this.type}:read`, title: 'some.translatable.string', data: {
-      project,
+    this.eventService.events.next({ id: `${this.type}:read`, title: 'some.translatable.string', project, data: {
       asset
     }});
     return asset;
@@ -53,8 +51,7 @@ export default class AssetService extends AbstractService {
 
   public async update(project: Project, asset: Asset): Promise<void> {
     await this.jsonFileService.update(asset, Util.pathTo.asset(project.id, asset.id, asset.language));
-    this.eventService.events.next({ id: `${this.type}:update`, title: 'some.translatable.string', data: {
-      project,
+    this.eventService.events.next({ id: `${this.type}:update`, title: 'some.translatable.string', project, data: {
       asset
     }});
   }
@@ -62,8 +59,7 @@ export default class AssetService extends AbstractService {
   public async delete(project: Project, asset: Asset): Promise<void> {
     await Fs.remove(Util.pathTo.lfs(project.id));
     await this.jsonFileService.delete(Util.pathTo.asset(project.id, asset.id, asset.language));
-    this.eventService.events.next({ id: `${this.type}:delete`, title: 'some.translatable.string', data: {
-      project,
+    this.eventService.events.next({ id: `${this.type}:delete`, title: 'some.translatable.string', project, data: {
       asset
     }});
   }
@@ -85,10 +81,8 @@ export default class AssetService extends AbstractService {
     const destination = Path.join(Util.pathTo.lfs(project.id), `${asset.id}${asset.language}${Path.extname(filePath)}`);
     const relativePath = Util.getRelativePath(destination);
     await Fs.copyFile(filePath, destination);
-    this.eventService.events.next({ id: `${this.type}:copyFileToLfs`, title: 'some.translatable.string', data: {
+    this.eventService.events.next({ id: `${this.type}:copyFileToLfs`, title: 'some.translatable.string', project, data: {
       filePath,
-      project,
-      id,
       destination,
       relativePath
     }});

@@ -23,7 +23,7 @@ export default class JsonFileService extends AbstractFileService {
     return JSON.stringify(data, null, 2);
   }
 
-  private deserialize(data: string): MdFileContent {
+  private deserialize(data: string): any {
     return JSON.parse(data);
   }
 }
