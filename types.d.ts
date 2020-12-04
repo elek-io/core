@@ -1,4 +1,4 @@
-import Project from './src2/model/Project';
+import Project from './src/model/Project';
 
 
 interface CrudMethods<T> {

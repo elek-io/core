@@ -21,16 +21,13 @@ jobs:
 
       - name: Install dependencies
         run: yarn install
-
-      - name: Lint
-        run: yarn test:lint
         
-      - name: Test & publish code coverage
+      - name: Lint, test & publish code coverage
         uses: paambaati/codeclimate-action@v2.6.0
         env:
           CC_TEST_REPORTER_ID: cf10f2b1011c521bc8b18392a62a9db4920821861e265aa96962107ae6425b86
         with:
-          coverageCommand: yarn test:unit
+          coverageCommand: yarn test
           coverageLocations: |
             ${{github.workspace}}/coverage/lcov.info:lcov
           debug: true

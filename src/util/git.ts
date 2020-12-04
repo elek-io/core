@@ -2,12 +2,8 @@ import Fs from 'fs-extra';
 import Globby from 'globby';
 import Git, { ReadTagResult } from 'isomorphic-git';
 import Http from 'isomorphic-git/http/node';
+import { GitSignature } from '../../types';
 import { assignDefaultIfMissing } from './general';
-
-export interface GitSignature {
-  name: string;
-  email: string;
-}
 
 /**
  * Initializes a new repository

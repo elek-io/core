@@ -13,9 +13,7 @@
   "author": "Nils Kolvenbach <info@nils-kolvenbach.de>",
   "license": "",
   "scripts": {
-    "test": "echo \"Running tests for version $npm_package_version...\" && yarn build && yarn test:lint && yarn test:unit",
-    "test:lint": "eslint ./tests ./src",
-    "test:unit": "jest --runInBand --config=jest.config.json",
+    "test": "echo \"Running tests for version $npm_package_version...\" && yarn build && yarn eslint src/** && yarn cypress run",
     "build": "rm -rf ./dist && tsc",
     "prepare": "yarn build",
     "preversion": "yarn test",
@@ -25,7 +23,6 @@
     "@types/cheerio": "^0.22.22",
     "@types/fs-extra": "^9.0.2",
     "@types/highlight.js": "^9.12.4",
-    "@types/jest": "^26.0.14",
     "@types/lodash": "^4.14.162",
     "@types/markdown-it": "^10.0.2",
     "@types/node": "^14.11.8",
@@ -34,10 +31,10 @@
     "@types/uuid": "^8.3.0",
     "@typescript-eslint/eslint-plugin": "^4.4.1",
     "@typescript-eslint/parser": "^4.4.1",
+    "cypress": "^6.0.1",
     "eslint": "^7.11.0",
-    "jest": "^26.5.3",
+    "eslint-plugin-cypress": "^2.11.2",
     "pino-pretty": "^4.3.0",
-    "ts-jest": "^26.4.1",
     "typescript": "^4.0.3"
   },
   "dependencies": {
