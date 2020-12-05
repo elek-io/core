@@ -1,3 +1,4 @@
+import Path from 'path';
 import Fs from 'fs-extra';
 import AbstractModel from '../model/AbstractModel';
 import Project from '../model/Project';
@@ -26,10 +27,16 @@ export default class ProjectService extends AbstractService {
    * @param name Name of the project
    * @param description Description of the project
    */
-  public async create(name: string, description: string): Promise<Project> {
+  public async create(name: string, description: string, signature: GitSignature): Promise<Project> {
     const project = new Project(Util.uuid(), name, description);
+
     await Util.git.init(Util.pathTo.project(project.id));
+    await this.createFolderStructure(project.id);
+    await this.createGitignore(project.id);
     await this.jsonFileService.create(project, Util.pathTo.projectConfig(project.id));
+    await Util.git.commit(Util.pathTo.project(project.id), signature, '*', ':tada: Created this new elek.io project');
+    await Util.git.checkout(Util.pathTo.project(project.id), 'stage', true);
+
     this.eventService.emit(`${this.type}:create`, {
       project
     });
@@ -84,5 +91,42 @@ export default class ProjectService extends AbstractService {
    */
   public static isProject(model: AbstractModel): boolean {
     return model.type === 'project';
+  }
+
+  /**
+   * Creates the projects folder structure and makes sure to 
+   * write empty .gitkeep files inside them to ensure they are 
+   * committed
+   */
+  private async createFolderStructure(id: string): Promise<void> {
+    const folders = [
+      'theme',
+      'assets',
+      'pages',
+      'blocks',
+      'public',
+      'logs',
+      'lfs'
+    ];
+
+    await Promise.all(folders.map(async (folder) => {
+      await Fs.mkdirp(Path.join(Util.pathTo.project(id), folder));
+      await Fs.writeFile(Path.join(Util.pathTo.project(id), folder, '.gitkeep'), '');
+    }));
+  }
+
+  /**
+   * Writes the projects main .gitignore file to disk
+   */
+  private async createGitignore(id: string): Promise<void> {
+    const content = `.DS_Store
+theme/
+public/
+lfs/
+
+# Keep directories with .gitkeep files in them
+# even if the directory itself is ignored
+!/**/.gitkeep`;
+    await Fs.writeFile(Path.join(Util.pathTo.project(id), '.gitignore'), content);
   }
 }

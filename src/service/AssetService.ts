@@ -21,9 +21,10 @@ export default class AssetService extends AbstractService {
 
   public async create(filePath: string, project: Project, language: string, name: string, description: string): Promise<Asset> {
     const id = Util.uuid();
-    const path = Path.join(Util.pathTo.lfs(project.id), `${id}.${language}${Path.extname(filePath)}`);
-    // const path = await this.copyFileToLfs(filePath, project, id);
-    const asset = new Asset(id, language, name, description, path);
+    const destination = Path.join(Util.pathTo.lfs(project.id), `${id}.${language}${Path.extname(filePath)}`);
+    const relativePath = Util.getRelativePath(destination);
+    await Fs.copyFile(filePath, destination);
+    const asset = new Asset(id, language, name, description, relativePath);
     await this.jsonFileService.create(asset, Util.pathTo.asset(project.id, asset.id, asset.language));
     this.eventService.emit(`${this.type}:create`, {
       project,
@@ -83,24 +84,5 @@ export default class AssetService extends AbstractService {
    */
   public static isProject(model: AbstractModel): boolean {
     return model.type === 'project';
-  }
-
-  /**
-   * Copies given file to the projects LFS
-   * and returns it's new relative path
-   */
-  private async copyFileToLfs(filePath: string, project: Project, asset: Asset) {
-    const destination = Path.join(Util.pathTo.lfs(project.id), `${asset.id}${asset.language}${Path.extname(filePath)}`);
-    const relativePath = Util.getRelativePath(destination);
-    await Fs.copyFile(filePath, destination);
-    this.eventService.emit(`${this.type}:copyFileToLfs`, {
-      project,
-      data: {
-        filePath,
-        destination,
-        relativePath
-      }
-    });
-    return relativePath;
   }
 }

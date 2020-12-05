@@ -14,7 +14,7 @@
   "license": "",
   "scripts": {
     "lint": "yarn eslint src/**",
-    "test": "NODE_ENV=test yarn ts-mocha -p tsconfig.json test/**/*.ts",
+    "test": "NODE_ENV=test yarn nyc --reporter=lcov ts-mocha -p tsconfig.json test/**/*.ts",
     "test:full": "echo \"Running tests for version $npm_package_version...\" && yarn build && yarn lint && yarn test",
     "build": "rm -rf ./dist && tsc",
     "prepare": "yarn build",
@@ -40,6 +40,7 @@
     "chai-as-promised": "^7.1.1",
     "eslint": "^7.15.0",
     "mocha": "^8.2.1",
+    "nyc": "^15.1.0",
     "pino-pretty": "^4.3.0",
     "ts-mocha": "^8.0.0",
     "typescript": "^4.1.2"
