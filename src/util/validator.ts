@@ -17,17 +17,6 @@ export function isLanguageTag(value: string): boolean {
 }
 
 /**
- * Validate a locale string to test if it is BCP 47 compliant
- * 
- * @param value the language tag to parse
- */
-export function checkLanguageTag(value: string): void {
-  if (isLanguageTag(value) !== true) {
-    throw new Error(`Provided value "${value}" is not BCP 47 compliant`);
-  }
-}
-
-/**
  * Validates a string to test if it is an UUID v4
  * 
  * @param value the string to check
@@ -37,15 +26,4 @@ export function isUuid(value: string): boolean {
     return true;
   }
   return false;
-}
-
-/**
- * Validates a string to test if it is an UUID v4
- * 
- * @param value the string to check
- */
-export function checkUuid(value: string): void {
-  if (isUuid(value) !== true) {
-    throw new Error(`Provided value "${value}" is not a valid UUID`);
-  }
 }

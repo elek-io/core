@@ -13,6 +13,7 @@ export default abstract class AbstractModel {
    * @see https://www.ietf.org/rfc/rfc4122.txt
    */
   public readonly id: string;
+  
   /**
    * The type of this model
    */

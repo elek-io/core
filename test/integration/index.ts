@@ -7,23 +7,18 @@ const core = new ElekIoCore();
 
 describe('Class ElekIoCore', () => {
 
-  describe('init', () => {
-    it('should create the folder structure', async () => {
-      await Fs.remove(Util.workingDirectory);
-      expect(await Fs.pathExists(Util.workingDirectory)).to.equal(false);
+  it('should be able to initialize', async () => {
+    await Fs.remove(Util.workingDirectory);
+    expect(await Fs.pathExists(Util.workingDirectory)).to.equal(false);
 
-      await core.init();
-      expect(await Fs.pathExists(Util.workingDirectory)).to.equal(true);
-    });
+    await core.init();
+    expect(await Fs.pathExists(Util.workingDirectory)).to.equal(true);
   });
 
-  // describe('Asset', () => {
-  //   beforeEach(async () => {
+  it('should be able to create a new project', async () => {
+    const project = await core.project.create('Project', 'The first project');
 
-  //   });
-
-  //   it('should be able to init when started for the first time', () => {
-  //     expect(true).to.equal(true);
-  //   });
-  // });
+    expect(project).to.have.property('name', 'Project');
+    expect(await Fs.pathExists(Util.pathTo.project(project.id))).to.equal(true);
+  });
 });
