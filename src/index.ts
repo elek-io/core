@@ -45,10 +45,18 @@ export default class ElekIoCore {
     await Fs.emptyDir(Util.pathTo.tmp);
   }
 
+  /**
+   * Endpoint to subscribe to internal events and react to accordingly
+   * 
+   * @todo figure out if we really want outside code be able to trigger next()
+   */
   public get events(): Subject<ElekIoCoreEvent> {
     return this.eventService.events;
   }
 
+  /**
+   * Searches for projects on disk, loads and returns them
+   */
   public async projects(): Promise<Project[]> {
     const possibleProjectDirectories = await Util.subdirectories(Util.pathTo.projects);
     return await Util.returnResolved(possibleProjectDirectories.map((possibleProjectDirectory) => {
@@ -56,10 +64,16 @@ export default class ElekIoCore {
     }));
   }
 
+  /**
+   * CRUD methods to work with projects
+   */
   public get project(): ProjectService {
     return this.projectService;
   }
 
+  /**
+   * Searches for assets of given project on disk, loads and returns them
+   */
   public async assets(project: Project): Promise<Asset[]> {
     const possibleAssetFiles = await Util.files(Util.pathTo.assets(project.id));
     return await Util.returnResolved(possibleAssetFiles.map((possibleAssetFile) => {
@@ -68,6 +82,9 @@ export default class ElekIoCore {
     }));
   }
 
+  /**
+   * CRUD methods to work with assets
+   */
   public get asset(): AssetService {
     return this.assetService;
   }
