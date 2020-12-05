@@ -1,4 +1,3 @@
-import { MdFileContent } from '../../types';
 import AbstractFileService from './AbstractFileService';
 import EventService from './EventService';
 

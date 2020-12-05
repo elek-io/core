@@ -1,4 +1,3 @@
-import { ModelType } from '../../types';
 import InvalidUuidError from '../error/InvalidUuidError';
 import Util from '../util';
 

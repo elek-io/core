@@ -1,34 +1,8 @@
-import Project from './src/model/Project';
-
-
 interface CrudMethods<T> {
   create(model: T): Promise<T>;
   read(model: Partial<T>): Promise<T>;
   update(model: T): Promise<void>;
   delete(model: T): Promise<void>;
-}
-
-type ElekIoCoreEvent = {
-  /**
-   * ID describing the event divided by colons
-   * 
-   * E.g.: "page:create"
-   */
-  id: string;
-  /**
-   * Translatable string divided by dots
-   * 
-   * E.g.: page.created.title
-   */
-  title: string;
-  /**
-   * The project this event was triggered from
-   */
-  project?: Project;
-  /**
-   * Additional object all subscribers have access to
-   */
-  data?: Record<string, unknown>;
 }
 
 type MdFileContent = {

@@ -30,9 +30,9 @@ export default class ProjectService extends AbstractService {
     const project = new Project(Util.uuid(), name, description);
     await Util.git.init(Util.pathTo.project(project.id));
     await this.jsonFileService.create(project, Util.pathTo.projectConfig(project.id));
-    this.eventService.events.next({ id: `${this.type}:create`, title: 'some.translatable.string', data: {
+    this.eventService.emit(`${this.type}:create`, {
       project
-    }});
+    });
     return project;
   }
 
@@ -46,9 +46,9 @@ export default class ProjectService extends AbstractService {
    */
   public async read(id: string): Promise<Project> {
     const project: Project = await this.jsonFileService.read(Util.pathTo.projectConfig(id));
-    this.eventService.events.next({ id: `${this.type}:read`, title: 'some.translatable.string', data: {
+    this.eventService.emit(`${this.type}:read`, {
       project
-    }});
+    });
     return project;
   }
 
@@ -59,9 +59,9 @@ export default class ProjectService extends AbstractService {
    */
   public async update(project: Project): Promise<void> {
     await this.jsonFileService.update(project, Util.pathTo.projectConfig(project.id));
-    this.eventService.events.next({ id: `${this.type}:update`, title: 'some.translatable.string', data: {
+    this.eventService.emit(`${this.type}:update`, {
       project
-    }});
+    });
   }
 
   /**
@@ -72,9 +72,9 @@ export default class ProjectService extends AbstractService {
    */
   public async delete(project: Project): Promise<void> {
     await Fs.remove(Util.pathTo.project(project.id));
-    this.eventService.events.next({ id: `${this.type}:delete`, title: 'some.translatable.string', data: {
+    this.eventService.emit(`${this.type}:delete`, {
       project
-    }});
+    });
   }
 
   /**

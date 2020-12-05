@@ -8,7 +8,7 @@ import JsonFileService from './service/JsonFileService';
 import ProjectService from './service/ProjectService';
 import Asset from './model/Asset';
 import LogService from './service/LogService';
-import { ElekIoCoreEvent, ElekIoCoreOptions } from '../types';
+import ElekIoCoreEvent from './model/ElekIoCoreEvent';
 
 export default class ElekIoCore {
   private options: ElekIoCoreOptions;

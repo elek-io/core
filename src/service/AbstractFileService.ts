@@ -1,5 +1,4 @@
 import Fs from 'fs-extra';
-import { ServiceType } from '../../types';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
 
@@ -22,10 +21,12 @@ export default abstract class AbstractFileService extends AbstractService {
     await Fs.writeFile(path, data, {
       flag: 'wx'
     });
-    this.eventService.events.next({ id: `${this.type}:create`, title: 'some.translatable.string', data: {
-      path,
-      data
-    }});
+    this.eventService.emit(`${this.type}:create`, {
+      data: {
+        path,
+        data
+      }
+    });
   }
 
   /**
@@ -37,10 +38,12 @@ export default abstract class AbstractFileService extends AbstractService {
     const data = await Fs.readFile(path, {
       flag: 'r'
     });
-    this.eventService.events.next({ id: `${this.type}:read`, title: 'some.translatable.string', data: {
-      path,
-      data
-    }});
+    this.eventService.emit(`${this.type}:read`, {
+      data: {
+        path,
+        data
+      }
+    });
     return data;
   }
 
@@ -56,10 +59,12 @@ export default abstract class AbstractFileService extends AbstractService {
     await Fs.writeFile(path, data, {
       flag: 'w'
     });
-    this.eventService.events.next({ id: `${this.type}:update`, title: 'some.translatable.string', data: {
-      path,
-      data
-    }});
+    this.eventService.emit(`${this.type}:update`, {
+      data: {
+        path,
+        data
+      }
+    });
   }
 
   /**
@@ -69,8 +74,10 @@ export default abstract class AbstractFileService extends AbstractService {
    */
   public async delete(path: string): Promise<void> {
     await Fs.remove(path);
-    this.eventService.events.next({ id: `${this.type}:delete`, title: 'some.translatable.string', data: {
-      path
-    }});
+    this.eventService.emit(`${this.type}:delete`, {
+      data: {
+        path
+      }
+    });
   }
 }
