@@ -1,8 +1,5 @@
 .DS_Store
 /dist
-/cypress/integration/examples
-/cypress/videos
-/cypress/screenshots
 
 # Logs
 logs

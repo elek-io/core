@@ -7,8 +7,7 @@
     "declaration": true,
     "outDir": "./dist",
     "strict": true,
-    "sourceMap": true,
-    "types": ["cypress"]
+    "sourceMap": true
   },
   "include": [
     "./src"

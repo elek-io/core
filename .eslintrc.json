@@ -10,13 +10,11 @@
     "sourceType": "module"
   },
   "plugins": [
-    "@typescript-eslint",
-    "cypress"
+    "@typescript-eslint"
   ],
   "extends": [
     "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-    "plugin:cypress/recommended"
+    "plugin:@typescript-eslint/recommended"
   ],
   "rules": {
     "indent": [
