@@ -18,6 +18,7 @@ const signature: GitSignature = {
 describe('Class ElekIoCore', () => {
 
   let projectId: string;
+  let assetId: string;
 
   it('should be able to initialize', async () => {
     await Fs.remove(Util.workingDirectory);
@@ -46,13 +47,14 @@ describe('Class ElekIoCore', () => {
     project.name = 'Project';
     await core.project.update(project);
 
-    expect(await core.project.read(projectId)).to.have.property('name', 'Project');
+    expect(await core.project.read(project.id)).to.have.property('name', 'Project');
   });
 
   it('should be able to add an asset to an existing project', async () => {
     const project = await core.project.read(projectId);
     const filePath = Path.resolve('./test/asset/300x300.png');
     const asset = await core.asset.create(filePath, project, 'en-GB', 'Asset 1', 'My first asset');
+    assetId = asset.id;
 
     expect(asset).to.have.property('name', 'Asset 1');
     expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language))).to.equal(true);
@@ -82,11 +84,60 @@ describe('Class ElekIoCore', () => {
     expect(projects.length).to.equal(2);
   });
 
-  // it('should be able to delete an existing project', async () => {
-  //   const project = await core.project.read(projectId);
-  //   await core.project.delete(project);
+  it('should be able to read an asset', async () => {
+    const project = await core.project.read(projectId);
+    const asset = await core.asset.read(project, assetId, 'en-GB');
 
-  //   expect(core.project.read(projectId)).to.be.rejectedWith();
-  //   expect(await Fs.pathExists(Util.pathTo.project(project.id))).to.equal(false);
-  // });
+    expect(asset).to.have.property('name', 'Asset 1');
+  });
+
+  it('should be able to update an asset', async () => {
+    const project = await core.project.read(projectId);
+    const asset = await core.asset.read(project, assetId, 'en-GB');
+    asset.name = 'Asset';
+    await core.asset.update(project, asset);
+
+    expect(await core.asset.read(project, asset.id, asset.language)).to.have.property('name', 'Asset');
+  });
+
+  it('should be able to load all assets from disk', async () => {
+    const project = await core.project.read(projectId);
+    const assets = await core.assets(project);
+
+    expect(assets.length).to.equal(1);
+  });
+
+  it('should be able to identify a project', async () => {
+    const project = await core.project.read(projectId);
+    const asset = await core.asset.read(project, assetId, 'en-GB');
+
+    expect(await core.project.isProject(asset)).to.equal(false);
+    expect(await core.project.isProject(project)).to.equal(true);
+  });
+
+  it('should be able to identify an asset', async () => {
+    const project = await core.project.read(projectId);
+    const asset = await core.asset.read(project, assetId, 'en-GB');
+
+    expect(await core.asset.isAsset(project)).to.equal(false);
+    expect(await core.asset.isAsset(asset)).to.equal(true);
+  });
+
+  it('should be able to delete an asset', async () => {
+    const project = await core.project.read(projectId);
+    const asset = await core.asset.read(project, assetId, 'en-GB');
+    await core.asset.delete(project, asset);
+
+    expect(core.asset.read(project, assetId, asset.language)).to.be.rejectedWith();
+    expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language))).to.equal(false);
+    expect(await Fs.pathExists(Path.join(Util.workingDirectory, asset.path))).to.equal(false);
+  });
+
+  it('should be able to delete a project', async () => {
+    const project = await core.project.read(projectId);
+    await core.project.delete(project);
+
+    expect(core.project.read(projectId)).to.be.rejectedWith();
+    expect(await Fs.pathExists(Util.pathTo.project(project.id))).to.equal(false);
+  });
 });

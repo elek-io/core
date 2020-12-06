@@ -62,7 +62,7 @@ export const pathTo = {
   },
   lfs: (projectId: string): string => {
     return Path.join(pathTo.projects, projectId, 'lfs');
-  },
+  }
 };
 
 /**

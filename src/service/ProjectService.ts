@@ -89,7 +89,7 @@ export default class ProjectService extends AbstractService {
    * 
    * @param model The model to check
    */
-  public static isProject(model: AbstractModel): boolean {
+  public isProject(model: AbstractModel): boolean {
     return model.type === 'project';
   }
 

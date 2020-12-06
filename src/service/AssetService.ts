@@ -23,8 +23,8 @@ export default class AssetService extends AbstractService {
     const id = Util.uuid();
     const destination = Path.join(Util.pathTo.lfs(project.id), `${id}.${language}${Path.extname(filePath)}`);
     const relativePath = Util.getRelativePath(destination);
-    await Fs.copyFile(filePath, destination);
     const asset = new Asset(id, language, name, description, relativePath);
+    await Fs.copyFile(filePath, destination);
     await this.jsonFileService.create(asset, Util.pathTo.asset(project.id, asset.id, asset.language));
     this.eventService.emit(`${this.type}:create`, {
       project,
@@ -36,10 +36,7 @@ export default class AssetService extends AbstractService {
   }
 
   /**
-   * Finds and returns a asset by ID
-   * 
-   * @todo Is proper checking of the JSON we get from loaded file needed?
-   * Or do we just assume that the data is correct?
+   * Finds and returns an asset by ID
    * 
    * @param project Project of the asset to read
    * @param id ID of the asset to read
@@ -67,7 +64,7 @@ export default class AssetService extends AbstractService {
   }
 
   public async delete(project: Project, asset: Asset): Promise<void> {
-    await Fs.remove(Util.pathTo.lfs(project.id));
+    await Fs.remove(Path.join(Util.workingDirectory, asset.path));
     await this.jsonFileService.delete(Util.pathTo.asset(project.id, asset.id, asset.language));
     this.eventService.emit(`${this.type}:delete`, {
       project,
@@ -78,11 +75,11 @@ export default class AssetService extends AbstractService {
   }
 
   /**
-   * Checks if given model is of type project
+   * Checks if given model is of type asset
    * 
    * @param model The model to check
    */
-  public static isProject(model: AbstractModel): boolean {
-    return model.type === 'project';
+  public isAsset(model: AbstractModel): boolean {
+    return model.type === 'asset';
   }
 }
