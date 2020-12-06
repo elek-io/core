@@ -8,9 +8,6 @@ export default abstract class AbstractLogger {
   private destination: SonicBoom;
 
   constructor(filePath: string) {
-    // Assure the log file exists
-    Fs.ensureFileSync(filePath);
-
     // Assign the file destination
     this.destination = Pino.destination(filePath);
 
@@ -18,7 +15,7 @@ export default abstract class AbstractLogger {
     if (process.env.NODE_ENV !== 'production') {
       this.options = {
         level: 'debug',
-        // prettyPrint: true
+        prettyPrint: true
       };
     }
 

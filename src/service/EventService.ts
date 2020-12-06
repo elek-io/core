@@ -12,7 +12,6 @@ export default class EventService extends AbstractService {
     super('event');
 
     this.logService = logService;
-    this.events.subscribe(this.onEvent);
   }
 
   /**
@@ -23,22 +22,15 @@ export default class EventService extends AbstractService {
    * @param data Optional additional object all subscribers have access to
    */
   public emit(id: string, optional?: {project?: Project, data?: Record<string, unknown>}): void {
-    this.events.next(new ElekIoCoreEvent(id, optional));
-  }
+    const event = new ElekIoCoreEvent(id, optional);
 
-  /**
-   * Executed every time an event is fired,
-   * this method allows for general logging and more
-   * 
-   * @todo check why logService is undefined here after the constructor was clearly called
-   * 
-   * @param event The event that was triggered
-   */
-  private onEvent(event: ElekIoCoreEvent) {
-    // if (event.project) {
-    //   this.logService.project(event.project.id).log.info(event);
-    // } else {
-    //   this.logService.global.log.info(event);
-    // }
+    // Logging
+    if (event.project) {
+      this.logService.project(event.project.id).log.info(event);
+    } else {
+      this.logService.global.log.info(event);
+    }
+
+    this.events.next(event);
   }
 }

@@ -4,6 +4,7 @@ import Fs from 'fs-extra';
 import Path from 'path';
 import { GitSignature } from '../../old/src/util/git';
 import ElekIoCore from '../../src';
+import InvalidBcp47LanguageTagError from '../../src/error/InvalidBcp47LanguageTagError';
 import Util from '../../src/util';
 
 Chai.use(ChaiAsPromised);
@@ -58,18 +59,27 @@ describe('Class ElekIoCore', () => {
     expect(await Fs.pathExists(Path.join(Util.workingDirectory, asset.path))).to.equal(true);
   });
 
-  // it('should be able to subscribe to events', async () => {
-  //   core.events.subscribe((event) => {
-  //     console.log(event);
-  //     expect(event).to.have.property('id', 'project:create');
-  //   });
-  //   await core.project.create('Project', 'The first project');
-  // });
+  it('should throw an error when an invalid language tag is used', async () => {
+    const project = await core.project.read(projectId);
+    const filePath = Path.resolve('./test/asset/300x300.png');
+
+    expect(core.asset.create(filePath, project, 'en_US', 'Asset 1', 'My first asset')).to.be.rejectedWith(InvalidBcp47LanguageTagError).and.eventually.have.property('name', 'InvalidBcp47LanguageTagError');
+  });
+
+  it('should be able to subscribe to events', async () => {
+    let counter = 0;
+    core.events.subscribe((event) => {
+      expect(event).to.have.property('type', 'event');
+      counter++;
+    });
+    await core.project.create('Another Project', 'The second project', signature);
+    expect(counter).to.be.at.least(1);
+  });
 
   it('should be able to load all projects from disk', async () => {
     const projects = await core.projects();
 
-    expect(projects.length).to.equal(1);
+    expect(projects.length).to.equal(2);
   });
 
   // it('should be able to delete an existing project', async () => {
