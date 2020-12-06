@@ -8,6 +8,8 @@ export default abstract class AbstractLogger {
   private destination: SonicBoom;
 
   constructor(filePath: string) {
+    Fs.ensureFileSync(filePath);
+
     // Assign the file destination
     this.destination = Pino.destination(filePath);
 
