@@ -12,8 +12,8 @@ export default class AssetService extends AbstractService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
 
-  constructor(eventService: EventService, jsonFileService: JsonFileService) {
-    super('asset');
+  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService) {
+    super('asset', options);
 
     this.eventService = eventService;
     this.jsonFileService = jsonFileService;

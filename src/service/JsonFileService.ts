@@ -3,8 +3,8 @@ import EventService from './EventService';
 
 export default class JsonFileService extends AbstractFileService {
 
-  constructor(eventService: EventService) {
-    super('jsonFile', eventService);
+  constructor(options: ElekIoCoreOptions, eventService: EventService) {
+    super('jsonFile', options, eventService);
   }
 
   public async create(data: any, path: string): Promise<void> {

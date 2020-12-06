@@ -9,11 +9,12 @@ import Util from '../../src/util';
 
 Chai.use(ChaiAsPromised);
 const expect = Chai.expect;
-const core = new ElekIoCore();
-const signature: GitSignature = {
-  name: 'John Doe',
-  email: 'john.doe@test.com'
-};
+const core = new ElekIoCore({
+  signature: {
+    name: 'John Doe',
+    email: 'john.doe@test.com'
+  }
+});
 
 describe('Class ElekIoCore', () => {
 
@@ -29,7 +30,7 @@ describe('Class ElekIoCore', () => {
   });
 
   it('should be able to create a new project', async () => {
-    const project = await core.project.create('Project 1', 'The first project', signature);
+    const project = await core.project.create('Project 1', 'The first project');
     projectId = project.id;
 
     expect(project).to.have.property('name', 'Project 1');
@@ -74,7 +75,7 @@ describe('Class ElekIoCore', () => {
       expect(event).to.have.property('type', 'event');
       counter++;
     });
-    await core.project.create('Another Project', 'The second project', signature);
+    await core.project.create('Another Project', 'The second project');
     expect(counter).to.be.at.least(1);
   });
 

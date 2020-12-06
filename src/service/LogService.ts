@@ -9,8 +9,8 @@ export default class LogService extends AbstractService {
   private globalLogger: GlobalLogger;
   private projectLoggers: ProjectLogger[] = [];
 
-  constructor() {
-    super('log');
+  constructor(options: ElekIoCoreOptions) {
+    super('log', options);
 
     this.globalLogger = new GlobalLogger();
   }

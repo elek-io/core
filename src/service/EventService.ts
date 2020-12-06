@@ -8,8 +8,8 @@ export default class EventService extends AbstractService {
   public readonly events = new Subject<ElekIoCoreEvent>();
   private logService: LogService;
 
-  constructor(logService: LogService) {
-    super('event');
+  constructor(options: ElekIoCoreOptions, logService: LogService) {
+    super('event', options);
 
     this.logService = logService;
   }

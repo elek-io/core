@@ -12,15 +12,21 @@ import ElekIoCoreEvent from './model/ElekIoCoreEvent';
 
 export default class ElekIoCore {
   private options: ElekIoCoreOptions;
-  private logService = new LogService();
-  private eventService = new EventService(this.logService);
-  private jsonFileService = new JsonFileService(this.eventService);
-  private assetService = new AssetService(this.eventService, this.jsonFileService);
-  private projectService = new ProjectService(this.eventService, this.jsonFileService);
+  private logService: LogService;
+  private eventService: EventService;
+  private jsonFileService: JsonFileService;
+  private assetService: AssetService;
+  private projectService: ProjectService;
 
-  constructor(options?: ElekIoCoreOptions) {
+  constructor(options: ElekIoCoreOptions) {
     const defaults = {};
     this.options = Object.assign({}, defaults, options);
+
+    this.logService = new LogService(this.options);
+    this.eventService = new EventService(this.options, this.logService);
+    this.jsonFileService = new JsonFileService(this.options, this.eventService);
+    this.assetService = new AssetService(this.options, this.eventService, this.jsonFileService);
+    this.projectService = new ProjectService(this.options, this.eventService, this.jsonFileService);
   }
 
   /**

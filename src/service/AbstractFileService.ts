@@ -3,10 +3,10 @@ import AbstractService from './AbstractService';
 import EventService from './EventService';
 
 export default abstract class AbstractFileService extends AbstractService {
-  public readonly eventService: EventService;
+  private eventService: EventService;
 
-  constructor(type: ServiceType, eventService: EventService) {
-    super(type);
+  constructor(type: ServiceType, options: ElekIoCoreOptions, eventService: EventService) {
+    super(type, options);
 
     this.eventService = eventService;
   }

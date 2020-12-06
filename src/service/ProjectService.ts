@@ -14,8 +14,8 @@ export default class ProjectService extends AbstractService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
 
-  constructor(eventService: EventService, jsonFileService: JsonFileService) {
-    super('project');
+  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService) {
+    super('project', options);
 
     this.eventService = eventService;
     this.jsonFileService = jsonFileService;
@@ -27,14 +27,14 @@ export default class ProjectService extends AbstractService {
    * @param name Name of the project
    * @param description Description of the project
    */
-  public async create(name: string, description: string, signature: GitSignature): Promise<Project> {
+  public async create(name: string, description: string): Promise<Project> {
     const project = new Project(Util.uuid(), name, description);
 
     await Util.git.init(Util.pathTo.project(project.id));
     await this.createFolderStructure(project.id);
     await this.createGitignore(project.id);
     await this.jsonFileService.create(project, Util.pathTo.projectConfig(project.id));
-    await Util.git.commit(Util.pathTo.project(project.id), signature, '*', ':tada: Created this new elek.io project');
+    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, '*', ':tada: Created this new elek.io project');
     await Util.git.checkout(Util.pathTo.project(project.id), 'stage', true);
 
     this.eventService.emit(`${this.type}:create`, {
