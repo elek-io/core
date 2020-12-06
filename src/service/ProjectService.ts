@@ -46,9 +46,6 @@ export default class ProjectService extends AbstractService {
   /**
    * Finds and returns a project by ID
    * 
-   * @todo Is proper checking of the JSON we get from loaded file needed?
-   * Or do we just assume that the data is correct?
-   * 
    * @param id ID of the project to read
    */
   public async read(id: string): Promise<Project> {
@@ -60,12 +57,14 @@ export default class ProjectService extends AbstractService {
   }
 
   /**
-   * Updates given project config
+   * Updates given project
    * 
    * @param project Project to update
+   * @param message Optional git message
    */
-  public async update(project: Project): Promise<void> {
+  public async update(project: Project, message = ':wrench: Updated project'): Promise<void> {
     await this.jsonFileService.update(project, Util.pathTo.projectConfig(project.id));
+    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, Util.pathTo.projectConfig(project.id), message);
     this.eventService.emit(`${this.type}:update`, {
       project
     });

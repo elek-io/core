@@ -26,6 +26,7 @@ export default class AssetService extends AbstractService {
     const asset = new Asset(id, language, name, description, relativePath);
     await Fs.copyFile(filePath, destination);
     await this.jsonFileService.create(asset, Util.pathTo.asset(project.id, asset.id, asset.language));
+    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, Util.pathTo.asset(project.id, asset.id, asset.language), ':heavy_plus_sign: Created new asset');
     this.eventService.emit(`${this.type}:create`, {
       project,
       data: {
@@ -53,8 +54,10 @@ export default class AssetService extends AbstractService {
     return asset;
   }
 
-  public async update(project: Project, asset: Asset): Promise<void> {
-    await this.jsonFileService.update(asset, Util.pathTo.asset(project.id, asset.id, asset.language));
+  public async update(project: Project, asset: Asset, message = ':wrench: Updated asset'): Promise<void> {
+    const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
+    await this.jsonFileService.update(asset, assetJsonPath);
+    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetJsonPath, message);
     this.eventService.emit(`${this.type}:update`, {
       project,
       data: {
@@ -63,9 +66,11 @@ export default class AssetService extends AbstractService {
     });
   }
 
-  public async delete(project: Project, asset: Asset): Promise<void> {
+  public async delete(project: Project, asset: Asset, message = ':fire: Deleted asset'): Promise<void> {
+    const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await Fs.remove(Path.join(Util.workingDirectory, asset.path));
-    await this.jsonFileService.delete(Util.pathTo.asset(project.id, asset.id, asset.language));
+    await this.jsonFileService.delete(assetJsonPath);
+    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetJsonPath, message);
     this.eventService.emit(`${this.type}:delete`, {
       project,
       data: {
