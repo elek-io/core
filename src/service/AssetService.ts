@@ -8,10 +8,21 @@ import AbstractService from './AbstractService';
 import EventService from './EventService';
 import JsonFileService from './JsonFileService';
 
+/**
+ * Service that manages CRUD functionality for asset files on disk
+ */
 export default class AssetService extends AbstractService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
 
+  /**
+   * Creates a new instance of the AssetService which
+   * inherits the type and options properties from AbstractService
+   * 
+   * @param options ElekIoCoreOptions
+   * @param eventService EventService
+   * @param jsonFileService JsonFileService
+   */
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService) {
     super('asset', options);
 
@@ -19,14 +30,25 @@ export default class AssetService extends AbstractService {
     this.jsonFileService = jsonFileService;
   }
 
+  /**
+   * Creates a new asset on disk, copies the assets file to the projects lfs folder
+   * and creates a new commit
+   * 
+   * @param filePath Path of the file to add as a new asset
+   * @param project Project to add the asset to
+   * @param language Language of the new asset
+   * @param name Name of the new asset
+   * @param description Description of the new asset
+   */
   public async create(filePath: string, project: Project, language: string, name: string, description: string): Promise<Asset> {
     const id = Util.uuid();
     const destination = Path.join(Util.pathTo.lfs(project.id), `${id}.${language}${Path.extname(filePath)}`);
     const relativePath = Util.getRelativePath(destination);
     const asset = new Asset(id, language, name, description, relativePath);
+    const assetPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await Fs.copyFile(filePath, destination);
-    await this.jsonFileService.create(asset, Util.pathTo.asset(project.id, asset.id, asset.language));
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, Util.pathTo.asset(project.id, asset.id, asset.language), ':heavy_plus_sign: Created new asset');
+    await this.jsonFileService.create(asset, assetPath);
+    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetPath, ':heavy_plus_sign: Created new asset');
     this.eventService.emit(`${this.type}:create`, {
       project,
       data: {
@@ -37,7 +59,7 @@ export default class AssetService extends AbstractService {
   }
 
   /**
-   * Finds and returns an asset by ID
+   * Finds and returns an asset on disk by ID
    * 
    * @param project Project of the asset to read
    * @param id ID of the asset to read
@@ -54,10 +76,17 @@ export default class AssetService extends AbstractService {
     return asset;
   }
 
-  public async update(project: Project, asset: Asset, message = ':wrench: Updated asset'): Promise<void> {
+  /**
+   * Saves the asset's files on disk and creates a commit
+   * 
+   * @param project Project of the asset to update
+   * @param asset Asset to write to disk
+   * @param message Optional overwrite for the git message
+   */
+  public async update(project: Project, asset: Asset, message = 'Updated asset'): Promise<void> {
     const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await this.jsonFileService.update(asset, assetJsonPath);
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetJsonPath, message);
+    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetJsonPath, `:wrench: ${message}`);
     this.eventService.emit(`${this.type}:update`, {
       project,
       data: {
@@ -66,11 +95,18 @@ export default class AssetService extends AbstractService {
     });
   }
 
-  public async delete(project: Project, asset: Asset, message = ':fire: Deleted asset'): Promise<void> {
+  /**
+   * Deletes the asset's files from disk and creates a commit
+   * 
+   * @param project Project of the asset to delete
+   * @param asset Asset to delete from disk
+   * @param message Optional overwrite for the git message
+   */
+  public async delete(project: Project, asset: Asset, message = 'Deleted asset'): Promise<void> {
     const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await Fs.remove(Path.join(Util.workingDirectory, asset.path));
     await this.jsonFileService.delete(assetJsonPath);
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetJsonPath, message);
+    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetJsonPath, `:fire: ${message}`);
     this.eventService.emit(`${this.type}:delete`, {
       project,
       data: {

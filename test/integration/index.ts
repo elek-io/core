@@ -19,6 +19,7 @@ const core = new ElekIoCore({
 describe('Class ElekIoCore', () => {
 
   let projectId: string;
+  let anotherProjectId: string;
   let assetId: string;
 
   it('should be able to initialize', async () => {
@@ -75,7 +76,8 @@ describe('Class ElekIoCore', () => {
       expect(event).to.have.property('type', 'event');
       counter++;
     });
-    await core.project.create('Another Project', 'The second project');
+    const project = await core.project.create('Another Project', 'The second project');
+    anotherProjectId = project.id;
     expect(counter).to.be.at.least(1);
   });
 
@@ -135,10 +137,10 @@ describe('Class ElekIoCore', () => {
   });
 
   it('should be able to delete a project', async () => {
-    const project = await core.project.read(projectId);
+    const project = await core.project.read(anotherProjectId);
     await core.project.delete(project);
 
-    expect(core.project.read(projectId)).to.be.rejectedWith();
+    expect(core.project.read(anotherProjectId)).to.be.rejectedWith();
     expect(await Fs.pathExists(Util.pathTo.project(project.id))).to.equal(false);
   });
 });

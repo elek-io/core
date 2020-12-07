@@ -121,6 +121,7 @@ export default class ProjectService extends AbstractService {
     const content = `.DS_Store
 theme/
 public/
+logs/
 lfs/
 
 # Keep directories with .gitkeep files in them
