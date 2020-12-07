@@ -6,8 +6,8 @@ import AbstractService from './AbstractService';
  * Service for writing logs
  */
 export default class LogService extends AbstractService {
-  private globalLogger: GlobalLogger;
-  private projectLoggers: ProjectLogger[] = [];
+  private readonly globalLogger: GlobalLogger;
+  private readonly projectLoggers: ProjectLogger[] = [];
 
   constructor(options: ElekIoCoreOptions) {
     super('log', options);

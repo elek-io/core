@@ -21,7 +21,7 @@ export default abstract class AbstractModelWithLanguage extends AbstractModel {
    */
   public readonly language: string;
 
-  constructor(id: string, language: string, type: ModelType) {
+  protected constructor(id: string, language: string, type: ModelType) {
     super(id, type);
     
     if (Util.validator.isLanguageTag(language) === false) {

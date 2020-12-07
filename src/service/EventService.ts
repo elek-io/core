@@ -18,8 +18,7 @@ export default class EventService extends AbstractService {
    * Emits a new ElekIoCoreEvent to all it's subscribers
    * 
    * @param id ID describing the event divided by colons. E.g.: "page:create"
-   * @param project Optional project this event was triggered from
-   * @param data Optional additional object all subscribers have access to
+   * @param optional Optional object containing the project this event was triggered from and an additional object all subscribers have access to
    */
   public emit(id: string, optional?: {project?: Project, data?: Record<string, unknown>}): void {
     const event = new ElekIoCoreEvent(id, optional);

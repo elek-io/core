@@ -18,7 +18,7 @@ export default abstract class AbstractModel {
    */
   public readonly type: ModelType;
 
-  constructor(id: string, type: ModelType) {
+  protected constructor(id: string, type: ModelType) {
     if (Util.validator.isUuid(id) === false) {
       throw new InvalidUuidError(id);
     }

@@ -5,7 +5,7 @@ export default abstract class AbstractService {
   public readonly type: ServiceType;
   public readonly options: ElekIoCoreOptions;
 
-  constructor(type: ServiceType, options: ElekIoCoreOptions) {
+  protected constructor(type: ServiceType, options: ElekIoCoreOptions) {
     this.type = type;
     this.options = options;
   }

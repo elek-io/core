@@ -4,10 +4,10 @@ import SonicBoom from 'sonic-boom';
 
 export default abstract class AbstractLogger {
   public readonly log: Pino.Logger;
-  private options: Pino.LoggerOptions = {};
-  private destination: SonicBoom;
+  private readonly options: Pino.LoggerOptions = {};
+  private readonly destination: SonicBoom;
 
-  constructor(filePath: string) {
+  protected constructor(filePath: string) {
     Fs.ensureFileSync(filePath);
 
     // Assign the file destination

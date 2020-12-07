@@ -3,8 +3,8 @@ import EventService from './EventService';
 
 export default class MdFileService extends AbstractFileService {
 
-  constructor(eventService: EventService) {
-    super('mdFile', eventService);
+  constructor(options: ElekIoCoreOptions ,eventService: EventService) {
+    super('mdFile', options, eventService);
   }
 
   public async create(data: MdFileContent, path: string): Promise<void> {

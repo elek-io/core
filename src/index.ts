@@ -11,12 +11,12 @@ import LogService from './service/LogService';
 import ElekIoCoreEvent from './model/ElekIoCoreEvent';
 
 export default class ElekIoCore {
-  private options: ElekIoCoreOptions;
-  private logService: LogService;
-  private eventService: EventService;
-  private jsonFileService: JsonFileService;
-  private assetService: AssetService;
-  private projectService: ProjectService;
+  private readonly options: ElekIoCoreOptions;
+  private readonly logService: LogService;
+  private readonly eventService: EventService;
+  private readonly jsonFileService: JsonFileService;
+  private readonly assetService: AssetService;
+  private readonly projectService: ProjectService;
 
   constructor(options: ElekIoCoreOptions) {
     const defaults = {};

@@ -5,7 +5,7 @@ import EventService from './EventService';
 export default abstract class AbstractFileService extends AbstractService {
   private eventService: EventService;
 
-  constructor(type: ServiceType, options: ElekIoCoreOptions, eventService: EventService) {
+  protected constructor(type: ServiceType, options: ElekIoCoreOptions, eventService: EventService) {
     super(type, options);
 
     this.eventService = eventService;
