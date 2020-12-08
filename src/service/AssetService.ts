@@ -48,7 +48,7 @@ export default class AssetService extends AbstractService {
     const assetPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await Fs.copyFile(filePath, destination);
     await this.jsonFileService.create(asset, assetPath);
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetPath, ':heavy_plus_sign: Created new asset');
+    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetPath, `:heavy_plus_sign: Created new ${this.type}`);
     this.eventService.emit(`${this.type}:create`, {
       project,
       data: {
@@ -83,7 +83,7 @@ export default class AssetService extends AbstractService {
    * @param asset Asset to write to disk
    * @param message Optional overwrite for the git message
    */
-  public async update(project: Project, asset: Asset, message = 'Updated asset'): Promise<void> {
+  public async update(project: Project, asset: Asset, message = `Updated ${this.type}`): Promise<void> {
     const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await this.jsonFileService.update(asset, assetJsonPath);
     await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetJsonPath, `:wrench: ${message}`);
@@ -102,7 +102,7 @@ export default class AssetService extends AbstractService {
    * @param asset Asset to delete from disk
    * @param message Optional overwrite for the git message
    */
-  public async delete(project: Project, asset: Asset, message = 'Deleted asset'): Promise<void> {
+  public async delete(project: Project, asset: Asset, message = `Deleted ${this.type}`): Promise<void> {
     const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await Fs.remove(Path.join(Util.workingDirectory, asset.path));
     await this.jsonFileService.delete(assetJsonPath);

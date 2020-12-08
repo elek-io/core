@@ -5,7 +5,7 @@ import AbstractLogger from './AbstractLogger';
 /**
  * Logger for logs that are not specific to a project
  */
-export default class GlobalLogger extends AbstractLogger {
+export default class GenericLogger extends AbstractLogger {
 
   constructor(fileName = 'core.log') {
     super(Path.join(Util.pathTo.logs, fileName));

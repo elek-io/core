@@ -4,14 +4,34 @@ import Project from '../model/Project';
 import AbstractService from './AbstractService';
 import LogService from './LogService';
 
+/**
+ * Service that manages subscribing and emitting events between
+ * different services and outside applications like the elek.io client
+ */
 export default class EventService extends AbstractService {
-  public readonly events = new Subject<ElekIoCoreEvent>();
-  private logService: LogService;
+  private readonly eventSubject = new Subject<ElekIoCoreEvent>();
+  private readonly logService: LogService;
 
+  /**
+   * Creates a new instance of the EventService which
+   * inherits the type and options properties from AbstractService
+   * 
+   * @param options ElekIoCoreOptions
+   * @param logService LogService
+   */
   constructor(options: ElekIoCoreOptions, logService: LogService) {
     super('event', options);
 
     this.logService = logService;
+  }
+
+  /**
+   * Subscribes to all events
+   * 
+   * @todo Should improve is alot once we know what we need
+   */
+  public get on() {
+    return this.eventSubject.subscribe.bind(this.eventSubject);
   }
 
   /**
@@ -27,9 +47,9 @@ export default class EventService extends AbstractService {
     if (event.project) {
       this.logService.project(event.project.id).log.info(event);
     } else {
-      this.logService.global.log.info(event);
+      this.logService.generic.log.info(event);
     }
 
-    this.events.next(event);
+    this.eventSubject.next(event);
   }
 }

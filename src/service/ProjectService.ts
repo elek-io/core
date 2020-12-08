@@ -8,12 +8,20 @@ import EventService from './EventService';
 import JsonFileService from './JsonFileService';
 
 /**
- * Handles 
+ * Service that manages CRUD functionality for project files on disk
  */
 export default class ProjectService extends AbstractService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
 
+  /**
+   * Creates a new instance of the ProjectService which
+   * inherits the type and options properties from AbstractService
+   * 
+   * @param options ElekIoCoreOptions
+   * @param eventService EventService
+   * @param jsonFileService JsonFileService
+   */
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService) {
     super('project', options);
 
@@ -60,11 +68,11 @@ export default class ProjectService extends AbstractService {
    * Updates given project
    * 
    * @param project Project to update
-   * @param message Optional git message
+   * @param message Optional overwrite for the git message
    */
-  public async update(project: Project, message = ':wrench: Updated project'): Promise<void> {
+  public async update(project: Project, message = `Updated ${this.type}`): Promise<void> {
     await this.jsonFileService.update(project, Util.pathTo.projectConfig(project.id));
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, Util.pathTo.projectConfig(project.id), message);
+    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, Util.pathTo.projectConfig(project.id), `:wrench: ${message}`);
     this.eventService.emit(`${this.type}:update`, {
       project
     });

@@ -2,7 +2,6 @@ import Chai from 'chai';
 import ChaiAsPromised from 'chai-as-promised';
 import Fs from 'fs-extra';
 import Path from 'path';
-import { GitSignature } from '../../old/src/util/git';
 import ElekIoCore from '../../src';
 import InvalidBcp47LanguageTagError from '../../src/error/InvalidBcp47LanguageTagError';
 import Util from '../../src/util';
@@ -72,8 +71,9 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to subscribe to events', async () => {
     let counter = 0;
-    core.events.subscribe((event) => {
+    core.event.on((event) => {
       expect(event).to.have.property('type', 'event');
+      // console.log(event.id);
       counter++;
     });
     const project = await core.project.create('Another Project', 'The second project');

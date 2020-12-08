@@ -1,9 +1,20 @@
 import AbstractFileService from './AbstractFileService';
 import EventService from './EventService';
 
+/**
+ * Service that manages CRUD functionality for Markdown files on disk
+ */
 export default class MdFileService extends AbstractFileService {
 
-  constructor(options: ElekIoCoreOptions ,eventService: EventService) {
+  /**
+   * Creates a new instance of the MdFileService which
+   * inherits the type and options properties from AbstractService
+   * as well as CRUD methods for basic file access from AbstractFileService
+   * 
+   * @param options 
+   * @param eventService 
+   */
+  constructor(options: ElekIoCoreOptions, eventService: EventService) {
     super('mdFile', options, eventService);
   }
 

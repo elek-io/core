@@ -1,5 +1,4 @@
 import Fs from 'fs-extra';
-import { Subject } from 'rxjs';
 import Util from './util';
 import Project from './model/Project';
 import AssetService from './service/AssetService';
@@ -8,7 +7,6 @@ import JsonFileService from './service/JsonFileService';
 import ProjectService from './service/ProjectService';
 import Asset from './model/Asset';
 import LogService from './service/LogService';
-import ElekIoCoreEvent from './model/ElekIoCoreEvent';
 
 export default class ElekIoCore {
   private readonly options: ElekIoCoreOptions;
@@ -41,7 +39,7 @@ export default class ElekIoCore {
       throw new Error('Environment variable "NODE_ENV" is not set');
     }
     if (process.env.NODE_ENV !== 'production') {
-      this.logService.global.log.info(`Initializing inside an "${process.env.NODE_ENV}" environment`);
+      this.logService.generic.log.info(`Initializing inside an "${process.env.NODE_ENV}" environment`);
     }
     await Promise.all([
       Fs.mkdirp(Util.pathTo.logs),
@@ -54,10 +52,13 @@ export default class ElekIoCore {
   /**
    * Endpoint to subscribe to internal events and react to accordingly
    * 
-   * @todo figure out if we really want outside code be able to trigger next()
+   * @todo figure out if we really want outside code be able to call emit()
    */
-  public get events(): Subject<ElekIoCoreEvent> {
-    return this.eventService.events;
+  public get event() {
+    return {
+      on: this.eventService.on,
+      emit: this.eventService.emit
+    };
   }
 
   /**
