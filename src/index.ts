@@ -7,6 +7,9 @@ import JsonFileService from './service/JsonFileService';
 import ProjectService from './service/ProjectService';
 import Asset from './model/Asset';
 import LogService from './service/LogService';
+import PageService from './service/PageService';
+import Page from './model/Page';
+import { ElekIoCoreOptions } from '../type/general';
 
 export default class ElekIoCore {
   private readonly options: ElekIoCoreOptions;
@@ -14,6 +17,7 @@ export default class ElekIoCore {
   private readonly eventService: EventService;
   private readonly jsonFileService: JsonFileService;
   private readonly assetService: AssetService;
+  private readonly pageService: PageService;
   private readonly projectService: ProjectService;
 
   constructor(options: ElekIoCoreOptions) {
@@ -24,6 +28,7 @@ export default class ElekIoCore {
     this.eventService = new EventService(this.options, this.logService);
     this.jsonFileService = new JsonFileService(this.options, this.eventService);
     this.assetService = new AssetService(this.options, this.eventService, this.jsonFileService);
+    this.pageService = new PageService(this.options, this.eventService, this.jsonFileService);
     this.projectService = new ProjectService(this.options, this.eventService, this.jsonFileService);
   }
 
@@ -94,5 +99,23 @@ export default class ElekIoCore {
    */
   public get asset(): AssetService {
     return this.assetService;
+  }
+
+  /**
+   * Searches for pages of given project on disk, loads and returns them
+   */
+  public async pages(project: Project): Promise<Page[]> {
+    const possiblePageFiles = await Util.files(Util.pathTo.pages(project.id));
+    return await Util.returnResolved(possiblePageFiles.map((possiblePageFile) => {
+      const fileNameArray = possiblePageFile.name.split('.');
+      return this.pageService.read(project, fileNameArray[0], fileNameArray[1]);
+    }));
+  }
+
+  /**
+   * CRUD methods to work with pages
+   */
+  public get page(): PageService {
+    return this.pageService;
   }
 }

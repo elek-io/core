@@ -1,3 +1,4 @@
+import { ModelType } from '../../type/model';
 import InvalidBcp47LanguageTagError from '../error/InvalidBcp47LanguageTagError';
 import Util from '../util';
 import AbstractModel from './AbstractModel';

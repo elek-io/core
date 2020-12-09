@@ -1,3 +1,4 @@
+import { ElekIoCoreOptions } from '../../type/general';
 import AbstractFileService from './AbstractFileService';
 import EventService from './EventService';
 

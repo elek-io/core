@@ -1,3 +1,4 @@
+import { PageStatus } from '../../type/page';
 import AbstractModelWithLanguage from './AbstractModelWithLanguage';
 
 /**

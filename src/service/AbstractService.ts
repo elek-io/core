@@ -1,3 +1,6 @@
+import { ElekIoCoreOptions } from '../../type/general';
+import { ServiceType } from '../../type/service';
+
 /**
  * A base service that provides properties for all other services
  */

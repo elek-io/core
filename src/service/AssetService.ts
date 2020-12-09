@@ -1,5 +1,6 @@
 import Fs from 'fs-extra';
 import Path from 'path';
+import { ElekIoCoreOptions } from '../../type/general';
 import AbstractModel from '../model/AbstractModel';
 import Asset from '../model/Asset';
 import Project from '../model/Project';
@@ -77,7 +78,7 @@ export default class AssetService extends AbstractService {
   }
 
   /**
-   * Saves the asset's files on disk and creates a commit
+   * Updates the asset's files on disk and creates a commit
    * 
    * @param project Project of the asset to update
    * @param asset Asset to write to disk

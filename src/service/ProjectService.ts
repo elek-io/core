@@ -6,6 +6,7 @@ import Util from '../util';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
 import JsonFileService from './JsonFileService';
+import { ElekIoCoreOptions } from '../../type/general';
 
 /**
  * Service that manages CRUD functionality for project files on disk

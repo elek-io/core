@@ -1,0 +1,1 @@
+export type ModelType = 'project' | 'asset' | 'page';

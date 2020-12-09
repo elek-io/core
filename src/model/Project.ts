@@ -1,3 +1,4 @@
+import { ProjectStatus } from '../../type/project';
 import AbstractModel from './AbstractModel';
 
 /**

@@ -1,0 +1,1 @@
+export type ServiceType = 'log' | 'project' | 'asset' | 'page' | 'event' | 'file' | 'jsonFile' | 'mdFile';

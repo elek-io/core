@@ -1,4 +1,5 @@
 import { Subject } from 'rxjs';
+import { ElekIoCoreOptions } from '../../type/general';
 import ElekIoCoreEvent from '../model/ElekIoCoreEvent';
 import Project from '../model/Project';
 import AbstractService from './AbstractService';

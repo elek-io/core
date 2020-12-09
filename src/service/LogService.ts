@@ -1,3 +1,4 @@
+import { ElekIoCoreOptions } from '../../type/general';
 import GenericLogger from '../logger/GenericLogger';
 import ProjectLogger from '../logger/projectLogger';
 import AbstractService from './AbstractService';

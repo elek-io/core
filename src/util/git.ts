@@ -2,6 +2,7 @@ import Fs from 'fs-extra';
 import Globby from 'globby';
 import Git, { ReadTagResult } from 'isomorphic-git';
 import Http from 'isomorphic-git/http/node';
+import { GitSignature } from '../../type/general';
 import { assignDefaultIfMissing } from './general';
 
 /**

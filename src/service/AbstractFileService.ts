@@ -1,4 +1,6 @@
 import Fs from 'fs-extra';
+import { ElekIoCoreOptions } from '../../type/general';
+import { ServiceType } from '../../type/service';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
 

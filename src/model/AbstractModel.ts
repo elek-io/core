@@ -1,3 +1,4 @@
+import { ModelType } from '../../type/model';
 import InvalidUuidError from '../error/InvalidUuidError';
 import Util from '../util';
 

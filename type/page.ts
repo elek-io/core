@@ -1,21 +1,9 @@
-interface CrudMethods<T> {
-  create(model: T): Promise<T>;
-  read(model: Partial<T>): Promise<T>;
-  update(model: T): Promise<void>;
-  delete(model: T): Promise<void>;
-}
-
-type MdFileContent = {
-  jsonHeader: any;
-  mdBody: string;
-}
-
 /**
  * Every status a page can have
  * 
  * Progressing through it is mostly linear
  */
-declare enum PageStatusEnum {
+export enum PageStatusEnum {
   /**
    * Only visible to the author(s) himself / themselfes
    * 
@@ -56,22 +44,4 @@ declare enum PageStatusEnum {
    */
   'published'
 }
-
-/**
- * Defines that one or more keys (K) of type (T) are optional
- */
-type Optional<T, K extends keyof T> = Omit<T, K> & Partial<T>;
-
-type ProjectStatus = 'todo' | 'foo' | 'bar';
-type PageStatus = keyof typeof PageStatusEnum;
-type ServiceType = 'log' | 'project' | 'asset' | 'event' | 'file' | 'jsonFile' | 'mdFile';
-type ModelType = 'project' | 'asset';
-
-type GitSignature = {
-  name: string;
-  email: string;
-}
-
-type ElekIoCoreOptions = {
-  signature: GitSignature;
-}
+export type PageStatus = keyof typeof PageStatusEnum;
