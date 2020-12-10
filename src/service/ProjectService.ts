@@ -6,7 +6,9 @@ import Util from '../util';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
 import JsonFileService from './JsonFileService';
+import BlockService from './BlockService';
 import { ElekIoCoreOptions } from '../../type/general';
+import PageService from './PageService';
 
 /**
  * Service that manages CRUD functionality for project files on disk
@@ -14,6 +16,8 @@ import { ElekIoCoreOptions } from '../../type/general';
 export default class ProjectService extends AbstractService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
+  private blockService: BlockService;
+  private pageService: PageService;
 
   /**
    * Creates a new instance of the ProjectService which
@@ -23,11 +27,13 @@ export default class ProjectService extends AbstractService {
    * @param eventService EventService
    * @param jsonFileService JsonFileService
    */
-  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService) {
+  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, blockService: BlockService, pageService: PageService) {
     super('project', options);
 
     this.eventService = eventService;
     this.jsonFileService = jsonFileService;
+    this.blockService = blockService;
+    this.pageService = pageService;
   }
 
   /**
@@ -45,6 +51,21 @@ export default class ProjectService extends AbstractService {
     await this.jsonFileService.create(project, Util.pathTo.projectConfig(project.id));
     await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, '*', ':tada: Created this new elek.io project');
     await Util.git.checkout(Util.pathTo.project(project.id), 'stage', true);
+    const block = await this.blockService.create(project, 'en-US', `We are very happy to have you on board. This page was created for you. 
+You can use it as a starting point or delete it. If you need help, consider visiting one of these pages: 
+
+- [An introduction to the elek.io client](https://elek.io)
+- [Working with pages](https://elek.io)
+- [Choosing a theme](https://elek.io)
+- [Deploying your first project](https://elek.io)
+`);
+    const page = await this.pageService.create(project, 'en-US', 'Welcome to elek.io!');
+    page.status = 'published';
+    page.content.push({
+      positionId: 'welcome-message',
+      blockId: block.id
+    });
+    await this.pageService.update(project, page);
 
     this.eventService.emit(`${this.type}:create`, {
       project

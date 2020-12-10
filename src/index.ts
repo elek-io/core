@@ -4,20 +4,26 @@ import Project from './model/Project';
 import AssetService from './service/AssetService';
 import EventService from './service/EventService';
 import JsonFileService from './service/JsonFileService';
+import MdFileService from './service/MdFileService';
 import ProjectService from './service/ProjectService';
 import Asset from './model/Asset';
 import LogService from './service/LogService';
 import PageService from './service/PageService';
+import BlockService from './service/BlockService';
 import Page from './model/Page';
 import { ElekIoCoreOptions } from '../type/general';
+import Block from './model/Block';
+
 
 export default class ElekIoCore {
   private readonly options: ElekIoCoreOptions;
   private readonly logService: LogService;
   private readonly eventService: EventService;
   private readonly jsonFileService: JsonFileService;
+  private readonly mdFileService: MdFileService;
   private readonly assetService: AssetService;
   private readonly pageService: PageService;
+  private readonly blockService: BlockService;
   private readonly projectService: ProjectService;
 
   constructor(options: ElekIoCoreOptions) {
@@ -27,9 +33,11 @@ export default class ElekIoCore {
     this.logService = new LogService(this.options);
     this.eventService = new EventService(this.options, this.logService);
     this.jsonFileService = new JsonFileService(this.options, this.eventService);
+    this.mdFileService = new MdFileService(this.options, this.eventService);
     this.assetService = new AssetService(this.options, this.eventService, this.jsonFileService);
     this.pageService = new PageService(this.options, this.eventService, this.jsonFileService);
-    this.projectService = new ProjectService(this.options, this.eventService, this.jsonFileService);
+    this.blockService = new BlockService(this.options, this.eventService, this.mdFileService);
+    this.projectService = new ProjectService(this.options, this.eventService, this.jsonFileService, this.blockService, this.pageService);
   }
 
   /**
@@ -117,5 +125,23 @@ export default class ElekIoCore {
    */
   public get page(): PageService {
     return this.pageService;
+  }
+
+  /**
+   * Searches for blocks of given project on disk, loads and returns them
+   */
+  public async blocks(project: Project): Promise<Block[]> {
+    const possibleBlockFiles = await Util.files(Util.pathTo.blocks(project.id));
+    return await Util.returnResolved(possibleBlockFiles.map((possibleBlockFile) => {
+      const fileNameArray = possibleBlockFile.name.split('.');
+      return this.blockService.read(project, fileNameArray[0], fileNameArray[1]);
+    }));
+  }
+
+  /**
+   * CRUD methods to work with blocks
+   */
+  public get block(): BlockService {
+    return this.blockService;
   }
 }

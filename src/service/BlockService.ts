@@ -39,11 +39,13 @@ export default class BlockService extends AbstractService {
   public async create(project: Project, language: string, body: string): Promise<Block> {
     const id = Util.uuid();
     const block = new Block(id, language, body);
-    const blockWithoutBody = Object.assign({}, block);
-    delete blockWithoutBody.body;
     const blockPath = Util.pathTo.block(project.id, block.id, language);
     await this.mdFileService.create({
-      jsonHeader: blockWithoutBody,
+      jsonHeader: {
+        id: block.id,
+        language: block.language,
+        type: block.type
+      },
       mdBody: block.body
     }, blockPath);
     await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, blockPath, `:heavy_plus_sign: Created new ${this.type}`);
@@ -58,10 +60,6 @@ export default class BlockService extends AbstractService {
 
   /**
    * Finds and returns a block on disk by ID
-   * 
-   * @todo Current implementation does not account for custom
-   * jsonHeader in file. This will be hard to bring into the 
-   * Block object dynamically. Maybe we define them explicitly?
    * 
    * @param project Project of the block to read
    * @param id ID of the block to read
@@ -82,18 +80,18 @@ export default class BlockService extends AbstractService {
   /**
    * Updates the block file on disk and creates a commit
    * 
-   * @todo Same question as in read() method
-   * 
    * @param project Project of the block to update
    * @param block Block to write to disk
    * @param message Optional overwrite for the git message
    */
   public async update(project: Project, block: Block, message = `Updated ${this.type}`): Promise<void> {
     const blockPath = Util.pathTo.block(project.id, block.id, block.language);
-    const blockWithoutBody = Object.assign({}, block);
-    delete blockWithoutBody.body;
     await this.mdFileService.update({
-      jsonHeader: blockWithoutBody,
+      jsonHeader: {
+        id: block.id,
+        language: block.language,
+        type: block.type
+      },
       mdBody: block.body
     }, blockPath);
     await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, blockPath, `:wrench: ${message}`);
