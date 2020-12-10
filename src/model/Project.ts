@@ -7,15 +7,13 @@ import AbstractModel from './AbstractModel';
 export default class Project extends AbstractModel {
   public name: string;
   public description: string;
-  public version: string;
-  public status: ProjectStatus;
+  public version = '0.1.0';
+  public status: ProjectStatus = 'todo';
 
-  constructor(id: string, name: string, description: string, version = '0.1.0', status: ProjectStatus = 'foo') {
+  constructor(id: string, name: string, description: string) {
     super(id, 'project');
     
     this.name = name;
     this.description = description;
-    this.version = version;
-    this.status = status;
   }
 }

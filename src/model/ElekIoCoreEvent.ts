@@ -1,7 +1,10 @@
 import Project from './Project';
 
 /**
+ * The ElekIoCoreEvent is used to inform subscribers (inside and outside)
+ * about events that take place inside the core
  * 
+ * Does not extend the AbstractModel because the ID is not an UUID
  */
 export default class ElekIoCoreEvent {
   /**

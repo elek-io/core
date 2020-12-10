@@ -1,1 +1,1 @@
-export type ServiceType = 'log' | 'project' | 'asset' | 'page' | 'event' | 'file' | 'jsonFile' | 'mdFile';
+export type ServiceType = 'log' | 'project' | 'asset' | 'page' | 'block' | 'event' | 'file' | 'jsonFile' | 'mdFile';

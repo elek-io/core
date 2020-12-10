@@ -1,5 +1,4 @@
 import { ElekIoCoreOptions } from '../../type/general';
-import { PageStatus } from '../../type/page';
 import AbstractModel from '../model/AbstractModel';
 import Page from '../model/Page';
 import Project from '../model/Project';
@@ -36,11 +35,10 @@ export default class PageService extends AbstractService {
    * @param project Project to add the page to
    * @param language Language of the new page
    * @param name Name of the new page
-   * @param status Status of the new page
    */
-  public async create(project: Project, language: string, name: string, status: PageStatus): Promise<Page> {
+  public async create(project: Project, language: string, name: string): Promise<Page> {
     const id = Util.uuid();
-    const page = new Page(id, language, name, status);
+    const page = new Page(id, language, name);
     const pagePath = Util.pathTo.page(project.id, page.id, language);
     await this.jsonFileService.create(page, pagePath);
     await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, pagePath, `:heavy_plus_sign: Created new ${this.type}`);

@@ -1,4 +1,4 @@
-import { PageStatus } from '../../type/page';
+import { PageContentReference, PageStatus } from '../../type/page';
 import AbstractModelWithLanguage from './AbstractModelWithLanguage';
 
 /**
@@ -7,12 +7,13 @@ import AbstractModelWithLanguage from './AbstractModelWithLanguage';
  */
 export default class Page extends AbstractModelWithLanguage {
   public name: string;
-  public status: PageStatus;
+  public status: PageStatus = 'private';
+  public uriPath = '';
+  public content: PageContentReference[] = [];
 
-  constructor(id: string, language: string, name: string, status: PageStatus) {
+  constructor(id: string, language: string, name: string) {
     super(id, language, 'page');
     
     this.name = name;
-    this.status = status;
   }
 }

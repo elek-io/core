@@ -44,4 +44,13 @@ export enum PageStatusEnum {
    */
   'published'
 }
+
 export type PageStatus = keyof typeof PageStatusEnum;
+
+/**
+ * Reference of a pages content which can be resolved via provided IDs
+ */
+export interface PageContentReference {
+  positionId: string;
+  blockId: string;
+}
