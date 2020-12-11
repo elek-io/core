@@ -20,6 +20,8 @@ describe('Class ElekIoCore', () => {
   let projectId: string;
   let anotherProjectId: string;
   let assetId: string;
+  let pageId: string;
+  let blockId: string;
 
   it('should be able to initialize', async () => {
     await Fs.remove(Util.workingDirectory);
@@ -62,6 +64,24 @@ describe('Class ElekIoCore', () => {
     expect(await Fs.pathExists(Path.join(Util.workingDirectory, asset.path))).to.equal(true);
   });
 
+  it('should be able to add a page to an existing project', async () => {
+    const project = await core.project.read(projectId);
+    const page = await core.page.create(project, 'en-GB', 'Page 1');
+    pageId = page.id;
+
+    expect(page).to.have.property('name', 'Page 1');
+    expect(await Fs.pathExists(Util.pathTo.page(project.id, page.id, page.language))).to.equal(true);
+  });
+
+  it('should be able to add a block to an existing project', async () => {
+    const project = await core.project.read(projectId);
+    const block = await core.block.create(project, 'en-GB', '# Hello World');
+    blockId = block.id;
+
+    expect(block).to.have.property('body', '# Hello World');
+    expect(await Fs.pathExists(Util.pathTo.block(project.id, block.id, block.language))).to.equal(true);
+  });
+
   it('should throw an error when an invalid language tag is used', async () => {
     const project = await core.project.read(projectId);
     const filePath = Path.resolve('./test/asset/300x300.png');
@@ -94,6 +114,20 @@ describe('Class ElekIoCore', () => {
     expect(asset).to.have.property('name', 'Asset 1');
   });
 
+  it('should be able to read a page', async () => {
+    const project = await core.project.read(projectId);
+    const page = await core.page.read(project, pageId, 'en-GB');
+
+    expect(page).to.have.property('name', 'Page 1');
+  });
+
+  it('should be able to read a block', async () => {
+    const project = await core.project.read(projectId);
+    const block = await core.block.read(project, blockId, 'en-GB');
+
+    expect(block).to.have.property('body', '# Hello World');
+  });
+
   it('should be able to update an asset', async () => {
     const project = await core.project.read(projectId);
     const asset = await core.asset.read(project, assetId, 'en-GB');
@@ -103,11 +137,43 @@ describe('Class ElekIoCore', () => {
     expect(await core.asset.read(project, asset.id, asset.language)).to.have.property('name', 'Asset');
   });
 
+  it('should be able to update a page', async () => {
+    const project = await core.project.read(projectId);
+    const page = await core.page.read(project, pageId, 'en-GB');
+    page.name = 'Page';
+    await core.page.update(project, page);
+
+    expect(await core.page.read(project, page.id, page.language)).to.have.property('name', 'Page');
+  });
+
+  it('should be able to update a block', async () => {
+    const project = await core.project.read(projectId);
+    const block = await core.block.read(project, blockId, 'en-GB');
+    block.body = '## Hello World!';
+    await core.block.update(project, block);
+
+    expect(await core.block.read(project, block.id, block.language)).to.have.property('body', '## Hello World!');
+  });
+
   it('should be able to load all assets from disk', async () => {
     const project = await core.project.read(projectId);
     const assets = await core.assets(project);
 
     expect(assets.length).to.equal(1);
+  });
+
+  it('should be able to load all pages from disk', async () => {
+    const project = await core.project.read(projectId);
+    const pages = await core.pages(project);
+
+    expect(pages.length).to.equal(2);
+  });
+
+  it('should be able to load all block from disk', async () => {
+    const project = await core.project.read(projectId);
+    const blocks = await core.blocks(project);
+
+    expect(blocks.length).to.equal(2);
   });
 
   it('should be able to identify a project', async () => {
@@ -126,6 +192,22 @@ describe('Class ElekIoCore', () => {
     expect(await core.asset.isAsset(asset)).to.equal(true);
   });
 
+  it('should be able to identify a page', async () => {
+    const project = await core.project.read(projectId);
+    const page = await core.page.read(project, pageId, 'en-GB');
+
+    expect(await core.page.isPage(project)).to.equal(false);
+    expect(await core.page.isPage(page)).to.equal(true);
+  });
+
+  it('should be able to identify a block', async () => {
+    const project = await core.project.read(projectId);
+    const block = await core.block.read(project, blockId, 'en-GB');
+
+    expect(await core.block.isBlock(project)).to.equal(false);
+    expect(await core.block.isBlock(block)).to.equal(true);
+  });
+
   it('should be able to delete an asset', async () => {
     const project = await core.project.read(projectId);
     const asset = await core.asset.read(project, assetId, 'en-GB');
@@ -134,6 +216,24 @@ describe('Class ElekIoCore', () => {
     expect(core.asset.read(project, assetId, asset.language)).to.be.rejectedWith();
     expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language))).to.equal(false);
     expect(await Fs.pathExists(Path.join(Util.workingDirectory, asset.path))).to.equal(false);
+  });
+
+  it('should be able to delete a page', async () => {
+    const project = await core.project.read(projectId);
+    const page = await core.page.read(project, pageId, 'en-GB');
+    await core.page.delete(project, page);
+
+    expect(core.page.read(project, pageId, page.language)).to.be.rejectedWith();
+    expect(await Fs.pathExists(Util.pathTo.page(project.id, page.id, page.language))).to.equal(false);
+  });
+
+  it('should be able to delete a block', async () => {
+    const project = await core.project.read(projectId);
+    const block = await core.block.read(project, blockId, 'en-GB');
+    await core.block.delete(project, block);
+
+    expect(core.block.read(project, blockId, block.language)).to.be.rejectedWith();
+    expect(await Fs.pathExists(Util.pathTo.block(project.id, block.id, block.language))).to.equal(false);
   });
 
   it('should be able to delete a project', async () => {

@@ -5,6 +5,10 @@ import EventService from './EventService';
 
 /**
  * Service that manages CRUD functionality for Markdown files on disk
+ * 
+ * @todo The serialize and deserialize methods use tripple dashes for
+ * seperating the JSON header from it's Mardown body. But Markdown uses
+ * tripple dashes for horizontal lines. So we should use something else.
  */
 export default class MdFileService extends AbstractFileService {
 
@@ -48,7 +52,7 @@ ${data.mdBody}`;
     if (data.startsWith('---')) {
       const stringHeader = data.substring(data.indexOf('---') + 3, data.lastIndexOf('---'));
       mdFileContent.jsonHeader = JSON.parse(stringHeader);
-      mdFileContent.mdBody = data.substring(data.lastIndexOf('---'));
+      mdFileContent.mdBody = data.substring(data.lastIndexOf('---') + 3).trim();
     }
     return mdFileContent;
   }

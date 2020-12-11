@@ -32,7 +32,8 @@ export default abstract class AbstractFileService extends AbstractService {
    */
   protected async create(data: any, path: string): Promise<void> {
     await Fs.writeFile(path, data, {
-      flag: 'wx'
+      flag: 'wx',
+      encoding: 'utf8'
     });
     this.eventService.emit(`${this.type}:create`, {
       data: {
@@ -46,10 +47,12 @@ export default abstract class AbstractFileService extends AbstractService {
    * Reads the content of a file on disk. Fails if path does not exist
    * 
    * @param path Path to read the file from
+   * @returns A string containing the file content
    */
   protected async read(path: string): Promise<any> {
     const data = await Fs.readFile(path, {
-      flag: 'r'
+      flag: 'r',
+      encoding: 'utf8'
     });
     this.eventService.emit(`${this.type}:read`, {
       data: {
@@ -70,7 +73,8 @@ export default abstract class AbstractFileService extends AbstractService {
    */
   protected async update(data: any, path: string): Promise<void> {
     await Fs.writeFile(path, data, {
-      flag: 'w'
+      flag: 'w',
+      encoding: 'utf8'
     });
     this.eventService.emit(`${this.type}:update`, {
       data: {
