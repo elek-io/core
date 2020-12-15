@@ -87,6 +87,10 @@ export default class SnapshotService extends AbstractService {
    * we need to find a way to restore the LFS folder to the given state of the snapshot too.
    * Until then, assets are broken once we revert to a snapshot
    * 
+   * @todo We simply commit everything after an revert. This is a bit dangerous,
+   * since it will also commit uncommitted files that have nothing to do with the revert.
+   * Maybe we should be more specific here
+   * 
    * @param project Project to revert it's state
    * @param snapshot Snapshot to revert to
    * @param force Force the revert even if we loose uncommitted data

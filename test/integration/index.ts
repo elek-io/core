@@ -23,6 +23,7 @@ describe('Class ElekIoCore', () => {
   let pageId: string;
   let blockId: string;
   let snapshotId: string;
+  let blockToRevertId: string;
 
   it('should be able to initialize', async () => {
     await Fs.remove(Util.workingDirectory);
@@ -212,7 +213,11 @@ describe('Class ElekIoCore', () => {
   it('should be able to create a snapshot', async () => {
     const project = await core.project.read(projectId);
     const snapshot = await core.snapshot.create(project, 'My first snapshot');
+    // Create a new block after creating the snapshot
+    // to test if reverting to the snapshot deletes the block too
+    const blockToRevert = await core.block.create(project, 'en-GB', 'This should be deleted after the revert');
     snapshotId = snapshot.id;
+    blockToRevertId = blockToRevert.id;
   });
 
   it('should be able to read an snapshot', async () => {
@@ -254,10 +259,13 @@ describe('Class ElekIoCore', () => {
   it('should be able to revert to an snapshot', async () => {
     const project = await core.project.read(projectId);
     const snapshot = await core.snapshot.read(project, snapshotId);
+    const prevExistingBlock = await core.block.read(project, blockToRevertId, 'en-GB');
     await core.snapshot.revert(project, snapshot);
     const prevDeletedBlock = await core.block.read(project, blockId, 'en-GB');
 
     expect(prevDeletedBlock.id).to.equal(blockId);
+    expect(core.block.read(project, prevExistingBlock.id, prevExistingBlock.language)).to.be.rejectedWith();
+    expect(await Fs.pathExists(Util.pathTo.block(project.id, prevExistingBlock.id, prevExistingBlock.language))).to.equal(false);
   });
 
   it('should be able to delete a project', async () => {

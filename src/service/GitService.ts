@@ -77,13 +77,10 @@ export default class GitService extends AbstractService {
   public async commit(project: Project, files: string[], message: string): Promise<void> {
     const dir = Util.pathTo.project(project.id);
     // Check if given file paths include the project path
+    // If so, remove the project path since isomorphic-git
+    // cannot resolve absolute file paths
     files = files.map((path) => {
-      if (path.includes(`${dir}/`) === true) {
-        // Remove the project path since isomorphic-git
-        // cannot resolve absolute paths
-        return path.replace(`${dir}/`, '');
-      }
-      return path;
+      return this.toRelativePath(dir, path);
     });
     const statusMatrix = await Git.statusMatrix({
       fs: Fs,
@@ -91,13 +88,13 @@ export default class GitService extends AbstractService {
       filepaths: files
     });
     await Promise.all(statusMatrix.map(([filepath, headStatus, worktreeStatus, stageStatus]) => {
-      if (worktreeStatus !== 0) {
+      if (worktreeStatus === 2) {
         return Git.add({
           fs: Fs,
           dir,
           filepath
         });
-      } else {
+      } else if(worktreeStatus === 0) {
         return Git.remove({
           fs: Fs,
           dir,
@@ -192,5 +189,18 @@ export default class GitService extends AbstractService {
       dir: Util.pathTo.project(project.id),
       ref: id
     });
+  }
+
+  /**
+   * Removes given dir from absolutePath to make it relative
+   * 
+   * @param dir Absolute path to the directory which will be removed from absolutePath
+   * @param absolutePath A possible absolute path that should be altered
+   */
+  private toRelativePath(dir: string, absolutePath: string) {
+    if (absolutePath.includes(`${dir}/`) === true) {
+      return absolutePath.replace(`${dir}/`, '');
+    }
+    return absolutePath;
   }
 }
