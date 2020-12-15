@@ -22,6 +22,7 @@ describe('Class ElekIoCore', () => {
   let assetId: string;
   let pageId: string;
   let blockId: string;
+  let snapshotId: string;
 
   it('should be able to initialize', async () => {
     await Fs.remove(Util.workingDirectory);
@@ -206,6 +207,20 @@ describe('Class ElekIoCore', () => {
 
     expect(await core.block.isBlock(project)).to.equal(false);
     expect(await core.block.isBlock(block)).to.equal(true);
+  });
+
+  it('should be able to create a snapshot', async () => {
+    const project = await core.project.read(projectId);
+    const snapshot = await core.snapshot.create(project, 'My first snapshot');
+    snapshotId = snapshot.id;
+  });
+
+  it('should be able to read an snapshot', async () => {
+    const project = await core.project.read(projectId);
+    const snapshot = await core.snapshot.read(project, snapshotId);
+    
+    expect(snapshot.id).to.equal(snapshotId);
+    expect(snapshot.name).to.contain('My first snapshot');
   });
 
   it('should be able to delete an asset', async () => {

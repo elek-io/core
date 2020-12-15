@@ -1,8 +1,9 @@
 import AbstractModel from './AbstractModel';
 
 /**
- * Snapshots reference a point in time of given project.
- * Internally they are handled by git via tags (GitTag model)
+ * Snapshots reference a point in time of given project
+ * 
+ * Internally they are handled by git via tags
  */
 export default class Snapshot extends AbstractModel {
   public readonly name: string;

@@ -15,8 +15,13 @@ import { ElekIoCoreOptions } from '../type/general';
 import Block from './model/Block';
 import SnapshotService from './service/SnapshotService';
 import GitService from './service/GitService';
+import Snapshot from './model/Snapshot';
 
-
+/**
+ * elek.io core
+ * 
+ * Provides access to all services from the outside.
+ */
 export default class ElekIoCore {
   private readonly options: ElekIoCoreOptions;
   private readonly logService: LogService;
@@ -99,6 +104,8 @@ export default class ElekIoCore {
 
   /**
    * Searches for assets of given project on disk, loads and returns them
+   * 
+   * @param project Project to get the assets from
    */
   public async assets(project: Project): Promise<Asset[]> {
     const possibleAssetFiles = await Util.files(Util.pathTo.assets(project.id));
@@ -117,6 +124,8 @@ export default class ElekIoCore {
 
   /**
    * Searches for pages of given project on disk, loads and returns them
+   * 
+   * @param project Project to get the pages from
    */
   public async pages(project: Project): Promise<Page[]> {
     const possiblePageFiles = await Util.files(Util.pathTo.pages(project.id));
@@ -135,6 +144,8 @@ export default class ElekIoCore {
 
   /**
    * Searches for blocks of given project on disk, loads and returns them
+   * 
+   * @param project Project to get the blocks from
    */
   public async blocks(project: Project): Promise<Block[]> {
     const possibleBlockFiles = await Util.files(Util.pathTo.blocks(project.id));
@@ -149,6 +160,15 @@ export default class ElekIoCore {
    */
   public get block(): BlockService {
     return this.blockService;
+  }
+
+  /**
+   * Searches for snapshots of given project and returns them
+   * 
+   * @param project Project to get the snapshots from
+   */
+  public async snapshots(project: Project): Promise<Snapshot[]> {
+    return this.snapshotService.list(project);
   }
 
   /**

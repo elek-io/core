@@ -76,15 +76,22 @@ export default class GitService extends AbstractService {
    */
   public async commit(project: Project, files: string[], message: string): Promise<void> {
     const dir = Util.pathTo.project(project.id);
-    // Add all added, modified and removed files to the staging area
-    // this is equal to `git add -A .`
+    // Check if given file paths include the project path
+    files = files.map((path) => {
+      if (path.includes(`${dir}/`) === true) {
+        // Remove the project path since isomorphic-git
+        // cannot resolve absolute paths
+        return path.replace(`${dir}/`, '');
+      }
+      return path;
+    });
     const statusMatrix = await Git.statusMatrix({
       fs: Fs,
       dir,
       filepaths: files
     });
-    await Promise.all(statusMatrix.map(([filepath, worktreeStatus]) => {
-      if (worktreeStatus) {
+    await Promise.all(statusMatrix.map(([filepath, headStatus, worktreeStatus, stageStatus]) => {
+      if (worktreeStatus !== 0) {
         return Git.add({
           fs: Fs,
           dir,
