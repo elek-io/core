@@ -268,6 +268,29 @@ describe('Class ElekIoCore', () => {
     expect(await Fs.pathExists(Util.pathTo.block(project.id, prevExistingBlock.id, prevExistingBlock.language))).to.equal(false);
   });
 
+  it('should be able to list all snapshots', async () => {
+    const project = await core.project.read(projectId);
+    const snapshots = await core.snapshots(project);
+
+    expect(snapshots.length).to.equal(1);
+  });
+
+  it('should be able to identify a snapshot', async () => {
+    const project = await core.project.read(projectId);
+    const snapshot = await core.snapshot.read(project, snapshotId);
+
+    expect(await core.snapshot.isSnapshot(project)).to.equal(false);
+    expect(await core.snapshot.isSnapshot(snapshot)).to.equal(true);
+  });
+
+  it('should be able to delete a snapshot', async () => {
+    const project = await core.project.read(projectId);
+    const snapshot = await core.snapshot.read(project, snapshotId);
+    await core.snapshot.delete(project, snapshot);
+
+    expect(core.snapshot.read(project, snapshotId)).to.be.rejectedWith();
+  });
+
   it('should be able to delete a project', async () => {
     const project = await core.project.read(anotherProjectId);
     await core.project.delete(project);
