@@ -7,6 +7,7 @@ import Project from '../model/Project';
 import Util from '../util';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
+import GitService from './GitService';
 import JsonFileService from './JsonFileService';
 
 /**
@@ -15,6 +16,7 @@ import JsonFileService from './JsonFileService';
 export default class AssetService extends AbstractService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
+  private gitService: GitService;
 
   /**
    * Creates a new instance of the AssetService which
@@ -24,11 +26,12 @@ export default class AssetService extends AbstractService {
    * @param eventService EventService
    * @param jsonFileService JsonFileService
    */
-  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService) {
+  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService) {
     super('asset', options);
 
     this.eventService = eventService;
     this.jsonFileService = jsonFileService;
+    this.gitService = gitService;
   }
 
   /**
@@ -49,7 +52,7 @@ export default class AssetService extends AbstractService {
     const assetPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await Fs.copyFile(filePath, destination);
     await this.jsonFileService.create(asset, assetPath);
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetPath, `:heavy_plus_sign: Created new ${this.type}`);
+    await this.gitService.commit(project, [assetPath], `:heavy_plus_sign: Created new ${this.type}`);
     this.eventService.emit(`${this.type}:create`, {
       project,
       data: {
@@ -87,7 +90,7 @@ export default class AssetService extends AbstractService {
   public async update(project: Project, asset: Asset, message = `Updated ${this.type}`): Promise<void> {
     const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await this.jsonFileService.update(asset, assetJsonPath);
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetJsonPath, `:wrench: ${message}`);
+    await this.gitService.commit(project, [assetJsonPath], `:wrench: ${message}`);
     this.eventService.emit(`${this.type}:update`, {
       project,
       data: {
@@ -107,7 +110,7 @@ export default class AssetService extends AbstractService {
     const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await Fs.remove(Path.join(Util.workingDirectory, asset.path));
     await this.jsonFileService.delete(assetJsonPath);
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, assetJsonPath, `:fire: ${message}`);
+    await this.gitService.commit(project, [assetJsonPath], `:fire: ${message}`);
     this.eventService.emit(`${this.type}:delete`, {
       project,
       data: {

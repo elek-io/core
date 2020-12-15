@@ -9,6 +9,7 @@ import JsonFileService from './JsonFileService';
 import BlockService from './BlockService';
 import { ElekIoCoreOptions } from '../../type/general';
 import PageService from './PageService';
+import GitService from './GitService';
 
 /**
  * Service that manages CRUD functionality for project files on disk
@@ -16,6 +17,7 @@ import PageService from './PageService';
 export default class ProjectService extends AbstractService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
+  private gitService: GitService;
   private blockService: BlockService;
   private pageService: PageService;
 
@@ -27,11 +29,12 @@ export default class ProjectService extends AbstractService {
    * @param eventService EventService
    * @param jsonFileService JsonFileService
    */
-  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, blockService: BlockService, pageService: PageService) {
+  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService, blockService: BlockService, pageService: PageService) {
     super('project', options);
 
     this.eventService = eventService;
     this.jsonFileService = jsonFileService;
+    this.gitService = gitService;
     this.blockService = blockService;
     this.pageService = pageService;
   }
@@ -45,12 +48,12 @@ export default class ProjectService extends AbstractService {
   public async create(name: string, description: string): Promise<Project> {
     const project = new Project(Util.uuid(), name, description);
 
-    await Util.git.init(Util.pathTo.project(project.id));
+    await this.gitService.init(project);
     await this.createFolderStructure(project.id);
     await this.createGitignore(project.id);
     await this.jsonFileService.create(project, Util.pathTo.projectConfig(project.id));
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, '*', ':tada: Created this new elek.io project');
-    await Util.git.checkout(Util.pathTo.project(project.id), 'stage', true);
+    await this.gitService.commit(project, ['.'], ':tada: Created this new elek.io project');
+    await this.gitService.checkout(project, 'stage', true);
     const block = await this.blockService.create(project, 'en-US', `We are very happy to have you on board. This page was created for you. 
 You can use it as a starting point or delete it. If you need help, consider visiting one of these pages: 
 
@@ -93,8 +96,9 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * @param message Optional overwrite for the git message
    */
   public async update(project: Project, message = `Updated ${this.type}`): Promise<void> {
-    await this.jsonFileService.update(project, Util.pathTo.projectConfig(project.id));
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, Util.pathTo.projectConfig(project.id), `:wrench: ${message}`);
+    const configPath = Util.pathTo.projectConfig(project.id);
+    await this.jsonFileService.update(project, configPath);
+    await this.gitService.commit(project, [configPath], `:wrench: ${message}`);
     this.eventService.emit(`${this.type}:update`, {
       project
     });

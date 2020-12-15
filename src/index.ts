@@ -13,12 +13,16 @@ import BlockService from './service/BlockService';
 import Page from './model/Page';
 import { ElekIoCoreOptions } from '../type/general';
 import Block from './model/Block';
+import SnapshotService from './service/SnapshotService';
+import GitService from './service/GitService';
 
 
 export default class ElekIoCore {
   private readonly options: ElekIoCoreOptions;
   private readonly logService: LogService;
   private readonly eventService: EventService;
+  private readonly gitService: GitService;
+  private readonly snapshotService: SnapshotService;
   private readonly jsonFileService: JsonFileService;
   private readonly mdFileService: MdFileService;
   private readonly assetService: AssetService;
@@ -27,17 +31,19 @@ export default class ElekIoCore {
   private readonly projectService: ProjectService;
 
   constructor(options: ElekIoCoreOptions) {
-    const defaults = {};
+    const defaults: Omit<ElekIoCoreOptions, 'signature'> = {};
     this.options = Object.assign({}, defaults, options);
 
     this.logService = new LogService(this.options);
     this.eventService = new EventService(this.options, this.logService);
+    this.gitService = new GitService(this.options, this.eventService);
+    this.snapshotService = new SnapshotService(this.options, this.eventService, this.gitService);
     this.jsonFileService = new JsonFileService(this.options, this.eventService);
     this.mdFileService = new MdFileService(this.options, this.eventService);
-    this.assetService = new AssetService(this.options, this.eventService, this.jsonFileService);
-    this.pageService = new PageService(this.options, this.eventService, this.jsonFileService);
-    this.blockService = new BlockService(this.options, this.eventService, this.mdFileService);
-    this.projectService = new ProjectService(this.options, this.eventService, this.jsonFileService, this.blockService, this.pageService);
+    this.assetService = new AssetService(this.options, this.eventService, this.jsonFileService, this.gitService);
+    this.pageService = new PageService(this.options, this.eventService, this.jsonFileService, this.gitService);
+    this.blockService = new BlockService(this.options, this.eventService, this.mdFileService, this.gitService);
+    this.projectService = new ProjectService(this.options, this.eventService, this.jsonFileService, this.gitService, this.blockService, this.pageService);
   }
 
   /**
@@ -143,5 +149,12 @@ export default class ElekIoCore {
    */
   public get block(): BlockService {
     return this.blockService;
+  }
+
+  /**
+   * CRUD methods to work with snapshots
+   */
+  public get snapshot(): SnapshotService {
+    return this.snapshotService;
   }
 }

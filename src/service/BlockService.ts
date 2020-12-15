@@ -5,6 +5,7 @@ import Project from '../model/Project';
 import Util from '../util';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
+import GitService from './GitService';
 import MdFileService from './MdFileService';
 
 /**
@@ -13,6 +14,7 @@ import MdFileService from './MdFileService';
 export default class BlockService extends AbstractService {
   private eventService: EventService;
   private mdFileService: MdFileService;
+  private gitService: GitService;
 
   /**
    * Creates a new instance of the BlockService which
@@ -22,11 +24,12 @@ export default class BlockService extends AbstractService {
    * @param eventService EventService
    * @param mdFileService MdFileService
    */
-  constructor(options: ElekIoCoreOptions, eventService: EventService, mdFileService: MdFileService) {
+  constructor(options: ElekIoCoreOptions, eventService: EventService, mdFileService: MdFileService, gitService: GitService) {
     super('block', options);
 
     this.eventService = eventService;
     this.mdFileService = mdFileService;
+    this.gitService = gitService;
   }
 
   /**
@@ -48,7 +51,7 @@ export default class BlockService extends AbstractService {
       },
       mdBody: block.body
     }, blockPath);
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, blockPath, `:heavy_plus_sign: Created new ${this.type}`);
+    await this.gitService.commit(project, [blockPath], `:heavy_plus_sign: Created new ${this.type}`);
     this.eventService.emit(`${this.type}:create`, {
       project,
       data: {
@@ -94,7 +97,7 @@ export default class BlockService extends AbstractService {
       },
       mdBody: block.body
     }, blockPath);
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, blockPath, `:wrench: ${message}`);
+    await this.gitService.commit(project, [blockPath], `:wrench: ${message}`);
     this.eventService.emit(`${this.type}:update`, {
       project,
       data: {
@@ -113,7 +116,7 @@ export default class BlockService extends AbstractService {
   public async delete(project: Project, block: Block, message = `Deleted ${this.type}`): Promise<void> {
     const blockPath = Util.pathTo.block(project.id, block.id, block.language);
     await this.mdFileService.delete(blockPath);
-    await Util.git.commit(Util.pathTo.project(project.id), this.options.signature, blockPath, `:fire: ${message}`);
+    await this.gitService.commit(project, [blockPath], `:fire: ${message}`);
     this.eventService.emit(`${this.type}:delete`, {
       project,
       data: {

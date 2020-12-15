@@ -115,19 +115,19 @@ export async function commit(localPath: string, signature: GitSignature, files: 
  * If the branch already exists it will check out that branch. 
  * Otherwise, it will create it locally and check it out after that.
  */
-export async function checkout(localPath: string, name: string, isNew = false, options?: Partial<Parameters<typeof Git.checkout>[0]>): Promise<void> {
+export async function checkout(localPath: string, id: string, isNew = false, options?: Partial<Parameters<typeof Git.checkout>[0]>): Promise<void> {
   if (isNew === true) {
     await Git.branch({
       fs: Fs,
       dir: localPath,
-      ref: name
+      ref: id
     });
   }
 
   return await Git.checkout(assignDefaultIfMissing(options, {
     fs: Fs,
     dir: localPath,
-    ref: name
+    ref: id
   }));
 }
 
