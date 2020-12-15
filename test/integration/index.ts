@@ -251,6 +251,15 @@ describe('Class ElekIoCore', () => {
     expect(await Fs.pathExists(Util.pathTo.block(project.id, block.id, block.language))).to.equal(false);
   });
 
+  it('should be able to revert to an snapshot', async () => {
+    const project = await core.project.read(projectId);
+    const snapshot = await core.snapshot.read(project, snapshotId);
+    await core.snapshot.revert(project, snapshot);
+    const prevDeletedBlock = await core.block.read(project, blockId, 'en-GB');
+
+    expect(prevDeletedBlock.id).to.equal(blockId);
+  });
+
   it('should be able to delete a project', async () => {
     const project = await core.project.read(anotherProjectId);
     await core.project.delete(project);

@@ -82,9 +82,14 @@ export default class SnapshotService extends AbstractService {
   /**
    * Reverts the projects state back to given snapshot
    * 
+   * @todo Since the LFS folder is ignored by git
+   * (which is correct since we only want asset references, not the actual files inside git),
+   * we need to find a way to restore the LFS folder to the given state of the snapshot too.
+   * Until then, assets are broken once we revert to a snapshot
+   * 
    * @param project Project to revert it's state
    * @param snapshot Snapshot to revert to
-   * @param force Force the revert
+   * @param force Force the revert even if we loose uncommitted data
    * @param message Optional overwrite for the git message
    */
   public async revert(project: Project, snapshot: Snapshot, force = false, message = `Reverted project state to ${this.type}`): Promise<void> {
@@ -94,8 +99,8 @@ export default class SnapshotService extends AbstractService {
       noUpdateHead: true,
       force
     });
-    // Now commit the changes, which are interestingly already added
-    await this.gitService.commit(project, [], `:rewind: ${message}`);
+    // Commit the now changed files again
+    await this.gitService.commit(project, ['.'], `:rewind: ${message}`);
     this.eventService.emit(`${this.type}:revert`, {
       project,
       data: {
