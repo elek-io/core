@@ -6,6 +6,8 @@ import AbstractService from './AbstractService';
 /**
  * Service for writing logs to disk.
  * Provides a generic logger and one specific logger for every project
+ * 
+ * @todo Check why the genericLogger does not actually log anything to it's file
  */
 export default class LogService extends AbstractService {
   private readonly genericLogger: GenericLogger;

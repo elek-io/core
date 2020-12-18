@@ -1,5 +1,6 @@
 import Fs from 'fs-extra';
 import Git from 'isomorphic-git';
+import Http from 'isomorphic-git/http/node';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
 import { ElekIoCoreOptions } from '../../type/general';
@@ -35,6 +36,34 @@ export default class GitService extends AbstractService {
     await Git.init({
       fs: Fs,
       dir: Util.pathTo.project(project.id)
+    });
+  }
+
+  /**
+   * Clones a Git repository into destination
+   * 
+   * @param repository URL to the repository to clone
+   * @param destination Folder to clone into
+   */
+  public async clone(repository: string, destination: string): Promise<void> {
+    await Git.clone({
+      fs: Fs,
+      http: Http,
+      url: repository,
+      dir: destination
+    });
+  }
+
+  /**
+   * Fetches and merges commits from a remote repository
+   * 
+   * @param directory Path to the local directory of the repository to pull
+   */
+  public async pull(directory: string): Promise<void> {
+    await Git.pull({
+      fs: Fs,
+      http: Http,
+      dir: directory
     });
   }
 

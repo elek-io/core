@@ -16,6 +16,7 @@ import Block from './model/Block';
 import SnapshotService from './service/SnapshotService';
 import GitService from './service/GitService';
 import Snapshot from './model/Snapshot';
+import ThemeService from './service/ThemeService';
 
 /**
  * elek.io core
@@ -30,6 +31,7 @@ export default class ElekIoCore {
   private readonly snapshotService: SnapshotService;
   private readonly jsonFileService: JsonFileService;
   private readonly mdFileService: MdFileService;
+  private readonly themeService: ThemeService;
   private readonly assetService: AssetService;
   private readonly pageService: PageService;
   private readonly blockService: BlockService;
@@ -45,10 +47,11 @@ export default class ElekIoCore {
     this.snapshotService = new SnapshotService(this.options, this.eventService, this.gitService);
     this.jsonFileService = new JsonFileService(this.options, this.eventService);
     this.mdFileService = new MdFileService(this.options, this.eventService);
+    this.themeService = new ThemeService(this.options, this.eventService, this.jsonFileService, this.gitService);
     this.assetService = new AssetService(this.options, this.eventService, this.jsonFileService, this.gitService);
     this.pageService = new PageService(this.options, this.eventService, this.jsonFileService, this.gitService);
     this.blockService = new BlockService(this.options, this.eventService, this.mdFileService, this.gitService);
-    this.projectService = new ProjectService(this.options, this.eventService, this.jsonFileService, this.gitService, this.blockService, this.pageService);
+    this.projectService = new ProjectService(this.options, this.eventService, this.jsonFileService, this.gitService, this.blockService, this.pageService, this.themeService);
   }
 
   /**
@@ -176,5 +179,12 @@ export default class ElekIoCore {
    */
   public get snapshot(): SnapshotService {
     return this.snapshotService;
+  }
+
+  /**
+   * CRUD methods to work with the theme
+   */
+  public get theme(): ThemeService {
+    return this.themeService;
   }
 }

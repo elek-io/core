@@ -1,1 +1,1 @@
-export type ModelType = 'project' | 'event' | 'asset' | 'page' | 'block' | 'snapshot';
+export type ModelType = 'project' | 'event' | 'asset' | 'page' | 'block' | 'snapshot' | 'theme';

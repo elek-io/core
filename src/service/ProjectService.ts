@@ -10,6 +10,7 @@ import BlockService from './BlockService';
 import { ElekIoCoreOptions } from '../../type/general';
 import PageService from './PageService';
 import GitService from './GitService';
+import ThemeService from './ThemeService';
 
 /**
  * Service that manages CRUD functionality for project files on disk
@@ -20,6 +21,7 @@ export default class ProjectService extends AbstractService {
   private gitService: GitService;
   private blockService: BlockService;
   private pageService: PageService;
+  private themeService: ThemeService;
 
   /**
    * Creates a new instance of the ProjectService which
@@ -28,8 +30,9 @@ export default class ProjectService extends AbstractService {
    * @param options ElekIoCoreOptions
    * @param eventService EventService
    * @param jsonFileService JsonFileService
+   * @param gitService GitService
    */
-  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService, blockService: BlockService, pageService: PageService) {
+  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService, blockService: BlockService, pageService: PageService, themeService: ThemeService) {
     super('project', options);
 
     this.eventService = eventService;
@@ -37,6 +40,7 @@ export default class ProjectService extends AbstractService {
     this.gitService = gitService;
     this.blockService = blockService;
     this.pageService = pageService;
+    this.themeService = themeService;
   }
 
   /**
@@ -69,6 +73,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
       blockId: block.id
     });
     await this.pageService.update(project, page);
+    await this.themeService.use(project, 'https://github.com/elek-io/starter-theme.git');
 
     this.eventService.emit(`${this.type}:create`, {
       project

@@ -23,6 +23,7 @@ export default class PageService extends AbstractService {
    * @param options ElekIoCoreOptions
    * @param eventService EventService
    * @param jsonFileService JsonFileService
+   * @param gitService GitService
    */
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService) {
     super('page', options);

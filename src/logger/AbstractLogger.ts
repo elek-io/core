@@ -28,6 +28,8 @@ export default abstract class AbstractLogger {
   /**
    * Reliably flush every log line in case of unexpected crashes to prevent loosing logs
    * 
+   * @todo Check if this is actually working
+   * 
    * @see http://getpino.io/#/docs/help?id=exit-logging
    */
   private registerEmergencyFlush() {
