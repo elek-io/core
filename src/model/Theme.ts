@@ -1,4 +1,5 @@
 import { ModelType } from '../../type/model';
+import { ThemeLayout } from '../../type/theme';
 
 /**
  * A theme is the websites structure and design
@@ -17,7 +18,7 @@ export default class Theme {
   public readonly author: string;
   public readonly license: string;
   // public readonly navigations = [];
-  // public readonly layouts = [];
+  public readonly layouts: ThemeLayout[];
   // public readonly scripts: {
   //   serve: string;
   //   build: string;
@@ -25,8 +26,14 @@ export default class Theme {
   public readonly exportFile = '.elek.io/project.json';
   public readonly buildDir = 'dist';
 
-  constructor(id: string, language: string, name: string, description: string) {
+  constructor(name: string, description: string, version: string, homepage: string, repository: string, author: string, license: string, layouts: ThemeLayout[]) {
     this.name = name;
     this.description = description;
+    this.version = version;
+    this.homepage = homepage;
+    this.repository = repository;
+    this.author = author;
+    this.license = license;
+    this.layouts = layouts;
   }
 }

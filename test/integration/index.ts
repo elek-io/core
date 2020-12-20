@@ -39,7 +39,7 @@ describe('Class ElekIoCore', () => {
 
     expect(project).to.have.property('name', 'Project 1');
     expect(await Fs.pathExists(Util.pathTo.project(project.id))).to.equal(true);
-  });
+  }).timeout(5000);
 
   it('should be able to read an existing project', async () => {
     const project = await core.project.read(projectId);
@@ -101,7 +101,7 @@ describe('Class ElekIoCore', () => {
     const project = await core.project.create('Another Project', 'The second project');
     anotherProjectId = project.id;
     expect(counter).to.be.at.least(1);
-  });
+  }).timeout(5000);
 
   it('should be able to load all projects from disk', async () => {
     const projects = await core.projects();
@@ -208,6 +208,15 @@ describe('Class ElekIoCore', () => {
 
     expect(await core.block.isBlock(project)).to.equal(false);
     expect(await core.block.isBlock(block)).to.equal(true);
+  });
+
+  it('should be able to get all block positions with restrictions from used theme', async () => {
+    const project = await core.project.read(projectId);
+    const theme = await core.theme.read(project);
+    const blockPositions = await core.theme.getBlockPositions(project, theme.layouts[1]);
+
+    expect(blockPositions[0].id).to.equal('welcome-message');
+    expect(blockPositions[0].restrictions.html).to.equal(false);
   });
 
   it('should be able to create a snapshot', async () => {

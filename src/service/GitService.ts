@@ -45,13 +45,13 @@ export default class GitService extends AbstractService {
    * @param repository URL to the repository to clone
    * @param destination Folder to clone into
    */
-  public async clone(repository: string, destination: string): Promise<void> {
-    await Git.clone({
+  public async clone(repository: string, destination: string, options?: Partial<Parameters<typeof Git.clone>[0]>): Promise<void> {
+    await Git.clone(Util.assignDefaultIfMissing(options, {
       fs: Fs,
       http: Http,
       url: repository,
       dir: destination
-    });
+    }));
   }
 
   /**
