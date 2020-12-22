@@ -68,7 +68,8 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to add a page to an existing project', async () => {
     const project = await core.project.read(projectId);
-    const page = await core.page.create(project, 'en-GB', 'Page 1');
+    const theme = await core.theme.read(project);
+    const page = await core.page.create(project, 'en-GB', 'Page 1', '/test', theme.layouts[2].id);
     pageId = page.id;
 
     expect(page).to.have.property('name', 'Page 1');
@@ -301,11 +302,16 @@ describe('Class ElekIoCore', () => {
     expect(core.snapshot.read(project, snapshotId)).to.be.rejectedWith();
   });
 
-  it('should be able to delete a project', async () => {
-    const project = await core.project.read(anotherProjectId);
-    await core.project.delete(project);
+  it('should be able to build a project in 5 minutes', async () => {
+    const project = await core.project.read(projectId);
+    await core.build(project);
+  }).timeout(300000);
 
-    expect(core.project.read(anotherProjectId)).to.be.rejectedWith();
-    expect(await Fs.pathExists(Util.pathTo.project(project.id))).to.equal(false);
-  });
+  // it('should be able to delete a project', async () => {
+  //   const project = await core.project.read(anotherProjectId);
+  //   await core.project.delete(project);
+
+  //   expect(core.project.read(anotherProjectId)).to.be.rejectedWith();
+  //   expect(await Fs.pathExists(Util.pathTo.project(project.id))).to.equal(false);
+  // });
 });

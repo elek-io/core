@@ -40,9 +40,9 @@ export default class PageService extends AbstractService {
    * @param language Language of the new page
    * @param name Name of the new page
    */
-  public async create(project: Project, language: string, name: string): Promise<Page> {
+  public async create(project: Project, language: string, name: string, uriPath: string, layoutId: string): Promise<Page> {
     const id = Util.uuid();
-    const page = new Page(id, language, name);
+    const page = new Page(id, language, name, uriPath, layoutId);
     const pagePath = Util.pathTo.page(project.id, page.id, language);
     await this.jsonFileService.create(page, pagePath);
     await this.gitService.commit(project, [pagePath], `:heavy_plus_sign: Created new ${this.type}`);

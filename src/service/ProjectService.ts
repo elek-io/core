@@ -47,6 +47,8 @@ export default class ProjectService extends AbstractService {
   /**
    * Creates a new project on disk
    * 
+   * @todo Refactor to use default theme layout
+   * 
    * @param name Name of the project
    * @param description Description of the project
    */
@@ -59,6 +61,7 @@ export default class ProjectService extends AbstractService {
     await this.jsonFileService.create(project, Util.pathTo.projectConfig(project.id));
     await this.gitService.commit(project, ['.'], ':tada: Created this new elek.io project');
     await this.gitService.checkout(project, 'stage', true);
+    const theme = await this.themeService.use(project, 'https://github.com/elek-io/starter-theme.git');
     const block = await this.blockService.create(project, 'en-US', `We are very happy to have you on board. This page was created for you. 
 You can use it as a starting point or delete it. If you need help, consider visiting one of these pages: 
 
@@ -67,14 +70,14 @@ You can use it as a starting point or delete it. If you need help, consider visi
 - [Choosing a theme](https://elek.io)
 - [Deploying your first project](https://elek.io)
 `);
-    const page = await this.pageService.create(project, 'en-US', 'Welcome to elek.io!');
+    const page = await this.pageService.create(project, 'en-US', 'Welcome to elek.io!', '/', theme.layouts[1].id);
     page.status = PageStatus.PUBLISHED;
+    page.layoutId = 'homepage';
     page.content.push({
       positionId: 'welcome-message',
       blockId: block.id
     });
     await this.pageService.update(project, page);
-    await this.themeService.use(project, 'https://github.com/elek-io/starter-theme.git');
 
     this.eventService.emit(`${this.type}:create`, {
       project

@@ -16,18 +16,20 @@ export default class Page extends AbstractModelWithLanguage {
    * 
    * @see https://en.wikipedia.org/wiki/Uniform_Resource_Identifier#Syntax
    */
-  public uriPath: string | null = null;
+  public uriPath: string;
 
   /**
    * Layout ID of the theme the project uses
    */
-  public layoutId: string | null = null;
+  public layoutId: string;
 
   public content: PageContentReference[] = [];
 
-  constructor(id: string, language: string, name: string) {
+  constructor(id: string, language: string, name: string, uriPath: string, layoutId: string) {
     super(id, language, ModelType.PAGE);
     
     this.name = name;
+    this.uriPath = uriPath;
+    this.layoutId = layoutId;
   }
 }

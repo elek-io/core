@@ -1,4 +1,5 @@
 import Fs from 'fs-extra';
+import Path from 'path';
 import Util from './util';
 import Project from './model/Project';
 import AssetService from './service/AssetService';
@@ -190,5 +191,81 @@ export default class ElekIoCore {
    */
   public get theme(): ThemeService {
     return this.themeService;
+  }
+
+  /**
+   * @todo Hacked together for now, refactor
+   * 
+   * @param project 
+   */
+  public async export(project: Project) {
+    const theme = await this.theme.read(project);
+    const pages = await this.pages(project);
+    return {
+      ...project,
+      pages: await Promise.all(pages.map( async (page) => {
+        const layout = theme.layouts.find((layout) => {
+          return layout.id === page.layoutId;
+        });
+        console.log(theme.layouts, page.layoutId);
+        if (!layout) { throw new Error('Layout not found'); }
+        const layoutPositions = await this.themeService.getPositions(project, layout);
+        return {
+          name: page.name,
+          language: page.language,
+          layout: {
+            id: layout.id,
+            path: layout.path
+          },
+          uriPath: page.uriPath,
+          content: await Promise.all(page.content.map( async (contentRef) => {
+            const block = await this.blockService.read(project, contentRef.blockId, page.language);
+            const blockPosition = layoutPositions.blocks.find((position) => {
+              return position.id === contentRef.positionId;
+            });
+            if (!blockPosition) { throw new Error('Block position not found'); }
+            return {
+              id: contentRef.positionId,
+              html: this.blockService.render(block, blockPosition.restrictions)
+            };
+          }))
+        };
+      }))
+    };
+  }
+
+  /**
+   * Builds given project by hydrating the theme with the projects information 
+   * and saving the outcome to the projects "public" directory
+   * 
+   * @todo check how to prevent remote code execution here,
+   * since running a user defined command is generally a very bad idea...
+   */
+  public async build(project: Project): Promise<void> {
+    const theme = await this.themeService.read(project);
+    const themePath = Util.pathTo.theme(project.id);
+    const exportPath = Path.join(themePath, theme.exportFile);
+    const exportData = await this.export(project);
+    const buildPath = Path.join(themePath, theme.buildDir);
+    const publicPath = Util.pathTo.public(project.id);
+
+    // Export the projects data to the export file, defined by the theme
+    await this.jsonFileService.update(exportData, exportPath);
+    
+    // Install the themes dependencies
+    await Util.spawnChildProcess('npm', ['install'], {
+      cwd: Path.join(themePath)
+    });
+
+    // Run the build script which uses the exported json
+    // to hydrate the themes content
+    await Util.spawnChildProcess('npm', ['run', 'build'], {
+      cwd: Path.join(themePath)
+    });
+
+    // Copy the contents of themes "buildDir" to the projects public directory
+    // where it's available from outside
+    await Fs.emptyDir(publicPath);
+    await Fs.copy(buildPath, publicPath);
   }
 }

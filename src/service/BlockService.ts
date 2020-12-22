@@ -1,3 +1,6 @@
+import Markdown from 'markdown-it';
+import Code from 'highlight.js';
+import { BlockRestrictions } from '../../type/block';
 import { ElekIoCoreOptions } from '../../type/general';
 import AbstractModel from '../model/AbstractModel';
 import Block from '../model/Block';
@@ -132,5 +135,73 @@ export default class BlockService extends AbstractService {
    */
   public isBlock(model: AbstractModel): boolean {
     return model.type === 'block';
+  }
+
+  /**
+   * Returns HTML of the rendered block content
+   * 
+   * @param block The block to render content from
+   * @param restrictions restrictions object of the theme in use
+   */
+  public render(block: Block, restrictions: BlockRestrictions): string {
+    // Configure the Markdown renderer based on the block's restriction
+    const md = new Markdown({
+      /**
+       * Enable HTML tags in source
+       */
+      html: restrictions.html,
+      /**
+       * Use '/' to close single tags (<br />).
+       * This is only for full CommonMark compatibility.
+       */
+      xhtmlOut: false,
+      /**
+       * Convert '\n' in paragraphs into <br>
+       */
+      breaks: restrictions.breaks,
+      /**
+       * CSS language prefix for fenced blocks. Can be
+       * useful for external highlighters.
+       */
+      langPrefix: 'language-',
+      /**
+       * Autoconvert URL-like text to links
+       */
+      linkify: false,
+      /**
+       * Enable some language-neutral replacement + quotes beautification
+       */
+      typographer: false,
+      /**
+       * Double + single quotes replacement pairs, when typographer enabled,
+       * and smartquotes on. Could be either a String or an Array.
+       *
+       * For example, you can use '«»„“' for Russian, '„“‚‘' for German,
+       * and ['«\xA0', '\xA0»', '‹\xA0', '\xA0›'] for French (including nbsp).
+       */
+      quotes: '“”‘’',
+      /**
+       * Highlighter function. Should return escaped HTML,
+       * or '' if the source string is not changed and should be escaped externally.
+       * If result starts with <pre... internal wrapper is skipped.
+       */
+      highlight: (code, language) => {
+        if (restrictions.highlightCode === true && language && Code.getLanguage(language)) {
+          try {
+            return Code.highlight(language, code).value;
+          } catch (error) {
+            throw new Error(error);
+          }
+        }
+        return '';
+      }
+    })
+      // Enable specific rules
+      .enable(restrictions.only)
+      // Disable specific rules
+      .disable(restrictions.not);
+
+    // Return rendered HTML as string
+    return md.render(block.body);
   }
 }
