@@ -9,7 +9,7 @@ export default class Theme {
   /**
    * The type of this model
    */
-  public readonly type: ModelType = 'theme';
+  public readonly type: ModelType = ModelType.THEME;
   public readonly name: string;
   public readonly description: string;
   public readonly version: string;

@@ -46,9 +46,9 @@ export default class AssetService extends AbstractService {
    */
   public async create(filePath: string, project: Project, language: string, name: string, description: string): Promise<Asset> {
     const id = Util.uuid();
-    const destination = Path.join(Util.pathTo.lfs(project.id), `${id}.${language}${Path.extname(filePath)}`);
-    const relativePath = Util.getRelativePath(destination);
-    const asset = new Asset(id, language, name, description, relativePath);
+    const extension = Path.extname(filePath).split('.').join('');
+    const destination = Path.join(Util.pathTo.lfs(project.id), `${id}.${language}.${extension}`);
+    const asset = new Asset(id, language, name, description, extension);
     const assetPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await Fs.copyFile(filePath, destination);
     await this.jsonFileService.create(asset, assetPath);
@@ -108,7 +108,7 @@ export default class AssetService extends AbstractService {
    */
   public async delete(project: Project, asset: Asset, message = `Deleted ${this.type}`): Promise<void> {
     const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
-    await Fs.remove(Path.join(Util.workingDirectory, asset.path));
+    await Fs.remove(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension));
     await this.jsonFileService.delete(assetJsonPath);
     await this.gitService.commit(project, [assetJsonPath], `:fire: ${message}`);
     this.eventService.emit(`${this.type}:delete`, {

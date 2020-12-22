@@ -2,24 +2,19 @@
  * Represents some supported markdown-it rules
  * @see https://github.com/markdown-it/markdown-it#manage-rules
  */
-export enum BlockRuleEnum {
-  'heading',
-  'table',
-  'code',
-  'blockquote',
-  'hr',
-  'list',
-  'paragraph',
-  'strikethrough',
-  'emphasis',
-  'link',
-  'image'
+export enum BlockRule {
+  HEADING = 'heading',
+  TABLE = 'table',
+  CODE = 'code',
+  BLOCKQUOTE = 'blockquote',
+  HR = 'hr',
+  LIST = 'list',
+  PARAGRAPH = 'paragraph',
+  STRIKETHROUGH = 'strikethrough',
+  EMPHASIS = 'emphasis',
+  LINK = 'link',
+  IMAGE = 'image'
 }
-export const BlockRuleArray = <BlockRule[]>Object.keys(BlockRuleEnum).filter((key) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return typeof BlockRuleEnum[key as any] === 'number';
-});
-export type BlockRule = keyof typeof BlockRuleEnum;
 
 export interface BlockRestrictions {
   only: BlockRule[];

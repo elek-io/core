@@ -62,6 +62,9 @@ export const pathTo = {
   },
   lfs: (projectId: string): string => {
     return Path.join(pathTo.projects, projectId, 'lfs');
+  },
+  lfsFile: (projectId: string, assetId: string, language: string, extension: string): string => {
+    return Path.join(pathTo.lfs(projectId), `${assetId}.${language}.${extension}`);
   }
 };
 

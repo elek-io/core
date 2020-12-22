@@ -1,3 +1,4 @@
+import { ModelType } from '../../type/model';
 import Project from './Project';
 
 /**
@@ -17,7 +18,7 @@ export default class ElekIoCoreEvent {
   /**
    * To make finding and parsing serialized events easier
    */
-  public readonly type = 'event';
+  public readonly type: ModelType = ModelType.EVENT;
 
   /**
    * The project this event was triggered from

@@ -1,3 +1,4 @@
+import { ModelType } from '../../type/model';
 import AbstractModel from './AbstractModel';
 
 /**
@@ -20,7 +21,7 @@ export default class Snapshot extends AbstractModel {
 
 
   constructor(id: string, name: string, timestamp: number, timezoneOffset: number) {
-    super(id, 'snapshot');
+    super(id, ModelType.SNAPSHOT);
     
     this.name = name;
     this.timestamp = timestamp;

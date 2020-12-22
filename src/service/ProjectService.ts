@@ -11,6 +11,7 @@ import { ElekIoCoreOptions } from '../../type/general';
 import PageService from './PageService';
 import GitService from './GitService';
 import ThemeService from './ThemeService';
+import { PageStatus } from '../../type/page';
 
 /**
  * Service that manages CRUD functionality for project files on disk
@@ -67,7 +68,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
 - [Deploying your first project](https://elek.io)
 `);
     const page = await this.pageService.create(project, 'en-US', 'Welcome to elek.io!');
-    page.status = 'published';
+    page.status = PageStatus.PUBLISHED;
     page.content.push({
       positionId: 'welcome-message',
       blockId: block.id

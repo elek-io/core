@@ -1,3 +1,4 @@
+import { ModelType } from '../../type/model';
 import { PageContentReference, PageStatus } from '../../type/page';
 import AbstractModelWithLanguage from './AbstractModelWithLanguage';
 
@@ -8,7 +9,7 @@ import AbstractModelWithLanguage from './AbstractModelWithLanguage';
 export default class Page extends AbstractModelWithLanguage {
   public name: string;
 
-  public status: PageStatus = 'private';
+  public status: PageStatus = PageStatus.PRIVATE;
 
   /**
    * URI path this page will be available from when deployed
@@ -25,7 +26,7 @@ export default class Page extends AbstractModelWithLanguage {
   public content: PageContentReference[] = [];
 
   constructor(id: string, language: string, name: string) {
-    super(id, language, 'page');
+    super(id, language, ModelType.PAGE);
     
     this.name = name;
   }

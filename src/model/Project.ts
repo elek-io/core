@@ -1,3 +1,4 @@
+import { ModelType } from '../../type/model';
 import { ProjectStatus } from '../../type/project';
 import AbstractModel from './AbstractModel';
 
@@ -11,7 +12,7 @@ export default class Project extends AbstractModel {
   public status: ProjectStatus = 'todo';
 
   constructor(id: string, name: string, description: string) {
-    super(id, 'project');
+    super(id, ModelType.PROJECT);
     
     this.name = name;
     this.description = description;

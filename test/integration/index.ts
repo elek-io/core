@@ -63,7 +63,7 @@ describe('Class ElekIoCore', () => {
 
     expect(asset).to.have.property('name', 'Asset 1');
     expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language))).to.equal(true);
-    expect(await Fs.pathExists(Path.join(Util.workingDirectory, asset.path))).to.equal(true);
+    expect(await Fs.pathExists(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension))).to.equal(true);
   });
 
   it('should be able to add a page to an existing project', async () => {
@@ -210,13 +210,14 @@ describe('Class ElekIoCore', () => {
     expect(await core.block.isBlock(block)).to.equal(true);
   });
 
-  it('should be able to get all block positions with restrictions from used theme', async () => {
+  it('should be able to get all block and element positions from used theme', async () => {
     const project = await core.project.read(projectId);
     const theme = await core.theme.read(project);
-    const blockPositions = await core.theme.getBlockPositions(project, theme.layouts[1]);
+    const positions = await core.theme.getPositions(project, theme.layouts[1]);
 
-    expect(blockPositions[0].id).to.equal('welcome-message');
-    expect(blockPositions[0].restrictions.html).to.equal(false);
+    expect(positions.blocks[0].id).to.equal('welcome-message');
+    expect(positions.blocks[0].restrictions.html).to.equal(false);
+    expect(positions.elements[0].id).to.equal('welcome-image');
   });
 
   it('should be able to create a snapshot', async () => {
@@ -244,7 +245,7 @@ describe('Class ElekIoCore', () => {
 
     expect(core.asset.read(project, assetId, asset.language)).to.be.rejectedWith();
     expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language))).to.equal(false);
-    expect(await Fs.pathExists(Path.join(Util.workingDirectory, asset.path))).to.equal(false);
+    expect(await Fs.pathExists(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension))).to.equal(false);
   });
 
   it('should be able to delete a page', async () => {

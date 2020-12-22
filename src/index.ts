@@ -11,7 +11,7 @@ import LogService from './service/LogService';
 import PageService from './service/PageService';
 import BlockService from './service/BlockService';
 import Page from './model/Page';
-import { ElekIoCoreOptions } from '../type/general';
+import { ElekIoCoreOptions, Optional } from '../type/general';
 import Block from './model/Block';
 import SnapshotService from './service/SnapshotService';
 import GitService from './service/GitService';
@@ -37,8 +37,12 @@ export default class ElekIoCore {
   private readonly blockService: BlockService;
   private readonly projectService: ProjectService;
 
-  constructor(options: ElekIoCoreOptions) {
-    const defaults: Omit<ElekIoCoreOptions, 'signature'> = {};
+  constructor(options: Optional<ElekIoCoreOptions, 'theme'>) {
+    const defaults: Omit<ElekIoCoreOptions, 'signature'> = {
+      theme: {
+        htmlPrefix: 'elek-io'
+      }
+    };
     this.options = Object.assign({}, defaults, options);
 
     this.logService = new LogService(this.options);

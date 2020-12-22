@@ -2,6 +2,12 @@ import { BlockRestrictions } from './block';
 
 export type ThemeLayoutType = 'main' | 'page';
 
+export enum ThemeLayoutElementType {
+  IMAGE = 'image',
+  HEADING = 'heading',
+  PARAGRAPH = 'paragraph'
+}
+
 export interface ThemeLayout {
   id: string;
   type: ThemeLayoutType;
@@ -13,4 +19,9 @@ export interface ThemeLayout {
 export interface ThemeLayoutBlockPosition {
   id: string;
   restrictions: BlockRestrictions;
+}
+
+export interface ThemeLayoutElementPosition {
+  id: string;
+  type: ThemeLayoutElementType;
 }

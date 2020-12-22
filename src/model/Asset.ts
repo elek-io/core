@@ -1,3 +1,4 @@
+import { ModelType } from '../../type/model';
 import AbstractModelWithLanguage from './AbstractModelWithLanguage';
 
 /**
@@ -8,17 +9,13 @@ import AbstractModelWithLanguage from './AbstractModelWithLanguage';
 export default class Asset extends AbstractModelWithLanguage {
   public name: string;
   public description: string;
-  /**
-   * Relative path from elek.io working directory
-   * to the actual asset file inside the projects LFS
-   */
-  public readonly path: string;
+  public extension: string;
 
-  constructor(id: string, language: string, name: string, description: string, path: string) {
-    super(id, language, 'asset');
+  constructor(id: string, language: string, name: string, description: string, extension: string) {
+    super(id, language, ModelType.ASSET);
     
     this.name = name;
     this.description = description;
-    this.path = path;
+    this.extension = extension;
   }
 }

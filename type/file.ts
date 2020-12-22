@@ -1,4 +1,4 @@
-export type MdFileContent = {
+export interface MdFileContent {
   jsonHeader: any;
   mdBody: string;
 }
