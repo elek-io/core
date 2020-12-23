@@ -35,10 +35,7 @@ export default class MdFileService extends AbstractFileService {
   }
 
   private serialize<T>(data: MdFileContent<T>): string {
-    return `${this.options.file.md.delimiter}
-${JSON.stringify(data.jsonHeader, null, 2)}
-${this.options.file.md.delimiter}
-${data.mdBody}`;
+    return `${this.options.file.md.delimiter}\n${JSON.stringify(data.jsonHeader, null, 2)}\n${this.options.file.md.delimiter}\n${data.mdBody}`;
   }
 
   private deserialize<T>(data: string): MdFileContent<T> {
