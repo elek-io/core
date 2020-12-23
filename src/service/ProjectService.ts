@@ -64,14 +64,7 @@ export default class ProjectService extends AbstractService {
     await this.gitService.commit(project, ['.'], ':tada: Created this new elek.io project');
     await this.gitService.checkout(project, 'stage', true);
     const theme = await this.themeService.use(project, 'https://github.com/elek-io/starter-theme.git');
-    const block = await this.blockService.create(project, 'en-US', `We are very happy to have you on board. This page was created for you. 
-You can use it as a starting point or delete it. If you need help, consider visiting one of these pages: 
-
-- [An introduction to the elek.io client](https://elek.io)
-- [Working with pages](https://elek.io)
-- [Choosing a theme](https://elek.io)
-- [Deploying your first project](https://elek.io)
-`);
+    const block = await this.blockService.create(project, 'en-US', 'We are very happy to have you on board. This page was created for you.\nYou can use it as a starting point or delete it. If you need help, consider visiting one of these pages:\n\n- [An introduction to the elek.io client](https://elek.io)\n- [Working with pages](https://elek.io)\n- [Choosing a theme](https://elek.io)\n- [Deploying your first project](https://elek.io)');
     const page = await this.pageService.create(project, 'en-US', 'Welcome to elek.io!', '/', theme.layouts[1].id);
     page.status = PageStatus.PUBLISHED;
     page.layoutId = 'homepage';
@@ -164,15 +157,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * Writes the projects main .gitignore file to disk
    */
   private async createGitignore(id: string): Promise<void> {
-    const content = `.DS_Store
-theme/
-public/
-logs/
-lfs/
-
-# Keep directories with .gitkeep files in them
-# even if the directory itself is ignored
-!/**/.gitkeep`;
+    const content = '.DS_Store\ntheme/\npublic/\nlogs/\nlfs/\n\n# Keep directories with .gitkeep files in them\n# even if the directory itself is ignored\n!/**/.gitkeep';
     await Fs.writeFile(Path.join(Util.pathTo.project(id), '.gitignore'), content);
   }
 }
