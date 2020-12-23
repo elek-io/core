@@ -4,8 +4,8 @@ import Util from '../util';
 import AbstractModel from './AbstractModel';
 
 /**
- * A model extending this, is only uniquely indentifieable
- * by it's ID in conjuction with it's language.
+ * A model extending this, is only uniquely identifiable
+ * by it's ID in conjunction with it's language.
  * 
  * This is because we save them with a name of
  * the following convention: ${uuid}.${language-code}.${extension}.

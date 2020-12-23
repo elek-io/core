@@ -1,4 +1,6 @@
 import { ElekIoCoreOptions } from '../../type/general';
+import { ModelType } from '../../type/model';
+import { ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
 import Page from '../model/Page';
 import Project from '../model/Project';
@@ -26,7 +28,7 @@ export default class PageService extends AbstractService {
    * @param gitService GitService
    */
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService) {
-    super('page', options);
+    super(ServiceType.PAGE, options);
 
     this.eventService = eventService;
     this.jsonFileService = jsonFileService;
@@ -63,7 +65,8 @@ export default class PageService extends AbstractService {
    * @param language Language of the page to read
    */
   public async read(project: Project, id: string, language: string): Promise<Page> {
-    const page: Page = await this.jsonFileService.read(Util.pathTo.page(project.id, id, language));
+    const json = await this.jsonFileService.read<Page>(Util.pathTo.page(project.id, id, language));
+    const page = new Page(json.id, json.language, json.name, json.uriPath, json.layoutId);
     this.eventService.emit(`${this.type}:read`, {
       project,
       data: {
@@ -117,6 +120,6 @@ export default class PageService extends AbstractService {
    * @param model The model to check
    */
   public isPage(model: AbstractModel): boolean {
-    return model.type === 'page';
+    return model.type === ModelType.PAGE;
   }
 }

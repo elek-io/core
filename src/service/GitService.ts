@@ -1,12 +1,12 @@
 import Fs from 'fs-extra';
-import Git from 'isomorphic-git';
+import Git, { ReadTagResult } from 'isomorphic-git';
 import Http from 'isomorphic-git/http/node';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
 import { ElekIoCoreOptions } from '../../type/general';
 import Project from '../model/Project';
-import Snapshot from '../model/Snapshot';
 import Util from '../util';
+import { ServiceType } from '../../type/service';
 
 /**
  * Service that manages Git functionality
@@ -22,7 +22,7 @@ export default class GitService extends AbstractService {
    * @param eventService EventService
    */
   constructor(options: ElekIoCoreOptions, eventService: EventService) {
-    super('git', options);
+    super(ServiceType.GIT, options);
 
     this.eventService = eventService;
   }
@@ -154,7 +154,7 @@ export default class GitService extends AbstractService {
    * @param name Name of the new tag. Internally used for the message
    * @param signature A signature which identifies the user who created the tag
    */
-  public async createTag(project: Project, id: string, name: string): Promise<Snapshot> {
+  public async createTag(project: Project, id: string, name: string): Promise<ReadTagResult> {
     await Git.annotatedTag({
       fs: Fs,
       dir: Util.pathTo.project(project.id),
@@ -174,7 +174,7 @@ export default class GitService extends AbstractService {
    * @param project Project to load the tag from
    * @param id UUID of the tag to load
    */
-  public async loadTag(project: Project, id: string): Promise<Snapshot> {
+  public async loadTag(project: Project, id: string): Promise<ReadTagResult> {
     const dir = Util.pathTo.project(project.id);
     // Resolve the oid by the tag's reference (in our case a UUID)
     const tagObjectId = await Git.resolveRef({
@@ -188,7 +188,7 @@ export default class GitService extends AbstractService {
       dir,
       oid: tagObjectId
     });
-    return new Snapshot(id, tag.tag.message, tag.tag.tagger.timestamp, tag.tag.tagger.timezoneOffset);
+    return tag;
   }
 
   /**
@@ -196,7 +196,7 @@ export default class GitService extends AbstractService {
    * 
    * @param project Project to list all tags from
    */
-  public async listTags(project: Project): Promise<Snapshot[]> {
+  public async listTags(project: Project): Promise<ReadTagResult[]> {
     const tagIds = await Git.listTags({
       fs: Fs,
       dir: Util.pathTo.project(project.id)

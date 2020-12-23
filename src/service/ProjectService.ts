@@ -12,6 +12,8 @@ import PageService from './PageService';
 import GitService from './GitService';
 import ThemeService from './ThemeService';
 import { PageStatus } from '../../type/page';
+import { ServiceType } from '../../type/service';
+import { ModelType } from '../../type/model';
 
 /**
  * Service that manages CRUD functionality for project files on disk
@@ -34,7 +36,7 @@ export default class ProjectService extends AbstractService {
    * @param gitService GitService
    */
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService, blockService: BlockService, pageService: PageService, themeService: ThemeService) {
-    super('project', options);
+    super(ServiceType.PROJECT, options);
 
     this.eventService = eventService;
     this.jsonFileService = jsonFileService;
@@ -91,7 +93,8 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * @param id ID of the project to read
    */
   public async read(id: string): Promise<Project> {
-    const project: Project = await this.jsonFileService.read(Util.pathTo.projectConfig(id));
+    const json = await this.jsonFileService.read<Project>(Util.pathTo.projectConfig(id));
+    const project = new Project(json.id, json.name, json.description);
     this.eventService.emit(`${this.type}:read`, {
       project
     });
@@ -132,7 +135,7 @@ You can use it as a starting point or delete it. If you need help, consider visi
    * @param model The model to check
    */
   public isProject(model: AbstractModel): boolean {
-    return model.type === 'project';
+    return model.type === ModelType.PROJECT;
   }
 
   /**

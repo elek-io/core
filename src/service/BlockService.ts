@@ -10,6 +10,8 @@ import AbstractService from './AbstractService';
 import EventService from './EventService';
 import GitService from './GitService';
 import MdFileService from './MdFileService';
+import { ServiceType } from '../../type/service';
+import { ModelType } from '../../type/model';
 
 /**
  * Service that manages CRUD functionality for block files on disk
@@ -28,7 +30,7 @@ export default class BlockService extends AbstractService {
    * @param mdFileService MdFileService
    */
   constructor(options: ElekIoCoreOptions, eventService: EventService, mdFileService: MdFileService, gitService: GitService) {
-    super('block', options);
+    super(ServiceType.BLOCK, options);
 
     this.eventService = eventService;
     this.mdFileService = mdFileService;
@@ -134,7 +136,7 @@ export default class BlockService extends AbstractService {
    * @param model The model to check
    */
   public isBlock(model: AbstractModel): boolean {
-    return model.type === 'block';
+    return model.type === ModelType.BLOCK;
   }
 
   /**

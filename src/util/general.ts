@@ -116,7 +116,7 @@ export async function returnResolved<T>(promises: Promise<T>[]): Promise<T[]> {
   }
   // Resolve all promises
   // Here we do not expect any error to fail the call to Promise.all()
-  // because we catched it earlier and returning an Error type instead of throwing it
+  // because we caught it earlier and returning an Error type instead of throwing it
   const checked = await Promise.all(toCheck);
   // This way we can easily filter out any Errors by type
   // Note that we also need to use a User-Defined Type Guard here,

@@ -1,4 +1,6 @@
 import { ElekIoCoreOptions } from '../../type/general';
+import { ModelType } from '../../type/model';
+import { ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
 import Project from '../model/Project';
 import Snapshot from '../model/Snapshot';
@@ -23,7 +25,7 @@ export default class SnapshotService extends AbstractService {
    * @param gitService GitService
    */
   constructor(options: ElekIoCoreOptions, eventService: EventService, gitService: GitService) {
-    super('snapshot', options);
+    super(ServiceType.SNAPSHOT, options);
 
     this.eventService = eventService;
     this.gitService = gitService;
@@ -36,7 +38,9 @@ export default class SnapshotService extends AbstractService {
    * @param name Name of the new snapshot
    */
   public async create(project: Project, name: string): Promise<Snapshot> {
-    const snapshot = await this.gitService.createTag(project, Util.uuid(), name);
+    const id = Util.uuid();
+    const tag = await this.gitService.createTag(project, id, name);
+    const snapshot = new Snapshot(id, tag.tag.message, tag.tag.tagger.timestamp, tag.tag.tagger.timezoneOffset);
     this.eventService.emit(`${this.type}:create`, {
       project,
       data: {
@@ -53,7 +57,8 @@ export default class SnapshotService extends AbstractService {
    * @param id ID of the snapshot to read
    */
   public async read(project: Project, id: string): Promise<Snapshot> {
-    const snapshot = await this.gitService.loadTag(project, id);
+    const tag = await this.gitService.loadTag(project, id);
+    const snapshot = new Snapshot(id, tag.tag.message, tag.tag.tagger.timestamp, tag.tag.tagger.timezoneOffset);
     this.eventService.emit(`${this.type}:read`, {
       project,
       data: {
@@ -69,7 +74,11 @@ export default class SnapshotService extends AbstractService {
    * @param project Project to list all snapshots from
    */
   public async list(project: Project): Promise<Snapshot[]> {
-    const snapshots = await this.gitService.listTags(project);
+    const tags = await this.gitService.listTags(project);
+    const snapshots: Snapshot[] = [];
+    tags.forEach((tag) => {
+      snapshots.push(new Snapshot(tag.tag.tag, tag.tag.message, tag.tag.tagger.timestamp, tag.tag.tagger.timezoneOffset));
+    });
     this.eventService.emit(`${this.type}:list`, {
       project,
       data: {
@@ -135,6 +144,6 @@ export default class SnapshotService extends AbstractService {
    * @param model The model to check
    */
   public isSnapshot(model: AbstractModel): boolean {
-    return model.type === 'snapshot';
+    return model.type === ModelType.SNAPSHOT;
   }
 }

@@ -11,6 +11,7 @@ import EventService from './EventService';
 import GitService from './GitService';
 import JsonFileService from './JsonFileService';
 import { ThemeLayoutBlockPosition, ThemeLayout, ThemeLayoutElementPosition, ThemeLayoutElementType } from '../../type/theme';
+import { ServiceType } from '../../type/service';
 
 /**
  * Service that manages CRUD functionality for the theme in use
@@ -30,7 +31,7 @@ export default class ThemeService extends AbstractService {
    * @param gitService GitService
    */
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService) {
-    super('theme', options);
+    super(ServiceType.THEME, options);
 
     this.eventService = eventService;
     this.jsonFileService = jsonFileService;
@@ -68,7 +69,8 @@ export default class ThemeService extends AbstractService {
    * @param project Project of the theme to read
    */
   public async read(project: Project): Promise<Theme> {
-    const theme: Theme = await this.jsonFileService.read(Util.pathTo.themeConfig(project.id));
+    const json = await this.jsonFileService.read<Theme>(Util.pathTo.themeConfig(project.id));
+    const theme = new Theme(json.name, json.description, json.version, json.homepage, json.repository, json.author, json.license, json.layouts);
     this.eventService.emit(`${this.type}:read`, {
       project,
       data: {

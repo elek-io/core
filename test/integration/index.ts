@@ -31,7 +31,7 @@ describe('Class ElekIoCore', () => {
 
     await core.init();
     expect(await Fs.pathExists(Util.workingDirectory)).to.equal(true);
-  });
+  }).timeout(5000);
 
   it('should be able to create a new project', async () => {
     const project = await core.project.create('Project 1', 'The first project');

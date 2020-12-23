@@ -1,1 +1,14 @@
-export type ServiceType = 'log' | 'git' | 'project' | 'asset' | 'page' | 'block' | 'snapshot' | 'theme' | 'event' | 'file' | 'jsonFile' | 'mdFile';
+export enum ServiceType {
+  LOG = 'log',
+  GIT = 'git',
+  PROJECT = 'project',
+  ASSET = 'asset',
+  PAGE = 'page',
+  BLOCK = 'block',
+  SNAPSHOT = 'snapshot',
+  THEME = 'theme',
+  EVENT = 'event',
+  FILE = 'file',
+  JSON_FILE = 'jsonFile',
+  MD_FILE = 'mdFile'
+}

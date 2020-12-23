@@ -1,14 +1,11 @@
 import { MdFileContent } from '../../type/file';
 import { ElekIoCoreOptions } from '../../type/general';
+import { ServiceType } from '../../type/service';
 import AbstractFileService from './AbstractFileService';
 import EventService from './EventService';
 
 /**
  * Service that manages CRUD functionality for Markdown files on disk
- * 
- * @todo The serialize and deserialize methods use tripple dashes for
- * seperating the JSON header from it's Mardown body. But Markdown uses
- * tripple dashes for horizontal lines. So we should use something else.
  */
 export default class MdFileService extends AbstractFileService {
 
@@ -21,39 +18,38 @@ export default class MdFileService extends AbstractFileService {
    * @param eventService 
    */
   constructor(options: ElekIoCoreOptions, eventService: EventService) {
-    super('mdFile', options, eventService);
+    super(ServiceType.MD_FILE, options, eventService);
   }
 
-  public async create(data: MdFileContent, path: string): Promise<void> {
-    await super.create(this.serialize(data), path);
+  public async create<T>(data: MdFileContent<T>, path: string): Promise<void> {
+    await super.create(this.serialize<T>(data), path);
   }
 
-  public async read(path: string): Promise<MdFileContent> {
+  public async read<T>(path: string): Promise<MdFileContent<T>> {
     const source = await super.read(path);
-    return this.deserialize(source);
+    return this.deserialize<T>(source);
   }
 
-  public async update(data: MdFileContent, path: string): Promise<void> {
-    await super.update(this.serialize(data), path);
+  public async update<T>(data: MdFileContent<T>, path: string): Promise<void> {
+    await super.update(this.serialize<T>(data), path);
   }
 
-  private serialize(data: MdFileContent): string {
-    return `---
+  private serialize<T>(data: MdFileContent<T>): string {
+    return `${this.options.file.md.delimiter}
 ${JSON.stringify(data.jsonHeader, null, 2)}
----
+${this.options.file.md.delimiter}
 ${data.mdBody}`;
   }
 
-  private deserialize(data: string): MdFileContent {
-    const mdFileContent: MdFileContent = {
-      jsonHeader: {},
-      mdBody: data
-    };
-    if (data.startsWith('---')) {
-      const stringHeader = data.substring(data.indexOf('---') + 3, data.lastIndexOf('---'));
-      mdFileContent.jsonHeader = JSON.parse(stringHeader);
-      mdFileContent.mdBody = data.substring(data.lastIndexOf('---') + 3).trim();
+  private deserialize<T>(data: string): MdFileContent<T> {
+    if (data.startsWith(this.options.file.md.delimiter) === false) {
+      throw new Error(`Could not deserialize data from Markdown file because it is missing a delimiter "${this.options.file.md.delimiter}"`);
     }
+    const stringHeader = data.substring(data.indexOf(this.options.file.md.delimiter) + this.options.file.md.delimiter.length, data.lastIndexOf(this.options.file.md.delimiter));
+    const mdFileContent: MdFileContent<T> = {
+      jsonHeader: JSON.parse(stringHeader),
+      mdBody: data.substring(data.lastIndexOf(this.options.file.md.delimiter) + this.options.file.md.delimiter.length).trim()
+    };
     return mdFileContent;
   }
 }

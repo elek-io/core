@@ -1,4 +1,6 @@
-export interface MdFileContent {
-  jsonHeader: any;
+import { JsonOf } from './general';
+
+export interface MdFileContent<T> {
+  jsonHeader: JsonOf<T>;
   mdBody: string;
 }

@@ -1,6 +1,8 @@
 import Fs from 'fs-extra';
 import Path from 'path';
 import { ElekIoCoreOptions } from '../../type/general';
+import { ModelType } from '../../type/model';
+import { ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
 import Asset from '../model/Asset';
 import Project from '../model/Project';
@@ -27,7 +29,7 @@ export default class AssetService extends AbstractService {
    * @param jsonFileService JsonFileService
    */
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService) {
-    super('asset', options);
+    super(ServiceType.ASSET, options);
 
     this.eventService = eventService;
     this.jsonFileService = jsonFileService;
@@ -70,7 +72,8 @@ export default class AssetService extends AbstractService {
    * @param language Language of the asset to read
    */
   public async read(project: Project, id: string, language: string): Promise<Asset> {
-    const asset: Asset = await this.jsonFileService.read(Util.pathTo.asset(project.id, id, language));
+    const json = await this.jsonFileService.read<Asset>(Util.pathTo.asset(project.id, id, language));
+    const asset = new Asset(json.id, json.language, json.name, json.description, json.extension);
     this.eventService.emit(`${this.type}:read`, {
       project,
       data: {
@@ -125,6 +128,6 @@ export default class AssetService extends AbstractService {
    * @param model The model to check
    */
   public isAsset(model: AbstractModel): boolean {
-    return model.type === 'asset';
+    return model.type === ModelType.ASSET;
   }
 }

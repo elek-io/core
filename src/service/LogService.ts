@@ -1,4 +1,5 @@
 import { ElekIoCoreOptions } from '../../type/general';
+import { ServiceType } from '../../type/service';
 import GenericLogger from '../logger/GenericLogger';
 import ProjectLogger from '../logger/projectLogger';
 import AbstractService from './AbstractService';
@@ -20,7 +21,7 @@ export default class LogService extends AbstractService {
    * @param options ElekIoCoreOptions
    */
   constructor(options: ElekIoCoreOptions) {
-    super('log', options);
+    super(ServiceType.LOG, options);
 
     this.genericLogger = new GenericLogger();
   }

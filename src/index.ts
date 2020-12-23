@@ -38,10 +38,15 @@ export default class ElekIoCore {
   private readonly blockService: BlockService;
   private readonly projectService: ProjectService;
 
-  constructor(options: Optional<ElekIoCoreOptions, 'theme'>) {
+  constructor(options: Optional<ElekIoCoreOptions, 'theme' | 'file'>) {
     const defaults: Omit<ElekIoCoreOptions, 'signature'> = {
       theme: {
         htmlPrefix: 'elek-io'
+      },
+      file: {
+        md: {
+          delimiter: '---'
+        }
       }
     };
     this.options = Object.assign({}, defaults, options);
@@ -207,7 +212,6 @@ export default class ElekIoCore {
         const layout = theme.layouts.find((layout) => {
           return layout.id === page.layoutId;
         });
-        console.log(theme.layouts, page.layoutId);
         if (!layout) { throw new Error('Layout not found'); }
         const layoutPositions = await this.themeService.getPositions(project, layout);
         return {

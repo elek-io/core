@@ -1,5 +1,6 @@
 import { Subject } from 'rxjs';
 import { ElekIoCoreOptions } from '../../type/general';
+import { ServiceType } from '../../type/service';
 import ElekIoCoreEvent from '../model/ElekIoCoreEvent';
 import Project from '../model/Project';
 import AbstractService from './AbstractService';
@@ -21,7 +22,7 @@ export default class EventService extends AbstractService {
    * @param logService LogService
    */
   constructor(options: ElekIoCoreOptions, logService: LogService) {
-    super('event', options);
+    super(ServiceType.EVENT, options);
 
     this.logService = logService;
   }
@@ -29,7 +30,7 @@ export default class EventService extends AbstractService {
   /**
    * Subscribes to all events
    * 
-   * @todo Should improve is alot once we know what we need
+   * @todo Should improve is a lot once we know what we need
    */
   public get on() {
     return this.eventSubject.subscribe.bind(this.eventSubject);
