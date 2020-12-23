@@ -59,6 +59,12 @@ export const pathTo = {
   },
   asset: (projectId: string, assetId: string, language: string): string => {
     return Path.join(pathTo.assets(projectId), `${assetId}.${language}.json`);
+  },
+  lfs: (projectId: string): string => {
+    return Path.join(pathTo.projects, projectId, 'lfs');
+  },
+  lfsFile: (projectId: string, assetId: string, language: string, extension: string): string => {
+    return Path.join(pathTo.lfs(projectId), `${assetId}.${language}.${extension}`);
   }
 };
 
@@ -74,7 +80,7 @@ export function uuid(): string {
  * 
  * @todo switch to lodash
  */
-export function assignDefaultIfMissing<T>(value: Partial<T>, defaultsTo: T): T {
+export function assignDefaultIfMissing<T>(value: Partial<T> | undefined | null, defaultsTo: T): T {
   return Object.assign(defaultsTo, value);
 }
 
@@ -110,7 +116,7 @@ export async function returnResolved<T>(promises: Promise<T>[]): Promise<T[]> {
   }
   // Resolve all promises
   // Here we do not expect any error to fail the call to Promise.all()
-  // because we catched it earlier and returning an Error type instead of throwing it
+  // because we caught it earlier and returning an Error type instead of throwing it
   const checked = await Promise.all(toCheck);
   // This way we can easily filter out any Errors by type
   // Note that we also need to use a User-Defined Type Guard here,
@@ -177,4 +183,16 @@ export async function files(path: string, extension?: string): Promise<Fs.Dirent
     }
     return dirent.isFile();
   });
+}
+
+/**
+ * Returns the relative path for given path 
+ * by stripping out everything up to the working directory
+ */
+export function getRelativePath(path: string): string {
+  let relativePath = path.replace(workingDirectory, '');
+  if (relativePath.startsWith('/')) {
+    relativePath = relativePath.substr(1);
+  }
+  return relativePath;
 }
