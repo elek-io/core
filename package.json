@@ -15,7 +15,9 @@
   "scripts": {
     "lint": "yarn eslint src/**",
     "test": "NODE_ENV=test yarn nyc --reporter=text ts-mocha --full-trace -p tsconfig.json test/**/*.ts",
+    "test:ci": "NODE_ENV=test yarn nyc --reporter=lcov ts-mocha --full-trace -p tsconfig.json test/**/*.ts",
     "test:full": "echo \"Running tests for version $npm_package_version...\" && yarn build && yarn lint && yarn test",
+    "test:full:ci": "echo \"Running tests for version $npm_package_version...\" && yarn build && yarn lint && yarn test:ci",
     "build": "rm -rf ./dist && tsc",
     "prepare": "yarn build",
     "preversion": "yarn test:full",

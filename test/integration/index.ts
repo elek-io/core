@@ -302,10 +302,10 @@ describe('Class ElekIoCore', () => {
     expect(core.snapshot.read(project, snapshotId)).to.be.rejectedWith();
   });
 
-  // it('should be able to build a project in 5 minutes', async () => {
-  //   const project = await core.project.read(projectId);
-  //   await core.build(project);
-  // }).timeout(300000);
+  it('should be able to build a project in 5 minutes', async () => {
+    const project = await core.project.read(projectId);
+    await core.build(project);
+  }).timeout(300000);
 
   it('should be able to delete a project', async () => {
     const project = await core.project.read(anotherProjectId);
