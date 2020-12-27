@@ -136,7 +136,7 @@ export default class ThemeService extends AbstractService {
     };
   }
 
-  private async getBlockPositions($: cheerio.Root) {
+  private async getBlockPositions($: any) {
     const blockPositions: ThemeLayoutBlockPosition[] = [];
     const defaultRestrictions: BlockRestrictions = {
       only: [],
@@ -151,7 +151,7 @@ export default class ThemeService extends AbstractService {
       repeatable: false
     };
     const blockSelector = `${this.options.theme.htmlPrefix}-block`;
-    $(`[${blockSelector}]`).map( async (index, block) => {
+    $(`[${blockSelector}]`).map( async (index: any, block: { attribs: { [x: string]: any; }; }) => {
       const id = block.attribs[`${blockSelector}`];
       const partialRestrictions = await this.parseRestrictions(block.attribs);
       blockPositions.push({
@@ -162,10 +162,10 @@ export default class ThemeService extends AbstractService {
     return blockPositions;
   }
 
-  private async getElementPositions($: cheerio.Root) {
+  private async getElementPositions($: any) {
     const elementSelector = `${this.options.theme.htmlPrefix}-element`;
     const elementPositions: ThemeLayoutElementPosition[] = [];
-    $(`[${elementSelector}]`).map( async (index, element) => {
+    $(`[${elementSelector}]`).map( async (index: any, element: { attribs: { [x: string]: any; }; }) => {
       const id = element.attribs[`${elementSelector}`];
       const type = element.attribs[`${elementSelector}-type`];
       if (type && this.isThemeLayoutElementType(type)) {
@@ -185,7 +185,7 @@ export default class ThemeService extends AbstractService {
   /**
    * Parses given HTML attributes and returns an partial BlockRestrictions object
    */
-  private async parseRestrictions(attributes: cheerio.Element['attribs']) {
+  private async parseRestrictions(attributes: any) {
     const restrictions: Partial<BlockRestrictions> = {};
     
     for (const key in attributes) {
