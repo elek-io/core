@@ -77,8 +77,6 @@ export function uuid(): string {
 
 /**
  * Returns a complete default type, hydrated with the partials of value
- * 
- * @todo switch to lodash
  */
 export function assignDefaultIfMissing<T>(value: Partial<T> | undefined | null, defaultsTo: T): T {
   return Object.assign(defaultsTo, value);
