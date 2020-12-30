@@ -1,6 +1,6 @@
 import { ElekIoCoreOptions } from '../../type/general';
 import { ModelType } from '../../type/model';
-import { ServiceType } from '../../type/service';
+import { CrudService, ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
 import Project from '../model/Project';
 import Snapshot from '../model/Snapshot';
@@ -12,7 +12,7 @@ import GitService from './GitService';
 /**
  * Service that manages CRUD functionality for snapshots
  */
-export default class SnapshotService extends AbstractService {
+export default class SnapshotService extends AbstractService implements CrudService {
   private eventService: EventService;
   private gitService: GitService;
 
@@ -66,6 +66,13 @@ export default class SnapshotService extends AbstractService {
       }
     });
     return snapshot;
+  }
+
+  /**
+   * @todo Check if we are able to and actually want to update snapshots
+   */
+  public async update() {
+    throw new Error('Method not supported');
   }
 
   /**

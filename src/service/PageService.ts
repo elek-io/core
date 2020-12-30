@@ -1,6 +1,6 @@
 import { ElekIoCoreOptions } from '../../type/general';
 import { ModelType } from '../../type/model';
-import { ServiceType } from '../../type/service';
+import { CrudService, ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
 import Page from '../model/Page';
 import Project from '../model/Project';
@@ -13,7 +13,7 @@ import JsonFileService from './JsonFileService';
 /**
  * Service that manages CRUD functionality for page files on disk
  */
-export default class PageService extends AbstractService {
+export default class PageService extends AbstractService implements CrudService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
   private gitService: GitService;

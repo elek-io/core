@@ -12,13 +12,13 @@ import PageService from './PageService';
 import GitService from './GitService';
 import ThemeService from './ThemeService';
 import { PageStatus } from '../../type/page';
-import { ServiceType } from '../../type/service';
+import { CrudService, ServiceType } from '../../type/service';
 import { ModelType } from '../../type/model';
 
 /**
  * Service that manages CRUD functionality for project files on disk
  */
-export default class ProjectService extends AbstractService {
+export default class ProjectService extends AbstractService implements CrudService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
   private gitService: GitService;

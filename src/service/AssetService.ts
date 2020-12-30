@@ -2,7 +2,7 @@ import Fs from 'fs-extra';
 import Path from 'path';
 import { ElekIoCoreOptions } from '../../type/general';
 import { ModelType } from '../../type/model';
-import { ServiceType } from '../../type/service';
+import { CrudService, ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
 import Asset from '../model/Asset';
 import Project from '../model/Project';
@@ -15,7 +15,7 @@ import JsonFileService from './JsonFileService';
 /**
  * Service that manages CRUD functionality for asset files on disk
  */
-export default class AssetService extends AbstractService {
+export default class AssetService extends AbstractService implements CrudService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
   private gitService: GitService;

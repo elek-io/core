@@ -12,3 +12,10 @@ export enum ServiceType {
   JSON_FILE = 'jsonFile',
   MD_FILE = 'mdFile'
 }
+
+export interface CrudService {
+  create: (...args: any) => any;
+  read: (...args: any) => any;
+  update: (...args: any) => any;
+  delete: (...args: any) => any;
+}

@@ -18,6 +18,7 @@ import SnapshotService from './service/SnapshotService';
 import GitService from './service/GitService';
 import Snapshot from './model/Snapshot';
 import ThemeService from './service/ThemeService';
+import { CrudService } from '../type/service';
 
 /**
  * elek.io core
@@ -121,11 +122,7 @@ export default class ElekIoCore {
    * @param project Project to get the assets from
    */
   public async assets(project: Project): Promise<Asset[]> {
-    const possibleAssetFiles = await Util.files(Util.pathTo.assets(project.id));
-    return await Util.returnResolved(possibleAssetFiles.map((possibleAssetFile) => {
-      const fileNameArray = possibleAssetFile.name.split('.');
-      return this.assetService.read(project, fileNameArray[0], fileNameArray[1]);
-    }));
+    return this.getModelsFromFiles<Asset>(project, Util.pathTo.assets(project.id), this.assetService);
   }
 
   /**
@@ -141,11 +138,7 @@ export default class ElekIoCore {
    * @param project Project to get the pages from
    */
   public async pages(project: Project): Promise<Page[]> {
-    const possiblePageFiles = await Util.files(Util.pathTo.pages(project.id));
-    return await Util.returnResolved(possiblePageFiles.map((possiblePageFile) => {
-      const fileNameArray = possiblePageFile.name.split('.');
-      return this.pageService.read(project, fileNameArray[0], fileNameArray[1]);
-    }));
+    return this.getModelsFromFiles<Page>(project, Util.pathTo.pages(project.id), this.pageService);
   }
 
   /**
@@ -161,11 +154,7 @@ export default class ElekIoCore {
    * @param project Project to get the blocks from
    */
   public async blocks(project: Project): Promise<Block[]> {
-    const possibleBlockFiles = await Util.files(Util.pathTo.blocks(project.id));
-    return await Util.returnResolved(possibleBlockFiles.map((possibleBlockFile) => {
-      const fileNameArray = possibleBlockFile.name.split('.');
-      return this.blockService.read(project, fileNameArray[0], fileNameArray[1]);
-    }));
+    return this.getModelsFromFiles<Block>(project, Util.pathTo.blocks(project.id), this.blockService);
   }
 
   /**
@@ -271,5 +260,25 @@ export default class ElekIoCore {
     // where it's available from outside
     await Fs.emptyDir(publicPath);
     await Fs.copy(buildPath, publicPath);
+  }
+
+  /**
+   * Returns an array of instanciated models from given service,
+   * that tries to load the model data from all files it finds
+   * under given path
+   * 
+   * @todo Check how we could get full type safety from using CrudService interface,
+   * since currently it only uses `...args: any;`
+   * 
+   * @param project Project to load the models from
+   * @param path Path to search for files in
+   * @param service Service that instanciates the models with data off of files loaded
+   */
+  private async getModelsFromFiles<T>(project: Project, path: string, service: CrudService): Promise<T[]> {
+    const possibleFiles = await Util.files(path);
+    return await Util.returnResolved(possibleFiles.map((possibleFile) => {
+      const fileNameArray = possibleFile.name.split('.');
+      return service.read(project, fileNameArray[0], fileNameArray[1]);
+    }));
   }
 }
