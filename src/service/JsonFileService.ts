@@ -1,12 +1,12 @@
 import { ElekIoCoreOptions, JsonOf } from '../../type/general';
-import { ServiceType } from '../../type/service';
+import { CrudService, ServiceType } from '../../type/service';
 import AbstractFileService from './AbstractFileService';
 import EventService from './EventService';
 
 /**
  * Service that manages CRUD functionality for JSON files on disk
  */
-export default class JsonFileService extends AbstractFileService {
+export default class JsonFileService extends AbstractFileService implements CrudService {
 
   /**
    * Creates a new instance of the JsonFileService which

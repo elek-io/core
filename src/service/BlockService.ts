@@ -10,13 +10,13 @@ import AbstractService from './AbstractService';
 import EventService from './EventService';
 import GitService from './GitService';
 import MdFileService from './MdFileService';
-import { ServiceType } from '../../type/service';
+import { CrudService, ServiceType } from '../../type/service';
 import { ModelType } from '../../type/model';
 
 /**
  * Service that manages CRUD functionality for block files on disk
  */
-export default class BlockService extends AbstractService {
+export default class BlockService extends AbstractService  implements CrudService {
   private eventService: EventService;
   private mdFileService: MdFileService;
   private gitService: GitService;

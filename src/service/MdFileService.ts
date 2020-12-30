@@ -1,13 +1,13 @@
 import { MdFileContent } from '../../type/file';
 import { ElekIoCoreOptions } from '../../type/general';
-import { ServiceType } from '../../type/service';
+import { CrudService, ServiceType } from '../../type/service';
 import AbstractFileService from './AbstractFileService';
 import EventService from './EventService';
 
 /**
  * Service that manages CRUD functionality for Markdown files on disk
  */
-export default class MdFileService extends AbstractFileService {
+export default class MdFileService extends AbstractFileService implements CrudService {
 
   /**
    * Creates a new instance of the MdFileService which
