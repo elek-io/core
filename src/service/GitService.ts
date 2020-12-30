@@ -116,21 +116,7 @@ export default class GitService extends AbstractService {
       dir,
       filepaths: files
     });
-    await Promise.all(statusMatrix.map(([filepath, headStatus, worktreeStatus, stageStatus]) => {
-      if (worktreeStatus === 2) {
-        return Git.add({
-          fs: Fs,
-          dir,
-          filepath
-        });
-      } else if(worktreeStatus === 0) {
-        return Git.remove({
-          fs: Fs,
-          dir,
-          filepath
-        });
-      }
-    }));
+    await this.addOrRemoveByStatus(statusMatrix, dir);
     await Git.commit({
       fs: Fs,
       dir,
@@ -231,5 +217,33 @@ export default class GitService extends AbstractService {
       return absolutePath.replace(`${dir}/`, '');
     }
     return absolutePath;
+  }
+
+  /**
+   * With git CLI you would `git add <file>` a file that was removed from FS.
+   * While isomorphic git requires you to use the `remove` method to
+   * commit the removal of a file. This method handles this case
+   * 
+   * @see https://github.com/isomorphic-git/isomorphic-git/issues/1099#issuecomment-659700768
+   * 
+   * @param statusMatrix A matrix of file status from `Git.statusMatrix()`
+   * @param dir The directory we are currently working in
+   */
+  private async addOrRemoveByStatus(statusMatrix: [string, 0 | 1, 0 | 1 | 2, 0 | 1 | 2 | 3][], dir: string) {
+    await Promise.all(statusMatrix.map(([filepath, headStatus, worktreeStatus, stageStatus]) => {
+      if (worktreeStatus === 2) {
+        return Git.add({
+          fs: Fs,
+          dir,
+          filepath
+        });
+      } else if(worktreeStatus === 0) {
+        return Git.remove({
+          fs: Fs,
+          dir,
+          filepath
+        });
+      }
+    }));
   }
 }
