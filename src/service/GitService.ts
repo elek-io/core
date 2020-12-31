@@ -125,8 +125,8 @@ export default class GitService extends AbstractService {
         email: this.options.signature.email
       },
       committer: {
-        name: this.options.signature.name,
-        email: this.options.signature.email
+        name: 'elek.io core',
+        email: ''
       },
       message
     });
