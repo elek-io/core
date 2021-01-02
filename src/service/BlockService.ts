@@ -46,6 +46,7 @@ export default class BlockService extends AbstractService  implements CrudServic
    */
   public async create(project: Project, language: string, body: string): Promise<Block> {
     const id = Util.uuid();
+    const projectPath = Util.pathTo.project(project.id);
     const block = new Block(id, language, body);
     const blockPath = Util.pathTo.block(project.id, block.id, language);
     await this.mdFileService.create({
@@ -56,7 +57,8 @@ export default class BlockService extends AbstractService  implements CrudServic
       },
       mdBody: block.body
     }, blockPath);
-    await this.gitService.commit(project, [blockPath], `:heavy_plus_sign: Created new ${this.type}`);
+    await this.gitService.add(projectPath, [blockPath]);
+    await this.gitService.commit(projectPath, `:heavy_plus_sign: Created new ${this.type}`);
     this.eventService.emit(`${this.type}:create`, {
       project,
       data: {
@@ -93,6 +95,7 @@ export default class BlockService extends AbstractService  implements CrudServic
    * @param message Optional overwrite for the git message
    */
   public async update(project: Project, block: Block, message = `Updated ${this.type}`): Promise<void> {
+    const projectPath = Util.pathTo.project(project.id);
     const blockPath = Util.pathTo.block(project.id, block.id, block.language);
     await this.mdFileService.update({
       jsonHeader: {
@@ -102,7 +105,8 @@ export default class BlockService extends AbstractService  implements CrudServic
       },
       mdBody: block.body
     }, blockPath);
-    await this.gitService.commit(project, [blockPath], `:wrench: ${message}`);
+    await this.gitService.add(projectPath, [blockPath]);
+    await this.gitService.commit(projectPath, `:wrench: ${message}`);
     this.eventService.emit(`${this.type}:update`, {
       project,
       data: {
@@ -119,9 +123,11 @@ export default class BlockService extends AbstractService  implements CrudServic
    * @param message Optional overwrite for the git message
    */
   public async delete(project: Project, block: Block, message = `Deleted ${this.type}`): Promise<void> {
+    const projectPath = Util.pathTo.project(project.id);
     const blockPath = Util.pathTo.block(project.id, block.id, block.language);
     await this.mdFileService.delete(blockPath);
-    await this.gitService.commit(project, [blockPath], `:fire: ${message}`);
+    await this.gitService.add(projectPath, [blockPath]);
+    await this.gitService.commit(projectPath, `:fire: ${message}`);
     this.eventService.emit(`${this.type}:delete`, {
       project,
       data: {

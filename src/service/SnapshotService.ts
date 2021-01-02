@@ -39,8 +39,9 @@ export default class SnapshotService extends AbstractService implements CrudServ
    */
   public async create(project: Project, name: string): Promise<Snapshot> {
     const id = Util.uuid();
-    const tag = await this.gitService.createTag(project, id, name);
-    const snapshot = new Snapshot(id, tag.tag.message, tag.tag.tagger.timestamp, tag.tag.tagger.timezoneOffset);
+    const projectPath = Util.pathTo.project(project.id);
+    await this.gitService.createTag(projectPath, id, name);
+    const snapshot = new Snapshot(id, name, 0, 0);
     this.eventService.emit(`${this.type}:create`, {
       project,
       data: {
@@ -57,8 +58,14 @@ export default class SnapshotService extends AbstractService implements CrudServ
    * @param id ID of the snapshot to read
    */
   public async read(project: Project, id: string): Promise<Snapshot> {
-    const tag = await this.gitService.loadTag(project, id);
-    const snapshot = new Snapshot(id, tag.tag.message, tag.tag.tagger.timestamp, tag.tag.tagger.timezoneOffset);
+    const tags = await this.gitService.listTags(Util.pathTo.project(project.id), id);
+    if (tags.length === 0) {
+      throw new Error(`Snapshot ${id} not found`);
+    }
+    if (tags.length > 1) {
+      throw new Error(`Snapshot ${id} resolved ${tags.length} git tags`);
+    }
+    const snapshot = new Snapshot(tags[0].name, tags[0].message, tags[0].timestamp, 0);
     this.eventService.emit(`${this.type}:read`, {
       project,
       data: {
@@ -81,10 +88,10 @@ export default class SnapshotService extends AbstractService implements CrudServ
    * @param project Project to list all snapshots from
    */
   public async list(project: Project): Promise<Snapshot[]> {
-    const tags = await this.gitService.listTags(project);
+    const tags = await this.gitService.listTags(Util.pathTo.project(project.id));
     const snapshots: Snapshot[] = [];
     tags.forEach((tag) => {
-      snapshots.push(new Snapshot(tag.tag.tag, tag.tag.message, tag.tag.tagger.timestamp, tag.tag.tagger.timezoneOffset));
+      snapshots.push(new Snapshot(tag.name, tag.message, tag.timestamp, 0));
     });
     this.eventService.emit(`${this.type}:list`, {
       project,
@@ -103,24 +110,17 @@ export default class SnapshotService extends AbstractService implements CrudServ
    * we need to find a way to restore the LFS folder to the given state of the snapshot too.
    * Until then, assets are broken once we revert to a snapshot
    * 
-   * @todo We simply commit everything after an revert. This is a bit dangerous,
-   * since it will also commit uncommitted files that have nothing to do with the revert.
-   * Maybe we should be more specific here
-   * 
-   * @param project Project to revert it's state
-   * @param snapshot Snapshot to revert to
-   * @param force Force the revert even if we loose uncommitted data
+   * @param project Project to revert
+   * @param snapshot Snapshot of the project to revert to
    * @param message Optional overwrite for the git message
    */
-  public async revert(project: Project, snapshot: Snapshot, force = false, message = `Reverted project state to ${this.type}`): Promise<void> {
-    // Checkout the git tag of this snapshot without updating the HEAD
-    // This way only the working directory changes
-    await this.gitService.checkout(project, snapshot.id, false, {
-      noUpdateHead: true,
-      force
-    });
+  public async revert(project: Project, snapshot: Snapshot, message = `Reverted project state to ${this.type}`): Promise<void> {
+    const projectPath = Util.pathTo.project(project.id);
+    // Restore the working directory files to given snapshot / Git tag
+    await this.gitService.restore(projectPath, snapshot.id, ['.']);
     // Commit the now changed files again
-    await this.gitService.commit(project, ['.'], `:rewind: ${message}`);
+    await this.gitService.add(projectPath, ['.']);
+    await this.gitService.commit(projectPath, `:rewind: ${message} (ID: ${snapshot.id})`);
     this.eventService.emit(`${this.type}:revert`, {
       project,
       data: {
@@ -136,7 +136,7 @@ export default class SnapshotService extends AbstractService implements CrudServ
    * @param snapshot Snapshot to delete
    */
   public async delete(project: Project, snapshot: Snapshot): Promise<void> {
-    await this.gitService.deleteTag(project, snapshot.id);
+    await this.gitService.deleteTag(Util.pathTo.project(project.id), snapshot.id);
     this.eventService.emit(`${this.type}:delete`, {
       project,
       data: {

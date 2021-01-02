@@ -1,249 +1,223 @@
-import Fs from 'fs-extra';
-import Git, { ReadTagResult } from 'isomorphic-git';
-import Http from 'isomorphic-git/http/node';
+import { GitProcess } from 'dugite';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
 import { ElekIoCoreOptions } from '../../type/general';
-import Project from '../model/Project';
-import Util from '../util';
 import { ServiceType } from '../../type/service';
+import { GitCloneOptions, GitInitOptions, GitSwitchOptions, GitTag } from '../../type/git';
 
 /**
  * Service that manages Git functionality
+ * 
+ * Uses dugite Node.js bindings for Git to be fully compatible
+ * and be able to leverage Git LFS functionality
+ * @see https://github.com/desktop/dugite
+ * 
+ * Heavily inspired by the GitHub Desktop app
+ * @see https://github.com/desktop/desktop
+ * 
+ * @todo Implement Git response model to handle success and error,
+ * since currently it fails silently without throwing
  */
 export default class GitService extends AbstractService {
   private eventService: EventService;
 
-  /**
-   * Creates a new instance of the GitService which
-   * inherits the type and options properties from AbstractService
-   * 
-   * @param options ElekIoCoreOptions
-   * @param eventService EventService
-   */
-  constructor(options: ElekIoCoreOptions, eventService: EventService) {
+  public constructor(options: ElekIoCoreOptions, eventService: EventService) {
     super(ServiceType.GIT, options);
 
     this.eventService = eventService;
   }
 
   /**
-   * Initializes given project's folder as a new Git repository
+   * Create an empty Git repository or reinitialize an existing one
    * 
-   * @param project Project to initialize in
+   * @see https://git-scm.com/docs/git-init
+   * @todo Change implementation once dugite updated to Git >= 2.28.0
+   * 
+   * @param path Path to initialize in. Fails if path does not exist
+   * @param options Options specific to the init operation
    */
-  public async init(project: Project): Promise<void> {
-    await Git.init({
-      fs: Fs,
-      dir: Util.pathTo.project(project.id)
-    });
-  }
+  public async init(path: string, options?: Partial<GitInitOptions>): Promise<void> {
+    const args = ['init'];
 
-  /**
-   * Clones a Git repository into destination
-   * 
-   * @param repository URL to the repository to clone
-   * @param destination Folder to clone into
-   */
-  public async clone(repository: string, destination: string, options?: Partial<Parameters<typeof Git.clone>[0]>): Promise<void> {
-    await Git.clone(Util.assignDefaultIfMissing(options, {
-      fs: Fs,
-      http: Http,
-      url: repository,
-      dir: destination
-    }));
-  }
+    // For when dugite is using Git >= 2.28.0
+    // if (options?.initialBranch) {
+    //   args = [...args, `--initial-branch="${options.initialBranch}"`];
+    // }
 
-  /**
-   * Fetches and merges commits from a remote repository
-   * 
-   * @param directory Path to the local directory of the repository to pull
-   */
-  public async pull(directory: string): Promise<void> {
-    await Git.pull({
-      fs: Fs,
-      http: Http,
-      dir: directory
-    });
-  }
+    await GitProcess.exec(args, path);
 
-  /**
-   * Checkout a branch or tag
-   * 
-   * If the branch / tag already exists it will check out that branch / tag. 
-   * Otherwise, it will create it locally and check it out after that.
-   * 
-   * @todo Maybe without the isNew arg and checking if the branch exists
-   * 
-   * @param project Project to checkout from
-   * @param id Unique name of the branch (e.g. "stage") / UUID if checking out a tag
-   * @param isNew If true, a new branch will 
-   * @param options Optional git checkout options
-   */
-  public async checkout(project: Project, id: string, isNew = false, options?: Partial<Parameters<typeof Git.checkout>[0]>): Promise<void> {
-    if (isNew === true) {
-      await Git.branch({
-        fs: Fs,
-        dir: Util.pathTo.project(project.id),
-        ref: id
-      });
+    // Delete when dugite is using Git >= 2.28.0
+    if (options?.initialBranch) {
+      await this.switch(path, options.initialBranch, { isNew: true });
     }
-    await Git.checkout(Util.assignDefaultIfMissing(options, {
-      fs: Fs,
-      dir: Util.pathTo.project(project.id),
-      ref: id
-    }));
   }
 
   /**
-   * Adds given files of the project to it's staging area
-   * and commits them
+   * Clone a repository into a directory
    * 
-   * @param project Project to commit files from
-   * @param files The files of the project to commit
+   * @see https://git-scm.com/docs/git-clone
+   * @todo Implement progress callback / events
+   * 
+   * @param url The remote repository URL to clone from
+   * @param path The destination path for the cloned repository.
+   * Which is only working if the directory is existing and empty.
+   * @param options Options specific to the clone operation
+   */
+  public async clone(url: string, path: string, options?: Partial<GitCloneOptions>): Promise<void> {
+    let args = ['clone', '--progress'];
+
+    if (options?.branch) {
+      args = [...args, '--branch', options.branch];
+    }
+
+    if (options?.depth) {
+      args = [...args, '--depth', options.depth.toString()];
+    }
+
+    if (options?.singleBranch === true) {
+      args = [...args, '--single-branch'];
+    }
+
+    await GitProcess.exec([...args, url, '.'], path);
+  }
+
+  /**
+   * Add file contents to the index
+   * 
+   * @see https://git-scm.com/docs/git-add
+   * 
+   * @param path Path to the repository
+   * @param files Files to add
+   */
+  public async add(path: string, files: string[]): Promise<void> {
+    const args = ['add', '--', ...files];
+
+    await GitProcess.exec(args, path);
+  }
+
+  /**
+   * Switch branches
+   * 
+   * @see https://git-scm.com/docs/git-switch/
+   * 
+   * @param path Path to the repository
+   * @param name Name of the branch to switch to
+   * @param options Options specific to the switch operation
+   */
+  public async switch(path: string, name: string, options?: Partial<GitSwitchOptions>): Promise<void> {
+    let args = ['switch'];
+
+    if (options?.isNew === true) {
+      args = [...args, '--create', name];
+    } else {
+      args = [...args, name];
+    }
+
+    await GitProcess.exec(args, path);
+  }
+
+  /**
+   * Restore working tree files
+   * 
+   * @see https://git-scm.com/docs/git-restore/
+   * 
+   * @param path Path to the repository
+   * @param source Git commit or tag to restore to
+   * @param files Files to restore
+   */
+  public async restore(path: string, source: string, files: string[]): Promise<void> {
+    const args = ['restore', `--source=${source}`, ...files];
+
+    await GitProcess.exec(args, path);
+  }
+
+  /**
+   * Fetch from and integrate with another repository or a local branch
+   * 
+   * @see https://git-scm.com/docs/git-pull
+   * 
+   * @param path Path to the repository
+   */
+  public async pull(path: string): Promise<void> {
+    const args = ['pull'];
+
+    await GitProcess.exec(args, path);
+  }
+
+  /**
+   * Record changes to the repository
+   * 
+   * @see https://git-scm.com/docs/git-commit
+   * 
+   * @param path Path to the repository
    * @param message A message that describes the changes
    */
-  public async commit(project: Project, files: string[], message: string): Promise<void> {
-    const dir = Util.pathTo.project(project.id);
-    // Check if given file paths include the project path
-    // If so, remove the project path since isomorphic-git
-    // cannot resolve absolute file paths
-    files = files.map((path) => {
-      return this.toRelativePath(dir, path);
-    });
-    const statusMatrix = await Git.statusMatrix({
-      fs: Fs,
-      dir,
-      filepaths: files
-    });
-    await this.addOrRemoveByStatus(statusMatrix, dir);
-    await Git.commit({
-      fs: Fs,
-      dir,
-      author: {
-        name: this.options.signature.name,
-        email: this.options.signature.email
-      },
-      committer: {
-        name: 'elek.io core',
-        email: ''
-      },
-      message
-    });
+  public async commit(path: string, message: string): Promise<void> {
+    const args = ['commit', `--message="${message}"`, `--author="${this.options.signature.name} <${this.options.signature.email}>"`];
+
+    await GitProcess.exec(args, path);
   }
 
   /**
    * Creates a new tag
    * 
-   * @param project Project to create the new tag in
-   * @param id UUID of the new tag. Internally used for the ref
-   * @param name Name of the new tag. Internally used for the message
-   * @param signature A signature which identifies the user who created the tag
+   * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---annotate
+   * 
+   * @param path Path to the repository
+   * @param name Name of the new tag
+   * @param message Message of the new tag
    */
-  public async createTag(project: Project, id: string, name: string): Promise<ReadTagResult> {
-    await Git.annotatedTag({
-      fs: Fs,
-      dir: Util.pathTo.project(project.id),
-      ref: id,
-      message: name,
-      tagger: {
-        name: this.options.signature.name,
-        email: this.options.signature.email
+  public async createTag(path: string, name: string, message: string): Promise<void> {
+    const args = ['tag', '--annotate', '-m', message, name];
+
+    await GitProcess.exec(args, path);
+  }
+
+  /**
+   * Gets all local tags or one specific if name is provided
+   * 
+   * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---list
+   * 
+   * @param path Path to the repository
+   * @param name Optional tag name to resolve
+   */
+  public async listTags(path: string, name?: string): Promise<GitTag[]> {
+    const args = ['for-each-ref', '--format=%(refname:short)|%(subject)|%(*authorname)|%(*authoremail)|%(*authordate:unix)', 'refs/tags'];
+    const result = await GitProcess.exec(args, path);
+
+    return result.stdout.split('\n').filter((line) => {
+      return line !== '';
+    }).map((line) => {
+      const lineArray = line.split('|');
+      return {
+        name: lineArray[0],
+        message: lineArray[1],
+        author: {
+          name: lineArray[2],
+          email: lineArray[3]
+        },
+        timestamp: parseInt(lineArray[4])
+      };
+    }).filter((tag) => {
+      if (name) {
+        return tag.name === name;
+      } else {
+        return true;
       }
     });
-    return await this.loadTag(project, id);
   }
 
   /**
-   * Returns a tag by ID
+   * Deletes a tag
    * 
-   * @param project Project to load the tag from
-   * @param id UUID of the tag to load
+   * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---delete
+   * 
+   * @param path Path to the repository
+   * @param name Name of the tag to delete
    */
-  public async loadTag(project: Project, id: string): Promise<ReadTagResult> {
-    const dir = Util.pathTo.project(project.id);
-    // Resolve the oid by the tag's reference (in our case a UUID)
-    const tagObjectId = await Git.resolveRef({
-      fs: Fs,
-      dir,
-      ref: id
-    });
-    // Use this oid to get the tag's full information
-    const tag = await Git.readTag({
-      fs: Fs,
-      dir,
-      oid: tagObjectId
-    });
-    return tag;
-  }
+  public async deleteTag(path: string, name: string): Promise<void> {
+    const args = ['tag', '--delete', name];
 
-  /**
-   * Returns all available tags of given project
-   * 
-   * @param project Project to list all tags from
-   */
-  public async listTags(project: Project): Promise<ReadTagResult[]> {
-    const tagIds = await Git.listTags({
-      fs: Fs,
-      dir: Util.pathTo.project(project.id)
-    });
-    return await Promise.all(tagIds.map((id) => {
-      return this.loadTag(project, id);
-    }));
-  }
-
-  /**
-   * Deletes a tag by ID
-   * 
-   * @param project Project to delete the tag from
-   * @param id UUID of the tag to delete
-   */
-  public async deleteTag(project: Project, id: string): Promise<void> {
-    await Git.deleteTag({
-      fs: Fs,
-      dir: Util.pathTo.project(project.id),
-      ref: id
-    });
-  }
-
-  /**
-   * Removes given dir from absolutePath to make it relative
-   * 
-   * @param dir Absolute path to the directory which will be removed from absolutePath
-   * @param absolutePath A possible absolute path that should be altered
-   */
-  private toRelativePath(dir: string, absolutePath: string) {
-    if (absolutePath.includes(`${dir}/`) === true) {
-      return absolutePath.replace(`${dir}/`, '');
-    }
-    return absolutePath;
-  }
-
-  /**
-   * With git CLI you would `git add <file>` a file that was removed from FS.
-   * While isomorphic git requires you to use the `remove` method to
-   * commit the removal of a file. This method handles this case
-   * 
-   * @see https://github.com/isomorphic-git/isomorphic-git/issues/1099#issuecomment-659700768
-   * 
-   * @param statusMatrix A matrix of file status from `Git.statusMatrix()`
-   * @param dir The directory we are currently working in
-   */
-  private async addOrRemoveByStatus(statusMatrix: [string, 0 | 1, 0 | 1 | 2, 0 | 1 | 2 | 3][], dir: string) {
-    await Promise.all(statusMatrix.map(([filepath, headStatus, worktreeStatus, stageStatus]) => {
-      if (worktreeStatus === 2) {
-        return Git.add({
-          fs: Fs,
-          dir,
-          filepath
-        });
-      } else if(worktreeStatus === 0) {
-        return Git.remove({
-          fs: Fs,
-          dir,
-          filepath
-        });
-      }
-    }));
+    await GitProcess.exec(args, path);
   }
 }

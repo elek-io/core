@@ -56,13 +56,16 @@ export default class ProjectService extends AbstractService implements CrudServi
    */
   public async create(name: string, description: string): Promise<Project> {
     const project = new Project(Util.uuid(), name, description);
+    const projectPath = Util.pathTo.project(project.id);
 
-    await this.gitService.init(project);
+    await Fs.ensureDir(projectPath);
+    await this.gitService.init(projectPath, { initialBranch: 'main' });
     await this.createFolderStructure(project.id);
     await this.createGitignore(project.id);
     await this.jsonFileService.create(project, Util.pathTo.projectConfig(project.id));
-    await this.gitService.commit(project, ['.'], ':tada: Created this new elek.io project');
-    await this.gitService.checkout(project, 'stage', true);
+    await this.gitService.add(projectPath, ['.']);
+    await this.gitService.commit(projectPath, ':tada: Created this new elek.io project');
+    await this.gitService.switch(projectPath, 'stage', { isNew: true });
     const theme = await this.themeService.use(project, 'https://github.com/elek-io/starter-theme.git');
     const block = await this.blockService.create(project, 'en-US', 'We are very happy to have you on board. This page was created for you.\nYou can use it as a starting point or delete it. If you need help, consider visiting one of these pages:\n\n- [An introduction to the elek.io client](https://elek.io)\n- [Working with pages](https://elek.io)\n- [Choosing a theme](https://elek.io)\n- [Deploying your first project](https://elek.io)');
     const page = await this.pageService.create(project, 'en-US', 'Welcome to elek.io!', '/', theme.layouts[1].id);
@@ -101,9 +104,11 @@ export default class ProjectService extends AbstractService implements CrudServi
    * @param message Optional overwrite for the git message
    */
   public async update(project: Project, message = `Updated ${this.type}`): Promise<void> {
+    const projectPath = Util.pathTo.project(project.id);
     const configPath = Util.pathTo.projectConfig(project.id);
     await this.jsonFileService.update(project, configPath);
-    await this.gitService.commit(project, [configPath], `:wrench: ${message}`);
+    await this.gitService.add(projectPath, [configPath]);
+    await this.gitService.commit(projectPath, `:wrench: ${message}`);
     this.eventService.emit(`${this.type}:update`, {
       project
     });
