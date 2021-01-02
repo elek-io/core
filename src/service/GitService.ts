@@ -1,9 +1,12 @@
-import { GitProcess } from 'dugite';
+import Util from '../util';
+import { GitProcess, IGitResult } from 'dugite';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
 import { ElekIoCoreOptions } from '../../type/general';
 import { ServiceType } from '../../type/service';
 import { GitCloneOptions, GitInitOptions, GitSwitchOptions, GitTag } from '../../type/git';
+import GitError from '../error/GitError';
+import LogService from './LogService';
 
 /**
  * Service that manages Git functionality
@@ -19,11 +22,13 @@ import { GitCloneOptions, GitInitOptions, GitSwitchOptions, GitTag } from '../..
  * since currently it fails silently without throwing
  */
 export default class GitService extends AbstractService {
+  private logService: LogService;
   private eventService: EventService;
 
-  public constructor(options: ElekIoCoreOptions, eventService: EventService) {
+  public constructor(options: ElekIoCoreOptions, logService: LogService, eventService: EventService) {
     super(ServiceType.GIT, options);
 
+    this.logService = logService;
     this.eventService = eventService;
   }
 
@@ -44,7 +49,7 @@ export default class GitService extends AbstractService {
     //   args = [...args, `--initial-branch="${options.initialBranch}"`];
     // }
 
-    await GitProcess.exec(args, path);
+    await this.git(path, args);
 
     // Delete when dugite is using Git >= 2.28.0
     if (options?.initialBranch) {
@@ -78,7 +83,7 @@ export default class GitService extends AbstractService {
       args = [...args, '--single-branch'];
     }
 
-    await GitProcess.exec([...args, url, '.'], path);
+    await this.git(path, [...args, url, '.']);
   }
 
   /**
@@ -92,7 +97,7 @@ export default class GitService extends AbstractService {
   public async add(path: string, files: string[]): Promise<void> {
     const args = ['add', '--', ...files];
 
-    await GitProcess.exec(args, path);
+    await this.git(path, args);
   }
 
   /**
@@ -113,7 +118,7 @@ export default class GitService extends AbstractService {
       args = [...args, name];
     }
 
-    await GitProcess.exec(args, path);
+    await this.git(path, args);
   }
 
   /**
@@ -127,8 +132,7 @@ export default class GitService extends AbstractService {
    */
   public async restore(path: string, source: string, files: string[]): Promise<void> {
     const args = ['restore', `--source=${source}`, ...files];
-
-    await GitProcess.exec(args, path);
+    await this.git(path, args);
   }
 
   /**
@@ -140,8 +144,7 @@ export default class GitService extends AbstractService {
    */
   public async pull(path: string): Promise<void> {
     const args = ['pull'];
-
-    await GitProcess.exec(args, path);
+    await this.git(path, args);
   }
 
   /**
@@ -154,8 +157,7 @@ export default class GitService extends AbstractService {
    */
   public async commit(path: string, message: string): Promise<void> {
     const args = ['commit', `--message="${message}"`, `--author="${this.options.signature.name} <${this.options.signature.email}>"`];
-
-    await GitProcess.exec(args, path);
+    await this.git(path, args);
   }
 
   /**
@@ -169,8 +171,7 @@ export default class GitService extends AbstractService {
    */
   public async createTag(path: string, name: string, message: string): Promise<void> {
     const args = ['tag', '--annotate', '-m', message, name];
-
-    await GitProcess.exec(args, path);
+    await this.git(path, args);
   }
 
   /**
@@ -183,7 +184,7 @@ export default class GitService extends AbstractService {
    */
   public async listTags(path: string, name?: string): Promise<GitTag[]> {
     const args = ['for-each-ref', '--format=%(refname:short)|%(subject)|%(*authorname)|%(*authoremail)|%(*authordate:unix)', 'refs/tags'];
-    const result = await GitProcess.exec(args, path);
+    const result = await this.git(path, args);
 
     return result.stdout.split('\n').filter((line) => {
       return line !== '';
@@ -217,7 +218,27 @@ export default class GitService extends AbstractService {
    */
   public async deleteTag(path: string, name: string): Promise<void> {
     const args = ['tag', '--delete', name];
+    await this.git(path, args);
+  }
 
-    await GitProcess.exec(args, path);
+  /**
+   * Wraps the execution of any git command for logging
+   * 
+   * @param path Path to the repository
+   * @param args Arguments to execute under the `git` command
+   */
+  private async git(path: string, args: string[]): Promise<IGitResult> {
+    const result = await GitProcess.exec(args, path);
+    if (result.exitCode !== 0) {
+      const error = new GitError(`Git command "git ${args.join(' ')}" failed with code ${result.exitCode} and message:\n${result.stderr}`);
+      const projectId = Util.fromPath.projectId(path);
+      if (projectId) {
+        this.logService.project(projectId).log.error(error);
+      } else {
+        this.logService.generic.log.error(error);
+      }
+      throw error;
+    }
+    return result;
   }
 }

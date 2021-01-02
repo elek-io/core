@@ -4,6 +4,7 @@ import Path from 'path';
 import { v4 as Uuid } from 'uuid';
 import Slugify from 'slugify';
 import { spawn, SpawnOptionsWithoutStdio } from 'child_process';
+import * as Validator from './validator';
 
 /**
  * The directory in which everything is stored and will be worked in
@@ -66,6 +67,16 @@ export const pathTo = {
   lfsFile: (projectId: string, assetId: string, language: string, extension: string): string => {
     return Path.join(pathTo.lfs(projectId), `${assetId}.${language}.${extension}`);
   }
+};
+
+export const fromPath = {
+  projectId: (path: string): string | null => {
+    const result = /projects\/(.*)\//.exec(path);
+    if (result && Validator.isUuid(result[1])) {
+      return result[1];
+    }
+    return null;
+  },
 };
 
 /**
