@@ -50,6 +50,7 @@ export default class GitService extends AbstractService {
     // }
 
     await this.git(path, args);
+    await this.setLocalConfig(path);
 
     // Delete when dugite is using Git >= 2.28.0
     if (options?.initialBranch) {
@@ -84,6 +85,7 @@ export default class GitService extends AbstractService {
     }
 
     await this.git(path, [...args, url, '.']);
+    await this.setLocalConfig(path);
   }
 
   /**
@@ -219,6 +221,18 @@ export default class GitService extends AbstractService {
   public async deleteTag(path: string, name: string): Promise<void> {
     const args = ['tag', '--delete', name];
     await this.git(path, args);
+  }
+
+  /**
+   * Sets the git config of given local repository from ElekIoCoreOptions
+   * 
+   * @param path Path to the repository
+   */
+  private async setLocalConfig(path: string) {
+    const userNameArgs = ['config', '--local', 'user.name', this.options.signature.name];
+    const userEmailArgs = ['config', '--local', 'user.email', this.options.signature.email];
+    await this.git(path, userNameArgs);
+    await this.git(path, userEmailArgs);
   }
 
   /**
