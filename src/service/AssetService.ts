@@ -56,6 +56,7 @@ export default class AssetService extends AbstractService implements CrudService
     await Fs.copyFile(filePath, destination);
     await this.jsonFileService.create(asset, assetPath);
     await this.gitService.add(projectPath, [assetPath]);
+    await this.gitService.add(projectPath, [Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)]);
     await this.gitService.commit(projectPath, `:heavy_plus_sign: Created new ${this.type}`);
     this.eventService.emit(`${this.type}:create`, {
       project,
@@ -97,6 +98,7 @@ export default class AssetService extends AbstractService implements CrudService
     const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await this.jsonFileService.update(asset, assetJsonPath);
     await this.gitService.add(projectPath, [assetJsonPath]);
+    await this.gitService.add(projectPath, [Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)]);
     await this.gitService.commit(projectPath, `:wrench: ${message}`);
     this.eventService.emit(`${this.type}:update`, {
       project,
@@ -119,6 +121,7 @@ export default class AssetService extends AbstractService implements CrudService
     await Fs.remove(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension));
     await this.jsonFileService.delete(assetJsonPath);
     await this.gitService.add(projectPath, [assetJsonPath]);
+    await this.gitService.add(projectPath, [Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)]);
     await this.gitService.commit(projectPath, `:fire: ${message}`);
     this.eventService.emit(`${this.type}:delete`, {
       project,

@@ -160,9 +160,12 @@ export default class ProjectService extends AbstractService implements CrudServi
 
   /**
    * Writes the projects main .gitignore file to disk
+   * 
+   * @todo We probably need to add some files like thumbnails
+   * for windows systems to that
    */
   private async createGitignore(id: string): Promise<void> {
-    const content = '.DS_Store\ntheme/\npublic/\nlogs/\nlfs/\n\n# Keep directories with .gitkeep files in them\n# even if the directory itself is ignored\n!/**/.gitkeep';
+    const content = '.DS_Store\ntheme/\npublic/\nlogs/\n\n# Keep directories with .gitkeep files in them\n# even if the directory itself is ignored\n!/**/.gitkeep';
     await Fs.writeFile(Path.join(Util.pathTo.project(id), '.gitignore'), content);
   }
 }

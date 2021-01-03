@@ -49,6 +49,7 @@ export default class GitService extends AbstractService {
 
     await this.git(path, args);
     await this.setLocalConfig(path);
+    await this.installLfs(path);
 
     // Delete when dugite is using Git >= 2.28.0
     if (options?.initialBranch) {
@@ -126,6 +127,11 @@ export default class GitService extends AbstractService {
    * Restore working tree files
    * 
    * @see https://git-scm.com/docs/git-restore/
+   * 
+   * @todo It's probably a good idea to not use restore
+   * for a use case where someone just wants to have a look
+   * and maybe copy something from a deleted file.
+   * We should use `checkout` without `add .` and `commit` for that
    * 
    * @param path Path to the repository
    * @param source Git commit SHA or tag name to restore to
@@ -260,6 +266,17 @@ export default class GitService extends AbstractService {
         timestamp: parseInt(lineArray[4])
       };
     });
+  }
+
+  /**
+   * Installs LFS support and starts tracking
+   * all files inside the lfs folder
+   * 
+   * @param path Path to the repository
+   */
+  private async installLfs(path: string): Promise<void> {
+    await this.git(path, ['lfs', 'install']);
+    await this.git(path, ['lfs', 'track', 'lfs/*']);
   }
 
   /**

@@ -273,10 +273,16 @@ describe('Class ElekIoCore', () => {
     const prevExistingBlock = await core.block.read(project, blockToRevertId, 'en-GB');
     await core.snapshot.revert(project, snapshot);
     const prevDeletedBlock = await core.block.read(project, blockId, 'en-GB');
+    const asset = await core.asset.read(project, assetId, 'en-GB');
 
     expect(prevDeletedBlock.id).to.equal(blockId);
     expect(core.block.read(project, prevExistingBlock.id, prevExistingBlock.language)).to.be.rejectedWith();
     expect(await Fs.pathExists(Util.pathTo.block(project.id, prevExistingBlock.id, prevExistingBlock.language))).to.equal(false);
+
+    // The deleted asset should also be there again now
+    expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language)), 'the previously deleted asset file to exist again').to.equal(true);
+    // Also check the LFS folder
+    expect(await Fs.pathExists(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)), 'the previously deleted LFS file to exist again').to.equal(true);
   });
 
   it('should be able to list all snapshots', async () => {
