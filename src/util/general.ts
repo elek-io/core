@@ -69,6 +69,10 @@ export const pathTo = {
   }
 };
 
+/**
+ * @todo I really dont like this. Can we get around this bs
+ * without having access to all params like the project all the time?
+ */
 export const fromPath = {
   projectId: (path: string): string | null => {
     const result = /projects\/(.*)\//.exec(path);
