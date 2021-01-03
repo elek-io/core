@@ -8,6 +8,16 @@ export interface GitTag {
   timestamp: number;
 }
 
+export interface GitCommit {
+  hash: string;
+  message: string;
+  author: {
+    name: string;
+    email: string;
+  };
+  timestamp: number;
+}
+
 export interface GitInitOptions {
   /**
    * Use the specified name for the initial branch in the newly created repository. If not specified, fall back to the default name (currently master, but this is subject to change in the future; the name can be customized via the init.defaultBranch configuration variable).
@@ -37,4 +47,18 @@ export interface GitSwitchOptions {
    * @see https://git-scm.com/docs/git-switch#Documentation/git-switch.txt---createltnew-branchgt
    */
   isNew: boolean;
+}
+
+export interface GitLogOptions {
+  /**
+   * Limit the result to given number of commits
+   */
+  limit: number;
+  /**
+   * Only list commits that are between given SHAs or tag names
+   */
+  between: {
+    from: string;
+    to: string;
+  };
 }

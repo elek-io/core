@@ -78,7 +78,7 @@ export default class SnapshotService extends AbstractService implements CrudServ
   /**
    * @todo Check if we are able to and actually want to update snapshots
    */
-  public async update() {
+  public async update(): Promise<void> {
     throw new Error('Method not supported');
   }
 

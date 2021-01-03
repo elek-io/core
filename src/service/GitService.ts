@@ -4,7 +4,7 @@ import AbstractService from './AbstractService';
 import EventService from './EventService';
 import { ElekIoCoreOptions } from '../../type/general';
 import { ServiceType } from '../../type/service';
-import { GitCloneOptions, GitInitOptions, GitSwitchOptions, GitTag } from '../../type/git';
+import { GitCloneOptions, GitCommit, GitInitOptions, GitLogOptions, GitSwitchOptions, GitTag } from '../../type/git';
 import GitError from '../error/GitError';
 import LogService from './LogService';
 
@@ -17,9 +17,6 @@ import LogService from './LogService';
  * 
  * Heavily inspired by the GitHub Desktop app
  * @see https://github.com/desktop/desktop
- * 
- * @todo Implement Git response model to handle success and error,
- * since currently it fails silently without throwing
  */
 export default class GitService extends AbstractService {
   private logService: LogService;
@@ -36,6 +33,7 @@ export default class GitService extends AbstractService {
    * Create an empty Git repository or reinitialize an existing one
    * 
    * @see https://git-scm.com/docs/git-init
+   * 
    * @todo Change implementation once dugite updated to Git >= 2.28.0
    * 
    * @param path Path to initialize in. Fails if path does not exist
@@ -62,6 +60,7 @@ export default class GitService extends AbstractService {
    * Clone a repository into a directory
    * 
    * @see https://git-scm.com/docs/git-clone
+   * 
    * @todo Implement progress callback / events
    * 
    * @param url The remote repository URL to clone from
@@ -129,7 +128,7 @@ export default class GitService extends AbstractService {
    * @see https://git-scm.com/docs/git-restore/
    * 
    * @param path Path to the repository
-   * @param source Git commit or tag to restore to
+   * @param source Git commit SHA or tag name to restore to
    * @param files Files to restore
    */
   public async restore(path: string, source: string, files: string[]): Promise<void> {
@@ -179,7 +178,7 @@ export default class GitService extends AbstractService {
   /**
    * Gets all local tags or one specific if name is provided
    * 
-   * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---list
+   * @see https://git-scm.com/docs/git-for-each-ref
    * 
    * @param path Path to the repository
    * @param name Optional tag name to resolve
@@ -221,6 +220,46 @@ export default class GitService extends AbstractService {
   public async deleteTag(path: string, name: string): Promise<void> {
     const args = ['tag', '--delete', name];
     await this.git(path, args);
+  }
+
+  /**
+   * Gets local commit history
+   * 
+   * @see https://git-scm.com/docs/git-log
+   * 
+   * @todo Check if there is a better way to get the commit message without >"< chars
+   * @todo Use this method in a service. Decide if we need a HistoryService for example
+   * 
+   * @param path Path to the repository
+   * @param options Options specific to the log operation
+   */
+  public async log(path: string, options?: Partial<GitLogOptions>): Promise<GitCommit[]> {
+    let args = ['log'];
+
+    if (options?.between?.from && options?.between?.to) {
+      args = [...args, `${options.between.from}..${options.between.to}`];
+    }
+
+    if (options?.limit) {
+      args = [...args, `--max-count=${options.limit}`];
+    }
+
+    const result = await this.git(path, [...args, '--format=%H|%s|%an|%ae|%at']);
+
+    return result.stdout.split('\n').filter((line) => {
+      return line !== '';
+    }).map((line) => {
+      const lineArray = line.split('|');
+      return {
+        hash: lineArray[0],
+        message: lineArray[1].replace('"', ''),
+        author: {
+          name: lineArray[2],
+          email: lineArray[3]
+        },
+        timestamp: parseInt(lineArray[4])
+      };
+    });
   }
 
   /**
