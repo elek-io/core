@@ -44,10 +44,12 @@ export default class PageService extends AbstractService implements CrudService 
    */
   public async create(project: Project, language: string, name: string, uriPath: string, layoutId: string): Promise<Page> {
     const id = Util.uuid();
+    const projectPath = Util.pathTo.project(project.id);
     const page = new Page(id, language, name, uriPath, layoutId);
     const pagePath = Util.pathTo.page(project.id, page.id, language);
     await this.jsonFileService.create(page, pagePath);
-    await this.gitService.commit(project, [pagePath], `:heavy_plus_sign: Created new ${this.type}`);
+    await this.gitService.add(projectPath, [pagePath]);
+    await this.gitService.commit(projectPath, `:heavy_plus_sign: Created new ${this.type}`);
     this.eventService.emit(`${this.type}:create`, {
       project,
       data: {
@@ -84,9 +86,11 @@ export default class PageService extends AbstractService implements CrudService 
    * @param message Optional overwrite for the git message
    */
   public async update(project: Project, page: Page, message = `Updated ${this.type}`): Promise<void> {
+    const projectPath = Util.pathTo.project(project.id);
     const pagePath = Util.pathTo.page(project.id, page.id, page.language);
     await this.jsonFileService.update(page, pagePath);
-    await this.gitService.commit(project, [pagePath], `:wrench: ${message}`);
+    await this.gitService.add(projectPath, [pagePath]);
+    await this.gitService.commit(projectPath, `:wrench: ${message}`);
     this.eventService.emit(`${this.type}:update`, {
       project,
       data: {
@@ -103,9 +107,11 @@ export default class PageService extends AbstractService implements CrudService 
    * @param message Optional overwrite for the git message
    */
   public async delete(project: Project, page: Page, message = `Deleted ${this.type}`): Promise<void> {
+    const projectPath = Util.pathTo.project(project.id);
     const pagePath = Util.pathTo.page(project.id, page.id, page.language);
     await this.jsonFileService.delete(pagePath);
-    await this.gitService.commit(project, [pagePath], `:fire: ${message}`);
+    await this.gitService.add(projectPath, [pagePath]);
+    await this.gitService.commit(projectPath, `:fire: ${message}`);
     this.eventService.emit(`${this.type}:delete`, {
       project,
       data: {

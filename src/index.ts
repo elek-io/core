@@ -54,7 +54,7 @@ export default class ElekIoCore {
 
     this.logService = new LogService(this.options);
     this.eventService = new EventService(this.options, this.logService);
-    this.gitService = new GitService(this.options, this.eventService);
+    this.gitService = new GitService(this.options, this.logService, this.eventService);
     this.snapshotService = new SnapshotService(this.options, this.eventService, this.gitService);
     this.jsonFileService = new JsonFileService(this.options, this.eventService);
     this.mdFileService = new MdFileService(this.options, this.eventService);

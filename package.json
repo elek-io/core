@@ -46,10 +46,10 @@
   },
   "dependencies": {
     "cheerio": "^1.0.0-rc.5",
+    "dugite": "^1.93.0",
     "fs-extra": "^9.0.1",
     "globby": "^11.0.1",
     "highlight.js": "^10.5.0",
-    "isomorphic-git": "^1.8.0",
     "markdown-it": "^12.0.4",
     "pino": "^6.8.0",
     "rxjs": "^6.6.3",

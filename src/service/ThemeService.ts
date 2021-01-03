@@ -45,11 +45,11 @@ export default class ThemeService extends AbstractService {
    * @param project Project to add the block to
    * @param repository URL to the repository to clone
    */
-  public async use(project: Project, repository: string): Promise<Theme> {
+  public async use(project: Project, url: string): Promise<Theme> {
     await this.delete(project);
     // Clone only the main branch with a history depth of 1
     // to save resources and time
-    await this.gitService.clone(repository, Util.pathTo.theme(project.id), {
+    await this.gitService.clone(url, Util.pathTo.theme(project.id), {
       singleBranch: true,
       depth: 1
     });
@@ -108,7 +108,6 @@ export default class ThemeService extends AbstractService {
    */
   public async delete(project: Project): Promise<void> {
     await Fs.emptyDir(Util.pathTo.theme(project.id));
-    await Fs.writeFile(Path.join(Util.pathTo.theme(project.id), '.gitkeep'), '');
     this.eventService.emit(`${this.type}:delete`, {
       project
     });
