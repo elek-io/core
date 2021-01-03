@@ -80,26 +80,26 @@ export default class ThemeService extends AbstractService {
     return theme;
   }
 
-  // /**
-  //  * Updates the current theme on disk by pulling
-  //  * the latest changes from the remote repository
-  //  * 
-  //  * @todo Implement logic to check for layout ID changes
-  //  * and maybe map between both versions if needed
-  //  * 
-  //  * @param project Project of the theme to update
-  //  */
-  // public async update(project: Project): Promise<Theme> {
-  //   await this.gitService.pull(Util.pathTo.theme(project.id));
-  //   const theme = await this.read(project);
-  //   this.eventService.emit(`${this.type}:update`, {
-  //     project,
-  //     data: {
-  //       theme
-  //     }
-  //   });
-  //   return theme;
-  // }
+  /**
+   * Updates the current theme on disk by pulling
+   * the latest changes from the remote repository
+   * 
+   * @todo Implement logic to check for layout ID changes
+   * and maybe map between both versions if needed
+   * 
+   * @param project Project of the theme to update
+   */
+  public async update(project: Project): Promise<Theme> {
+    await this.gitService.pull(Util.pathTo.theme(project.id));
+    const theme = await this.read(project);
+    this.eventService.emit(`${this.type}:update`, {
+      project,
+      data: {
+        theme
+      }
+    });
+    return theme;
+  }
 
   /**
    * Deletes the current theme from disk
