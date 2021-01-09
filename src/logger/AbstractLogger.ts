@@ -16,8 +16,7 @@ export default abstract class AbstractLogger {
     // Pretty print when not in production
     if (process.env.NODE_ENV !== 'production') {
       this.options = {
-        level: 'debug',
-        prettyPrint: true
+        level: 'debug'
       };
     }
 
