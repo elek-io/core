@@ -88,6 +88,15 @@ export default class ElekIoCore {
   }
 
   /**
+   * Util library
+   * 
+   * @todo Do we really want to expose this / is this really needed?
+   */
+  public get util() {
+    return Util;
+  }
+
+  /**
    * Endpoint to subscribe to internal events and react to accordingly
    * 
    * @todo figure out if we really want outside code be able to call emit()
