@@ -35,7 +35,7 @@ export default abstract class AbstractLogger {
     ['uncaughtException', 'unhandledRejection'].forEach((errorToHandle) => {
       process.on(errorToHandle, Pino.final(this.log, (err, finalLogger) => {
         finalLogger.error(err, errorToHandle);
-        process.exit(1);
+        throw err;
       }));
     });
   }
