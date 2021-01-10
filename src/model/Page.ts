@@ -25,11 +25,12 @@ export default class Page extends AbstractModelWithLanguage {
 
   public content: PageContentReference[] = [];
 
-  constructor(id: string, language: string, name: string, uriPath: string, layoutId: string) {
+  constructor(id: string, language: string, name: string, uriPath: string, layoutId: string, content: PageContentReference[]) {
     super(id, language, ModelType.PAGE);
     
     this.name = name;
     this.uriPath = uriPath;
     this.layoutId = layoutId;
+    this.content = content;
   }
 }

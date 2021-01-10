@@ -45,7 +45,7 @@ export default class PageService extends AbstractService implements CrudService 
   public async create(project: Project, language: string, name: string, uriPath: string, layoutId: string): Promise<Page> {
     const id = Util.uuid();
     const projectPath = Util.pathTo.project(project.id);
-    const page = new Page(id, language, name, uriPath, layoutId);
+    const page = new Page(id, language, name, uriPath, layoutId, []);
     const pagePath = Util.pathTo.page(project.id, page.id, language);
     await this.jsonFileService.create(page, pagePath);
     await this.gitService.add(projectPath, [pagePath]);
@@ -68,7 +68,7 @@ export default class PageService extends AbstractService implements CrudService 
    */
   public async read(project: Project, id: string, language: string): Promise<Page> {
     const json = await this.jsonFileService.read<Page>(Util.pathTo.page(project.id, id, language));
-    const page = new Page(json.id, json.language, json.name, json.uriPath, json.layoutId);
+    const page = new Page(json.id, json.language, json.name, json.uriPath, json.layoutId, json.content);
     this.eventService.emit(`${this.type}:read`, {
       project,
       data: {
