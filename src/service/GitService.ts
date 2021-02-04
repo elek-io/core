@@ -112,6 +112,8 @@ export default class GitService extends AbstractService {
    * @param options Options specific to the switch operation
    */
   public async switch(path: string, name: string, options?: Partial<GitSwitchOptions>): Promise<void> {
+    await this.checkBranchOrTagName(path, name);
+    
     let args = ['switch'];
 
     if (options?.isNew === true) {
@@ -178,6 +180,8 @@ export default class GitService extends AbstractService {
    * @param commit Optional commit to create the tag on
    */
   public async createTag(path: string, name: string, message: string, commit?: GitCommit): Promise<GitTag> {
+    await this.checkBranchOrTagName(path, name);
+
     let args = ['tag', '--annotate', '-m', message, name];
 
     if (commit) {
@@ -198,6 +202,8 @@ export default class GitService extends AbstractService {
    * @param name Optional tag name to resolve
    */
   public async listTags(path: string, name?: string): Promise<GitTag[]> {
+    if (name) { await this.checkBranchOrTagName(path, name); }
+
     const args = ['for-each-ref', '--format=%(refname:short)|%(subject)|%(*authorname)|%(*authoremail)|%(*authordate:unix)', 'refs/tags'];
     const result = await this.git(path, args);
 
@@ -232,6 +238,7 @@ export default class GitService extends AbstractService {
    * @param name Name of the tag to delete
    */
   public async deleteTag(path: string, name: string): Promise<void> {
+    await this.checkBranchOrTagName(path, name);
     const args = ['tag', '--delete', name];
     await this.git(path, args);
   }
@@ -274,6 +281,19 @@ export default class GitService extends AbstractService {
         timestamp: parseInt(lineArray[4])
       };
     });
+  }
+
+  /**
+   * A reference is used in Git to specify branches and tags.
+   * This method checks if given name matches the required format
+   * 
+   * @see https://git-scm.com/docs/git-check-ref-format
+   * 
+   * @param path Path to the repository
+   * @param name Name to check
+   */
+  private async checkBranchOrTagName(path: string, name: string) {
+    await this.git(path, ['check-ref-format', '--allow-onelevel', name]);
   }
 
   /**
