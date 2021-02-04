@@ -242,6 +242,22 @@ export default class ElekIoCore {
    * 
    * @todo check how to prevent remote code execution here,
    * since running a user defined command is generally a very bad idea...
+   * 
+   * Ok, so this seems to be one of the main challenges to get this project going.
+   * Currently this solution works. For a developer it might be ok to write a theme,
+   * then using it like this - he wrote the code himself. But for an end-user this is horrible.
+   * Using a theme like this means running external code with full access on your private
+   * or companies computer. E.g. a theme update now containing a "rm -rf /" as the build command.
+   * 
+   * A few (not so great) solutions that come to my mind:
+   * - Do not use npm run to execute self defined commands. Instead direktly invoke e.g. the Vue CLI.
+   *   = a bit more secure but not really
+   * - Use a container technology to execute code in (Docker etc.)
+   *   = better security, more overhead and complexity
+   * - Use a VM technology to execute code in (VirtualBox etc.)
+   *   = even more overhead & complexity but also more secure
+   * - Just don't allow themes to be build locally if they are not from a trusted source
+   *   = limits the usability
    */
   public async build(project: Project): Promise<void> {
     const theme = await this.themeService.read(project);
