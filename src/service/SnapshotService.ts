@@ -1,4 +1,5 @@
 import { ElekIoCoreOptions } from '../../type/general';
+import { GitCommit } from '../../type/git';
 import { ModelType } from '../../type/model';
 import { CrudService, ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
@@ -37,11 +38,11 @@ export default class SnapshotService extends AbstractService implements CrudServ
    * @param project Project to create the snapshot from
    * @param name Name of the new snapshot
    */
-  public async create(project: Project, name: string): Promise<Snapshot> {
+  public async create(project: Project, name: string, commit?: GitCommit): Promise<Snapshot> {
     const id = Util.uuid();
     const projectPath = Util.pathTo.project(project.id);
-    await this.gitService.createTag(projectPath, id, name);
-    const snapshot = new Snapshot(id, name, 0, 0);
+    const tag = await this.gitService.createTag(projectPath, id, name, commit);
+    const snapshot = new Snapshot(tag.name, tag.name, tag.timestamp, tag.author);
     this.eventService.emit(`${this.type}:create`, {
       project,
       data: {
@@ -60,12 +61,12 @@ export default class SnapshotService extends AbstractService implements CrudServ
   public async read(project: Project, id: string): Promise<Snapshot> {
     const tags = await this.gitService.listTags(Util.pathTo.project(project.id), id);
     if (tags.length === 0) {
-      throw new Error(`Snapshot ${id} not found`);
+      throw new Error(`Snapshot "${id}" not found`);
     }
     if (tags.length > 1) {
-      throw new Error(`Snapshot ${id} resolved ${tags.length} git tags`);
+      throw new Error(`Snapshot "${id}" resolved ${tags.length} git tags`);
     }
-    const snapshot = new Snapshot(tags[0].name, tags[0].message, tags[0].timestamp, 0);
+    const snapshot = new Snapshot(tags[0].name, tags[0].message, tags[0].timestamp, tags[0].author);
     this.eventService.emit(`${this.type}:read`, {
       project,
       data: {
@@ -91,7 +92,7 @@ export default class SnapshotService extends AbstractService implements CrudServ
     const tags = await this.gitService.listTags(Util.pathTo.project(project.id));
     const snapshots: Snapshot[] = [];
     tags.forEach((tag) => {
-      snapshots.push(new Snapshot(tag.name, tag.message, tag.timestamp, 0));
+      snapshots.push(new Snapshot(tag.name, tag.message, tag.timestamp, tag.author));
     });
     this.eventService.emit(`${this.type}:list`, {
       project,

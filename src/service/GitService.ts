@@ -175,10 +175,18 @@ export default class GitService extends AbstractService {
    * @param path Path to the repository
    * @param name Name of the new tag
    * @param message Message of the new tag
+   * @param commit Optional commit to create the tag on
    */
-  public async createTag(path: string, name: string, message: string): Promise<void> {
-    const args = ['tag', '--annotate', '-m', message, name];
+  public async createTag(path: string, name: string, message: string, commit?: GitCommit): Promise<GitTag> {
+    let args = ['tag', '--annotate', '-m', message, name];
+
+    if (commit) {
+      args = [...args, commit.hash];
+    }
+
     await this.git(path, args);
+    const tags = await this.listTags(path, name);
+    return tags[0];
   }
 
   /**
@@ -242,8 +250,8 @@ export default class GitService extends AbstractService {
   public async log(path: string, options?: Partial<GitLogOptions>): Promise<GitCommit[]> {
     let args = ['log'];
 
-    if (options?.between?.from && options?.between?.to) {
-      args = [...args, `${options.between.from}..${options.between.to}`];
+    if (options?.between?.from) {
+      args = [...args, `${options.between.from}..${options.between.to || 'HEAD'}`];
     }
 
     if (options?.limit) {

@@ -267,6 +267,36 @@ describe('Class ElekIoCore', () => {
     expect(await Fs.pathExists(Util.pathTo.block(project.id, block.id, block.language))).to.equal(false);
   });
 
+  it('should be able to read the git log', async () => {
+    const project = await core.project.read(projectId);
+    const logs = await core.historyLog(project);
+
+    expect(logs.length).to.greaterThan(5);
+  });
+
+  it('should be able to read the git log with options', async () => {
+    const project = await core.project.read(projectId);
+    const allLogs = await core.historyLog(project);
+    const limitedLogs = await core.historyLog(project, {
+      limit: 3
+    });
+    const lastLogs = await core.historyLog(project, {
+      between: {
+        from: allLogs[5].hash
+      }
+    });
+    const betweenLogs = await core.historyLog(project, {
+      between: {
+        from: allLogs[allLogs.length - 1].hash,
+        to: allLogs[allLogs.length - 6].hash
+      }
+    });
+
+    expect(limitedLogs.length).to.equal(3);
+    expect(lastLogs.length).to.equal(5);
+    expect(betweenLogs.length).to.equal(5);
+  });
+
   it('should be able to revert to an snapshot', async () => {
     const project = await core.project.read(projectId);
     const snapshot = await core.snapshot.read(project, snapshotId);

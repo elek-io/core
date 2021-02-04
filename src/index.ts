@@ -19,6 +19,7 @@ import GitService from './service/GitService';
 import Snapshot from './model/Snapshot';
 import ThemeService from './service/ThemeService';
 import { CrudService } from '../type/service';
+import { GitCommit, GitLogOptions } from '../type/git';
 
 /**
  * elek.io core
@@ -187,6 +188,13 @@ export default class ElekIoCore {
    */
   public get snapshot(): SnapshotService {
     return this.snapshotService;
+  }
+
+  /**
+   * Provides access to the `git log` method
+   */
+  public async historyLog(project: Project, options?: GitLogOptions): Promise<GitCommit[]> {
+    return this.gitService.log(this.util.pathTo.project(project.id), options);
   }
 
   /**

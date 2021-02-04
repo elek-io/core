@@ -1,20 +1,16 @@
+import { GitSignature } from './general';
+
 export interface GitTag {
   name: string;
   message: string;
-  author: {
-    name: string;
-    email: string;
-  };
+  author: GitSignature;
   timestamp: number;
 }
 
 export interface GitCommit {
   hash: string;
   message: string;
-  author: {
-    name: string;
-    email: string;
-  };
+  author: GitSignature;
   timestamp: number;
 }
 
@@ -53,12 +49,22 @@ export interface GitLogOptions {
   /**
    * Limit the result to given number of commits
    */
-  limit: number;
+  limit?: number;
   /**
    * Only list commits that are between given SHAs or tag names
+   * 
+   * Note that the commits of from and to are not included in the result
    */
-  between: {
+  between?: {
+    /**
+     * From the oldest commit
+     */
     from: string;
-    to: string;
+    /**
+     * To the newest commit
+     * 
+     * Defaults to the current HEAD
+     */
+    to?: string;
   };
 }

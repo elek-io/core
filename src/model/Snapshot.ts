@@ -1,3 +1,4 @@
+import { GitSignature } from '../../type/general';
 import { ModelType } from '../../type/model';
 import AbstractModel from './AbstractModel';
 
@@ -15,16 +16,15 @@ export default class Snapshot extends AbstractModel {
   public readonly timestamp: number;
 
   /**
-   * Timezone difference from UTC in minutes
+   * The author who created this snapshot
    */
-  public readonly timezoneOffset: number;
+  public readonly author: GitSignature;
 
-
-  constructor(id: string, name: string, timestamp: number, timezoneOffset: number) {
+  constructor(id: string, name: string, timestamp: number, author: GitSignature) {
     super(id, ModelType.SNAPSHOT);
     
     this.name = name;
     this.timestamp = timestamp;
-    this.timezoneOffset = timezoneOffset;
+    this.author = author;
   }
 }
