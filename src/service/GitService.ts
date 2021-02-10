@@ -254,8 +254,12 @@ export default class GitService extends AbstractService {
    * @param path Path to the repository
    * @param options Options specific to the log operation
    */
-  public async log(path: string, options?: Partial<GitLogOptions>): Promise<GitCommit[]> {
+  public async log(path: string, parent?: string, options?: Partial<GitLogOptions>): Promise<GitCommit[]> {
     let args = ['log'];
+
+    if (parent) {
+      args = [...args, parent];
+    }
 
     if (options?.between?.from) {
       args = [...args, `${options.between.from}..${options.between.to || 'HEAD'}`];
