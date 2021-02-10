@@ -165,7 +165,7 @@ export default class GitService extends AbstractService {
    * @param message A message that describes the changes
    */
   public async commit(path: string, message: string): Promise<void> {
-    const args = ['commit', `--message="${message}"`, `--author="${this.options.signature.name} <${this.options.signature.email}>"`];
+    const args = ['commit', `--message=${message}`, `--author="${this.options.signature.name} <${this.options.signature.email}>"`];
     await this.git(path, args);
   }
 
