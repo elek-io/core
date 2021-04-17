@@ -198,6 +198,9 @@ export default class GitService extends AbstractService {
   /**
    * Gets all local tags or one specific if name is provided
    * 
+   * They are sorted by authordate of the commit, not the timestamp the tag is created.
+   * This ensures tags are sorted correctly in the timeline of their commits.
+   * 
    * @see https://git-scm.com/docs/git-for-each-ref
    * 
    * @param path Path to the repository
@@ -206,7 +209,7 @@ export default class GitService extends AbstractService {
   public async listTags(path: string, name?: string): Promise<GitTag[]> {
     if (name) { await this.checkBranchOrTagName(path, name); }
 
-    const args = ['for-each-ref', '--format=%(refname:short)|%(subject)|%(*authorname)|%(*authoremail)|%(*authordate:unix)', 'refs/tags'];
+    const args = ['for-each-ref', '--sort=-*authordate', '--format=%(refname:short)|%(subject)|%(*authorname)|%(*authoremail)|%(*authordate:unix)', 'refs/tags'];
     const result = await this.git(path, args);
 
     return result.stdout.split('\n').filter((line) => {
