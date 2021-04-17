@@ -16,8 +16,7 @@ export default abstract class AbstractLogger {
     // Pretty print when not in production
     if (process.env.NODE_ENV !== 'production') {
       this.options = {
-        level: 'debug',
-        prettyPrint: true
+        level: 'debug'
       };
     }
 
@@ -36,7 +35,7 @@ export default abstract class AbstractLogger {
     ['uncaughtException', 'unhandledRejection'].forEach((errorToHandle) => {
       process.on(errorToHandle, Pino.final(this.log, (err, finalLogger) => {
         finalLogger.error(err, errorToHandle);
-        process.exit(1);
+        //process.exit(1);
       }));
     });
   }

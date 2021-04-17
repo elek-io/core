@@ -177,7 +177,7 @@ export default class GitService extends AbstractService {
    * @param message Message of the new tag
    */
   public async createTag(path: string, name: string, message: string): Promise<void> {
-    const args = ['tag', '--annotate', '-m', message, name];
+    const args = ['tag', '--annotate', name, '-m', message];
     await this.git(path, args);
   }
 
