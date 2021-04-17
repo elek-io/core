@@ -182,7 +182,7 @@ export default class GitService extends AbstractService {
   public async createTag(path: string, name: string, message: string, commit?: GitCommit): Promise<GitTag> {
     await this.checkBranchOrTagName(path, name);
 
-    let args = ['tag', '--annotate', '-m', message, name];
+    let args = ['tag', '--annotate', name, '-m', message];
 
     if (commit) {
       args = [...args, commit.hash];

@@ -13,7 +13,7 @@ export default abstract class AbstractLogger {
     // Assign the file destination
     this.destination = Pino.destination(filePath);
 
-    // Pretty print when not in production
+    // Log all debug messages when not in production
     if (process.env.NODE_ENV !== 'production') {
       this.options = {
         level: 'debug'
