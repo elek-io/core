@@ -42,7 +42,7 @@ export default class SnapshotService extends AbstractService implements CrudServ
     const id = Util.uuid();
     const projectPath = Util.pathTo.project(project.id);
     const tag = await this.gitService.createTag(projectPath, id, name, commit);
-    const snapshot = new Snapshot(tag.name, tag.name, tag.timestamp, tag.author);
+    const snapshot = new Snapshot(tag.name, tag.message, tag.timestamp, tag.author);
     this.eventService.emit(`${this.type}:create`, {
       project,
       data: {

@@ -338,6 +338,12 @@ describe('Class ElekIoCore', () => {
     expect(await core.snapshot.isSnapshot(snapshot)).to.equal(true);
   });
 
+  it('should be able to create a snapshot for a specified commit', async () => {
+    const project = await core.project.read(projectId);
+    const logs = await core.historyLog(project);
+    const snapshot = await core.snapshot.create(project, 'Snapshot on the second to first commit', logs[logs.length - 2]);
+  });
+
   // it('should be able to delete a snapshot', async () => {
   //   const project = await core.project.read(projectId);
   //   const snapshot = await core.snapshot.read(project, snapshotId);
