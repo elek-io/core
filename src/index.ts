@@ -193,8 +193,8 @@ export default class ElekIoCore {
   /**
    * Provides access to the `git log` method
    */
-  public async historyLog(project: Project, parent?: string, options?: GitLogOptions): Promise<GitCommit[]> {
-    return this.gitService.log(this.util.pathTo.project(project.id), parent, options);
+  public async historyLog(project: Project, options?: GitLogOptions): Promise<GitCommit[]> {
+    return this.gitService.log(this.util.pathTo.project(project.id), options);
   }
 
   /**

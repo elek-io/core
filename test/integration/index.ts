@@ -274,26 +274,26 @@ describe('Class ElekIoCore', () => {
     expect(logs.length).to.greaterThan(5);
   });
 
-  it('should be able to read the git log from start to parent', async () => {
-    const project = await core.project.read(projectId);
-    const allLogs = await core.historyLog(project);
-    const toParent = await core.historyLog(project, allLogs[allLogs.length - 5].hash);
+  // it('should be able to read the git log from start to parent', async () => {
+  //   const project = await core.project.read(projectId);
+  //   const allLogs = await core.historyLog(project);
+  //   const toParent = await core.historyLog(project, allLogs[allLogs.length - 5].hash);
 
-    expect(toParent.length).to.equal(5);
-  });
+  //   expect(toParent.length).to.equal(5);
+  // });
 
   it('should be able to read the git log with options', async () => {
     const project = await core.project.read(projectId);
     const allLogs = await core.historyLog(project);
-    const limitedLogs = await core.historyLog(project, undefined, {
+    const limitedLogs = await core.historyLog(project, {
       limit: 3
     });
-    const lastLogs = await core.historyLog(project, undefined, {
+    const lastLogs = await core.historyLog(project, {
       between: {
         from: allLogs[5].hash
       }
     });
-    const betweenLogs = await core.historyLog(project, undefined, {
+    const betweenLogs = await core.historyLog(project, {
       between: {
         from: allLogs[allLogs.length - 1].hash,
         to: allLogs[allLogs.length - 6].hash
