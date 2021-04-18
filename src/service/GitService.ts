@@ -313,6 +313,16 @@ export default class GitService extends AbstractService {
   }
 
   /**
+   * Returns the currently used version of Git
+   * 
+   * @param path Path to the repository
+   */
+  private async version(path: string): Promise<string> {
+    const result = await this.git(path, ['--version']);
+    return result.stdout.replace('git version ', '');
+  }
+
+  /**
    * Sets the git config of given local repository from ElekIoCoreOptions
    * 
    * @param path Path to the repository
@@ -333,7 +343,8 @@ export default class GitService extends AbstractService {
   private async git(path: string, args: string[]): Promise<IGitResult> {
     const result = await GitProcess.exec(args, path);
     if (result.exitCode !== 0) {
-      const error = new GitError(`Git command "git ${args.join(' ')}" failed with code ${result.exitCode} and message:\n${result.stderr}`);
+      const version = await this.version(path);
+      const error = new GitError(`Git (${version}) command "git ${args.join(' ')}" failed with code ${result.exitCode} and message:\n${result.stderr}`);
       const projectId = Util.fromPath.projectId(path);
       if (projectId) {
         this.logService.project(projectId).log.error(error);

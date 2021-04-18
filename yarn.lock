@@ -906,10 +906,10 @@ domutils@^2.4.3, domutils@^2.4.4:
     domelementtype "^2.0.1"
     domhandler "^4.0.0"
 
-dugite@^1.93.0:
-  version "1.93.0"
-  resolved "https://registry.yarnpkg.com/dugite/-/dugite-1.93.0.tgz#897e9559347db383d534d274cae6d418d9dcc05e"
-  integrity sha512-2xeCD9zaJLscWX4hMQkCcq6YrUkQvj17gBIhJyBkqNRMTLwIzTuSfeu1wNUBvUvZJe9/WBeMy+YcbCkAEHqDNg==
+dugite@^1.102.0:
+  version "1.102.0"
+  resolved "https://registry.yarnpkg.com/dugite/-/dugite-1.102.0.tgz#15fde8ec6726f03dabcee06e7e5ee5492bf9bf74"
+  integrity sha512-z3eqQd0sCAt/6HgEDFDKw/VFp9LJG5v7MpR0wQAZh4Y/vz/pt5rdjJozVGVX9kGP3sHbIVz251Ooi8lrLupUeQ==
   dependencies:
     checksum "^0.1.1"
     got "^9.6.0"
