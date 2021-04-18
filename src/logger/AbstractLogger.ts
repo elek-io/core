@@ -27,7 +27,7 @@ export default abstract class AbstractLogger {
   /**
    * Reliably flush every log line in case of unexpected crashes to prevent loosing logs
    * 
-   * @todo Check if this is actually working
+   * @todo Add event emitter on error, so the user get's notified
    * 
    * @see http://getpino.io/#/docs/help?id=exit-logging
    */
@@ -35,7 +35,7 @@ export default abstract class AbstractLogger {
     ['uncaughtException', 'unhandledRejection'].forEach((errorToHandle) => {
       process.on(errorToHandle, Pino.final(this.log, (err, finalLogger) => {
         finalLogger.error(err, errorToHandle);
-        throw err;
+        // Emit event here
       }));
     });
   }

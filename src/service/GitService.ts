@@ -329,8 +329,6 @@ export default class GitService extends AbstractService {
   /**
    * Wraps the execution of any git command for logging
    * 
-   * @todo Add event emitter on error, so the user get's notified
-   * 
    * @param path Path to the repository
    * @param args Arguments to execute under the `git` command
    */
@@ -345,7 +343,6 @@ export default class GitService extends AbstractService {
       } else {
         this.logService.generic.log.error(error);
       }
-      // Emit event here
     }
     return result;
   }
