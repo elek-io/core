@@ -30,31 +30,33 @@ export default class GitService extends AbstractService {
   }
 
   /**
+   * Returns the currently used version of Git
+   * 
+   * @param path Path to the repository
+   */
+  private async version(path: string): Promise<string> {
+    const result = await this.git(path, ['--version']);
+    return result.stdout.replace('git version', '').trim();
+  }
+
+  /**
    * Create an empty Git repository or reinitialize an existing one
    * 
    * @see https://git-scm.com/docs/git-init
-   * 
-   * @todo Change implementation once dugite updated to Git >= 2.28.0
    * 
    * @param path Path to initialize in. Fails if path does not exist
    * @param options Options specific to the init operation
    */
   public async init(path: string, options?: Partial<GitInitOptions>): Promise<void> {
-    const args = ['init'];
+    let args = ['init'];
 
-    // For when dugite is using Git >= 2.28.0
-    // if (options?.initialBranch) {
-    //   args = [...args, `--initial-branch=${options.initialBranch}`];
-    // }
+    if (options?.initialBranch) {
+      args = [...args, `--initial-branch=${options.initialBranch}`];
+    }
 
     await this.git(path, args);
     await this.setLocalConfig(path);
     await this.installLfs(path);
-
-    // Delete when dugite is using Git >= 2.28.0
-    if (options?.initialBranch) {
-      await this.switch(path, options.initialBranch, { isNew: true });
-    }
   }
 
   /**
@@ -313,16 +315,6 @@ export default class GitService extends AbstractService {
   }
 
   /**
-   * Returns the currently used version of Git
-   * 
-   * @param path Path to the repository
-   */
-  private async version(path: string): Promise<string> {
-    const result = await this.git(path, ['--version']);
-    return result.stdout.replace('git version ', '');
-  }
-
-  /**
    * Sets the git config of given local repository from ElekIoCoreOptions
    * 
    * @param path Path to the repository
@@ -336,6 +328,8 @@ export default class GitService extends AbstractService {
 
   /**
    * Wraps the execution of any git command for logging
+   * 
+   * @todo Add event emitter on error, so the user get's notified
    * 
    * @param path Path to the repository
    * @param args Arguments to execute under the `git` command
@@ -351,7 +345,7 @@ export default class GitService extends AbstractService {
       } else {
         this.logService.generic.log.error(error);
       }
-      throw error;
+      // Emit event here
     }
     return result;
   }
