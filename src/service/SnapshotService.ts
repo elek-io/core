@@ -1,3 +1,4 @@
+import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
 import { GitCommit } from '../../type/git';
 import { ModelType } from '../../type/model';
@@ -43,7 +44,7 @@ export default class SnapshotService extends AbstractService implements CrudServ
     const projectPath = Util.pathTo.project(project.id);
     const tag = await this.gitService.createTag(projectPath, id, name, commit);
     const snapshot = new Snapshot(tag.name, tag.message, tag.timestamp, tag.author);
-    this.eventService.emit(`${this.type}:create`, {
+    this.eventService.emit(CoreEventName.SNAPSHOT_CREATE, {
       project,
       data: {
         snapshot
@@ -67,7 +68,7 @@ export default class SnapshotService extends AbstractService implements CrudServ
       throw new Error(`Snapshot "${id}" resolved ${tags.length} git tags`);
     }
     const snapshot = new Snapshot(tags[0].name, tags[0].message, tags[0].timestamp, tags[0].author);
-    this.eventService.emit(`${this.type}:read`, {
+    this.eventService.emit(CoreEventName.SNAPSHOT_READ, {
       project,
       data: {
         snapshot
@@ -94,7 +95,7 @@ export default class SnapshotService extends AbstractService implements CrudServ
     tags.forEach((tag) => {
       snapshots.push(new Snapshot(tag.name, tag.message, tag.timestamp, tag.author));
     });
-    this.eventService.emit(`${this.type}:list`, {
+    this.eventService.emit(CoreEventName.SNAPSHOT_LIST, {
       project,
       data: {
         snapshots
@@ -122,7 +123,7 @@ export default class SnapshotService extends AbstractService implements CrudServ
     // Commit the now changed files again
     await this.gitService.add(projectPath, ['.']);
     await this.gitService.commit(projectPath, `:rewind: ${message} (ID: ${snapshot.id})`);
-    this.eventService.emit(`${this.type}:revert`, {
+    this.eventService.emit(CoreEventName.SNAPSHOT_REVERT, {
       project,
       data: {
         snapshot
@@ -138,7 +139,7 @@ export default class SnapshotService extends AbstractService implements CrudServ
    */
   public async delete(project: Project, snapshot: Snapshot): Promise<void> {
     await this.gitService.deleteTag(Util.pathTo.project(project.id), snapshot.id);
-    this.eventService.emit(`${this.type}:delete`, {
+    this.eventService.emit(CoreEventName.SNAPSHOT_DELETE, {
       project,
       data: {
         snapshot

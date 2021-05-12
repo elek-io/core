@@ -1,4 +1,5 @@
 import Fs from 'fs-extra';
+import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
 import { ServiceType } from '../../type/service';
 import AbstractService from './AbstractService';
@@ -35,7 +36,7 @@ export default abstract class AbstractFileService extends AbstractService {
       flag: 'wx',
       encoding: 'utf8'
     });
-    this.eventService.emit(`${this.type}:create`, {
+    this.eventService.emit(CoreEventName.FILE_CREATE, {
       data: {
         path,
         data
@@ -54,7 +55,7 @@ export default abstract class AbstractFileService extends AbstractService {
       flag: 'r',
       encoding: 'utf8'
     });
-    this.eventService.emit(`${this.type}:read`, {
+    this.eventService.emit(CoreEventName.FILE_READ, {
       data: {
         path,
         data
@@ -76,7 +77,7 @@ export default abstract class AbstractFileService extends AbstractService {
       flag: 'w',
       encoding: 'utf8'
     });
-    this.eventService.emit(`${this.type}:update`, {
+    this.eventService.emit(CoreEventName.FILE_UPDATE, {
       data: {
         path,
         data
@@ -91,7 +92,7 @@ export default abstract class AbstractFileService extends AbstractService {
    */
   public async delete(path: string): Promise<void> {
     await Fs.remove(path);
-    this.eventService.emit(`${this.type}:delete`, {
+    this.eventService.emit(CoreEventName.FILE_DELETE, {
       data: {
         path
       }

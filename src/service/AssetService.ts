@@ -1,5 +1,6 @@
 import Fs from 'fs-extra';
 import Path from 'path';
+import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
 import { ModelType } from '../../type/model';
 import { CrudService, ServiceType } from '../../type/service';
@@ -57,8 +58,8 @@ export default class AssetService extends AbstractService implements CrudService
     await this.jsonFileService.create(asset, assetPath);
     await this.gitService.add(projectPath, [assetPath]);
     await this.gitService.add(projectPath, [Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)]);
-    await this.gitService.commit(projectPath, `:heavy_plus_sign: Created new ${this.type}`);
-    this.eventService.emit(`${this.type}:create`, {
+    await this.gitService.commit(projectPath, this.gitMessage.create);
+    this.eventService.emit(CoreEventName.ASSET_CREATE, {
       project,
       data: {
         asset
@@ -77,7 +78,7 @@ export default class AssetService extends AbstractService implements CrudService
   public async read(project: Project, id: string, language: string): Promise<Asset> {
     const json = await this.jsonFileService.read<Asset>(Util.pathTo.asset(project.id, id, language));
     const asset = new Asset(json.id, json.language, json.name, json.description, json.extension);
-    this.eventService.emit(`${this.type}:read`, {
+    this.eventService.emit(CoreEventName.ASSET_READ, {
       project,
       data: {
         asset
@@ -93,14 +94,14 @@ export default class AssetService extends AbstractService implements CrudService
    * @param asset Asset to write to disk
    * @param message Optional overwrite for the git message
    */
-  public async update(project: Project, asset: Asset, message = `Updated ${this.type}`): Promise<void> {
+  public async update(project: Project, asset: Asset, message = this.gitMessage.update): Promise<void> {
     const projectPath = Util.pathTo.project(project.id);
     const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await this.jsonFileService.update(asset, assetJsonPath);
     await this.gitService.add(projectPath, [assetJsonPath]);
     await this.gitService.add(projectPath, [Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)]);
-    await this.gitService.commit(projectPath, `:wrench: ${message}`);
-    this.eventService.emit(`${this.type}:update`, {
+    await this.gitService.commit(projectPath, message);
+    this.eventService.emit(CoreEventName.ASSET_UPDATE, {
       project,
       data: {
         asset
@@ -115,15 +116,15 @@ export default class AssetService extends AbstractService implements CrudService
    * @param asset Asset to delete from disk
    * @param message Optional overwrite for the git message
    */
-  public async delete(project: Project, asset: Asset, message = `Deleted ${this.type}`): Promise<void> {
+  public async delete(project: Project, asset: Asset, message = this.gitMessage.delete): Promise<void> {
     const projectPath = Util.pathTo.project(project.id);
     const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
     await Fs.remove(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension));
     await this.jsonFileService.delete(assetJsonPath);
     await this.gitService.add(projectPath, [assetJsonPath]);
     await this.gitService.add(projectPath, [Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)]);
-    await this.gitService.commit(projectPath, `:fire: ${message}`);
-    this.eventService.emit(`${this.type}:delete`, {
+    await this.gitService.commit(projectPath, message);
+    this.eventService.emit(CoreEventName.ASSET_DELETE, {
       project,
       data: {
         asset

@@ -12,11 +12,12 @@ import GitService from './GitService';
 import MdFileService from './MdFileService';
 import { CrudService, ServiceType } from '../../type/service';
 import { ModelType } from '../../type/model';
+import { CoreEventName } from '../../type/coreEvent';
 
 /**
  * Service that manages CRUD functionality for block files on disk
  */
-export default class BlockService extends AbstractService  implements CrudService {
+export default class BlockService extends AbstractService implements CrudService {
   private eventService: EventService;
   private mdFileService: MdFileService;
   private gitService: GitService;
@@ -58,8 +59,8 @@ export default class BlockService extends AbstractService  implements CrudServic
       mdBody: block.body
     }, blockPath);
     await this.gitService.add(projectPath, [blockPath]);
-    await this.gitService.commit(projectPath, `:heavy_plus_sign: Created new ${this.type}`);
-    this.eventService.emit(`${this.type}:create`, {
+    await this.gitService.commit(projectPath, this.gitMessage.create);
+    this.eventService.emit(CoreEventName.BLOCK_CREATE, {
       project,
       data: {
         block
@@ -78,7 +79,7 @@ export default class BlockService extends AbstractService  implements CrudServic
   public async read(project: Project, id: string, language: string): Promise<Block> {
     const mdFile = await this.mdFileService.read(Util.pathTo.block(project.id, id, language));
     const block = new Block(id, language, mdFile.mdBody);
-    this.eventService.emit(`${this.type}:read`, {
+    this.eventService.emit(CoreEventName.BLOCK_READ, {
       project,
       data: {
         block
@@ -94,7 +95,7 @@ export default class BlockService extends AbstractService  implements CrudServic
    * @param block Block to write to disk
    * @param message Optional overwrite for the git message
    */
-  public async update(project: Project, block: Block, message = `Updated ${this.type}`): Promise<void> {
+  public async update(project: Project, block: Block, message = this.gitMessage.update): Promise<void> {
     const projectPath = Util.pathTo.project(project.id);
     const blockPath = Util.pathTo.block(project.id, block.id, block.language);
     await this.mdFileService.update({
@@ -106,8 +107,8 @@ export default class BlockService extends AbstractService  implements CrudServic
       mdBody: block.body
     }, blockPath);
     await this.gitService.add(projectPath, [blockPath]);
-    await this.gitService.commit(projectPath, `:wrench: ${message}`);
-    this.eventService.emit(`${this.type}:update`, {
+    await this.gitService.commit(projectPath, message);
+    this.eventService.emit(CoreEventName.BLOCK_UPDATE, {
       project,
       data: {
         block
@@ -122,13 +123,13 @@ export default class BlockService extends AbstractService  implements CrudServic
    * @param block Block to delete from disk
    * @param message Optional overwrite for the git message
    */
-  public async delete(project: Project, block: Block, message = `Deleted ${this.type}`): Promise<void> {
+  public async delete(project: Project, block: Block, message = this.gitMessage.delete): Promise<void> {
     const projectPath = Util.pathTo.project(project.id);
     const blockPath = Util.pathTo.block(project.id, block.id, block.language);
     await this.mdFileService.delete(blockPath);
     await this.gitService.add(projectPath, [blockPath]);
-    await this.gitService.commit(projectPath, `:fire: ${message}`);
-    this.eventService.emit(`${this.type}:delete`, {
+    await this.gitService.commit(projectPath, message);
+    this.eventService.emit(CoreEventName.BLOCK_DELETE, {
       project,
       data: {
         block

@@ -14,6 +14,7 @@ import ThemeService from './ThemeService';
 import { PageStatus } from '../../type/page';
 import { CrudService, ServiceType } from '../../type/service';
 import { ModelType } from '../../type/model';
+import { CoreEventName } from '../../type/coreEvent';
 
 /**
  * Service that manages CRUD functionality for project files on disk
@@ -64,6 +65,7 @@ export default class ProjectService extends AbstractService implements CrudServi
     await this.createGitignore(project.id);
     await this.jsonFileService.create(project, Util.pathTo.projectConfig(project.id));
     await this.gitService.add(projectPath, ['.']);
+    // We don't use this.gitMessage.create here on purpose
     await this.gitService.commit(projectPath, ':tada: Created this new elek.io project');
     await this.gitService.switch(projectPath, 'stage', { isNew: true });
     const theme = await this.themeService.use(project, 'https://github.com/elek-io/starter-theme.git');
@@ -77,7 +79,7 @@ export default class ProjectService extends AbstractService implements CrudServi
     });
     await this.pageService.update(project, page);
 
-    this.eventService.emit(`${this.type}:create`, {
+    this.eventService.emit(CoreEventName.PROJECT_CREATE, {
       project
     });
     return project;
@@ -91,7 +93,7 @@ export default class ProjectService extends AbstractService implements CrudServi
   public async read(id: string): Promise<Project> {
     const json = await this.jsonFileService.read<Project>(Util.pathTo.projectConfig(id));
     const project = new Project(json.id, json.name, json.description);
-    this.eventService.emit(`${this.type}:read`, {
+    this.eventService.emit(CoreEventName.PROJECT_READ, {
       project
     });
     return project;
@@ -103,13 +105,13 @@ export default class ProjectService extends AbstractService implements CrudServi
    * @param project Project to update
    * @param message Optional overwrite for the git message
    */
-  public async update(project: Project, message = `Updated ${this.type}`): Promise<void> {
+  public async update(project: Project, message = this.gitMessage.update): Promise<void> {
     const projectPath = Util.pathTo.project(project.id);
     const configPath = Util.pathTo.projectConfig(project.id);
     await this.jsonFileService.update(project, configPath);
     await this.gitService.add(projectPath, [configPath]);
-    await this.gitService.commit(projectPath, `:wrench: ${message}`);
-    this.eventService.emit(`${this.type}:update`, {
+    await this.gitService.commit(projectPath, message);
+    this.eventService.emit(CoreEventName.PROJECT_UPDATE, {
       project
     });
   }
@@ -122,7 +124,7 @@ export default class ProjectService extends AbstractService implements CrudServi
    */
   public async delete(project: Project): Promise<void> {
     await Fs.remove(Util.pathTo.project(project.id));
-    this.eventService.emit(`${this.type}:delete`, {
+    this.eventService.emit(CoreEventName.PROJECT_DELETE, {
       project
     });
   }

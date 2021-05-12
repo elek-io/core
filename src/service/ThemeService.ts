@@ -12,6 +12,7 @@ import GitService from './GitService';
 import JsonFileService from './JsonFileService';
 import { ThemeLayoutBlockPosition, ThemeLayout, ThemeLayoutElementPosition, ThemeLayoutElementType } from '../../type/theme';
 import { ServiceType } from '../../type/service';
+import { CoreEventName } from '../../type/coreEvent';
 
 /**
  * Service that manages CRUD functionality for the theme in use
@@ -54,7 +55,7 @@ export default class ThemeService extends AbstractService {
       depth: 1
     });
     const theme = await this.read(project);
-    this.eventService.emit(`${this.type}:use`, {
+    this.eventService.emit(CoreEventName.THEME_USE, {
       project,
       data: {
         theme
@@ -71,7 +72,7 @@ export default class ThemeService extends AbstractService {
   public async read(project: Project): Promise<Theme> {
     const json = await this.jsonFileService.read<Theme>(Util.pathTo.themeConfig(project.id));
     const theme = new Theme(json.name, json.description, json.version, json.homepage, json.repository, json.author, json.license, json.layouts);
-    this.eventService.emit(`${this.type}:read`, {
+    this.eventService.emit(CoreEventName.THEME_READ, {
       project,
       data: {
         theme
@@ -92,7 +93,7 @@ export default class ThemeService extends AbstractService {
   public async update(project: Project): Promise<Theme> {
     await this.gitService.pull(Util.pathTo.theme(project.id));
     const theme = await this.read(project);
-    this.eventService.emit(`${this.type}:update`, {
+    this.eventService.emit(CoreEventName.THEME_UPDATE, {
       project,
       data: {
         theme
@@ -108,7 +109,7 @@ export default class ThemeService extends AbstractService {
    */
   public async delete(project: Project): Promise<void> {
     await Fs.emptyDir(Util.pathTo.theme(project.id));
-    this.eventService.emit(`${this.type}:delete`, {
+    this.eventService.emit(CoreEventName.THEME_DELETE, {
       project
     });
   }

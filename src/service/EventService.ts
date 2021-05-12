@@ -1,17 +1,19 @@
 import { Subject } from 'rxjs';
+import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
 import { ServiceType } from '../../type/service';
-import ElekIoCoreEvent from '../model/ElekIoCoreEvent';
+import CoreEvent from '../model/CoreEvent';
 import Project from '../model/Project';
 import AbstractService from './AbstractService';
 import LogService from './LogService';
+import Util from '../util';
 
 /**
  * Service that manages subscribing and emitting events between
  * different services and outside applications like the elek.io client
  */
 export default class EventService extends AbstractService {
-  private readonly eventSubject = new Subject<ElekIoCoreEvent>();
+  private readonly eventSubject = new Subject<CoreEvent>();
   private readonly logService: LogService;
 
   /**
@@ -37,15 +39,17 @@ export default class EventService extends AbstractService {
   }
 
   /**
-   * Emits a new ElekIoCoreEvent to all it's subscribers
+   * Emits a new CoreEvent to all it's subscribers
    * 
-   * @param id ID describing the event divided by colons. E.g.: "page:create"
+   * @param name Colon separated name describing what the event is about. E.g.: "page:create"
    * @param optional Optional object containing the project this event was triggered from and an additional object all subscribers have access to
    */
-  public emit(id: string, optional?: {project?: Project, data?: Record<string, unknown>}): void {
-    const event = new ElekIoCoreEvent(id, optional);
+  public emit(name: CoreEventName, optional?: {project?: Project, data?: Record<string, unknown>}): void {
+    const id = Util.uuid();
+    const event = new CoreEvent(id, name, optional);
 
     // Logging
+    // @todo probably only relevant for debugging / not for default production
     if (event.project) {
       this.logService.project(event.project.id).log.info(event);
     } else {

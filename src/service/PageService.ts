@@ -1,3 +1,4 @@
+import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
 import { ModelType } from '../../type/model';
 import { CrudService, ServiceType } from '../../type/service';
@@ -49,8 +50,8 @@ export default class PageService extends AbstractService implements CrudService 
     const pagePath = Util.pathTo.page(project.id, page.id, language);
     await this.jsonFileService.create(page, pagePath);
     await this.gitService.add(projectPath, [pagePath]);
-    await this.gitService.commit(projectPath, `:heavy_plus_sign: Created new ${this.type}`);
-    this.eventService.emit(`${this.type}:create`, {
+    await this.gitService.commit(projectPath, this.gitMessage.create);
+    this.eventService.emit(CoreEventName.PAGE_CREATE, {
       project,
       data: {
         page
@@ -69,7 +70,7 @@ export default class PageService extends AbstractService implements CrudService 
   public async read(project: Project, id: string, language: string): Promise<Page> {
     const json = await this.jsonFileService.read<Page>(Util.pathTo.page(project.id, id, language));
     const page = new Page(json.id, json.language, json.name, json.uriPath, json.layoutId, json.content);
-    this.eventService.emit(`${this.type}:read`, {
+    this.eventService.emit(CoreEventName.PAGE_READ, {
       project,
       data: {
         page
@@ -85,13 +86,13 @@ export default class PageService extends AbstractService implements CrudService 
    * @param page Page to write to disk
    * @param message Optional overwrite for the git message
    */
-  public async update(project: Project, page: Page, message = `Updated ${this.type}`): Promise<void> {
+  public async update(project: Project, page: Page, message = this.gitMessage.update): Promise<void> {
     const projectPath = Util.pathTo.project(project.id);
     const pagePath = Util.pathTo.page(project.id, page.id, page.language);
     await this.jsonFileService.update(page, pagePath);
     await this.gitService.add(projectPath, [pagePath]);
-    await this.gitService.commit(projectPath, `:wrench: ${message}`);
-    this.eventService.emit(`${this.type}:update`, {
+    await this.gitService.commit(projectPath, message);
+    this.eventService.emit(CoreEventName.PAGE_UPDATE, {
       project,
       data: {
         page
@@ -106,13 +107,13 @@ export default class PageService extends AbstractService implements CrudService 
    * @param page Page to delete from disk
    * @param message Optional overwrite for the git message
    */
-  public async delete(project: Project, page: Page, message = `Deleted ${this.type}`): Promise<void> {
+  public async delete(project: Project, page: Page, message = this.gitMessage.delete): Promise<void> {
     const projectPath = Util.pathTo.project(project.id);
     const pagePath = Util.pathTo.page(project.id, page.id, page.language);
     await this.jsonFileService.delete(pagePath);
     await this.gitService.add(projectPath, [pagePath]);
-    await this.gitService.commit(projectPath, `:fire: ${message}`);
-    this.eventService.emit(`${this.type}:delete`, {
+    await this.gitService.commit(projectPath, message);
+    this.eventService.emit(CoreEventName.PAGE_DELETE, {
       project,
       data: {
         page
