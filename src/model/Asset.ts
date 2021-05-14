@@ -1,21 +1,25 @@
-import { ModelType } from '../../type/model';
-import AbstractModelWithLanguage from './AbstractModelWithLanguage';
+import AssetFile from './AssetFile';
 
 /**
- * The asset represents an external file like image, PDF or ZIP,
- * that was added to a projects LFS and contains meta information
- * about that file
+ * The Asset class extending AssetFile class represents an external file like image, PDF or ZIP.
+ * In addition to the AssetFile's saved file content, the Asset contains meta information about that file,
+ * like EXIF, dimensions and the absolute path to it.
  */
-export default class Asset extends AbstractModelWithLanguage {
-  public name: string;
-  public description: string;
-  public extension: string;
+export default class Asset extends AssetFile {
+  /**
+   * Absolute path on this filesystem
+   */
+  public readonly absolutePath: string;
 
-  constructor(id: string, language: string, name: string, description: string, extension: string) {
-    super(id, language, ModelType.ASSET);
+  /**
+   * Total size in bytes
+   */
+  public readonly size: number;
+
+  constructor(assetFile: AssetFile, absolutePath: string, size: number) {
+    super(assetFile.id, assetFile.language, assetFile.name, assetFile.description, assetFile.extension, assetFile.mimeType);
     
-    this.name = name;
-    this.description = description;
-    this.extension = extension;
+    this.absolutePath = absolutePath;
+    this.size = size;
   }
 }

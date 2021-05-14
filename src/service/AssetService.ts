@@ -1,17 +1,20 @@
 import Fs from 'fs-extra';
-import Path from 'path';
+import FileType from 'file-type';
+import IsSvg from 'is-svg';
 import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
 import { ModelType } from '../../type/model';
 import { CrudService, ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
-import Asset from '../model/Asset';
+import AssetFile from '../model/AssetFile';
 import Project from '../model/Project';
 import Util from '../util';
 import AbstractService from './AbstractService';
 import EventService from './EventService';
 import GitService from './GitService';
 import JsonFileService from './JsonFileService';
+import { SupportedExtension, supportedExtensions, SupportedMimeType, supportedMimeTypes } from '../../type/asset';
+import Asset from '../model/Asset';
 
 /**
  * Service that manages CRUD functionality for asset files on disk
@@ -50,19 +53,20 @@ export default class AssetService extends AbstractService implements CrudService
   public async create(filePath: string, project: Project, language: string, name: string, description: string): Promise<Asset> {
     const id = Util.uuid();
     const projectPath = Util.pathTo.project(project.id);
-    const extension = Path.extname(filePath).split('.').join('');
-    const destination = Path.join(Util.pathTo.lfs(project.id), `${id}.${language}.${extension}`);
-    const asset = new Asset(id, language, name, description, extension);
-    const assetPath = Util.pathTo.asset(project.id, asset.id, asset.language);
-    await Fs.copyFile(filePath, destination);
-    await this.jsonFileService.create(asset, assetPath);
-    await this.gitService.add(projectPath, [assetPath]);
-    await this.gitService.add(projectPath, [Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)]);
+    const fileType = await this.getSupportedFileTypeOrThrow(filePath);
+    const assetFile = new AssetFile(id, language, name, description, fileType.extension, fileType.mimeType);
+    const lfsFilePath = Util.pathTo.lfsFile(project.id, assetFile.id, assetFile.language, assetFile.extension);
+    const assetFilePath = Util.pathTo.asset(project.id, assetFile.id, assetFile.language);
+    await Fs.copyFile(filePath, lfsFilePath);
+    await this.jsonFileService.create(assetFile, assetFilePath);
+    await this.gitService.add(projectPath, [assetFilePath, lfsFilePath]);
     await this.gitService.commit(projectPath, this.gitMessage.create);
+    const lfsFileSize = (await Fs.stat(lfsFilePath)).size;
+    const asset = new Asset(assetFile, lfsFilePath, lfsFileSize);
     this.eventService.emit(CoreEventName.ASSET_CREATE, {
       project,
       data: {
-        asset
+        asset: asset
       }
     });
     return asset;
@@ -76,19 +80,26 @@ export default class AssetService extends AbstractService implements CrudService
    * @param language Language of the asset to read
    */
   public async read(project: Project, id: string, language: string): Promise<Asset> {
-    const json = await this.jsonFileService.read<Asset>(Util.pathTo.asset(project.id, id, language));
-    const asset = new Asset(json.id, json.language, json.name, json.description, json.extension);
+    const json = await this.jsonFileService.read<AssetFile>(Util.pathTo.asset(project.id, id, language));
+    const assetFile = new AssetFile(json.id, json.language, json.name, json.description, json.extension, json.mimeType);
+    const lfsFilePath = Util.pathTo.lfsFile(project.id, assetFile.id, assetFile.language, assetFile.extension);
+    const lfsFileSize = (await Fs.stat(lfsFilePath)).size;
+    const asset = new Asset(assetFile, lfsFilePath, lfsFileSize);
     this.eventService.emit(CoreEventName.ASSET_READ, {
       project,
       data: {
-        asset
+        asset: asset
       }
     });
     return asset;
   }
 
   /**
-   * Updates the asset's files on disk and creates a commit
+   * Updates the asset's information on disk and creates a commit
+   * 
+   * Please note that the asset inself (e.g. an image or zip file)
+   * cannot be updated and needs to be recreated.
+   * The update only affects the meta information like name and description.
    * 
    * @param project Project of the asset to update
    * @param asset Asset to write to disk
@@ -96,10 +107,10 @@ export default class AssetService extends AbstractService implements CrudService
    */
   public async update(project: Project, asset: Asset, message = this.gitMessage.update): Promise<void> {
     const projectPath = Util.pathTo.project(project.id);
-    const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
-    await this.jsonFileService.update(asset, assetJsonPath);
-    await this.gitService.add(projectPath, [assetJsonPath]);
-    await this.gitService.add(projectPath, [Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)]);
+    const assetFile = new AssetFile(asset.id, asset.language, asset.name, asset.description, asset.extension, asset.mimeType);
+    const assetFilePath = Util.pathTo.asset(project.id, asset.id, asset.language);
+    await this.jsonFileService.update(assetFile, assetFilePath);
+    await this.gitService.add(projectPath, [assetFilePath]);
     await this.gitService.commit(projectPath, message);
     this.eventService.emit(CoreEventName.ASSET_UPDATE, {
       project,
@@ -118,11 +129,11 @@ export default class AssetService extends AbstractService implements CrudService
    */
   public async delete(project: Project, asset: Asset, message = this.gitMessage.delete): Promise<void> {
     const projectPath = Util.pathTo.project(project.id);
-    const assetJsonPath = Util.pathTo.asset(project.id, asset.id, asset.language);
-    await Fs.remove(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension));
-    await this.jsonFileService.delete(assetJsonPath);
-    await this.gitService.add(projectPath, [assetJsonPath]);
-    await this.gitService.add(projectPath, [Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)]);
+    const assetFilePath = Util.pathTo.asset(project.id, asset.id, asset.language);
+    const lfsFilePath = Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension);
+    await Fs.remove(lfsFilePath);
+    await this.jsonFileService.delete(assetFilePath);
+    await this.gitService.add(projectPath, [assetFilePath, lfsFilePath]);
     await this.gitService.commit(projectPath, message);
     this.eventService.emit(CoreEventName.ASSET_DELETE, {
       project,
@@ -139,5 +150,48 @@ export default class AssetService extends AbstractService implements CrudService
    */
   public isAsset(model: AbstractModel): boolean {
     return model.type === ModelType.ASSET;
+  }
+
+  /**
+   * Returns the found and supported extension as well as mime type,
+   * otherwise throws an error
+   * 
+   * @param filePath Path to the file to check
+   */
+  private async getSupportedFileTypeOrThrow(filePath: string) {
+    const fileSize = (await Fs.stat(filePath)).size;
+
+    // Only try to parse potential SVG's
+    // that are smaller than 500 kB
+    if (fileSize / 1000 <= 500) {
+      const fileBuffer = await Fs.readFile(filePath);
+
+      if (IsSvg(fileBuffer) === true) {
+        return {
+          extension: 'svg' as SupportedExtension,
+          mimeType: 'image/svg+xml' as SupportedMimeType
+        };
+      } 
+    }
+
+    // We do not use fileBuffer here again because fromFile() is recommended
+    const fileType = await FileType.fromFile(filePath);
+
+    if (!fileType) {
+      throw new Error(`Could not retrieve the type of file "${filePath}"`);
+    }
+
+    if (supportedExtensions.includes(fileType.ext as SupportedExtension) === false) {
+      throw new Error(`The extension "${fileType.ext}" is not supported`);
+    }
+
+    if (supportedMimeTypes.includes(fileType.mime as SupportedMimeType) === false) {
+      throw new Error(`The MIME type "${fileType.mime}" is not supported`);
+    }
+
+    return {
+      extension: fileType.ext as SupportedExtension,
+      mimeType: fileType.mime as SupportedMimeType
+    };
   }
 }

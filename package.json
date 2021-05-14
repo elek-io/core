@@ -46,8 +46,10 @@
   "dependencies": {
     "cheerio": "^1.0.0-rc.6",
     "dugite": "^1.102.0",
+    "file-type": "^16.4.0",
     "fs-extra": "^9.1.0",
     "highlight.js": "^10.7.2",
+    "is-svg": "^4.3.1",
     "markdown-it": "^12.0.6",
     "pino": "^6.11.3",
     "rxjs": "^6.6.7",

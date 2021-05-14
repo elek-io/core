@@ -239,15 +239,15 @@ describe('Class ElekIoCore', () => {
     expect(snapshot.name).to.contain('My first snapshot');
   });
 
-  it('should be able to delete an asset', async () => {
-    const project = await core.project.read(projectId);
-    const asset = await core.asset.read(project, assetId, 'en-GB');
-    await core.asset.delete(project, asset);
+  // it('should be able to delete an asset', async () => {
+  //   const project = await core.project.read(projectId);
+  //   const asset = await core.asset.read(project, assetId, 'en-GB');
+  //   await core.asset.delete(project, asset);
 
-    expect(core.asset.read(project, assetId, asset.language)).to.be.rejectedWith();
-    expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language))).to.equal(false);
-    expect(await Fs.pathExists(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension))).to.equal(false);
-  });
+  //   expect(core.asset.read(project, assetId, asset.language)).to.be.rejectedWith();
+  //   expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language))).to.equal(false);
+  //   expect(await Fs.pathExists(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension))).to.equal(false);
+  // });
 
   it('should be able to delete a page', async () => {
     const project = await core.project.read(projectId);
