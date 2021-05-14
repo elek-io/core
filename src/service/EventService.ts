@@ -5,7 +5,6 @@ import { ServiceType } from '../../type/service';
 import CoreEvent from '../model/CoreEvent';
 import Project from '../model/Project';
 import AbstractService from './AbstractService';
-import LogService from './LogService';
 import Util from '../util';
 
 /**
@@ -14,7 +13,6 @@ import Util from '../util';
  */
 export default class EventService extends AbstractService {
   private readonly eventSubject = new Subject<CoreEvent>();
-  private readonly logService: LogService;
 
   /**
    * Creates a new instance of the EventService which
@@ -23,10 +21,8 @@ export default class EventService extends AbstractService {
    * @param options ElekIoCoreOptions
    * @param logService LogService
    */
-  constructor(options: ElekIoCoreOptions, logService: LogService) {
+  constructor(options: ElekIoCoreOptions) {
     super(ServiceType.EVENT, options);
-
-    this.logService = logService;
   }
 
   /**
@@ -47,15 +43,7 @@ export default class EventService extends AbstractService {
   public emit(name: CoreEventName, optional?: {project?: Project, data?: Record<string, unknown>}): void {
     const id = Util.uuid();
     const event = new CoreEvent(id, name, optional);
-
-    // Logging
-    // @todo probably only relevant for debugging / not for default production
-    if (event.project) {
-      this.logService.project(event.project.id).log.info(event);
-    } else {
-      this.logService.generic.log.info(event);
-    }
-
+    
     this.eventSubject.next(event);
   }
 }

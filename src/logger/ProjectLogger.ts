@@ -1,4 +1,5 @@
 import Path from 'path';
+import EventService from '../service/EventService';
 import Util from '../util';
 import AbstractLogger from './AbstractLogger';
 
@@ -8,8 +9,8 @@ import AbstractLogger from './AbstractLogger';
 export default class ProjectLogger extends AbstractLogger {
   public readonly projectId: string;
 
-  constructor(projectId: string, fileName = 'core.log') {
-    super(Path.join(Util.pathTo.projectLogs(projectId), fileName));
+  constructor(projectId: string, fileName: string, eventService: EventService) {
+    super(Path.join(Util.pathTo.projectLogs(projectId), fileName), eventService);
 
     this.projectId = projectId;
   }

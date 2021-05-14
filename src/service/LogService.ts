@@ -3,6 +3,7 @@ import { ServiceType } from '../../type/service';
 import GenericLogger from '../logger/GenericLogger';
 import ProjectLogger from '../logger/ProjectLogger';
 import AbstractService from './AbstractService';
+import EventService from './EventService';
 
 /**
  * Service for writing logs to disk.
@@ -11,6 +12,7 @@ import AbstractService from './AbstractService';
  * @todo Check why the genericLogger does not actually log anything to it's file
  */
 export default class LogService extends AbstractService {
+  private readonly eventService: EventService;
   private readonly genericLogger: GenericLogger;
   private readonly projectLoggers: ProjectLogger[] = [];
 
@@ -20,10 +22,11 @@ export default class LogService extends AbstractService {
    * 
    * @param options ElekIoCoreOptions
    */
-  constructor(options: ElekIoCoreOptions) {
+  constructor(options: ElekIoCoreOptions, eventService: EventService) {
     super(ServiceType.LOG, options);
 
-    this.genericLogger = new GenericLogger();
+    this.eventService = eventService;
+    this.genericLogger = new GenericLogger(this.options.log.fileName, this.eventService);
   }
 
   /**
@@ -48,7 +51,7 @@ export default class LogService extends AbstractService {
       return existingProjectLogger;
     }
     // And creates a new logger for this project if it's not available already
-    const newProjectLogger = new ProjectLogger(projectId);
+    const newProjectLogger = new ProjectLogger(projectId, this.options.log.fileName, this.eventService);
     this.projectLoggers.push(newProjectLogger);
     return newProjectLogger;
   }

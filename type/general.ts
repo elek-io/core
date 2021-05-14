@@ -50,6 +50,9 @@ export interface ElekIoCoreOptions {
       delimiter: string;
     };
   };
+  log: {
+    fileName: string;
+  };
 }
 
 /**

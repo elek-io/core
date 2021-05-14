@@ -40,7 +40,7 @@ export default class ElekIoCore {
   private readonly blockService: BlockService;
   private readonly projectService: ProjectService;
 
-  constructor(options: Optional<ElekIoCoreOptions, 'theme' | 'file'>) {
+  constructor(options: Optional<ElekIoCoreOptions, 'theme' | 'file' | 'log'>) {
     const defaults: Omit<ElekIoCoreOptions, 'signature'> = {
       theme: {
         htmlPrefix: 'elek-io'
@@ -49,12 +49,16 @@ export default class ElekIoCore {
         md: {
           delimiter: '---'
         }
+      },
+      log: {
+        fileName: 'core.log'
       }
     };
     this.options = Object.assign({}, defaults, options);
 
-    this.logService = new LogService(this.options);
-    this.eventService = new EventService(this.options, this.logService);
+    
+    this.eventService = new EventService(this.options);
+    this.logService = new LogService(this.options, this.eventService);
     this.gitService = new GitService(this.options, this.logService, this.eventService);
     this.snapshotService = new SnapshotService(this.options, this.eventService, this.gitService);
     this.jsonFileService = new JsonFileService(this.options, this.eventService);

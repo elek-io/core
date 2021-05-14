@@ -1,4 +1,5 @@
 import Path from 'path';
+import EventService from '../service/EventService';
 import Util from '../util';
 import AbstractLogger from './AbstractLogger';
 
@@ -7,8 +8,8 @@ import AbstractLogger from './AbstractLogger';
  */
 export default class GenericLogger extends AbstractLogger {
 
-  constructor(fileName = 'core.log') {
-    super(Path.join(Util.pathTo.logs, fileName));
+  constructor(fileName: string, eventService: EventService) {
+    super(Path.join(Util.pathTo.logs, fileName), eventService);
   }
   
 }

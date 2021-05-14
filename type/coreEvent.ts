@@ -9,6 +9,8 @@ export enum CoreEventName {
   BLOCK_UPDATE = 'block:update',
   BLOCK_DELETE = 'block:delete',
 
+  ERROR = 'error',
+
   FILE_CREATE = 'file:create',
   FILE_READ = 'file:read',
   FILE_UPDATE = 'file:update',
