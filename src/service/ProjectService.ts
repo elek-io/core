@@ -12,14 +12,14 @@ import PageService from './PageService';
 import GitService from './GitService';
 import ThemeService from './ThemeService';
 import { PageStatus } from '../../type/page';
-import { CrudService, ServiceType } from '../../type/service';
+import { ExtendedCrudService, ServiceType } from '../../type/service';
 import { ModelType } from '../../type/model';
 import { CoreEventName } from '../../type/coreEvent';
 
 /**
  * Service that manages CRUD functionality for project files on disk
  */
-export default class ProjectService extends AbstractService implements CrudService {
+export default class ProjectService extends AbstractService implements ExtendedCrudService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
@@ -27,15 +27,6 @@ export default class ProjectService extends AbstractService implements CrudServi
   private pageService: PageService;
   private themeService: ThemeService;
 
-  /**
-   * Creates a new instance of the ProjectService which
-   * inherits the type and options properties from AbstractService
-   * 
-   * @param options ElekIoCoreOptions
-   * @param eventService EventService
-   * @param jsonFileService JsonFileService
-   * @param gitService GitService
-   */
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService, blockService: BlockService, pageService: PageService, themeService: ThemeService) {
     super(ServiceType.PROJECT, options);
 
@@ -127,6 +118,36 @@ export default class ProjectService extends AbstractService implements CrudServi
     this.eventService.emit(CoreEventName.PROJECT_DELETE, {
       project
     });
+  }
+
+  /**
+   * Returns a list of all project references
+   */
+  public async listReferences() {
+    const possibleProjectDirectories = await Util.subdirectories(Util.pathTo.projects);
+    return possibleProjectDirectories.map((possibleProjectDirectory) => {
+      if (Util.validator.isUuid(possibleProjectDirectory.name) === false) {
+        return null;
+      }
+      return possibleProjectDirectory.name;
+    }).filter(Util.notEmpty);
+  }
+
+  /**
+   * Returns a list of all projects
+   */
+  public async list(): Promise<Project[]> {
+    const projectReferences = await this.listReferences();
+    return await Util.returnResolved(projectReferences.map((projectReference) => {
+      return this.read(projectReference);
+    }));
+  }
+
+  /**
+   * Returns the total number of projects
+   */
+  public async count(): Promise<number> {
+    return (await this.listReferences()).length;
   }
 
   /**

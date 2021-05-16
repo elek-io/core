@@ -98,6 +98,24 @@ export function assignDefaultIfMissing<T>(value: Partial<T> | undefined | null, 
 }
 
 /**
+ * Used as parameter for filter() methods to assure,
+ * only values not null, undefined or empty strings are returned
+ * 
+ * @param value Value to check
+ */
+export function notEmpty<T>(value: T | null | undefined): value is T {
+  if (value === null || value === undefined) {
+    return false;
+  }
+  if (typeof value === 'string') {
+    if (value.trim() === '') {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Returns the slug of given string
  */
 export function slug(string: string): string {

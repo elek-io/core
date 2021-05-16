@@ -4,7 +4,7 @@ import IsSvg from 'is-svg';
 import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
 import { ModelType } from '../../type/model';
-import { CrudService, ServiceType } from '../../type/service';
+import { ExtendedCrudService, ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
 import AssetFile from '../model/AssetFile';
 import Project from '../model/Project';
@@ -19,19 +19,11 @@ import Asset from '../model/Asset';
 /**
  * Service that manages CRUD functionality for asset files on disk
  */
-export default class AssetService extends AbstractService implements CrudService {
+export default class AssetService extends AbstractService implements ExtendedCrudService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
 
-  /**
-   * Creates a new instance of the AssetService which
-   * inherits the type and options properties from AbstractService
-   * 
-   * @param options ElekIoCoreOptions
-   * @param eventService EventService
-   * @param jsonFileService JsonFileService
-   */
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService) {
     super(ServiceType.ASSET, options);
 
@@ -141,6 +133,39 @@ export default class AssetService extends AbstractService implements CrudService
         asset
       }
     });
+  }
+
+  /**
+   * Returns a list of all asset references of given project
+   * 
+   * @param project Project to get all asset references from
+   */
+  public async listReferences(project: Project) {
+    return this.getModelReferences(Util.pathTo.assets(project.id));
+  }
+
+  /**
+   * Returns a list of all assets of given project
+   * 
+   * @param project Project to get all assets from
+   */
+  public async list(project: Project): Promise<Asset[]> {
+    const modelReferences = await this.listReferences(project);
+    return await Util.returnResolved(modelReferences.map((modelReference) => {
+      if (!modelReference.language) {
+        throw new Error(`Asset reference "${modelReference.id}" had no language`);
+      }
+      return this.read(project, modelReference.id, modelReference.language);
+    }));
+  }
+
+  /**
+   * Returns the total number of assets inside given project
+   * 
+   * @param project Project to count all assets from
+   */
+  public async count(project: Project): Promise<number> {
+    return (await this.listReferences(project)).length;
   }
 
   /**

@@ -14,10 +14,6 @@ export default abstract class AbstractFileService extends AbstractService {
 
   /**
    * Do not instantiate directly as this is an abstract class
-   * 
-   * @param type Type of the service that inherits from this class
-   * @param options ElekIoCoreOptions
-   * @param eventService EventService
    */
   protected constructor(type: ServiceType, options: ElekIoCoreOptions, eventService: EventService) {
     super(type, options);

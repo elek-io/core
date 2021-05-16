@@ -16,12 +16,6 @@ export default class LogService extends AbstractService {
   private readonly genericLogger: GenericLogger;
   private readonly projectLoggers: ProjectLogger[] = [];
 
-  /**
-   * Creates a new instance of the LogService which
-   * inherits the type and options properties from AbstractService
-   * 
-   * @param options ElekIoCoreOptions
-   */
   constructor(options: ElekIoCoreOptions, eventService: EventService) {
     super(ServiceType.LOG, options);
 

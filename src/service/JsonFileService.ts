@@ -8,14 +8,6 @@ import EventService from './EventService';
  */
 export default class JsonFileService extends AbstractFileService implements CrudService {
 
-  /**
-   * Creates a new instance of the JsonFileService which
-   * inherits the type and options properties from AbstractService
-   * as well as CRUD methods for basic file access from AbstractFileService
-   * 
-   * @param options ElekIoCoreOptions
-   * @param eventService EventService
-   */
   constructor(options: ElekIoCoreOptions, eventService: EventService) {
     super(ServiceType.JSON_FILE, options, eventService);
   }

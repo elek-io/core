@@ -14,13 +14,6 @@ import Util from '../util';
 export default class EventService extends AbstractService {
   private readonly eventSubject = new Subject<CoreEvent>();
 
-  /**
-   * Creates a new instance of the EventService which
-   * inherits the type and options properties from AbstractService
-   * 
-   * @param options ElekIoCoreOptions
-   * @param logService LogService
-   */
   constructor(options: ElekIoCoreOptions) {
     super(ServiceType.EVENT, options);
   }

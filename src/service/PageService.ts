@@ -1,7 +1,7 @@
 import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
 import { ModelType } from '../../type/model';
-import { CrudService, ServiceType } from '../../type/service';
+import { ExtendedCrudService, ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
 import Page from '../model/Page';
 import Project from '../model/Project';
@@ -14,20 +14,11 @@ import JsonFileService from './JsonFileService';
 /**
  * Service that manages CRUD functionality for page files on disk
  */
-export default class PageService extends AbstractService implements CrudService {
+export default class PageService extends AbstractService implements ExtendedCrudService {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
 
-  /**
-   * Creates a new instance of the PageService which
-   * inherits the type and options properties from AbstractService
-   * 
-   * @param options ElekIoCoreOptions
-   * @param eventService EventService
-   * @param jsonFileService JsonFileService
-   * @param gitService GitService
-   */
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService) {
     super(ServiceType.PAGE, options);
 
@@ -119,6 +110,39 @@ export default class PageService extends AbstractService implements CrudService 
         page
       }
     });
+  }
+
+  /**
+   * Returns a list of all page references of given project
+   * 
+   * @param project Project to get all page references from
+   */
+  public async listReferences(project: Project) {
+    return this.getModelReferences(Util.pathTo.pages(project.id));
+  }
+
+  /**
+   * Returns a list of all pages of given project
+   * 
+   * @param project Project to get all pages from
+   */
+  public async list(project: Project): Promise<Page[]> {
+    const modelReferences = await this.listReferences(project);
+    return await Util.returnResolved(modelReferences.map((modelReference) => {
+      if (!modelReference.language) {
+        throw new Error(`Page reference "${modelReference.id}" had no language`);
+      }
+      return this.read(project, modelReference.id, modelReference.language);
+    }));
+  }
+
+  /**
+   * Returns the total number of pages inside given project
+   * 
+   * @param project Project to count all pages from
+   */
+  public async count(project: Project): Promise<number> {
+    return (await this.listReferences(project)).length;
   }
 
   /**

@@ -2,7 +2,8 @@ import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
 import { GitCommit } from '../../type/git';
 import { ModelType } from '../../type/model';
-import { CrudService, ServiceType } from '../../type/service';
+import { ExtendedCrudService, ServiceType } from '../../type/service';
+import MethodNotSupportedError from '../error/MethodNotSupportedError';
 import AbstractModel from '../model/AbstractModel';
 import Project from '../model/Project';
 import Snapshot from '../model/Snapshot';
@@ -14,18 +15,10 @@ import GitService from './GitService';
 /**
  * Service that manages CRUD functionality for snapshots
  */
-export default class SnapshotService extends AbstractService implements CrudService {
+export default class SnapshotService extends AbstractService implements ExtendedCrudService {
   private eventService: EventService;
   private gitService: GitService;
 
-  /**
-   * Creates a new instance of the SnapshotService which
-   * inherits the type and options properties from AbstractService
-   * 
-   * @param options ElekIoCoreOptions
-   * @param eventService EventService
-   * @param gitService GitService
-   */
   constructor(options: ElekIoCoreOptions, eventService: EventService, gitService: GitService) {
     super(ServiceType.SNAPSHOT, options);
 
@@ -81,7 +74,14 @@ export default class SnapshotService extends AbstractService implements CrudServ
    * @todo Check if we are able to and actually want to update snapshots
    */
   public async update(): Promise<void> {
-    throw new Error('Method not supported');
+    throw new MethodNotSupportedError();
+  }
+
+  /**
+   * Not supported
+   */
+  public async listReferences(): Promise<void> {
+    throw new MethodNotSupportedError();
   }
 
   /**
@@ -102,6 +102,13 @@ export default class SnapshotService extends AbstractService implements CrudServ
       }
     });
     return snapshots;
+  }
+
+  /**
+   * Returns the total number of snapshots inside given project
+   */
+  public async count(project: Project): Promise<number> {
+    return (await this.list(project)).length;
   }
 
   /**

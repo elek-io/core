@@ -7,18 +7,13 @@ import EventService from './service/EventService';
 import JsonFileService from './service/JsonFileService';
 import MdFileService from './service/MdFileService';
 import ProjectService from './service/ProjectService';
-import Asset from './model/Asset';
 import LogService from './service/LogService';
 import PageService from './service/PageService';
 import BlockService from './service/BlockService';
-import Page from './model/Page';
 import { ElekIoCoreOptions, Optional } from '../type/general';
-import Block from './model/Block';
 import SnapshotService from './service/SnapshotService';
 import GitService from './service/GitService';
-import Snapshot from './model/Snapshot';
 import ThemeService from './service/ThemeService';
-import { CrudService } from '../type/service';
 import { GitCommit, GitLogOptions } from '../type/git';
 
 /**
@@ -56,7 +51,6 @@ export default class ElekIoCore {
     };
     this.options = Object.assign({}, defaults, options);
 
-    
     this.eventService = new EventService(this.options);
     this.logService = new LogService(this.options, this.eventService);
     this.gitService = new GitService(this.options, this.logService, this.eventService);
@@ -93,15 +87,6 @@ export default class ElekIoCore {
   }
 
   /**
-   * Util library
-   * 
-   * @todo Do we really want to expose this / is this really needed?
-   */
-  public get util() {
-    return Util;
-  }
-
-  /**
    * Endpoint to subscribe to internal events and react to accordingly
    * 
    * @todo figure out if we really want outside code be able to call emit()
@@ -114,83 +99,37 @@ export default class ElekIoCore {
   }
 
   /**
-   * Searches for projects on disk, loads and returns them
-   */
-  public async projects(): Promise<Project[]> {
-    const possibleProjectDirectories = await Util.subdirectories(Util.pathTo.projects);
-    return await Util.returnResolved(possibleProjectDirectories.map((possibleProjectDirectory) => {
-      return this.projectService.read(possibleProjectDirectory.name);
-    }));
-  }
-
-  /**
    * CRUD methods to work with projects
    */
-  public get project(): ProjectService {
+  public get projects(): ProjectService {
     return this.projectService;
-  }
-
-  /**
-   * Searches for assets of given project on disk, loads and returns them
-   * 
-   * @param project Project to get the assets from
-   */
-  public async assets(project: Project): Promise<Asset[]> {
-    return this.getModelsFromFiles<Asset>(project, Util.pathTo.assets(project.id), this.assetService);
   }
 
   /**
    * CRUD methods to work with assets
    */
-  public get asset(): AssetService {
+  public get assets(): AssetService {
     return this.assetService;
-  }
-
-  /**
-   * Searches for pages of given project on disk, loads and returns them
-   * 
-   * @param project Project to get the pages from
-   */
-  public async pages(project: Project): Promise<Page[]> {
-    return this.getModelsFromFiles<Page>(project, Util.pathTo.pages(project.id), this.pageService);
   }
 
   /**
    * CRUD methods to work with pages
    */
-  public get page(): PageService {
+  public get pages(): PageService {
     return this.pageService;
-  }
-
-  /**
-   * Searches for blocks of given project on disk, loads and returns them
-   * 
-   * @param project Project to get the blocks from
-   */
-  public async blocks(project: Project): Promise<Block[]> {
-    return this.getModelsFromFiles<Block>(project, Util.pathTo.blocks(project.id), this.blockService);
   }
 
   /**
    * CRUD methods to work with blocks
    */
-  public get block(): BlockService {
+  public get blocks(): BlockService {
     return this.blockService;
-  }
-
-  /**
-   * Searches for snapshots of given project and returns them
-   * 
-   * @param project Project to get the snapshots from
-   */
-  public async snapshots(project: Project): Promise<Snapshot[]> {
-    return this.snapshotService.list(project);
   }
 
   /**
    * CRUD methods to work with snapshots
    */
-  public get snapshot(): SnapshotService {
+  public get snapshots(): SnapshotService {
     return this.snapshotService;
   }
 
@@ -198,7 +137,7 @@ export default class ElekIoCore {
    * Provides access to the `git log` method
    */
   public async historyLog(project: Project, options?: GitLogOptions): Promise<GitCommit[]> {
-    return this.gitService.log(this.util.pathTo.project(project.id), options);
+    return this.gitService.log(Util.pathTo.project(project.id), options);
   }
 
   /**
@@ -215,7 +154,7 @@ export default class ElekIoCore {
    */
   public async export(project: Project) {
     const theme = await this.theme.read(project);
-    const pages = await this.pages(project);
+    const pages = await this.pages.list(project);
     return {
       ...project,
       pages: await Promise.all(pages.map( async (page) => {
@@ -297,25 +236,5 @@ export default class ElekIoCore {
     // where it's available from outside
     await Fs.emptyDir(publicPath);
     await Fs.copy(buildPath, publicPath);
-  }
-
-  /**
-   * Returns an array of instanciated models from given service,
-   * that tries to load the model data from all files it finds
-   * under given path
-   * 
-   * @todo Check how we could get full type safety from using CrudService interface,
-   * since currently it only uses `...args: any;`
-   * 
-   * @param project Project to load the models from
-   * @param path Path to search for files in
-   * @param service Service that instanciates the models with data off of files loaded
-   */
-  private async getModelsFromFiles<T>(project: Project, path: string, service: CrudService): Promise<T[]> {
-    const possibleFiles = await Util.files(path);
-    return await Util.returnResolved(possibleFiles.map((possibleFile) => {
-      const fileNameArray = possibleFile.name.split('.');
-      return service.read(project, fileNameArray[0], fileNameArray[1]);
-    }));
   }
 }

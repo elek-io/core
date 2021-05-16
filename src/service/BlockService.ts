@@ -10,26 +10,18 @@ import AbstractService from './AbstractService';
 import EventService from './EventService';
 import GitService from './GitService';
 import MdFileService from './MdFileService';
-import { CrudService, ServiceType } from '../../type/service';
+import { ExtendedCrudService, ServiceType } from '../../type/service';
 import { ModelType } from '../../type/model';
 import { CoreEventName } from '../../type/coreEvent';
 
 /**
  * Service that manages CRUD functionality for block files on disk
  */
-export default class BlockService extends AbstractService implements CrudService {
+export default class BlockService extends AbstractService implements ExtendedCrudService {
   private eventService: EventService;
   private mdFileService: MdFileService;
   private gitService: GitService;
 
-  /**
-   * Creates a new instance of the BlockService which
-   * inherits the type and options properties from AbstractService
-   * 
-   * @param options ElekIoCoreOptions
-   * @param eventService EventService
-   * @param mdFileService MdFileService
-   */
   constructor(options: ElekIoCoreOptions, eventService: EventService, mdFileService: MdFileService, gitService: GitService) {
     super(ServiceType.BLOCK, options);
 
@@ -135,6 +127,39 @@ export default class BlockService extends AbstractService implements CrudService
         block
       }
     });
+  }
+
+  /**
+   * Returns a list of all block references of given project
+   * 
+   * @param project Project to get all block references from
+   */
+  public async listReferences(project: Project) {
+    return this.getModelReferences(Util.pathTo.blocks(project.id));
+  }
+
+  /**
+   * Returns a list of all blocks of given project
+   * 
+   * @param project Project to get all blocks from
+   */
+  public async list(project: Project): Promise<Block[]> {
+    const modelReferences = await this.listReferences(project);
+    return await Util.returnResolved(modelReferences.map((modelReference) => {
+      if (!modelReference.language) {
+        throw new Error(`Block reference "${modelReference.id}" had no language`);
+      }
+      return this.read(project, modelReference.id, modelReference.language);
+    }));
+  }
+
+  /**
+   * Returns the total number of blocks inside given project
+   * 
+   * @param project Project to count all blocks from
+   */
+  public async count(project: Project): Promise<number> {
+    return (await this.listReferences(project)).length;
   }
 
   /**

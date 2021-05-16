@@ -22,15 +22,6 @@ export default class ThemeService extends AbstractService {
   private jsonFileService: JsonFileService;
   private gitService: GitService;
 
-  /**
-   * Creates a new instance of the ThemeService which
-   * inherits the type and options properties from AbstractService
-   * 
-   * @param options ElekIoCoreOptions
-   * @param eventService EventService
-   * @param jsonFileService JsonFileService
-   * @param gitService GitService
-   */
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService) {
     super(ServiceType.THEME, options);
 
