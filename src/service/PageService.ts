@@ -1,6 +1,6 @@
 import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
-import { ModelType } from '../../type/model';
+import { ModelReference, ModelType } from '../../type/model';
 import { ExtendedCrudService, ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
 import Page from '../model/Page';
@@ -117,7 +117,7 @@ export default class PageService extends AbstractService implements ExtendedCrud
    * 
    * @param project Project to get all page references from
    */
-  public async listReferences(project: Project) {
+  public async listReferences(project: Project): Promise<ModelReference[]> {
     return this.getModelReferences(Util.pathTo.pages(project.id));
   }
 

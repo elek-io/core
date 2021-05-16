@@ -1,6 +1,7 @@
 import Util from '../util';
 import { ElekIoCoreOptions } from '../../type/general';
 import { ServiceType } from '../../type/service';
+import { ModelReference } from '../../type/model';
 
 /**
  * A base service that provides properties for all other services
@@ -35,7 +36,7 @@ export default abstract class AbstractService {
    * Searches for all files inside given folder,
    * parses their names and returns a list of them
    */
-  protected async getModelReferences(path: string) {
+  protected async getModelReferences(path: string): Promise<ModelReference[]> {
     const servicesWithLanguage = [ServiceType.ASSET, ServiceType.BLOCK, ServiceType.PAGE];
     const possibleModels = await Util.files(path);
 

@@ -123,7 +123,7 @@ export default class ProjectService extends AbstractService implements ExtendedC
   /**
    * Returns a list of all project references
    */
-  public async listReferences() {
+  public async listReferences(): Promise<string[]> {
     const possibleProjectDirectories = await Util.subdirectories(Util.pathTo.projects);
     return possibleProjectDirectories.map((possibleProjectDirectory) => {
       if (Util.validator.isUuid(possibleProjectDirectory.name) === false) {

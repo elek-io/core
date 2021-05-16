@@ -3,7 +3,7 @@ import FileType from 'file-type';
 import IsSvg from 'is-svg';
 import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
-import { ModelType } from '../../type/model';
+import { ModelReference, ModelType } from '../../type/model';
 import { ExtendedCrudService, ServiceType } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
 import AssetFile from '../model/AssetFile';
@@ -140,7 +140,7 @@ export default class AssetService extends AbstractService implements ExtendedCru
    * 
    * @param project Project to get all asset references from
    */
-  public async listReferences(project: Project) {
+  public async listReferences(project: Project): Promise<ModelReference[]> {
     return this.getModelReferences(Util.pathTo.assets(project.id));
   }
 

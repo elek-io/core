@@ -11,7 +11,7 @@ import EventService from './EventService';
 import GitService from './GitService';
 import MdFileService from './MdFileService';
 import { ExtendedCrudService, ServiceType } from '../../type/service';
-import { ModelType } from '../../type/model';
+import { ModelReference, ModelType } from '../../type/model';
 import { CoreEventName } from '../../type/coreEvent';
 
 /**
@@ -134,7 +134,7 @@ export default class BlockService extends AbstractService implements ExtendedCru
    * 
    * @param project Project to get all block references from
    */
-  public async listReferences(project: Project) {
+  public async listReferences(project: Project): Promise<ModelReference[]> {
     return this.getModelReferences(Util.pathTo.blocks(project.id));
   }
 
