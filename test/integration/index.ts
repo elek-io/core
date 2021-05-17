@@ -78,7 +78,7 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to add a block to an existing project', async () => {
     const project = await core.projects.read(projectId);
-    const block = await core.blocks.create(project, 'en-GB', '# Hello World');
+    const block = await core.blocks.create(project, 'en-GB', 'Hey', '# Hello World');
     blockId = block.id;
 
     expect(block).to.have.property('body', '# Hello World');
@@ -226,7 +226,7 @@ describe('Class ElekIoCore', () => {
     const snapshot = await core.snapshots.create(project, 'My first snapshot');
     // Create a new block after creating the snapshot
     // to test if reverting to the snapshot deletes the block too
-    const blockToRevert = await core.blocks.create(project, 'en-GB', 'This should be deleted after the revert');
+    const blockToRevert = await core.blocks.create(project, 'en-GB', 'To delete', 'This should be deleted after the revert');
     snapshotId = snapshot.id;
     blockToRevertId = blockToRevert.id;
   });
@@ -342,6 +342,15 @@ describe('Class ElekIoCore', () => {
     const project = await core.projects.read(projectId);
     const logs = await core.historyLog(project);
     const snapshot = await core.snapshots.create(project, 'Snapshot on the second to first commit', logs[logs.length - 2]);
+  });
+
+  it('should be able to search a project for given query', async () => {
+    const project = await core.projects.read(projectId);
+
+    const results = await core.projects.search(project, 'Page');
+    
+    //console.log(JSON.stringify(results, null, 2));
+    expect(results.length).to.equal(2);
   });
 
   // it('should be able to delete a snapshot', async () => {

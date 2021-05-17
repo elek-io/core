@@ -8,11 +8,13 @@ import AbstractModelWithLanguage from './AbstractModelWithLanguage';
  * The used theme dictates what elements can be used in given block's position
  */
 export default class Block extends AbstractModelWithLanguage {
+  public name: string;
   public body = '';
 
-  constructor(id: string, language: string, body: string) {
+  constructor(id: string, language: string, name: string, body: string) {
     super(id, language, ModelType.BLOCK);
 
+    this.name = name;
     this.body = body;
   }
 }

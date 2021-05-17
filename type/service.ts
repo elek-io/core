@@ -10,7 +10,8 @@ export enum ServiceType {
   EVENT = 'event',
   FILE = 'file',
   JSON_FILE = 'jsonFile',
-  MD_FILE = 'mdFile'
+  MD_FILE = 'mdFile',
+  SEARCH = 'search'
 }
 
 /**

@@ -33,19 +33,22 @@ export default class BlockService extends AbstractService implements ExtendedCru
   /**
    * Creates a new block on disk and commits it
    * 
+   * @todo how to add json header dynamically?
+   * 
    * @param project Project to add the block to
    * @param language Language of the new block
    * @param body Markdown body of the block
    */
-  public async create(project: Project, language: string, body: string): Promise<Block> {
+  public async create(project: Project, language: string, name: string, body: string): Promise<Block> {
     const id = Util.uuid();
     const projectPath = Util.pathTo.project(project.id);
-    const block = new Block(id, language, body);
+    const block = new Block(id, language, name, body);
     const blockPath = Util.pathTo.block(project.id, block.id, language);
     await this.mdFileService.create({
       jsonHeader: {
         id: block.id,
         language: block.language,
+        name: block.name,
         type: block.type
       },
       mdBody: block.body
@@ -69,8 +72,8 @@ export default class BlockService extends AbstractService implements ExtendedCru
    * @param language Language of the block to read
    */
   public async read(project: Project, id: string, language: string): Promise<Block> {
-    const mdFile = await this.mdFileService.read(Util.pathTo.block(project.id, id, language));
-    const block = new Block(id, language, mdFile.mdBody);
+    const mdFile = await this.mdFileService.read<Block>(Util.pathTo.block(project.id, id, language));
+    const block = new Block(id, language, mdFile.jsonHeader.name, mdFile.mdBody);
     this.eventService.emit(CoreEventName.BLOCK_READ, {
       project,
       data: {
@@ -83,6 +86,8 @@ export default class BlockService extends AbstractService implements ExtendedCru
   /**
    * Updates the block file on disk and creates a commit
    * 
+   * @todo how to add json header dynamically?
+   * 
    * @param project Project of the block to update
    * @param block Block to write to disk
    * @param message Optional overwrite for the git message
@@ -94,6 +99,7 @@ export default class BlockService extends AbstractService implements ExtendedCru
       jsonHeader: {
         id: block.id,
         language: block.language,
+        name: block.name,
         type: block.type
       },
       mdBody: block.body

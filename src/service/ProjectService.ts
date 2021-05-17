@@ -15,6 +15,7 @@ import { PageStatus } from '../../type/page';
 import { ExtendedCrudService, ServiceType } from '../../type/service';
 import { ModelType } from '../../type/model';
 import { CoreEventName } from '../../type/coreEvent';
+import SearchService from './SearchService';
 
 /**
  * Service that manages CRUD functionality for project files on disk
@@ -26,8 +27,9 @@ export default class ProjectService extends AbstractService implements ExtendedC
   private blockService: BlockService;
   private pageService: PageService;
   private themeService: ThemeService;
+  private searchService: SearchService;
 
-  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService, blockService: BlockService, pageService: PageService, themeService: ThemeService) {
+  constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService, blockService: BlockService, pageService: PageService, themeService: ThemeService, searchService: SearchService) {
     super(ServiceType.PROJECT, options);
 
     this.eventService = eventService;
@@ -36,6 +38,7 @@ export default class ProjectService extends AbstractService implements ExtendedC
     this.blockService = blockService;
     this.pageService = pageService;
     this.themeService = themeService;
+    this.searchService = searchService;
   }
 
   /**
@@ -60,7 +63,7 @@ export default class ProjectService extends AbstractService implements ExtendedC
     await this.gitService.commit(projectPath, ':tada: Created this new elek.io project');
     await this.gitService.switch(projectPath, 'stage', { isNew: true });
     const theme = await this.themeService.use(project, 'https://github.com/elek-io/starter-theme.git');
-    const block = await this.blockService.create(project, 'en-US', 'We are very happy to have you on board. This page was created for you.\nYou can use it as a starting point or delete it. If you need help, consider visiting one of these pages:\n\n- [An introduction to the elek.io client](https://elek.io)\n- [Working with pages](https://elek.io)\n- [Choosing a theme](https://elek.io)\n- [Deploying your first project](https://elek.io)');
+    const block = await this.blockService.create(project, 'en-US', 'Welcome', 'We are very happy to have you on board. This page was created for you.\nYou can use it as a starting point or delete it. If you need help, consider visiting one of these pages:\n\n- [An introduction to the elek.io client](https://elek.io)\n- [Working with pages](https://elek.io)\n- [Choosing a theme](https://elek.io)\n- [Deploying your first project](https://elek.io)');
     const page = await this.pageService.create(project, 'en-US', 'Welcome to elek.io!', '/', theme.layouts[1].id);
     page.status = PageStatus.PUBLISHED;
     page.layoutId = 'homepage';
@@ -148,6 +151,16 @@ export default class ProjectService extends AbstractService implements ExtendedC
    */
   public async count(): Promise<number> {
     return (await this.listReferences()).length;
+  }
+
+  /**
+   * Search all models inside the project for given query
+   * 
+   * @param project Project to search in
+   * @param query Query to search for
+   */
+  public async search(project: Project, query: string) {
+    return this.searchService.search(project, query);
   }
 
   /**

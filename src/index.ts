@@ -15,6 +15,7 @@ import SnapshotService from './service/SnapshotService';
 import GitService from './service/GitService';
 import ThemeService from './service/ThemeService';
 import { GitCommit, GitLogOptions } from '../type/git';
+import SearchService from './service/SearchService';
 
 /**
  * elek.io core
@@ -33,6 +34,7 @@ export default class ElekIoCore {
   private readonly assetService: AssetService;
   private readonly pageService: PageService;
   private readonly blockService: BlockService;
+  private readonly searchService: SearchService;
   private readonly projectService: ProjectService;
 
   constructor(options: Optional<ElekIoCoreOptions, 'theme' | 'file' | 'log'>) {
@@ -61,7 +63,8 @@ export default class ElekIoCore {
     this.assetService = new AssetService(this.options, this.eventService, this.jsonFileService, this.gitService);
     this.pageService = new PageService(this.options, this.eventService, this.jsonFileService, this.gitService);
     this.blockService = new BlockService(this.options, this.eventService, this.mdFileService, this.gitService);
-    this.projectService = new ProjectService(this.options, this.eventService, this.jsonFileService, this.gitService, this.blockService, this.pageService, this.themeService);
+    this.searchService = new SearchService(this.options, this.eventService, this.pageService, this.assetService, this.blockService);
+    this.projectService = new ProjectService(this.options, this.eventService, this.jsonFileService, this.gitService, this.blockService, this.pageService, this.themeService, this.searchService);
   }
 
   /**
