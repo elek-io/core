@@ -291,6 +291,33 @@ export default class GitService extends AbstractService {
   }
 
   /**
+   * Returns a timestamp of given files creation
+   * 
+   * Git only returns the timestamp the file was added,
+   * which could be different from the file being created.
+   * But since file operations will always be committed
+   * immediately, this is practically the same.
+   * 
+   * @param path Path to the repository
+   * @param file File to get timestamp from
+   */
+  public async getFileCreatedTimestamp(path: string, file: string) {
+    const result = await this.git(path, ['log', '--diff-filter=A', '--follow', '--format=%at', '--max-count=1', '--', file]);
+    return parseInt(result.stdout);
+  }
+
+  /**
+   * Returns a timestamp of the files last modification
+   * 
+   * @param path Path to the repository
+   * @param file File to get timestamp from
+   */
+  public async getFileLastModifiedTimestamp(path: string, file: string) {
+    const result = await this.git(path, ['log', '--follow', '--format=%at', '--max-count=1', '--', file]);
+    return parseInt(result.stdout);
+  }
+
+  /**
    * A reference is used in Git to specify branches and tags.
    * This method checks if given name matches the required format
    * 

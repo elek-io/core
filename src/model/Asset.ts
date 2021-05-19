@@ -6,6 +6,9 @@ import AssetFile from './AssetFile';
  * like EXIF, dimensions and the absolute path to it.
  */
 export default class Asset extends AssetFile {
+  public readonly created: number;
+  public readonly modified: number;
+
   /**
    * Absolute path on this filesystem
    */
@@ -16,9 +19,11 @@ export default class Asset extends AssetFile {
    */
   public readonly size: number;
 
-  constructor(assetFile: AssetFile, absolutePath: string, size: number) {
+  constructor(assetFile: AssetFile, created: number, modified: number, absolutePath: string, size: number) {
     super(assetFile.id, assetFile.language, assetFile.name, assetFile.description, assetFile.extension, assetFile.mimeType);
     
+    this.created = created;
+    this.modified = modified;
     this.absolutePath = absolutePath;
     this.size = size;
   }

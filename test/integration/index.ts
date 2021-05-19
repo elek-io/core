@@ -353,6 +353,20 @@ describe('Class ElekIoCore', () => {
     expect(results.length).to.equal(2);
   });
 
+  it('should perform an asset read operation quickly', async () => {
+    const project = await core.projects.read(projectId);
+
+    const start = process.hrtime();
+    const asset = await core.assets.read(project, assetId, 'en-GB');
+    const stop = process.hrtime(start);
+
+    const s = stop[0];
+    const ms = parseFloat((stop[1] / 1000000).toFixed(2));
+
+    expect(s).to.lessThanOrEqual(0);
+    expect(ms).to.lessThanOrEqual(50);
+  });
+
   // it('should be able to delete a snapshot', async () => {
   //   const project = await core.projects.read(projectId);
   //   const snapshot = await core.snapshots.read(project, snapshotId);

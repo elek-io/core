@@ -54,7 +54,9 @@ export default class AssetService extends AbstractService implements ExtendedCru
     await this.gitService.add(projectPath, [assetFilePath, lfsFilePath]);
     await this.gitService.commit(projectPath, this.gitMessage.create);
     const lfsFileSize = (await Fs.stat(lfsFilePath)).size;
-    const asset = new Asset(assetFile, lfsFilePath, lfsFileSize);
+    const created = await this.gitService.getFileCreatedTimestamp(projectPath, assetFilePath);
+    const modified = await this.gitService.getFileLastModifiedTimestamp(projectPath, assetFilePath);
+    const asset = new Asset(assetFile, created, modified, lfsFilePath, lfsFileSize);
     this.eventService.emit(CoreEventName.ASSET_CREATE, {
       project,
       data: {
@@ -72,11 +74,15 @@ export default class AssetService extends AbstractService implements ExtendedCru
    * @param language Language of the asset to read
    */
   public async read(project: Project, id: string, language: string): Promise<Asset> {
-    const json = await this.jsonFileService.read<AssetFile>(Util.pathTo.asset(project.id, id, language));
+    const projectPath = Util.pathTo.project(project.id);
+    const assetFilePath = Util.pathTo.asset(project.id, id, language);
+    const json = await this.jsonFileService.read<AssetFile>(assetFilePath);
     const assetFile = new AssetFile(json.id, json.language, json.name, json.description, json.extension, json.mimeType);
     const lfsFilePath = Util.pathTo.lfsFile(project.id, assetFile.id, assetFile.language, assetFile.extension);
     const lfsFileSize = (await Fs.stat(lfsFilePath)).size;
-    const asset = new Asset(assetFile, lfsFilePath, lfsFileSize);
+    const created = await this.gitService.getFileCreatedTimestamp(projectPath, assetFilePath);
+    const modified = await this.gitService.getFileLastModifiedTimestamp(projectPath, assetFilePath);
+    const asset = new Asset(assetFile, created, modified, lfsFilePath, lfsFileSize);
     this.eventService.emit(CoreEventName.ASSET_READ, {
       project,
       data: {
