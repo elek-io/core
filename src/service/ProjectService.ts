@@ -12,7 +12,7 @@ import PageService from './PageService';
 import GitService from './GitService';
 import ThemeService from './ThemeService';
 import { PageStatus } from '../../type/page';
-import { ExtendedCrudService, ServiceType } from '../../type/service';
+import { ExtendedCrudService, PaginatedList, ServiceType, Sort } from '../../type/service';
 import { ModelType } from '../../type/model';
 import { CoreEventName } from '../../type/coreEvent';
 import SearchService from './SearchService';
@@ -20,7 +20,7 @@ import SearchService from './SearchService';
 /**
  * Service that manages CRUD functionality for project files on disk
  */
-export default class ProjectService extends AbstractService implements ExtendedCrudService {
+export default class ProjectService extends AbstractService implements ExtendedCrudService<Project> {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
@@ -123,34 +123,17 @@ export default class ProjectService extends AbstractService implements ExtendedC
     });
   }
 
-  /**
-   * Returns a list of all project references
-   */
-  public async listReferences(): Promise<string[]> {
-    const possibleProjectDirectories = await Util.subdirectories(Util.pathTo.projects);
-    return possibleProjectDirectories.map((possibleProjectDirectory) => {
-      if (Util.validator.isUuid(possibleProjectDirectory.name) === false) {
-        return null;
-      }
-      return possibleProjectDirectory.name;
-    }).filter(Util.notEmpty);
-  }
-
-  /**
-   * Returns a list of all projects
-   */
-  public async list(): Promise<Project[]> {
-    const projectReferences = await this.listReferences();
-    return await Util.returnResolved(projectReferences.map((projectReference) => {
-      return this.read(projectReference);
+  public async list(sort: Sort<Project>[] = [], filter = '', limit = 15, offset = 0): Promise<PaginatedList<Project>> {
+    const modelReferences = await this.listReferences(ModelType.PROJECT);
+    const list = await Util.returnResolved(modelReferences.map((modelReference) => {
+      return this.read(modelReference.id);
     }));
+
+    return this.paginate(list, sort, filter, limit, offset);
   }
 
-  /**
-   * Returns the total number of projects
-   */
   public async count(): Promise<number> {
-    return (await this.listReferences()).length;
+    return (await this.listReferences(ModelType.PROJECT)).length;
   }
 
   /**

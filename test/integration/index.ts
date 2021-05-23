@@ -107,7 +107,7 @@ describe('Class ElekIoCore', () => {
   it('should be able to load all projects from disk', async () => {
     const projects = await core.projects.list();
 
-    expect(projects.length).to.equal(2);
+    expect(projects.list.length).to.equal(2);
   });
 
   it('should be able to read an asset', async () => {
@@ -162,21 +162,21 @@ describe('Class ElekIoCore', () => {
     const project = await core.projects.read(projectId);
     const assets = await core.assets.list(project);
 
-    expect(assets.length).to.equal(1);
+    expect(assets.list.length).to.equal(1);
   });
 
   it('should be able to load all pages from disk', async () => {
     const project = await core.projects.read(projectId);
     const pages = await core.pages.list(project);
 
-    expect(pages.length).to.equal(2);
+    expect(pages.list.length).to.equal(2);
   });
 
   it('should be able to load all block from disk', async () => {
     const project = await core.projects.read(projectId);
     const blocks = await core.blocks.list(project);
 
-    expect(blocks.length).to.equal(2);
+    expect(blocks.list.length).to.equal(2);
   });
 
   it('should be able to identify a project', async () => {
@@ -327,7 +327,7 @@ describe('Class ElekIoCore', () => {
     const project = await core.projects.read(projectId);
     const snapshots = await core.snapshots.list(project);
 
-    expect(snapshots.length).to.equal(1);
+    expect(snapshots.list.length).to.equal(1);
   });
 
   it('should be able to identify a snapshot', async () => {

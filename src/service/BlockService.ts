@@ -6,21 +6,22 @@ import AbstractModel from '../model/AbstractModel';
 import Block from '../model/Block';
 import Project from '../model/Project';
 import Util from '../util';
-import AbstractService from './AbstractService';
 import EventService from './EventService';
 import GitService from './GitService';
 import MdFileService from './MdFileService';
-import { ExtendedCrudService, ServiceType } from '../../type/service';
-import { ModelReference, ModelType } from '../../type/model';
+import { ExtendedCrudService, PaginatedList, ServiceType, Sort } from '../../type/service';
+import { ModelType } from '../../type/model';
 import { CoreEventName } from '../../type/coreEvent';
+import AbstractService from './AbstractService';
+import RequiredParameterMissingError from '../error/RequiredParameterMissingError';
 
 /**
  * Service that manages CRUD functionality for block files on disk
  */
-export default class BlockService extends AbstractService implements ExtendedCrudService {
+export default class BlockService extends AbstractService implements ExtendedCrudService<Block> {
   private eventService: EventService;
   private mdFileService: MdFileService;
-  private gitService: GitService;
+  private readonly gitService: GitService;
 
   constructor(options: ElekIoCoreOptions, eventService: EventService, mdFileService: MdFileService, gitService: GitService) {
     super(ServiceType.BLOCK, options);
@@ -135,37 +136,18 @@ export default class BlockService extends AbstractService implements ExtendedCru
     });
   }
 
-  /**
-   * Returns a list of all block references of given project
-   * 
-   * @param project Project to get all block references from
-   */
-  public async listReferences(project: Project): Promise<ModelReference[]> {
-    return this.getModelReferences(Util.pathTo.blocks(project.id));
-  }
-
-  /**
-   * Returns a list of all blocks of given project
-   * 
-   * @param project Project to get all blocks from
-   */
-  public async list(project: Project): Promise<Block[]> {
-    const modelReferences = await this.listReferences(project);
-    return await Util.returnResolved(modelReferences.map((modelReference) => {
-      if (!modelReference.language) {
-        throw new Error(`Block reference "${modelReference.id}" had no language`);
-      }
+  public async list(project: Project, sort: Sort<Block>[] = [], filter = '', limit = 15, offset = 0): Promise<PaginatedList<Block>> {
+    const modelReferences = await this.listReferences(ModelType.BLOCK, project);
+    const list = await Util.returnResolved(modelReferences.map((modelReference) => {
+      if (!modelReference.language) { throw new RequiredParameterMissingError('language'); }
       return this.read(project, modelReference.id, modelReference.language);
     }));
+
+    return this.paginate(list, sort, filter, limit, offset);
   }
 
-  /**
-   * Returns the total number of blocks inside given project
-   * 
-   * @param project Project to count all blocks from
-   */
   public async count(project: Project): Promise<number> {
-    return (await this.listReferences(project)).length;
+    return (await this.listReferences(ModelType.BLOCK, project)).length;
   }
 
   /**

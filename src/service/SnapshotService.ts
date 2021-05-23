@@ -2,7 +2,7 @@ import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
 import { GitCommit } from '../../type/git';
 import { ModelType } from '../../type/model';
-import { ExtendedCrudService, ServiceType } from '../../type/service';
+import { ExtendedCrudService, PaginatedList, ServiceType, Sort } from '../../type/service';
 import MethodNotSupportedError from '../error/MethodNotSupportedError';
 import AbstractModel from '../model/AbstractModel';
 import Project from '../model/Project';
@@ -15,7 +15,7 @@ import GitService from './GitService';
 /**
  * Service that manages CRUD functionality for snapshots
  */
-export default class SnapshotService extends AbstractService implements ExtendedCrudService {
+export default class SnapshotService extends AbstractService implements ExtendedCrudService<Snapshot> {
   private eventService: EventService;
   private gitService: GitService;
 
@@ -77,38 +77,18 @@ export default class SnapshotService extends AbstractService implements Extended
     throw new MethodNotSupportedError();
   }
 
-  /**
-   * Not supported
-   */
-  public async listReferences(): Promise<void> {
-    throw new MethodNotSupportedError();
-  }
-
-  /**
-   * Returns all available snapshots of given project
-   * 
-   * @param project Project to list all snapshots from
-   */
-  public async list(project: Project): Promise<Snapshot[]> {
+  public async list(project: Project, sort: Sort<Snapshot>[] = [], filter = '', limit = 15, offset = 0): Promise<PaginatedList<Snapshot>> {
     const tags = await this.gitService.listTags(Util.pathTo.project(project.id));
-    const snapshots: Snapshot[] = [];
+    const list: Snapshot[] = [];
     tags.forEach((tag) => {
-      snapshots.push(new Snapshot(tag.name, tag.message, tag.timestamp, tag.author));
+      list.push(new Snapshot(tag.name, tag.message, tag.timestamp, tag.author));
     });
-    this.eventService.emit(CoreEventName.SNAPSHOT_LIST, {
-      project,
-      data: {
-        snapshots
-      }
-    });
-    return snapshots;
+
+    return this.paginate(list, sort, filter, limit, offset);
   }
 
-  /**
-   * Returns the total number of snapshots inside given project
-   */
   public async count(project: Project): Promise<number> {
-    return (await this.list(project)).length;
+    return (await this.list(project, undefined, undefined, 0, 0)).total;
   }
 
   /**

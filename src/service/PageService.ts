@@ -1,7 +1,8 @@
 import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
-import { ModelReference, ModelType } from '../../type/model';
-import { ExtendedCrudService, ServiceType } from '../../type/service';
+import { ModelType } from '../../type/model';
+import { ExtendedCrudService, PaginatedList, ServiceType, Sort } from '../../type/service';
+import RequiredParameterMissingError from '../error/RequiredParameterMissingError';
 import AbstractModel from '../model/AbstractModel';
 import Page from '../model/Page';
 import Project from '../model/Project';
@@ -14,7 +15,7 @@ import JsonFileService from './JsonFileService';
 /**
  * Service that manages CRUD functionality for page files on disk
  */
-export default class PageService extends AbstractService implements ExtendedCrudService {
+export default class PageService extends AbstractService implements ExtendedCrudService<Page> {
   private eventService: EventService;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
@@ -112,37 +113,18 @@ export default class PageService extends AbstractService implements ExtendedCrud
     });
   }
 
-  /**
-   * Returns a list of all page references of given project
-   * 
-   * @param project Project to get all page references from
-   */
-  public async listReferences(project: Project): Promise<ModelReference[]> {
-    return this.getModelReferences(Util.pathTo.pages(project.id));
-  }
-
-  /**
-   * Returns a list of all pages of given project
-   * 
-   * @param project Project to get all pages from
-   */
-  public async list(project: Project): Promise<Page[]> {
-    const modelReferences = await this.listReferences(project);
-    return await Util.returnResolved(modelReferences.map((modelReference) => {
-      if (!modelReference.language) {
-        throw new Error(`Page reference "${modelReference.id}" had no language`);
-      }
+  public async list(project: Project, sort: Sort<Page>[] = [], filter = '', limit = 15, offset = 0): Promise<PaginatedList<Page>> {
+    const modelReferences = await this.listReferences(ModelType.PAGE, project);
+    const list = await Util.returnResolved(modelReferences.map((modelReference) => {
+      if (!modelReference.language) { throw new RequiredParameterMissingError('language'); }
       return this.read(project, modelReference.id, modelReference.language);
     }));
+
+    return this.paginate(list, sort, filter, limit, offset);
   }
 
-  /**
-   * Returns the total number of pages inside given project
-   * 
-   * @param project Project to count all pages from
-   */
   public async count(project: Project): Promise<number> {
-    return (await this.listReferences(project)).length;
+    return (await this.listReferences(ModelType.PAGE, project)).length;
   }
 
   /**

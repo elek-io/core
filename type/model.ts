@@ -14,5 +14,5 @@ export enum ModelType {
 export interface ModelReference {
   id: string;
   language: string | null;
-  extension: string;
+  extension: string | null;
 }

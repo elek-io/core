@@ -3,26 +3,28 @@ import FileType from 'file-type';
 import IsSvg from 'is-svg';
 import { CoreEventName } from '../../type/coreEvent';
 import { ElekIoCoreOptions } from '../../type/general';
-import { ModelReference, ModelType } from '../../type/model';
-import { ExtendedCrudService, ServiceType } from '../../type/service';
+import { ModelType } from '../../type/model';
+import { ExtendedCrudService, PaginatedList, ServiceType, Sort } from '../../type/service';
 import AbstractModel from '../model/AbstractModel';
 import AssetFile from '../model/AssetFile';
 import Project from '../model/Project';
 import Util from '../util';
-import AbstractService from './AbstractService';
 import EventService from './EventService';
 import GitService from './GitService';
 import JsonFileService from './JsonFileService';
 import { SupportedExtension, supportedExtensions, SupportedMimeType, supportedMimeTypes } from '../../type/asset';
 import Asset from '../model/Asset';
+import FileTypeNotSupportedError from '../error/FileTypeNotSupportedError';
+import AbstractService from './AbstractService';
+import RequiredParameterMissingError from '../error/RequiredParameterMissingError';
 
 /**
  * Service that manages CRUD functionality for asset files on disk
  */
-export default class AssetService extends AbstractService implements ExtendedCrudService {
-  private eventService: EventService;
-  private jsonFileService: JsonFileService;
-  private gitService: GitService;
+export default class AssetService extends AbstractService implements ExtendedCrudService<Asset> {
+  private readonly eventService: EventService;
+  private readonly jsonFileService: JsonFileService;
+  private readonly gitService: GitService;
 
   constructor(options: ElekIoCoreOptions, eventService: EventService, jsonFileService: JsonFileService, gitService: GitService) {
     super(ServiceType.ASSET, options);
@@ -141,37 +143,18 @@ export default class AssetService extends AbstractService implements ExtendedCru
     });
   }
 
-  /**
-   * Returns a list of all asset references of given project
-   * 
-   * @param project Project to get all asset references from
-   */
-  public async listReferences(project: Project): Promise<ModelReference[]> {
-    return this.getModelReferences(Util.pathTo.assets(project.id));
-  }
-
-  /**
-   * Returns a list of all assets of given project
-   * 
-   * @param project Project to get all assets from
-   */
-  public async list(project: Project): Promise<Asset[]> {
-    const modelReferences = await this.listReferences(project);
-    return await Util.returnResolved(modelReferences.map((modelReference) => {
-      if (!modelReference.language) {
-        throw new Error(`Asset reference "${modelReference.id}" had no language`);
-      }
+  public async list(project: Project, sort: Sort<Asset>[] = [], filter = '', limit = 15, offset = 0): Promise<PaginatedList<Asset>> {
+    const modelReferences = await this.listReferences(ModelType.ASSET, project);
+    const list = await Util.returnResolved(modelReferences.map((modelReference) => {
+      if (!modelReference.language) { throw new RequiredParameterMissingError('language'); }
       return this.read(project, modelReference.id, modelReference.language);
     }));
+
+    return this.paginate(list, sort, filter, limit, offset);
   }
 
-  /**
-   * Returns the total number of assets inside given project
-   * 
-   * @param project Project to count all assets from
-   */
   public async count(project: Project): Promise<number> {
-    return (await this.listReferences(project)).length;
+    return (await this.listReferences(ModelType.ASSET, project)).length;
   }
 
   /**
@@ -213,11 +196,11 @@ export default class AssetService extends AbstractService implements ExtendedCru
     }
 
     if (supportedExtensions.includes(fileType.ext as SupportedExtension) === false) {
-      throw new Error(`The extension "${fileType.ext}" is not supported`);
+      throw new FileTypeNotSupportedError(`The extension "${fileType.ext}" is not supported`);
     }
 
     if (supportedMimeTypes.includes(fileType.mime as SupportedMimeType) === false) {
-      throw new Error(`The MIME type "${fileType.mime}" is not supported`);
+      throw new FileTypeNotSupportedError(`The MIME type "${fileType.mime}" is not supported`);
     }
 
     return {

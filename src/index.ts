@@ -157,10 +157,10 @@ export default class ElekIoCore {
    */
   public async export(project: Project) {
     const theme = await this.theme.read(project);
-    const pages = await this.pages.list(project);
+    const paginatedPagesList = await this.pages.list(project);
     return {
       ...project,
-      pages: await Promise.all(pages.map( async (page) => {
+      pages: await Promise.all(paginatedPagesList.list.flat().map( async (page) => {
         const layout = theme.layouts.find((layout) => {
           return layout.id === page.layoutId;
         });
