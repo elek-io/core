@@ -17,16 +17,14 @@ export default class SearchService extends AbstractService {
   private pageService: PageService;
   private assetService: AssetService;
   private blockService: BlockService;
-  private snapshotService: SnapshotService;
 
-  constructor(options: ElekIoCoreOptions, eventService: EventService, pageService: PageService, assetService: AssetService, blockService: BlockService, snapshotService: SnapshotService) {
+  constructor(options: ElekIoCoreOptions, eventService: EventService, pageService: PageService, assetService: AssetService, blockService: BlockService) {
     super(ServiceType.SEARCH, options);
 
     this.eventService = eventService;
     this.pageService = pageService;
     this.assetService = assetService;
     this.blockService = blockService;
-    this.snapshotService = snapshotService;
   }
 
   /**
