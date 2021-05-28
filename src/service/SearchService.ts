@@ -37,10 +37,16 @@ export default class SearchService extends AbstractService {
    */
   public async search(project: Project, query: string) {
     const results: SearchResult[] = [];
+    const normalizedQuery = query.trim();
+
+    if (normalizedQuery === '') {
+      return results;
+    }
+
     const paginatedLists = (await Promise.all([
-      this.pageService.list(project, [], query),
-      this.assetService.list(project, [], query),
-      this.blockService.list(project, [], query)
+      this.pageService.list(project, [], normalizedQuery),
+      this.assetService.list(project, [], normalizedQuery),
+      this.blockService.list(project, [], normalizedQuery)
     ])).flat();
 
     paginatedLists.forEach((paginatedList) => {
@@ -55,9 +61,9 @@ export default class SearchService extends AbstractService {
 
         for (const [key, value] of Object.entries(model)) {
           const valueString = String(value);
-          if (valueString.toLowerCase().includes(query.toLowerCase())) {
-            const matchStart = valueString.toLowerCase().indexOf(query.toLowerCase());
-            const matchEnd = matchStart + query.length;
+          if (valueString.toLowerCase().includes(normalizedQuery.toLowerCase())) {
+            const matchStart = valueString.toLowerCase().indexOf(normalizedQuery.toLowerCase());
+            const matchEnd = matchStart + normalizedQuery.length;
 
             result.matches.push({
               key,

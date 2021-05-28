@@ -353,6 +353,16 @@ describe('Class ElekIoCore', () => {
     expect(results.length).to.equal(2);
   });
 
+  it('should not return anything when searching a project for given empty query', async () => {
+    const project = await core.projects.read(projectId);
+
+    const results = await core.projects.search(project, '');
+    const results2 = await core.projects.search(project, ' ');
+    
+    expect(results.length).to.equal(0);
+    expect(results2.length).to.equal(0);
+  });
+
   it('should perform an asset read operation quickly', async () => {
     const project = await core.projects.read(projectId);
 
