@@ -1,3 +1,5 @@
+import { GitSignature } from './git';
+
 /**
  * Defines that one or more keys (K) of type (T) are optional
  */
@@ -42,6 +44,7 @@ export type JsonOf<T> = {
  */
 export interface ElekIoCoreOptions {
   signature: GitSignature;
+  locale: Locale;
   theme: {
     htmlPrefix: string;
   };
@@ -55,10 +58,52 @@ export interface ElekIoCoreOptions {
   };
 }
 
-/**
- * Signature git uses to identify users
- */
-export interface GitSignature {
+export interface Locale {
+  /**
+   * BCP 47 compliant, unique language tag
+   */
+  id: string;
+  /**
+   * Display name
+   */
   name: string;
-  email: string;
 }
+
+/**
+ * All currently supported, BCP 47 compliant language tags
+ * 
+ * The support depends on the tools and libraries we use.
+ * We can't support a given language, if there is no support
+ * for it from used third parties. Currently, to check if a langauge
+ * tag can be added to this list, it needs to be supported by:
+ * - DeepL translation API
+ * 
+ * @see https://www.deepl.com/docs-api/other-functions/listing-supported-languages/
+ */
+export const supportedLanguages = [
+  'bg', // Bulgarian
+  'cs', // Czech
+  'da', // Danish
+  'de', // German
+  'el', // Greek
+  'en', // English
+  'es', // Spanish
+  'et', // Estonian
+  'fi', // Finnish
+  'fr', // French
+  'hu', // Hungarian
+  'it', // Italian
+  'ja', // Japanese
+  'lt', // Lithuanian
+  'lv', // Latvian
+  'nl', // Dutch
+  'pl', // Polish
+  'pt', // Portuguese
+  'ro', // Romanian
+  'ru', // Russian
+  'sk', // Slovak
+  'sl', // Slovenian
+  'sv', // Swedish
+  'zh'  // Chinese
+] as const;
+export type SupportedLanguage = typeof supportedLanguages[number];

@@ -1,5 +1,6 @@
 import { ModelType } from '../../type/model';
 import InvalidBcp47LanguageTagError from '../error/InvalidBcp47LanguageTagError';
+import UnsupportedLanguageTagError from '../error/UnsupportedLanguageTagError';
 import Util from '../util';
 import AbstractModel from './AbstractModel';
 
@@ -15,7 +16,7 @@ import AbstractModel from './AbstractModel';
  */
 export default abstract class AbstractModelWithLanguage extends AbstractModel {
   /**
-   * BCP 47 compliant language tag
+   * BCP 47 compliant, supported language tag
    * 
    * @see https://en.wikipedia.org/wiki/IETF_language_tag
    * @see https://tools.ietf.org/html/bcp47
@@ -27,6 +28,9 @@ export default abstract class AbstractModelWithLanguage extends AbstractModel {
     
     if (Util.validator.isLanguageTag(language) === false) {
       throw new InvalidBcp47LanguageTagError(language);
+    }
+    if (Util.validator.isSupportedLanguageTag(language) === false) {
+      throw new UnsupportedLanguageTagError(language);
     }
     this.language = language;
   }

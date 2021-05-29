@@ -1,4 +1,4 @@
-import { GitSignature } from '../../type/general';
+import { GitSignature } from '../../type/git';
 import { ModelType } from '../../type/model';
 import AbstractModel from './AbstractModel';
 

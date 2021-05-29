@@ -4,11 +4,18 @@ import Fs from 'fs-extra';
 import Path from 'path';
 import ElekIoCore from '../../src';
 import InvalidBcp47LanguageTagError from '../../src/error/InvalidBcp47LanguageTagError';
+import UnsupportedLanguageTagError from '../../src/error/UnsupportedLanguageTagError';
 import Util from '../../src/util';
+import { Locale } from '../../type/general';
 
 Chai.use(ChaiAsPromised);
 const expect = Chai.expect;
+const locale: Locale = {
+  id: 'en',
+  name: 'English'
+};
 const core = new ElekIoCore({
+  locale,
   signature: {
     name: 'John Doe',
     email: 'john.doe@test.com'
@@ -58,7 +65,7 @@ describe('Class ElekIoCore', () => {
   it('should be able to add an asset to an existing project', async () => {
     const project = await core.projects.read(projectId);
     const filePath = Path.resolve('./test/asset/300x300.png');
-    const asset = await core.assets.create(filePath, project, 'en-GB', 'Asset 1', 'My first asset');
+    const asset = await core.assets.create(filePath, project, locale.id, 'Asset 1', 'My first asset');
     assetId = asset.id;
 
     expect(asset).to.have.property('name', 'Asset 1');
@@ -69,7 +76,7 @@ describe('Class ElekIoCore', () => {
   it('should be able to add a page to an existing project', async () => {
     const project = await core.projects.read(projectId);
     const theme = await core.theme.read(project);
-    const page = await core.pages.create(project, 'en-GB', 'Page 1', '/test', theme.layouts[2].id);
+    const page = await core.pages.create(project, locale.id, 'Page 1', '/test', theme.layouts[2].id);
     pageId = page.id;
 
     expect(page).to.have.property('name', 'Page 1');
@@ -78,7 +85,7 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to add a block to an existing project', async () => {
     const project = await core.projects.read(projectId);
-    const block = await core.blocks.create(project, 'en-GB', 'Hey', '# Hello World');
+    const block = await core.blocks.create(project, locale.id, 'Hey', '# Hello World');
     blockId = block.id;
 
     expect(block).to.have.property('body', '# Hello World');
@@ -90,6 +97,13 @@ describe('Class ElekIoCore', () => {
     const filePath = Path.resolve('./test/asset/300x300.png');
 
     expect(core.assets.create(filePath, project, 'en_US', 'Asset 1', 'My first asset')).to.be.rejectedWith(InvalidBcp47LanguageTagError).and.eventually.have.property('name', 'InvalidBcp47LanguageTagError');
+  });
+
+  it('should throw an error when an unsupported language tag is used', async () => {
+    const project = await core.projects.read(projectId);
+    const filePath = Path.resolve('./test/asset/300x300.png');
+
+    expect(core.assets.create(filePath, project, 'xx', 'Asset 1', 'My first asset')).to.be.rejectedWith(UnsupportedLanguageTagError).and.eventually.have.property('name', 'UnsupportedLanguageTagError');
   });
 
   it('should be able to subscribe to events', async () => {
@@ -112,28 +126,28 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to read an asset', async () => {
     const project = await core.projects.read(projectId);
-    const asset = await core.assets.read(project, assetId, 'en-GB');
+    const asset = await core.assets.read(project, assetId, locale.id);
 
     expect(asset).to.have.property('name', 'Asset 1');
   });
 
   it('should be able to read a page', async () => {
     const project = await core.projects.read(projectId);
-    const page = await core.pages.read(project, pageId, 'en-GB');
+    const page = await core.pages.read(project, pageId, locale.id);
 
     expect(page).to.have.property('name', 'Page 1');
   });
 
   it('should be able to read a block', async () => {
     const project = await core.projects.read(projectId);
-    const block = await core.blocks.read(project, blockId, 'en-GB');
+    const block = await core.blocks.read(project, blockId, locale.id);
 
     expect(block).to.have.property('body', '# Hello World');
   });
 
   it('should be able to update an asset', async () => {
     const project = await core.projects.read(projectId);
-    const asset = await core.assets.read(project, assetId, 'en-GB');
+    const asset = await core.assets.read(project, assetId, locale.id);
     asset.name = 'Asset';
     await core.assets.update(project, asset);
 
@@ -142,7 +156,7 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to update a page', async () => {
     const project = await core.projects.read(projectId);
-    const page = await core.pages.read(project, pageId, 'en-GB');
+    const page = await core.pages.read(project, pageId, locale.id);
     page.name = 'Page';
     await core.pages.update(project, page);
 
@@ -151,7 +165,7 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to update a block', async () => {
     const project = await core.projects.read(projectId);
-    const block = await core.blocks.read(project, blockId, 'en-GB');
+    const block = await core.blocks.read(project, blockId, locale.id);
     block.body = '## Hello World!';
     await core.blocks.update(project, block);
 
@@ -181,7 +195,7 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to identify a project', async () => {
     const project = await core.projects.read(projectId);
-    const asset = await core.assets.read(project, assetId, 'en-GB');
+    const asset = await core.assets.read(project, assetId, locale.id);
 
     expect(await core.projects.isProject(asset)).to.equal(false);
     expect(await core.projects.isProject(project)).to.equal(true);
@@ -189,7 +203,7 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to identify an asset', async () => {
     const project = await core.projects.read(projectId);
-    const asset = await core.assets.read(project, assetId, 'en-GB');
+    const asset = await core.assets.read(project, assetId, locale.id);
 
     expect(await core.assets.isAsset(project)).to.equal(false);
     expect(await core.assets.isAsset(asset)).to.equal(true);
@@ -197,7 +211,7 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to identify a page', async () => {
     const project = await core.projects.read(projectId);
-    const page = await core.pages.read(project, pageId, 'en-GB');
+    const page = await core.pages.read(project, pageId, locale.id);
 
     expect(await core.pages.isPage(project)).to.equal(false);
     expect(await core.pages.isPage(page)).to.equal(true);
@@ -205,7 +219,7 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to identify a block', async () => {
     const project = await core.projects.read(projectId);
-    const block = await core.blocks.read(project, blockId, 'en-GB');
+    const block = await core.blocks.read(project, blockId, locale.id);
 
     expect(await core.blocks.isBlock(project)).to.equal(false);
     expect(await core.blocks.isBlock(block)).to.equal(true);
@@ -226,7 +240,7 @@ describe('Class ElekIoCore', () => {
     const snapshot = await core.snapshots.create(project, 'My first snapshot');
     // Create a new block after creating the snapshot
     // to test if reverting to the snapshot deletes the block too
-    const blockToRevert = await core.blocks.create(project, 'en-GB', 'To delete', 'This should be deleted after the revert');
+    const blockToRevert = await core.blocks.create(project, locale.id, 'To delete', 'This should be deleted after the revert');
     snapshotId = snapshot.id;
     blockToRevertId = blockToRevert.id;
   });
@@ -239,19 +253,19 @@ describe('Class ElekIoCore', () => {
     expect(snapshot.name).to.contain('My first snapshot');
   });
 
-  // it('should be able to delete an asset', async () => {
-  //   const project = await core.projects.read(projectId);
-  //   const asset = await core.assets.read(project, assetId, 'en-GB');
-  //   await core.assets.delete(project, asset);
+  it('should be able to delete an asset', async () => {
+    const project = await core.projects.read(projectId);
+    const asset = await core.assets.read(project, assetId, locale.id);
+    await core.assets.delete(project, asset);
 
-  //   expect(core.assets.read(project, assetId, asset.language)).to.be.rejectedWith();
-  //   expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language))).to.equal(false);
-  //   expect(await Fs.pathExists(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension))).to.equal(false);
-  // });
+    expect(core.assets.read(project, assetId, asset.language)).to.be.rejectedWith();
+    expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language))).to.equal(false);
+    expect(await Fs.pathExists(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension))).to.equal(false);
+  });
 
   it('should be able to delete a page', async () => {
     const project = await core.projects.read(projectId);
-    const page = await core.pages.read(project, pageId, 'en-GB');
+    const page = await core.pages.read(project, pageId, locale.id);
     await core.pages.delete(project, page);
 
     expect(core.pages.read(project, pageId, page.language)).to.be.rejectedWith();
@@ -260,7 +274,7 @@ describe('Class ElekIoCore', () => {
 
   it('should be able to delete a block', async () => {
     const project = await core.projects.read(projectId);
-    const block = await core.blocks.read(project, blockId, 'en-GB');
+    const block = await core.blocks.read(project, blockId, locale.id);
     await core.blocks.delete(project, block);
 
     expect(core.blocks.read(project, blockId, block.language)).to.be.rejectedWith();
@@ -273,14 +287,6 @@ describe('Class ElekIoCore', () => {
 
     expect(logs.length).to.greaterThan(5);
   });
-
-  // it('should be able to read the git log from start to parent', async () => {
-  //   const project = await core.projects.read(projectId);
-  //   const allLogs = await core.historyLog(project);
-  //   const toParent = await core.historyLog(project, allLogs[allLogs.length - 5].hash);
-
-  //   expect(toParent.length).to.equal(5);
-  // });
 
   it('should be able to read the git log with options', async () => {
     const project = await core.projects.read(projectId);
@@ -300,28 +306,29 @@ describe('Class ElekIoCore', () => {
       }
     });
 
+    // console.log(JSON.stringify(allLogs, null, 2), '---', JSON.stringify(lastLogs, null, 2));
     expect(limitedLogs.length).to.equal(3);
     expect(lastLogs.length).to.equal(5);
     expect(betweenLogs.length).to.equal(5);
   });
 
-  // it('should be able to revert to an snapshot', async () => {
-  //   const project = await core.projects.read(projectId);
-  //   const snapshot = await core.snapshots.read(project, snapshotId);
-  //   const prevExistingBlock = await core.blocks.read(project, blockToRevertId, 'en-GB');
-  //   await core.snapshots.revert(project, snapshot);
-  //   const prevDeletedBlock = await core.blocks.read(project, blockId, 'en-GB');
-  //   const asset = await core.assets.read(project, assetId, 'en-GB');
+  it('should be able to revert to an snapshot', async () => {
+    const project = await core.projects.read(projectId);
+    const snapshot = await core.snapshots.read(project, snapshotId);
+    const prevExistingBlock = await core.blocks.read(project, blockToRevertId, locale.id);
+    await core.snapshots.revert(project, snapshot);
+    const prevDeletedBlock = await core.blocks.read(project, blockId, locale.id);
+    const asset = await core.assets.read(project, assetId, locale.id);
 
-  //   expect(prevDeletedBlock.id).to.equal(blockId);
-  //   expect(core.blocks.read(project, prevExistingBlock.id, prevExistingBlock.language)).to.be.rejectedWith();
-  //   expect(await Fs.pathExists(Util.pathTo.block(project.id, prevExistingBlock.id, prevExistingBlock.language))).to.equal(false);
+    expect(prevDeletedBlock.id).to.equal(blockId);
+    expect(core.blocks.read(project, prevExistingBlock.id, prevExistingBlock.language)).to.be.rejectedWith();
+    expect(await Fs.pathExists(Util.pathTo.block(project.id, prevExistingBlock.id, prevExistingBlock.language))).to.equal(false);
 
-  //   // The deleted asset should also be there again now
-  //   expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language)), 'the previously deleted asset file to exist again').to.equal(true);
-  //   // Also check the LFS folder
-  //   expect(await Fs.pathExists(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)), 'the previously deleted LFS file to exist again').to.equal(true);
-  // });
+    // The deleted asset should also be there again now
+    expect(await Fs.pathExists(Util.pathTo.asset(project.id, asset.id, asset.language)), 'the previously deleted asset file to exist again').to.equal(true);
+    // Also check the LFS folder
+    expect(await Fs.pathExists(Util.pathTo.lfsFile(project.id, asset.id, asset.language, asset.extension)), 'the previously deleted LFS file to exist again').to.equal(true);
+  });
 
   it('should be able to list all snapshots', async () => {
     const project = await core.projects.read(projectId);
@@ -350,7 +357,7 @@ describe('Class ElekIoCore', () => {
     const results = await core.projects.search(project, 'Page');
     
     //console.log(JSON.stringify(results, null, 2));
-    expect(results.length).to.equal(2);
+    expect(results.length).to.equal(3);
   });
 
   it('should not return anything when searching a project for given empty query', async () => {
@@ -367,7 +374,7 @@ describe('Class ElekIoCore', () => {
     const project = await core.projects.read(projectId);
 
     const start = process.hrtime();
-    const asset = await core.assets.read(project, assetId, 'en-GB');
+    const asset = await core.assets.read(project, assetId, locale.id);
     const stop = process.hrtime(start);
 
     const s = stop[0];
@@ -377,24 +384,24 @@ describe('Class ElekIoCore', () => {
     expect(ms).to.lessThanOrEqual(50);
   });
 
-  // it('should be able to delete a snapshot', async () => {
-  //   const project = await core.projects.read(projectId);
-  //   const snapshot = await core.snapshots.read(project, snapshotId);
-  //   await core.snapshots.delete(project, snapshot);
+  it('should be able to delete a snapshot', async () => {
+    const project = await core.projects.read(projectId);
+    const snapshot = await core.snapshots.read(project, snapshotId);
+    await core.snapshots.delete(project, snapshot);
 
-  //   expect(core.snapshots.read(project, snapshotId)).to.be.rejectedWith();
-  // });
+    expect(core.snapshots.read(project, snapshotId)).to.be.rejectedWith();
+  });
 
   // it('should be able to build a project in 5 minutes', async () => {
   //   const project = await core.projects.read(projectId);
   //   await core.build(project);
   // }).timeout(300000);
 
-  // it('should be able to delete a project', async () => {
-  //   const project = await core.projects.read(anotherProjectId);
-  //   await core.projects.delete(project);
+  it('should be able to delete a project', async () => {
+    const project = await core.projects.read(anotherProjectId);
+    await core.projects.delete(project);
 
-  //   expect(core.projects.read(anotherProjectId)).to.be.rejectedWith();
-  //   expect(await Fs.pathExists(Util.pathTo.project(project.id))).to.equal(false);
-  // });
+    expect(core.projects.read(anotherProjectId)).to.be.rejectedWith();
+    expect(await Fs.pathExists(Util.pathTo.project(project.id))).to.equal(false);
+  });
 });

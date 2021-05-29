@@ -37,8 +37,12 @@ export default class ElekIoCore {
   private readonly searchService: SearchService;
   private readonly projectService: ProjectService;
 
-  constructor(options: Optional<ElekIoCoreOptions, 'theme' | 'file' | 'log'>) {
+  constructor(options: Optional<ElekIoCoreOptions, 'locale' | 'theme' | 'file' | 'log'>) {
     const defaults: Omit<ElekIoCoreOptions, 'signature'> = {
+      locale: {
+        id: 'en',
+        name: 'English'
+      },
       theme: {
         htmlPrefix: 'elek-io'
       },

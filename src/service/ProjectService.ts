@@ -16,6 +16,7 @@ import { ExtendedCrudService, PaginatedList, ServiceType, Sort } from '../../typ
 import { ModelType } from '../../type/model';
 import { CoreEventName } from '../../type/coreEvent';
 import SearchService from './SearchService';
+import { ProjectSettings } from '../../type/project';
 
 /**
  * Service that manages CRUD functionality for project files on disk
@@ -50,7 +51,13 @@ export default class ProjectService extends AbstractService implements ExtendedC
    * @param description Description of the project
    */
   public async create(name: string, description: string): Promise<Project> {
-    const project = new Project(Util.uuid(), name, description);
+    const settings: ProjectSettings = {
+      locale: {
+        default: this.options.locale,
+        supported: [this.options.locale]
+      }
+    };
+    const project = new Project(Util.uuid(), name, description, settings);
     const projectPath = Util.pathTo.project(project.id);
 
     await Fs.ensureDir(projectPath);
@@ -63,8 +70,8 @@ export default class ProjectService extends AbstractService implements ExtendedC
     await this.gitService.commit(projectPath, ':tada: Created this new elek.io project');
     await this.gitService.switch(projectPath, 'stage', { isNew: true });
     const theme = await this.themeService.use(project, 'https://github.com/elek-io/starter-theme.git');
-    const block = await this.blockService.create(project, 'en-US', 'Welcome', 'We are very happy to have you on board. This page was created for you.\nYou can use it as a starting point or delete it. If you need help, consider visiting one of these pages:\n\n- [An introduction to the elek.io client](https://elek.io)\n- [Working with pages](https://elek.io)\n- [Choosing a theme](https://elek.io)\n- [Deploying your first project](https://elek.io)');
-    const page = await this.pageService.create(project, 'en-US', 'Welcome to elek.io!', '/', theme.layouts[1].id);
+    const block = await this.blockService.create(project, this.options.locale.id, 'Welcome', 'We are very happy to have you on board. This page was created for you.\nYou can use it as a starting point or delete it. If you need help, consider visiting one of these pages:\n\n- [An introduction to the elek.io client](https://elek.io)\n- [Working with pages](https://elek.io)\n- [Choosing a theme](https://elek.io)\n- [Deploying your first project](https://elek.io)');
+    const page = await this.pageService.create(project, this.options.locale.id, 'Welcome to elek.io!', '/', theme.layouts[1].id);
     page.status = PageStatus.PUBLISHED;
     page.layoutId = 'homepage';
     page.content.push({
@@ -86,7 +93,7 @@ export default class ProjectService extends AbstractService implements ExtendedC
    */
   public async read(id: string): Promise<Project> {
     const json = await this.jsonFileService.read<Project>(Util.pathTo.projectConfig(id));
-    const project = new Project(json.id, json.name, json.description);
+    const project = new Project(json.id, json.name, json.description, json.settings);
     this.eventService.emit(CoreEventName.PROJECT_READ, {
       project
     });

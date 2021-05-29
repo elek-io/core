@@ -1,5 +1,5 @@
 import { ModelType } from '../../type/model';
-import { ProjectStatus } from '../../type/project';
+import { ProjectSettings, ProjectStatus } from '../../type/project';
 import AbstractModel from './AbstractModel';
 
 /**
@@ -23,11 +23,13 @@ export default class Project extends AbstractModel {
    */
   public version = '0.1.0';
   public status: ProjectStatus = 'todo';
+  public settings: ProjectSettings;
 
-  constructor(id: string, name: string, description: string) {
+  constructor(id: string, name: string, description: string, settings: ProjectSettings) {
     super(id, ModelType.PROJECT);
     
     this.name = name;
     this.description = description;
+    this.settings = settings;
   }
 }

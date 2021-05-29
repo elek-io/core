@@ -1,4 +1,10 @@
-import { GitSignature } from './general';
+/**
+ * Signature git uses to identify users
+ */
+ export interface GitSignature {
+  name: string;
+  email: string;
+}
 
 export interface GitTag {
   name: string;
