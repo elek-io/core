@@ -86,7 +86,7 @@ export const supportedLanguages = [
   'da', // Danish
   'de', // German
   'el', // Greek
-  'en', // English
+  'en', // (US) English
   'es', // Spanish
   'et', // Estonian
   'fi', // Finnish
@@ -104,6 +104,6 @@ export const supportedLanguages = [
   'sk', // Slovak
   'sl', // Slovenian
   'sv', // Swedish
-  'zh'  // Chinese
+  'zh'  // (Simplified) Chinese
 ] as const;
 export type SupportedLanguage = typeof supportedLanguages[number];
