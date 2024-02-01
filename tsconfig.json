@@ -1,0 +1,14 @@
+{
+  // @see https://www.typescriptlang.org/docs/handbook/modules/guides/choosing-compiler-options.html#im-writing-a-library
+  "compilerOptions": {
+    "module": "node16", // When a codebase is compatible with Node.js’s module system, it almost always works in bundlers as well
+    "target": "es2020", // set to the *lowest* target you support
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": true // Do not emit code when linting
+  },
+  "include": ["src"]
+}

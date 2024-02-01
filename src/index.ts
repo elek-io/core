@@ -1,0 +1,156 @@
+import {
+  constructorElekIoCoreSchema,
+  environmentSchema,
+  type ConstructorElekIoCoreProps,
+  type ElekIoCoreOptions,
+} from '@elek-io/shared';
+import Fs from 'fs-extra';
+import AssetService from './service/AssetService.js';
+import CollectionService from './service/CollectionService.js';
+import EntryService from './service/EntryService.js';
+import GitService from './service/GitService.js';
+import JsonFileService from './service/JsonFileService.js';
+import ProjectService from './service/ProjectService.js';
+import SearchService from './service/SearchService.js';
+import UserService from './service/UserService.js';
+import ValueService from './service/ValueService.js';
+import * as CoreUtil from './util/index.js';
+
+/**
+ * elek.io Core
+ *
+ * Provides access to all services Core is offering
+ */
+export default class ElekIoCore {
+  private readonly options: ElekIoCoreOptions;
+  private readonly userService: UserService;
+  private readonly gitService: GitService;
+  private readonly jsonFileService: JsonFileService;
+  private readonly assetService: AssetService;
+  private readonly searchService: SearchService;
+  private readonly projectService: ProjectService;
+  private readonly collectionService: CollectionService;
+  private readonly entryService: EntryService;
+  private readonly valueService: ValueService;
+
+  constructor(props?: ConstructorElekIoCoreProps) {
+    if (props) {
+      constructorElekIoCoreSchema.parse(props);
+    }
+    const environment = environmentSchema.parse(process.env.NODE_ENV);
+
+    const defaults: ElekIoCoreOptions = {
+      environment,
+      version: '0.0.0',
+      file: {
+        json: {
+          indentation: 2,
+        },
+      },
+    };
+    this.options = Object.assign({}, defaults, props);
+
+    this.jsonFileService = new JsonFileService(this.options);
+    this.userService = new UserService(this.jsonFileService);
+    this.gitService = new GitService(this.options, this.userService);
+    // this.gitService.getVersion(); // @todo currently throws an "Error: Unable to find path to repository on disk."
+    this.assetService = new AssetService(
+      this.options,
+      this.jsonFileService,
+      this.gitService
+    );
+    this.valueService = new ValueService(
+      this.options,
+      this.jsonFileService,
+      this.gitService,
+      this.assetService
+    );
+    this.collectionService = new CollectionService(
+      this.options,
+      this.jsonFileService,
+      this.gitService
+    );
+    this.entryService = new EntryService(
+      this.options,
+      this.jsonFileService,
+      this.gitService,
+      this.collectionService,
+      this.valueService
+    );
+    this.searchService = new SearchService(
+      this.options,
+      this.assetService,
+      this.collectionService
+    );
+    this.projectService = new ProjectService(
+      this.options,
+      this.jsonFileService,
+      this.userService,
+      this.gitService,
+      this.searchService,
+      this.assetService,
+      this.collectionService,
+      this.entryService,
+      this.valueService
+    );
+
+    if (environment !== 'production') {
+      console.info(`Initializing inside an "${environment}" environment`, {
+        options: this.options,
+      });
+    }
+
+    Fs.mkdirpSync(CoreUtil.pathTo.projects);
+    Fs.mkdirpSync(CoreUtil.pathTo.tmp);
+    Fs.emptyDirSync(CoreUtil.pathTo.tmp);
+  }
+
+  /**
+   * Utility / helper functions
+   */
+  public get util() {
+    return CoreUtil;
+  }
+
+  /**
+   *
+   */
+  public get user(): UserService {
+    return this.userService;
+  }
+
+  /**
+   * CRUD methods to work with Projects
+   */
+  public get projects(): ProjectService {
+    return this.projectService;
+  }
+
+  /**
+   * CRUD methods to work with Assets
+   */
+  public get assets(): AssetService {
+    return this.assetService;
+  }
+
+  /**
+   * CRUD methods to work with Collections
+   */
+  public get collections(): CollectionService {
+    return this.collectionService;
+  }
+
+  /**
+   * CRUD methods to work with Entries
+   */
+  public get entries(): EntryService {
+    return this.entryService;
+  }
+
+  /**
+   * CRUD methods to work with Values
+   */
+  public get values(): ValueService {
+    return this.valueService;
+  }
+}
