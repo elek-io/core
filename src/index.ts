@@ -1,6 +1,5 @@
 import {
   constructorElekIoCoreSchema,
-  environmentSchema,
   type ConstructorElekIoCoreProps,
   type ElekIoCoreOptions,
 } from '@elek-io/shared';
@@ -34,13 +33,10 @@ export default class ElekIoCore {
   private readonly valueService: ValueService;
 
   constructor(props?: ConstructorElekIoCoreProps) {
-    if (props) {
-      constructorElekIoCoreSchema.parse(props);
-    }
-    const environment = environmentSchema.parse(process.env.NODE_ENV);
+    const parsedProps = constructorElekIoCoreSchema.parse(props);
 
     const defaults: ElekIoCoreOptions = {
-      environment,
+      environment: 'production',
       version: '0.0.0',
       file: {
         json: {
@@ -48,7 +44,7 @@ export default class ElekIoCore {
         },
       },
     };
-    this.options = Object.assign({}, defaults, props);
+    this.options = Object.assign({}, defaults, parsedProps);
 
     this.jsonFileService = new JsonFileService(this.options);
     this.userService = new UserService(this.jsonFileService);
@@ -94,10 +90,13 @@ export default class ElekIoCore {
       this.valueService
     );
 
-    if (environment !== 'production') {
-      console.info(`Initializing inside an "${environment}" environment`, {
-        options: this.options,
-      });
+    if (this.options.environment !== 'production') {
+      console.info(
+        `Initializing inside an "${this.options.environment}" environment`,
+        {
+          ...this.options,
+        }
+      );
     }
 
     Fs.mkdirpSync(CoreUtil.pathTo.projects);
