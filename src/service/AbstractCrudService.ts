@@ -146,11 +146,11 @@ export default abstract class AbstractCrudService {
           CoreUtil.pathTo.collection(projectId, collectionId)
         );
 
-      case fileTypeSchema.Enum.value:
+      case fileTypeSchema.Enum.sharedValue:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
-        return this.getFileReferences(CoreUtil.pathTo.values(projectId));
+        return this.getFileReferences(CoreUtil.pathTo.sharedValues(projectId));
 
       default:
         throw new Error(`Trying to list files of unsupported type "${type}"`);

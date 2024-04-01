@@ -22,9 +22,10 @@ import {
   type ExtendedCrudService,
   type ListEntriesProps,
   type ReadEntryProps,
+  type ResolvedSharedValueReference,
   type UpdateEntryProps,
+  type Value,
   type ValueDefinition,
-  type ValueReference,
 } from '@elek-io/shared';
 import Fs from 'fs-extra';
 import RequiredParameterMissingError from '../error/RequiredParameterMissingError.js';
@@ -33,7 +34,7 @@ import AbstractCrudService from './AbstractCrudService.js';
 import CollectionService from './CollectionService.js';
 import GitService from './GitService.js';
 import JsonFileService from './JsonFileService.js';
-import ValueService from './ValueService.js';
+import SharedValueService from './SharedValueService.js';
 
 /**
  * Service that manages CRUD functionality for Entry files on disk
@@ -45,25 +46,25 @@ export default class EntryService
   private jsonFileService: JsonFileService;
   private gitService: GitService;
   private collectionService: CollectionService;
-  private valueService: ValueService;
+  private sharedValueService: SharedValueService;
 
   constructor(
     options: ElekIoCoreOptions,
     jsonFileService: JsonFileService,
     gitService: GitService,
     collectionService: CollectionService,
-    valueService: ValueService
+    sharedValueService: SharedValueService
   ) {
     super(serviceTypeSchema.Enum.Entry, options);
 
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
     this.collectionService = collectionService;
-    this.valueService = valueService;
+    this.sharedValueService = sharedValueService;
   }
 
   /**
-   * Creates a new Entry
+   * Creates a new Entry for given Collection
    */
   public async create(props: CreateEntryProps): Promise<Entry> {
     createEntrySchema.parse(props);
@@ -81,23 +82,32 @@ export default class EntryService
       id: props.collectionId,
     });
 
-    await this.validateValueReferences(
-      props.projectId,
-      props.collectionId,
-      props.valueReferences,
-      collection.valueDefinitions
-    );
-
-    /**
-     * Entry saves references to the Values it's using
-     */
     const entryFile: EntryFile = {
       fileType: 'entry',
       id,
       language: props.language,
-      valueReferences: props.valueReferences,
+      values: props.values.map((value) => {
+        return { ...value, id: uuid() };
+      }),
+      sharedValues: props.sharedValues,
       created: currentTimestamp(),
     };
+
+    const entry: Entry = await this.toEntry({
+      projectId: props.projectId,
+      entryFile,
+    });
+
+    this.validateValues({
+      collectionId: props.collectionId,
+      valueDefinitions: collection.valueDefinitions,
+      values: entry.values,
+    });
+    this.validateResolvedSharedValues({
+      collectionId: props.collectionId,
+      valueDefinitions: collection.valueDefinitions,
+      resolvedSharedValues: entry.sharedValues,
+    });
 
     await this.jsonFileService.create(
       entryFile,
@@ -107,16 +117,16 @@ export default class EntryService
     await this.gitService.add(projectPath, [entryFilePath]);
     await this.gitService.commit(projectPath, this.gitMessage.create);
 
-    return entryFile;
+    return entry;
   }
 
   /**
-   * Returns an Entry by ID and language
+   * Returns an Entry from given Collection by ID and language
    */
   public async read(props: ReadEntryProps): Promise<Entry> {
     readEntrySchema.parse(props);
 
-    const entryFile = await this.jsonFileService.read(
+    const entryFile: EntryFile = await this.jsonFileService.read(
       CoreUtil.pathTo.entryFile(
         props.projectId,
         props.collectionId,
@@ -126,11 +136,11 @@ export default class EntryService
       entryFileSchema
     );
 
-    return entryFile;
+    return await this.toEntry({ projectId: props.projectId, entryFile });
   }
 
   /**
-   * Updates Entry with given ValueReferences
+   * Updates an Entry of given Collection with new Values and shared Values
    */
   public async update(props: UpdateEntryProps): Promise<Entry> {
     updateEntrySchema.parse(props);
@@ -147,13 +157,6 @@ export default class EntryService
       id: props.collectionId,
     });
 
-    await this.validateValueReferences(
-      props.projectId,
-      props.collectionId,
-      props.valueReferences,
-      collection.valueDefinitions
-    );
-
     const prevEntryFile = await this.read({
       projectId: props.projectId,
       collectionId: props.collectionId,
@@ -163,9 +166,26 @@ export default class EntryService
 
     const entryFile: EntryFile = {
       ...prevEntryFile,
-      valueReferences: props.valueReferences,
+      values: props.values,
+      sharedValues: props.sharedValues,
       updated: currentTimestamp(),
     };
+
+    const entry: Entry = await this.toEntry({
+      projectId: props.projectId,
+      entryFile,
+    });
+
+    this.validateValues({
+      collectionId: props.collectionId,
+      valueDefinitions: collection.valueDefinitions,
+      values: entry.values,
+    });
+    this.validateResolvedSharedValues({
+      collectionId: props.collectionId,
+      valueDefinitions: collection.valueDefinitions,
+      resolvedSharedValues: entry.sharedValues,
+    });
 
     await this.jsonFileService.update(
       entryFile,
@@ -175,11 +195,11 @@ export default class EntryService
     await this.gitService.add(projectPath, [entryFilePath]);
     await this.gitService.commit(projectPath, this.gitMessage.update);
 
-    return entryFile;
+    return entry;
   }
 
   /**
-   * Deletes given Entry
+   * Deletes given Entry from it's Collection
    */
   public async delete(props: DeleteEntryProps): Promise<void> {
     deleteEntrySchema.parse(props);
@@ -241,46 +261,98 @@ export default class EntryService
   }
 
   /**
-   * Checks if given object of Collection, CollectionItem,
-   * Field, Project or Asset is of type CollectionItem
+   * Checks if given object is of type Entry
    */
   public isEntry(obj: BaseFile | unknown): obj is Entry {
     return entrySchema.safeParse(obj).success;
   }
 
   /**
-   * Validates referenced Values against the Collections definition
-   *
-   * @todo should probably return all errors occurring during parsing instead of throwing
+   * Returns a Value definition by ID
    */
-  private async validateValueReferences(
-    projectId: string,
-    collectionId: string,
-    valueReferences: ValueReference[],
-    valueDefinitions: ValueDefinition[]
-  ) {
-    await Promise.all(
-      valueReferences.map(async (reference) => {
-        const definition = valueDefinitions.find((def) => {
-          if (def.id === reference.definitionId) {
-            return true;
-          }
-          return false;
-        });
+  private getValueDefinitionById(props: {
+    valueDefinitions: ValueDefinition[];
+    id: string;
+    collectionId: string;
+  }) {
+    const definition = props.valueDefinitions.find((def) => {
+      if (def.id === props.id) {
+        return true;
+      }
+      return false;
+    });
 
-        if (!definition) {
-          throw new Error(
-            `No definition with ID "${reference.definitionId}" found in Collection "${collectionId}" for given Value reference`
-          );
-        }
+    if (!definition) {
+      throw new Error(
+        `No definition with ID "${props.id}" found in Collection "${props.collectionId}" for given Value reference`
+      );
+    }
 
-        const schema = getValueSchemaFromDefinition(definition);
-        const value = await this.valueService.read({
-          ...reference.references,
-          projectId,
-        });
-        schema.parse(value.content);
-      })
-    );
+    return definition;
+  }
+
+  /**
+   * Validates given Values against it's Collections definitions
+   */
+  private validateValues(props: {
+    collectionId: string;
+    valueDefinitions: ValueDefinition[];
+    values: Omit<Value, 'id'>[];
+  }) {
+    props.values.map((value) => {
+      const definition = this.getValueDefinitionById({
+        collectionId: props.collectionId,
+        valueDefinitions: props.valueDefinitions,
+        id: value.definitionId,
+      });
+      const schema = getValueSchemaFromDefinition(definition);
+      schema.parse(value.content);
+    });
+  }
+
+  /**
+   * Validates given shared Value references against it's Collections definitions
+   */
+  private validateResolvedSharedValues(props: {
+    collectionId: string;
+    valueDefinitions: ValueDefinition[];
+    resolvedSharedValues: ResolvedSharedValueReference[];
+  }) {
+    props.resolvedSharedValues.map((value) => {
+      const definition = this.getValueDefinitionById({
+        collectionId: props.collectionId,
+        valueDefinitions: props.valueDefinitions,
+        id: value.definitionId,
+      });
+      const schema = getValueSchemaFromDefinition(definition);
+      schema.parse(value.resolved.content);
+    });
+  }
+
+  /**
+   * Creates an Entry from given EntryFile by resolving it's shared Values
+   */
+  private async toEntry(props: {
+    projectId: string;
+    entryFile: EntryFile;
+  }): Promise<Entry> {
+    const entry: Entry = {
+      ...props.entryFile,
+      sharedValues: await Promise.all(
+        props.entryFile.sharedValues.map(async (sharedValue) => {
+          const resolved = await this.sharedValueService.read({
+            ...sharedValue.references,
+            projectId: props.projectId,
+          });
+
+          return {
+            ...sharedValue,
+            resolved,
+          };
+        })
+      ),
+    };
+
+    return entry;
   }
 }

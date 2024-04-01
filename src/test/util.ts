@@ -102,7 +102,7 @@ export async function createCollection(projectId: string) {
 }
 
 export async function createValue(projectId: string) {
-  const value = await core.values.create({
+  const value = await core.sharedValues.create({
     projectId: projectId,
     valueType: 'string',
     language: 'en',

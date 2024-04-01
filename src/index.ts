@@ -11,8 +11,8 @@ import GitService from './service/GitService.js';
 import JsonFileService from './service/JsonFileService.js';
 import ProjectService from './service/ProjectService.js';
 import SearchService from './service/SearchService.js';
+import SharedValueService from './service/SharedValueService.js';
 import UserService from './service/UserService.js';
-import ValueService from './service/ValueService.js';
 import * as CoreUtil from './util/index.js';
 
 /**
@@ -30,7 +30,7 @@ export default class ElekIoCore {
   private readonly projectService: ProjectService;
   private readonly collectionService: CollectionService;
   private readonly entryService: EntryService;
-  private readonly valueService: ValueService;
+  private readonly sharedValueService: SharedValueService;
 
   constructor(props?: ConstructorElekIoCoreProps) {
     const parsedProps = constructorElekIoCoreSchema.parse(props);
@@ -55,23 +55,23 @@ export default class ElekIoCore {
       this.jsonFileService,
       this.gitService
     );
-    this.valueService = new ValueService(
-      this.options,
-      this.jsonFileService,
-      this.gitService,
-      this.assetService
-    );
     this.collectionService = new CollectionService(
       this.options,
       this.jsonFileService,
       this.gitService
+    );
+    this.sharedValueService = new SharedValueService(
+      this.options,
+      this.jsonFileService,
+      this.gitService,
+      this.assetService
     );
     this.entryService = new EntryService(
       this.options,
       this.jsonFileService,
       this.gitService,
       this.collectionService,
-      this.valueService
+      this.sharedValueService
     );
     this.searchService = new SearchService(
       this.options,
@@ -86,8 +86,7 @@ export default class ElekIoCore {
       this.searchService,
       this.assetService,
       this.collectionService,
-      this.entryService,
-      this.valueService
+      this.entryService
     );
 
     if (this.options.environment !== 'production') {
@@ -149,7 +148,7 @@ export default class ElekIoCore {
   /**
    * CRUD methods to work with Values
    */
-  public get values(): ValueService {
-    return this.valueService;
+  public get sharedValues(): SharedValueService {
+    return this.sharedValueService;
   }
 }

@@ -23,7 +23,7 @@ describe.sequential('Integration', function () {
   });
 
   it.sequential('should be able to read an Value', async function () {
-    const readValue = await core.values.read({
+    const readValue = await core.sharedValues.read({
       projectId: project.id,
       id: value.id,
       language: value.language,
@@ -34,7 +34,7 @@ describe.sequential('Integration', function () {
 
   it.sequential('should be able to update an Value', async function () {
     value.content = 'Hello World!';
-    const updatedCollection = await core.values.update({
+    const updatedCollection = await core.sharedValues.update({
       projectId: project.id,
       ...value,
     });
@@ -42,24 +42,24 @@ describe.sequential('Integration', function () {
   });
 
   it.sequential('should be able to list all Values', async function () {
-    const values = await core.values.list({ projectId: project.id });
+    const values = await core.sharedValues.list({ projectId: project.id });
     expect(values.list.length).to.equal(1);
     expect(values.total).to.equal(1);
     expect(values.list.find((a) => a.id === value.id)?.id).to.equal(value.id);
   });
 
   it.sequential('should be able to count all Values', async function () {
-    const counted = await core.values.count({ projectId: project.id });
+    const counted = await core.sharedValues.count({ projectId: project.id });
     expect(counted).to.equal(1);
   });
 
   it.sequential('should be able to identify an Value', async function () {
-    expect(core.values.isValue(value)).to.be.true;
-    expect(core.values.isValue({ fileType: 'value' })).to.be.false;
+    expect(core.sharedValues.isValue(value)).to.be.true;
+    expect(core.sharedValues.isValue({ fileType: 'value' })).to.be.false;
   });
 
   it.sequential('should be able to delete an Value', async function () {
-    await core.values.delete({
+    await core.sharedValues.delete({
       projectId: project.id,
       id: value.id,
       language: value.language,
@@ -67,7 +67,7 @@ describe.sequential('Integration', function () {
 
     expect(
       await Fs.pathExists(
-        core.util.pathTo.valueFile(project.id, value.id, value.language)
+        core.util.pathTo.sharedValueFile(project.id, value.id, value.language)
       )
     ).to.be.false;
   });
