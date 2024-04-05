@@ -95,14 +95,43 @@ export async function createCollection(projectId: string) {
         isUnique: true,
         max: 70,
       },
+      {
+        id: '77e8f99c-f197-4b55-a88d-682b7e670728',
+        valueType: 'reference',
+        name: {
+          en: 'Header image',
+        },
+        description: {
+          en: 'An image for this recipe displayed on top of the page',
+        },
+        inputType: 'asset',
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: true,
+      },
+      {
+        id: '22e8f99c-f197-4b55-a88d-682b7e670728',
+        valueType: 'reference',
+        name: {
+          en: 'Created by',
+        },
+        description: {
+          en: 'The Author of this recipe',
+        },
+        inputType: 'sharedValue',
+        sharedValueType: 'string',
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: true,
+      },
     ],
   });
 
   return collection;
 }
 
-export async function createValue(projectId: string) {
-  const value = await core.values.create({
+export async function createSharedValue(projectId: string) {
+  const value = await core.sharedValues.create({
     projectId: projectId,
     valueType: 'string',
     language: 'en',
@@ -115,18 +144,44 @@ export async function createValue(projectId: string) {
 export async function createEntry(
   projectId: string,
   collectionId: string,
-  valueId: string
+  sharedValueId: string,
+  assetValueId: string
 ) {
   const entry = await core.entries.create({
     projectId: projectId,
     collectionId: collectionId,
     language: 'en',
-    valueReferences: [
+    values: [
       {
+        objectType: 'value',
+        valueType: 'string',
         definitionId: '82e8f99c-f197-4b55-a88d-682b7e670728',
-        references: {
-          id: valueId,
-          language: 'en',
+        content: 'A direct string based value for the Title',
+      },
+      {
+        objectType: 'value',
+        valueType: 'reference',
+        definitionId: '77e8f99c-f197-4b55-a88d-682b7e670728',
+        content: {
+          referenceObjectType: 'asset',
+          references: [
+            {
+              id: assetValueId,
+              language: 'en',
+            },
+          ],
+        },
+      },
+      {
+        objectType: 'value',
+        valueType: 'reference',
+        definitionId: '22e8f99c-f197-4b55-a88d-682b7e670728',
+        content: {
+          referenceObjectType: 'sharedValue',
+          references: {
+            id: sharedValueId,
+            language: 'en',
+          },
         },
       },
     ],

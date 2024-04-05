@@ -2,9 +2,9 @@ import {
   createProjectSchema,
   currentTimestamp,
   deleteProjectSchema,
-  fileTypeSchema,
   gitCommitIconSchema,
   listProjectsSchema,
+  objectTypeSchema,
   projectFileSchema,
   projectFolderSchema,
   readProjectSchema,
@@ -18,8 +18,8 @@ import {
   type DeleteProjectProps,
   type ElekIoCoreOptions,
   type ExtendedCrudService,
-  type FileType,
   type ListProjectsProps,
+  type ObjectType,
   type PaginatedList,
   type Project,
   type ProjectExport,
@@ -45,7 +45,6 @@ import GitService from './GitService.js';
 import JsonFileService from './JsonFileService.js';
 import SearchService from './SearchService.js';
 import UserService from './UserService.js';
-import type ValueService from './ValueService.js';
 
 /**
  * Service that manages CRUD functionality for Project files on disk
@@ -61,7 +60,6 @@ export default class ProjectService
   private assetService: AssetService;
   private collectionService: CollectionService;
   private entryService: EntryService;
-  private valueService: ValueService;
 
   constructor(
     options: ElekIoCoreOptions,
@@ -71,8 +69,7 @@ export default class ProjectService
     searchService: SearchService,
     assetService: AssetService,
     collectionService: CollectionService,
-    entryService: EntryService,
-    valueService: ValueService
+    entryService: EntryService
   ) {
     super(serviceTypeSchema.Enum.Project, options);
 
@@ -83,7 +80,6 @@ export default class ProjectService
     this.assetService = assetService;
     this.collectionService = collectionService;
     this.entryService = entryService;
-    this.valueService = valueService;
   }
 
   /**
@@ -107,7 +103,7 @@ export default class ProjectService
 
     const projectFile: ProjectFile = {
       ...props,
-      fileType: 'project',
+      objectType: 'project',
       id,
       description: props.description || '',
       settings: Object.assign({}, defaultSettings, props.settings),
@@ -300,7 +296,7 @@ export default class ProjectService
       listProjectsSchema.parse(props);
     }
 
-    const references = await this.listReferences(fileTypeSchema.Enum.project);
+    const references = await this.listReferences(objectTypeSchema.Enum.project);
     const list = await CoreUtil.returnResolved(
       references.map((reference) => {
         return this.read({ id: reference.id });
@@ -317,7 +313,7 @@ export default class ProjectService
   }
 
   public async count(): Promise<number> {
-    return (await this.listReferences(fileTypeSchema.Enum.project)).length;
+    return (await this.listReferences(objectTypeSchema.Enum.project)).length;
   }
 
   /**
@@ -327,7 +323,7 @@ export default class ProjectService
    * @param query     Query to search for
    * @param type      (Optional) specify the type to search for
    */
-  public async search(projectId: string, query: string, type?: FileType) {
+  public async search(projectId: string, query: string, type?: ObjectType) {
     return this.searchService.search(projectId, query, type);
   }
 
@@ -341,6 +337,7 @@ export default class ProjectService
   /**
    * Exports given Project to JSON
    *
+   * @todo do not read everything before writing to disk -> stream into file given via props
    * @todo performance tests
    * @todo add progress callback
    */
@@ -360,28 +357,10 @@ export default class ProjectService
             limit: 0,
           })
         ).list;
-        const entryExport = await Promise.all(
-          entries.map(async (entry) => {
-            const valueExport = await Promise.all(
-              entry.valueReferences.map(async (valueReference) => {
-                return this.valueService.read({
-                  projectId,
-                  id: valueReference.references.id,
-                  language: valueReference.references.language,
-                });
-              })
-            );
-
-            return {
-              ...entry,
-              values: valueExport,
-            };
-          })
-        );
 
         return {
           ...collection,
-          entries: entryExport,
+          entries,
         };
       })
     );

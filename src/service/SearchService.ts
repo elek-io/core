@@ -1,7 +1,7 @@
 import {
   serviceTypeSchema,
   type ElekIoCoreOptions,
-  type FileType,
+  type ObjectType,
   type SearchResult,
 } from '@elek-io/shared';
 import AbstractCrudService from './AbstractCrudService.js';
@@ -36,7 +36,11 @@ export default class SearchService extends AbstractCrudService {
    * @param project Project to search in
    * @param query Query to search for
    */
-  public async search(projectId: string, query: string, fileType?: FileType) {
+  public async search(
+    projectId: string,
+    query: string,
+    objectType?: ObjectType
+  ) {
     const results: SearchResult[] = [];
     const normalizedQuery = query.trim();
 
@@ -54,7 +58,7 @@ export default class SearchService extends AbstractCrudService {
           id: file.id,
           language: file.language,
           name: file.name,
-          type: file.fileType,
+          type: file.objectType,
           matches: [],
         };
 

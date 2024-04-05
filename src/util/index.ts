@@ -67,11 +67,11 @@ export const pathTo = {
     );
   },
 
-  values: (projectId: string): string => {
-    return Path.join(pathTo.project(projectId), 'values');
+  sharedValues: (projectId: string): string => {
+    return Path.join(pathTo.project(projectId), 'shared-values');
   },
-  valueFile: (projectId: string, id: string, language: string) => {
-    return Path.join(pathTo.values(projectId), `${id}.${language}.json`);
+  sharedValueFile: (projectId: string, id: string, language: string) => {
+    return Path.join(pathTo.sharedValues(projectId), `${id}.${language}.json`);
   },
 
   assets: (projectId: string): string => {

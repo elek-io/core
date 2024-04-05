@@ -4,8 +4,8 @@ import {
   createCollectionSchema,
   currentTimestamp,
   deleteCollectionSchema,
-  fileTypeSchema,
   listCollectionsSchema,
+  objectTypeSchema,
   readCollectionSchema,
   serviceTypeSchema,
   slug,
@@ -67,7 +67,7 @@ export default class CollectionService
 
     const collectionFile: CollectionFile = {
       ...props,
-      fileType: 'collection',
+      objectType: 'collection',
       id,
       slug: {
         singular: slug(props.slug.singular),
@@ -309,7 +309,7 @@ export default class CollectionService
     listCollectionsSchema.parse(props);
 
     const references = await this.listReferences(
-      fileTypeSchema.Enum.collection,
+      objectTypeSchema.Enum.collection,
       props.projectId
     );
     const list = await CoreUtil.returnResolved(
@@ -334,7 +334,10 @@ export default class CollectionService
     countCollectionsSchema.parse(props);
 
     const count = (
-      await this.listReferences(fileTypeSchema.Enum.collection, props.projectId)
+      await this.listReferences(
+        objectTypeSchema.Enum.collection,
+        props.projectId
+      )
     ).length;
 
     return count;

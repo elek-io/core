@@ -5,13 +5,13 @@ import {
   createAssetSchema,
   currentTimestamp,
   deleteAssetSchema,
-  fileTypeSchema,
   listAssetsSchema,
+  objectTypeSchema,
   readAssetSchema,
   serviceTypeSchema,
-  supportedExtensionSchema,
-  supportedFileTypeSchema,
-  supportedMimeTypeSchema,
+  supportedAssetExtensionSchema,
+  supportedAssetMimeTypeSchema,
+  supportedAssetTypeSchema,
   updateAssetSchema,
   uuid,
   type Asset,
@@ -80,7 +80,7 @@ export default class AssetService
 
     const assetFile: AssetFile = {
       ...props,
-      fileType: 'asset',
+      objectType: 'asset',
       id,
       created: currentTimestamp(),
       extension: fileType.extension,
@@ -214,7 +214,7 @@ export default class AssetService
     listAssetsSchema.parse(props);
 
     const assetReferences = await this.listReferences(
-      fileTypeSchema.Enum.asset,
+      objectTypeSchema.Enum.asset,
       props.projectId
     );
     const list = await CoreUtil.returnResolved(
@@ -245,7 +245,7 @@ export default class AssetService
     countAssetsSchema.parse(props);
 
     const count = (
-      await this.listReferences(fileTypeSchema.Enum.asset, props.projectId)
+      await this.listReferences(objectTypeSchema.Enum.asset, props.projectId)
     ).length;
 
     return count;
@@ -307,8 +307,8 @@ export default class AssetService
       const fileBuffer = await Fs.readFile(filePath);
       if (IsSvg(fileBuffer.toString()) === true) {
         return {
-          extension: supportedExtensionSchema.Enum.svg,
-          mimeType: supportedMimeTypeSchema.Enum['image/svg+xml'],
+          extension: supportedAssetExtensionSchema.Enum.svg,
+          mimeType: supportedAssetMimeTypeSchema.Enum['image/svg+xml'],
         };
       }
     }
@@ -317,7 +317,7 @@ export default class AssetService
     const { fileTypeFromFile } = await import('file-type');
     const fileType = await fileTypeFromFile(filePath);
 
-    const result = supportedFileTypeSchema.parse({
+    const result = supportedAssetTypeSchema.parse({
       extension: fileType?.ext,
       mimeType: fileType?.mime,
     });
