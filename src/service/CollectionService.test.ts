@@ -64,8 +64,9 @@ describe.sequential('Integration', function () {
 
   it.sequential('should be able to identify an Collection', async function () {
     expect(core.collections.isCollection(collection)).to.be.true;
-    expect(core.collections.isCollection({ fileType: 'collection' })).to.be
-      .false;
+    expect(
+      core.collections.isCollection({ objectType: 'collection' })
+    ).to.be.false;
   });
 
   it.sequential('should be able to delete an Collection', async function () {

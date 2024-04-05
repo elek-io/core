@@ -1,24 +1,33 @@
-import type { Collection, Entry, Project, Value } from '@elek-io/shared';
+import type {
+  Asset,
+  Collection,
+  Entry,
+  Project,
+  SharedValue,
+} from '@elek-io/shared';
 import Fs from 'fs-extra';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import core from '../test/setup.js';
 import {
+  createAsset,
   createCollection,
   createEntry,
   createProject,
-  createValue,
+  createSharedValue,
 } from '../test/util.js';
 
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
   let collection: Collection;
   let entry: Entry;
-  let value: Value;
+  let asset: Asset;
+  let sharedValue: SharedValue;
 
   beforeAll(async function () {
     project = await createProject();
     collection = await createCollection(project.id);
-    value = await createValue(project.id);
+    asset = await createAsset(project.id);
+    sharedValue = await createSharedValue(project.id);
   });
 
   afterAll(async function () {
@@ -26,7 +35,12 @@ describe.sequential('Integration', function () {
   });
 
   it.sequential('should be able to create a new Entry', async function () {
-    entry = await createEntry(project.id, collection.id, value.id);
+    entry = await createEntry(
+      project.id,
+      collection.id,
+      sharedValue.id,
+      asset.id
+    );
 
     expect(entry.id).to.not.be.undefined;
   });
@@ -48,10 +62,10 @@ describe.sequential('Integration', function () {
       collectionId: collection.id,
       id: entry.id,
       language: entry.language,
-      valueReferences: [],
+      values: [],
     });
 
-    expect(updatedEntry.valueReferences).to.be.an('array').that.is.empty;
+    expect(updatedEntry.values).to.be.an('array').that.is.empty;
   });
 
   it.sequential('should be able to list all Entries', async function () {
@@ -76,7 +90,7 @@ describe.sequential('Integration', function () {
 
   it.sequential('should be able to identify an Entry', async function () {
     expect(core.entries.isEntry(entry)).to.be.true;
-    expect(core.entries.isEntry({ fileType: 'entry' })).to.be.false;
+    expect(core.entries.isEntry({ objectType: 'entry' })).to.be.false;
   });
 
   it.sequential('should be able to delete an Entry', async function () {

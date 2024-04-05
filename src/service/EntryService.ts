@@ -1,13 +1,14 @@
 import {
+  ValueTypeSchema,
   countEntriesSchema,
   createEntrySchema,
   currentTimestamp,
   deleteEntrySchema,
   entryFileSchema,
   entrySchema,
-  fileTypeSchema,
-  getValueSchemaFromDefinition,
+  getValueContentSchemaFromDefinition,
   listEntriesSchema,
+  objectTypeSchema,
   readEntrySchema,
   serviceTypeSchema,
   updateEntrySchema,
@@ -22,15 +23,21 @@ import {
   type ExtendedCrudService,
   type ListEntriesProps,
   type ReadEntryProps,
-  type ResolvedSharedValueReference,
+  type ResolvedValueContentReference,
+  type ResolvedValueContentReferenceToAsset,
+  type ResolvedValueContentReferenceToSharedValue,
   type UpdateEntryProps,
   type Value,
+  type ValueContentReference,
+  type ValueContentReferenceToAsset,
+  type ValueContentReferenceToSharedValue,
   type ValueDefinition,
 } from '@elek-io/shared';
 import Fs from 'fs-extra';
 import RequiredParameterMissingError from '../error/RequiredParameterMissingError.js';
 import * as CoreUtil from '../util/index.js';
 import AbstractCrudService from './AbstractCrudService.js';
+import type AssetService from './AssetService.js';
 import CollectionService from './CollectionService.js';
 import GitService from './GitService.js';
 import JsonFileService from './JsonFileService.js';
@@ -46,6 +53,7 @@ export default class EntryService
   private jsonFileService: JsonFileService;
   private gitService: GitService;
   private collectionService: CollectionService;
+  private assetService: AssetService;
   private sharedValueService: SharedValueService;
 
   constructor(
@@ -53,6 +61,7 @@ export default class EntryService
     jsonFileService: JsonFileService,
     gitService: GitService,
     collectionService: CollectionService,
+    assetService: AssetService,
     sharedValueService: SharedValueService
   ) {
     super(serviceTypeSchema.Enum.Entry, options);
@@ -60,6 +69,7 @@ export default class EntryService
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
     this.collectionService = collectionService;
+    this.assetService = assetService;
     this.sharedValueService = sharedValueService;
   }
 
@@ -83,13 +93,10 @@ export default class EntryService
     });
 
     const entryFile: EntryFile = {
-      fileType: 'entry',
+      objectType: 'entry',
       id,
       language: props.language,
-      values: props.values.map((value) => {
-        return { ...value, id: uuid() };
-      }),
-      sharedValues: props.sharedValues,
+      values: props.values,
       created: currentTimestamp(),
     };
 
@@ -102,11 +109,6 @@ export default class EntryService
       collectionId: props.collectionId,
       valueDefinitions: collection.valueDefinitions,
       values: entry.values,
-    });
-    this.validateResolvedSharedValues({
-      collectionId: props.collectionId,
-      valueDefinitions: collection.valueDefinitions,
-      resolvedSharedValues: entry.sharedValues,
     });
 
     await this.jsonFileService.create(
@@ -167,7 +169,6 @@ export default class EntryService
     const entryFile: EntryFile = {
       ...prevEntryFile,
       values: props.values,
-      sharedValues: props.sharedValues,
       updated: currentTimestamp(),
     };
 
@@ -180,11 +181,6 @@ export default class EntryService
       collectionId: props.collectionId,
       valueDefinitions: collection.valueDefinitions,
       values: entry.values,
-    });
-    this.validateResolvedSharedValues({
-      collectionId: props.collectionId,
-      valueDefinitions: collection.valueDefinitions,
-      resolvedSharedValues: entry.sharedValues,
     });
 
     await this.jsonFileService.update(
@@ -221,7 +217,7 @@ export default class EntryService
     listEntriesSchema.parse(props);
 
     const references = await this.listReferences(
-      fileTypeSchema.Enum.entry,
+      objectTypeSchema.Enum.entry,
       props.projectId,
       props.collectionId
     );
@@ -253,7 +249,7 @@ export default class EntryService
 
     return (
       await this.listReferences(
-        fileTypeSchema.Enum.entry,
+        objectTypeSchema.Enum.entry,
         props.projectId,
         props.collectionId
       )
@@ -297,7 +293,7 @@ export default class EntryService
   private validateValues(props: {
     collectionId: string;
     valueDefinitions: ValueDefinition[];
-    values: Omit<Value, 'id'>[];
+    values: Value[];
   }) {
     props.values.map((value) => {
       const definition = this.getValueDefinitionById({
@@ -305,32 +301,106 @@ export default class EntryService
         valueDefinitions: props.valueDefinitions,
         id: value.definitionId,
       });
-      const schema = getValueSchemaFromDefinition(definition);
-      schema.parse(value.content);
+      const schema = getValueContentSchemaFromDefinition(definition);
+
+      try {
+        schema.parse(value.content);
+      } catch (error) {
+        console.log('Definition:', definition);
+        console.log('Value:', value);
+        throw error;
+      }
     });
   }
 
   /**
    * Validates given shared Value references against it's Collections definitions
    */
-  private validateResolvedSharedValues(props: {
-    collectionId: string;
-    valueDefinitions: ValueDefinition[];
-    resolvedSharedValues: ResolvedSharedValueReference[];
-  }) {
-    props.resolvedSharedValues.map((value) => {
-      const definition = this.getValueDefinitionById({
-        collectionId: props.collectionId,
-        valueDefinitions: props.valueDefinitions,
-        id: value.definitionId,
-      });
-      const schema = getValueSchemaFromDefinition(definition);
-      schema.parse(value.resolved.content);
+  // private validateResolvedSharedValues(props: {
+  //   collectionId: string;
+  //   valueDefinitions: ValueDefinition[];
+  //   resolvedSharedValues: ResolvedSharedValueReference[];
+  // }) {
+  //   props.resolvedSharedValues.map((value) => {
+  //     const definition = this.getValueDefinitionById({
+  //       collectionId: props.collectionId,
+  //       valueDefinitions: props.valueDefinitions,
+  //       id: value.definitionId,
+  //     });
+  //     const schema = getValueSchemaFromDefinition(definition);
+  //     schema.parse(value.resolved.content);
+  //   });
+  // }
+
+  private async resolveValueContentReference(props: {
+    projectId: string;
+    valueContentReference: ValueContentReference;
+  }): Promise<ResolvedValueContentReference> {
+    switch (props.valueContentReference.referenceObjectType) {
+      case objectTypeSchema.Enum.asset:
+        return this.resolveValueContentReferenceToAsset({
+          projectId: props.projectId,
+          valueContentReferenceToAsset: props.valueContentReference,
+        });
+      case objectTypeSchema.Enum.sharedValue:
+        return this.resolveValueContentReferenceToSharedValue({
+          projectId: props.projectId,
+          valueContentReferenceToSharedValue: props.valueContentReference,
+        });
+
+      default:
+        throw new Error(
+          // @ts-ignore
+          `Tried to resolve unsupported Value reference "${props.valueContentReference.referenceObjectType}"`
+        );
+    }
+  }
+
+  private async resolveValueContentReferenceToAsset(props: {
+    projectId: string;
+    valueContentReferenceToAsset: ValueContentReferenceToAsset;
+  }): Promise<ResolvedValueContentReferenceToAsset> {
+    const resolvedReferences = await Promise.all(
+      props.valueContentReferenceToAsset.references.map(async (reference) => {
+        const resolvedAsset = await this.assetService.read({
+          projectId: props.projectId,
+          id: reference.id,
+          language: reference.language,
+        });
+        return {
+          ...reference,
+          resolved: resolvedAsset,
+        };
+      })
+    );
+
+    return {
+      ...props.valueContentReferenceToAsset,
+      references: resolvedReferences,
+    };
+  }
+
+  private async resolveValueContentReferenceToSharedValue(props: {
+    projectId: string;
+    valueContentReferenceToSharedValue: ValueContentReferenceToSharedValue;
+  }): Promise<ResolvedValueContentReferenceToSharedValue> {
+    const resolvedSharedValue = await this.sharedValueService.read({
+      projectId: props.projectId,
+      id: props.valueContentReferenceToSharedValue.references.id,
+      language: props.valueContentReferenceToSharedValue.references.language,
     });
+
+    return {
+      ...props.valueContentReferenceToSharedValue,
+      references: {
+        ...props.valueContentReferenceToSharedValue.references,
+        resolved: resolvedSharedValue,
+      },
+    };
   }
 
   /**
-   * Creates an Entry from given EntryFile by resolving it's shared Values
+   * Creates an Entry from given EntryFile by resolving it's Values
    */
   private async toEntry(props: {
     projectId: string;
@@ -338,17 +408,22 @@ export default class EntryService
   }): Promise<Entry> {
     const entry: Entry = {
       ...props.entryFile,
-      sharedValues: await Promise.all(
-        props.entryFile.sharedValues.map(async (sharedValue) => {
-          const resolved = await this.sharedValueService.read({
-            ...sharedValue.references,
-            projectId: props.projectId,
-          });
+      values: await Promise.all(
+        props.entryFile.values.map(async (value) => {
+          if (value.valueType === ValueTypeSchema.Enum.reference) {
+            const resolvedValueContentReference =
+              await this.resolveValueContentReference({
+                projectId: props.projectId,
+                valueContentReference: value.content,
+              });
 
-          return {
-            ...sharedValue,
-            resolved,
-          };
+            return {
+              ...value,
+              content: resolvedValueContentReference,
+            };
+          }
+
+          return value;
         })
       ),
     };

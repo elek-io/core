@@ -2,9 +2,9 @@ import {
   createProjectSchema,
   currentTimestamp,
   deleteProjectSchema,
-  fileTypeSchema,
   gitCommitIconSchema,
   listProjectsSchema,
+  objectTypeSchema,
   projectFileSchema,
   projectFolderSchema,
   readProjectSchema,
@@ -18,8 +18,8 @@ import {
   type DeleteProjectProps,
   type ElekIoCoreOptions,
   type ExtendedCrudService,
-  type FileType,
   type ListProjectsProps,
+  type ObjectType,
   type PaginatedList,
   type Project,
   type ProjectExport,
@@ -103,7 +103,7 @@ export default class ProjectService
 
     const projectFile: ProjectFile = {
       ...props,
-      fileType: 'project',
+      objectType: 'project',
       id,
       description: props.description || '',
       settings: Object.assign({}, defaultSettings, props.settings),
@@ -296,7 +296,7 @@ export default class ProjectService
       listProjectsSchema.parse(props);
     }
 
-    const references = await this.listReferences(fileTypeSchema.Enum.project);
+    const references = await this.listReferences(objectTypeSchema.Enum.project);
     const list = await CoreUtil.returnResolved(
       references.map((reference) => {
         return this.read({ id: reference.id });
@@ -313,7 +313,7 @@ export default class ProjectService
   }
 
   public async count(): Promise<number> {
-    return (await this.listReferences(fileTypeSchema.Enum.project)).length;
+    return (await this.listReferences(objectTypeSchema.Enum.project)).length;
   }
 
   /**
@@ -323,7 +323,7 @@ export default class ProjectService
    * @param query     Query to search for
    * @param type      (Optional) specify the type to search for
    */
-  public async search(projectId: string, query: string, type?: FileType) {
+  public async search(projectId: string, query: string, type?: ObjectType) {
     return this.searchService.search(projectId, query, type);
   }
 

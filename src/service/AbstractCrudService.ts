@@ -1,16 +1,16 @@
 import {
   fileReferenceSchema,
-  fileTypeSchema,
   gitCommitIconSchema,
+  objectTypeSchema,
   type BaseFile,
   type ElekIoCoreOptions,
   type FileReference,
-  type FileType,
   type GitTag,
+  type ObjectType,
   type PaginatedList,
   type ServiceType,
   type Sort,
-  type SupportedExtension,
+  type SupportedAssetExtension,
   type SupportedLanguage,
 } from '@elek-io/shared';
 import { orderBy, remove } from 'lodash-es';
@@ -115,27 +115,27 @@ export default abstract class AbstractCrudService {
    * @param collectionId Only needed when requesting files of type "Entry"
    */
   protected async listReferences(
-    type: FileType,
+    type: ObjectType,
     projectId?: string,
     collectionId?: string
   ): Promise<FileReference[]> {
     switch (type) {
-      case fileTypeSchema.Enum.asset:
+      case objectTypeSchema.Enum.asset:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
         return this.getFileReferences(CoreUtil.pathTo.lfs(projectId)); // LFS folder is correct, since we want the extension of the file itself, not the AssetFile (.json)
 
-      case fileTypeSchema.Enum.project:
+      case objectTypeSchema.Enum.project:
         return this.getFolderReferences(CoreUtil.pathTo.projects);
 
-      case fileTypeSchema.Enum.collection:
+      case objectTypeSchema.Enum.collection:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
         return this.getFolderReferences(CoreUtil.pathTo.collections(projectId));
 
-      case fileTypeSchema.Enum.entry:
+      case objectTypeSchema.Enum.entry:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
@@ -146,7 +146,7 @@ export default abstract class AbstractCrudService {
           CoreUtil.pathTo.collection(projectId, collectionId)
         );
 
-      case fileTypeSchema.Enum.sharedValue:
+      case objectTypeSchema.Enum.sharedValue:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
@@ -196,8 +196,8 @@ export default abstract class AbstractCrudService {
               : undefined,
           extension:
             fileNameArray.length === 2
-              ? (fileNameArray[1] as SupportedExtension)
-              : (fileNameArray[2] as SupportedExtension),
+              ? (fileNameArray[1] as SupportedAssetExtension)
+              : (fileNameArray[2] as SupportedAssetExtension),
         };
 
         try {

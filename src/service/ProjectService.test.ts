@@ -32,8 +32,9 @@ describe.sequential('Integration', function () {
     });
     expect(project.created).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
     expect(project.updated).to.be.undefined;
-    expect(await Fs.pathExists(core.util.pathTo.project(project.id))).to.be
-      .true;
+    expect(
+      await Fs.pathExists(core.util.pathTo.project(project.id))
+    ).to.be.true;
   });
 
   it.sequential('should be able to read a Project', async function () {
@@ -72,12 +73,13 @@ describe.sequential('Integration', function () {
 
   it.sequential('should be able to identify a Project', async function () {
     expect(core.projects.isProject(project)).to.be.true;
-    expect(core.projects.isProject({ fileType: 'project' })).to.be.false;
+    expect(core.projects.isProject({ objectType: 'project' })).to.be.false;
   });
 
   it.sequential('should be able to delete a Project', async function () {
     await core.projects.delete({ id: project.id });
-    expect(await Fs.pathExists(core.util.pathTo.project(project.id))).to.be
-      .false;
+    expect(
+      await Fs.pathExists(core.util.pathTo.project(project.id))
+    ).to.be.false;
   });
 });

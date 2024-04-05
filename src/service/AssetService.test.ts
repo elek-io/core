@@ -88,7 +88,7 @@ describe.sequential('Integration', function () {
 
   it.sequential('should be able to identify an Asset', async function () {
     expect(core.assets.isAsset(asset)).to.be.true;
-    expect(core.assets.isAsset({ fileType: 'asset' })).to.be.false;
+    expect(core.assets.isAsset({ objectType: 'asset' })).to.be.false;
   });
 
   it.sequential('should be able to delete an Asset', async function () {

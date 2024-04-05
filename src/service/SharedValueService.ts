@@ -4,8 +4,8 @@ import {
   createSharedValueSchema,
   currentTimestamp,
   deleteSharedValueSchema,
-  fileTypeSchema,
   listSharedValuesSchema,
+  objectTypeSchema,
   readSharedValueSchema,
   serviceTypeSchema,
   sharedValueFileSchema,
@@ -72,7 +72,7 @@ export default class SharedValueService
 
     const sharedValueFile: SharedValueFile = {
       ...props,
-      fileType: 'sharedValue',
+      objectType: 'sharedValue',
       id,
       created: currentTimestamp(),
     };
@@ -167,7 +167,7 @@ export default class SharedValueService
     listSharedValuesSchema.parse(props);
 
     const references = await this.listReferences(
-      fileTypeSchema.Enum.sharedValue,
+      objectTypeSchema.Enum.sharedValue,
       props.projectId
     );
     const list = await CoreUtil.returnResolved(
@@ -197,7 +197,7 @@ export default class SharedValueService
 
     const count = (
       await this.listReferences(
-        fileTypeSchema.Enum.sharedValue,
+        objectTypeSchema.Enum.sharedValue,
         props.projectId
       )
     ).length;

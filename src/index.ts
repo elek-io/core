@@ -71,6 +71,7 @@ export default class ElekIoCore {
       this.jsonFileService,
       this.gitService,
       this.collectionService,
+      this.assetService,
       this.sharedValueService
     );
     this.searchService = new SearchService(
