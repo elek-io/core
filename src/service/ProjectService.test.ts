@@ -17,17 +17,9 @@ describe.sequential('Integration', function () {
 
     expect(project.name).to.equal('project #1');
     expect(project.settings, 'settings to default to').to.deep.equal({
-      locale: {
-        supported: [
-          {
-            id: 'en',
-            name: 'English',
-          },
-        ],
-        default: {
-          id: 'en',
-          name: 'English',
-        },
+      language: {
+        supported: ['en'],
+        default: 'en',
       },
     });
     expect(project.created).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed

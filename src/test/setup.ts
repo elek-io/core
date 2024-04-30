@@ -6,10 +6,7 @@ await core.user.set({
   userType: 'local',
   name: 'John Doe',
   email: 'john.doe@test.com',
-  locale: {
-    id: 'en',
-    name: 'English',
-  },
+  language: 'en',
 });
 
 export default core;
