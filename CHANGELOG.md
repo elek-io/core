@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.2.1
+
+### Patch Changes
+
+- b0bd8c1: Updated shared lib to 0.4.7
+
 ## 0.2.0
 
 ### Minor Changes
