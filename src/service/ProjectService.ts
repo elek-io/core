@@ -95,9 +95,9 @@ export default class ProjectService
 
     const id = uuid();
     const defaultSettings: ProjectSettings = {
-      locale: {
-        default: user.locale,
-        supported: [user.locale],
+      language: {
+        default: user.language,
+        supported: [user.language],
       },
     };
 
