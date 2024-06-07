@@ -1,10 +1,4 @@
-import type {
-  Asset,
-  Collection,
-  Entry,
-  Project,
-  SharedValue,
-} from '@elek-io/shared';
+import type { Asset, Collection, Entry, Project } from '@elek-io/shared';
 import Fs from 'fs-extra';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import core from '../test/setup.js';
@@ -13,22 +7,21 @@ import {
   createCollection,
   createEntry,
   createProject,
-  createSharedValue,
 } from '../test/util.js';
 
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
   let asset: Asset;
   let collection: Collection;
+  let referencedEntry: Entry;
   let entry: Entry;
-  let sharedValue: SharedValue;
 
   beforeAll(async function () {
     project = await createProject();
 
     asset = await createAsset(project.id);
     collection = await createCollection(project.id);
-    sharedValue = await createSharedValue(project.id);
+    referencedEntry = await createEntry(project.id, collection.id, asset.id);
   });
 
   afterAll(async function () {
@@ -39,8 +32,8 @@ describe.sequential('Integration', function () {
     entry = await createEntry(
       project.id,
       collection.id,
-      sharedValue.id,
-      asset.id
+      asset.id,
+      referencedEntry.id
     );
 
     expect(entry.id).to.not.be.undefined;
@@ -59,7 +52,7 @@ describe.sequential('Integration', function () {
 
       expect(exportedProject.collections).to.have.lengthOf(1);
       expect(exportedProject.assets).to.have.lengthOf(1);
-      expect(exportedProject.collections[0].entries).to.have.lengthOf(1);
+      expect(exportedProject.collections[0].entries).to.have.lengthOf(2);
       expect(exportedProject.collections[0].entries[0].values).to.have.lengthOf(
         3
       );

@@ -11,7 +11,7 @@ import GitService from './service/GitService.js';
 import JsonFileService from './service/JsonFileService.js';
 import ProjectService from './service/ProjectService.js';
 import SearchService from './service/SearchService.js';
-import SharedValueService from './service/SharedValueService.js';
+// import SharedValueService from './service/SharedValueService.js';
 import UserService from './service/UserService.js';
 import * as CoreUtil from './util/index.js';
 
@@ -30,7 +30,7 @@ export default class ElekIoCore {
   private readonly projectService: ProjectService;
   private readonly collectionService: CollectionService;
   private readonly entryService: EntryService;
-  private readonly sharedValueService: SharedValueService;
+  // private readonly sharedValueService: SharedValueService;
 
   constructor(props?: ConstructorElekIoCoreProps) {
     const parsedProps = constructorElekIoCoreSchema.parse(props);
@@ -60,19 +60,19 @@ export default class ElekIoCore {
       this.jsonFileService,
       this.gitService
     );
-    this.sharedValueService = new SharedValueService(
-      this.options,
-      this.jsonFileService,
-      this.gitService,
-      this.assetService
-    );
+    // this.sharedValueService = new SharedValueService(
+    //   this.options,
+    //   this.jsonFileService,
+    //   this.gitService,
+    //   this.assetService
+    // );
     this.entryService = new EntryService(
       this.options,
       this.jsonFileService,
       this.gitService,
       this.collectionService,
-      this.assetService,
-      this.sharedValueService
+      this.assetService
+      // this.sharedValueService
     );
     this.searchService = new SearchService(
       this.options,
@@ -149,7 +149,7 @@ export default class ElekIoCore {
   /**
    * CRUD methods to work with Values
    */
-  public get sharedValues(): SharedValueService {
-    return this.sharedValueService;
-  }
+  // public get sharedValues(): SharedValueService {
+  //   return this.sharedValueService;
+  // }
 }

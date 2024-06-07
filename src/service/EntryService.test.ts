@@ -1,10 +1,4 @@
-import type {
-  Asset,
-  Collection,
-  Entry,
-  Project,
-  SharedValue,
-} from '@elek-io/shared';
+import type { Asset, Collection, Entry, Project } from '@elek-io/shared';
 import Fs from 'fs-extra';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import core from '../test/setup.js';
@@ -13,21 +7,21 @@ import {
   createCollection,
   createEntry,
   createProject,
-  createSharedValue,
 } from '../test/util.js';
 
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
   let collection: Collection;
   let entry: Entry;
+  let referencedEntry: Entry;
   let asset: Asset;
-  let sharedValue: SharedValue;
+  // let sharedValue: SharedValue;
 
   beforeAll(async function () {
     project = await createProject();
     collection = await createCollection(project.id);
     asset = await createAsset(project.id);
-    sharedValue = await createSharedValue(project.id);
+    referencedEntry = await createEntry(project.id, collection.id, asset.id);
   });
 
   afterAll(async function () {
@@ -38,8 +32,8 @@ describe.sequential('Integration', function () {
     entry = await createEntry(
       project.id,
       collection.id,
-      sharedValue.id,
-      asset.id
+      asset.id,
+      referencedEntry.id
     );
 
     expect(entry.id).to.not.be.undefined;
@@ -50,7 +44,6 @@ describe.sequential('Integration', function () {
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
-      language: 'en',
     });
 
     expect(readEntry.id).to.equal(entry.id);
@@ -61,7 +54,6 @@ describe.sequential('Integration', function () {
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
-      language: entry.language,
       values: [],
     });
 
@@ -74,8 +66,8 @@ describe.sequential('Integration', function () {
       collectionId: collection.id,
     });
 
-    expect(entries.list.length).to.equal(1);
-    expect(entries.total).to.equal(1);
+    expect(entries.list.length).to.equal(2);
+    expect(entries.total).to.equal(2);
     expect(entries.list.find((a) => a.id === entry.id)?.id).to.equal(entry.id);
   });
 
@@ -85,7 +77,7 @@ describe.sequential('Integration', function () {
       collectionId: collection.id,
     });
 
-    expect(counted).to.equal(1);
+    expect(counted).to.equal(2);
   });
 
   it.sequential('should be able to identify an Entry', async function () {
@@ -98,17 +90,11 @@ describe.sequential('Integration', function () {
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
-      language: entry.language,
     });
 
     expect(
       await Fs.pathExists(
-        core.util.pathTo.entryFile(
-          project.id,
-          collection.id,
-          entry.id,
-          entry.language
-        )
+        core.util.pathTo.entryFile(project.id, collection.id, entry.id)
       )
     ).to.be.false;
   });

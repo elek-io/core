@@ -55,16 +55,8 @@ export const pathTo = {
   entries: (projectId: string, collectionId: string): string => {
     return Path.join(pathTo.collection(projectId, collectionId));
   },
-  entryFile: (
-    projectId: string,
-    collectionId: string,
-    id: string,
-    language: string
-  ) => {
-    return Path.join(
-      pathTo.entries(projectId, collectionId),
-      `${id}.${language}.json`
-    );
+  entryFile: (projectId: string, collectionId: string, id: string) => {
+    return Path.join(pathTo.entries(projectId, collectionId), `${id}.json`);
   },
 
   sharedValues: (projectId: string): string => {
