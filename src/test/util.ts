@@ -1,14 +1,19 @@
-import type { ProjectSettings } from '@elek-io/shared';
 import {
-  adjectives,
-  animals,
-  colors,
-  uniqueNamesGenerator,
-} from '@joaomoreno/unique-names-generator';
+  uuid,
+  type EntryValueDefinition,
+  type ProjectSettings,
+} from '@elek-io/shared';
+import { faker } from '@faker-js/faker';
 import crypto from 'crypto';
 import Fs from 'fs-extra';
 import Path from 'path';
 import core from './setup.js';
+
+const id = {
+  textValueDefinition: uuid(),
+  assetReferenceValueDefinition: uuid(),
+  entryReferenceValueDefinition: uuid(),
+};
 
 /**
  * Returns the MD5 hash of given file
@@ -29,14 +34,9 @@ export async function getFileHash(path: string): Promise<string> {
  * The Project has a special destroy method, that removes the Project again.
  */
 export async function createProject(name?: string, settings?: ProjectSettings) {
-  const randomName = uniqueNamesGenerator({
-    dictionaries: [adjectives, animals, colors],
-    separator: '-',
-  });
-
   const project = await core.projects.create({
-    name: name || randomName,
-    description: 'This Project was created for an automatic test.',
+    name: name || faker.company.name(),
+    description: faker.company.catchPhrase(),
     settings: settings,
   });
 
@@ -63,30 +63,30 @@ export async function createCollection(projectId: string) {
   const collection = await core.collections.create({
     projectId,
     icon: 'home',
-    slug: {
-      singular: 'recipe',
-      plural: 'recipes',
-    },
     name: {
       singular: {
-        en: 'Recipe',
+        en: 'Product',
       },
       plural: {
-        en: 'Recipes',
+        en: 'Products',
       },
     },
+    slug: {
+      singular: 'product',
+      plural: 'products',
+    },
     description: {
-      en: 'A Collection that contains recipes',
+      en: 'A Collection that contains our Products',
     },
     valueDefinitions: [
       {
-        id: '82e8f99c-f197-4b55-a88d-682b7e670728',
+        id: id.textValueDefinition,
         valueType: 'string',
-        name: {
-          en: 'Title',
+        label: {
+          en: 'Name',
         },
         description: {
-          en: 'The title should be shirt and catchy, to grab the users attention.',
+          en: 'The title should be shirt and catchy, to grab the users attention',
         },
         inputType: 'text',
         inputWidth: '12',
@@ -96,13 +96,13 @@ export async function createCollection(projectId: string) {
         max: 70,
       },
       {
-        id: '77e8f99c-f197-4b55-a88d-682b7e670728',
+        id: id.assetReferenceValueDefinition,
         valueType: 'reference',
-        name: {
+        label: {
           en: 'Header image',
         },
         description: {
-          en: 'An image for this recipe displayed on top of the page',
+          en: 'An image for this product displayed on top of the page',
         },
         inputType: 'asset',
         inputWidth: '12',
@@ -110,58 +110,71 @@ export async function createCollection(projectId: string) {
         isRequired: true,
       },
       {
-        id: '22e8f99c-f197-4b55-a88d-682b7e670728',
+        id: id.entryReferenceValueDefinition,
         valueType: 'reference',
-        name: {
-          en: 'Created by',
+        label: {
+          en: 'Related products',
         },
         description: {
-          en: 'The Author of this recipe',
+          en: 'References to other products that the visitor might want to check out too',
         },
-        inputType: 'sharedValue',
-        sharedValueType: 'string',
+        inputType: 'entry',
+        ofCollections: [],
         inputWidth: '12',
         isDisabled: false,
-        isRequired: true,
+        isRequired: false,
       },
     ],
   });
 
-  return collection;
-}
+  // Add circular reference to products
+  (
+    collection.valueDefinitions.find((definition) => {
+      return definition.id === id.entryReferenceValueDefinition;
+    }) as EntryValueDefinition
+  ).ofCollections = [id.entryReferenceValueDefinition];
 
-export async function createSharedValue(projectId: string) {
-  const value = await core.sharedValues.create({
-    projectId: projectId,
-    valueType: 'string',
-    language: 'en',
-    content: 'Hello World',
+  const updatedCollection = await core.collections.update({
+    ...collection,
+    projectId,
   });
 
-  return value;
+  return updatedCollection;
 }
+
+// export async function createSharedValue(projectId: string) {
+//   const value = await core.sharedValues.create({
+//     projectId: projectId,
+//     valueType: 'string',
+//     language: 'en',
+//     content: 'Hello World',
+//   });
+
+//   return value;
+// }
 
 export async function createEntry(
   projectId: string,
   collectionId: string,
-  sharedValueId: string,
-  assetValueId: string
+  assetValueId: string,
+  entryValueId?: string
 ) {
   const entry = await core.entries.create({
     projectId: projectId,
     collectionId: collectionId,
-    language: 'en',
     values: [
       {
         objectType: 'value',
         valueType: 'string',
-        definitionId: '82e8f99c-f197-4b55-a88d-682b7e670728',
-        content: 'A direct string based value for the Title',
+        definitionId: id.textValueDefinition,
+        content: {
+          en: faker.commerce.product(),
+        },
       },
       {
         objectType: 'value',
         valueType: 'reference',
-        definitionId: '77e8f99c-f197-4b55-a88d-682b7e670728',
+        definitionId: id.assetReferenceValueDefinition,
         content: {
           referenceObjectType: 'asset',
           references: [
@@ -175,13 +188,16 @@ export async function createEntry(
       {
         objectType: 'value',
         valueType: 'reference',
-        definitionId: '22e8f99c-f197-4b55-a88d-682b7e670728',
+        definitionId: id.entryReferenceValueDefinition,
         content: {
-          referenceObjectType: 'sharedValue',
-          references: {
-            id: sharedValueId,
-            language: 'en',
-          },
+          referenceObjectType: 'entry',
+          references:
+            (entryValueId && [
+              {
+                id: entryValueId,
+              },
+            ]) ||
+            [],
         },
       },
     ],
