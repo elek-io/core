@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.3.0
+
+### Minor Changes
+
+- e691b5d: Updated shared lib to 0.5.0. Added Entry references and removed sharedValues for now.
+
 ## 0.2.1
 
 ### Patch Changes
