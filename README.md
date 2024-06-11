@@ -27,10 +27,12 @@ Handles core functionality of elek.io Projects like file IO and version control.
 ## The concept behind Projects, Collections, Entries, Values and Assets
 
 ```
-|-- Project (e.g. Website)
-|   |-- Collection (e.g. Blog)
-|   |   |-- Entry (e.g Post)
-|   |   |   |-- Value (e.g for a post's title: "Quarterly results 7% higher than expected")
+|-- Project - e.g. "Website"
+|   |-- Collection - e.g. "Blog"
+|   |   |-- Entry - e.g "Post"
+|   |   |   |-- Value - e.g for a post's title: "Quarterly results 7% higher than expected"
+|   |   |   |-- Asset - a reference to a previously added Asset like image, PDF or ZIP
+|   |   |   |-- Entry - a reference to another Entry e.g. to show the user related posts
 ```
 
 ### Projects
@@ -42,21 +44,21 @@ Are a container for Collections, Entries, Values and Assets. Think of a folder c
 Contains ValueDefinitions (a schema) for possible Values each Entry can or has to have.
 e.g. for a Blog, it could have the following definition for each post / Entry:
 
-- an image that is displayed on top of the post
-- a title to catch users attention
-- content that contains multiple headlines and paragraphs
-- an author that wrote the post
+- an image that is displayed on top of the post (Asset reference)
+- a title to catch users attention (Value)
+- content that contains multiple headlines and paragraphs (Value)
+- an author that wrote the post (Entry reference)
 
 Each definition like the title, contains additional information for the input field, that is used to modify it's Value.
 e.g. the title would be a simple one line input field, that has a maximum lenght of 150 characters and is required for each post. But the content is a markdown editor to easily add formatting. The image let's the user select a jpeg or png from disk. And the author is a reference to another Collection's Entry, so the user is able to choose one of them.
 
 ### Entries
 
-Contains references to Values that follow the Collection's ValueDefinitions. Why references and not the Values itself? To make Values reusable for different Entries and even Collections - so when you update a Value, it updates everywhere you've referenced it.
+Contains Values and references that follow the Collection's ValueDefinitions. Why references and not the Assets or Entries itself? To make Values reusable for different Entries and even Collections - so when you update an Asset or Entry, it updates everywhere you've referenced it.
 
 ### Values
 
-Represent a single piece of data like the string "How to be successfull in 3 easy steps", a number or a boolean.
+Represent either a single piece of data like the string "How to be successfull in 3 easy steps", a number or a boolean - or a reference to Assets or other Entries.
 
 ### Assets
 
