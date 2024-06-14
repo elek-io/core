@@ -30,7 +30,7 @@
     "release": "changeset publish"
   },
   "dependencies": {
-    "@elek-io/shared": "0.5.0",
+    "@elek-io/shared": "0.5.1",
     "file-type": "^19.0.0",
     "fs-extra": "^11.2.0",
     "is-svg": "^5.0.0",
