@@ -10,7 +10,7 @@ import * as CoreUtil from '../util/index.js';
 import JsonFileService from './JsonFileService.js';
 
 /**
- * Service that manages CRUD functionality for Asset files on disk
+ * Service to handle the User that is currently working with Core
  */
 export default class UserService {
   private readonly jsonFileService: JsonFileService;
