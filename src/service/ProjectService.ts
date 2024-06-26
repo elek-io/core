@@ -277,6 +277,44 @@ export default class ProjectService
   }
 
   /**
+   * Returns the differences of the given Projects current branch
+   * between the local and remote `origin` (commits ahead & behind)
+   *
+   * - `behind` contains a list of commits on the current branch that are available on the remote `origin` but not yet locally
+   * - `ahead` contains a list of commits on the current branch that are available locally but not yet on the remote `origin`
+   */
+  public async getChanges(projectId: string) {
+    const projectPath = CoreUtil.pathTo.project(projectId);
+    const currentBranch = await this.gitService.branches.getCurrent(
+      projectPath
+    );
+
+    await this.gitService.fetch(projectPath);
+    const behind = await this.gitService.log(projectPath, {
+      between: { from: currentBranch, to: `origin/${currentBranch}` },
+    });
+    const ahead = await this.gitService.log(projectPath, {
+      between: { from: `origin/${currentBranch}`, to: currentBranch },
+    });
+
+    return {
+      behind,
+      ahead,
+    };
+  }
+
+  /**
+   * Pulls remote changes of `origin` down to the local repository
+   * and then pushes local commits to the upstream branch
+   */
+  public async synchronize(projectId: string) {
+    const projectPath = CoreUtil.pathTo.project(projectId);
+
+    await this.gitService.pull(projectPath);
+    await this.gitService.push(projectPath);
+  }
+
+  /**
    * Deletes given Project
    *
    * Deletes the whole Project folder including the history, not only the config file.
