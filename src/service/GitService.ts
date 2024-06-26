@@ -54,9 +54,10 @@ export default class GitService {
   /**
    * Reads the currently used version of Git
    */
-  public async getVersion(): Promise<void> {
+  public async getVersion(): Promise<string> {
     const result = await this.git('', ['--version']);
     this.version = result.stdout.replace('git version', '').trim();
+    return this.version;
   }
 
   /**
@@ -131,6 +132,129 @@ export default class GitService {
     await this.git(path, args);
   }
 
+  public branches = {
+    /**
+     * List branches
+     *
+     * @see https://www.git-scm.com/docs/git-branch
+     *
+     * @param path  Path to the repository
+     */
+    list: async (path: string) => {
+      const args = ['branch', '--list', '--all'];
+      const result = await this.git(path, args);
+
+      const normalizedLinesArr = result.stdout
+        .split('\n')
+        .filter((line) => {
+          return line !== '';
+        })
+        .map((line) => {
+          return line.trim().replace('* ', '');
+        });
+
+      const local: string[] = [];
+      const remote: string[] = [];
+      normalizedLinesArr.forEach((line) => {
+        if (line.startsWith('remotes/')) {
+          remote.push(line.replace('remotes/', ''));
+        } else {
+          local.push(line);
+        }
+      });
+      return {
+        local,
+        remote,
+      };
+    },
+    /**
+     * Returns the name of the current branch. In detached HEAD state, an empty string is returned.
+     *
+     * @see https://www.git-scm.com/docs/git-branch#Documentation/git-branch.txt---show-current
+     *
+     * @param path  Path to the repository
+     */
+    getCurrent: async (path: string) => {
+      const args = ['branch', '--show-current'];
+      const result = await this.git(path, args);
+
+      return result.stdout.replace('\n', '');
+    },
+  };
+
+  public remotes = {
+    /**
+     * Returns a list of currently tracked remotes
+     *
+     * @see https://git-scm.com/docs/git-remote
+     *
+     * @param path  Path to the repository
+     */
+    list: async (path: string) => {
+      const args = ['remote'];
+      const result = await this.git(path, args);
+      const normalizedLinesArr = result.stdout.split('\n').filter((line) => {
+        return line !== '';
+      });
+
+      return normalizedLinesArr;
+    },
+    /**
+     * Returns true if the `origin` remote exists, otherwise false
+     *
+     * @param path  Path to the repository
+     */
+    hasOrigin: async (path: string) => {
+      const remotes = await this.remotes.list(path);
+
+      if (remotes.includes('origin')) {
+        return true;
+      }
+      return false;
+    },
+    /**
+     * Adds the `origin` remote with given URL
+     *
+     * Throws if `origin` remote is added already.
+     *
+     * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emaddem
+     *
+     * @param path  Path to the repository
+     */
+    addOrigin: async (path: string, url: string) => {
+      const args = ['remote', 'add', 'origin', url];
+      await this.git(path, args);
+    },
+    /**
+     * Returns the current `origin` remote URL
+     *
+     * Throws if no `origin` remote is added yet.
+     *
+     * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emget-urlem
+     *
+     * @param path  Path to the repository
+     */
+    getOriginUrl: async (path: string) => {
+      const args = ['remote', 'get-url', 'origin'];
+      const result = await this.git(path, args);
+
+      return result.stdout.replace('\n', '');
+    },
+    /**
+     * Sets the current `origin` remote URL
+     *
+     * Throws if no `origin` remote is added yet.
+     *
+     * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emset-urlem
+     *
+     * @param path  Path to the repository
+     */
+    setOriginUrl: async (path: string, url: string) => {
+      const args = ['remote', 'set-url', 'origin', url];
+      await this.git(path, args);
+    },
+  };
+
   /**
    * Switch branches
    *
@@ -197,7 +321,19 @@ export default class GitService {
   // }
 
   /**
-   * Fetch from and integrate with another repository or a local branch
+   * Download objects and refs from remote `origin`
+   *
+   * @see https://www.git-scm.com/docs/git-fetch
+   *
+   * @param path Path to the repository
+   */
+  public async fetch(path: string): Promise<void> {
+    const args = ['fetch'];
+    await this.git(path, args);
+  }
+
+  /**
+   * Fetch from and integrate (rebase or merge) with a local branch
    *
    * @see https://git-scm.com/docs/git-pull
    *
@@ -205,6 +341,18 @@ export default class GitService {
    */
   public async pull(path: string): Promise<void> {
     const args = ['pull'];
+    await this.git(path, args);
+  }
+
+  /**
+   * Update remote refs along with associated objects to remote `origin`
+   *
+   * @see https://git-scm.com/docs/git-push
+   *
+   * @param path Path to the repository
+   */
+  public async push(path: string): Promise<void> {
+    const args = ['push'];
     await this.git(path, args);
   }
 
@@ -423,6 +571,15 @@ export default class GitService {
         `Git (${this.version}) command "git ${args.join(
           ' '
         )}" failed to return a result`
+      );
+    }
+    if (result.exitCode !== 0) {
+      throw new GitError(
+        `Git (${this.version}) command "git ${args.join(
+          ' '
+        )}" failed with exit code "${result.exitCode}" and message "${
+          result.stderr
+        }"`
       );
     }
 

@@ -112,7 +112,14 @@ export default class ElekIoCore {
   }
 
   /**
-   *
+   * Exposes git functions
+   */
+  public get git(): GitService {
+    return this.gitService;
+  }
+
+  /**
+   * Getter and setter methods for the User currently working with Core
    */
   public get user(): UserService {
     return this.userService;
