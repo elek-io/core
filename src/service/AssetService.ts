@@ -83,6 +83,7 @@ export default class AssetService
       objectType: 'asset',
       id,
       created: currentTimestamp(),
+      updated: null,
       extension: fileType.extension,
       mimeType: fileType.mimeType,
       size,

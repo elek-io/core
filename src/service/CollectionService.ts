@@ -74,6 +74,7 @@ export default class CollectionService
         plural: slug(props.slug.plural),
       },
       created: currentTimestamp(),
+      updated: null,
     };
 
     await Fs.ensureDir(collectionPath);

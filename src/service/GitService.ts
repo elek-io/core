@@ -425,7 +425,7 @@ export default class GitService {
           email: lineArray[3],
         },
         timestamp: parseInt(lineArray[4]),
-        tag: this.refNameToTagName(lineArray[5]),
+        tag: this.refNameToTagName(lineArray[5]) || null,
       };
     });
 

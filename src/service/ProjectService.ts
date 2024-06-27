@@ -108,6 +108,7 @@ export default class ProjectService
       description: props.description || '',
       settings: Object.assign({}, defaultSettings, props.settings),
       created: currentTimestamp(),
+      updated: null,
       coreVersion: this.options.version, // @todo should be read from package.json to avoid duplicates
       status: 'todo',
       version: '0.0.1',
