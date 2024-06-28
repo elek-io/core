@@ -42,6 +42,8 @@ export default class GitService {
     });
     this.gitTagService = new GitTagService(options, this.git);
     this.userService = userService;
+
+    this.updateVersion();
   }
 
   /**
@@ -54,10 +56,9 @@ export default class GitService {
   /**
    * Reads the currently used version of Git
    */
-  public async getVersion(): Promise<string> {
+  private async updateVersion(): Promise<void> {
     const result = await this.git('', ['--version']);
     this.version = result.stdout.replace('git version', '').trim();
-    return this.version;
   }
 
   /**
