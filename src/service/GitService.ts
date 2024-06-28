@@ -351,8 +351,27 @@ export default class GitService {
    *
    * @param path Path to the repository
    */
-  public async push(path: string): Promise<void> {
-    const args = ['push'];
+  public async push(
+    path: string,
+    // branch: string,
+    options?: Partial<{ all: boolean; force: boolean }>
+  ): Promise<void> {
+    let args = ['push', 'origin'];
+
+    // if (options?.trackRemoteBranch === true) {
+    //   args = [...args, '--set-upstream'];
+    // }
+
+    // args = [...args, 'origin'];
+
+    if (options?.all === true) {
+      args = [...args, '--all'];
+    }
+
+    if (options?.force === true) {
+      args = [...args, '--force'];
+    }
+
     await this.git(path, args);
   }
 
@@ -398,7 +417,7 @@ export default class GitService {
     if (options?.between?.from) {
       args = [
         ...args,
-        `${options.between.from}...${options.between.to || 'HEAD'}`,
+        `${options.between.from}..${options.between.to || 'HEAD'}`,
       ];
     }
 
@@ -542,10 +561,21 @@ export default class GitService {
       throw new NoCurrentUserError();
     }
 
+    // Setup the local User
     const userNameArgs = ['config', '--local', 'user.name', user.name];
     const userEmailArgs = ['config', '--local', 'user.email', user.email];
+    // By default new branches that are pushed are automatically tracking
+    // their remote without the need of using the `--set-upstream` argument of `git push`
+    const autoSetupRemoteArgs = [
+      'config',
+      '--local',
+      'push.autoSetupRemote',
+      'true',
+    ];
+
     await this.git(path, userNameArgs);
     await this.git(path, userEmailArgs);
+    await this.git(path, autoSetupRemoteArgs);
   }
 
   /**

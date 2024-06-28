@@ -1,4 +1,6 @@
 import type { Project } from '@elek-io/shared';
+import Fs from 'fs-extra';
+import path from 'path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import core from '../test/setup.js';
 import { createProject } from '../test/util.js';
@@ -106,6 +108,33 @@ describe.sequential('Integration', function () {
       await expect(() =>
         core.git.remotes.addOrigin(projectPath, gitUrl)
       ).rejects.toThrow();
+    }
+  );
+
+  it.sequential(
+    'should be able to push an existing Project to a new remote',
+    { timeout: 20000 },
+    async function () {
+      await core.git.remotes.setOriginUrl(
+        projectPath,
+        'git@github.com:elek-io/project-test-1.git'
+      );
+      await core.git.push(projectPath, { all: true, force: true }); // Force all branches because remote origin is probably not empty
+    }
+  );
+
+  it.sequential(
+    'should be able to make a local change and see the difference between local and remote',
+    { timeout: 20000 },
+    async function () {
+      await Fs.writeFile(path.join(projectPath, 'README.md'), 'Hello World!');
+      await core.git.add(projectPath, ['README.md']);
+      await core.git.commit(projectPath, 'Added a README');
+
+      const changes = await core.projects.getChanges(project.id);
+
+      expect(changes.ahead).to.have.lengthOf(1);
+      expect(changes.behind).to.have.lengthOf(0);
     }
   );
 });
