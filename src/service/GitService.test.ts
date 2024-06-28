@@ -1,13 +1,14 @@
 import type { Project } from '@elek-io/shared';
 import Fs from 'fs-extra';
 import path from 'path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import core from '../test/setup.js';
 import { createProject } from '../test/util.js';
 
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
   let projectPath = '';
+  const isGithubAction = process.env.GITHUB_ACTIONS;
   const gitUrl = 'git@github.com:organisation/repository.git';
 
   beforeAll(async function () {
@@ -15,9 +16,9 @@ describe.sequential('Integration', function () {
     projectPath = core.util.pathTo.project(project.id);
   });
 
-  // afterAll(async function () {
-  //   await project.destroy();
-  // });
+  afterAll(async function () {
+    await project.destroy();
+  });
 
   it.sequential(
     'should be able to get the current Branch name',
@@ -111,47 +112,52 @@ describe.sequential('Integration', function () {
     }
   );
 
-  it.sequential(
-    'should be able to push an existing Project to a new remote',
-    { timeout: 20000 },
-    async function () {
-      await core.git.remotes.setOriginUrl(
-        projectPath,
-        'git@github.com:elek-io/project-test-1.git'
-      );
-      await core.git.push(projectPath, { all: true, force: true }); // Force all branches because remote origin is probably not empty
-    }
-  );
+  // @todo make this work inside Github Action - ideally we can add an SSH key to the Action that can read / write to the test repository
+  if (isGithubAction) {
+    console.warn('Running inside a Github Action - some tests are skipped');
+  } else {
+    it.sequential(
+      'should be able to push an existing Project to a new remote',
+      { timeout: 20000 },
+      async function () {
+        await core.git.remotes.setOriginUrl(
+          projectPath,
+          'git@github.com:elek-io/project-test-1.git'
+        );
+        await core.git.push(projectPath, { all: true, force: true }); // Force all branches because remote origin is probably not empty
+      }
+    );
 
-  it.sequential(
-    'should be able to make a local change and see the difference between local and remote',
-    async function () {
-      await Fs.writeFile(path.join(projectPath, 'README.md'), 'Hello World!');
-      await core.git.add(projectPath, ['README.md']);
-      await core.git.commit(projectPath, 'Added a README');
+    it.sequential(
+      'should be able to make a local change and see the difference between local and remote',
+      async function () {
+        await Fs.writeFile(path.join(projectPath, 'README.md'), 'Hello World!');
+        await core.git.add(projectPath, ['README.md']);
+        await core.git.commit(projectPath, 'Added a README');
 
-      const changes = await core.projects.getChanges(project.id);
+        const changes = await core.projects.getChanges(project.id);
 
-      expect(changes.ahead).to.have.lengthOf(1);
-      expect(changes.behind).to.have.lengthOf(0);
-    }
-  );
+        expect(changes.ahead).to.have.lengthOf(1);
+        expect(changes.behind).to.have.lengthOf(0);
+      }
+    );
 
-  it.sequential(
-    'should be able to push the change to remote',
-    { timeout: 20000 },
-    async function () {
-      await core.git.push(projectPath);
-    }
-  );
+    it.sequential(
+      'should be able to push the change to remote',
+      { timeout: 20000 },
+      async function () {
+        await core.git.push(projectPath);
+      }
+    );
 
-  it.sequential(
-    'should be able to see there is no difference between local and remote anymore',
-    async function () {
-      const changes = await core.projects.getChanges(project.id);
+    it.sequential(
+      'should be able to see there is no difference between local and remote anymore',
+      async function () {
+        const changes = await core.projects.getChanges(project.id);
 
-      expect(changes.ahead).to.have.lengthOf(0);
-      expect(changes.behind).to.have.lengthOf(0);
-    }
-  );
+        expect(changes.ahead).to.have.lengthOf(0);
+        expect(changes.behind).to.have.lengthOf(0);
+      }
+    );
+  }
 });
