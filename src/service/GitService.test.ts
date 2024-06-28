@@ -136,4 +136,22 @@ describe.sequential('Integration', function () {
       expect(changes.behind).to.have.lengthOf(0);
     }
   );
+
+  it.sequential(
+    'should be able to push the change to remote',
+    { timeout: 20000 },
+    async function () {
+      await core.git.push(projectPath);
+    }
+  );
+
+  it.sequential(
+    'should be able to see there is no difference between local and remote anymore',
+    async function () {
+      const changes = await core.projects.getChanges(project.id);
+
+      expect(changes.ahead).to.have.lengthOf(0);
+      expect(changes.behind).to.have.lengthOf(0);
+    }
+  );
 });
