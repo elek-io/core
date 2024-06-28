@@ -125,7 +125,6 @@ describe.sequential('Integration', function () {
 
   it.sequential(
     'should be able to make a local change and see the difference between local and remote',
-    { timeout: 20000 },
     async function () {
       await Fs.writeFile(path.join(projectPath, 'README.md'), 'Hello World!');
       await core.git.add(projectPath, ['README.md']);
