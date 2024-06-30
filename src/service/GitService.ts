@@ -9,6 +9,7 @@ import {
   type GitSwitchOptions,
 } from '@elek-io/shared';
 import { GitProcess, type IGitResult } from 'dugite';
+import { EOL } from 'os';
 import PQueue from 'p-queue';
 import GitError from '../error/GitError.js';
 import NoCurrentUserError from '../error/NoCurrentUserError.js';
@@ -28,6 +29,8 @@ import UserService from './UserService.js';
  * Git operations are sequential!
  * We use a FIFO queue to translate async calls
  * into a sequence of git operations
+ *
+ * @todo All public methods should recieve only a single object as parameter and the type should be defined through the shared library to be accessible in Core and Client
  */
 export default class GitService {
   private version: string | undefined;
@@ -51,14 +54,6 @@ export default class GitService {
    */
   public get tags(): GitTagService {
     return this.gitTagService;
-  }
-
-  /**
-   * Reads the currently used version of Git
-   */
-  private async updateVersion(): Promise<void> {
-    const result = await this.git('', ['--version']);
-    this.version = result.stdout.replace('git version', '').trim();
   }
 
   /**
@@ -146,9 +141,9 @@ export default class GitService {
       const result = await this.git(path, args);
 
       const normalizedLinesArr = result.stdout
-        .split('\n')
+        .split(EOL)
         .filter((line) => {
-          return line !== '';
+          return line.trim() !== '';
         })
         .map((line) => {
           return line.trim().replace('* ', '');
@@ -175,11 +170,37 @@ export default class GitService {
      *
      * @param path  Path to the repository
      */
-    getCurrent: async (path: string) => {
+    current: async (path: string) => {
       const args = ['branch', '--show-current'];
       const result = await this.git(path, args);
 
-      return result.stdout.replace('\n', '');
+      return result.stdout.trim();
+    },
+    /**
+     * Switch branches
+     *
+     * @see https://git-scm.com/docs/git-switch/
+     *
+     * @param path    Path to the repository
+     * @param name    Name of the branch to switch to
+     * @param options Options specific to the switch operation
+     */
+    switch: async (
+      path: string,
+      name: string,
+      options?: Partial<GitSwitchOptions>
+    ) => {
+      await this.checkBranchOrTagName(path, name);
+
+      let args = ['switch'];
+
+      if (options?.isNew === true) {
+        args = [...args, '--create', name];
+      } else {
+        args = [...args, name];
+      }
+
+      await this.git(path, args);
     },
   };
 
@@ -194,8 +215,8 @@ export default class GitService {
     list: async (path: string) => {
       const args = ['remote'];
       const result = await this.git(path, args);
-      const normalizedLinesArr = result.stdout.split('\n').filter((line) => {
-        return line !== '';
+      const normalizedLinesArr = result.stdout.split(EOL).filter((line) => {
+        return line.trim() !== '';
       });
 
       return normalizedLinesArr;
@@ -237,9 +258,9 @@ export default class GitService {
      */
     getOriginUrl: async (path: string) => {
       const args = ['remote', 'get-url', 'origin'];
-      const result = await this.git(path, args);
+      const result = (await this.git(path, args)).stdout.trim();
 
-      return result.stdout.replace('\n', '');
+      return result.length === 0 ? null : result;
     },
     /**
      * Sets the current `origin` remote URL
@@ -255,33 +276,6 @@ export default class GitService {
       await this.git(path, args);
     },
   };
-
-  /**
-   * Switch branches
-   *
-   * @see https://git-scm.com/docs/git-switch/
-   *
-   * @param path    Path to the repository
-   * @param name    Name of the branch to switch to
-   * @param options Options specific to the switch operation
-   */
-  public async switch(
-    path: string,
-    name: string,
-    options?: Partial<GitSwitchOptions>
-  ): Promise<void> {
-    await this.checkBranchOrTagName(path, name);
-
-    let args = ['switch'];
-
-    if (options?.isNew === true) {
-      args = [...args, '--create', name];
-    } else {
-      args = [...args, name];
-    }
-
-    await this.git(path, args);
-  }
 
   /**
    * Reset current HEAD to the specified state
@@ -431,8 +425,8 @@ export default class GitService {
       '--format=%H|%s|%an|%ae|%at|%D',
     ]);
 
-    const noEmptyLinesArr = result.stdout.split('\n').filter((line) => {
-      return line !== '';
+    const noEmptyLinesArr = result.stdout.split(EOL).filter((line) => {
+      return line.trim() !== '';
     });
 
     const lineObjArr = noEmptyLinesArr.map((line) => {
@@ -445,7 +439,7 @@ export default class GitService {
           email: lineArray[3],
         },
         timestamp: parseInt(lineArray[4]),
-        tag: this.refNameToTagName(lineArray[5]) || null,
+        tag: this.refNameToTagName(lineArray[5]),
       };
     });
 
@@ -453,16 +447,11 @@ export default class GitService {
   }
 
   public refNameToTagName(refName: string) {
-    let tagName: string | undefined = '';
+    const tagName = refName.replace('tag: ', '').trim();
 
-    // Strip tag key
-    tagName = refName.replace('tag: ', '');
-    // Return undefined for anything else than UUIDs (tag names are UUIDs)
-    if (
-      tagName.trim() === '' ||
-      uuidSchema.safeParse(tagName).success === false
-    ) {
-      tagName = undefined;
+    // Return null for anything else than UUIDs (tag names are UUIDs)
+    if (tagName === '' || uuidSchema.safeParse(tagName).success === false) {
+      return null;
     }
 
     return tagName;
@@ -525,6 +514,14 @@ export default class GitService {
       created: meta[0],
       updated: meta[1],
     };
+  }
+
+  /**
+   * Reads the currently used version of Git
+   */
+  private async updateVersion(): Promise<void> {
+    const result = await this.git('', ['--version']);
+    this.version = result.stdout.replace('git version', '').trim();
   }
 
   /**

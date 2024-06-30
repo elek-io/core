@@ -23,7 +23,7 @@ describe.sequential('Integration', function () {
   it.sequential(
     'should be able to get the current Branch name',
     async function () {
-      const currentBranch = await core.git.branches.getCurrent(projectPath);
+      const currentBranch = await core.git.branches.current(projectPath);
 
       expect(currentBranch).to.equal('stage');
     }
@@ -135,7 +135,7 @@ describe.sequential('Integration', function () {
         await core.git.add(projectPath, ['README.md']);
         await core.git.commit(projectPath, 'Added a README');
 
-        const changes = await core.projects.getChanges(project.id);
+        const changes = await core.projects.getChanges({ id: project.id });
 
         expect(changes.ahead).to.have.lengthOf(1);
         expect(changes.behind).to.have.lengthOf(0);
@@ -153,7 +153,7 @@ describe.sequential('Integration', function () {
     it.sequential(
       'should be able to see there is no difference between local and remote anymore',
       async function () {
-        const changes = await core.projects.getChanges(project.id);
+        const changes = await core.projects.getChanges({ id: project.id });
 
         expect(changes.ahead).to.have.lengthOf(0);
         expect(changes.behind).to.have.lengthOf(0);
