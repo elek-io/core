@@ -18,6 +18,7 @@ import {
   type DeleteProjectProps,
   type ElekIoCoreOptions,
   type ExtendedCrudService,
+  type GitSwitchOptions,
   type ListProjectsProps,
   type ObjectType,
   type PaginatedList,
@@ -132,7 +133,9 @@ export default class ProjectService
         projectPath,
         `${gitCommitIconSchema.enum.INIT} Created this new elek.io project`
       );
-      await this.gitService.switch(projectPath, 'stage', { isNew: true });
+      await this.gitService.branches.switch(projectPath, 'stage', {
+        isNew: true,
+      });
     } catch (error) {
       // To avoid partial data being added to the repository / git status reporting uncommitted files
       await this.delete({
@@ -141,7 +144,41 @@ export default class ProjectService
       throw error;
     }
 
-    return projectFile;
+    return await this.toProject({
+      projectFile,
+    });
+  }
+
+  /**
+   * Clones a Project by URL
+   */
+  public async clone(props: { url: string }): Promise<Project> {
+    // @todo schema.parse
+
+    const tmpId = uuid();
+    const tmpProjectPath = Path.join(CoreUtil.pathTo.tmp, tmpId);
+    await this.gitService.clone(props.url, tmpProjectPath);
+
+    // Check if it is actually a Project by trying to read it
+    const projectFile = await this.jsonFileService.read(
+      tmpProjectPath,
+      projectFileSchema
+    );
+
+    // If so, copy it into the correct directory
+    const projectPath = CoreUtil.pathTo.project(projectFile.id);
+    const alreadyExists = await Fs.pathExists(projectPath);
+    if (alreadyExists) {
+      throw new Error(
+        `Tried to clone Project "${projectFile.id}" from "${props.url}" - but the Project already exists locally`
+      );
+    }
+    await Fs.copy(tmpProjectPath, projectPath);
+    await Fs.remove(tmpProjectPath);
+
+    return await this.toProject({
+      projectFile,
+    });
   }
 
   /**
@@ -155,7 +192,9 @@ export default class ProjectService
       projectFileSchema
     );
 
-    return projectFile;
+    return await this.toProject({
+      projectFile,
+    });
   }
 
   /**
@@ -178,7 +217,9 @@ export default class ProjectService
     await this.gitService.add(projectPath, [filePath]);
     await this.gitService.commit(projectPath, this.gitMessage.update);
 
-    return projectFile;
+    return await this.toProject({
+      projectFile,
+    });
   }
 
   /**
@@ -277,6 +318,46 @@ export default class ProjectService
     }
   }
 
+  public branches = {
+    list: async (projectId: string) => {
+      const projectPath = CoreUtil.pathTo.project(projectId);
+      await this.gitService.fetch(projectPath);
+      return await this.gitService.branches.list(projectPath);
+    },
+    current: async (projectId: string) => {
+      const projectPath = CoreUtil.pathTo.project(projectId);
+      return await this.gitService.branches.current(projectPath);
+    },
+    switch: async (props: {
+      projectId: string;
+      name: string;
+      options?: Partial<GitSwitchOptions>;
+    }) => {
+      const projectPath = CoreUtil.pathTo.project(props.projectId);
+      return await this.gitService.branches.switch(
+        projectPath,
+        props.name,
+        props.options
+      );
+    },
+  };
+
+  public remotes = {
+    getOriginUrl: async (props: { id: string }) => {
+      const projectPath = CoreUtil.pathTo.project(props.id);
+      return await this.gitService.remotes.getOriginUrl(projectPath);
+    },
+    setOriginUrl: async (props: { id: string; url: string }) => {
+      const projectPath = CoreUtil.pathTo.project(props.id);
+      const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
+      if (!hasOrigin) {
+        await this.gitService.remotes.addOrigin(projectPath, props.url);
+      } else {
+        await this.gitService.remotes.setOriginUrl(projectPath, props.url);
+      }
+    },
+  };
+
   /**
    * Returns the differences of the given Projects current branch
    * between the local and remote `origin` (commits ahead & behind)
@@ -284,11 +365,9 @@ export default class ProjectService
    * - `behind` contains a list of commits on the current branch that are available on the remote `origin` but not yet locally
    * - `ahead` contains a list of commits on the current branch that are available locally but not yet on the remote `origin`
    */
-  public async getChanges(projectId: string) {
-    const projectPath = CoreUtil.pathTo.project(projectId);
-    const currentBranch = await this.gitService.branches.getCurrent(
-      projectPath
-    );
+  public async getChanges(props: { id: string }) {
+    const projectPath = CoreUtil.pathTo.project(props.id);
+    const currentBranch = await this.gitService.branches.current(projectPath);
 
     await this.gitService.fetch(projectPath);
     const behind = await this.gitService.log(projectPath, {
@@ -308,8 +387,8 @@ export default class ProjectService
    * Pulls remote changes of `origin` down to the local repository
    * and then pushes local commits to the upstream branch
    */
-  public async synchronize(projectId: string) {
-    const projectPath = CoreUtil.pathTo.project(projectId);
+  public async synchronize(props: { id: string }) {
+    const projectPath = CoreUtil.pathTo.project(props.id);
 
     await this.gitService.pull(projectPath);
     await this.gitService.push(projectPath);
@@ -408,6 +487,17 @@ export default class ProjectService
       ...project,
       assets,
       collections: collectionExport,
+    };
+  }
+
+  /**
+   * Creates a Project from given ProjectFile by adding git information
+   */
+  private async toProject(props: {
+    projectFile: ProjectFile;
+  }): Promise<Project> {
+    return {
+      ...props.projectFile,
     };
   }
 

@@ -24,6 +24,7 @@ describe.sequential('Integration', function () {
     });
     expect(project.created).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
     expect(project.updated).to.be.null;
+    expect(project.git.remoteOriginUrl).to.be.null;
     expect(
       await Fs.pathExists(core.util.pathTo.project(project.id))
     ).to.be.true;
