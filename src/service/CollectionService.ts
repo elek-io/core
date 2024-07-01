@@ -1,31 +1,30 @@
+import Fs from 'fs-extra';
+import { objectTypeSchema } from '../schema/baseSchema.js';
 import {
   collectionFileSchema,
   countCollectionsSchema,
   createCollectionSchema,
-  currentTimestamp,
   deleteCollectionSchema,
-  listCollectionsSchema,
-  objectTypeSchema,
   readCollectionSchema,
-  serviceTypeSchema,
-  slug,
   updateCollectionSchema,
-  uuid,
-  type BaseFile,
   type Collection,
   type CollectionFile,
   type CountCollectionsProps,
   type CreateCollectionProps,
   type DeleteCollectionProps,
-  type ElekIoCoreOptions,
+  type ReadCollectionProps,
+  type UpdateCollectionProps,
+} from '../schema/collectionSchema.js';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import type { BaseFile } from '../schema/fileSchema.js';
+import {
+  listCollectionsSchema,
+  serviceTypeSchema,
   type ExtendedCrudService,
   type ListCollectionsProps,
   type PaginatedList,
-  type ReadCollectionProps,
-  type UpdateCollectionProps,
-} from '@elek-io/shared';
-import Fs from 'fs-extra';
-import * as CoreUtil from '../util/index.js';
+} from '../schema/serviceSchema.js';
+import * as Util from '../util/index.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import GitService from './GitService.js';
 import JsonFileService from './JsonFileService.js';
@@ -57,23 +56,21 @@ export default class CollectionService
   public async create(props: CreateCollectionProps): Promise<Collection> {
     createCollectionSchema.parse(props);
 
-    const id = uuid();
-    const projectPath = CoreUtil.pathTo.project(props.projectId);
-    const collectionPath = CoreUtil.pathTo.collection(props.projectId, id);
-    const collectionFilePath = CoreUtil.pathTo.collectionFile(
-      props.projectId,
-      id
-    );
+    const id = Util.uuid();
+    const projectPath = Util.pathTo.project(props.projectId);
+    const collectionPath = Util.pathTo.collection(props.projectId, id);
+    const collectionFilePath = Util.pathTo.collectionFile(props.projectId, id);
 
     const collectionFile: CollectionFile = {
       ...props,
       objectType: 'collection',
       id,
       slug: {
-        singular: slug(props.slug.singular),
-        plural: slug(props.slug.plural),
+        singular: Util.slug(props.slug.singular),
+        plural: Util.slug(props.slug.plural),
       },
-      created: currentTimestamp(),
+      created: Util.currentTimestamp(),
+      updated: null,
     };
 
     await Fs.ensureDir(collectionPath);
@@ -95,7 +92,7 @@ export default class CollectionService
     readCollectionSchema.parse(props);
 
     const collection = await this.jsonFileService.read(
-      CoreUtil.pathTo.collectionFile(props.projectId, props.id),
+      Util.pathTo.collectionFile(props.projectId, props.id),
       collectionFileSchema
     );
 
@@ -115,8 +112,8 @@ export default class CollectionService
   public async update(props: UpdateCollectionProps): Promise<Collection> {
     updateCollectionSchema.parse(props);
 
-    const projectPath = CoreUtil.pathTo.project(props.projectId);
-    const collectionFilePath = CoreUtil.pathTo.collectionFile(
+    const projectPath = Util.pathTo.project(props.projectId);
+    const collectionFilePath = Util.pathTo.collectionFile(
       props.projectId,
       props.id
     );
@@ -125,7 +122,7 @@ export default class CollectionService
     const collectionFile: CollectionFile = {
       ...prevCollectionFile,
       ...props,
-      updated: currentTimestamp(),
+      updated: Util.currentTimestamp(),
     };
 
     // @todo Collection Service has to check if any of the updated fieldDefinitions do not validate against the used Fields in each CollectionItem of the Collection
@@ -292,11 +289,8 @@ export default class CollectionService
   public async delete(props: DeleteCollectionProps): Promise<void> {
     deleteCollectionSchema.parse(props);
 
-    const projectPath = CoreUtil.pathTo.project(props.projectId);
-    const collectionPath = CoreUtil.pathTo.collection(
-      props.projectId,
-      props.id
-    );
+    const projectPath = Util.pathTo.project(props.projectId);
+    const collectionPath = Util.pathTo.collection(props.projectId, props.id);
 
     await Fs.remove(collectionPath);
     await this.gitService.add(projectPath, [collectionPath]);
@@ -312,7 +306,7 @@ export default class CollectionService
       objectTypeSchema.Enum.collection,
       props.projectId
     );
-    const list = await CoreUtil.returnResolved(
+    const list = await Util.returnResolved(
       references.map((reference) => {
         return this.read({
           projectId: props.projectId,

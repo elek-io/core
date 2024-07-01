@@ -1,23 +1,26 @@
+import { EOL } from 'os';
+import GitError from '../error/GitError.js';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import {
   countGitTagsSchema,
   createGitTagSchema,
   deleteGitTagSchema,
   gitTagSchema,
-  listGitTagsSchema,
   readGitTagSchema,
-  serviceTypeSchema,
-  uuid,
   type CountGitTagsProps,
   type CreateGitTagProps,
   type DeleteGitTagProps,
-  type ElekIoCoreOptions,
-  type ExtendedCrudService,
   type GitTag,
+  type ReadGitTagProps,
+} from '../schema/gitTagSchema.js';
+import {
+  listGitTagsSchema,
+  serviceTypeSchema,
+  type ExtendedCrudService,
   type ListGitTagsProps,
   type PaginatedList,
-  type ReadGitTagProps,
-} from '@elek-io/shared';
-import GitError from '../error/GitError.js';
+} from '../schema/serviceSchema.js';
+import { uuid } from '../util/index.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import GitService from './GitService.js';
 
@@ -130,8 +133,8 @@ export default class GitTagService
     ];
     const result = await this.git(props.path, args);
 
-    const noEmptyLinesArr = result.stdout.split('\n').filter((line) => {
-      return line !== '';
+    const noEmptyLinesArr = result.stdout.split(EOL).filter((line) => {
+      return line.trim() !== '';
     });
 
     const lineObjArr = noEmptyLinesArr.map((line) => {
@@ -143,8 +146,7 @@ export default class GitTagService
           name: lineArray[2],
           email: lineArray[3],
         },
-        timestamp:
-          typeof lineArray[4] === 'string' ? parseInt(lineArray[4]) : undefined,
+        timestamp: parseInt(lineArray[4]),
       };
     });
 

@@ -1,4 +1,4 @@
-import { type ProjectUpgrade } from '@elek-io/shared';
+import type { ProjectUpgrade } from '../schema/projectSchema.js';
 
 export type ProjectUpgradeImport = typeof import('./example.js');
 

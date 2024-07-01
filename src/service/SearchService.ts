@@ -1,9 +1,7 @@
-import {
-  serviceTypeSchema,
-  type ElekIoCoreOptions,
-  type ObjectType,
-  type SearchResult,
-} from '@elek-io/shared';
+import type { ObjectType } from '../schema/baseSchema.js';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import type { SearchResult } from '../schema/searchSchema.js';
+import { serviceTypeSchema } from '../schema/serviceSchema.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import AssetService from './AssetService.js';
 import CollectionService from './CollectionService.js';
