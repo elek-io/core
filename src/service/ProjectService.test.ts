@@ -7,6 +7,7 @@ import { createProject } from '../test/util.js';
 describe.sequential('Integration', function () {
   let project: Project;
   let clonedProject: Project;
+  const isGithubAction = process.env.GITHUB_ACTIONS;
   const gitUrl = 'git@github.com:elek-io/project-test-1.git';
 
   beforeAll(async function () {
@@ -82,44 +83,53 @@ describe.sequential('Integration', function () {
     ).to.be.false;
   });
 
-  it.sequential(
-    'should be able to clone an existing Project',
-    { timeout: 20000 },
-    async function () {
-      clonedProject = await core.projects.clone({ url: gitUrl });
-      expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id))).to
-        .be.true;
-    }
-  );
+  // @todo make this work inside Github Action - ideally we can add an SSH key to the Action that can read / write to the test repository
+  if (isGithubAction) {
+    console.warn('Running inside a Github Action - some tests are skipped');
+  } else {
+    it.sequential(
+      'should be able to clone an existing Project',
+      { timeout: 20000 },
+      async function () {
+        clonedProject = await core.projects.clone({ url: gitUrl });
+        expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id)))
+          .to.be.true;
+      }
+    );
 
-  it.sequential(
-    'should be able to get the origin URL of the cloned Project',
-    async function () {
-      const originUrl = await core.projects.remotes.getOriginUrl({
-        id: clonedProject.id,
-      });
-      expect(originUrl).to.equal(gitUrl);
-    }
-  );
+    it.sequential(
+      'should be able to get the origin URL of the cloned Project',
+      async function () {
+        const originUrl = await core.projects.remotes.getOriginUrl({
+          id: clonedProject.id,
+        });
+        expect(originUrl).to.equal(gitUrl);
+      }
+    );
 
-  it.sequential(
-    'should be able to update the cloned Project and verify there is a change',
-    async function () {
-      await core.projects.update({ ...clonedProject, name: 'A new name' });
-      const changes = await core.projects.getChanges({ id: clonedProject.id });
+    it.sequential(
+      'should be able to update the cloned Project and verify there is a change',
+      async function () {
+        await core.projects.update({ ...clonedProject, name: 'A new name' });
+        const changes = await core.projects.getChanges({
+          id: clonedProject.id,
+        });
 
-      expect(changes.ahead.length).to.equal(1);
-    }
-  );
+        expect(changes.ahead.length).to.equal(1);
+      }
+    );
 
-  it.sequential(
-    'should be able to synchronize the cloned Project with its remote',
-    { timeout: 20000 },
-    async function () {
-      await core.projects.synchronize({ id: clonedProject.id });
-      const changes = await core.projects.getChanges({ id: clonedProject.id });
+    it.sequential(
+      'should be able to synchronize the cloned Project with its remote',
+      { timeout: 20000 },
+      async function () {
+        await core.projects.synchronize({ id: clonedProject.id });
+        const changes = await core.projects.getChanges({
+          id: clonedProject.id,
+        });
 
-      expect(changes.ahead.length).to.equal(0);
-    }
-  );
+        expect(changes.ahead.length).to.equal(0);
+      }
+    );
+  }
 });
