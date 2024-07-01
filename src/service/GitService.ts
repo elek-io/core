@@ -1,18 +1,18 @@
-import {
-  gitCommitSchema,
-  uuidSchema,
-  type ElekIoCoreOptions,
-  type GitCloneOptions,
-  type GitCommit,
-  type GitInitOptions,
-  type GitLogOptions,
-  type GitSwitchOptions,
-} from '@elek-io/shared';
 import { GitProcess, type IGitResult } from 'dugite';
 import { EOL } from 'os';
 import PQueue from 'p-queue';
 import GitError from '../error/GitError.js';
 import NoCurrentUserError from '../error/NoCurrentUserError.js';
+import { uuidSchema } from '../schema/baseSchema.js';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import {
+  gitCommitSchema,
+  type GitCloneOptions,
+  type GitCommit,
+  type GitInitOptions,
+  type GitLogOptions,
+  type GitSwitchOptions,
+} from '../schema/gitSchema.js';
 import GitTagService from './GitTagService.js';
 import UserService from './UserService.js';
 
@@ -33,13 +33,15 @@ import UserService from './UserService.js';
  * @todo All public methods should recieve only a single object as parameter and the type should be defined through the shared library to be accessible in Core and Client
  */
 export default class GitService {
-  private version: string | undefined;
+  private version: string | null;
+  private gitPath: string | null;
   private queue: PQueue;
   private gitTagService: GitTagService;
   private userService: UserService;
 
   public constructor(options: ElekIoCoreOptions, userService: UserService) {
-    this.version = undefined;
+    this.version = null;
+    this.gitPath = null;
     this.queue = new PQueue({
       concurrency: 1, // No concurrency because git operations are sequencial
     });
@@ -47,6 +49,7 @@ export default class GitService {
     this.userService = userService;
 
     this.updateVersion();
+    this.updateGitPath();
   }
 
   /**
@@ -110,7 +113,7 @@ export default class GitService {
       args = [...args, '--single-branch'];
     }
 
-    await this.git(path, [...args, url, '.']);
+    await this.git('', [...args, url, path]);
     await this.setLocalConfig(path);
   }
 
@@ -518,10 +521,24 @@ export default class GitService {
 
   /**
    * Reads the currently used version of Git
+   *
+   * This can help debugging
    */
   private async updateVersion(): Promise<void> {
     const result = await this.git('', ['--version']);
     this.version = result.stdout.replace('git version', '').trim();
+  }
+
+  /**
+   * Reads the path to the executable of Git that is used
+   *
+   * This can help debugging, since dugite is shipping their own executable
+   * but in some cases resolves another executable
+   * @see https://github.com/desktop/dugite/blob/main/lib/git-environment.ts
+   */
+  private async updateGitPath(): Promise<void> {
+    const result = await this.git('', ['--exec-path']);
+    this.gitPath = result.stdout.trim();
   }
 
   /**
@@ -593,17 +610,25 @@ export default class GitService {
    * @param args Arguments to append after the `git` command
    */
   private async git(path: string, args: string[]): Promise<IGitResult> {
-    const result = await this.queue.add(() => GitProcess.exec(args, path));
+    const result = await this.queue.add(() =>
+      GitProcess.exec(args, path, {
+        env: {
+          // @todo Nasty stuff - remove after update to dugite with git > v2.45.2 once available
+          // @see https://github.com/git-lfs/git-lfs/issues/5749
+          GIT_CLONE_PROTECTION_ACTIVE: 'false',
+        },
+      })
+    );
     if (!result) {
       throw new GitError(
-        `Git (${this.version}) command "git ${args.join(
+        `Git ${this.version} (${this.gitPath}) command "git ${args.join(
           ' '
         )}" failed to return a result`
       );
     }
     if (result.exitCode !== 0) {
       throw new GitError(
-        `Git (${this.version}) command "git ${args.join(
+        `Git ${this.version} (${this.gitPath}) command "git ${args.join(
           ' '
         )}" failed with exit code "${result.exitCode}" and message "${
           result.stderr

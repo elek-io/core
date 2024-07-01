@@ -1,36 +1,38 @@
+import Fs from 'fs-extra';
+import IsSvg from 'is-svg';
+import RequiredParameterMissingError from '../error/RequiredParameterMissingError.js';
 import {
   assetFileSchema,
   assetSchema,
   countAssetsSchema,
   createAssetSchema,
-  currentTimestamp,
   deleteAssetSchema,
-  listAssetsSchema,
-  objectTypeSchema,
   readAssetSchema,
-  serviceTypeSchema,
-  supportedAssetExtensionSchema,
-  supportedAssetMimeTypeSchema,
-  supportedAssetTypeSchema,
   updateAssetSchema,
-  uuid,
   type Asset,
   type AssetFile,
-  type BaseFile,
   type CountAssetsProps,
   type CreateAssetProps,
   type DeleteAssetProps,
-  type ElekIoCoreOptions,
+  type ReadAssetProps,
+  type UpdateAssetProps,
+} from '../schema/assetSchema.js';
+import {
+  objectTypeSchema,
+  supportedAssetExtensionSchema,
+  supportedAssetMimeTypeSchema,
+  supportedAssetTypeSchema,
+} from '../schema/baseSchema.js';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import type { BaseFile } from '../schema/fileSchema.js';
+import {
+  listAssetsSchema,
+  serviceTypeSchema,
   type ExtendedCrudService,
   type ListAssetsProps,
   type PaginatedList,
-  type ReadAssetProps,
-  type UpdateAssetProps,
-} from '@elek-io/shared';
-import Fs from 'fs-extra';
-import IsSvg from 'is-svg';
-import RequiredParameterMissingError from '../error/RequiredParameterMissingError.js';
-import * as CoreUtil from '../util/index.js';
+} from '../schema/serviceSchema.js';
+import * as Util from '../util/index.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import GitService from './GitService.js';
 import JsonFileService from './JsonFileService.js';
@@ -62,17 +64,17 @@ export default class AssetService
   public async create(props: CreateAssetProps): Promise<Asset> {
     createAssetSchema.parse(props);
 
-    const id = uuid();
-    const projectPath = CoreUtil.pathTo.project(props.projectId);
+    const id = Util.uuid();
+    const projectPath = Util.pathTo.project(props.projectId);
     const fileType = await this.getSupportedFileTypeOrThrow(props.filePath);
     const size = await this.getAssetSize(props.filePath);
-    const assetPath = CoreUtil.pathTo.asset(
+    const assetPath = Util.pathTo.asset(
       props.projectId,
       id,
       props.language,
       fileType.extension
     );
-    const assetFilePath = CoreUtil.pathTo.assetFile(
+    const assetFilePath = Util.pathTo.assetFile(
       props.projectId,
       id,
       props.language
@@ -82,7 +84,7 @@ export default class AssetService
       ...props,
       objectType: 'asset',
       id,
-      created: currentTimestamp(),
+      created: Util.currentTimestamp(),
       updated: null,
       extension: fileType.extension,
       mimeType: fileType.mimeType,
@@ -115,7 +117,7 @@ export default class AssetService
     readAssetSchema.parse(props);
 
     const assetFile = await this.jsonFileService.read(
-      CoreUtil.pathTo.assetFile(props.projectId, props.id, props.language),
+      Util.pathTo.assetFile(props.projectId, props.id, props.language),
       assetFileSchema
     );
 
@@ -130,8 +132,8 @@ export default class AssetService
   public async update(props: UpdateAssetProps): Promise<Asset> {
     updateAssetSchema.parse(props);
 
-    const projectPath = CoreUtil.pathTo.project(props.projectId);
-    const assetFilePath = CoreUtil.pathTo.assetFile(
+    const projectPath = Util.pathTo.project(props.projectId);
+    const assetFilePath = Util.pathTo.assetFile(
       props.projectId,
       props.id,
       props.language
@@ -143,7 +145,7 @@ export default class AssetService
     const assetFile: AssetFile = {
       ...prevAssetFile,
       ...props,
-      updated: currentTimestamp(),
+      updated: Util.currentTimestamp(),
     };
 
     if (props.newFilePath) {
@@ -153,13 +155,13 @@ export default class AssetService
         props.newFilePath
       );
       const size = await this.getAssetSize(props.newFilePath);
-      const prevAssetPath = CoreUtil.pathTo.asset(
+      const prevAssetPath = Util.pathTo.asset(
         props.projectId,
         props.id,
         props.language,
         prevAssetFile.extension
       );
-      const assetPath = CoreUtil.pathTo.asset(
+      const assetPath = Util.pathTo.asset(
         props.projectId,
         props.id,
         props.language,
@@ -193,13 +195,13 @@ export default class AssetService
   public async delete(props: DeleteAssetProps): Promise<void> {
     deleteAssetSchema.parse(props);
 
-    const projectPath = CoreUtil.pathTo.project(props.projectId);
-    const assetFilePath = CoreUtil.pathTo.assetFile(
+    const projectPath = Util.pathTo.project(props.projectId);
+    const assetFilePath = Util.pathTo.assetFile(
       props.projectId,
       props.id,
       props.language
     );
-    const assetPath = CoreUtil.pathTo.asset(
+    const assetPath = Util.pathTo.asset(
       props.projectId,
       props.id,
       props.language,
@@ -218,7 +220,7 @@ export default class AssetService
       objectTypeSchema.Enum.asset,
       props.projectId
     );
-    const list = await CoreUtil.returnResolved(
+    const list = await Util.returnResolved(
       assetReferences.map((assetReference) => {
         if (!assetReference.language) {
           throw new RequiredParameterMissingError('language');
@@ -278,7 +280,7 @@ export default class AssetService
     projectId: string,
     assetFile: AssetFile
   ): Promise<Asset> {
-    const assetPath = CoreUtil.pathTo.asset(
+    const assetPath = Util.pathTo.asset(
       projectId,
       assetFile.id,
       assetFile.language,

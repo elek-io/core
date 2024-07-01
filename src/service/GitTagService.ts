@@ -1,24 +1,26 @@
+import { EOL } from 'os';
+import GitError from '../error/GitError.js';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import {
   countGitTagsSchema,
   createGitTagSchema,
   deleteGitTagSchema,
   gitTagSchema,
-  listGitTagsSchema,
   readGitTagSchema,
-  serviceTypeSchema,
-  uuid,
   type CountGitTagsProps,
   type CreateGitTagProps,
   type DeleteGitTagProps,
-  type ElekIoCoreOptions,
-  type ExtendedCrudService,
   type GitTag,
+  type ReadGitTagProps,
+} from '../schema/gitTagSchema.js';
+import {
+  listGitTagsSchema,
+  serviceTypeSchema,
+  type ExtendedCrudService,
   type ListGitTagsProps,
   type PaginatedList,
-  type ReadGitTagProps,
-} from '@elek-io/shared';
-import { EOL } from 'os';
-import GitError from '../error/GitError.js';
+} from '../schema/serviceSchema.js';
+import { uuid } from '../util/index.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import GitService from './GitService.js';
 

@@ -1,12 +1,10 @@
-import {
-  uuid,
-  type EntryValueDefinition,
-  type ProjectSettings,
-} from '@elek-io/shared';
 import { faker } from '@faker-js/faker';
 import crypto from 'crypto';
 import Fs from 'fs-extra';
 import Path from 'path';
+import type { ProjectSettings } from '../schema/projectSchema.js';
+import type { EntryValueDefinition } from '../schema/valueSchema.js';
+import { uuid } from '../util/index.js';
 import core from './setup.js';
 
 const id = {

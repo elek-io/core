@@ -5,8 +5,8 @@ import {
   type SetUserProps,
   type User,
   type UserFile,
-} from '@elek-io/shared';
-import * as CoreUtil from '../util/index.js';
+} from '../schema/userSchema.js';
+import * as Util from '../util/index.js';
 import JsonFileService from './JsonFileService.js';
 
 /**
@@ -25,7 +25,7 @@ export default class UserService {
   public async get(): Promise<User | undefined> {
     try {
       return await this.jsonFileService.read(
-        CoreUtil.pathTo.userFile,
+        Util.pathTo.userFile,
         userFileSchema
       );
     } catch (error) {
@@ -42,7 +42,7 @@ export default class UserService {
   public async set(props: SetUserProps): Promise<User> {
     setUserSchema.parse(props);
 
-    const userFilePath = CoreUtil.pathTo.userFile;
+    const userFilePath = Util.pathTo.userFile;
 
     const userFile: UserFile = {
       ...props,

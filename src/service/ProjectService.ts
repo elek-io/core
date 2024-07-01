@@ -1,27 +1,27 @@
+import Fs from 'fs-extra';
+import Os from 'os';
+import Path from 'path';
+import Semver from 'semver';
+import NoCurrentUserError from '../error/NoCurrentUserError.js';
+import ProjectUpgradeError from '../error/ProjectUpgradeError.js';
+import { objectTypeSchema, type ObjectType } from '../schema/baseSchema.js';
+import type { CollectionExport } from '../schema/collectionSchema.js';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import type { BaseFile } from '../schema/fileSchema.js';
+import {
+  gitCommitIconSchema,
+  type GitSwitchOptions,
+} from '../schema/gitSchema.js';
 import {
   createProjectSchema,
-  currentTimestamp,
   deleteProjectSchema,
-  gitCommitIconSchema,
-  listProjectsSchema,
-  objectTypeSchema,
   projectFileSchema,
   projectFolderSchema,
   readProjectSchema,
-  serviceTypeSchema,
   updateProjectSchema,
   upgradeProjectSchema,
-  uuid,
-  type BaseFile,
-  type CollectionExport,
   type CreateProjectProps,
   type DeleteProjectProps,
-  type ElekIoCoreOptions,
-  type ExtendedCrudService,
-  type GitSwitchOptions,
-  type ListProjectsProps,
-  type ObjectType,
-  type PaginatedList,
   type Project,
   type ProjectExport,
   type ProjectFile,
@@ -29,15 +29,16 @@ import {
   type ReadProjectProps,
   type UpdateProjectProps,
   type UpgradeProjectProps,
-} from '@elek-io/shared';
-import Fs from 'fs-extra';
-import Os from 'os';
-import Path from 'path';
-import Semver from 'semver';
-import NoCurrentUserError from '../error/NoCurrentUserError.js';
-import ProjectUpgradeError from '../error/ProjectUpgradeError.js';
+} from '../schema/projectSchema.js';
+import {
+  listProjectsSchema,
+  serviceTypeSchema,
+  type ExtendedCrudService,
+  type ListProjectsProps,
+  type PaginatedList,
+} from '../schema/serviceSchema.js';
 import type { ProjectUpgradeImport } from '../upgrade/example.js';
-import * as CoreUtil from '../util/index.js';
+import * as Util from '../util/index.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import AssetService from './AssetService.js';
 import CollectionService from './CollectionService.js';
@@ -94,7 +95,7 @@ export default class ProjectService
       throw new NoCurrentUserError();
     }
 
-    const id = uuid();
+    const id = Util.uuid();
     const defaultSettings: ProjectSettings = {
       language: {
         default: user.language,
@@ -108,14 +109,14 @@ export default class ProjectService
       id,
       description: props.description || '',
       settings: Object.assign({}, defaultSettings, props.settings),
-      created: currentTimestamp(),
+      created: Util.currentTimestamp(),
       updated: null,
       coreVersion: this.options.version, // @todo should be read from package.json to avoid duplicates
       status: 'todo',
       version: '0.0.1',
     };
 
-    const projectPath = CoreUtil.pathTo.project(id);
+    const projectPath = Util.pathTo.project(id);
 
     await Fs.ensureDir(projectPath);
 
@@ -125,7 +126,7 @@ export default class ProjectService
       await this.gitService.init(projectPath, { initialBranch: 'main' });
       await this.jsonFileService.create(
         projectFile,
-        CoreUtil.pathTo.projectFile(id),
+        Util.pathTo.projectFile(id),
         projectFileSchema
       );
       await this.gitService.add(projectPath, ['.']);
@@ -155,18 +156,19 @@ export default class ProjectService
   public async clone(props: { url: string }): Promise<Project> {
     // @todo schema.parse
 
-    const tmpId = uuid();
-    const tmpProjectPath = Path.join(CoreUtil.pathTo.tmp, tmpId);
+    const tmpId = Util.uuid();
+    const tmpProjectPath = Path.join(Util.pathTo.tmp, tmpId);
+    // await Fs.ensureDir(tmpProjectPath);
     await this.gitService.clone(props.url, tmpProjectPath);
 
     // Check if it is actually a Project by trying to read it
     const projectFile = await this.jsonFileService.read(
-      tmpProjectPath,
+      Path.join(tmpProjectPath, 'project.json'),
       projectFileSchema
     );
 
     // If so, copy it into the correct directory
-    const projectPath = CoreUtil.pathTo.project(projectFile.id);
+    const projectPath = Util.pathTo.project(projectFile.id);
     const alreadyExists = await Fs.pathExists(projectPath);
     if (alreadyExists) {
       throw new Error(
@@ -188,7 +190,7 @@ export default class ProjectService
     readProjectSchema.parse(props);
 
     const projectFile = await this.jsonFileService.read(
-      CoreUtil.pathTo.projectFile(props.id),
+      Util.pathTo.projectFile(props.id),
       projectFileSchema
     );
 
@@ -203,14 +205,14 @@ export default class ProjectService
   public async update(props: UpdateProjectProps): Promise<Project> {
     updateProjectSchema.parse(props);
 
-    const projectPath = CoreUtil.pathTo.project(props.id);
-    const filePath = CoreUtil.pathTo.projectFile(props.id);
+    const projectPath = Util.pathTo.project(props.id);
+    const filePath = Util.pathTo.projectFile(props.id);
     const prevProjectFile = await this.read(props);
 
     const projectFile: ProjectFile = {
       ...prevProjectFile,
       ...props,
-      updated: currentTimestamp(),
+      updated: Util.currentTimestamp(),
     };
 
     await this.jsonFileService.update(projectFile, filePath, projectFileSchema);
@@ -233,7 +235,7 @@ export default class ProjectService
     upgradeProjectSchema.parse(props);
 
     const project = await this.read(props);
-    const projectPath = CoreUtil.pathTo.project(project.id);
+    const projectPath = Util.pathTo.project(project.id);
 
     if (Semver.gt(project.coreVersion, this.options.version)) {
       // Upgrade of the client needed before the project can be upgraded
@@ -248,7 +250,7 @@ export default class ProjectService
     }
 
     // Get all available upgrade scripts
-    const upgradeFiles = await CoreUtil.files(
+    const upgradeFiles = await Util.files(
       Path.resolve(__dirname, '../upgrade'),
       'ts'
     );
@@ -320,12 +322,12 @@ export default class ProjectService
 
   public branches = {
     list: async (projectId: string) => {
-      const projectPath = CoreUtil.pathTo.project(projectId);
+      const projectPath = Util.pathTo.project(projectId);
       await this.gitService.fetch(projectPath);
       return await this.gitService.branches.list(projectPath);
     },
     current: async (projectId: string) => {
-      const projectPath = CoreUtil.pathTo.project(projectId);
+      const projectPath = Util.pathTo.project(projectId);
       return await this.gitService.branches.current(projectPath);
     },
     switch: async (props: {
@@ -333,7 +335,7 @@ export default class ProjectService
       name: string;
       options?: Partial<GitSwitchOptions>;
     }) => {
-      const projectPath = CoreUtil.pathTo.project(props.projectId);
+      const projectPath = Util.pathTo.project(props.projectId);
       return await this.gitService.branches.switch(
         projectPath,
         props.name,
@@ -344,11 +346,11 @@ export default class ProjectService
 
   public remotes = {
     getOriginUrl: async (props: { id: string }) => {
-      const projectPath = CoreUtil.pathTo.project(props.id);
+      const projectPath = Util.pathTo.project(props.id);
       return await this.gitService.remotes.getOriginUrl(projectPath);
     },
     setOriginUrl: async (props: { id: string; url: string }) => {
-      const projectPath = CoreUtil.pathTo.project(props.id);
+      const projectPath = Util.pathTo.project(props.id);
       const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
       if (!hasOrigin) {
         await this.gitService.remotes.addOrigin(projectPath, props.url);
@@ -366,7 +368,7 @@ export default class ProjectService
    * - `ahead` contains a list of commits on the current branch that are available locally but not yet on the remote `origin`
    */
   public async getChanges(props: { id: string }) {
-    const projectPath = CoreUtil.pathTo.project(props.id);
+    const projectPath = Util.pathTo.project(props.id);
     const currentBranch = await this.gitService.branches.current(projectPath);
 
     await this.gitService.fetch(projectPath);
@@ -388,7 +390,7 @@ export default class ProjectService
    * and then pushes local commits to the upstream branch
    */
   public async synchronize(props: { id: string }) {
-    const projectPath = CoreUtil.pathTo.project(props.id);
+    const projectPath = Util.pathTo.project(props.id);
 
     await this.gitService.pull(projectPath);
     await this.gitService.push(projectPath);
@@ -404,7 +406,7 @@ export default class ProjectService
   public async delete(props: DeleteProjectProps): Promise<void> {
     deleteProjectSchema.parse(props);
 
-    await Fs.remove(CoreUtil.pathTo.project(props.id));
+    await Fs.remove(Util.pathTo.project(props.id));
   }
 
   public async list(
@@ -415,7 +417,7 @@ export default class ProjectService
     }
 
     const references = await this.listReferences(objectTypeSchema.Enum.project);
-    const list = await CoreUtil.returnResolved(
+    const list = await Util.returnResolved(
       references.map((reference) => {
         return this.read({ id: reference.id });
       })

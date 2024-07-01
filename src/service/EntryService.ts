@@ -1,38 +1,42 @@
+import Fs from 'fs-extra';
 import {
-  ValueTypeSchema,
+  objectTypeSchema,
+  type SupportedLanguage,
+} from '../schema/baseSchema.js';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import {
   countEntriesSchema,
   createEntrySchema,
-  currentTimestamp,
   deleteEntrySchema,
   entryFileSchema,
   entrySchema,
-  getValueContentSchemaFromDefinition,
-  listEntriesSchema,
-  objectTypeSchema,
   readEntrySchema,
-  serviceTypeSchema,
   updateEntrySchema,
-  uuid,
-  type BaseFile,
   type CountEntriesProps,
   type CreateEntryProps,
   type DeleteEntryProps,
-  type ElekIoCoreOptions,
   type Entry,
   type EntryFile,
+  type ReadEntryProps,
+  type UpdateEntryProps,
+} from '../schema/entrySchema.js';
+import type { BaseFile } from '../schema/fileSchema.js';
+import {
+  listEntriesSchema,
+  serviceTypeSchema,
   type ExtendedCrudService,
   type ListEntriesProps,
-  type ReadEntryProps,
+} from '../schema/serviceSchema.js';
+import {
+  ValueTypeSchema,
+  getValueContentSchemaFromDefinition,
   type ReferencedValue,
   type ResolvedValueContentReference,
-  type SupportedLanguage,
-  type UpdateEntryProps,
   type Value,
   type ValueContentReference,
   type ValueDefinition,
-} from '@elek-io/shared';
-import Fs from 'fs-extra';
-import * as CoreUtil from '../util/index.js';
+} from '../schema/valueSchema.js';
+import * as Util from '../util/index.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import type AssetService from './AssetService.js';
 import CollectionService from './CollectionService.js';
@@ -76,9 +80,9 @@ export default class EntryService
   public async create(props: CreateEntryProps): Promise<Entry> {
     createEntrySchema.parse(props);
 
-    const id = uuid();
-    const projectPath = CoreUtil.pathTo.project(props.projectId);
-    const entryFilePath = CoreUtil.pathTo.entryFile(
+    const id = Util.uuid();
+    const projectPath = Util.pathTo.project(props.projectId);
+    const entryFilePath = Util.pathTo.entryFile(
       props.projectId,
       props.collectionId,
       id
@@ -92,7 +96,7 @@ export default class EntryService
       objectType: 'entry',
       id,
       values: props.values,
-      created: currentTimestamp(),
+      created: Util.currentTimestamp(),
       updated: null,
     };
 
@@ -126,7 +130,7 @@ export default class EntryService
     readEntrySchema.parse(props);
 
     const entryFile: EntryFile = await this.jsonFileService.read(
-      CoreUtil.pathTo.entryFile(props.projectId, props.collectionId, props.id),
+      Util.pathTo.entryFile(props.projectId, props.collectionId, props.id),
       entryFileSchema
     );
 
@@ -143,8 +147,8 @@ export default class EntryService
   public async update(props: UpdateEntryProps): Promise<Entry> {
     updateEntrySchema.parse(props);
 
-    const projectPath = CoreUtil.pathTo.project(props.projectId);
-    const entryFilePath = CoreUtil.pathTo.entryFile(
+    const projectPath = Util.pathTo.project(props.projectId);
+    const entryFilePath = Util.pathTo.entryFile(
       props.projectId,
       props.collectionId,
       props.id
@@ -163,7 +167,7 @@ export default class EntryService
     const entryFile: EntryFile = {
       ...prevEntryFile,
       values: props.values,
-      updated: currentTimestamp(),
+      updated: Util.currentTimestamp(),
     };
 
     const entry: Entry = await this.toEntry({
@@ -195,8 +199,8 @@ export default class EntryService
   public async delete(props: DeleteEntryProps): Promise<void> {
     deleteEntrySchema.parse(props);
 
-    const projectPath = CoreUtil.pathTo.project(props.projectId);
-    const entryFilePath = CoreUtil.pathTo.entryFile(
+    const projectPath = Util.pathTo.project(props.projectId);
+    const entryFilePath = Util.pathTo.entryFile(
       props.projectId,
       props.collectionId,
       props.id
@@ -215,7 +219,7 @@ export default class EntryService
       props.projectId,
       props.collectionId
     );
-    const list = await CoreUtil.returnResolved(
+    const list = await Util.returnResolved(
       references.map((reference) => {
         return this.read({
           projectId: props.projectId,

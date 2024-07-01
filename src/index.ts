@@ -1,8 +1,3 @@
-import {
-  constructorElekIoCoreSchema,
-  type ConstructorElekIoCoreProps,
-  type ElekIoCoreOptions,
-} from '@elek-io/shared';
 import Fs from 'fs-extra';
 import AssetService from './service/AssetService.js';
 import CollectionService from './service/CollectionService.js';
@@ -12,8 +7,13 @@ import JsonFileService from './service/JsonFileService.js';
 import ProjectService from './service/ProjectService.js';
 import SearchService from './service/SearchService.js';
 // import SharedValueService from './service/SharedValueService.js';
+import {
+  constructorElekIoCoreSchema,
+  type ConstructorElekIoCoreProps,
+  type ElekIoCoreOptions,
+} from './schema/coreSchema.js';
 import UserService from './service/UserService.js';
-import * as CoreUtil from './util/index.js';
+import * as Util from './util/index.js';
 
 /**
  * elek.io Core
@@ -99,16 +99,16 @@ export default class ElekIoCore {
       );
     }
 
-    Fs.mkdirpSync(CoreUtil.pathTo.projects);
-    Fs.mkdirpSync(CoreUtil.pathTo.tmp);
-    Fs.emptyDirSync(CoreUtil.pathTo.tmp);
+    Fs.mkdirpSync(Util.pathTo.projects);
+    Fs.mkdirpSync(Util.pathTo.tmp);
+    Fs.emptyDirSync(Util.pathTo.tmp);
   }
 
   /**
    * Utility / helper functions
    */
   public get util() {
-    return CoreUtil;
+    return Util;
   }
 
   /**

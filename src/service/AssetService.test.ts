@@ -1,7 +1,8 @@
-import type { Asset, Project } from '@elek-io/shared';
 import Fs from 'fs-extra';
 import Path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { Asset } from '../schema/assetSchema.js';
+import type { Project } from '../schema/projectSchema.js';
 import core from '../test/setup.js';
 import { createAsset, createProject, getFileHash } from '../test/util.js';
 
