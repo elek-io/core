@@ -1,17 +1,18 @@
+import { GitProcess, type IGitResult } from 'dugite';
+import { EOL } from 'os';
+import PQueue from 'p-queue';
+import GitError from '../error/GitError.js';
+import NoCurrentUserError from '../error/NoCurrentUserError.js';
+import { uuidSchema } from '../schema/baseSchema.js';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import {
   gitCommitSchema,
-  uuidSchema,
-  type ElekIoCoreOptions,
   type GitCloneOptions,
   type GitCommit,
   type GitInitOptions,
   type GitLogOptions,
   type GitSwitchOptions,
-} from '@elek-io/shared';
-import { GitProcess, type IGitResult } from 'dugite';
-import PQueue from 'p-queue';
-import GitError from '../error/GitError.js';
-import NoCurrentUserError from '../error/NoCurrentUserError.js';
+} from '../schema/gitSchema.js';
 import GitTagService from './GitTagService.js';
 import UserService from './UserService.js';
 
@@ -28,20 +29,27 @@ import UserService from './UserService.js';
  * Git operations are sequential!
  * We use a FIFO queue to translate async calls
  * into a sequence of git operations
+ *
+ * @todo All public methods should recieve only a single object as parameter and the type should be defined through the shared library to be accessible in Core and Client
  */
 export default class GitService {
-  private version: string | undefined;
+  private version: string | null;
+  private gitPath: string | null;
   private queue: PQueue;
   private gitTagService: GitTagService;
   private userService: UserService;
 
   public constructor(options: ElekIoCoreOptions, userService: UserService) {
-    this.version = undefined;
+    this.version = null;
+    this.gitPath = null;
     this.queue = new PQueue({
       concurrency: 1, // No concurrency because git operations are sequencial
     });
     this.gitTagService = new GitTagService(options, this.git);
     this.userService = userService;
+
+    this.updateVersion();
+    this.updateGitPath();
   }
 
   /**
@@ -49,14 +57,6 @@ export default class GitService {
    */
   public get tags(): GitTagService {
     return this.gitTagService;
-  }
-
-  /**
-   * Reads the currently used version of Git
-   */
-  public async getVersion(): Promise<void> {
-    const result = await this.git('', ['--version']);
-    this.version = result.stdout.replace('git version', '').trim();
   }
 
   /**
@@ -113,7 +113,7 @@ export default class GitService {
       args = [...args, '--single-branch'];
     }
 
-    await this.git(path, [...args, url, '.']);
+    await this.git('', [...args, url, path]);
     await this.setLocalConfig(path);
   }
 
@@ -131,32 +131,154 @@ export default class GitService {
     await this.git(path, args);
   }
 
-  /**
-   * Switch branches
-   *
-   * @see https://git-scm.com/docs/git-switch/
-   *
-   * @param path    Path to the repository
-   * @param name    Name of the branch to switch to
-   * @param options Options specific to the switch operation
-   */
-  public async switch(
-    path: string,
-    name: string,
-    options?: Partial<GitSwitchOptions>
-  ): Promise<void> {
-    await this.checkBranchOrTagName(path, name);
+  public branches = {
+    /**
+     * List branches
+     *
+     * @see https://www.git-scm.com/docs/git-branch
+     *
+     * @param path  Path to the repository
+     */
+    list: async (path: string) => {
+      const args = ['branch', '--list', '--all'];
+      const result = await this.git(path, args);
 
-    let args = ['switch'];
+      const normalizedLinesArr = result.stdout
+        .split(EOL)
+        .filter((line) => {
+          return line.trim() !== '';
+        })
+        .map((line) => {
+          return line.trim().replace('* ', '');
+        });
 
-    if (options?.isNew === true) {
-      args = [...args, '--create', name];
-    } else {
-      args = [...args, name];
-    }
+      const local: string[] = [];
+      const remote: string[] = [];
+      normalizedLinesArr.forEach((line) => {
+        if (line.startsWith('remotes/')) {
+          remote.push(line.replace('remotes/', ''));
+        } else {
+          local.push(line);
+        }
+      });
+      return {
+        local,
+        remote,
+      };
+    },
+    /**
+     * Returns the name of the current branch. In detached HEAD state, an empty string is returned.
+     *
+     * @see https://www.git-scm.com/docs/git-branch#Documentation/git-branch.txt---show-current
+     *
+     * @param path  Path to the repository
+     */
+    current: async (path: string) => {
+      const args = ['branch', '--show-current'];
+      const result = await this.git(path, args);
 
-    await this.git(path, args);
-  }
+      return result.stdout.trim();
+    },
+    /**
+     * Switch branches
+     *
+     * @see https://git-scm.com/docs/git-switch/
+     *
+     * @param path    Path to the repository
+     * @param branch  Name of the branch to switch to
+     * @param options Options specific to the switch operation
+     */
+    switch: async (
+      path: string,
+      branch: string,
+      options?: GitSwitchOptions
+    ) => {
+      await this.checkBranchOrTagName(path, branch);
+
+      let args = ['switch'];
+
+      if (options?.isNew === true) {
+        args = [...args, '--create', branch];
+      } else {
+        args = [...args, branch];
+      }
+
+      await this.git(path, args);
+    },
+  };
+
+  public remotes = {
+    /**
+     * Returns a list of currently tracked remotes
+     *
+     * @see https://git-scm.com/docs/git-remote
+     *
+     * @param path  Path to the repository
+     */
+    list: async (path: string) => {
+      const args = ['remote'];
+      const result = await this.git(path, args);
+      const normalizedLinesArr = result.stdout.split(EOL).filter((line) => {
+        return line.trim() !== '';
+      });
+
+      return normalizedLinesArr;
+    },
+    /**
+     * Returns true if the `origin` remote exists, otherwise false
+     *
+     * @param path  Path to the repository
+     */
+    hasOrigin: async (path: string) => {
+      const remotes = await this.remotes.list(path);
+
+      if (remotes.includes('origin')) {
+        return true;
+      }
+      return false;
+    },
+    /**
+     * Adds the `origin` remote with given URL
+     *
+     * Throws if `origin` remote is added already.
+     *
+     * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emaddem
+     *
+     * @param path  Path to the repository
+     */
+    addOrigin: async (path: string, url: string) => {
+      const args = ['remote', 'add', 'origin', url];
+      await this.git(path, args);
+    },
+    /**
+     * Returns the current `origin` remote URL
+     *
+     * Throws if no `origin` remote is added yet.
+     *
+     * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emget-urlem
+     *
+     * @param path  Path to the repository
+     */
+    getOriginUrl: async (path: string) => {
+      const args = ['remote', 'get-url', 'origin'];
+      const result = (await this.git(path, args)).stdout.trim();
+
+      return result.length === 0 ? null : result;
+    },
+    /**
+     * Sets the current `origin` remote URL
+     *
+     * Throws if no `origin` remote is added yet.
+     *
+     * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emset-urlem
+     *
+     * @param path  Path to the repository
+     */
+    setOriginUrl: async (path: string, url: string) => {
+      const args = ['remote', 'set-url', 'origin', url];
+      await this.git(path, args);
+    },
+  };
 
   /**
    * Reset current HEAD to the specified state
@@ -197,7 +319,19 @@ export default class GitService {
   // }
 
   /**
-   * Fetch from and integrate with another repository or a local branch
+   * Download objects and refs from remote `origin`
+   *
+   * @see https://www.git-scm.com/docs/git-fetch
+   *
+   * @param path Path to the repository
+   */
+  public async fetch(path: string): Promise<void> {
+    const args = ['fetch'];
+    await this.git(path, args);
+  }
+
+  /**
+   * Fetch from and integrate (rebase or merge) with a local branch
    *
    * @see https://git-scm.com/docs/git-pull
    *
@@ -205,6 +339,37 @@ export default class GitService {
    */
   public async pull(path: string): Promise<void> {
     const args = ['pull'];
+    await this.git(path, args);
+  }
+
+  /**
+   * Update remote refs along with associated objects to remote `origin`
+   *
+   * @see https://git-scm.com/docs/git-push
+   *
+   * @param path Path to the repository
+   */
+  public async push(
+    path: string,
+    // branch: string,
+    options?: Partial<{ all: boolean; force: boolean }>
+  ): Promise<void> {
+    let args = ['push', 'origin'];
+
+    // if (options?.trackRemoteBranch === true) {
+    //   args = [...args, '--set-upstream'];
+    // }
+
+    // args = [...args, 'origin'];
+
+    if (options?.all === true) {
+      args = [...args, '--all'];
+    }
+
+    if (options?.force === true) {
+      args = [...args, '--force'];
+    }
+
     await this.git(path, args);
   }
 
@@ -250,7 +415,7 @@ export default class GitService {
     if (options?.between?.from) {
       args = [
         ...args,
-        `${options.between.from}...${options.between.to || 'HEAD'}`,
+        `${options.between.from}..${options.between.to || 'HEAD'}`,
       ];
     }
 
@@ -263,8 +428,8 @@ export default class GitService {
       '--format=%H|%s|%an|%ae|%at|%D',
     ]);
 
-    const noEmptyLinesArr = result.stdout.split('\n').filter((line) => {
-      return line !== '';
+    const noEmptyLinesArr = result.stdout.split(EOL).filter((line) => {
+      return line.trim() !== '';
     });
 
     const lineObjArr = noEmptyLinesArr.map((line) => {
@@ -285,16 +450,11 @@ export default class GitService {
   }
 
   public refNameToTagName(refName: string) {
-    let tagName: string | undefined = '';
+    const tagName = refName.replace('tag: ', '').trim();
 
-    // Strip tag key
-    tagName = refName.replace('tag: ', '');
-    // Return undefined for anything else than UUIDs (tag names are UUIDs)
-    if (
-      tagName.trim() === '' ||
-      uuidSchema.safeParse(tagName).success === false
-    ) {
-      tagName = undefined;
+    // Return null for anything else than UUIDs (tag names are UUIDs)
+    if (tagName === '' || uuidSchema.safeParse(tagName).success === false) {
+      return null;
     }
 
     return tagName;
@@ -360,6 +520,28 @@ export default class GitService {
   }
 
   /**
+   * Reads the currently used version of Git
+   *
+   * This can help debugging
+   */
+  private async updateVersion(): Promise<void> {
+    const result = await this.git('', ['--version']);
+    this.version = result.stdout.replace('git version', '').trim();
+  }
+
+  /**
+   * Reads the path to the executable of Git that is used
+   *
+   * This can help debugging, since dugite is shipping their own executable
+   * but in some cases resolves another executable
+   * @see https://github.com/desktop/dugite/blob/main/lib/git-environment.ts
+   */
+  private async updateGitPath(): Promise<void> {
+    const result = await this.git('', ['--exec-path']);
+    this.gitPath = result.stdout.trim();
+  }
+
+  /**
    * A reference is used in Git to specify branches and tags.
    * This method checks if given name matches the required format
    *
@@ -394,10 +576,21 @@ export default class GitService {
       throw new NoCurrentUserError();
     }
 
+    // Setup the local User
     const userNameArgs = ['config', '--local', 'user.name', user.name];
     const userEmailArgs = ['config', '--local', 'user.email', user.email];
+    // By default new branches that are pushed are automatically tracking
+    // their remote without the need of using the `--set-upstream` argument of `git push`
+    const autoSetupRemoteArgs = [
+      'config',
+      '--local',
+      'push.autoSetupRemote',
+      'true',
+    ];
+
     await this.git(path, userNameArgs);
     await this.git(path, userEmailArgs);
+    await this.git(path, autoSetupRemoteArgs);
   }
 
   /**
@@ -417,12 +610,29 @@ export default class GitService {
    * @param args Arguments to append after the `git` command
    */
   private async git(path: string, args: string[]): Promise<IGitResult> {
-    const result = await this.queue.add(() => GitProcess.exec(args, path));
+    const result = await this.queue.add(() =>
+      GitProcess.exec(args, path, {
+        env: {
+          // @todo Nasty stuff - remove after update to dugite with git > v2.45.2 once available
+          // @see https://github.com/git-lfs/git-lfs/issues/5749
+          GIT_CLONE_PROTECTION_ACTIVE: 'false',
+        },
+      })
+    );
     if (!result) {
       throw new GitError(
-        `Git (${this.version}) command "git ${args.join(
+        `Git ${this.version} (${this.gitPath}) command "git ${args.join(
           ' '
         )}" failed to return a result`
+      );
+    }
+    if (result.exitCode !== 0) {
+      throw new GitError(
+        `Git ${this.version} (${this.gitPath}) command "git ${args.join(
+          ' '
+        )}" failed with exit code "${result.exitCode}" and message "${
+          result.stderr
+        }"`
       );
     }
 

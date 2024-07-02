@@ -1,6 +1,7 @@
-import type { Collection, Project } from '@elek-io/shared';
 import Fs from 'fs-extra';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { Collection } from '../schema/collectionSchema.js';
+import type { Project } from '../schema/projectSchema.js';
 import core from '../test/setup.js';
 import { createCollection, createProject } from '../test/util.js';
 

@@ -1,12 +1,10 @@
-import {
-  uuid,
-  type EntryValueDefinition,
-  type ProjectSettings,
-} from '@elek-io/shared';
 import { faker } from '@faker-js/faker';
 import crypto from 'crypto';
 import Fs from 'fs-extra';
 import Path from 'path';
+import type { ProjectSettings } from '../schema/projectSchema.js';
+import type { EntryValueDefinition } from '../schema/valueSchema.js';
+import { uuid } from '../util/index.js';
 import core from './setup.js';
 
 const id = {
@@ -93,6 +91,8 @@ export async function createCollection(projectId: string) {
         isDisabled: false,
         isRequired: true,
         isUnique: true,
+        min: null,
+        defaultValue: null,
         max: 70,
       },
       {
@@ -108,6 +108,10 @@ export async function createCollection(projectId: string) {
         inputWidth: '12',
         isDisabled: false,
         isRequired: true,
+        isUnique: false,
+        allowedMimeTypes: ['image/jpeg'],
+        min: null,
+        max: null,
       },
       {
         id: id.entryReferenceValueDefinition,
@@ -123,6 +127,9 @@ export async function createCollection(projectId: string) {
         inputWidth: '12',
         isDisabled: false,
         isRequired: false,
+        isUnique: false,
+        min: null,
+        max: null,
       },
     ],
   });
@@ -176,9 +183,9 @@ export async function createEntry(
         valueType: 'reference',
         definitionId: id.assetReferenceValueDefinition,
         content: {
-          referenceObjectType: 'asset',
-          references: [
+          en: [
             {
+              objectType: 'asset',
               id: assetValueId,
               language: 'en',
             },
@@ -190,10 +197,10 @@ export async function createEntry(
         valueType: 'reference',
         definitionId: id.entryReferenceValueDefinition,
         content: {
-          referenceObjectType: 'entry',
-          references:
+          en:
             (entryValueId && [
               {
+                objectType: 'entry',
                 id: entryValueId,
               },
             ]) ||

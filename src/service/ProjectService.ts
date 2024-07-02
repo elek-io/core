@@ -1,42 +1,57 @@
-import {
-  createProjectSchema,
-  currentTimestamp,
-  deleteProjectSchema,
-  gitCommitIconSchema,
-  listProjectsSchema,
-  objectTypeSchema,
-  projectFileSchema,
-  projectFolderSchema,
-  readProjectSchema,
-  serviceTypeSchema,
-  updateProjectSchema,
-  upgradeProjectSchema,
-  uuid,
-  type BaseFile,
-  type CollectionExport,
-  type CreateProjectProps,
-  type DeleteProjectProps,
-  type ElekIoCoreOptions,
-  type ExtendedCrudService,
-  type ListProjectsProps,
-  type ObjectType,
-  type PaginatedList,
-  type Project,
-  type ProjectExport,
-  type ProjectFile,
-  type ProjectSettings,
-  type ReadProjectProps,
-  type UpdateProjectProps,
-  type UpgradeProjectProps,
-} from '@elek-io/shared';
 import Fs from 'fs-extra';
 import Os from 'os';
 import Path from 'path';
 import Semver from 'semver';
 import NoCurrentUserError from '../error/NoCurrentUserError.js';
 import ProjectUpgradeError from '../error/ProjectUpgradeError.js';
+import { objectTypeSchema, type ObjectType } from '../schema/baseSchema.js';
+import type { CollectionExport } from '../schema/collectionSchema.js';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import type { BaseFile } from '../schema/fileSchema.js';
+import { gitCommitIconSchema } from '../schema/gitSchema.js';
+import {
+  cloneProjectSchema,
+  createProjectSchema,
+  currentBranchProjectSchema,
+  deleteProjectSchema,
+  getChangesProjectSchema,
+  getRemoteOriginUrlProjectSchema,
+  listBranchesProjectSchema,
+  projectFileSchema,
+  projectFolderSchema,
+  readProjectSchema,
+  setRemoteOriginUrlProjectSchema,
+  switchBranchProjectSchema,
+  synchronizeProjectSchema,
+  updateProjectSchema,
+  upgradeProjectSchema,
+  type CloneProjectProps,
+  type CreateProjectProps,
+  type CurrentBranchProjectProps,
+  type DeleteProjectProps,
+  type GetChangesProjectProps,
+  type GetRemoteOriginUrlProjectProps,
+  type ListBranchesProjectProps,
+  type Project,
+  type ProjectExport,
+  type ProjectFile,
+  type ProjectSettings,
+  type ReadProjectProps,
+  type SetRemoteOriginUrlProjectProps,
+  type SwitchBranchProjectProps,
+  type SynchronizeProjectProps,
+  type UpdateProjectProps,
+  type UpgradeProjectProps,
+} from '../schema/projectSchema.js';
+import {
+  listProjectsSchema,
+  serviceTypeSchema,
+  type ExtendedCrudService,
+  type ListProjectsProps,
+  type PaginatedList,
+} from '../schema/serviceSchema.js';
 import type { ProjectUpgradeImport } from '../upgrade/example.js';
-import * as CoreUtil from '../util/index.js';
+import * as Util from '../util/index.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import AssetService from './AssetService.js';
 import CollectionService from './CollectionService.js';
@@ -93,7 +108,7 @@ export default class ProjectService
       throw new NoCurrentUserError();
     }
 
-    const id = uuid();
+    const id = Util.uuid();
     const defaultSettings: ProjectSettings = {
       language: {
         default: user.language,
@@ -107,13 +122,14 @@ export default class ProjectService
       id,
       description: props.description || '',
       settings: Object.assign({}, defaultSettings, props.settings),
-      created: currentTimestamp(),
+      created: Util.currentTimestamp(),
+      updated: null,
       coreVersion: this.options.version, // @todo should be read from package.json to avoid duplicates
       status: 'todo',
       version: '0.0.1',
     };
 
-    const projectPath = CoreUtil.pathTo.project(id);
+    const projectPath = Util.pathTo.project(id);
 
     await Fs.ensureDir(projectPath);
 
@@ -123,7 +139,7 @@ export default class ProjectService
       await this.gitService.init(projectPath, { initialBranch: 'main' });
       await this.jsonFileService.create(
         projectFile,
-        CoreUtil.pathTo.projectFile(id),
+        Util.pathTo.projectFile(id),
         projectFileSchema
       );
       await this.gitService.add(projectPath, ['.']);
@@ -131,7 +147,9 @@ export default class ProjectService
         projectPath,
         `${gitCommitIconSchema.enum.INIT} Created this new elek.io project`
       );
-      await this.gitService.switch(projectPath, 'stage', { isNew: true });
+      await this.gitService.branches.switch(projectPath, 'stage', {
+        isNew: true,
+      });
     } catch (error) {
       // To avoid partial data being added to the repository / git status reporting uncommitted files
       await this.delete({
@@ -140,7 +158,42 @@ export default class ProjectService
       throw error;
     }
 
-    return projectFile;
+    return await this.toProject({
+      projectFile,
+    });
+  }
+
+  /**
+   * Clones a Project by URL
+   */
+  public async clone(props: CloneProjectProps): Promise<Project> {
+    cloneProjectSchema.parse(props);
+
+    const tmpId = Util.uuid();
+    const tmpProjectPath = Path.join(Util.pathTo.tmp, tmpId);
+    // await Fs.ensureDir(tmpProjectPath);
+    await this.gitService.clone(props.url, tmpProjectPath);
+
+    // Check if it is actually a Project by trying to read it
+    const projectFile = await this.jsonFileService.read(
+      Path.join(tmpProjectPath, 'project.json'),
+      projectFileSchema
+    );
+
+    // If so, copy it into the correct directory
+    const projectPath = Util.pathTo.project(projectFile.id);
+    const alreadyExists = await Fs.pathExists(projectPath);
+    if (alreadyExists) {
+      throw new Error(
+        `Tried to clone Project "${projectFile.id}" from "${props.url}" - but the Project already exists locally`
+      );
+    }
+    await Fs.copy(tmpProjectPath, projectPath);
+    await Fs.remove(tmpProjectPath);
+
+    return await this.toProject({
+      projectFile,
+    });
   }
 
   /**
@@ -150,11 +203,13 @@ export default class ProjectService
     readProjectSchema.parse(props);
 
     const projectFile = await this.jsonFileService.read(
-      CoreUtil.pathTo.projectFile(props.id),
+      Util.pathTo.projectFile(props.id),
       projectFileSchema
     );
 
-    return projectFile;
+    return await this.toProject({
+      projectFile,
+    });
   }
 
   /**
@@ -163,21 +218,23 @@ export default class ProjectService
   public async update(props: UpdateProjectProps): Promise<Project> {
     updateProjectSchema.parse(props);
 
-    const projectPath = CoreUtil.pathTo.project(props.id);
-    const filePath = CoreUtil.pathTo.projectFile(props.id);
+    const projectPath = Util.pathTo.project(props.id);
+    const filePath = Util.pathTo.projectFile(props.id);
     const prevProjectFile = await this.read(props);
 
     const projectFile: ProjectFile = {
       ...prevProjectFile,
       ...props,
-      updated: currentTimestamp(),
+      updated: Util.currentTimestamp(),
     };
 
     await this.jsonFileService.update(projectFile, filePath, projectFileSchema);
     await this.gitService.add(projectPath, [filePath]);
     await this.gitService.commit(projectPath, this.gitMessage.update);
 
-    return projectFile;
+    return await this.toProject({
+      projectFile,
+    });
   }
 
   /**
@@ -191,7 +248,7 @@ export default class ProjectService
     upgradeProjectSchema.parse(props);
 
     const project = await this.read(props);
-    const projectPath = CoreUtil.pathTo.project(project.id);
+    const projectPath = Util.pathTo.project(project.id);
 
     if (Semver.gt(project.coreVersion, this.options.version)) {
       // Upgrade of the client needed before the project can be upgraded
@@ -206,7 +263,7 @@ export default class ProjectService
     }
 
     // Get all available upgrade scripts
-    const upgradeFiles = await CoreUtil.files(
+    const upgradeFiles = await Util.files(
       Path.resolve(__dirname, '../upgrade'),
       'ts'
     );
@@ -276,6 +333,85 @@ export default class ProjectService
     }
   }
 
+  public branches = {
+    list: async (props: ListBranchesProjectProps) => {
+      listBranchesProjectSchema.parse(props);
+      const projectPath = Util.pathTo.project(props.id);
+      await this.gitService.fetch(projectPath);
+      return await this.gitService.branches.list(projectPath);
+    },
+    current: async (props: CurrentBranchProjectProps) => {
+      currentBranchProjectSchema.parse(props);
+      const projectPath = Util.pathTo.project(props.id);
+      return await this.gitService.branches.current(projectPath);
+    },
+    switch: async (props: SwitchBranchProjectProps) => {
+      switchBranchProjectSchema.parse(props);
+      const projectPath = Util.pathTo.project(props.id);
+      return await this.gitService.branches.switch(
+        projectPath,
+        props.branch,
+        props.options
+      );
+    },
+  };
+
+  public remotes = {
+    getOriginUrl: async (props: GetRemoteOriginUrlProjectProps) => {
+      getRemoteOriginUrlProjectSchema.parse(props);
+      const projectPath = Util.pathTo.project(props.id);
+      return await this.gitService.remotes.getOriginUrl(projectPath);
+    },
+    setOriginUrl: async (props: SetRemoteOriginUrlProjectProps) => {
+      setRemoteOriginUrlProjectSchema.parse(props);
+      const projectPath = Util.pathTo.project(props.id);
+      const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
+      if (!hasOrigin) {
+        await this.gitService.remotes.addOrigin(projectPath, props.url);
+      } else {
+        await this.gitService.remotes.setOriginUrl(projectPath, props.url);
+      }
+    },
+  };
+
+  /**
+   * Returns the differences of the given Projects current branch
+   * between the local and remote `origin` (commits ahead & behind)
+   *
+   * - `behind` contains a list of commits on the current branch that are available on the remote `origin` but not yet locally
+   * - `ahead` contains a list of commits on the current branch that are available locally but not yet on the remote `origin`
+   */
+  public async getChanges(props: GetChangesProjectProps) {
+    getChangesProjectSchema.parse(props);
+    const projectPath = Util.pathTo.project(props.id);
+    const currentBranch = await this.gitService.branches.current(projectPath);
+
+    await this.gitService.fetch(projectPath);
+    const behind = await this.gitService.log(projectPath, {
+      between: { from: currentBranch, to: `origin/${currentBranch}` },
+    });
+    const ahead = await this.gitService.log(projectPath, {
+      between: { from: `origin/${currentBranch}`, to: currentBranch },
+    });
+
+    return {
+      behind,
+      ahead,
+    };
+  }
+
+  /**
+   * Pulls remote changes of `origin` down to the local repository
+   * and then pushes local commits to the upstream branch
+   */
+  public async synchronize(props: SynchronizeProjectProps) {
+    synchronizeProjectSchema.parse(props);
+    const projectPath = Util.pathTo.project(props.id);
+
+    await this.gitService.pull(projectPath);
+    await this.gitService.push(projectPath);
+  }
+
   /**
    * Deletes given Project
    *
@@ -286,7 +422,7 @@ export default class ProjectService
   public async delete(props: DeleteProjectProps): Promise<void> {
     deleteProjectSchema.parse(props);
 
-    await Fs.remove(CoreUtil.pathTo.project(props.id));
+    await Fs.remove(Util.pathTo.project(props.id));
   }
 
   public async list(
@@ -297,7 +433,7 @@ export default class ProjectService
     }
 
     const references = await this.listReferences(objectTypeSchema.Enum.project);
-    const list = await CoreUtil.returnResolved(
+    const list = await Util.returnResolved(
       references.map((reference) => {
         return this.read({ id: reference.id });
       })
@@ -369,6 +505,17 @@ export default class ProjectService
       ...project,
       assets,
       collections: collectionExport,
+    };
+  }
+
+  /**
+   * Creates a Project from given ProjectFile by adding git information
+   */
+  private async toProject(props: {
+    projectFile: ProjectFile;
+  }): Promise<Project> {
+    return {
+      ...props.projectFile,
     };
   }
 

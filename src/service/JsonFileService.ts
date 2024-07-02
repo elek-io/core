@@ -1,11 +1,9 @@
-import {
-  serviceTypeSchema,
-  type BaseFile,
-  type ElekIoCoreOptions,
-  type UserFile,
-} from '@elek-io/shared';
 import Fs from 'fs-extra';
 import type { z } from 'zod';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import type { BaseFile } from '../schema/fileSchema.js';
+import { serviceTypeSchema } from '../schema/serviceSchema.js';
+import type { UserFile } from '../schema/userSchema.js';
 import AbstractCrudService from './AbstractCrudService.js';
 
 /**

@@ -1,21 +1,25 @@
-import {
-  fileReferenceSchema,
-  gitCommitIconSchema,
-  objectTypeSchema,
-  type BaseFile,
-  type ElekIoCoreOptions,
-  type FileReference,
-  type GitTag,
-  type ObjectType,
-  type PaginatedList,
-  type ServiceType,
-  type Sort,
-  type SupportedAssetExtension,
-  type SupportedLanguage,
-} from '@elek-io/shared';
 import { orderBy, remove } from 'lodash-es';
 import RequiredParameterMissingError from '../error/RequiredParameterMissingError.js';
-import * as CoreUtil from '../util/index.js';
+import {
+  objectTypeSchema,
+  type ObjectType,
+  type SupportedAssetExtension,
+  type SupportedLanguage,
+} from '../schema/baseSchema.js';
+import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import {
+  fileReferenceSchema,
+  type BaseFile,
+  type FileReference,
+} from '../schema/fileSchema.js';
+import { gitCommitIconSchema } from '../schema/gitSchema.js';
+import type { GitTag } from '../schema/gitTagSchema.js';
+import type {
+  PaginatedList,
+  ServiceType,
+  Sort,
+} from '../schema/serviceSchema.js';
+import * as Util from '../util/index.js';
 
 /**
  * A base service that provides properties for most other services
@@ -124,16 +128,16 @@ export default abstract class AbstractCrudService {
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
-        return this.getFileReferences(CoreUtil.pathTo.lfs(projectId)); // LFS folder is correct, since we want the extension of the file itself, not the AssetFile (.json)
+        return this.getFileReferences(Util.pathTo.lfs(projectId)); // LFS folder is correct, since we want the extension of the file itself, not the AssetFile (.json)
 
       case objectTypeSchema.Enum.project:
-        return this.getFolderReferences(CoreUtil.pathTo.projects);
+        return this.getFolderReferences(Util.pathTo.projects);
 
       case objectTypeSchema.Enum.collection:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
-        return this.getFolderReferences(CoreUtil.pathTo.collections(projectId));
+        return this.getFolderReferences(Util.pathTo.collections(projectId));
 
       case objectTypeSchema.Enum.entry:
         if (!projectId) {
@@ -143,14 +147,14 @@ export default abstract class AbstractCrudService {
           throw new RequiredParameterMissingError('collectionId');
         }
         return this.getFileReferences(
-          CoreUtil.pathTo.collection(projectId, collectionId)
+          Util.pathTo.collection(projectId, collectionId)
         );
 
       case objectTypeSchema.Enum.sharedValue:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
-        return this.getFileReferences(CoreUtil.pathTo.sharedValues(projectId));
+        return this.getFileReferences(Util.pathTo.sharedValues(projectId));
 
       default:
         throw new Error(`Trying to list files of unsupported type "${type}"`);
@@ -158,7 +162,7 @@ export default abstract class AbstractCrudService {
   }
 
   private async getFolderReferences(path: string): Promise<FileReference[]> {
-    const possibleFolders = await CoreUtil.folders(path);
+    const possibleFolders = await Util.folders(path);
     const results = possibleFolders.map((possibleFolder) => {
       const folderReference: FileReference = {
         id: possibleFolder.name,
@@ -171,7 +175,7 @@ export default abstract class AbstractCrudService {
       }
     });
 
-    return results.filter(CoreUtil.notEmpty);
+    return results.filter(Util.notEmpty);
   }
 
   /**
@@ -182,7 +186,7 @@ export default abstract class AbstractCrudService {
    * or [id].[extension] format for their names
    */
   private async getFileReferences(path: string): Promise<FileReference[]> {
-    const possibleFiles = await CoreUtil.files(path);
+    const possibleFiles = await Util.files(path);
 
     const results = await Promise.all(
       possibleFiles.map(async (possibleFile) => {
@@ -208,6 +212,6 @@ export default abstract class AbstractCrudService {
       })
     );
 
-    return results.filter(CoreUtil.notEmpty);
+    return results.filter(Util.notEmpty);
   }
 }
