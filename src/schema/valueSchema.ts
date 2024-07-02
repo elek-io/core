@@ -283,6 +283,14 @@ export type ValueContentReferenceToAsset = z.infer<
   typeof valueContentReferenceToAssetSchema
 >;
 
+export const valueContentReferenceToCollectionSchema =
+  valueContentReferenceBase.extend({
+    objectType: z.literal(objectTypeSchema.Enum.collection),
+  });
+export type ValueContentReferenceToCollection = z.infer<
+  typeof valueContentReferenceToCollectionSchema
+>;
+
 export const valueContentReferenceToEntrySchema =
   valueContentReferenceBase.extend({
     objectType: z.literal(objectTypeSchema.Enum.entry),
@@ -339,6 +347,7 @@ export type ValueContentReferenceToEntry = z.infer<
 
 export const valueContentReferenceSchema = z.union([
   valueContentReferenceToAssetSchema,
+  valueContentReferenceToCollectionSchema,
   valueContentReferenceToEntrySchema,
   // valueContentReferenceToSharedValueSchema,
 ]);

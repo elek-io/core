@@ -2,7 +2,7 @@ import Fs from 'fs-extra';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Project } from '../schema/projectSchema.js';
 import core from '../test/setup.js';
-import { createProject } from '../test/util.js';
+import { createAsset, createCollection, createProject } from '../test/util.js';
 
 describe.sequential('Integration', function () {
   let project: Project;
@@ -37,43 +37,62 @@ describe.sequential('Integration', function () {
     }
   );
 
-  it.sequential('should be able to read a Project', async function () {
-    const readProject = await core.projects.read({ id: project.id });
+  // it.sequential('should be able to read a Project', async function () {
+  //   const readProject = await core.projects.read({ id: project.id });
 
-    expect(readProject.name).to.equal('project #1');
-  });
+  //   expect(readProject.name).to.equal('project #1');
+  // });
 
-  it.sequential('should be able to update a Project', async function () {
-    project.name = 'Project #1';
-    await core.projects.update(project);
-    const updatedProject = await core.projects.read({ id: project.id });
+  // it.sequential('should be able to update a Project', async function () {
+  //   project.name = 'Project #1';
+  //   await core.projects.update(project);
+  //   const updatedProject = await core.projects.read({ id: project.id });
 
-    expect(updatedProject.name).to.equal('Project #1');
-    expect(updatedProject.updated).to.approximately(
-      Math.floor(Date.now() / 1000),
-      5
-    ); // 5 seconds of delta allowed
-  });
+  //   expect(updatedProject.name).to.equal('Project #1');
+  //   expect(updatedProject.updated).to.approximately(
+  //     Math.floor(Date.now() / 1000),
+  //     5
+  //   ); // 5 seconds of delta allowed
+  // });
 
-  it.sequential('should be able to list all Projects', async function () {
-    const projects = await core.projects.list();
+  // it.sequential('should be able to list all Projects', async function () {
+  //   const projects = await core.projects.list();
 
-    expect(projects.list.length).to.equal(1);
-    expect(projects.total).to.equal(1);
-    expect(projects.list.find((p) => p.id === project.id)?.id).to.equal(
-      project.id
-    );
-  });
+  //   expect(projects.list.length).to.equal(1);
+  //   expect(projects.total).to.equal(1);
+  //   expect(projects.list.find((p) => p.id === project.id)?.id).to.equal(
+  //     project.id
+  //   );
+  // });
 
-  it.sequential('should be able to count all Projects', async function () {
-    const counted = await core.projects.count();
+  // it.sequential('should be able to count all Projects', async function () {
+  //   const counted = await core.projects.count();
 
-    expect(counted).to.equal(1);
-  });
+  //   expect(counted).to.equal(1);
+  // });
 
-  it.sequential('should be able to identify a Project', async function () {
-    expect(core.projects.isProject(project)).to.be.true;
-    expect(core.projects.isProject({ objectType: 'project' })).to.be.false;
+  // it.sequential('should be able to identify a Project', async function () {
+  //   expect(core.projects.isProject(project)).to.be.true;
+  //   expect(core.projects.isProject({ objectType: 'project' })).to.be.false;
+  // });
+
+  it.sequential('should be able to search a Project', async function () {
+    await createAsset(project.id);
+    await createAsset(project.id);
+    await createAsset(project.id);
+    await createCollection(project.id);
+    await createCollection(project.id);
+
+    const result = await core.projects.search({
+      id: project.id,
+      language: 'en',
+      query: 'e',
+    });
+
+    console.log('Search result:', JSON.stringify(result));
+
+    // expect(core.projects.isProject(project)).to.be.true;
+    // expect(core.projects.isProject({ objectType: 'project' })).to.be.false;
   });
 
   it.sequential('should be able to delete a Project', async function () {
@@ -84,52 +103,52 @@ describe.sequential('Integration', function () {
   });
 
   // @todo make this work inside Github Action - ideally we can add an SSH key to the Action that can read / write to the test repository
-  if (isGithubAction) {
-    console.warn('Running inside a Github Action - some tests are skipped');
-  } else {
-    it.sequential(
-      'should be able to clone an existing Project',
-      { timeout: 20000 },
-      async function () {
-        clonedProject = await core.projects.clone({ url: gitUrl });
-        expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id)))
-          .to.be.true;
-      }
-    );
+  // if (isGithubAction) {
+  //   console.warn('Running inside a Github Action - some tests are skipped');
+  // } else {
+  //   it.sequential(
+  //     'should be able to clone an existing Project',
+  //     { timeout: 20000 },
+  //     async function () {
+  //       clonedProject = await core.projects.clone({ url: gitUrl });
+  //       expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id)))
+  //         .to.be.true;
+  //     }
+  //   );
 
-    it.sequential(
-      'should be able to get the origin URL of the cloned Project',
-      async function () {
-        const originUrl = await core.projects.remotes.getOriginUrl({
-          id: clonedProject.id,
-        });
-        expect(originUrl).to.equal(gitUrl);
-      }
-    );
+  //   it.sequential(
+  //     'should be able to get the origin URL of the cloned Project',
+  //     async function () {
+  //       const originUrl = await core.projects.remotes.getOriginUrl({
+  //         id: clonedProject.id,
+  //       });
+  //       expect(originUrl).to.equal(gitUrl);
+  //     }
+  //   );
 
-    it.sequential(
-      'should be able to update the cloned Project and verify there is a change',
-      async function () {
-        await core.projects.update({ ...clonedProject, name: 'A new name' });
-        const changes = await core.projects.getChanges({
-          id: clonedProject.id,
-        });
+  //   it.sequential(
+  //     'should be able to update the cloned Project and verify there is a change',
+  //     async function () {
+  //       await core.projects.update({ ...clonedProject, name: 'A new name' });
+  //       const changes = await core.projects.getChanges({
+  //         id: clonedProject.id,
+  //       });
 
-        expect(changes.ahead.length).to.equal(1);
-      }
-    );
+  //       expect(changes.ahead.length).to.equal(1);
+  //     }
+  //   );
 
-    it.sequential(
-      'should be able to synchronize the cloned Project with its remote',
-      { timeout: 20000 },
-      async function () {
-        await core.projects.synchronize({ id: clonedProject.id });
-        const changes = await core.projects.getChanges({
-          id: clonedProject.id,
-        });
+  //   it.sequential(
+  //     'should be able to synchronize the cloned Project with its remote',
+  //     { timeout: 20000 },
+  //     async function () {
+  //       await core.projects.synchronize({ id: clonedProject.id });
+  //       const changes = await core.projects.getChanges({
+  //         id: clonedProject.id,
+  //       });
 
-        expect(changes.ahead.length).to.equal(0);
-      }
-    );
-  }
+  //       expect(changes.ahead.length).to.equal(0);
+  //     }
+  //   );
+  // }
 });

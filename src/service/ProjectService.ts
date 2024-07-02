@@ -4,7 +4,7 @@ import Path from 'path';
 import Semver from 'semver';
 import NoCurrentUserError from '../error/NoCurrentUserError.js';
 import ProjectUpgradeError from '../error/ProjectUpgradeError.js';
-import { objectTypeSchema, type ObjectType } from '../schema/baseSchema.js';
+import { objectTypeSchema } from '../schema/baseSchema.js';
 import type { CollectionExport } from '../schema/collectionSchema.js';
 import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import type { BaseFile } from '../schema/fileSchema.js';
@@ -20,6 +20,7 @@ import {
   projectFileSchema,
   projectFolderSchema,
   readProjectSchema,
+  searchProjectSchema,
   setRemoteOriginUrlProjectSchema,
   switchBranchProjectSchema,
   synchronizeProjectSchema,
@@ -37,6 +38,7 @@ import {
   type ProjectFile,
   type ProjectSettings,
   type ReadProjectProps,
+  type SearchProjectProps,
   type SetRemoteOriginUrlProjectProps,
   type SwitchBranchProjectProps,
   type SynchronizeProjectProps,
@@ -459,8 +461,14 @@ export default class ProjectService
    * @param query     Query to search for
    * @param type      (Optional) specify the type to search for
    */
-  public async search(projectId: string, query: string, type?: ObjectType) {
-    return this.searchService.search(projectId, query, type);
+  public async search(props: SearchProjectProps) {
+    searchProjectSchema.parse(props);
+    return this.searchService.search(
+      props.id,
+      props.query,
+      props.language,
+      props.type
+    );
   }
 
   /**

@@ -1,9 +1,9 @@
 import { z } from 'zod';
+import { translatableStringSchema } from './baseSchema.js';
 import {
-  objectTypeSchema,
-  supportedLanguageSchema,
-  uuidSchema,
-} from './baseSchema.js';
+  valueContentReferenceToAssetSchema,
+  valueContentReferenceToCollectionSchema,
+} from './valueSchema.js';
 
 export const searchOptionsSchema = z.object({
   caseSensitive: z.boolean(),
@@ -18,11 +18,24 @@ export const searchResultExcerptSchema = z.object({
 });
 export type SearchResultExcerpt = z.infer<typeof searchResultExcerptSchema>;
 
-export const searchResultSchema = z.object({
-  id: uuidSchema,
-  language: supportedLanguageSchema.optional(),
-  name: z.string(),
-  type: objectTypeSchema,
-  matches: z.array(searchResultExcerptSchema),
-});
+export const assetSearchResultSchema =
+  valueContentReferenceToAssetSchema.extend({
+    name: z.string(),
+    matches: z.array(searchResultExcerptSchema),
+  });
+export type AssetSearchResult = z.infer<typeof assetSearchResultSchema>;
+
+export const collectionSearchResultSchema =
+  valueContentReferenceToCollectionSchema.extend({
+    name: translatableStringSchema,
+    matches: z.array(searchResultExcerptSchema),
+  });
+export type CollectionSearchResult = z.infer<
+  typeof collectionSearchResultSchema
+>;
+
+export const searchResultSchema = z.union([
+  assetSearchResultSchema,
+  collectionSearchResultSchema,
+]);
 export type SearchResult = z.infer<typeof searchResultSchema>;

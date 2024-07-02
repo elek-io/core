@@ -1,7 +1,12 @@
-import type { ObjectType } from '../schema/baseSchema.js';
+import type { Asset } from '../schema/assetSchema.js';
+import type { ObjectType, SupportedLanguage } from '../schema/baseSchema.js';
+import type { Collection } from '../schema/collectionSchema.js';
 import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import type { SearchResult } from '../schema/searchSchema.js';
-import { serviceTypeSchema } from '../schema/serviceSchema.js';
+import {
+  serviceTypeSchema,
+  type PaginatedList,
+} from '../schema/serviceSchema.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import AssetService from './AssetService.js';
 import CollectionService from './CollectionService.js';
@@ -37,61 +42,109 @@ export default class SearchService extends AbstractCrudService {
   public async search(
     projectId: string,
     query: string,
-    objectType?: ObjectType
+    language: SupportedLanguage,
+    objectTypes?: ObjectType[]
   ) {
-    const results: SearchResult[] = [];
+    const paginatedListPromises: Promise<PaginatedList<Asset | Collection>>[] =
+      [];
     const normalizedQuery = query.trim();
 
     if (normalizedQuery === '') {
-      return results;
+      return [];
     }
 
-    const paginatedLists = (
-      await Promise.all([this.assetService.list({ projectId, filter: query })])
-    ).flat();
+    if (objectTypes && objectTypes.length !== 0) {
+      for (let index = 0; index < objectTypes.length; index++) {
+        const objectType = objectTypes[index];
 
-    paginatedLists.forEach((paginatedList) => {
-      paginatedList.list.flat().forEach((file) => {
-        const result: SearchResult = {
-          id: file.id,
-          language: file.language,
-          name: file.name,
-          type: file.objectType,
-          matches: [],
-        };
-
-        for (const [key, value] of Object.entries(file)) {
-          const valueString = String(value);
-          if (
-            valueString.toLowerCase().includes(normalizedQuery.toLowerCase())
-          ) {
-            const matchStart = valueString
-              .toLowerCase()
-              .indexOf(normalizedQuery.toLowerCase());
-            const matchEnd = matchStart + normalizedQuery.length;
-
-            result.matches.push({
-              key,
-              prefix: this.truncate(
-                valueString.substring(0, matchStart),
-                'start'
-              ),
-              match: valueString.substring(matchStart, matchEnd),
-              suffix: this.truncate(
-                valueString.substring(matchEnd, valueString.length),
-                'end'
-              ),
-            });
-          }
+        switch (objectType) {
+          case 'asset':
+            paginatedListPromises.push(
+              this.assetService.list({ projectId, filter: query })
+            );
+            break;
+          case 'collection':
+            paginatedListPromises.push(
+              this.collectionService.list({ projectId, filter: query })
+            );
+            break;
         }
+      }
+    } else {
+      paginatedListPromises.push(
+        this.assetService.list({ projectId, filter: query })
+      );
+      paginatedListPromises.push(
+        this.collectionService.list({ projectId, filter: query })
+      );
+    }
 
-        if (result.matches.length > 0) {
-          results.push(result);
+    const paginatedLists = (await Promise.all(paginatedListPromises)).flat();
+
+    return paginatedLists.map((paginatedList) => {
+      return paginatedList.list.flat().map((file) => {
+        switch (file.objectType) {
+          case 'asset': {
+            const result: SearchResult = {
+              id: file.id,
+              language: file.language,
+              objectType: file.objectType,
+              name: file.name,
+              matches: this.match(
+                file,
+                ['name', 'description', 'mimeType', 'extension'],
+                normalizedQuery
+              ),
+            };
+            return result;
+          }
+          case 'collection': {
+            const result: SearchResult = {
+              id: file.id,
+              objectType: file.objectType,
+              name: file.name.singular,
+              matches: [
+                ...this.match(file, ['slug'], normalizedQuery),
+                ...this.match(file.name.singular, [language], normalizedQuery),
+                ...this.match(file.name.plural, [language], normalizedQuery),
+                ...this.match(file.description, [language], normalizedQuery),
+              ],
+            };
+            return result;
+          }
+          default:
+            break;
         }
       });
     });
+  }
 
-    return results;
+  private match<T extends Object>(obj: T, keys: (keyof T)[], query: string) {
+    const matches = [];
+
+    for (let index = 0; index < keys.length; index++) {
+      const key = keys[index];
+      const value = obj[key];
+
+      if (typeof value === 'string') {
+        if (value.toLowerCase().includes(query.toLowerCase())) {
+          const matchStart = value.toLowerCase().indexOf(query.toLowerCase());
+          const matchEnd = matchStart + query.length;
+
+          matches.push({
+            key: String(keys[index]),
+            prefix: this.truncate(value.substring(0, matchStart), 'start'),
+            match: value.substring(matchStart, matchEnd),
+            suffix: this.truncate(
+              value.substring(matchEnd, value.length),
+              'end'
+            ),
+          });
+        }
+      }
+    }
+
+    return matches;
   }
 
   private truncate(value: string, at: 'start' | 'end', limit = 15) {
