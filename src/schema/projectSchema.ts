@@ -8,6 +8,7 @@ import {
 } from './baseSchema.js';
 import { collectionExportSchema } from './collectionSchema.js';
 import { baseFileSchema } from './fileSchema.js';
+import { gitSwitchOptionsSchema } from './gitSchema.js';
 
 export const projectStatusSchema = z.enum(['foo', 'bar', 'todo']);
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;
@@ -101,3 +102,56 @@ export const projectUpgradeSchema = z.object({
   run: z.function().args(projectFileSchema).returns(z.promise(z.void())),
 });
 export type ProjectUpgrade = z.infer<typeof projectUpgradeSchema>;
+
+export const cloneProjectSchema = z.object({
+  url: z.string(),
+});
+export type CloneProjectProps = z.infer<typeof cloneProjectSchema>;
+
+export const listBranchesProjectSchema = z.object({
+  id: uuidSchema.readonly(),
+});
+export type ListBranchesProjectProps = z.infer<
+  typeof listBranchesProjectSchema
+>;
+
+export const currentBranchProjectSchema = z.object({
+  id: uuidSchema.readonly(),
+});
+export type CurrentBranchProjectProps = z.infer<
+  typeof currentBranchProjectSchema
+>;
+
+export const switchBranchProjectSchema = z.object({
+  id: uuidSchema.readonly(),
+  branch: z.string(),
+  options: gitSwitchOptionsSchema.optional(),
+});
+export type SwitchBranchProjectProps = z.infer<
+  typeof switchBranchProjectSchema
+>;
+
+export const getRemoteOriginUrlProjectSchema = z.object({
+  id: uuidSchema.readonly(),
+});
+export type GetRemoteOriginUrlProjectProps = z.infer<
+  typeof getRemoteOriginUrlProjectSchema
+>;
+
+export const setRemoteOriginUrlProjectSchema = z.object({
+  id: uuidSchema.readonly(),
+  url: z.string(),
+});
+export type SetRemoteOriginUrlProjectProps = z.infer<
+  typeof setRemoteOriginUrlProjectSchema
+>;
+
+export const getChangesProjectSchema = z.object({
+  id: uuidSchema.readonly(),
+});
+export type GetChangesProjectProps = z.infer<typeof getChangesProjectSchema>;
+
+export const synchronizeProjectSchema = z.object({
+  id: uuidSchema.readonly(),
+});
+export type SynchronizeProjectProps = z.infer<typeof synchronizeProjectSchema>;

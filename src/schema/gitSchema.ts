@@ -70,7 +70,7 @@ export const gitSwitchOptionsSchema = z.object({
    *
    * @see https://git-scm.com/docs/git-switch#Documentation/git-switch.txt---createltnew-branchgt
    */
-  isNew: z.boolean(),
+  isNew: z.boolean().optional(),
 });
 export type GitSwitchOptions = z.infer<typeof gitSwitchOptionsSchema>;
 

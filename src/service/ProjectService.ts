@@ -8,25 +8,38 @@ import { objectTypeSchema, type ObjectType } from '../schema/baseSchema.js';
 import type { CollectionExport } from '../schema/collectionSchema.js';
 import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import type { BaseFile } from '../schema/fileSchema.js';
+import { gitCommitIconSchema } from '../schema/gitSchema.js';
 import {
-  gitCommitIconSchema,
-  type GitSwitchOptions,
-} from '../schema/gitSchema.js';
-import {
+  cloneProjectSchema,
   createProjectSchema,
+  currentBranchProjectSchema,
   deleteProjectSchema,
+  getChangesProjectSchema,
+  getRemoteOriginUrlProjectSchema,
+  listBranchesProjectSchema,
   projectFileSchema,
   projectFolderSchema,
   readProjectSchema,
+  setRemoteOriginUrlProjectSchema,
+  switchBranchProjectSchema,
+  synchronizeProjectSchema,
   updateProjectSchema,
   upgradeProjectSchema,
+  type CloneProjectProps,
   type CreateProjectProps,
+  type CurrentBranchProjectProps,
   type DeleteProjectProps,
+  type GetChangesProjectProps,
+  type GetRemoteOriginUrlProjectProps,
+  type ListBranchesProjectProps,
   type Project,
   type ProjectExport,
   type ProjectFile,
   type ProjectSettings,
   type ReadProjectProps,
+  type SetRemoteOriginUrlProjectProps,
+  type SwitchBranchProjectProps,
+  type SynchronizeProjectProps,
   type UpdateProjectProps,
   type UpgradeProjectProps,
 } from '../schema/projectSchema.js';
@@ -153,8 +166,8 @@ export default class ProjectService
   /**
    * Clones a Project by URL
    */
-  public async clone(props: { url: string }): Promise<Project> {
-    // @todo schema.parse
+  public async clone(props: CloneProjectProps): Promise<Project> {
+    cloneProjectSchema.parse(props);
 
     const tmpId = Util.uuid();
     const tmpProjectPath = Path.join(Util.pathTo.tmp, tmpId);
@@ -321,35 +334,36 @@ export default class ProjectService
   }
 
   public branches = {
-    list: async (projectId: string) => {
-      const projectPath = Util.pathTo.project(projectId);
+    list: async (props: ListBranchesProjectProps) => {
+      listBranchesProjectSchema.parse(props);
+      const projectPath = Util.pathTo.project(props.id);
       await this.gitService.fetch(projectPath);
       return await this.gitService.branches.list(projectPath);
     },
-    current: async (projectId: string) => {
-      const projectPath = Util.pathTo.project(projectId);
+    current: async (props: CurrentBranchProjectProps) => {
+      currentBranchProjectSchema.parse(props);
+      const projectPath = Util.pathTo.project(props.id);
       return await this.gitService.branches.current(projectPath);
     },
-    switch: async (props: {
-      projectId: string;
-      name: string;
-      options?: Partial<GitSwitchOptions>;
-    }) => {
-      const projectPath = Util.pathTo.project(props.projectId);
+    switch: async (props: SwitchBranchProjectProps) => {
+      switchBranchProjectSchema.parse(props);
+      const projectPath = Util.pathTo.project(props.id);
       return await this.gitService.branches.switch(
         projectPath,
-        props.name,
+        props.branch,
         props.options
       );
     },
   };
 
   public remotes = {
-    getOriginUrl: async (props: { id: string }) => {
+    getOriginUrl: async (props: GetRemoteOriginUrlProjectProps) => {
+      getRemoteOriginUrlProjectSchema.parse(props);
       const projectPath = Util.pathTo.project(props.id);
       return await this.gitService.remotes.getOriginUrl(projectPath);
     },
-    setOriginUrl: async (props: { id: string; url: string }) => {
+    setOriginUrl: async (props: SetRemoteOriginUrlProjectProps) => {
+      setRemoteOriginUrlProjectSchema.parse(props);
       const projectPath = Util.pathTo.project(props.id);
       const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
       if (!hasOrigin) {
@@ -367,7 +381,8 @@ export default class ProjectService
    * - `behind` contains a list of commits on the current branch that are available on the remote `origin` but not yet locally
    * - `ahead` contains a list of commits on the current branch that are available locally but not yet on the remote `origin`
    */
-  public async getChanges(props: { id: string }) {
+  public async getChanges(props: GetChangesProjectProps) {
+    getChangesProjectSchema.parse(props);
     const projectPath = Util.pathTo.project(props.id);
     const currentBranch = await this.gitService.branches.current(projectPath);
 
@@ -389,7 +404,8 @@ export default class ProjectService
    * Pulls remote changes of `origin` down to the local repository
    * and then pushes local commits to the upstream branch
    */
-  public async synchronize(props: { id: string }) {
+  public async synchronize(props: SynchronizeProjectProps) {
+    synchronizeProjectSchema.parse(props);
     const projectPath = Util.pathTo.project(props.id);
 
     await this.gitService.pull(projectPath);

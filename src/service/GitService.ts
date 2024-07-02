@@ -185,22 +185,22 @@ export default class GitService {
      * @see https://git-scm.com/docs/git-switch/
      *
      * @param path    Path to the repository
-     * @param name    Name of the branch to switch to
+     * @param branch  Name of the branch to switch to
      * @param options Options specific to the switch operation
      */
     switch: async (
       path: string,
-      name: string,
-      options?: Partial<GitSwitchOptions>
+      branch: string,
+      options?: GitSwitchOptions
     ) => {
-      await this.checkBranchOrTagName(path, name);
+      await this.checkBranchOrTagName(path, branch);
 
       let args = ['switch'];
 
       if (options?.isNew === true) {
-        args = [...args, '--create', name];
+        args = [...args, '--create', branch];
       } else {
-        args = [...args, name];
+        args = [...args, branch];
       }
 
       await this.git(path, args);
