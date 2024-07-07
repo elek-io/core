@@ -1,23 +1,21 @@
-import RequiredParameterMissingError from '../error/RequiredParameterMissingError.js';
-import {
-  objectTypeSchema,
-  type ObjectType,
-  type SupportedAssetExtension,
-  type SupportedLanguage,
-} from '../schema/baseSchema.js';
-import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import { RequiredParameterMissingError } from '../error/index.js';
 import {
   fileReferenceSchema,
+  gitCommitIconSchema,
+  objectTypeSchema,
+  type ElekIoCoreOptions,
   type FileReference,
-} from '../schema/fileSchema.js';
-import { gitCommitIconSchema } from '../schema/gitSchema.js';
-import type { ServiceType } from '../schema/serviceSchema.js';
+  type ObjectType,
+  type ServiceType,
+  type SupportedAssetExtension,
+  type SupportedLanguage,
+} from '../schema/index.js';
 import { files, folders, notEmpty, pathTo } from '../util/node.js';
 
 /**
  * A base service that provides properties for most other services
  */
-export default abstract class AbstractCrudService {
+export abstract class AbstractCrudService {
   public readonly type: ServiceType;
   public readonly options: ElekIoCoreOptions;
 

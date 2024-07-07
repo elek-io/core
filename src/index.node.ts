@@ -1,18 +1,22 @@
 import Fs from 'fs-extra';
-import AssetService from './service/AssetService.js';
-import CollectionService from './service/CollectionService.js';
-import EntryService from './service/EntryService.js';
-import GitService from './service/GitService.js';
-import JsonFileService from './service/JsonFileService.js';
-import ProjectService from './service/ProjectService.js';
-// import SharedValueService from './service/SharedValueService.js';
 import {
   constructorElekIoCoreSchema,
   type ConstructorElekIoCoreProps,
   type ElekIoCoreOptions,
-} from './schema/coreSchema.js';
-import UserService from './service/UserService.js';
+} from './schema/index.js';
+import {
+  AssetService,
+  CollectionService,
+  EntryService,
+  GitService,
+  JsonFileService,
+  ProjectService,
+  UserService,
+} from './service/index.js';
 import * as Util from './util/node.js';
+
+export * from './schema/index.js';
+export * from './util/shared.js';
 
 /**
  * elek.io Core
@@ -152,6 +156,3 @@ export default class ElekIoCore {
   //   return this.sharedValueService;
   // }
 }
-
-export * from './schema/index.js';
-export * from './util/shared.js';

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { uuidSchema } from '../schema/baseSchema.js';
-import { currentTimestamp, slug, uuid } from './shared.js';
+import { currentTimestamp, slug, uuid, uuidSchema } from '../test/setup.js';
 
 describe('UUID', () => {
   it('can be generated', () => {

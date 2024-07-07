@@ -1,8 +1,11 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
-import { uuid } from '../util/shared.js';
-import { entrySchema, type Entry } from './entrySchema.js';
-import { getValueContentSchemaFromDefinition } from './valueSchema.js';
+import {
+  entrySchema,
+  getValueContentSchemaFromDefinition,
+  uuid,
+  type Entry,
+} from '../test/setup.js';
 
 describe('Dynamic zod schema', () => {
   it('from toggle Value input type definition can be generated and parsed with', () => {

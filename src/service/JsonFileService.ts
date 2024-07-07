@@ -4,12 +4,12 @@ import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import type { BaseFile } from '../schema/fileSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
 import type { UserFile } from '../schema/userSchema.js';
-import AbstractCrudService from './AbstractCrudService.js';
+import { AbstractCrudService } from './AbstractCrudService.js';
 
 /**
  * Service that manages CRUD functionality for JSON files on disk
  */
-export default class JsonFileService extends AbstractCrudService {
+export class JsonFileService extends AbstractCrudService {
   private cache: Map<string, any> = new Map();
 
   constructor(options: ElekIoCoreOptions) {

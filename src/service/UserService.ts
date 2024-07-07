@@ -5,14 +5,14 @@ import {
   type SetUserProps,
   type User,
   type UserFile,
-} from '../schema/userSchema.js';
+} from '../schema/index.js';
 import { pathTo } from '../util/node.js';
-import JsonFileService from './JsonFileService.js';
+import { JsonFileService } from './JsonFileService.js';
 
 /**
  * Service to handle the User that is currently working with Core
  */
-export default class UserService {
+export class UserService {
   private readonly jsonFileService: JsonFileService;
 
   constructor(jsonFileService: JsonFileService) {

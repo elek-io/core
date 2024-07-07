@@ -1,8 +1,6 @@
 import Fs from 'fs-extra';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Collection } from '../schema/collectionSchema.js';
-import type { Project } from '../schema/projectSchema.js';
-import core from '../test/setup.js';
+import core, { type Collection, type Project } from '../test/setup.js';
 import { createCollection, createProject } from '../test/util.js';
 
 describe.sequential('Integration', function () {

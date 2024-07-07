@@ -2,10 +2,11 @@ import { faker } from '@faker-js/faker';
 import crypto from 'crypto';
 import Fs from 'fs-extra';
 import Path from 'path';
-import type { ProjectSettings } from '../schema/projectSchema.js';
-import type { EntryValueDefinition } from '../schema/valueSchema.js';
-import { uuid } from '../util/shared.js';
-import core from './setup.js';
+import core, {
+  uuid,
+  type EntryValueDefinition,
+  type ProjectSettings,
+} from './setup.js';
 
 const id = {
   textValueDefinition: uuid(),

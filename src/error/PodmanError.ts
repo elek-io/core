@@ -1,4 +1,4 @@
-export default class PodmanError extends Error {
+export class PodmanError extends Error {
   constructor(message: string) {
     super(message);
 

@@ -1,47 +1,43 @@
 import Fs from 'fs-extra';
 import IsSvg from 'is-svg';
-import RequiredParameterMissingError from '../error/RequiredParameterMissingError.js';
+import { RequiredParameterMissingError } from '../error/index.js';
 import {
   assetFileSchema,
   assetSchema,
   countAssetsSchema,
   createAssetSchema,
   deleteAssetSchema,
-  readAssetSchema,
-  updateAssetSchema,
-  type Asset,
-  type AssetFile,
-  type CountAssetsProps,
-  type CreateAssetProps,
-  type DeleteAssetProps,
-  type ReadAssetProps,
-  type UpdateAssetProps,
-} from '../schema/assetSchema.js';
-import {
+  listAssetsSchema,
   objectTypeSchema,
+  readAssetSchema,
+  serviceTypeSchema,
   supportedAssetExtensionSchema,
   supportedAssetMimeTypeSchema,
   supportedAssetTypeSchema,
-} from '../schema/baseSchema.js';
-import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
-import type { BaseFile } from '../schema/fileSchema.js';
-import {
-  listAssetsSchema,
-  serviceTypeSchema,
+  updateAssetSchema,
+  type Asset,
+  type AssetFile,
+  type BaseFile,
+  type CountAssetsProps,
+  type CreateAssetProps,
+  type DeleteAssetProps,
+  type ElekIoCoreOptions,
   type ExtendedCrudService,
   type ListAssetsProps,
   type PaginatedList,
-} from '../schema/serviceSchema.js';
+  type ReadAssetProps,
+  type UpdateAssetProps,
+} from '../schema/index.js';
 import { pathTo, returnResolved } from '../util/node.js';
 import { currentTimestamp, uuid } from '../util/shared.js';
-import AbstractCrudService from './AbstractCrudService.js';
-import GitService from './GitService.js';
-import JsonFileService from './JsonFileService.js';
+import { AbstractCrudService } from './AbstractCrudService.js';
+import type { GitService } from './GitService.js';
+import { JsonFileService } from './JsonFileService.js';
 
 /**
  * Service that manages CRUD functionality for Asset files on disk
  */
-export default class AssetService
+export class AssetService
   extends AbstractCrudService
   implements ExtendedCrudService<Asset>
 {
