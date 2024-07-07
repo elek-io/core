@@ -9,16 +9,22 @@
   },
   "type": "module",
   "files": [
-    "dist"
+    "dist/node",
+    "dist/browser"
   ],
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/node/index.node.cjs",
+  "module": "./dist/browser/index.browser.js",
+  "types": "./dist/node/index.node.d.ts",
   "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+    "./node": {
+      "import": "./dist/node/index.node.js",
+      "require": "./dist/node/index.node.cjs",
+      "types": "./dist/node/index.node.d.ts"
+    },
+    "./browser": {
+      "import": "./dist/browser/index.browser.js",
+      "require": "./dist/browser/index.browser.cjs",
+      "types": "./dist/browser/index.browser.d.ts"
     }
   },
   "scripts": {
