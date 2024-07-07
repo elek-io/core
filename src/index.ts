@@ -152,3 +152,5 @@ export default class ElekIoCore {
   //   return this.sharedValueService;
   // }
 }
+
+export * from './schema/index.js';
