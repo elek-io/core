@@ -1,20 +1,19 @@
 import { GitProcess, type IGitResult } from 'dugite';
 import { EOL } from 'os';
 import PQueue from 'p-queue';
-import GitError from '../error/GitError.js';
-import NoCurrentUserError from '../error/NoCurrentUserError.js';
-import { uuidSchema } from '../schema/baseSchema.js';
-import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import { GitError, NoCurrentUserError } from '../error/index.js';
 import {
   gitCommitSchema,
+  uuidSchema,
+  type ElekIoCoreOptions,
   type GitCloneOptions,
   type GitCommit,
   type GitInitOptions,
   type GitLogOptions,
   type GitSwitchOptions,
-} from '../schema/gitSchema.js';
-import GitTagService from './GitTagService.js';
-import UserService from './UserService.js';
+} from '../schema/index.js';
+import { GitTagService } from './GitTagService.js';
+import { UserService } from './UserService.js';
 
 /**
  * Service that manages Git functionality
@@ -32,7 +31,7 @@ import UserService from './UserService.js';
  *
  * @todo All public methods should recieve only a single object as parameter and the type should be defined through the shared library to be accessible in Core and Client
  */
-export default class GitService {
+export class GitService {
   private version: string | null;
   private gitPath: string | null;
   private queue: PQueue;

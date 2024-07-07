@@ -1,4 +1,4 @@
-export default class MethodNotSupportedError extends Error {
+export class MethodNotSupportedError extends Error {
   constructor() {
     super();
 

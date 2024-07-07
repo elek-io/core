@@ -1,8 +1,7 @@
 import Fs from 'fs-extra';
 import path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Project } from '../schema/projectSchema.js';
-import core from '../test/setup.js';
+import core, { type Project } from '../test/setup.js';
 import { createProject } from '../test/util.js';
 
 describe.sequential('Integration', function () {

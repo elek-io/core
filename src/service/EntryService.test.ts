@@ -1,10 +1,11 @@
 import Fs from 'fs-extra';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Asset } from '../schema/assetSchema.js';
-import type { Collection } from '../schema/collectionSchema.js';
-import type { Entry } from '../schema/entrySchema.js';
-import type { Project } from '../schema/projectSchema.js';
-import core from '../test/setup.js';
+import core, {
+  type Asset,
+  type Collection,
+  type Entry,
+  type Project,
+} from '../test/setup.js';
 import {
   createAsset,
   createCollection,

@@ -1,39 +1,37 @@
 import Fs from 'fs-extra';
-import { objectTypeSchema } from '../schema/baseSchema.js';
 import {
   collectionFileSchema,
   countCollectionsSchema,
   createCollectionSchema,
   deleteCollectionSchema,
+  listCollectionsSchema,
+  objectTypeSchema,
   readCollectionSchema,
+  serviceTypeSchema,
   updateCollectionSchema,
+  type BaseFile,
   type Collection,
   type CollectionFile,
   type CountCollectionsProps,
   type CreateCollectionProps,
   type DeleteCollectionProps,
-  type ReadCollectionProps,
-  type UpdateCollectionProps,
-} from '../schema/collectionSchema.js';
-import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
-import type { BaseFile } from '../schema/fileSchema.js';
-import {
-  listCollectionsSchema,
-  serviceTypeSchema,
+  type ElekIoCoreOptions,
   type ExtendedCrudService,
   type ListCollectionsProps,
   type PaginatedList,
-} from '../schema/serviceSchema.js';
+  type ReadCollectionProps,
+  type UpdateCollectionProps,
+} from '../schema/index.js';
 import { pathTo, returnResolved } from '../util/node.js';
 import { currentTimestamp, slug, uuid } from '../util/shared.js';
-import AbstractCrudService from './AbstractCrudService.js';
-import GitService from './GitService.js';
-import JsonFileService from './JsonFileService.js';
+import { AbstractCrudService } from './AbstractCrudService.js';
+import { GitService } from './GitService.js';
+import { JsonFileService } from './JsonFileService.js';
 
 /**
  * Service that manages CRUD functionality for Collection files on disk
  */
-export default class CollectionService
+export class CollectionService
   extends AbstractCrudService
   implements ExtendedCrudService<Collection>
 {

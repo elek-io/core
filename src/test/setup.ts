@@ -1,5 +1,5 @@
-import ElekIoCore from '../index.js';
-export * from '../index.js';
+import ElekIoCore from '../index.node.js';
+export * from '../index.node.js';
 
 const core = new ElekIoCore();
 await core.user.set({

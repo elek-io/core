@@ -1,54 +1,47 @@
 import Fs from 'fs-extra';
 import {
-  objectTypeSchema,
-  type SupportedLanguage,
-} from '../schema/baseSchema.js';
-import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
-import {
+  ValueTypeSchema,
   countEntriesSchema,
   createEntrySchema,
   deleteEntrySchema,
   entryFileSchema,
   entrySchema,
+  getValueContentSchemaFromDefinition,
+  listEntriesSchema,
+  objectTypeSchema,
   readEntrySchema,
+  serviceTypeSchema,
   updateEntrySchema,
+  type BaseFile,
   type CountEntriesProps,
   type CreateEntryProps,
   type DeleteEntryProps,
+  type ElekIoCoreOptions,
   type Entry,
   type EntryFile,
-  type ReadEntryProps,
-  type UpdateEntryProps,
-} from '../schema/entrySchema.js';
-import type { BaseFile } from '../schema/fileSchema.js';
-import {
-  listEntriesSchema,
-  serviceTypeSchema,
   type ExtendedCrudService,
   type ListEntriesProps,
-} from '../schema/serviceSchema.js';
-import {
-  ValueTypeSchema,
-  getValueContentSchemaFromDefinition,
+  type ReadEntryProps,
   type ReferencedValue,
   type ResolvedValueContentReference,
+  type SupportedLanguage,
+  type UpdateEntryProps,
   type Value,
   type ValueContentReference,
   type ValueDefinition,
-} from '../schema/valueSchema.js';
+} from '../schema/index.js';
 import { pathTo, returnResolved } from '../util/node.js';
 import { currentTimestamp, uuid } from '../util/shared.js';
-import AbstractCrudService from './AbstractCrudService.js';
-import type AssetService from './AssetService.js';
-import CollectionService from './CollectionService.js';
-import GitService from './GitService.js';
-import JsonFileService from './JsonFileService.js';
-// import SharedValueService from './SharedValueService.js';
+import { AbstractCrudService } from './AbstractCrudService.js';
+import type { AssetService } from './AssetService.js';
+import type { CollectionService } from './CollectionService.js';
+import type { GitService } from './GitService.js';
+import { JsonFileService } from './JsonFileService.js';
 
 /**
  * Service that manages CRUD functionality for Entry files on disk
  */
-export default class EntryService
+export class EntryService
   extends AbstractCrudService
   implements ExtendedCrudService<Entry>
 {

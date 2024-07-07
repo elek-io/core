@@ -1,33 +1,31 @@
 import { EOL } from 'os';
-import GitError from '../error/GitError.js';
-import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
+import { GitError } from '../error/index.js';
 import {
   countGitTagsSchema,
   createGitTagSchema,
   deleteGitTagSchema,
   gitTagSchema,
+  listGitTagsSchema,
   readGitTagSchema,
+  serviceTypeSchema,
   type CountGitTagsProps,
   type CreateGitTagProps,
   type DeleteGitTagProps,
-  type GitTag,
-  type ReadGitTagProps,
-} from '../schema/gitTagSchema.js';
-import {
-  listGitTagsSchema,
-  serviceTypeSchema,
+  type ElekIoCoreOptions,
   type ExtendedCrudService,
+  type GitTag,
   type ListGitTagsProps,
   type PaginatedList,
-} from '../schema/serviceSchema.js';
+  type ReadGitTagProps,
+} from '../schema/index.js';
 import { uuid } from '../util/shared.js';
-import AbstractCrudService from './AbstractCrudService.js';
-import GitService from './GitService.js';
+import { AbstractCrudService } from './AbstractCrudService.js';
+import { GitService } from './GitService.js';
 
 /**
  * Service that manages CRUD functionality for GitTags
  */
-export default class GitTagService
+export class GitTagService
   extends AbstractCrudService
   implements ExtendedCrudService<GitTag>
 {

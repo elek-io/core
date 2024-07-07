@@ -2,13 +2,7 @@ import Fs from 'fs-extra';
 import Os from 'os';
 import Path from 'path';
 import Semver from 'semver';
-import NoCurrentUserError from '../error/NoCurrentUserError.js';
-import ProjectUpgradeError from '../error/ProjectUpgradeError.js';
-import { objectTypeSchema } from '../schema/baseSchema.js';
-import type { CollectionExport } from '../schema/collectionSchema.js';
-import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
-import type { BaseFile } from '../schema/fileSchema.js';
-import { gitCommitIconSchema } from '../schema/gitSchema.js';
+import { NoCurrentUserError, ProjectUpgradeError } from '../error/index.js';
 import {
   cloneProjectSchema,
   createProjectSchema,
@@ -16,22 +10,32 @@ import {
   deleteProjectSchema,
   getChangesProjectSchema,
   getRemoteOriginUrlProjectSchema,
+  gitCommitIconSchema,
   listBranchesProjectSchema,
+  listProjectsSchema,
+  objectTypeSchema,
   projectFileSchema,
   projectFolderSchema,
   readProjectSchema,
+  serviceTypeSchema,
   setRemoteOriginUrlProjectSchema,
   switchBranchProjectSchema,
   synchronizeProjectSchema,
   updateProjectSchema,
   upgradeProjectSchema,
+  type BaseFile,
   type CloneProjectProps,
+  type CollectionExport,
   type CreateProjectProps,
   type CurrentBranchProjectProps,
   type DeleteProjectProps,
+  type ElekIoCoreOptions,
+  type ExtendedCrudService,
   type GetChangesProjectProps,
   type GetRemoteOriginUrlProjectProps,
   type ListBranchesProjectProps,
+  type ListProjectsProps,
+  type PaginatedList,
   type Project,
   type ProjectExport,
   type ProjectFile,
@@ -42,29 +46,22 @@ import {
   type SynchronizeProjectProps,
   type UpdateProjectProps,
   type UpgradeProjectProps,
-} from '../schema/projectSchema.js';
-import {
-  listProjectsSchema,
-  serviceTypeSchema,
-  type ExtendedCrudService,
-  type ListProjectsProps,
-  type PaginatedList,
-} from '../schema/serviceSchema.js';
+} from '../schema/index.js';
 import type { ProjectUpgradeImport } from '../upgrade/example.js';
 import { files, pathTo, returnResolved } from '../util/node.js';
 import { currentTimestamp, uuid } from '../util/shared.js';
-import AbstractCrudService from './AbstractCrudService.js';
-import AssetService from './AssetService.js';
-import CollectionService from './CollectionService.js';
-import type EntryService from './EntryService.js';
-import GitService from './GitService.js';
-import JsonFileService from './JsonFileService.js';
-import UserService from './UserService.js';
+import { AbstractCrudService } from './AbstractCrudService.js';
+import { AssetService } from './AssetService.js';
+import { CollectionService } from './CollectionService.js';
+import type { EntryService } from './EntryService.js';
+import { GitService } from './GitService.js';
+import { JsonFileService } from './JsonFileService.js';
+import { UserService } from './UserService.js';
 
 /**
  * Service that manages CRUD functionality for Project files on disk
  */
-export default class ProjectService
+export class ProjectService
   extends AbstractCrudService
   implements ExtendedCrudService<Project>
 {

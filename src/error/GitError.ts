@@ -1,4 +1,4 @@
-export default class GitError extends Error {
+export class GitError extends Error {
   constructor(message: string) {
     super(message);
 
