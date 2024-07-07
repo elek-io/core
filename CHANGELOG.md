@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.5.2
+
+### Patch Changes
+
+- 8114ca1: fix: properly export for node and browser environments
+
 ## 0.5.1
 
 ### Patch Changes
