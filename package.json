@@ -16,15 +16,15 @@
   "module": "./dist/browser/index.browser.js",
   "types": "./dist/node/index.node.d.ts",
   "exports": {
-    "./node": {
+    "node": {
+      "types": "./dist/node/index.node.d.ts",
       "import": "./dist/node/index.node.js",
-      "require": "./dist/node/index.node.cjs",
-      "types": "./dist/node/index.node.d.ts"
+      "require": "./dist/node/index.node.cjs"
     },
-    "./browser": {
+    "browser": {
+      "types": "./dist/browser/index.browser.d.ts",
       "import": "./dist/browser/index.browser.js",
-      "require": "./dist/browser/index.browser.cjs",
-      "types": "./dist/browser/index.browser.d.ts"
+      "require": "./dist/browser/index.browser.cjs"
     }
   },
   "scripts": {
