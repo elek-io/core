@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.4.2
+
+### Patch Changes
+
+- b56c625: Added missing export of shared functions
+
 ## 0.4.1
 
 ### Patch Changes
