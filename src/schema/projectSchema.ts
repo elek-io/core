@@ -155,3 +155,11 @@ export const synchronizeProjectSchema = z.object({
   id: uuidSchema.readonly(),
 });
 export type SynchronizeProjectProps = z.infer<typeof synchronizeProjectSchema>;
+
+export const searchProjectSchema = z.object({
+  id: uuidSchema.readonly(),
+  query: z.string(),
+  language: supportedLanguageSchema,
+  type: z.array(objectTypeSchema).optional(),
+});
+export type SearchProjectProps = z.infer<typeof searchProjectSchema>;

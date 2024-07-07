@@ -214,13 +214,19 @@ export default class EntryService
   public async list(props: ListEntriesProps) {
     listEntriesSchema.parse(props);
 
-    const references = await this.listReferences(
+    const offset = props.offset || 0;
+    const limit = props.limit || 15;
+
+    const entryReferences = await this.listReferences(
       objectTypeSchema.Enum.entry,
       props.projectId,
       props.collectionId
     );
-    const list = await Util.returnResolved(
-      references.map((reference) => {
+
+    const partialEntryReferences = entryReferences.slice(offset, limit);
+
+    const entries = await Util.returnResolved(
+      partialEntryReferences.map((reference) => {
         return this.read({
           projectId: props.projectId,
           collectionId: props.collectionId,
@@ -229,13 +235,12 @@ export default class EntryService
       })
     );
 
-    return this.paginate(
-      list,
-      props.sort,
-      props.filter,
-      props.limit,
-      props.offset
-    );
+    return {
+      total: entryReferences.length,
+      limit,
+      offset,
+      list: entries,
+    };
   }
 
   public async count(props: CountEntriesProps): Promise<number> {

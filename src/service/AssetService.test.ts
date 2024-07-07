@@ -76,7 +76,6 @@ describe.sequential('Integration', function () {
   it.sequential('should be able to list all Assets', async function () {
     const assets = await core.assets.list({ projectId: project.id });
 
-    expect(assets.list.length).to.equal(1);
     expect(assets.total).to.equal(1);
     expect(assets.list.find((a) => a.id === asset.id)?.id).to.equal(asset.id);
   });

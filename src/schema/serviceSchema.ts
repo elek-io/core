@@ -1,11 +1,6 @@
 import { z } from 'zod';
-import { assetSchema } from './assetSchema.js';
 import { uuidSchema } from './baseSchema.js';
-import { collectionSchema } from './collectionSchema.js';
-import { entrySchema } from './entrySchema.js';
 import { gitRepositoryPathSchema } from './gitSchema.js';
-import { gitTagSchema } from './gitTagSchema.js';
-import { projectSchema } from './projectSchema.js';
 
 export const serviceTypeSchema = z.enum([
   'Git',
@@ -27,20 +22,8 @@ export interface PaginatedList<T> {
   offset: number;
   list: T[];
 }
-// function paginatedListOfSchema<Schema extends z.ZodTypeAny>(schema: Schema) {
-//   return z.object({
-//     total: z.number(),
-//     limit: z.number(),
-//     offset: z.number(),
-//     list: z.array(schema),
-//   });
-// }
-// const stringSchema = paginatedListOfSchema(z.string());
-// type StringSchema = z.infer<typeof stringSchema>;
 
-export interface PaginationOptions<T> {
-  sort: Sort<T>[];
-  filter: string;
+export interface PaginationOptions {
   limit: number;
   offset: number;
 }
@@ -61,65 +44,41 @@ export interface CrudService<T> {
  */
 export interface ExtendedCrudService<T> extends CrudService<T> {
   /**
-   * Returns a filtered, sorted and paginated list
-   * of this services models from given project
-   *
-   * @see AbstractCrudService.paginate
-   *
+   * Returns a list of this services objects
    */
-  list: (...props: any) => Promise<PaginatedList<T>>; // @todo change to "sort: Sort<T>[]" once schema.keyof() is not of type "never" anymore
-
+  list: (...props: any) => Promise<PaginatedList<T>>;
   /**
-   * Returns the total number of models inside given project
+   * Returns the total number of this services objects
    */
   count: (...props: any) => Promise<number>;
 }
 
-function sortSchema<T extends z.AnyZodObject>(schema: T) {
-  return z.object({
-    by: schema.keyof(), // @todo schema.keyof() is of type "never" - why?
-    order: z.enum(['asc', 'desc']),
-  });
-}
-export type Sort<T> = {
-  by: keyof T;
-  order: 'asc' | 'desc';
-};
+const listSchema = z.object({
+  projectId: uuidSchema,
+  limit: z.number().optional(),
+  offset: z.number().optional(),
+});
 
-function listSchema<T extends z.AnyZodObject>(schema: T) {
-  return z.object({
-    projectId: uuidSchema,
-    sort: z.array(sortSchema(schema)).optional(),
-    filter: z.string().optional(),
-    limit: z.number().optional(),
-    offset: z.number().optional(),
-  });
-}
-
-export const listCollectionsSchema = listSchema(collectionSchema);
+export const listCollectionsSchema = listSchema;
 export type ListCollectionsProps = z.infer<typeof listCollectionsSchema>;
 
-export const listEntriesSchema = listSchema(entrySchema).extend({
+export const listEntriesSchema = listSchema.extend({
   collectionId: uuidSchema,
 });
 export type ListEntriesProps = z.infer<typeof listEntriesSchema>;
 
-export const listAssetsSchema = listSchema(assetSchema);
+export const listAssetsSchema = listSchema;
 export type ListAssetsProps = z.infer<typeof listAssetsSchema>;
 
 // export const listSharedValuesSchema = listSchema(sharedValueSchema);
 // export type ListSharedValuesProps = z.infer<typeof listSharedValuesSchema>;
 
-export const listProjectsSchema = listSchema(projectSchema).omit({
+export const listProjectsSchema = listSchema.omit({
   projectId: true,
 });
 export type ListProjectsProps = z.infer<typeof listProjectsSchema>;
 
-export const listGitTagsSchema = listSchema(gitTagSchema)
-  .omit({
-    projectId: true,
-  })
-  .extend({
-    path: gitRepositoryPathSchema,
-  });
+export const listGitTagsSchema = z.object({
+  path: gitRepositoryPathSchema,
+});
 export type ListGitTagsProps = z.infer<typeof listGitTagsSchema>;

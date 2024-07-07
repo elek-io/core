@@ -5,7 +5,6 @@ import EntryService from './service/EntryService.js';
 import GitService from './service/GitService.js';
 import JsonFileService from './service/JsonFileService.js';
 import ProjectService from './service/ProjectService.js';
-import SearchService from './service/SearchService.js';
 // import SharedValueService from './service/SharedValueService.js';
 import {
   constructorElekIoCoreSchema,
@@ -26,7 +25,6 @@ export default class ElekIoCore {
   private readonly gitService: GitService;
   private readonly jsonFileService: JsonFileService;
   private readonly assetService: AssetService;
-  private readonly searchService: SearchService;
   private readonly projectService: ProjectService;
   private readonly collectionService: CollectionService;
   private readonly entryService: EntryService;
@@ -74,17 +72,11 @@ export default class ElekIoCore {
       this.assetService
       // this.sharedValueService
     );
-    this.searchService = new SearchService(
-      this.options,
-      this.assetService,
-      this.collectionService
-    );
     this.projectService = new ProjectService(
       this.options,
       this.jsonFileService,
       this.userService,
       this.gitService,
-      this.searchService,
       this.assetService,
       this.collectionService,
       this.entryService
