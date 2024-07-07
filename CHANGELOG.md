@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.4.1
+
+### Patch Changes
+
+- a0293cd: Added missing export of schema files
+
 ## 0.4.0
 
 ### Minor Changes
