@@ -1,6 +1,6 @@
 {
   "name": "@elek-io/core",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Handles core functionality of elek.io Projects like file IO and version control.",
   "homepage": "https://elek.io",
   "repository": "https://github.com/elek-io/core",
