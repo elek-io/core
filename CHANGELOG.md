@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.5.0
+
+### Minor Changes
+
+- a923ef7: Separated entry points for node and browser. Simplified imports by providing exports via index.ts for errors and services
+
 ## 0.4.2
 
 ### Patch Changes
