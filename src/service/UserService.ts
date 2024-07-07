@@ -6,7 +6,7 @@ import {
   type User,
   type UserFile,
 } from '../schema/userSchema.js';
-import * as Util from '../util/index.js';
+import { pathTo } from '../util/node.js';
 import JsonFileService from './JsonFileService.js';
 
 /**
@@ -24,10 +24,7 @@ export default class UserService {
    */
   public async get(): Promise<User | undefined> {
     try {
-      return await this.jsonFileService.read(
-        Util.pathTo.userFile,
-        userFileSchema
-      );
+      return await this.jsonFileService.read(pathTo.userFile, userFileSchema);
     } catch (error) {
       // Should probably be logged in some way or another
       return undefined;
@@ -42,7 +39,7 @@ export default class UserService {
   public async set(props: SetUserProps): Promise<User> {
     setUserSchema.parse(props);
 
-    const userFilePath = Util.pathTo.userFile;
+    const userFilePath = pathTo.userFile;
 
     const userFile: UserFile = {
       ...props,

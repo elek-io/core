@@ -12,7 +12,7 @@ import {
   type ElekIoCoreOptions,
 } from './schema/coreSchema.js';
 import UserService from './service/UserService.js';
-import * as Util from './util/index.js';
+import * as Util from './util/node.js';
 
 /**
  * elek.io Core
@@ -154,3 +154,4 @@ export default class ElekIoCore {
 }
 
 export * from './schema/index.js';
+export * from './util/shared.js';

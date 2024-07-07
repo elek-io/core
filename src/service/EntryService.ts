@@ -36,7 +36,8 @@ import {
   type ValueContentReference,
   type ValueDefinition,
 } from '../schema/valueSchema.js';
-import * as Util from '../util/index.js';
+import { pathTo, returnResolved } from '../util/node.js';
+import { currentTimestamp, uuid } from '../util/shared.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import type AssetService from './AssetService.js';
 import CollectionService from './CollectionService.js';
@@ -80,9 +81,9 @@ export default class EntryService
   public async create(props: CreateEntryProps): Promise<Entry> {
     createEntrySchema.parse(props);
 
-    const id = Util.uuid();
-    const projectPath = Util.pathTo.project(props.projectId);
-    const entryFilePath = Util.pathTo.entryFile(
+    const id = uuid();
+    const projectPath = pathTo.project(props.projectId);
+    const entryFilePath = pathTo.entryFile(
       props.projectId,
       props.collectionId,
       id
@@ -96,7 +97,7 @@ export default class EntryService
       objectType: 'entry',
       id,
       values: props.values,
-      created: Util.currentTimestamp(),
+      created: currentTimestamp(),
       updated: null,
     };
 
@@ -130,7 +131,7 @@ export default class EntryService
     readEntrySchema.parse(props);
 
     const entryFile: EntryFile = await this.jsonFileService.read(
-      Util.pathTo.entryFile(props.projectId, props.collectionId, props.id),
+      pathTo.entryFile(props.projectId, props.collectionId, props.id),
       entryFileSchema
     );
 
@@ -147,8 +148,8 @@ export default class EntryService
   public async update(props: UpdateEntryProps): Promise<Entry> {
     updateEntrySchema.parse(props);
 
-    const projectPath = Util.pathTo.project(props.projectId);
-    const entryFilePath = Util.pathTo.entryFile(
+    const projectPath = pathTo.project(props.projectId);
+    const entryFilePath = pathTo.entryFile(
       props.projectId,
       props.collectionId,
       props.id
@@ -167,7 +168,7 @@ export default class EntryService
     const entryFile: EntryFile = {
       ...prevEntryFile,
       values: props.values,
-      updated: Util.currentTimestamp(),
+      updated: currentTimestamp(),
     };
 
     const entry: Entry = await this.toEntry({
@@ -199,8 +200,8 @@ export default class EntryService
   public async delete(props: DeleteEntryProps): Promise<void> {
     deleteEntrySchema.parse(props);
 
-    const projectPath = Util.pathTo.project(props.projectId);
-    const entryFilePath = Util.pathTo.entryFile(
+    const projectPath = pathTo.project(props.projectId);
+    const entryFilePath = pathTo.entryFile(
       props.projectId,
       props.collectionId,
       props.id
@@ -225,7 +226,7 @@ export default class EntryService
 
     const partialEntryReferences = entryReferences.slice(offset, limit);
 
-    const entries = await Util.returnResolved(
+    const entries = await returnResolved(
       partialEntryReferences.map((reference) => {
         return this.read({
           projectId: props.projectId,
