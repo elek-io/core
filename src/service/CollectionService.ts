@@ -302,12 +302,21 @@ export default class CollectionService
   ): Promise<PaginatedList<Collection>> {
     listCollectionsSchema.parse(props);
 
-    const references = await this.listReferences(
+    const offset = props.offset || 0;
+    const limit = props.limit || 15;
+
+    const collectionReferences = await this.listReferences(
       objectTypeSchema.Enum.collection,
       props.projectId
     );
-    const list = await Util.returnResolved(
-      references.map((reference) => {
+
+    const partialCollectionReferences = collectionReferences.slice(
+      offset,
+      limit
+    );
+
+    const collections = await Util.returnResolved(
+      partialCollectionReferences.map((reference) => {
         return this.read({
           projectId: props.projectId,
           id: reference.id,
@@ -315,13 +324,12 @@ export default class CollectionService
       })
     );
 
-    return this.paginate(
-      list,
-      props.sort,
-      props.filter,
-      props.limit,
-      props.offset
-    );
+    return {
+      total: collectionReferences.length,
+      limit,
+      offset,
+      list: collections,
+    };
   }
 
   public async count(props: CountCollectionsProps): Promise<number> {

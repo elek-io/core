@@ -1,4 +1,3 @@
-import { orderBy, remove } from 'lodash-es';
 import RequiredParameterMissingError from '../error/RequiredParameterMissingError.js';
 import {
   objectTypeSchema,
@@ -9,16 +8,10 @@ import {
 import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import {
   fileReferenceSchema,
-  type BaseFile,
   type FileReference,
 } from '../schema/fileSchema.js';
 import { gitCommitIconSchema } from '../schema/gitSchema.js';
-import type { GitTag } from '../schema/gitTagSchema.js';
-import type {
-  PaginatedList,
-  ServiceType,
-  Sort,
-} from '../schema/serviceSchema.js';
+import type { ServiceType } from '../schema/serviceSchema.js';
 import * as Util from '../util/index.js';
 
 /**
@@ -47,67 +40,6 @@ export default abstract class AbstractCrudService {
       create: `${gitCommitIconSchema.enum.CREATE} Created ${this.type}`,
       update: `${gitCommitIconSchema.enum.UPDATE} Updated ${this.type}`,
       delete: `${gitCommitIconSchema.enum.DELETE} Deleted ${this.type}`,
-    };
-  }
-
-  /**
-   * Returns the filtered, sorted and paginated version of given list
-   *
-   * @todo Sorting and filtering requires all models to be loaded
-   * from disk. This results in a huge memory spike before the
-   * filtering and pagination takes effect - removing most of it again.
-   * This approach is still better than returning everything and
-   * letting the frontend handle it, since the memory usage would then be constant.
-   * But this still could fill the memory limit of node.js (default 1,4 GB).
-   *
-   * @param list Array to filter, sort and paginate
-   * @param sort Array of sort objects containing information about what to sort and how
-   * @param filter Filter all object values of `list` by this string
-   * @param limit Limit the result to this amount. If 0 is given, no limit is applied
-   * @param offset Start at this index instead of 0
-   */
-  protected async paginate<T extends BaseFile | GitTag>(
-    list: T[],
-    sort: Sort<T>[] = [],
-    filter = '',
-    limit = 15,
-    offset = 0
-  ): Promise<PaginatedList<T>> {
-    let result = list;
-    const total = list.length;
-    const normalizedFilter = filter.trim().toLowerCase();
-
-    // Filter
-    if (normalizedFilter !== '') {
-      remove(result, (model) => {
-        let key: keyof T;
-        for (key in model) {
-          const value = model[key];
-          if (String(value).toLowerCase().includes(normalizedFilter)) {
-            return false;
-          }
-        }
-        return true;
-      });
-    }
-
-    // Sort
-    if (sort.length !== 0) {
-      const keys = sort.map((value) => value.by);
-      const orders = sort.map((value) => value.order);
-      result = orderBy(result, keys, orders);
-    }
-
-    // Paginate
-    if (limit !== 0) {
-      result = result.slice(offset, offset + limit);
-    }
-
-    return {
-      total,
-      limit,
-      offset,
-      list: result,
     };
   }
 

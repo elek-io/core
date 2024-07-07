@@ -20,7 +20,6 @@ import {
   projectFileSchema,
   projectFolderSchema,
   readProjectSchema,
-  searchProjectSchema,
   setRemoteOriginUrlProjectSchema,
   switchBranchProjectSchema,
   synchronizeProjectSchema,
@@ -38,7 +37,6 @@ import {
   type ProjectFile,
   type ProjectSettings,
   type ReadProjectProps,
-  type SearchProjectProps,
   type SetRemoteOriginUrlProjectProps,
   type SwitchBranchProjectProps,
   type SynchronizeProjectProps,
@@ -60,7 +58,6 @@ import CollectionService from './CollectionService.js';
 import type EntryService from './EntryService.js';
 import GitService from './GitService.js';
 import JsonFileService from './JsonFileService.js';
-import SearchService from './SearchService.js';
 import UserService from './UserService.js';
 
 /**
@@ -73,7 +70,6 @@ export default class ProjectService
   private jsonFileService: JsonFileService;
   private userService: UserService;
   private gitService: GitService;
-  private searchService: SearchService;
   private assetService: AssetService;
   private collectionService: CollectionService;
   private entryService: EntryService;
@@ -83,7 +79,6 @@ export default class ProjectService
     jsonFileService: JsonFileService,
     userService: UserService,
     gitService: GitService,
-    searchService: SearchService,
     assetService: AssetService,
     collectionService: CollectionService,
     entryService: EntryService
@@ -93,7 +88,6 @@ export default class ProjectService
     this.jsonFileService = jsonFileService;
     this.userService = userService;
     this.gitService = gitService;
-    this.searchService = searchService;
     this.assetService = assetService;
     this.collectionService = collectionService;
     this.entryService = entryService;
@@ -434,41 +428,31 @@ export default class ProjectService
       listProjectsSchema.parse(props);
     }
 
-    const references = await this.listReferences(objectTypeSchema.Enum.project);
-    const list = await Util.returnResolved(
-      references.map((reference) => {
+    const offset = props?.offset || 0;
+    const limit = props?.limit || 15;
+
+    const projectReferences = await this.listReferences(
+      objectTypeSchema.Enum.project
+    );
+
+    const partialProjectReferences = projectReferences.slice(offset, limit);
+
+    const projects = await Util.returnResolved(
+      partialProjectReferences.map((reference) => {
         return this.read({ id: reference.id });
       })
     );
 
-    return this.paginate(
-      list,
-      props?.sort,
-      props?.filter,
-      props?.limit,
-      props?.offset
-    );
+    return {
+      total: projectReferences.length,
+      limit,
+      offset,
+      list: projects,
+    };
   }
 
   public async count(): Promise<number> {
     return (await this.listReferences(objectTypeSchema.Enum.project)).length;
-  }
-
-  /**
-   * Search all models inside the project for given query
-   *
-   * @param projectId Project ID to search in
-   * @param query     Query to search for
-   * @param type      (Optional) specify the type to search for
-   */
-  public async search(props: SearchProjectProps) {
-    searchProjectSchema.parse(props);
-    return this.searchService.search(
-      props.id,
-      props.query,
-      props.language,
-      props.type
-    );
   }
 
   /**

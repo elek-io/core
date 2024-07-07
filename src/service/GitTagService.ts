@@ -65,25 +65,23 @@ export default class GitTagService
   /**
    * Returns a tag by ID
    *
-   * Internally uses list() with id as pattern.
+   * Internally uses list() but only returns the tag with matching ID.
    */
   public async read(props: ReadGitTagProps): Promise<GitTag> {
     readGitTagSchema.parse(props);
 
-    const tags = await this.list({ path: props.path, filter: props.id });
+    const tags = await this.list({ path: props.path });
+    const tag = tags.list.find((tag) => {
+      return tag.id === props.id;
+    });
 
-    if (tags.total === 0) {
+    if (!tag) {
       throw new GitError(
         `Provided tag with UUID "${props.id}" did not match any known tags`
       );
     }
-    if (tags.total > 1) {
-      throw new GitError(
-        `Provided tag with UUID "${props.id}" matched multiple known tags`
-      );
-    }
 
-    return tags.list[0];
+    return tag;
   }
 
   /**
@@ -152,13 +150,12 @@ export default class GitTagService
 
     const gitTags = lineObjArr.filter(this.isGitTag.bind(this));
 
-    return this.paginate(
-      gitTags,
-      props?.sort,
-      props?.filter,
-      props?.limit,
-      props?.offset
-    );
+    return {
+      total: gitTags.length,
+      limit: 0,
+      offset: 0,
+      list: gitTags,
+    };
   }
 
   /**

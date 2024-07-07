@@ -216,12 +216,18 @@ export default class AssetService
   public async list(props: ListAssetsProps): Promise<PaginatedList<Asset>> {
     listAssetsSchema.parse(props);
 
+    const offset = props.offset || 0;
+    const limit = props.limit || 15;
+
     const assetReferences = await this.listReferences(
       objectTypeSchema.Enum.asset,
       props.projectId
     );
-    const list = await Util.returnResolved(
-      assetReferences.map((assetReference) => {
+
+    const partialAssetReferences = assetReferences.slice(offset, limit);
+
+    const assets = await Util.returnResolved(
+      partialAssetReferences.map((assetReference) => {
         if (!assetReference.language) {
           throw new RequiredParameterMissingError('language');
         }
@@ -233,15 +239,12 @@ export default class AssetService
       })
     );
 
-    const paginatedResult = this.paginate(
-      list,
-      props.sort,
-      props.filter,
-      props.limit,
-      props.offset
-    );
-
-    return paginatedResult;
+    return {
+      total: assetReferences.length,
+      limit,
+      offset,
+      list: assets,
+    };
   }
 
   public async count(props: CountAssetsProps): Promise<number> {
