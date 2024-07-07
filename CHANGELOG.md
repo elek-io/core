@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.5.1
+
+### Patch Changes
+
+- 45d5de4: Optimized imports
+
 ## 0.5.0
 
 ### Minor Changes
