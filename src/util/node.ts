@@ -3,46 +3,8 @@ import Fs from 'fs-extra';
 import { filter, flatten, groupBy, uniq } from 'lodash-es';
 import Os from 'os';
 import Path from 'path';
-import slugify from 'slugify';
-import { v4 as generateUuid } from 'uuid';
-import { uuidSchema, type Uuid } from '../schema/baseSchema.js';
+import { uuidSchema } from '../schema/baseSchema.js';
 import { projectFolderSchema } from '../schema/projectSchema.js';
-
-// Hack to make slugify work with ESM
-// @see https://github.com/simov/slugify/issues/24
-// @ts-ignore
-const Slugify = slugify.default || slugify;
-
-/**
- * Returns a new UUID
- */
-export function uuid(): Uuid {
-  return generateUuid();
-}
-
-/**
- * Returns the current UNIX timestamp
- *
- * Since the UNIX timestamp is the number of seconds
- * that have elapsed from January 1, 1970, UTC and
- * `Date.now()` returns the time in milliseconds,
- * we need to convert this into seconds.
- */
-export function currentTimestamp() {
-  return Math.floor(Date.now() / 1000);
-}
-
-/**
- * Returns the slug of given string
- */
-export function slug(string: string): string {
-  return Slugify(string, {
-    replacement: '-', // replace spaces with replacement character, defaults to `-`
-    remove: undefined, // remove characters that match regex, defaults to `undefined`
-    lower: true, // convert to lower case, defaults to `false`
-    strict: true, // strip special characters except replacement, defaults to `false`
-  });
-}
 
 /**
  * The directory in which everything is stored and will be worked in

@@ -20,7 +20,7 @@ import {
   type ListGitTagsProps,
   type PaginatedList,
 } from '../schema/serviceSchema.js';
-import { uuid } from '../util/index.js';
+import { uuid } from '../util/shared.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import GitService from './GitService.js';
 

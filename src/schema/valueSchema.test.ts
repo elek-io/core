@@ -1,6 +1,6 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
-import { uuid } from '../util/index.js';
+import { uuid } from '../util/shared.js';
 import { entrySchema, type Entry } from './entrySchema.js';
 import { getValueContentSchemaFromDefinition } from './valueSchema.js';
 

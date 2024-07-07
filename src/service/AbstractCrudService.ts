@@ -12,7 +12,7 @@ import {
 } from '../schema/fileSchema.js';
 import { gitCommitIconSchema } from '../schema/gitSchema.js';
 import type { ServiceType } from '../schema/serviceSchema.js';
-import * as Util from '../util/index.js';
+import { files, folders, notEmpty, pathTo } from '../util/node.js';
 
 /**
  * A base service that provides properties for most other services
@@ -60,16 +60,16 @@ export default abstract class AbstractCrudService {
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
-        return this.getFileReferences(Util.pathTo.lfs(projectId)); // LFS folder is correct, since we want the extension of the file itself, not the AssetFile (.json)
+        return this.getFileReferences(pathTo.lfs(projectId)); // LFS folder is correct, since we want the extension of the file itself, not the AssetFile (.json)
 
       case objectTypeSchema.Enum.project:
-        return this.getFolderReferences(Util.pathTo.projects);
+        return this.getFolderReferences(pathTo.projects);
 
       case objectTypeSchema.Enum.collection:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
-        return this.getFolderReferences(Util.pathTo.collections(projectId));
+        return this.getFolderReferences(pathTo.collections(projectId));
 
       case objectTypeSchema.Enum.entry:
         if (!projectId) {
@@ -79,14 +79,14 @@ export default abstract class AbstractCrudService {
           throw new RequiredParameterMissingError('collectionId');
         }
         return this.getFileReferences(
-          Util.pathTo.collection(projectId, collectionId)
+          pathTo.collection(projectId, collectionId)
         );
 
       case objectTypeSchema.Enum.sharedValue:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
-        return this.getFileReferences(Util.pathTo.sharedValues(projectId));
+        return this.getFileReferences(pathTo.sharedValues(projectId));
 
       default:
         throw new Error(`Trying to list files of unsupported type "${type}"`);
@@ -94,7 +94,7 @@ export default abstract class AbstractCrudService {
   }
 
   private async getFolderReferences(path: string): Promise<FileReference[]> {
-    const possibleFolders = await Util.folders(path);
+    const possibleFolders = await folders(path);
     const results = possibleFolders.map((possibleFolder) => {
       const folderReference: FileReference = {
         id: possibleFolder.name,
@@ -107,7 +107,7 @@ export default abstract class AbstractCrudService {
       }
     });
 
-    return results.filter(Util.notEmpty);
+    return results.filter(notEmpty);
   }
 
   /**
@@ -118,7 +118,7 @@ export default abstract class AbstractCrudService {
    * or [id].[extension] format for their names
    */
   private async getFileReferences(path: string): Promise<FileReference[]> {
-    const possibleFiles = await Util.files(path);
+    const possibleFiles = await files(path);
 
     const results = await Promise.all(
       possibleFiles.map(async (possibleFile) => {
@@ -144,6 +144,6 @@ export default abstract class AbstractCrudService {
       })
     );
 
-    return results.filter(Util.notEmpty);
+    return results.filter(notEmpty);
   }
 }

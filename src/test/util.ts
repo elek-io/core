@@ -4,7 +4,7 @@ import Fs from 'fs-extra';
 import Path from 'path';
 import type { ProjectSettings } from '../schema/projectSchema.js';
 import type { EntryValueDefinition } from '../schema/valueSchema.js';
-import { uuid } from '../util/index.js';
+import { uuid } from '../util/shared.js';
 import core from './setup.js';
 
 const id = {

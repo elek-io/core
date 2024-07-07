@@ -24,7 +24,8 @@ import {
   type ListCollectionsProps,
   type PaginatedList,
 } from '../schema/serviceSchema.js';
-import * as Util from '../util/index.js';
+import { pathTo, returnResolved } from '../util/node.js';
+import { currentTimestamp, slug, uuid } from '../util/shared.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import GitService from './GitService.js';
 import JsonFileService from './JsonFileService.js';
@@ -56,20 +57,20 @@ export default class CollectionService
   public async create(props: CreateCollectionProps): Promise<Collection> {
     createCollectionSchema.parse(props);
 
-    const id = Util.uuid();
-    const projectPath = Util.pathTo.project(props.projectId);
-    const collectionPath = Util.pathTo.collection(props.projectId, id);
-    const collectionFilePath = Util.pathTo.collectionFile(props.projectId, id);
+    const id = uuid();
+    const projectPath = pathTo.project(props.projectId);
+    const collectionPath = pathTo.collection(props.projectId, id);
+    const collectionFilePath = pathTo.collectionFile(props.projectId, id);
 
     const collectionFile: CollectionFile = {
       ...props,
       objectType: 'collection',
       id,
       slug: {
-        singular: Util.slug(props.slug.singular),
-        plural: Util.slug(props.slug.plural),
+        singular: slug(props.slug.singular),
+        plural: slug(props.slug.plural),
       },
-      created: Util.currentTimestamp(),
+      created: currentTimestamp(),
       updated: null,
     };
 
@@ -92,7 +93,7 @@ export default class CollectionService
     readCollectionSchema.parse(props);
 
     const collection = await this.jsonFileService.read(
-      Util.pathTo.collectionFile(props.projectId, props.id),
+      pathTo.collectionFile(props.projectId, props.id),
       collectionFileSchema
     );
 
@@ -112,17 +113,14 @@ export default class CollectionService
   public async update(props: UpdateCollectionProps): Promise<Collection> {
     updateCollectionSchema.parse(props);
 
-    const projectPath = Util.pathTo.project(props.projectId);
-    const collectionFilePath = Util.pathTo.collectionFile(
-      props.projectId,
-      props.id
-    );
+    const projectPath = pathTo.project(props.projectId);
+    const collectionFilePath = pathTo.collectionFile(props.projectId, props.id);
     const prevCollectionFile = await this.read(props);
 
     const collectionFile: CollectionFile = {
       ...prevCollectionFile,
       ...props,
-      updated: Util.currentTimestamp(),
+      updated: currentTimestamp(),
     };
 
     // @todo Collection Service has to check if any of the updated fieldDefinitions do not validate against the used Fields in each CollectionItem of the Collection
@@ -215,7 +213,7 @@ export default class CollectionService
     //       // -> If a value is not unique, this is a violation
     //       // const fieldReferences = await this.collectionItemService.getAllFieldReferences(project, currentCollection, currentFieldDefinition.id);
     //       // const fields = await this.fieldService.readAll(project, fieldReferences);
-    //       // const duplicates = Util.getDuplicates(fields, 'value');
+    //       // const duplicates = getDuplicates(fields, 'value');
     //       // for (let index = 0; index < duplicates.length; index++) {
     //       //   const duplicate = duplicates[index];
     //       //   result.update.push({
@@ -289,8 +287,8 @@ export default class CollectionService
   public async delete(props: DeleteCollectionProps): Promise<void> {
     deleteCollectionSchema.parse(props);
 
-    const projectPath = Util.pathTo.project(props.projectId);
-    const collectionPath = Util.pathTo.collection(props.projectId, props.id);
+    const projectPath = pathTo.project(props.projectId);
+    const collectionPath = pathTo.collection(props.projectId, props.id);
 
     await Fs.remove(collectionPath);
     await this.gitService.add(projectPath, [collectionPath]);
@@ -315,7 +313,7 @@ export default class CollectionService
       limit
     );
 
-    const collections = await Util.returnResolved(
+    const collections = await returnResolved(
       partialCollectionReferences.map((reference) => {
         return this.read({
           projectId: props.projectId,

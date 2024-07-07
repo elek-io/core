@@ -51,7 +51,8 @@ import {
   type PaginatedList,
 } from '../schema/serviceSchema.js';
 import type { ProjectUpgradeImport } from '../upgrade/example.js';
-import * as Util from '../util/index.js';
+import { files, pathTo, returnResolved } from '../util/node.js';
+import { currentTimestamp, uuid } from '../util/shared.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import AssetService from './AssetService.js';
 import CollectionService from './CollectionService.js';
@@ -104,7 +105,7 @@ export default class ProjectService
       throw new NoCurrentUserError();
     }
 
-    const id = Util.uuid();
+    const id = uuid();
     const defaultSettings: ProjectSettings = {
       language: {
         default: user.language,
@@ -118,14 +119,14 @@ export default class ProjectService
       id,
       description: props.description || '',
       settings: Object.assign({}, defaultSettings, props.settings),
-      created: Util.currentTimestamp(),
+      created: currentTimestamp(),
       updated: null,
       coreVersion: this.options.version, // @todo should be read from package.json to avoid duplicates
       status: 'todo',
       version: '0.0.1',
     };
 
-    const projectPath = Util.pathTo.project(id);
+    const projectPath = pathTo.project(id);
 
     await Fs.ensureDir(projectPath);
 
@@ -135,7 +136,7 @@ export default class ProjectService
       await this.gitService.init(projectPath, { initialBranch: 'main' });
       await this.jsonFileService.create(
         projectFile,
-        Util.pathTo.projectFile(id),
+        pathTo.projectFile(id),
         projectFileSchema
       );
       await this.gitService.add(projectPath, ['.']);
@@ -165,8 +166,8 @@ export default class ProjectService
   public async clone(props: CloneProjectProps): Promise<Project> {
     cloneProjectSchema.parse(props);
 
-    const tmpId = Util.uuid();
-    const tmpProjectPath = Path.join(Util.pathTo.tmp, tmpId);
+    const tmpId = uuid();
+    const tmpProjectPath = Path.join(pathTo.tmp, tmpId);
     // await Fs.ensureDir(tmpProjectPath);
     await this.gitService.clone(props.url, tmpProjectPath);
 
@@ -177,7 +178,7 @@ export default class ProjectService
     );
 
     // If so, copy it into the correct directory
-    const projectPath = Util.pathTo.project(projectFile.id);
+    const projectPath = pathTo.project(projectFile.id);
     const alreadyExists = await Fs.pathExists(projectPath);
     if (alreadyExists) {
       throw new Error(
@@ -199,7 +200,7 @@ export default class ProjectService
     readProjectSchema.parse(props);
 
     const projectFile = await this.jsonFileService.read(
-      Util.pathTo.projectFile(props.id),
+      pathTo.projectFile(props.id),
       projectFileSchema
     );
 
@@ -214,14 +215,14 @@ export default class ProjectService
   public async update(props: UpdateProjectProps): Promise<Project> {
     updateProjectSchema.parse(props);
 
-    const projectPath = Util.pathTo.project(props.id);
-    const filePath = Util.pathTo.projectFile(props.id);
+    const projectPath = pathTo.project(props.id);
+    const filePath = pathTo.projectFile(props.id);
     const prevProjectFile = await this.read(props);
 
     const projectFile: ProjectFile = {
       ...prevProjectFile,
       ...props,
-      updated: Util.currentTimestamp(),
+      updated: currentTimestamp(),
     };
 
     await this.jsonFileService.update(projectFile, filePath, projectFileSchema);
@@ -244,7 +245,7 @@ export default class ProjectService
     upgradeProjectSchema.parse(props);
 
     const project = await this.read(props);
-    const projectPath = Util.pathTo.project(project.id);
+    const projectPath = pathTo.project(project.id);
 
     if (Semver.gt(project.coreVersion, this.options.version)) {
       // Upgrade of the client needed before the project can be upgraded
@@ -259,7 +260,7 @@ export default class ProjectService
     }
 
     // Get all available upgrade scripts
-    const upgradeFiles = await Util.files(
+    const upgradeFiles = await files(
       Path.resolve(__dirname, '../upgrade'),
       'ts'
     );
@@ -332,18 +333,18 @@ export default class ProjectService
   public branches = {
     list: async (props: ListBranchesProjectProps) => {
       listBranchesProjectSchema.parse(props);
-      const projectPath = Util.pathTo.project(props.id);
+      const projectPath = pathTo.project(props.id);
       await this.gitService.fetch(projectPath);
       return await this.gitService.branches.list(projectPath);
     },
     current: async (props: CurrentBranchProjectProps) => {
       currentBranchProjectSchema.parse(props);
-      const projectPath = Util.pathTo.project(props.id);
+      const projectPath = pathTo.project(props.id);
       return await this.gitService.branches.current(projectPath);
     },
     switch: async (props: SwitchBranchProjectProps) => {
       switchBranchProjectSchema.parse(props);
-      const projectPath = Util.pathTo.project(props.id);
+      const projectPath = pathTo.project(props.id);
       return await this.gitService.branches.switch(
         projectPath,
         props.branch,
@@ -355,12 +356,12 @@ export default class ProjectService
   public remotes = {
     getOriginUrl: async (props: GetRemoteOriginUrlProjectProps) => {
       getRemoteOriginUrlProjectSchema.parse(props);
-      const projectPath = Util.pathTo.project(props.id);
+      const projectPath = pathTo.project(props.id);
       return await this.gitService.remotes.getOriginUrl(projectPath);
     },
     setOriginUrl: async (props: SetRemoteOriginUrlProjectProps) => {
       setRemoteOriginUrlProjectSchema.parse(props);
-      const projectPath = Util.pathTo.project(props.id);
+      const projectPath = pathTo.project(props.id);
       const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
       if (!hasOrigin) {
         await this.gitService.remotes.addOrigin(projectPath, props.url);
@@ -379,7 +380,7 @@ export default class ProjectService
    */
   public async getChanges(props: GetChangesProjectProps) {
     getChangesProjectSchema.parse(props);
-    const projectPath = Util.pathTo.project(props.id);
+    const projectPath = pathTo.project(props.id);
     const currentBranch = await this.gitService.branches.current(projectPath);
 
     await this.gitService.fetch(projectPath);
@@ -402,7 +403,7 @@ export default class ProjectService
    */
   public async synchronize(props: SynchronizeProjectProps) {
     synchronizeProjectSchema.parse(props);
-    const projectPath = Util.pathTo.project(props.id);
+    const projectPath = pathTo.project(props.id);
 
     await this.gitService.pull(projectPath);
     await this.gitService.push(projectPath);
@@ -418,7 +419,7 @@ export default class ProjectService
   public async delete(props: DeleteProjectProps): Promise<void> {
     deleteProjectSchema.parse(props);
 
-    await Fs.remove(Util.pathTo.project(props.id));
+    await Fs.remove(pathTo.project(props.id));
   }
 
   public async list(
@@ -437,7 +438,7 @@ export default class ProjectService
 
     const partialProjectReferences = projectReferences.slice(offset, limit);
 
-    const projects = await Util.returnResolved(
+    const projects = await returnResolved(
       partialProjectReferences.map((reference) => {
         return this.read({ id: reference.id });
       })

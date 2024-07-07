@@ -32,7 +32,8 @@ import {
   type ListAssetsProps,
   type PaginatedList,
 } from '../schema/serviceSchema.js';
-import * as Util from '../util/index.js';
+import { pathTo, returnResolved } from '../util/node.js';
+import { currentTimestamp, uuid } from '../util/shared.js';
 import AbstractCrudService from './AbstractCrudService.js';
 import GitService from './GitService.js';
 import JsonFileService from './JsonFileService.js';
@@ -64,27 +65,23 @@ export default class AssetService
   public async create(props: CreateAssetProps): Promise<Asset> {
     createAssetSchema.parse(props);
 
-    const id = Util.uuid();
-    const projectPath = Util.pathTo.project(props.projectId);
+    const id = uuid();
+    const projectPath = pathTo.project(props.projectId);
     const fileType = await this.getSupportedFileTypeOrThrow(props.filePath);
     const size = await this.getAssetSize(props.filePath);
-    const assetPath = Util.pathTo.asset(
+    const assetPath = pathTo.asset(
       props.projectId,
       id,
       props.language,
       fileType.extension
     );
-    const assetFilePath = Util.pathTo.assetFile(
-      props.projectId,
-      id,
-      props.language
-    );
+    const assetFilePath = pathTo.assetFile(props.projectId, id, props.language);
 
     const assetFile: AssetFile = {
       ...props,
       objectType: 'asset',
       id,
-      created: Util.currentTimestamp(),
+      created: currentTimestamp(),
       updated: null,
       extension: fileType.extension,
       mimeType: fileType.mimeType,
@@ -117,7 +114,7 @@ export default class AssetService
     readAssetSchema.parse(props);
 
     const assetFile = await this.jsonFileService.read(
-      Util.pathTo.assetFile(props.projectId, props.id, props.language),
+      pathTo.assetFile(props.projectId, props.id, props.language),
       assetFileSchema
     );
 
@@ -132,8 +129,8 @@ export default class AssetService
   public async update(props: UpdateAssetProps): Promise<Asset> {
     updateAssetSchema.parse(props);
 
-    const projectPath = Util.pathTo.project(props.projectId);
-    const assetFilePath = Util.pathTo.assetFile(
+    const projectPath = pathTo.project(props.projectId);
+    const assetFilePath = pathTo.assetFile(
       props.projectId,
       props.id,
       props.language
@@ -145,7 +142,7 @@ export default class AssetService
     const assetFile: AssetFile = {
       ...prevAssetFile,
       ...props,
-      updated: Util.currentTimestamp(),
+      updated: currentTimestamp(),
     };
 
     if (props.newFilePath) {
@@ -155,13 +152,13 @@ export default class AssetService
         props.newFilePath
       );
       const size = await this.getAssetSize(props.newFilePath);
-      const prevAssetPath = Util.pathTo.asset(
+      const prevAssetPath = pathTo.asset(
         props.projectId,
         props.id,
         props.language,
         prevAssetFile.extension
       );
-      const assetPath = Util.pathTo.asset(
+      const assetPath = pathTo.asset(
         props.projectId,
         props.id,
         props.language,
@@ -195,13 +192,13 @@ export default class AssetService
   public async delete(props: DeleteAssetProps): Promise<void> {
     deleteAssetSchema.parse(props);
 
-    const projectPath = Util.pathTo.project(props.projectId);
-    const assetFilePath = Util.pathTo.assetFile(
+    const projectPath = pathTo.project(props.projectId);
+    const assetFilePath = pathTo.assetFile(
       props.projectId,
       props.id,
       props.language
     );
-    const assetPath = Util.pathTo.asset(
+    const assetPath = pathTo.asset(
       props.projectId,
       props.id,
       props.language,
@@ -226,7 +223,7 @@ export default class AssetService
 
     const partialAssetReferences = assetReferences.slice(offset, limit);
 
-    const assets = await Util.returnResolved(
+    const assets = await returnResolved(
       partialAssetReferences.map((assetReference) => {
         if (!assetReference.language) {
           throw new RequiredParameterMissingError('language');
@@ -283,7 +280,7 @@ export default class AssetService
     projectId: string,
     assetFile: AssetFile
   ): Promise<Asset> {
-    const assetPath = Util.pathTo.asset(
+    const assetPath = pathTo.asset(
       projectId,
       assetFile.id,
       assetFile.language,
