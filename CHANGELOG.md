@@ -1,5 +1,13 @@
 # @elek-io/core
 
+## 0.4.0
+
+### Minor Changes
+
+- 7c56031: Added git methods for working with branches, remotes, pull, fetch and push. The ProjectService can now determine changes between the local Project and it's remote origin and synchonize (pull & push) between them.
+- 71efc35: Removed search, filter and sort
+- 7c56031: Updated shared lib to 0.6.2 - moving from optional keys that could be undefined to nullable values and changing the structure of Entry Value references and their resolved counterparts
+
 ## 0.3.1
 
 ### Patch Changes
