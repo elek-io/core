@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.5.4
+
+### Patch Changes
+
+- daf5f50: fix: EXPORT_TYPES_INVALID_FORMAT
+
 ## 0.5.3
 
 ### Patch Changes
