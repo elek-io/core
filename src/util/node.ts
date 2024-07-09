@@ -1,9 +1,7 @@
 import { spawn, type SpawnOptionsWithoutStdio } from 'child_process';
 import Fs from 'fs-extra';
-import { filter, flatten, groupBy, uniq } from 'lodash-es';
 import Os from 'os';
 import Path from 'path';
-import { uuidSchema } from '../schema/baseSchema.js';
 import { projectFolderSchema } from '../schema/projectSchema.js';
 
 /**
@@ -83,34 +81,6 @@ export const pathTo = {
     extension: string
   ): string => {
     return Path.join(pathTo.lfs(projectId), `${id}.${language}.${extension}`);
-  },
-};
-
-/**
- * Searches for a potential project ID in given path string and returns it
- *
- * Mainly used for logging inside the GitService, where we don't have a project ID,
- * but always have a path which could contain one. The ID is then used,
- * to log to the current project log, instead of logging to the main log file.
- *
- * @todo I really dont like this and I do not know how much performance we loose here
- */
-export const fromPath = {
-  projectId: (path: string): string | undefined => {
-    const startsWith = 'projects/';
-    const endsWith = '/';
-    const start = path.indexOf(startsWith) + startsWith.length;
-    // Return early
-    if (start === -1) {
-      return undefined;
-    }
-    const end = path.indexOf(endsWith, start);
-    // Use path length if there is no ending "/"
-    const result = path.substring(start, end === -1 ? path.length : end);
-    if (result && uuidSchema.safeParse(result).success) {
-      return result;
-    }
-    return undefined;
   },
 };
 
@@ -245,35 +215,4 @@ export async function files(
     }
     return dirent.isFile();
   });
-}
-
-/**
- * Returns the relative path for given path
- * by stripping out everything up to the working directory
- */
-export function getRelativePath(path: string): string {
-  let relativePath = path.replace(workingDirectory, '');
-  if (relativePath.startsWith('/')) {
-    relativePath = relativePath.substr(1);
-  }
-  return relativePath;
-}
-
-/**
- * Searches given array of objects for duplicates of given key and returns them
- *
- * @param arr Array with possible duplicate values
- * @param key Key of object T to get duplicates of
- */
-export function getDuplicates<T>(arr: T[], key: keyof T) {
-  const grouped = groupBy(arr, (item) => {
-    return item[key];
-  });
-  return uniq(
-    flatten(
-      filter(grouped, (item) => {
-        return item.length > 1;
-      })
-    )
-  );
 }
