@@ -17,14 +17,24 @@
   "types": "./dist/node/index.node.d.ts",
   "exports": {
     "node": {
-      "types": "./dist/node/index.node.d.ts",
-      "import": "./dist/node/index.node.js",
-      "require": "./dist/node/index.node.cjs"
+      "import": {
+        "types": "./dist/node/index.node.d.ts",
+        "default": "./dist/node/index.node.js"
+      },
+      "require": {
+        "types": "./dist/node/index.node.d.cts",
+        "default": "./dist/node/index.node.cjs"
+      }
     },
     "browser": {
-      "types": "./dist/browser/index.browser.d.ts",
-      "import": "./dist/browser/index.browser.js",
-      "require": "./dist/browser/index.browser.cjs"
+      "import": {
+        "types": "./dist/browser/index.browser.d.ts",
+        "default": "./dist/browser/index.browser.js"
+      },
+      "require": {
+        "types": "./dist/browser/index.browser.d.cts",
+        "default": "./dist/browser/index.browser.cjs"
+      }
     }
   },
   "scripts": {
