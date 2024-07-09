@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.5.3
+
+### Patch Changes
+
+- 03dd60a: Removed unused code
+
 ## 0.5.2
 
 ### Patch Changes
