@@ -142,7 +142,7 @@ export class GitTagService
           name: lineArray[2],
           email: lineArray[3],
         },
-        timestamp: parseInt(lineArray[4]),
+        timestamp: parseInt(lineArray[4] || ''),
       };
     });
 

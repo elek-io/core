@@ -7,7 +7,10 @@ export type ProjectUpgradeImport = typeof import('./example.js');
  */
 const upgrade: ProjectUpgrade = {
   to: '0.0.0',
-  run: async (project) => {},
+  run: async (project) => {
+    // Do something with the Project
+    console.log(project);
+  },
 };
 
 export default upgrade;

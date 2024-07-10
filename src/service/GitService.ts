@@ -440,8 +440,8 @@ export class GitService {
           name: lineArray[2],
           email: lineArray[3],
         },
-        timestamp: parseInt(lineArray[4]),
-        tag: this.refNameToTagName(lineArray[5]),
+        timestamp: parseInt(lineArray[4] || ''),
+        tag: this.refNameToTagName(lineArray[5] || ''),
       };
     });
 

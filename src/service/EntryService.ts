@@ -297,7 +297,7 @@ export class EntryService
       const schema = getValueContentSchemaFromDefinition(definition);
 
       try {
-        for (const [language, content] of Object.entries(value.content)) {
+        for (const [, content] of Object.entries(value.content)) {
           schema.parse(content);
         }
       } catch (error) {

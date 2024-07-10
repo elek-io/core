@@ -6,7 +6,7 @@ import { createProject } from '../test/util.js';
 describe.sequential('Integration', function () {
   let project: Project;
   let clonedProject: Project;
-  const isGithubAction = process.env.GITHUB_ACTIONS;
+  const isGithubAction = process.env?.['GITHUB_ACTIONS'];
   const gitUrl = 'git@github.com:elek-io/project-test-1.git';
 
   beforeAll(async function () {
