@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.6.0
+
+### Minor Changes
+
+- dd365e3: Now only exports ESM - electron and the browser should now be able to handle it and it resolves issues with dependencies while exporting CJS
+
 ## 0.5.4
 
 ### Patch Changes
