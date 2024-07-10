@@ -123,7 +123,7 @@ export abstract class AbstractCrudService {
         const fileNameArray = possibleFile.name.split('.');
 
         const fileReference: FileReference = {
-          id: fileNameArray[0],
+          id: fileNameArray[0] || '',
           language:
             fileNameArray.length === 3
               ? (fileNameArray[1] as SupportedLanguage)

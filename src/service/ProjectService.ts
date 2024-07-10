@@ -218,7 +218,18 @@ export class ProjectService
 
     const projectFile: ProjectFile = {
       ...prevProjectFile,
-      ...props,
+      name: props.name || prevProjectFile.name,
+      description: props.description || prevProjectFile.description,
+      settings: {
+        language: {
+          supported:
+            props.settings?.language.supported ||
+            prevProjectFile.settings.language.supported,
+          default:
+            props.settings?.language.default ||
+            prevProjectFile.settings.language.default,
+        },
+      },
       updated: currentTimestamp(),
     };
 
@@ -284,6 +295,7 @@ export class ProjectService
         if (upgrade.to !== '0.0.0') {
           return upgrade;
         }
+        return;
       });
 
     for (let index = 0; index < sortedUpgrades.length; index++) {

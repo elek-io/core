@@ -1,5 +1,6 @@
+import { fileTypeFromFile } from 'file-type';
 import Fs from 'fs-extra';
-import IsSvg from 'is-svg';
+import isSvg from 'is-svg';
 import { RequiredParameterMissingError } from '../error/index.js';
 import {
   assetFileSchema,
@@ -304,7 +305,7 @@ export class AssetService
     // that are smaller than 500 kB
     if (fileSize / 1000 <= 500) {
       const fileBuffer = await Fs.readFile(filePath);
-      if (IsSvg(fileBuffer.toString()) === true) {
+      if (isSvg(fileBuffer.toString()) === true) {
         return {
           extension: supportedAssetExtensionSchema.Enum.svg,
           mimeType: supportedAssetMimeTypeSchema.Enum['image/svg+xml'],
@@ -313,7 +314,7 @@ export class AssetService
     }
 
     // We do not use fileBuffer here again because fromFile() is recommended
-    const { fileTypeFromFile } = await import('file-type');
+    // @see https://www.npmjs.com/package/file-type#filetypefrombufferbuffer
     const fileType = await fileTypeFromFile(filePath);
 
     const result = supportedAssetTypeSchema.parse({

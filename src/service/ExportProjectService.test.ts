@@ -56,10 +56,10 @@ describe.sequential('Integration', function () {
 
       expect(exportedProject.collections).to.have.lengthOf(1);
       expect(exportedProject.assets).to.have.lengthOf(1);
-      expect(exportedProject.collections[0].entries).to.have.lengthOf(2);
-      expect(exportedProject.collections[0].entries[0].values).to.have.lengthOf(
-        3
-      );
+      expect(exportedProject.collections[0]?.entries).to.have.lengthOf(2);
+      expect(
+        exportedProject.collections[0]?.entries[0]?.values
+      ).to.have.lengthOf(3);
     }
   );
 });

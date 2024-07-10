@@ -430,7 +430,7 @@ export function getValueContentSchemaFromDefinition(
 ) {
   switch (definition.valueType) {
     case ValueTypeSchema.Enum.boolean:
-      return getBooleanValueContentSchema(definition);
+      return getBooleanValueContentSchema();
     case ValueTypeSchema.Enum.number:
       return getNumberValueContentSchema(definition);
     case ValueTypeSchema.Enum.string:
@@ -445,7 +445,7 @@ export function getValueContentSchemaFromDefinition(
   }
 }
 
-function getBooleanValueContentSchema(definition: ToggleValueDefinition) {
+function getBooleanValueContentSchema() {
   return z.boolean();
 }
 

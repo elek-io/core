@@ -1,15 +1,16 @@
 {
-  // @see https://www.typescriptlang.org/docs/handbook/modules/guides/choosing-compiler-options.html#im-writing-a-library
+  // Support for >= Node 20, since it is the current LTS
+  // and Electron 29.0.0 (the oldest still supported version) uses Node 20 too
+  // @see https://www.electronjs.org/docs/latest/tutorial/electron-timelines
+  // ESM support was added to Electron in version 28.0.0
+  // Using TypeScript Node.js with native ESM
+  // @see https://gist.github.com/slavafomin/cd7a54035eff5dc1c7c2eff096b23b6b
+  "extends": [
+    "@tsconfig/node20/tsconfig.json",
+    "@tsconfig/strictest/tsconfig.json"
+  ],
   "compilerOptions": {
-    "module": "node16", // When a codebase is compatible with Node.js’s module system, it almost always works in bundlers as well
-    "target": "es2020", // set to the *lowest* target you support
-    "strict": true,
-    "verbatimModuleSyntax": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "noEmit": true, // Do not emit code when linting
-    "skipLibCheck": true // @see https://github.com/vitejs/vite/issues/15714
+    "noEmit": true // Do not emit code when linting
   },
   "include": ["src"]
 }

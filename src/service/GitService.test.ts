@@ -7,7 +7,7 @@ import { createProject } from '../test/util.js';
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
   let projectPath = '';
-  const isGithubAction = process.env.GITHUB_ACTIONS;
+  const isGithubAction = process.env?.['GITHUB_ACTIONS'];
   const gitUrl = 'git@github.com:organisation/repository.git';
 
   beforeAll(async function () {
