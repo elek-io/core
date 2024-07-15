@@ -16,13 +16,13 @@ export const baseFileSchema = z.object({
    */
   id: uuidSchema.readonly(),
   /**
-   * The timestamp of the file being created is set by the service of "objectType" while creating it
+   * The datetime of the file being created is set by the service of "objectType" while creating it
    */
-  created: z.number().readonly(),
+  created: z.string().datetime().readonly(),
   /**
-   * The timestamp of the file being updated is set by the service of "objectType" while updating it
+   * The datetime of the file being updated is set by the service of "objectType" while updating it
    */
-  updated: z.number().nullable(),
+  updated: z.string().datetime().nullable(),
 });
 export type BaseFile = z.infer<typeof baseFileSchema>;
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { currentTimestamp, slug, uuid, uuidSchema } from '../test/setup.js';
+import { z } from 'zod';
+import { currentDatetime, slug, uuid, uuidSchema } from '../test/setup.js';
 
 describe('UUID', () => {
   it('can be generated', () => {
@@ -17,13 +18,12 @@ describe('UUID', () => {
   });
 });
 
-describe('UNIX timestamp', () => {
+describe('UNIX datetime', () => {
   it('can be generated', () => {
-    const timestamp = currentTimestamp();
+    const datetime = currentDatetime();
+    const schema = z.string().datetime();
 
-    expect(timestamp).toBeTypeOf('number');
-    expect(timestamp).toBeGreaterThan(1700000000); // 2023-11-14
-    expect(timestamp).toBeLessThan(2000000000); // 2033-05-18
+    schema.parse(datetime);
   });
 });
 
