@@ -1,11 +1,6 @@
-import slugify from 'slugify';
+import slugify from '@sindresorhus/slugify';
 import { v4 as generateUuid } from 'uuid';
 import { type Uuid } from '../schema/baseSchema.js';
-
-// Hack to make slugify work with ESM
-// @see https://github.com/simov/slugify/issues/24
-// @ts-ignore
-const Slugify = slugify.default || slugify;
 
 /**
  * Returns a new UUID
@@ -30,10 +25,9 @@ export function currentTimestamp() {
  * Returns the slug of given string
  */
 export function slug(string: string): string {
-  return Slugify(string, {
-    replacement: '-', // replace spaces with replacement character, defaults to `-`
-    // remove: undefined, // remove characters that match regex, defaults to `undefined`
-    lower: true, // convert to lower case, defaults to `false`
-    strict: true, // strip special characters except replacement, defaults to `false`
+  return slugify(string, {
+    separator: '-',
+    lowercase: true,
+    decamelize: true,
   });
 }
