@@ -26,10 +26,9 @@ describe.sequential('Integration', function () {
           default: 'en',
         },
       });
-      expect(project.created).to.approximately(
-        Math.floor(Date.now() / 1000),
-        5
-      ); // 5 seconds of delta allowed
+      expect(
+        Math.floor(new Date(project.created).getTime() / 1000)
+      ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
       expect(project.updated).to.be.null;
       expect(await Fs.pathExists(core.util.pathTo.project(project.id))).to.be
         .true;
@@ -48,10 +47,10 @@ describe.sequential('Integration', function () {
     const updatedProject = await core.projects.read({ id: project.id });
 
     expect(updatedProject.name).to.equal('Project #1');
-    expect(updatedProject.updated).to.approximately(
-      Math.floor(Date.now() / 1000),
-      5
-    ); // 5 seconds of delta allowed
+    expect(
+      // @ts-expect-error updated is not allowed to be null
+      Math.floor(new Date(updatedProject.updated).getTime() / 1000)
+    ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
   });
 
   it.sequential('should be able to list all Projects', async function () {

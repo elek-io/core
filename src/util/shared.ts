@@ -10,15 +10,23 @@ export function uuid(): Uuid {
 }
 
 /**
- * Returns the current UNIX timestamp
+ * Returns a string representing date and time
+ * in a simplified format based on ISO 8601.
+ * The timezone is always UTC.
  *
- * Since the UNIX timestamp is the number of seconds
- * that have elapsed from January 1, 1970, UTC and
- * `Date.now()` returns the time in milliseconds,
- * we need to convert this into seconds.
+ * - If value is not given, the current date and time is used
+ * - If value is given, it's converted to above representation and UTC timezone
+ *
+ * @example 'YYYY-MM-DDTHH:mm:ss.sssZ'
+ *
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString
+ * @see https://en.wikipedia.org/wiki/ISO_8601
  */
-export function currentTimestamp() {
-  return Math.floor(Date.now() / 1000);
+export function datetime(value?: number | string | Date) {
+  if (!value) {
+    return new Date().toISOString();
+  }
+  return new Date(value).toISOString();
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   type GitLogOptions,
   type GitSwitchOptions,
 } from '../schema/index.js';
+import { datetime } from '../util/shared.js';
 import { GitTagService } from './GitTagService.js';
 import { UserService } from './UserService.js';
 
@@ -424,7 +425,7 @@ export class GitService {
 
     const result = await this.git(path, [
       ...args,
-      '--format=%H|%s|%an|%ae|%at|%D',
+      '--format=%H|%s|%an|%ae|%aI|%D',
     ]);
 
     const noEmptyLinesArr = result.stdout.split(EOL).filter((line) => {
@@ -440,7 +441,7 @@ export class GitService {
           name: lineArray[2],
           email: lineArray[3],
         },
-        timestamp: parseInt(lineArray[4] || ''),
+        datetime: datetime(lineArray[4]),
         tag: this.refNameToTagName(lineArray[5] || ''),
       };
     });
@@ -457,65 +458,6 @@ export class GitService {
     }
 
     return tagName;
-  }
-
-  /**
-   * Returns a timestamp of given files creation
-   *
-   * Git only returns the timestamp the file was added,
-   * which could be different from the file being created.
-   * But since file operations will always be committed
-   * immediately, this is practically the same.
-   *
-   * @param path Path to the repository
-   * @param file File to get timestamp from
-   */
-  public async getFileCreatedTimestamp(path: string, file: string) {
-    const result = await this.git(path, [
-      'log',
-      '--diff-filter=A',
-      '--follow',
-      '--format=%at',
-      '--max-count=1',
-      '--',
-      file,
-    ]);
-    return parseInt(result.stdout);
-  }
-
-  /**
-   * Returns a timestamp of the files last modification
-   *
-   * @param path Path to the repository
-   * @param file File to get timestamp from
-   */
-  public async getFileLastUpdatedTimestamp(path: string, file: string) {
-    const result = await this.git(path, [
-      'log',
-      '--follow',
-      '--format=%at',
-      '--max-count=1',
-      '--',
-      file,
-    ]);
-    return parseInt(result.stdout);
-  }
-
-  /**
-   * Returns created and updated timestamps from given file
-   *
-   * @param path Path to the project
-   * @param file Path to the file
-   */
-  public async getFileCreatedUpdatedMeta(path: string, file: string) {
-    const meta = await Promise.all([
-      this.getFileCreatedTimestamp(path, file),
-      this.getFileLastUpdatedTimestamp(path, file),
-    ]);
-    return {
-      created: meta[0],
-      updated: meta[1],
-    };
   }
 
   /**

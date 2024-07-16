@@ -30,7 +30,7 @@ import {
   type UpdateAssetProps,
 } from '../schema/index.js';
 import { pathTo, returnResolved } from '../util/node.js';
-import { currentTimestamp, uuid } from '../util/shared.js';
+import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import type { GitService } from './GitService.js';
 import { JsonFileService } from './JsonFileService.js';
@@ -78,7 +78,7 @@ export class AssetService
       ...props,
       objectType: 'asset',
       id,
-      created: currentTimestamp(),
+      created: datetime(),
       updated: null,
       extension: fileType.extension,
       mimeType: fileType.mimeType,
@@ -139,7 +139,7 @@ export class AssetService
     const assetFile: AssetFile = {
       ...prevAssetFile,
       ...props,
-      updated: currentTimestamp(),
+      updated: datetime(),
     };
 
     if (props.newFilePath) {
