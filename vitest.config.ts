@@ -3,9 +3,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     poolOptions: {
-      threads: {
-        minThreads: 1,
-        maxThreads: 1, // Core tests cannot run in parallel because it CRUD files on disk
+      forks: {
+        // Tests currently cannot run in parallel, since some tests
+        // are getting the total number of Projects, Assets etc.
+        // which fails depending on the timing they are run (race condition).
+        singleFork: true,
       },
     },
     coverage: {
