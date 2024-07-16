@@ -20,7 +20,9 @@ describe.sequential('Integration', function () {
     asset = await createAsset(project.id);
 
     expect(asset.id).to.not.be.undefined;
-    expect(asset.created).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
+    expect(
+      Math.floor(new Date(asset.created).getTime() / 1000)
+    ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
     expect(asset.extension).to.equal('png');
     expect(asset.mimeType).to.equal('image/png');
     expect(

@@ -23,7 +23,7 @@ import {
   type UpdateCollectionProps,
 } from '../schema/index.js';
 import { pathTo, returnResolved } from '../util/node.js';
-import { currentTimestamp, slug, uuid } from '../util/shared.js';
+import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import { GitService } from './GitService.js';
 import { JsonFileService } from './JsonFileService.js';
@@ -68,7 +68,7 @@ export class CollectionService
         singular: slug(props.slug.singular),
         plural: slug(props.slug.plural),
       },
-      created: currentTimestamp(),
+      created: datetime(),
       updated: null,
     };
 
@@ -118,7 +118,7 @@ export class CollectionService
     const collectionFile: CollectionFile = {
       ...prevCollectionFile,
       ...props,
-      updated: currentTimestamp(),
+      updated: datetime(),
     };
 
     // @todo Collection Service has to check if any of the updated fieldDefinitions do not validate against the used Fields in each CollectionItem of the Collection

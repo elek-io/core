@@ -18,7 +18,7 @@ import {
   type PaginatedList,
   type ReadGitTagProps,
 } from '../schema/index.js';
-import { uuid } from '../util/shared.js';
+import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import { GitService } from './GitService.js';
 
@@ -112,7 +112,7 @@ export class GitTagService
   /**
    * Gets all local tags or filter them by pattern
    *
-   * They are sorted by authordate of the commit, not the timestamp the tag is created.
+   * They are sorted by authordate of the commit, not when the tag is created.
    * This ensures tags are sorted correctly in the timeline of their commits.
    *
    * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---list
@@ -125,7 +125,7 @@ export class GitTagService
     args = [
       ...args,
       '--sort=-*authordate',
-      '--format=%(refname:short)|%(subject)|%(*authorname)|%(*authoremail)|%(*authordate:unix)',
+      '--format=%(refname:short)|%(subject)|%(*authorname)|%(*authoremail)|%(*authordate:iso-strict)',
     ];
     const result = await this.git(props.path, args);
 
@@ -142,7 +142,7 @@ export class GitTagService
           name: lineArray[2],
           email: lineArray[3],
         },
-        timestamp: parseInt(lineArray[4] || ''),
+        datetime: datetime(lineArray[4]),
       };
     });
 

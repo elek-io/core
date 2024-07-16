@@ -31,7 +31,7 @@ import {
   type ValueDefinition,
 } from '../schema/index.js';
 import { pathTo, returnResolved } from '../util/node.js';
-import { currentTimestamp, uuid } from '../util/shared.js';
+import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import type { AssetService } from './AssetService.js';
 import type { CollectionService } from './CollectionService.js';
@@ -90,7 +90,7 @@ export class EntryService
       objectType: 'entry',
       id,
       values: props.values,
-      created: currentTimestamp(),
+      created: datetime(),
       updated: null,
     };
 
@@ -161,7 +161,7 @@ export class EntryService
     const entryFile: EntryFile = {
       ...prevEntryFile,
       values: props.values,
-      updated: currentTimestamp(),
+      updated: datetime(),
     };
 
     const entry: Entry = await this.toEntry({

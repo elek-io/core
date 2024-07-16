@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { currentDatetime, slug, uuid, uuidSchema } from '../test/setup.js';
+import { datetime, slug, uuid, uuidSchema } from '../test/setup.js';
 
 describe('UUID', () => {
   it('can be generated', () => {
@@ -20,10 +20,10 @@ describe('UUID', () => {
 
 describe('UNIX datetime', () => {
   it('can be generated', () => {
-    const datetime = currentDatetime();
+    const created = datetime();
     const schema = z.string().datetime();
 
-    schema.parse(datetime);
+    schema.parse(created);
   });
 });
 

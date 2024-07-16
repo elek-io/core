@@ -49,7 +49,7 @@ import {
 } from '../schema/index.js';
 import type { ProjectUpgradeImport } from '../upgrade/example.js';
 import { files, pathTo, returnResolved } from '../util/node.js';
-import { currentTimestamp, uuid } from '../util/shared.js';
+import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import { AssetService } from './AssetService.js';
 import { CollectionService } from './CollectionService.js';
@@ -116,7 +116,7 @@ export class ProjectService
       id,
       description: props.description || '',
       settings: Object.assign({}, defaultSettings, props.settings),
-      created: currentTimestamp(),
+      created: datetime(),
       updated: null,
       coreVersion: this.options.version, // @todo should be read from package.json to avoid duplicates
       status: 'todo',
@@ -230,7 +230,7 @@ export class ProjectService
             prevProjectFile.settings.language.default,
         },
       },
-      updated: currentTimestamp(),
+      updated: datetime(),
     };
 
     await this.jsonFileService.update(projectFile, filePath, projectFileSchema);

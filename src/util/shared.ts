@@ -10,17 +10,23 @@ export function uuid(): Uuid {
 }
 
 /**
- * Returns a string representing the current date and time
+ * Returns a string representing date and time
  * in a simplified format based on ISO 8601.
  * The timezone is always UTC.
+ *
+ * - If value is not given, the current date and time is used
+ * - If value is given, it's converted to above representation and UTC timezone
  *
  * @example 'YYYY-MM-DDTHH:mm:ss.sssZ'
  *
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString
  * @see https://en.wikipedia.org/wiki/ISO_8601
  */
-export function currentDatetime() {
-  return new Date().toISOString();
+export function datetime(value?: number | string | Date) {
+  if (!value) {
+    return new Date().toISOString();
+  }
+  return new Date(value).toISOString();
 }
 
 /**

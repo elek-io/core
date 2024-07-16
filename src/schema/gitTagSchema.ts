@@ -10,7 +10,7 @@ export const gitTagSchema = z.object({
   id: uuidSchema,
   message: z.string(),
   author: gitSignatureSchema,
-  timestamp: z.number(),
+  datetime: z.string().datetime(),
 });
 export type GitTag = z.infer<typeof gitTagSchema>;
 

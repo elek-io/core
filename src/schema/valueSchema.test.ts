@@ -730,7 +730,7 @@ describe('Dynamic zod schema', () => {
             en: [
               {
                 id: '6e40e9b2-6393-46a4-be0c-1e151a947373',
-                created: 1719518327,
+                created: '2024-07-16T12:42:27.897Z',
                 updated: null,
                 language: 'en',
                 objectType: 'asset',
@@ -753,7 +753,7 @@ describe('Dynamic zod schema', () => {
             en: [
               {
                 id: 'ea6a7da3-9cb4-4dd5-aa81-83b6f657106f',
-                created: 1719518327,
+                created: '2024-07-16T12:42:27.897Z',
                 updated: null,
                 objectType: 'entry',
                 values: [
@@ -773,7 +773,7 @@ describe('Dynamic zod schema', () => {
                       en: [
                         {
                           id: '6e40e9b2-6393-46a4-be0c-1e151a947373',
-                          created: 1719518327,
+                          created: '2024-07-16T12:42:27.897Z',
                           updated: null,
                           language: 'en',
                           objectType: 'asset',
@@ -802,7 +802,7 @@ describe('Dynamic zod schema', () => {
           },
         },
       ],
-      created: 1719518328,
+      created: '2024-07-16T12:42:27.897Z',
       updated: null,
     };
 
