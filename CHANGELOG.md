@@ -1,5 +1,16 @@
 # @elek-io/core
 
+## 0.7.0
+
+### Minor Changes
+
+- d5fc359: Switched to a different slug generating dependency and updated all dependencies
+- 27e16e9: Using datetime instead of timestamp for created and updated fields as well as git log and git tags --list results
+
+### Patch Changes
+
+- 13b4626: Fixed import for browser environments and added ElekIoCore type export to it
+
 ## 0.6.0
 
 ### Minor Changes
