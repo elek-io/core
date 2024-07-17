@@ -15,6 +15,8 @@ import {
 } from './service/index.js';
 import * as Util from './util/node.js';
 
+// Export all schemas and shared code that works inside node environments,
+// including code that requires filesystem access / git integration etc.
 export * from './schema/index.js';
 export * from './util/shared.js';
 
