@@ -3,6 +3,7 @@ export * from './baseSchema.js';
 export * from './collectionSchema.js';
 export * from './coreSchema.js';
 export * from './entrySchema.js';
+export * from './fieldSchema.js';
 export * from './fileSchema.js';
 export * from './gitSchema.js';
 export * from './gitTagSchema.js';

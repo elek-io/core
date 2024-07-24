@@ -6,8 +6,8 @@ import {
   uuidSchema,
 } from './baseSchema.js';
 import { entryExportSchema } from './entrySchema.js';
+import { fieldDefinitionSchema } from './fieldSchema.js';
 import { baseFileSchema } from './fileSchema.js';
-import { valueDefinitionSchema } from './valueSchema.js';
 
 export const collectionFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.Enum.collection).readonly(),
@@ -21,7 +21,7 @@ export const collectionFileSchema = baseFileSchema.extend({
   }),
   description: translatableStringSchema,
   icon: supportedIconSchema,
-  valueDefinitions: z.array(valueDefinitionSchema),
+  fieldDefinitions: z.array(fieldDefinitionSchema),
 });
 export type CollectionFile = z.infer<typeof collectionFileSchema>;
 
@@ -58,7 +58,7 @@ export const updateCollectionSchema = collectionFileSchema
     slug: true,
     description: true,
     icon: true,
-    valueDefinitions: true,
+    fieldDefinitions: true,
   })
   .extend({
     projectId: uuidSchema.readonly(),
