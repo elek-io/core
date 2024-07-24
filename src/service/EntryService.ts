@@ -1,12 +1,13 @@
 import Fs from 'fs-extra';
 import {
+  FieldDefinition,
   ValueTypeSchema,
   countEntriesSchema,
   createEntrySchema,
   deleteEntrySchema,
   entryFileSchema,
   entrySchema,
-  getValueContentSchemaFromDefinition,
+  getValueContentSchemaFromFieldDefinition,
   listEntriesSchema,
   objectTypeSchema,
   readEntrySchema,
@@ -28,7 +29,6 @@ import {
   type UpdateEntryProps,
   type Value,
   type ValueContentReference,
-  type ValueDefinition,
 } from '../schema/index.js';
 import { pathTo, returnResolved } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
@@ -102,7 +102,7 @@ export class EntryService
 
     this.validateValues({
       collectionId: props.collectionId,
-      valueDefinitions: collection.valueDefinitions,
+      fieldDefinitions: collection.fieldDefinitions,
       values: entry.values,
     });
 
@@ -172,7 +172,7 @@ export class EntryService
 
     this.validateValues({
       collectionId: props.collectionId,
-      valueDefinitions: collection.valueDefinitions,
+      fieldDefinitions: collection.fieldDefinitions,
       values: entry.values,
     });
 
@@ -257,51 +257,52 @@ export class EntryService
   }
 
   /**
-   * Returns a Value definition by ID
+   * Returns a Field definition by ID
    */
-  private getValueDefinitionById(props: {
-    valueDefinitions: ValueDefinition[];
+  private getFieldDefinitionById(props: {
+    fieldDefinitions: FieldDefinition[];
     id: string;
     collectionId: string;
   }) {
-    const definition = props.valueDefinitions.find((def) => {
-      if (def.id === props.id) {
+    const fieldDefinition = props.fieldDefinitions.find((definition) => {
+      if (definition.id === props.id) {
         return true;
       }
       return false;
     });
 
-    if (!definition) {
+    if (!fieldDefinition) {
       throw new Error(
-        `No definition with ID "${props.id}" found in Collection "${props.collectionId}" for given Value reference`
+        `No Field definition with ID "${props.id}" found in Collection "${props.collectionId}" for given Value reference`
       );
     }
 
-    return definition;
+    return fieldDefinition;
   }
 
   /**
-   * Validates given Values against it's Collections definitions
+   * Validates given Values against their Collections Field definitions
    */
   private validateValues(props: {
     collectionId: string;
-    valueDefinitions: ValueDefinition[];
+    fieldDefinitions: FieldDefinition[];
     values: Value[];
   }) {
     props.values.map((value) => {
-      const definition = this.getValueDefinitionById({
+      const fieldDefinition = this.getFieldDefinitionById({
         collectionId: props.collectionId,
-        valueDefinitions: props.valueDefinitions,
-        id: value.definitionId,
+        fieldDefinitions: props.fieldDefinitions,
+        id: value.fieldDefinitionId,
       });
-      const schema = getValueContentSchemaFromDefinition(definition);
+      const contentSchema =
+        getValueContentSchemaFromFieldDefinition(fieldDefinition);
 
       try {
-        for (const [, content] of Object.entries(value.content)) {
-          schema.parse(content);
+        for (const [_language, content] of Object.entries(value.content)) {
+          contentSchema.parse(content);
         }
       } catch (error) {
-        console.log('Definition:', definition);
+        console.log('Definition:', fieldDefinition);
         console.log('Value:', value);
         throw error;
       }

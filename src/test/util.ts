@@ -3,15 +3,15 @@ import crypto from 'crypto';
 import Fs from 'fs-extra';
 import Path from 'path';
 import core, {
+  EntryFieldDefinition,
   uuid,
-  type EntryValueDefinition,
   type ProjectSettings,
 } from './setup.js';
 
 const id = {
-  textValueDefinition: uuid(),
-  assetReferenceValueDefinition: uuid(),
-  entryReferenceValueDefinition: uuid(),
+  textFieldDefinition: uuid(),
+  assetReferenceFieldDefinition: uuid(),
+  entryReferenceFieldDefinition: uuid(),
 };
 
 /**
@@ -77,9 +77,9 @@ export async function createCollection(projectId: string) {
     description: {
       en: 'A Collection that contains our Products',
     },
-    valueDefinitions: [
+    fieldDefinitions: [
       {
-        id: id.textValueDefinition,
+        id: id.textFieldDefinition,
         valueType: 'string',
         label: {
           en: 'Name',
@@ -87,7 +87,7 @@ export async function createCollection(projectId: string) {
         description: {
           en: 'The title should be shirt and catchy, to grab the users attention',
         },
-        inputType: 'text',
+        fieldType: 'text',
         inputWidth: '12',
         isDisabled: false,
         isRequired: true,
@@ -97,7 +97,7 @@ export async function createCollection(projectId: string) {
         max: 70,
       },
       {
-        id: id.assetReferenceValueDefinition,
+        id: id.assetReferenceFieldDefinition,
         valueType: 'reference',
         label: {
           en: 'Header image',
@@ -105,7 +105,7 @@ export async function createCollection(projectId: string) {
         description: {
           en: 'An image for this product displayed on top of the page',
         },
-        inputType: 'asset',
+        fieldType: 'asset',
         inputWidth: '12',
         isDisabled: false,
         isRequired: true,
@@ -115,7 +115,7 @@ export async function createCollection(projectId: string) {
         max: null,
       },
       {
-        id: id.entryReferenceValueDefinition,
+        id: id.entryReferenceFieldDefinition,
         valueType: 'reference',
         label: {
           en: 'Related products',
@@ -123,7 +123,7 @@ export async function createCollection(projectId: string) {
         description: {
           en: 'References to other products that the visitor might want to check out too',
         },
-        inputType: 'entry',
+        fieldType: 'entry',
         ofCollections: [],
         inputWidth: '12',
         isDisabled: false,
@@ -137,10 +137,10 @@ export async function createCollection(projectId: string) {
 
   // Add circular reference to products
   (
-    collection.valueDefinitions.find((definition) => {
-      return definition.id === id.entryReferenceValueDefinition;
-    }) as EntryValueDefinition
-  ).ofCollections = [id.entryReferenceValueDefinition];
+    collection.fieldDefinitions.find((definition) => {
+      return definition.id === id.entryReferenceFieldDefinition;
+    }) as EntryFieldDefinition
+  ).ofCollections = [id.entryReferenceFieldDefinition];
 
   const updatedCollection = await core.collections.update({
     ...collection,
@@ -174,7 +174,7 @@ export async function createEntry(
       {
         objectType: 'value',
         valueType: 'string',
-        definitionId: id.textValueDefinition,
+        fieldDefinitionId: id.textFieldDefinition,
         content: {
           en: faker.commerce.product(),
         },
@@ -182,7 +182,7 @@ export async function createEntry(
       {
         objectType: 'value',
         valueType: 'reference',
-        definitionId: id.assetReferenceValueDefinition,
+        fieldDefinitionId: id.assetReferenceFieldDefinition,
         content: {
           en: [
             {
@@ -196,7 +196,7 @@ export async function createEntry(
       {
         objectType: 'value',
         valueType: 'reference',
-        definitionId: id.entryReferenceValueDefinition,
+        fieldDefinitionId: id.entryReferenceFieldDefinition,
         content: {
           en:
             (entryValueId && [
