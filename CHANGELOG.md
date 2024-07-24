@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.8.0
+
+### Minor Changes
+
+- a8db4a5: Value input types are now called Field types. Value definitions are now called Field definitions
+
 ## 0.7.0
 
 ### Minor Changes
