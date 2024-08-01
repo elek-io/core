@@ -1,7 +1,6 @@
 import { fileTypeFromFile } from 'file-type';
 import Fs from 'fs-extra';
 import isSvg from 'is-svg';
-import { RequiredParameterMissingError } from '../error/index.js';
 import {
   assetFileSchema,
   assetSchema,
@@ -66,13 +65,8 @@ export class AssetService
     const projectPath = pathTo.project(props.projectId);
     const fileType = await this.getSupportedFileTypeOrThrow(props.filePath);
     const size = await this.getAssetSize(props.filePath);
-    const assetPath = pathTo.asset(
-      props.projectId,
-      id,
-      props.language,
-      fileType.extension
-    );
-    const assetFilePath = pathTo.assetFile(props.projectId, id, props.language);
+    const assetPath = pathTo.asset(props.projectId, id, fileType.extension);
+    const assetFilePath = pathTo.assetFile(props.projectId, id);
 
     const assetFile: AssetFile = {
       ...props,
@@ -105,13 +99,13 @@ export class AssetService
   }
 
   /**
-   * Returns an Asset by ID and language
+   * Returns an Asset by ID
    */
   public async read(props: ReadAssetProps): Promise<Asset> {
     readAssetSchema.parse(props);
 
     const assetFile = await this.jsonFileService.read(
-      pathTo.assetFile(props.projectId, props.id, props.language),
+      pathTo.assetFile(props.projectId, props.id),
       assetFileSchema
     );
 
@@ -127,11 +121,7 @@ export class AssetService
     updateAssetSchema.parse(props);
 
     const projectPath = pathTo.project(props.projectId);
-    const assetFilePath = pathTo.assetFile(
-      props.projectId,
-      props.id,
-      props.language
-    );
+    const assetFilePath = pathTo.assetFile(props.projectId, props.id);
     const prevAssetFile = await this.read(props);
 
     // Overwrite old data with new
@@ -152,13 +142,11 @@ export class AssetService
       const prevAssetPath = pathTo.asset(
         props.projectId,
         props.id,
-        props.language,
         prevAssetFile.extension
       );
       const assetPath = pathTo.asset(
         props.projectId,
         props.id,
-        props.language,
         fileType.extension
       );
 
@@ -190,17 +178,8 @@ export class AssetService
     deleteAssetSchema.parse(props);
 
     const projectPath = pathTo.project(props.projectId);
-    const assetFilePath = pathTo.assetFile(
-      props.projectId,
-      props.id,
-      props.language
-    );
-    const assetPath = pathTo.asset(
-      props.projectId,
-      props.id,
-      props.language,
-      props.extension
-    );
+    const assetFilePath = pathTo.assetFile(props.projectId, props.id);
+    const assetPath = pathTo.asset(props.projectId, props.id, props.extension);
     await Fs.remove(assetPath);
     await Fs.remove(assetFilePath);
     await this.gitService.add(projectPath, [assetFilePath, assetPath]);
@@ -222,13 +201,9 @@ export class AssetService
 
     const assets = await returnResolved(
       partialAssetReferences.map((assetReference) => {
-        if (!assetReference.language) {
-          throw new RequiredParameterMissingError('language');
-        }
         return this.read({
           projectId: props.projectId,
           id: assetReference.id,
-          language: assetReference.language,
         });
       })
     );
@@ -280,7 +255,6 @@ export class AssetService
     const assetPath = pathTo.asset(
       projectId,
       assetFile.id,
-      assetFile.language,
       assetFile.extension
     );
 

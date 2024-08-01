@@ -26,19 +26,12 @@ describe.sequential('Integration', function () {
     expect(asset.extension).to.equal('png');
     expect(asset.mimeType).to.equal('image/png');
     expect(
-      await Fs.pathExists(
-        core.util.pathTo.assetFile(project.id, asset.id, asset.language)
-      ),
+      await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id)),
       'the AssetFile to be created for saving additional meta data of the Asset'
     ).to.be.true;
     expect(
       await Fs.pathExists(
-        core.util.pathTo.asset(
-          project.id,
-          asset.id,
-          asset.language,
-          asset.extension
-        )
+        core.util.pathTo.asset(project.id, asset.id, asset.extension)
       ),
       'the Asset to be copied into the LFS directory of the Project'
     ).to.be.true;
@@ -55,7 +48,6 @@ describe.sequential('Integration', function () {
     const readAsset = await core.assets.read({
       projectId: project.id,
       id: asset.id,
-      language: asset.language,
     });
 
     expect(readAsset.name).to.equal(asset.name);
@@ -96,18 +88,11 @@ describe.sequential('Integration', function () {
 
     expect(
       await Fs.pathExists(
-        core.util.pathTo.asset(
-          project.id,
-          asset.id,
-          asset.language,
-          asset.extension
-        )
+        core.util.pathTo.asset(project.id, asset.id, asset.extension)
       )
     ).to.be.false;
     expect(
-      await Fs.pathExists(
-        core.util.pathTo.assetFile(project.id, asset.id, asset.language)
-      )
+      await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id))
     ).to.be.false;
   });
 });

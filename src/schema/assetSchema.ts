@@ -5,9 +5,9 @@ import {
   supportedAssetMimeTypeSchema,
   uuidSchema,
 } from './baseSchema.js';
-import { baseFileWithLanguageSchema } from './fileSchema.js';
+import { baseFileSchema } from './fileSchema.js';
 
-export const assetFileSchema = baseFileWithLanguageSchema.extend({
+export const assetFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.Enum.asset).readonly(),
   name: z.string(),
   description: z.string(),
@@ -35,7 +35,6 @@ export const createAssetSchema = assetFileSchema
   .pick({
     name: true,
     description: true,
-    language: true,
   })
   .extend({
     projectId: uuidSchema.readonly(),
@@ -49,7 +48,6 @@ export type CreateAssetProps = z.infer<typeof createAssetSchema>;
 export const readAssetSchema = assetFileSchema
   .pick({
     id: true,
-    language: true,
   })
   .extend({
     projectId: uuidSchema.readonly(),
@@ -61,7 +59,6 @@ export const updateAssetSchema = assetFileSchema
     id: true,
     name: true,
     description: true,
-    language: true,
   })
   .extend({
     projectId: uuidSchema.readonly(),
@@ -75,7 +72,6 @@ export type UpdateAssetProps = z.infer<typeof updateAssetSchema>;
 export const deleteAssetSchema = assetFileSchema
   .pick({
     id: true,
-    language: true,
     extension: true,
   })
   .extend({

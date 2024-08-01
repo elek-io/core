@@ -52,7 +52,6 @@ export async function createAsset(projectId: string) {
     filePath: Path.resolve('src/test/data/150x150.png'),
     name: 'elek.io',
     description: 'A 150x150 image of the text "elek.ioo"',
-    language: 'en',
   });
 
   return asset;
@@ -188,7 +187,6 @@ export async function createEntry(
             {
               objectType: 'asset',
               id: assetValueId,
-              language: 'en',
             },
           ],
         },
