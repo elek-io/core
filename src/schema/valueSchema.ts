@@ -29,7 +29,7 @@ export const valueContentReferenceWithLanguageBase =
   });
 
 export const valueContentReferenceToAssetSchema =
-  valueContentReferenceWithLanguageBase.extend({
+  valueContentReferenceBase.extend({
     objectType: z.literal(objectTypeSchema.Enum.asset),
   });
 export type ValueContentReferenceToAsset = z.infer<

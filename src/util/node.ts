@@ -71,16 +71,11 @@ export const pathTo = {
       projectFolderSchema.Enum.assets
     );
   },
-  assetFile: (projectId: string, id: string, language: string): string => {
-    return Path.join(pathTo.assets(projectId), `${id}.${language}.json`);
+  assetFile: (projectId: string, id: string): string => {
+    return Path.join(pathTo.assets(projectId), `${id}.json`);
   },
-  asset: (
-    projectId: string,
-    id: string,
-    language: string,
-    extension: string
-  ): string => {
-    return Path.join(pathTo.lfs(projectId), `${id}.${language}.${extension}`);
+  asset: (projectId: string, id: string, extension: string): string => {
+    return Path.join(pathTo.lfs(projectId), `${id}.${extension}`);
   },
 };
 

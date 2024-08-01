@@ -338,7 +338,6 @@ export class EntryService
         return await this.assetService.read({
           projectId: props.projectId,
           id: props.valueContentReference.id,
-          language: props.valueContentReference.language,
         });
       case objectTypeSchema.Enum.entry:
         return await this.read({
