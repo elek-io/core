@@ -7,6 +7,17 @@ export const UserTypeSchema = z.enum(['local', 'cloud']);
 export const baseUserSchema = gitSignatureSchema.extend({
   userType: UserTypeSchema,
   language: supportedLanguageSchema,
+  window: z
+    .object({
+      displayId: z.number(),
+      width: z.number(),
+      height: z.number(),
+      position: z.object({
+        x: z.number(),
+        y: z.number(),
+      }),
+    })
+    .nullable(),
 });
 export type BaseUser = z.infer<typeof baseUserSchema>;
 
