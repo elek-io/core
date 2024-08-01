@@ -18,6 +18,9 @@ export const projectSettingsSchema = z.object({
     default: supportedLanguageSchema,
     supported: z.array(supportedLanguageSchema),
   }),
+  git: z.object({
+    lfs: z.boolean(),
+  }),
 });
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 
