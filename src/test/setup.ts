@@ -7,6 +7,7 @@ await core.user.set({
   name: 'John Doe',
   email: 'john.doe@test.com',
   language: 'en',
+  window: null,
 });
 
 export default core;
