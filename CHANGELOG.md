@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.9.1
+
+### Patch Changes
+
+- fa234b7: Removed displayId from user file
+
 ## 0.9.0
 
 ### Minor Changes
