@@ -79,7 +79,9 @@ export class GitService {
 
     await this.git(path, args);
     await this.setLocalConfig(path);
-    await this.installLfs(path);
+    if (options?.lfs === true) {
+      await this.installLfs(path);
+    }
   }
 
   /**
@@ -461,6 +463,32 @@ export class GitService {
   }
 
   /**
+   * Installs LFS support and starts tracking
+   * all files inside the lfs folder
+   *
+   * @param path Path to the repository
+   * @todo If the user installs LFS after adding one or more Assets, we need to migrate the object files into their corresponding pointer files
+   * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-migrate.adoc
+   * @see https://docs.github.com/en/repositories/working-with-files/managing-large-files/moving-a-file-in-your-repository-to-git-large-file-storage
+   */
+  public async installLfs(path: string): Promise<void> {
+    await this.git(path, ['lfs', 'install']);
+    await this.git(path, ['lfs', 'track', 'lfs/*']);
+  }
+
+  /**
+   * Uninstalls LFS support and stops tracking
+   * all files inside the lfs folder
+   *
+   * @param path Path to the repository
+   * @todo If the user uninstalls LFS after adding one or more Assets, we need to migrate the pointer files into their corresponding object files again
+   * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-migrate.adoc
+   */
+  public async uninstallLfs(path: string): Promise<void> {
+    await this.git(path, ['lfs', 'uninstall']);
+  }
+
+  /**
    * Reads the currently used version of Git
    *
    * This can help debugging
@@ -493,17 +521,6 @@ export class GitService {
    */
   private async checkBranchOrTagName(path: string, name: string) {
     await this.git(path, ['check-ref-format', '--allow-onelevel', name]);
-  }
-
-  /**
-   * Installs LFS support and starts tracking
-   * all files inside the lfs folder
-   *
-   * @param path Path to the repository
-   */
-  private async installLfs(path: string): Promise<void> {
-    await this.git(path, ['lfs', 'install']);
-    await this.git(path, ['lfs', 'track', 'lfs/*']);
   }
 
   /**

@@ -108,6 +108,9 @@ export class ProjectService
         default: user.language,
         supported: [user.language],
       },
+      git: {
+        lfs: false,
+      },
     };
 
     const projectFile: ProjectFile = {
@@ -130,7 +133,10 @@ export class ProjectService
     try {
       await this.createFolderStructure(projectPath);
       await this.createGitignore(projectPath);
-      await this.gitService.init(projectPath, { initialBranch: 'main' });
+      await this.gitService.init(projectPath, {
+        initialBranch: 'main',
+        lfs: projectFile.settings.git.lfs,
+      });
       await this.jsonFileService.create(
         projectFile,
         pathTo.projectFile(id),
@@ -228,6 +234,9 @@ export class ProjectService
           default:
             props.settings?.language.default ||
             prevProjectFile.settings.language.default,
+        },
+        git: {
+          lfs: props.settings?.git.lfs || prevProjectFile.settings.git.lfs,
         },
       },
       updated: datetime(),

@@ -45,6 +45,7 @@ export const gitInitOptionsSchema = z.object({
    * Use the specified name for the initial branch in the newly created repository. If not specified, fall back to the default name (currently master, but this is subject to change in the future; the name can be customized via the init.defaultBranch configuration variable).
    */
   initialBranch: z.string(),
+  lfs: z.boolean(),
 });
 export type GitInitOptions = z.infer<typeof gitInitOptionsSchema>;
 
