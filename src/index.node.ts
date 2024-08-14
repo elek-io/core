@@ -13,6 +13,7 @@ import {
   ProjectService,
   UserService,
 } from './service/index.js';
+import { LogService } from './service/LogService.js';
 import * as Util from './util/node.js';
 
 // Export all schemas and shared code that works inside node environments,
@@ -27,6 +28,7 @@ export * from './util/shared.js';
  */
 export default class ElekIoCore {
   private readonly options: ElekIoCoreOptions;
+  private readonly logService: LogService;
   private readonly userService: UserService;
   private readonly gitService: GitService;
   private readonly jsonFileService: JsonFileService;
@@ -34,7 +36,6 @@ export default class ElekIoCore {
   private readonly projectService: ProjectService;
   private readonly collectionService: CollectionService;
   private readonly entryService: EntryService;
-  // private readonly sharedValueService: SharedValueService;
 
   constructor(props?: ConstructorElekIoCoreProps) {
     const parsedProps = constructorElekIoCoreSchema.parse(props);
@@ -42,6 +43,9 @@ export default class ElekIoCore {
     const defaults: ElekIoCoreOptions = {
       environment: 'production',
       version: '0.0.0',
+      log: {
+        level: parsedProps?.environment !== 'production' ? 'debug' : 'info',
+      },
       file: {
         json: {
           indentation: 2,
@@ -50,10 +54,16 @@ export default class ElekIoCore {
     };
     this.options = Object.assign({}, defaults, parsedProps);
 
-    this.jsonFileService = new JsonFileService(this.options);
-    this.userService = new UserService(this.jsonFileService);
-    this.gitService = new GitService(this.options, this.userService);
-    // this.gitService.getVersion(); // @todo currently throws an "Error: Unable to find path to repository on disk."
+    console.log('this.options', this.options);
+
+    this.logService = new LogService(this.options);
+    this.jsonFileService = new JsonFileService(this.options, this.logService);
+    this.userService = new UserService(this.logService, this.jsonFileService);
+    this.gitService = new GitService(
+      this.options,
+      this.logService,
+      this.userService
+    );
     this.assetService = new AssetService(
       this.options,
       this.jsonFileService,
@@ -64,19 +74,13 @@ export default class ElekIoCore {
       this.jsonFileService,
       this.gitService
     );
-    // this.sharedValueService = new SharedValueService(
-    //   this.options,
-    //   this.jsonFileService,
-    //   this.gitService,
-    //   this.assetService
-    // );
     this.entryService = new EntryService(
       this.options,
+      this.logService,
       this.jsonFileService,
       this.gitService,
       this.collectionService,
       this.assetService
-      // this.sharedValueService
     );
     this.projectService = new ProjectService(
       this.options,
@@ -89,17 +93,22 @@ export default class ElekIoCore {
     );
 
     if (this.options.environment !== 'production') {
-      console.info(
+      this.logService.info(
         `Initializing inside an "${this.options.environment}" environment`,
-        {
-          ...this.options,
-        }
+        { options: this.options }
       );
     }
 
     Fs.mkdirpSync(Util.pathTo.projects);
     Fs.mkdirpSync(Util.pathTo.tmp);
     Fs.emptyDirSync(Util.pathTo.tmp);
+  }
+
+  /**
+   * Exposes the logger
+   */
+  public get logger() {
+    return this.logService;
   }
 
   /**
@@ -150,11 +159,4 @@ export default class ElekIoCore {
   public get entries(): EntryService {
     return this.entryService;
   }
-
-  /**
-   * CRUD methods to work with Values
-   */
-  // public get sharedValues(): SharedValueService {
-  //   return this.sharedValueService;
-  // }
 }

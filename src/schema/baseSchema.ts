@@ -107,6 +107,8 @@ export const objectTypeSchema = z.enum([
 ]);
 export type ObjectType = z.infer<typeof objectTypeSchema>;
 
+export const logLevelSchema = z.enum(['error', 'warn', 'info', 'debug']);
+
 export const versionSchema = z.string();
 // .refine((version) => {
 //   if (Semver.valid(version) !== null) {

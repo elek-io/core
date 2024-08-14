@@ -5,15 +5,19 @@ import type { BaseFile } from '../schema/fileSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
 import type { UserFile } from '../schema/userSchema.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
+import { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for JSON files on disk
  */
 export class JsonFileService extends AbstractCrudService {
   private cache: Map<string, any> = new Map();
+  private readonly logService: LogService;
 
-  constructor(options: ElekIoCoreOptions) {
+  constructor(options: ElekIoCoreOptions, logService: LogService) {
     super(serviceTypeSchema.Enum.JsonFile, options);
+
+    this.logService = logService;
   }
 
   /**
@@ -36,6 +40,7 @@ export class JsonFileService extends AbstractCrudService {
       encoding: 'utf8',
     });
     this.cache.set(path, parsedData);
+    this.logService.debug(`Created file "${path}"`);
 
     return parsedData;
   }
@@ -52,11 +57,11 @@ export class JsonFileService extends AbstractCrudService {
     schema: T
   ): Promise<z.output<T>> {
     if (this.cache.has(path)) {
-      // console.log(`Cache hit for "${path}"`);
+      this.logService.debug(`Cache hit reading file "${path}"`);
       return this.cache.get(path);
     }
 
-    // console.log(`Cache miss for "${path}"`);
+    this.logService.debug(`Cache miss reading file "${path}"`);
     const data = await Fs.readFile(path, {
       flag: 'r',
       encoding: 'utf8',
@@ -90,6 +95,7 @@ export class JsonFileService extends AbstractCrudService {
       encoding: 'utf8',
     });
     this.cache.set(path, parsedData);
+    this.logService.debug(`Updated file "${path}"`);
 
     return parsedData;
   }

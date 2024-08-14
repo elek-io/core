@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { environmentSchema, versionSchema } from './baseSchema.js';
+import {
+  environmentSchema,
+  logLevelSchema,
+  versionSchema,
+} from './baseSchema.js';
 
 /**
  * Options that can be passed to elek.io core
@@ -13,6 +17,9 @@ export const elekIoCoreOptionsSchema = z.object({
    * The current version of elek.io Core
    */
   version: versionSchema,
+  log: z.object({
+    level: logLevelSchema,
+  }),
   file: z.object({
     json: z.object({
       /**
@@ -32,6 +39,7 @@ export const constructorElekIoCoreSchema = elekIoCoreOptionsSchema
   })
   .partial({
     environment: true,
+    log: true,
     file: true,
   })
   .optional();

@@ -37,6 +37,7 @@ import type { AssetService } from './AssetService.js';
 import type { CollectionService } from './CollectionService.js';
 import type { GitService } from './GitService.js';
 import { JsonFileService } from './JsonFileService.js';
+import { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for Entry files on disk
@@ -45,6 +46,7 @@ export class EntryService
   extends AbstractCrudService
   implements ExtendedCrudService<Entry>
 {
+  private logService: LogService;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
   private collectionService: CollectionService;
@@ -53,6 +55,7 @@ export class EntryService
 
   constructor(
     options: ElekIoCoreOptions,
+    logService: LogService,
     jsonFileService: JsonFileService,
     gitService: GitService,
     collectionService: CollectionService,
@@ -61,6 +64,7 @@ export class EntryService
   ) {
     super(serviceTypeSchema.Enum.Entry, options);
 
+    this.logService = logService;
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
     this.collectionService = collectionService;
@@ -297,14 +301,17 @@ export class EntryService
       const contentSchema =
         getValueContentSchemaFromFieldDefinition(fieldDefinition);
 
-      try {
-        for (const [_language, content] of Object.entries(value.content)) {
-          contentSchema.parse(content);
+      this.logService.debug(
+        'Validating Value against content schema generated from Field definition',
+        {
+          value,
+          contentSchema,
+          fieldDefinition,
         }
-      } catch (error) {
-        console.log('Definition:', fieldDefinition);
-        console.log('Value:', value);
-        throw error;
+      );
+
+      for (const [_language, content] of Object.entries(value.content)) {
+        contentSchema.parse(content);
       }
     });
   }
