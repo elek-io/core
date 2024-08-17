@@ -54,8 +54,6 @@ export default class ElekIoCore {
     };
     this.options = Object.assign({}, defaults, parsedProps);
 
-    console.log('this.options', this.options);
-
     this.logService = new LogService(this.options);
     this.jsonFileService = new JsonFileService(this.options, this.logService);
     this.userService = new UserService(this.logService, this.jsonFileService);
@@ -92,12 +90,10 @@ export default class ElekIoCore {
       this.entryService
     );
 
-    if (this.options.environment !== 'production') {
-      this.logService.info(
-        `Initializing inside an "${this.options.environment}" environment`,
-        { options: this.options }
-      );
-    }
+    this.logService.info(
+      `Initializing inside an "${this.options.environment}" environment`,
+      { options: this.options }
+    );
 
     Fs.mkdirpSync(Util.pathTo.projects);
     Fs.mkdirpSync(Util.pathTo.tmp);

@@ -17,7 +17,7 @@ export const workingDirectory = Path.join(Os.homedir(), 'elek.io');
 export const pathTo = {
   tmp: Path.join(workingDirectory, 'tmp'),
   userFile: Path.join(workingDirectory, 'user.json'),
-  // logs: Path.join(workingDirectory, 'logs'),
+  logs: Path.join(workingDirectory, 'logs'),
 
   projects: Path.join(workingDirectory, 'projects'),
   project: (projectId: string): string => {

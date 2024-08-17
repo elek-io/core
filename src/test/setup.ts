@@ -2,9 +2,10 @@ import ElekIoCore from '../index.node.js';
 export * from '../index.node.js';
 
 const core = new ElekIoCore({
-  log: {
-    level: 'debug',
-  },
+  environment: 'test',
+  // log: {
+  //   level: 'debug',
+  // },
 });
 await core.user.set({
   userType: 'local',
