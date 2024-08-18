@@ -6,6 +6,7 @@ import {
   QueryOptions,
   transports,
 } from 'winston';
+import DailyRotateFile from 'winston-daily-rotate-file';
 import { type ElekIoCoreOptions } from '../schema/index.js';
 import { pathTo } from '../util/node.js';
 
@@ -18,21 +19,32 @@ export class LogService {
   private readonly logger: Logger;
 
   constructor(options: ElekIoCoreOptions) {
+    const rotatingFileTransport = new DailyRotateFile({
+      filename: Path.join(pathTo.logs, 'core-%DATE%.log'),
+      datePattern: 'YYYY-MM-DD',
+      zippedArchive: true,
+      maxFiles: '30d',
+      handleExceptions: true,
+      handleRejections: true,
+      format: format.combine(format.timestamp(), format.json()),
+    });
+
     this.logger = createLogger({
       level: options.log.level,
       transports: [
-        new transports.File({
-          handleExceptions: true,
-          handleRejections: true,
-          filename: Path.join(pathTo.logs, 'core.log'),
-          format: format.combine(format.timestamp(), format.json()),
-        }),
+        rotatingFileTransport,
         new transports.Console({
           handleExceptions: true,
           handleRejections: true,
           format: format.cli(),
         }),
       ],
+    });
+
+    rotatingFileTransport.on('rotate', (oldFilename, newFilename) => {
+      this.logger.info(
+        `Rotated log file from ${oldFilename} to ${newFilename}`
+      );
     });
   }
 
