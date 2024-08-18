@@ -11,7 +11,7 @@ import { LogService } from './LogService.js';
  * Service that manages CRUD functionality for JSON files on disk
  */
 export class JsonFileService extends AbstractCrudService {
-  private cache: Map<string, any> = new Map();
+  private cache: Map<string, unknown> = new Map();
   private readonly logService: LogService;
 
   constructor(options: ElekIoCoreOptions, logService: LogService) {
@@ -39,7 +39,7 @@ export class JsonFileService extends AbstractCrudService {
       flag: 'wx',
       encoding: 'utf8',
     });
-    this.cache.set(path, parsedData);
+    this.options.file.cache === true && this.cache.set(path, parsedData);
     this.logService.debug(`Created file "${path}"`);
 
     return parsedData;
@@ -56,9 +56,11 @@ export class JsonFileService extends AbstractCrudService {
     path: string,
     schema: T
   ): Promise<z.output<T>> {
-    if (this.cache.has(path)) {
+    if (this.options.file.cache === true && this.cache.has(path)) {
       this.logService.debug(`Cache hit reading file "${path}"`);
-      return this.cache.get(path);
+      const json = this.cache.get(path);
+      const parsedData = schema.parse(json);
+      return parsedData;
     }
 
     this.logService.debug(`Cache miss reading file "${path}"`);
@@ -68,7 +70,7 @@ export class JsonFileService extends AbstractCrudService {
     });
     const json = this.deserialize(data);
     const parsedData = schema.parse(json);
-    this.cache.set(path, parsedData);
+    this.options.file.cache === true && this.cache.set(path, parsedData);
 
     return parsedData;
   }
@@ -94,14 +96,14 @@ export class JsonFileService extends AbstractCrudService {
       flag: 'w',
       encoding: 'utf8',
     });
-    this.cache.set(path, parsedData);
+    this.options.file.cache === true && this.cache.set(path, parsedData);
     this.logService.debug(`Updated file "${path}"`);
 
     return parsedData;
   }
 
   private serialize(data: unknown): string {
-    return JSON.stringify(data, null, this.options.file.json.indentation);
+    return JSON.stringify(data, null, 2);
   }
 
   private deserialize(data: string): unknown {

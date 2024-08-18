@@ -23,6 +23,7 @@ import {
   synchronizeProjectSchema,
   updateProjectSchema,
   upgradeProjectSchema,
+  Version,
   type BaseFile,
   type CloneProjectProps,
   type CollectionExport,
@@ -65,6 +66,7 @@ export class ProjectService
   extends AbstractCrudService
   implements ExtendedCrudService<Project>
 {
+  private version: Version;
   private jsonFileService: JsonFileService;
   private userService: UserService;
   private gitService: GitService;
@@ -73,6 +75,7 @@ export class ProjectService
   private entryService: EntryService;
 
   constructor(
+    version: Version,
     options: ElekIoCoreOptions,
     jsonFileService: JsonFileService,
     userService: UserService,
@@ -83,6 +86,7 @@ export class ProjectService
   ) {
     super(serviceTypeSchema.Enum.Project, options);
 
+    this.version = version;
     this.jsonFileService = jsonFileService;
     this.userService = userService;
     this.gitService = gitService;
@@ -118,7 +122,7 @@ export class ProjectService
       settings: Object.assign({}, defaultSettings, props.settings),
       created: datetime(),
       updated: null,
-      coreVersion: this.options.version, // @todo should be read from package.json to avoid duplicates
+      coreVersion: this.version,
       status: 'todo',
       version: '0.0.1',
     };
@@ -246,8 +250,6 @@ export class ProjectService
    * Upgrades given Project to the latest version of this client
    *
    * Needed when a new core version is requiring changes to existing files or structure.
-   *
-   * @todo Find out why using this.snapshotService is throwing isObjWithKeyAndValueOfString of undefined error in gitService (maybe binding issue)
    */
   public async upgrade(props: UpgradeProjectProps): Promise<void> {
     upgradeProjectSchema.parse(props);
@@ -255,14 +257,14 @@ export class ProjectService
     const project = await this.read(props);
     const projectPath = pathTo.project(project.id);
 
-    if (Semver.gt(project.coreVersion, this.options.version)) {
+    if (Semver.gt(project.coreVersion, this.version)) {
       // Upgrade of the client needed before the project can be upgraded
       throw new Error(
-        `Failed upgrading project. The projects core version "${project.coreVersion}" is higher than the current core version "${this.options.version}" of this client. A client upgrade is needed beforehand.`
+        `Failed upgrading project. The projects core version "${project.coreVersion}" is higher than the current core version "${this.version}" of this client. A client upgrade is needed beforehand.`
       );
     }
 
-    if (Semver.eq(project.coreVersion, this.options.version)) {
+    if (Semver.eq(project.coreVersion, this.version)) {
       // Nothing, since both are equal
       return;
     }

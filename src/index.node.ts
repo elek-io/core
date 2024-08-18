@@ -1,6 +1,8 @@
 import Fs from 'fs-extra';
+import { version as coreVersion } from '../package.json';
 import {
   constructorElekIoCoreSchema,
+  Version,
   type ConstructorElekIoCoreProps,
   type ElekIoCoreOptions,
 } from './schema/index.js';
@@ -27,7 +29,8 @@ export * from './util/shared.js';
  * Provides access to all services Core is offering
  */
 export default class ElekIoCore {
-  private readonly options: ElekIoCoreOptions;
+  public readonly version: Version;
+  public readonly options: ElekIoCoreOptions;
   private readonly logService: LogService;
   private readonly userService: UserService;
   private readonly gitService: GitService;
@@ -38,18 +41,15 @@ export default class ElekIoCore {
   private readonly entryService: EntryService;
 
   constructor(props?: ConstructorElekIoCoreProps) {
+    this.version = coreVersion;
     const parsedProps = constructorElekIoCoreSchema.parse(props);
 
     const defaults: ElekIoCoreOptions = {
-      environment: 'production',
-      version: '0.0.0',
       log: {
-        level: parsedProps?.environment !== 'production' ? 'debug' : 'info',
+        level: 'info',
       },
       file: {
-        json: {
-          indentation: 2,
-        },
+        cache: true,
       },
     };
     this.options = Object.assign({}, defaults, parsedProps);
@@ -81,6 +81,7 @@ export default class ElekIoCore {
       this.assetService
     );
     this.projectService = new ProjectService(
+      this.version,
       this.options,
       this.jsonFileService,
       this.userService,
@@ -90,10 +91,9 @@ export default class ElekIoCore {
       this.entryService
     );
 
-    this.logService.info(
-      `Initializing inside an "${this.options.environment}" environment`,
-      { options: this.options }
-    );
+    this.logService.info(`Initializing elek.io Core`, {
+      options: this.options,
+    });
 
     Fs.mkdirpSync(Util.pathTo.projects);
     Fs.mkdirpSync(Util.pathTo.tmp);

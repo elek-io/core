@@ -1,8 +1,5 @@
 import z from 'zod';
 
-export const environmentSchema = z.enum(['production', 'development', 'test']);
-export type Environment = z.infer<typeof environmentSchema>;
-
 /**
  * All currently supported, BCP 47 compliant language tags
  *
