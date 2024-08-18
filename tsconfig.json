@@ -10,7 +10,8 @@
     "@tsconfig/strictest/tsconfig.json"
   ],
   "compilerOptions": {
-    "noEmit": true // Do not emit code when linting
+    "noEmit": true, // Do not emit code when linting
+    "resolveJsonModule": true // Allows importing the version from package.json
   },
   "include": ["src"]
 }

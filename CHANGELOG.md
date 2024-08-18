@@ -1,5 +1,18 @@
 # @elek-io/core
 
+## 0.9.1
+
+### Patch Changes
+
+- fa234b7: Removed displayId from user file
+
+## 0.9.0
+
+### Minor Changes
+
+- a2a7b7a: Assets do not have a language anymore
+- 5dec07b: The Users window position and size is saved between application launches
+
 ## 0.8.0
 
 ### Minor Changes

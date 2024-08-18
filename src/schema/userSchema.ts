@@ -9,7 +9,6 @@ export const baseUserSchema = gitSignatureSchema.extend({
   language: supportedLanguageSchema,
   window: z
     .object({
-      displayId: z.number(),
       width: z.number(),
       height: z.number(),
       position: z.object({

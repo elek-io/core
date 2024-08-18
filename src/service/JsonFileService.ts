@@ -5,15 +5,19 @@ import type { BaseFile } from '../schema/fileSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
 import type { UserFile } from '../schema/userSchema.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
+import { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for JSON files on disk
  */
 export class JsonFileService extends AbstractCrudService {
-  private cache: Map<string, any> = new Map();
+  private cache: Map<string, unknown> = new Map();
+  private readonly logService: LogService;
 
-  constructor(options: ElekIoCoreOptions) {
+  constructor(options: ElekIoCoreOptions, logService: LogService) {
     super(serviceTypeSchema.Enum.JsonFile, options);
+
+    this.logService = logService;
   }
 
   /**
@@ -35,7 +39,8 @@ export class JsonFileService extends AbstractCrudService {
       flag: 'wx',
       encoding: 'utf8',
     });
-    this.cache.set(path, parsedData);
+    this.options.file.cache === true && this.cache.set(path, parsedData);
+    this.logService.debug(`Created file "${path}"`);
 
     return parsedData;
   }
@@ -51,19 +56,21 @@ export class JsonFileService extends AbstractCrudService {
     path: string,
     schema: T
   ): Promise<z.output<T>> {
-    if (this.cache.has(path)) {
-      // console.log(`Cache hit for "${path}"`);
-      return this.cache.get(path);
+    if (this.options.file.cache === true && this.cache.has(path)) {
+      this.logService.debug(`Cache hit reading file "${path}"`);
+      const json = this.cache.get(path);
+      const parsedData = schema.parse(json);
+      return parsedData;
     }
 
-    // console.log(`Cache miss for "${path}"`);
+    this.logService.debug(`Cache miss reading file "${path}"`);
     const data = await Fs.readFile(path, {
       flag: 'r',
       encoding: 'utf8',
     });
     const json = this.deserialize(data);
     const parsedData = schema.parse(json);
-    this.cache.set(path, parsedData);
+    this.options.file.cache === true && this.cache.set(path, parsedData);
 
     return parsedData;
   }
@@ -89,13 +96,14 @@ export class JsonFileService extends AbstractCrudService {
       flag: 'w',
       encoding: 'utf8',
     });
-    this.cache.set(path, parsedData);
+    this.options.file.cache === true && this.cache.set(path, parsedData);
+    this.logService.debug(`Updated file "${path}"`);
 
     return parsedData;
   }
 
   private serialize(data: unknown): string {
-    return JSON.stringify(data, null, this.options.file.json.indentation);
+    return JSON.stringify(data, null, 2);
   }
 
   private deserialize(data: string): unknown {
