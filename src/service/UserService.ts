@@ -8,14 +8,17 @@ import {
 } from '../schema/index.js';
 import { pathTo } from '../util/node.js';
 import { JsonFileService } from './JsonFileService.js';
+import { LogService } from './LogService.js';
 
 /**
  * Service to handle the User that is currently working with Core
  */
 export class UserService {
+  private readonly logService: LogService;
   private readonly jsonFileService: JsonFileService;
 
-  constructor(jsonFileService: JsonFileService) {
+  constructor(logService: LogService, jsonFileService: JsonFileService) {
+    this.logService = logService;
     this.jsonFileService = jsonFileService;
   }
 
@@ -26,7 +29,8 @@ export class UserService {
     try {
       return await this.jsonFileService.read(pathTo.userFile, userFileSchema);
     } catch (error) {
-      // Should probably be logged in some way or another
+      this.logService.info('No User found');
+
       return undefined;
     }
   }
@@ -51,6 +55,7 @@ export class UserService {
     }
 
     await this.jsonFileService.update(userFile, userFilePath, userFileSchema);
+    this.logService.debug('Updated User');
 
     return userFile;
   }

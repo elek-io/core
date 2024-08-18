@@ -1,8 +1,5 @@
 import z from 'zod';
 
-export const environmentSchema = z.enum(['production', 'development', 'test']);
-export type Environment = z.infer<typeof environmentSchema>;
-
 /**
  * All currently supported, BCP 47 compliant language tags
  *
@@ -106,6 +103,8 @@ export const objectTypeSchema = z.enum([
   'sharedValue',
 ]);
 export type ObjectType = z.infer<typeof objectTypeSchema>;
+
+export const logLevelSchema = z.enum(['error', 'warn', 'info', 'debug']);
 
 export const versionSchema = z.string();
 // .refine((version) => {

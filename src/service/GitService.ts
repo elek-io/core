@@ -14,6 +14,7 @@ import {
 } from '../schema/index.js';
 import { datetime } from '../util/shared.js';
 import { GitTagService } from './GitTagService.js';
+import { LogService } from './LogService.js';
 import { UserService } from './UserService.js';
 
 /**
@@ -36,16 +37,22 @@ export class GitService {
   private version: string | null;
   private gitPath: string | null;
   private queue: PQueue;
+  private logService: LogService;
   private gitTagService: GitTagService;
   private userService: UserService;
 
-  public constructor(options: ElekIoCoreOptions, userService: UserService) {
+  public constructor(
+    options: ElekIoCoreOptions,
+    logService: LogService,
+    userService: UserService
+  ) {
     this.version = null;
     this.gitPath = null;
     this.queue = new PQueue({
       concurrency: 1, // No concurrency because git operations are sequencial
     });
     this.gitTagService = new GitTagService(options, this.git);
+    this.logService = logService;
     this.userService = userService;
 
     this.updateVersion();
@@ -560,6 +567,9 @@ export class GitService {
         },
       })
     );
+
+    this.logService.debug(`Executed "git ${args.join(' ')}"`);
+
     if (!result) {
       throw new GitError(
         `Git ${this.version} (${this.gitPath}) command "git ${args.join(

@@ -5,5 +5,6 @@ export * from './EntryService.js';
 export * from './GitService.js';
 export * from './GitTagService.js';
 export * from './JsonFileService.js';
+export * from './LogService.js';
 export * from './ProjectService.js';
 export * from './UserService.js';
