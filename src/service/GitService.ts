@@ -86,7 +86,6 @@ export class GitService {
 
     await this.git(path, args);
     await this.setLocalConfig(path);
-    await this.installLfs(path);
   }
 
   /**
@@ -503,17 +502,6 @@ export class GitService {
   }
 
   /**
-   * Installs LFS support and starts tracking
-   * all files inside the lfs folder
-   *
-   * @param path Path to the repository
-   */
-  private async installLfs(path: string): Promise<void> {
-    await this.git(path, ['lfs', 'install']);
-    await this.git(path, ['lfs', 'track', 'lfs/*']);
-  }
-
-  /**
    * Sets the git config of given local repository from ElekIoCoreOptions
    *
    * @param path Path to the repository
@@ -558,35 +546,40 @@ export class GitService {
    * @param args Arguments to append after the `git` command
    */
   private async git(path: string, args: string[]): Promise<IGitResult> {
-    const result = await this.queue.add(() =>
-      GitProcess.exec(args, path, {
-        env: {
-          // @todo Nasty stuff - remove after update to dugite with git > v2.45.2 once available
-          // @see https://github.com/git-lfs/git-lfs/issues/5749
-          GIT_CLONE_PROTECTION_ACTIVE: 'false',
-        },
-      })
-    );
-
-    this.logService.debug(`Executed "git ${args.join(' ')}"`);
+    const result = await this.queue.add(async () => {
+      const start = Date.now();
+      const gitResult = await GitProcess.exec(args, path);
+      const durationMs = Date.now() - start;
+      return {
+        gitResult,
+        durationMs,
+      };
+    });
 
     if (!result) {
       throw new GitError(
         `Git ${this.version} (${this.gitPath}) command "git ${args.join(
           ' '
-        )}" failed to return a result`
+        )}" executed for "${path}" failed to return a result`
       );
     }
-    if (result.exitCode !== 0) {
+
+    this.logService.debug(
+      `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`
+    );
+
+    if (result.gitResult.exitCode !== 0) {
       throw new GitError(
         `Git ${this.version} (${this.gitPath}) command "git ${args.join(
           ' '
-        )}" failed with exit code "${result.exitCode}" and message "${
-          result.stderr
+        )}" executed for "${path}" failed with exit code "${
+          result.gitResult.exitCode
+        }" and message "${
+          result.gitResult.stderr.trim() || result.gitResult.stdout.trim()
         }"`
       );
     }
 
-    return result;
+    return result.gitResult;
   }
 }
