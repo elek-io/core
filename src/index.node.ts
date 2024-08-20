@@ -81,6 +81,7 @@ export default class ElekIoCore {
       this.assetService
     );
     this.projectService = new ProjectService(
+      this.logService,
       this.version,
       this.options,
       this.jsonFileService,

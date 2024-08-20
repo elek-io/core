@@ -57,6 +57,7 @@ import { CollectionService } from './CollectionService.js';
 import type { EntryService } from './EntryService.js';
 import { GitService } from './GitService.js';
 import { JsonFileService } from './JsonFileService.js';
+import { LogService } from './LogService.js';
 import { UserService } from './UserService.js';
 
 /**
@@ -66,6 +67,7 @@ export class ProjectService
   extends AbstractCrudService
   implements ExtendedCrudService<Project>
 {
+  private logService: LogService;
   private version: Version;
   private jsonFileService: JsonFileService;
   private userService: UserService;
@@ -75,6 +77,7 @@ export class ProjectService
   private entryService: EntryService;
 
   constructor(
+    logService: LogService,
     version: Version,
     options: ElekIoCoreOptions,
     jsonFileService: JsonFileService,
@@ -86,6 +89,7 @@ export class ProjectService
   ) {
     super(serviceTypeSchema.Enum.Project, options);
 
+    this.logService = logService;
     this.version = version;
     this.jsonFileService = jsonFileService;
     this.userService = userService;
@@ -245,6 +249,21 @@ export class ProjectService
       },
       updated: datetime(),
     };
+
+    if (prevProjectFile.settings.git.lfs !== projectFile.settings.git.lfs) {
+      // LFS settings changed, install or uninstall LFS
+      if (projectFile.settings.git.lfs === true) {
+        this.logService.info('Migrating Project to use LFS');
+        await this.gitService.lfs.install(projectPath);
+        await this.gitService.lfs.trackSupportedAssetExtensions(projectPath);
+        const assets = (await this.assetService.list({ projectId: props.id }))
+          .list;
+        await this.gitService.lfs.migrateImportAssets(projectPath, assets);
+      } else {
+        this.logService.info('Migrating Project to not use LFS');
+        await this.gitService.lfs.uninstall(projectPath);
+      }
+    }
 
     await this.jsonFileService.update(projectFile, filePath, projectFileSchema);
     await this.gitService.add(projectPath, [filePath]);

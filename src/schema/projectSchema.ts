@@ -29,7 +29,6 @@ export const projectFolderSchema = z.enum([
   'collections',
   'shared-values',
   'lfs',
-  // 'logs',
   // 'public',
   // 'theme',
 ]);

@@ -3,7 +3,10 @@ import { EOL } from 'os';
 import PQueue from 'p-queue';
 import { GitError, NoCurrentUserError } from '../error/index.js';
 import {
+  gitCommitIconSchema,
   gitCommitSchema,
+  SupportedAssetExtension,
+  supportedAssetExtensionSchema,
   uuidSchema,
   type ElekIoCoreOptions,
   type GitCloneOptions,
@@ -34,6 +37,7 @@ import { UserService } from './UserService.js';
  * @todo All public methods should recieve only a single object as parameter and the type should be defined through the shared library to be accessible in Core and Client
  */
 export class GitService {
+  private options: ElekIoCoreOptions;
   private version: string | null;
   private gitPath: string | null;
   private queue: PQueue;
@@ -46,6 +50,7 @@ export class GitService {
     logService: LogService,
     userService: UserService
   ) {
+    this.options = options;
     this.version = null;
     this.gitPath = null;
     this.queue = new PQueue({
@@ -87,7 +92,8 @@ export class GitService {
     await this.git(path, args);
     await this.setLocalConfig(path);
     if (options?.lfs === true) {
-      await this.installLfs(path);
+      await this.lfs.install(path);
+      await this.lfs.trackSupportedAssetExtensions(path);
     }
   }
 
@@ -470,30 +476,69 @@ export class GitService {
   }
 
   /**
-   * Installs LFS support and starts tracking
-   * all files inside the lfs folder
-   *
-   * @param path Path to the repository
-   * @todo If the user installs LFS after adding one or more Assets, we need to migrate the object files into their corresponding pointer files
-   * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-migrate.adoc
-   * @see https://docs.github.com/en/repositories/working-with-files/managing-large-files/moving-a-file-in-your-repository-to-git-large-file-storage
+   * Git LFS (Large File Storage) related methods
    */
-  public async installLfs(path: string): Promise<void> {
-    await this.git(path, ['lfs', 'install']);
-    await this.git(path, ['lfs', 'track', 'lfs/*']);
-  }
-
-  /**
-   * Uninstalls LFS support and stops tracking
-   * all files inside the lfs folder
-   *
-   * @param path Path to the repository
-   * @todo If the user uninstalls LFS after adding one or more Assets, we need to migrate the pointer files into their corresponding object files again
-   * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-migrate.adoc
-   */
-  public async uninstallLfs(path: string): Promise<void> {
-    await this.git(path, ['lfs', 'uninstall']);
-  }
+  public lfs = {
+    /**
+     * Installs LFS support for the given repository
+     *
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-install.adoc
+     *
+     * @param path Path to the repository
+     */
+    install: async (path: string): Promise<void> => {
+      await this.git(path, ['lfs', 'install', '--local']);
+    },
+    /**
+     * Uninstalls LFS support for the given repository
+     *
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-uninstall.adoc
+     *
+     * @param path Path to the repository
+     */
+    uninstall: async (path: string): Promise<void> => {
+      await this.git(path, ['lfs', 'uninstall', '--local']);
+    },
+    /**
+     * Migrate Assets to Git LFS in a new commit without rewriting Git history
+     *
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-migrate.adoc
+     */
+    migrateImportAssets: async (
+      path: string,
+      assets: { id: string; extension: SupportedAssetExtension }[]
+    ): Promise<IGitResult> => {
+      return await this.git(path, [
+        'lfs',
+        'migrate',
+        'import',
+        '--no-rewrite',
+        ...assets.map((asset) => {
+          return `lfs/${asset.id}.${asset.extension}`;
+        }),
+        '--message',
+        `${gitCommitIconSchema.enum.UPDATE} Migrated Assets to Git LFS`,
+      ]);
+    },
+    /**
+     * Updates the repositories .gitattributes file to track all supported Asset extensions
+     *
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-track.adoc
+     */
+    trackSupportedAssetExtensions: async (path: string): Promise<void> => {
+      const extensionsToTrack = supportedAssetExtensionSchema.options.map(
+        (extension) => {
+          return `lfs/*.${extension}`;
+        }
+      );
+      await this.git(path, ['lfs', 'track', ...extensionsToTrack]);
+      await this.add(path, ['.gitattributes', 'lfs/*']);
+      await this.commit(
+        path,
+        `${gitCommitIconSchema.enum.UPDATE} Tracking all supported Asset extensions with Git LFS`
+      );
+    },
+  };
 
   /**
    * Reads the currently used version of Git
@@ -575,35 +620,46 @@ export class GitService {
    * @param args Arguments to append after the `git` command
    */
   private async git(path: string, args: string[]): Promise<IGitResult> {
-    const result = await this.queue.add(() =>
-      GitProcess.exec(args, path, {
+    const result = await this.queue.add(async () => {
+      const start = Date.now();
+      const gitResult = await GitProcess.exec(args, path, {
         env: {
           // @todo Nasty stuff - remove after update to dugite with git > v2.45.2 once available
           // @see https://github.com/git-lfs/git-lfs/issues/5749
           GIT_CLONE_PROTECTION_ACTIVE: 'false',
         },
-      })
-    );
-
-    this.logService.debug(`Executed "git ${args.join(' ')}"`);
+      });
+      const durationMs = Date.now() - start;
+      return {
+        gitResult,
+        durationMs,
+      };
+    });
 
     if (!result) {
       throw new GitError(
         `Git ${this.version} (${this.gitPath}) command "git ${args.join(
           ' '
-        )}" failed to return a result`
+        )}" executed for "${path}" failed to return a result`
       );
     }
-    if (result.exitCode !== 0) {
+
+    this.logService.debug(
+      `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`
+    );
+
+    if (result.gitResult.exitCode !== 0) {
       throw new GitError(
         `Git ${this.version} (${this.gitPath}) command "git ${args.join(
           ' '
-        )}" failed with exit code "${result.exitCode}" and message "${
-          result.stderr
+        )}" executed for "${path}" failed with exit code "${
+          result.gitResult.exitCode
+        }" and message "${
+          result.gitResult.stderr.trim() || result.gitResult.stdout.trim()
         }"`
       );
     }
 
-    return result;
+    return result.gitResult;
   }
 }

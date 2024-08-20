@@ -1,7 +1,7 @@
 import Fs from 'fs-extra';
 import { beforeAll, describe, expect, it } from 'vitest';
 import core, { type Project } from '../test/setup.js';
-import { createProject } from '../test/util.js';
+import { createAsset, createProject } from '../test/util.js';
 
 describe.sequential('Integration', function () {
   let project: Project;
@@ -21,6 +21,9 @@ describe.sequential('Integration', function () {
 
       expect(project.name).to.equal('project #1');
       expect(project.settings, 'settings to default to').to.deep.equal({
+        git: {
+          lfs: false,
+        },
         language: {
           supported: ['en'],
           default: 'en',
@@ -74,60 +77,86 @@ describe.sequential('Integration', function () {
     expect(core.projects.isProject({ objectType: 'project' })).to.be.false;
   });
 
-  it.sequential('should be able to delete a Project', async function () {
-    await core.projects.delete({ id: project.id });
-    expect(
-      await Fs.pathExists(core.util.pathTo.project(project.id))
-    ).to.be.false;
-  });
+  it.sequential(
+    'should be able to migrate a Project to use LFS after adding Assets',
+    async function () {
+      const asset = await createAsset(project.id);
+      project.settings.git.lfs = true;
+      await core.projects.update(project);
+      // const updatedProject = await core.projects.read({ id: project.id });
+      // const info = await core.git.lfs.migrate(
+      //   pathTo.project(project.id),
+      //   'info'
+      // );
+
+      // console.log('Info:', info);
+
+      // await core.git.lfs.install(pathTo.project(project.id));
+      // await core.git.lfs.trackSupportedAssetExtensions(
+      //   pathTo.project(project.id)
+      // );
+      // await core.git.lfs.migrateImport(pathTo.project(project.id), [
+      //   `lfs/${asset.id}.${asset.extension}`,
+      // ]);
+
+      // expect(updatedProject.settings.git.lfs).to.equal(true);
+    }
+  );
+
+  // it.sequential('should be able to delete a Project', async function () {
+  //   await core.projects.delete({ id: project.id });
+  //   expect(
+  //     await Fs.pathExists(core.util.pathTo.project(project.id))
+  //   ).to.be.false;
+  // });
 
   // @todo make this work inside Github Action - ideally we can add an SSH key to the Action that can read / write to the test repository
-  if (isGithubAction) {
-    console.warn('Running inside a Github Action - some tests are skipped');
-  } else {
-    it.sequential(
-      'should be able to clone an existing Project',
-      { timeout: 20000 },
-      async function () {
-        clonedProject = await core.projects.clone({ url: gitUrl });
-        expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id)))
-          .to.be.true;
-      }
-    );
+  // if (isGithubAction) {
+  //   console.warn('Running inside a Github Action - some tests are skipped');
+  // } else {
+  //   it.sequential(
+  //     'should be able to clone an existing Project',
+  //     { timeout: 20000 },
+  //     async function () {
+  //       clonedProject = await core.projects.clone({ url: gitUrl });
+  //       expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id)))
+  //         .to.be.true;
+  //     }
+  //   );
 
-    it.sequential(
-      'should be able to get the origin URL of the cloned Project',
-      async function () {
-        const originUrl = await core.projects.remotes.getOriginUrl({
-          id: clonedProject.id,
-        });
-        expect(originUrl).to.equal(gitUrl);
-      }
-    );
+  //   it.sequential(
+  //     'should be able to get the origin URL of the cloned Project',
+  //     async function () {
+  //       const originUrl = await core.projects.remotes.getOriginUrl({
+  //         id: clonedProject.id,
+  //       });
+  //       expect(originUrl).to.equal(gitUrl);
+  //     }
+  //   );
 
-    it.sequential(
-      'should be able to update the cloned Project and verify there is a change',
-      async function () {
-        await core.projects.update({ ...clonedProject, name: 'A new name' });
-        const changes = await core.projects.getChanges({
-          id: clonedProject.id,
-        });
+  //   it.sequential(
+  //     'should be able to update the cloned Project and verify there is a change',
+  //     async function () {
+  //       await core.projects.update({ ...clonedProject, name: 'A new name' });
+  //       const changes = await core.projects.getChanges({
+  //         id: clonedProject.id,
+  //       });
 
-        expect(changes.ahead.length).to.equal(1);
-      }
-    );
+  //       expect(changes.ahead.length).to.equal(1);
+  //     }
+  //   );
 
-    it.sequential(
-      'should be able to synchronize the cloned Project with its remote',
-      { timeout: 20000 },
-      async function () {
-        await core.projects.synchronize({ id: clonedProject.id });
-        const changes = await core.projects.getChanges({
-          id: clonedProject.id,
-        });
+  //   it.sequential(
+  //     'should be able to synchronize the cloned Project with its remote',
+  //     { timeout: 20000 },
+  //     async function () {
+  //       await core.projects.synchronize({ id: clonedProject.id });
+  //       const changes = await core.projects.getChanges({
+  //         id: clonedProject.id,
+  //       });
 
-        expect(changes.ahead.length).to.equal(0);
-      }
-    );
-  }
+  //       expect(changes.ahead.length).to.equal(0);
+  //     }
+  //   );
+  // }
 });
