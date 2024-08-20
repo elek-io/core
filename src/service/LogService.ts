@@ -65,6 +65,6 @@ export class LogService {
   }
 
   public read(options?: QueryOptions) {
-    this.logger.query(options);
+    return this.logger.query(options);
   }
 }

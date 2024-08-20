@@ -1,7 +1,7 @@
 import Fs from 'fs-extra';
 import { beforeAll, describe, expect, it } from 'vitest';
 import core, { type Project } from '../test/setup.js';
-import { createProject } from '../test/util.js';
+import { createAsset, createProject } from '../test/util.js';
 
 describe.sequential('Integration', function () {
   let project: Project;
@@ -109,11 +109,12 @@ describe.sequential('Integration', function () {
       'should be able to update the cloned Project and verify there is a change',
       async function () {
         await core.projects.update({ ...clonedProject, name: 'A new name' });
+        await createAsset(clonedProject.id);
         const changes = await core.projects.getChanges({
           id: clonedProject.id,
         });
 
-        expect(changes.ahead.length).to.equal(1);
+        expect(changes.ahead.length).to.equal(2);
       }
     );
 
