@@ -91,7 +91,7 @@ export default class ElekIoCore {
       this.entryService
     );
 
-    this.logService.info(`Initializing elek.io Core`, {
+    this.logService.info(`Initializing elek.io Core ${this.version}`, {
       options: this.options,
     });
 

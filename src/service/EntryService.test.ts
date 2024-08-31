@@ -64,6 +64,29 @@ describe.sequential('Integration', function () {
     expect(updatedEntry.values).to.be.an('array').that.is.empty;
   });
 
+  it.sequential(
+    'should be able to get an Entrys commit history and the content of a specific commit',
+    async function () {
+      const history = await core.entries.getHistory({
+        projectId: project.id,
+        collectionId: collection.id,
+        id: entry.id,
+      });
+
+      expect(history.length).to.equal(2);
+
+      const entryFromHistory = await core.entries.readFromHistory({
+        projectId: project.id,
+        collectionId: collection.id,
+        id: entry.id,
+        // @ts-ignore - we know that the history entry exists
+        hash: history[1].hash,
+      });
+
+      expect(entryFromHistory.values.length).to.equal(3);
+    }
+  );
+
   it.sequential('should be able to list all Entries', async function () {
     const entries = await core.entries.list({
       projectId: project.id,

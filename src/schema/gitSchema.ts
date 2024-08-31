@@ -35,7 +35,7 @@ enum GitCommitIconNative {
   INIT = ':tada:',
   CREATE = ':heavy_plus_sign:',
   UPDATE = ':wrench:',
-  DELETE = ':fire:',
+  DELETE = ':heavy_minus_sign:',
 }
 export const gitCommitIconSchema = z.nativeEnum(GitCommitIconNative);
 export type GitCommitIcon = z.infer<typeof gitCommitIconSchema>;
@@ -96,5 +96,9 @@ export const gitLogOptionsSchema = z.object({
      */
     to: z.string().optional(),
   }),
+  /**
+   * Only shows commits of given file
+   */
+  filePath: z.string().optional(),
 });
 export type GitLogOptions = z.infer<typeof gitLogOptionsSchema>;

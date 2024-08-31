@@ -56,6 +56,22 @@ export const readEntrySchema = z.object({
 });
 export type ReadEntryProps = z.infer<typeof readEntrySchema>;
 
+export const getHistoryEntrySchema = readEntrySchema;
+export type GetHistoryEntryProps = z.infer<typeof getHistoryEntrySchema>;
+
+export const readFromHistoryEntrySchema = entryFileSchema
+  .pick({
+    id: true,
+  })
+  .extend({
+    projectId: uuidSchema.readonly(),
+    collectionId: uuidSchema.readonly(),
+    hash: z.string().readonly(),
+  });
+export type ReadFromHistoryEntryProps = z.infer<
+  typeof readFromHistoryEntrySchema
+>;
+
 export const updateEntrySchema = entrySchema
   .omit({
     objectType: true,

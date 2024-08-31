@@ -54,6 +54,21 @@ export const readAssetSchema = assetFileSchema
   });
 export type ReadAssetProps = z.infer<typeof readAssetSchema>;
 
+export const getHistoryAssetSchema = readAssetSchema;
+export type GetHistoryAssetProps = z.infer<typeof getHistoryAssetSchema>;
+
+export const readFromHistoryAssetSchema = assetFileSchema
+  .pick({
+    id: true,
+  })
+  .extend({
+    projectId: uuidSchema.readonly(),
+    hash: z.string().readonly(),
+  });
+export type ReadFromHistoryAssetProps = z.infer<
+  typeof readFromHistoryAssetSchema
+>;
+
 export const updateAssetSchema = assetFileSchema
   .pick({
     id: true,

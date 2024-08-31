@@ -1,26 +1,32 @@
 import Fs from 'fs-extra';
 import {
+  CrudServiceWithHistory,
   FieldDefinition,
+  GetHistoryEntryProps,
+  GitCommit,
+  ReadFromHistoryEntryProps,
   ValueTypeSchema,
   countEntriesSchema,
   createEntrySchema,
   deleteEntrySchema,
   entryFileSchema,
   entrySchema,
+  getHistoryEntrySchema,
   getValueContentSchemaFromFieldDefinition,
   listEntriesSchema,
   objectTypeSchema,
   readEntrySchema,
+  readFromHistoryEntrySchema,
   serviceTypeSchema,
   updateEntrySchema,
   type BaseFile,
   type CountEntriesProps,
   type CreateEntryProps,
+  type CrudServiceWithListCount,
   type DeleteEntryProps,
   type ElekIoCoreOptions,
   type Entry,
   type EntryFile,
-  type ExtendedCrudService,
   type ListEntriesProps,
   type ReadEntryProps,
   type ReferencedValue,
@@ -44,7 +50,7 @@ import { LogService } from './LogService.js';
  */
 export class EntryService
   extends AbstractCrudService
-  implements ExtendedCrudService<Entry>
+  implements CrudServiceWithListCount<Entry>, CrudServiceWithHistory<Entry>
 {
   private logService: LogService;
   private jsonFileService: JsonFileService;
@@ -130,6 +136,44 @@ export class EntryService
     const entryFile: EntryFile = await this.jsonFileService.read(
       pathTo.entryFile(props.projectId, props.collectionId, props.id),
       entryFileSchema
+    );
+
+    return await this.toEntry({
+      projectId: props.projectId,
+      collectionId: props.collectionId,
+      entryFile,
+    });
+  }
+
+  /**
+   * Returns the Entry file commit history
+   */
+  public async getHistory(props: GetHistoryEntryProps): Promise<GitCommit[]> {
+    getHistoryEntrySchema.parse(props);
+
+    return await this.gitService.log(pathTo.project(props.projectId), {
+      filePath: pathTo.entryFile(props.projectId, props.collectionId, props.id),
+    });
+  }
+
+  /**
+   * Returns the Entry file content at a specific commit hash
+   *
+   * @todo toEntry probably needs to also use the / a hash to resolve the content references from a specific commit
+   */
+  public async readFromHistory(
+    props: ReadFromHistoryEntryProps
+  ): Promise<Entry> {
+    readFromHistoryEntrySchema.parse(props);
+
+    const entryFile = entryFileSchema.parse(
+      JSON.parse(
+        await this.gitService.show(
+          pathTo.project(props.projectId),
+          pathTo.entryFile(props.projectId, props.collectionId, props.id),
+          props.hash
+        )
+      )
     );
 
     return await this.toEntry({

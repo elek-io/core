@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { uuidSchema } from './baseSchema.js';
-import { gitRepositoryPathSchema } from './gitSchema.js';
+import { GitCommit, gitRepositoryPathSchema } from './gitSchema.js';
 
 export const serviceTypeSchema = z.enum([
   'Git',
@@ -42,7 +42,7 @@ export interface CrudService<T> {
  * Implements list and count methods additionally
  * to create, read, update and delete
  */
-export interface ExtendedCrudService<T> extends CrudService<T> {
+export interface CrudServiceWithListCount<T> extends CrudService<T> {
   /**
    * Returns a list of this services objects
    */
@@ -51,6 +51,11 @@ export interface ExtendedCrudService<T> extends CrudService<T> {
    * Returns the total number of this services objects
    */
   count: (...props: any) => Promise<number>;
+}
+
+export interface CrudServiceWithHistory<T> extends CrudService<T> {
+  getHistory: (...props: any) => Promise<GitCommit[]>;
+  readFromHistory: (...props: any) => Promise<T>;
 }
 
 const listSchema = z.object({

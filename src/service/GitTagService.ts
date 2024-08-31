@@ -10,9 +10,9 @@ import {
   serviceTypeSchema,
   type CountGitTagsProps,
   type CreateGitTagProps,
+  type CrudServiceWithListCount,
   type DeleteGitTagProps,
   type ElekIoCoreOptions,
-  type ExtendedCrudService,
   type GitTag,
   type ListGitTagsProps,
   type PaginatedList,
@@ -27,7 +27,7 @@ import { GitService } from './GitService.js';
  */
 export class GitTagService
   extends AbstractCrudService
-  implements ExtendedCrudService<GitTag>
+  implements CrudServiceWithListCount<GitTag>
 {
   private git: GitService['git'];
 

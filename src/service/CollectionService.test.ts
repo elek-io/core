@@ -45,6 +45,29 @@ describe.sequential('Integration', function () {
     );
   });
 
+  it.sequential(
+    'should be able to get an Collections commit history and the content of a specific commit',
+    async function () {
+      const history = await core.collections.getHistory({
+        projectId: project.id,
+        id: collection.id,
+      });
+
+      expect(history.length).to.equal(3); // 3 not 2 because of the circular reference createCollection is creating
+
+      const collectionFromHistory = await core.collections.readFromHistory({
+        projectId: project.id,
+        id: collection.id,
+        // @ts-ignore - we know that the history entry exists
+        hash: history[1].hash,
+      });
+
+      expect(collectionFromHistory.description.en).to.equal(
+        'A Collection that contains our Products'
+      );
+    }
+  );
+
   it.sequential('should be able to list all Collections', async function () {
     const collections = await core.collections.list({ projectId: project.id });
 

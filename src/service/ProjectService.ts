@@ -6,16 +6,22 @@ import { NoCurrentUserError, ProjectUpgradeError } from '../error/index.js';
 import {
   cloneProjectSchema,
   createProjectSchema,
+  CrudServiceWithHistory,
   currentBranchProjectSchema,
   deleteProjectSchema,
   getChangesProjectSchema,
+  GetHistoryProjectProps,
+  getHistoryProjectSchema,
   getRemoteOriginUrlProjectSchema,
+  GitCommit,
   gitCommitIconSchema,
   listBranchesProjectSchema,
   listProjectsSchema,
   objectTypeSchema,
   projectFileSchema,
   projectFolderSchema,
+  ReadFromHistoryProjectProps,
+  readFromHistoryProjectSchema,
   readProjectSchema,
   serviceTypeSchema,
   setRemoteOriginUrlProjectSchema,
@@ -28,10 +34,10 @@ import {
   type CloneProjectProps,
   type CollectionExport,
   type CreateProjectProps,
+  type CrudServiceWithListCount,
   type CurrentBranchProjectProps,
   type DeleteProjectProps,
   type ElekIoCoreOptions,
-  type ExtendedCrudService,
   type GetChangesProjectProps,
   type GetRemoteOriginUrlProjectProps,
   type ListBranchesProjectProps,
@@ -64,7 +70,7 @@ import { UserService } from './UserService.js';
  */
 export class ProjectService
   extends AbstractCrudService
-  implements ExtendedCrudService<Project>
+  implements CrudServiceWithListCount<Project>, CrudServiceWithHistory<Project>
 {
   private version: Version;
   private jsonFileService: JsonFileService;
@@ -135,6 +141,7 @@ export class ProjectService
       await this.createFolderStructure(projectPath);
       await this.createGitignore(projectPath);
       await this.gitService.init(projectPath, { initialBranch: 'main' });
+      await this.gitService.remotes.addOrigin(projectPath, '');
       await this.jsonFileService.create(
         projectFile,
         pathTo.projectFile(id),
@@ -203,6 +210,51 @@ export class ProjectService
     const projectFile = await this.jsonFileService.read(
       pathTo.projectFile(props.id),
       projectFileSchema
+    );
+
+    return await this.toProject({
+      projectFile,
+    });
+  }
+
+  /**
+   * Returns the whole Project's commit history
+   */
+  public async getAllHistory(
+    props: GetHistoryProjectProps
+  ): Promise<GitCommit[]> {
+    getHistoryProjectSchema.parse(props);
+
+    return await this.gitService.log(pathTo.project(props.id));
+  }
+
+  /**
+   * Returns the Project file commit history
+   */
+  public async getHistory(props: GetHistoryProjectProps): Promise<GitCommit[]> {
+    getHistoryProjectSchema.parse(props);
+
+    return await this.gitService.log(pathTo.project(props.id), {
+      filePath: pathTo.projectFile(props.id),
+    });
+  }
+
+  /**
+   * Returns the Project file content at a specific commit hash
+   */
+  public async readFromHistory(
+    props: ReadFromHistoryProjectProps
+  ): Promise<Project> {
+    readFromHistoryProjectSchema.parse(props);
+
+    const projectFile = projectFileSchema.parse(
+      JSON.parse(
+        await this.gitService.show(
+          pathTo.project(props.id),
+          pathTo.projectFile(props.id),
+          props.hash
+        )
+      )
     );
 
     return await this.toProject({
@@ -513,7 +565,7 @@ export class ProjectService
   }
 
   /**
-   * Creates a Project from given ProjectFile by adding git information
+   * Creates a Project from given ProjectFile
    */
   private async toProject(props: {
     projectFile: ProjectFile;
