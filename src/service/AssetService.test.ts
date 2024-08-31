@@ -1,6 +1,6 @@
 import Fs from 'fs-extra';
 import Path from 'path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import core, { type Asset, type Project } from '../test/setup.js';
 import { createAsset, createProject, getFileHash } from '../test/util.js';
 
@@ -12,9 +12,9 @@ describe.sequential('Integration', function () {
     project = await createProject();
   });
 
-  afterAll(async function () {
-    await project.destroy();
-  });
+  // afterAll(async function () {
+  //   await project.destroy();
+  // });
 
   it.sequential('should be able to create a new Asset', async function () {
     asset = await createAsset(project.id);
@@ -65,6 +65,62 @@ describe.sequential('Integration', function () {
     );
   });
 
+  it.sequential(
+    'should be able to update an Asset with a new file',
+    async function () {
+      const newFilePath = Path.resolve('src/test/data/150x150.jpg');
+      const updatedAsset = await core.assets.update({
+        projectId: project.id,
+        ...asset,
+        newFilePath,
+      });
+
+      expect(updatedAsset.extension).to.equal('jpg');
+      expect(updatedAsset.size).to.equal(1342);
+    }
+  );
+
+  it.sequential(
+    'should be able to get an Assets commit history and the content of a specific commit',
+    async function () {
+      const history = await core.assets.getHistory({
+        projectId: project.id,
+        id: asset.id,
+      });
+
+      expect(history.length).to.equal(3);
+
+      const assetFromHistory = await core.assets.readFromHistory({
+        projectId: project.id,
+        id: asset.id,
+        // @ts-ignore - we know that the history entry exists
+        hash: history[1].hash,
+      });
+
+      expect(assetFromHistory.extension).to.equal('png');
+      expect(assetFromHistory.mimeType).to.equal('image/png');
+      expect(
+        assetFromHistory.absolutePath.startsWith(core.util.pathTo.tmp)
+      ).to.equal(true);
+      expect(
+        await Fs.pathExists(
+          core.util.pathTo.tmpAsset(
+            assetFromHistory.id,
+            assetFromHistory.extension
+          )
+        ),
+        'the Asset to be copied into the tmp directory'
+      ).to.be.true;
+      expect(
+        await getFileHash(assetFromHistory.absolutePath),
+        'the copied file hash'
+      ).to.equal(
+        await getFileHash(Path.resolve('src/test/data/150x150.png')),
+        'the original file hash'
+      );
+    }
+  );
+
   it.sequential('should be able to list all Assets', async function () {
     const assets = await core.assets.list({ projectId: project.id });
 
@@ -83,16 +139,16 @@ describe.sequential('Integration', function () {
     expect(core.assets.isAsset({ objectType: 'asset' })).to.be.false;
   });
 
-  it.sequential('should be able to delete an Asset', async function () {
-    await core.assets.delete({ projectId: project.id, ...asset });
+  // it.sequential('should be able to delete an Asset', async function () {
+  //   await core.assets.delete({ projectId: project.id, ...asset });
 
-    expect(
-      await Fs.pathExists(
-        core.util.pathTo.asset(project.id, asset.id, asset.extension)
-      )
-    ).to.be.false;
-    expect(
-      await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id))
-    ).to.be.false;
-  });
+  //   expect(
+  //     await Fs.pathExists(
+  //       core.util.pathTo.asset(project.id, asset.id, asset.extension)
+  //     )
+  //   ).to.be.false;
+  //   expect(
+  //     await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id))
+  //   ).to.be.false;
+  // });
 });

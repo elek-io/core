@@ -51,6 +51,23 @@ export const readCollectionSchema = z.object({
 });
 export type ReadCollectionProps = z.infer<typeof readCollectionSchema>;
 
+export const getHistoryCollectionSchema = readCollectionSchema;
+export type GetHistoryCollectionProps = z.infer<
+  typeof getHistoryCollectionSchema
+>;
+
+export const readFromHistoryCollectionSchema = collectionFileSchema
+  .pick({
+    id: true,
+  })
+  .extend({
+    projectId: uuidSchema.readonly(),
+    hash: z.string().readonly(),
+  });
+export type ReadFromHistoryCollectionProps = z.infer<
+  typeof readFromHistoryCollectionSchema
+>;
+
 export const updateCollectionSchema = collectionFileSchema
   .pick({
     id: true,

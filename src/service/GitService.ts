@@ -1,6 +1,8 @@
-import { GitProcess, type IGitResult } from 'dugite';
+import { ChildProcess } from 'child_process';
+import { GitProcess, IGitExecutionOptions, type IGitResult } from 'dugite';
 import { EOL } from 'os';
 import PQueue from 'p-queue';
+import Path from 'path';
 import { GitError, NoCurrentUserError } from '../error/index.js';
 import {
   gitCommitSchema,
@@ -253,7 +255,7 @@ export class GitService {
      * @param path  Path to the repository
      */
     addOrigin: async (path: string, url: string) => {
-      const args = ['remote', 'add', 'origin', url];
+      const args = ['remote', 'add', 'origin', url.trim()];
       await this.git(path, args);
     },
     /**
@@ -281,7 +283,7 @@ export class GitService {
      * @param path  Path to the repository
      */
     setOriginUrl: async (path: string, url: string) => {
-      const args = ['remote', 'set-url', 'origin', url];
+      const args = ['remote', 'set-url', 'origin', url.trim()];
       await this.git(path, args);
     },
   };
@@ -429,10 +431,13 @@ export class GitService {
       args = [...args, `--max-count=${options.limit}`];
     }
 
-    const result = await this.git(path, [
-      ...args,
-      '--format=%H|%s|%an|%ae|%aI|%D',
-    ]);
+    args = [...args, '--format=%H|%s|%an|%ae|%aI|%D'];
+
+    if (options?.filePath) {
+      args = [...args, '--', options.filePath];
+    }
+
+    const result = await this.git(path, args);
 
     const noEmptyLinesArr = result.stdout.split(EOL).filter((line) => {
       return line.trim() !== '';
@@ -453,6 +458,66 @@ export class GitService {
     });
 
     return lineObjArr.filter(this.isGitCommit.bind(this));
+  }
+
+  /**
+   * Retrieves the content of a file at a specific commit
+   *
+   * @see https://git-scm.com/docs/git-show
+   */
+  public async show(
+    path: string,
+    filePath: string,
+    hash: string,
+    encoding: 'utf8' | 'binary' = 'utf8'
+  ) {
+    const relativePathFromRepositoryRoot = filePath.replace(
+      `${path}${Path.sep}`,
+      ''
+    );
+    const args = ['show', `${hash}:${relativePathFromRepositoryRoot}`];
+    const setEncoding: (process: ChildProcess) => void = (cb) => {
+      if (cb.stdout) {
+        cb.stdout.setEncoding(encoding);
+      }
+    };
+
+    return (
+      await this.git(path, args, {
+        processCallback: setEncoding,
+      })
+    ).stdout;
+  }
+
+  /**
+   * Retrieve the binary contents of a blob from the repository at a given commit
+   *
+   * Returns a promise that will produce a Buffer instance containing
+   * the binary contents of the blob.
+   *
+   * @see https://github.com/desktop/desktop/blob/development/app/src/lib/git/show.ts#L24
+   * @see https://git-scm.com/docs/git-show
+   *
+   * @param path Path to the repository
+   * @param filePath Path to the file in the repository to retrieve the contents of. Can be a relative or absolute path.
+   * @param hash The hash of the commit
+   */
+  public async getBlobContents(path: string, filePath: string, hash: string) {
+    const relativePathFromRepositoryRoot = filePath.replace(
+      `${path}${Path.sep}`,
+      ''
+    );
+    const args = ['show', `${hash}:${relativePathFromRepositoryRoot}`];
+    const setBinaryEncoding: (process: ChildProcess) => void = (cb) => {
+      if (cb.stdout) {
+        cb.stdout.setEncoding('binary');
+      }
+    };
+    const blobContents = await this.git(path, args, {
+      processCallback: setBinaryEncoding,
+    });
+
+    return Buffer.from(blobContents.stdout, 'binary');
   }
 
   public refNameToTagName(refName: string) {
@@ -545,10 +610,14 @@ export class GitService {
    * @param path Path to the repository
    * @param args Arguments to append after the `git` command
    */
-  private async git(path: string, args: string[]): Promise<IGitResult> {
+  private async git(
+    path: string,
+    args: string[],
+    options?: IGitExecutionOptions
+  ): Promise<IGitResult> {
     const result = await this.queue.add(async () => {
       const start = Date.now();
-      const gitResult = await GitProcess.exec(args, path);
+      const gitResult = await GitProcess.exec(args, path, options);
       const durationMs = Date.now() - start;
       return {
         gitResult,

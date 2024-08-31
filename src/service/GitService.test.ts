@@ -37,62 +37,26 @@ describe.sequential('Integration', function () {
     }
   );
 
-  it.sequential('should be able to get no remotes at first', async function () {
-    const remotes = await core.git.remotes.list(projectPath);
-
-    expect(remotes).to.be.empty;
-  });
-
   it.sequential(
-    'should be able to tell that there is no remote origin yet',
+    'should be able to tell that there is a remote origin already',
     async function () {
       const hasOrigin = await core.git.remotes.hasOrigin(projectPath);
 
-      expect(hasOrigin).to.be.false;
-    }
-  );
-
-  it.sequential(
-    'should throw trying to get the current origin URL if no origin is set yet',
-    async function () {
-      await expect(() =>
-        core.git.remotes.getOriginUrl(projectPath)
-      ).rejects.toThrow();
-    }
-  );
-
-  it.sequential(
-    'should throw trying to set the current origin URL if no origin is set yet',
-    async function () {
-      await expect(() =>
-        core.git.remotes.setOriginUrl(projectPath, gitUrl)
-      ).rejects.toThrow();
-    }
-  );
-
-  it.sequential(
-    'should be able to add the remote origin and verify it is set',
-    async function () {
-      await core.git.remotes.addOrigin(projectPath, gitUrl);
-      const remotes = await core.git.remotes.list(projectPath);
-      const hasOrigin = await core.git.remotes.hasOrigin(projectPath);
-
-      expect(remotes).to.contain('origin');
       expect(hasOrigin).to.be.true;
     }
   );
 
   it.sequential(
-    'should be able to get the remote origin URL',
+    'should be able to get the default remote origin URL',
     async function () {
       const remoteOriginUrl = await core.git.remotes.getOriginUrl(projectPath);
 
-      expect(remoteOriginUrl).to.equal(gitUrl);
+      expect(remoteOriginUrl).to.equal(null);
     }
   );
 
   it.sequential(
-    'should be able to set the remote origin URL',
+    'should be able to set a new remote origin URL',
     async function () {
       const newGitUrl = 'git@elek.io:organisation/repository.git';
       await core.git.remotes.setOriginUrl(projectPath, newGitUrl);

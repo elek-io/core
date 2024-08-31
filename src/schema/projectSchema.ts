@@ -151,6 +151,22 @@ export const getChangesProjectSchema = z.object({
 });
 export type GetChangesProjectProps = z.infer<typeof getChangesProjectSchema>;
 
+export const getHistoryProjectSchema = z.object({
+  id: uuidSchema.readonly(),
+});
+export type GetHistoryProjectProps = z.infer<typeof getHistoryProjectSchema>;
+
+export const readFromHistoryProjectSchema = projectFileSchema
+  .pick({
+    id: true,
+  })
+  .extend({
+    hash: z.string().readonly(),
+  });
+export type ReadFromHistoryProjectProps = z.infer<
+  typeof readFromHistoryProjectSchema
+>;
+
 export const synchronizeProjectSchema = z.object({
   id: uuidSchema.readonly(),
 });

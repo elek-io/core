@@ -53,6 +53,39 @@ describe.sequential('Integration', function () {
     ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
   });
 
+  it.sequential(
+    'should be able to get the full commit history of the Project',
+    async function () {
+      const history = await core.projects.getAllHistory({ id: project.id });
+      expect(history.length).to.equal(2); // Created and updated once
+
+      await createAsset(project.id);
+      const historyWithAsset = await core.projects.getAllHistory({
+        id: project.id,
+      });
+      expect(historyWithAsset.length).to.equal(3); // Now with new Asset
+    }
+  );
+
+  it.sequential(
+    'should be able to get an Projects file commit history and the content of a specific commit',
+    async function () {
+      const history = await core.projects.getHistory({
+        id: project.id,
+      });
+
+      expect(history.length).to.equal(2);
+
+      const projectFromHistory = await core.projects.readFromHistory({
+        id: project.id,
+        // @ts-ignore - we know that the history entry exists
+        hash: history[1].hash,
+      });
+
+      expect(projectFromHistory.name).to.equal('project #1');
+    }
+  );
+
   it.sequential('should be able to list all Projects', async function () {
     const projects = await core.projects.list();
 

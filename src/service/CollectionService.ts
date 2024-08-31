@@ -3,10 +3,16 @@ import {
   collectionFileSchema,
   countCollectionsSchema,
   createCollectionSchema,
+  CrudServiceWithHistory,
   deleteCollectionSchema,
+  GetHistoryCollectionProps,
+  getHistoryCollectionSchema,
+  GitCommit,
   listCollectionsSchema,
   objectTypeSchema,
   readCollectionSchema,
+  ReadFromHistoryCollectionProps,
+  readFromHistoryCollectionSchema,
   serviceTypeSchema,
   updateCollectionSchema,
   type BaseFile,
@@ -14,9 +20,9 @@ import {
   type CollectionFile,
   type CountCollectionsProps,
   type CreateCollectionProps,
+  type CrudServiceWithListCount,
   type DeleteCollectionProps,
   type ElekIoCoreOptions,
-  type ExtendedCrudService,
   type ListCollectionsProps,
   type PaginatedList,
   type ReadCollectionProps,
@@ -33,7 +39,9 @@ import { JsonFileService } from './JsonFileService.js';
  */
 export class CollectionService
   extends AbstractCrudService
-  implements ExtendedCrudService<Collection>
+  implements
+    CrudServiceWithListCount<Collection>,
+    CrudServiceWithHistory<Collection>
 {
   private jsonFileService: JsonFileService;
   private gitService: GitService;
@@ -93,6 +101,40 @@ export class CollectionService
     const collection = await this.jsonFileService.read(
       pathTo.collectionFile(props.projectId, props.id),
       collectionFileSchema
+    );
+
+    return collection;
+  }
+
+  /**
+   * Returns the Collection file commit history
+   */
+  public async getHistory(
+    props: GetHistoryCollectionProps
+  ): Promise<GitCommit[]> {
+    getHistoryCollectionSchema.parse(props);
+
+    return await this.gitService.log(pathTo.project(props.projectId), {
+      filePath: pathTo.collectionFile(props.projectId, props.id),
+    });
+  }
+
+  /**
+   * Returns the Collection file content at a specific commit hash
+   */
+  public async readFromHistory(
+    props: ReadFromHistoryCollectionProps
+  ): Promise<Collection> {
+    readFromHistoryCollectionSchema.parse(props);
+
+    const collection = collectionFileSchema.parse(
+      JSON.parse(
+        await this.gitService.show(
+          pathTo.project(props.projectId),
+          pathTo.collectionFile(props.projectId, props.id),
+          props.hash
+        )
+      )
     );
 
     return collection;
