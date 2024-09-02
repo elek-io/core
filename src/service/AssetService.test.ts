@@ -1,4 +1,5 @@
 import Fs from 'fs-extra';
+import Os from 'os';
 import Path from 'path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import core, { type Asset, type Project } from '../test/setup.js';
@@ -25,6 +26,7 @@ describe.sequential('Integration', function () {
     ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
     expect(asset.extension).to.equal('png');
     expect(asset.mimeType).to.equal('image/png');
+    expect(asset.history.length).to.equal(1);
     expect(
       await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id)),
       'the AssetFile to be created for saving additional meta data of the Asset'
@@ -55,46 +57,38 @@ describe.sequential('Integration', function () {
 
   it.sequential('should be able to update an Asset', async function () {
     asset.description = 'A 150x150 image of the text "elek.io"';
-    const updatedAsset = await core.assets.update({
+    asset = await core.assets.update({
       projectId: project.id,
       ...asset,
     });
 
-    expect(updatedAsset.description).to.equal(
-      'A 150x150 image of the text "elek.io"'
-    );
+    expect(asset.description).to.equal('A 150x150 image of the text "elek.io"');
+    expect(asset.history.length).to.equal(2);
   });
 
   it.sequential(
     'should be able to update an Asset with a new file',
     async function () {
       const newFilePath = Path.resolve('src/test/data/150x150.jpg');
-      const updatedAsset = await core.assets.update({
+      asset = await core.assets.update({
         projectId: project.id,
         ...asset,
         newFilePath,
       });
 
-      expect(updatedAsset.extension).to.equal('jpg');
-      expect(updatedAsset.size).to.equal(1342);
+      expect(asset.extension).to.equal('jpg');
+      expect(asset.size).to.equal(1342);
+      expect(asset.history.length).to.equal(3);
     }
   );
 
   it.sequential(
-    'should be able to get an Assets commit history and the content of a specific commit',
+    'should be able to get an Asset of a specific commit',
     async function () {
-      const history = await core.assets.getHistory({
+      const assetFromHistory = await core.assets.read({
         projectId: project.id,
         id: asset.id,
-      });
-
-      expect(history.length).to.equal(3);
-
-      const assetFromHistory = await core.assets.readFromHistory({
-        projectId: project.id,
-        id: asset.id,
-        // @ts-ignore - we know that the history entry exists
-        hash: history[1].hash,
+        commitHash: asset.history.pop()?.hash,
       });
 
       expect(assetFromHistory.extension).to.equal('png');
@@ -113,6 +107,59 @@ describe.sequential('Integration', function () {
       ).to.be.true;
       expect(
         await getFileHash(assetFromHistory.absolutePath),
+        'the copied file hash'
+      ).to.equal(
+        await getFileHash(Path.resolve('src/test/data/150x150.png')),
+        'the original file hash'
+      );
+    }
+  );
+
+  it.sequential(
+    'should be able to save the current Asset version on disk',
+    async function () {
+      const filePathToSaveTo = Path.join(Os.homedir(), `saved-asset.jpg`);
+
+      await core.assets.save({
+        projectId: project.id,
+        id: asset.id,
+        filePath: filePathToSaveTo,
+      });
+
+      expect(
+        await Fs.pathExists(filePathToSaveTo),
+        'the Asset to be copied into given directory'
+      ).to.be.true;
+      expect(
+        await getFileHash(filePathToSaveTo),
+        'the copied file hash'
+      ).to.equal(
+        await getFileHash(asset.absolutePath),
+        'the original file hash'
+      );
+    }
+  );
+  it.sequential(
+    'should be able to save an Asset from history on disk',
+    async function () {
+      const filePathToSaveToFromHistory = Path.join(
+        Os.homedir(),
+        `saved-asset-from-history.png`
+      );
+
+      await core.assets.save({
+        projectId: project.id,
+        id: asset.id,
+        commitHash: asset.history.pop()?.hash,
+        filePath: filePathToSaveToFromHistory,
+      });
+
+      expect(
+        await Fs.pathExists(filePathToSaveToFromHistory),
+        'the Asset to be copied into given directory'
+      ).to.be.true;
+      expect(
+        await getFileHash(filePathToSaveToFromHistory),
         'the copied file hash'
       ).to.equal(
         await getFileHash(Path.resolve('src/test/data/150x150.png')),

@@ -64,6 +64,7 @@ export default class ElekIoCore {
     );
     this.assetService = new AssetService(
       this.options,
+      this.logService,
       this.jsonFileService,
       this.gitService
     );

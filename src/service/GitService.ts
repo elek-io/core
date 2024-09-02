@@ -465,17 +465,17 @@ export class GitService {
    *
    * @see https://git-scm.com/docs/git-show
    */
-  public async show(
+  public async getFileContentAtCommit(
     path: string,
     filePath: string,
-    hash: string,
+    commitHash: string,
     encoding: 'utf8' | 'binary' = 'utf8'
   ) {
     const relativePathFromRepositoryRoot = filePath.replace(
       `${path}${Path.sep}`,
       ''
     );
-    const args = ['show', `${hash}:${relativePathFromRepositoryRoot}`];
+    const args = ['show', `${commitHash}:${relativePathFromRepositoryRoot}`];
     const setEncoding: (process: ChildProcess) => void = (cb) => {
       if (cb.stdout) {
         cb.stdout.setEncoding(encoding);
@@ -487,37 +487,6 @@ export class GitService {
         processCallback: setEncoding,
       })
     ).stdout;
-  }
-
-  /**
-   * Retrieve the binary contents of a blob from the repository at a given commit
-   *
-   * Returns a promise that will produce a Buffer instance containing
-   * the binary contents of the blob.
-   *
-   * @see https://github.com/desktop/desktop/blob/development/app/src/lib/git/show.ts#L24
-   * @see https://git-scm.com/docs/git-show
-   *
-   * @param path Path to the repository
-   * @param filePath Path to the file in the repository to retrieve the contents of. Can be a relative or absolute path.
-   * @param hash The hash of the commit
-   */
-  public async getBlobContents(path: string, filePath: string, hash: string) {
-    const relativePathFromRepositoryRoot = filePath.replace(
-      `${path}${Path.sep}`,
-      ''
-    );
-    const args = ['show', `${hash}:${relativePathFromRepositoryRoot}`];
-    const setBinaryEncoding: (process: ChildProcess) => void = (cb) => {
-      if (cb.stdout) {
-        cb.stdout.setEncoding('binary');
-      }
-    };
-    const blobContents = await this.git(path, args, {
-      processCallback: setBinaryEncoding,
-    });
-
-    return Buffer.from(blobContents.stdout, 'binary');
   }
 
   public refNameToTagName(refName: string) {
@@ -633,9 +602,12 @@ export class GitService {
       );
     }
 
-    this.logService.debug(
-      `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`
-    );
+    const gitLog = `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`;
+    if (result.durationMs >= 100) {
+      this.logService.warn(gitLog);
+    } else {
+      this.logService.debug(gitLog);
+    }
 
     if (result.gitResult.exitCode !== 0) {
       throw new GitError(
