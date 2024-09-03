@@ -44,6 +44,7 @@ export class AssetService
   extends AbstractCrudService
   implements CrudServiceWithListCount<Asset>
 {
+  // @ts-ignore
   private readonly logService: LogService;
   private readonly jsonFileService: JsonFileService;
   private readonly gitService: GitService;
@@ -352,14 +353,9 @@ export class AssetService
   }
 
   /**
-   * Migrates an potentially outdated Asset file
-   * from commit history to the current schema
+   * Migrates an potentially outdated Asset file to the current schema
    */
-  private migrate(potentiallyOutdatedAssetFile: unknown) {
-    this.logService.info('Attempting to migrate Asset file to current schema', {
-      potentiallyOutdatedAssetFile,
-    });
-
+  public migrate(potentiallyOutdatedAssetFile: unknown) {
     // @todo
 
     return assetFileSchema.parse(potentiallyOutdatedAssetFile);

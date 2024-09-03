@@ -1,6 +1,5 @@
 import Fs from 'fs-extra';
 import {
-  CrudServiceWithHistory,
   FieldDefinition,
   GetHistoryEntryProps,
   GitCommit,
@@ -50,7 +49,7 @@ import { LogService } from './LogService.js';
  */
 export class EntryService
   extends AbstractCrudService
-  implements CrudServiceWithListCount<Entry>, CrudServiceWithHistory<Entry>
+  implements CrudServiceWithListCount<Entry>
 {
   private logService: LogService;
   private jsonFileService: JsonFileService;
@@ -168,7 +167,7 @@ export class EntryService
 
     const entryFile = entryFileSchema.parse(
       JSON.parse(
-        await this.gitService.show(
+        await this.gitService.getFileContentAtCommit(
           pathTo.project(props.projectId),
           pathTo.entryFile(props.projectId, props.collectionId, props.id),
           props.hash
@@ -302,6 +301,15 @@ export class EntryService
    */
   public isEntry(obj: BaseFile | unknown): obj is Entry {
     return entrySchema.safeParse(obj).success;
+  }
+
+  /**
+   * Migrates an potentially outdated Entry file to the current schema
+   */
+  public migrate(potentiallyOutdatedEntryFile: unknown) {
+    // @todo
+
+    return entryFileSchema.parse(potentiallyOutdatedEntryFile);
   }
 
   /**

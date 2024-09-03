@@ -8,7 +8,7 @@ import {
 } from './baseSchema.js';
 import { collectionExportSchema } from './collectionSchema.js';
 import { baseFileSchema } from './fileSchema.js';
-import { gitSwitchOptionsSchema } from './gitSchema.js';
+import { gitCommitSchema, gitSwitchOptionsSchema } from './gitSchema.js';
 
 export const projectStatusSchema = z.enum(['foo', 'bar', 'todo']);
 export type ProjectStatus = z.infer<typeof projectStatusSchema>;
@@ -43,8 +43,25 @@ export const projectFileSchema = baseFileSchema.extend({
 });
 export type ProjectFile = z.infer<typeof projectFileSchema>;
 
-export const projectSchema = projectFileSchema.extend({});
+export const projectSchema = projectFileSchema.extend({
+  /**
+   * Commit history of this Project
+   */
+  history: z.array(gitCommitSchema),
+  /**
+   * Full commit history of this Project
+   * including all Assets, Collections, Entries and other files
+   */
+  fullHistory: z.array(gitCommitSchema),
+});
 export type Project = z.infer<typeof projectSchema>;
+
+export const outdatedProjectSchema = projectFileSchema.pick({
+  id: true,
+  name: true,
+  coreVersion: true,
+});
+export type OutdatedProject = z.infer<typeof outdatedProjectSchema>;
 
 export const projectExportSchema = projectSchema.extend({
   assets: z.array(assetExportSchema),
@@ -66,6 +83,7 @@ export type CreateProjectProps = z.infer<typeof createProjectSchema>;
 
 export const readProjectSchema = z.object({
   id: uuidSchema.readonly(),
+  commitHash: z.string().optional().readonly(),
 });
 export type ReadProjectProps = z.infer<typeof readProjectSchema>;
 
@@ -85,6 +103,7 @@ export type UpdateProjectProps = z.infer<typeof updateProjectSchema>;
 
 export const upgradeProjectSchema = z.object({
   id: uuidSchema.readonly(),
+  force: z.boolean().optional(),
 });
 export type UpgradeProjectProps = z.infer<typeof upgradeProjectSchema>;
 

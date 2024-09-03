@@ -730,7 +730,6 @@ describe('Dynamic zod schema', () => {
                 id: '6e40e9b2-6393-46a4-be0c-1e151a947373',
                 created: '2024-07-16T12:42:27.897Z',
                 updated: null,
-                language: 'en',
                 objectType: 'asset',
                 name: 'elek.io',
                 description: 'A 150x150 image of the text "elek.ioo"',
@@ -739,6 +738,7 @@ describe('Dynamic zod schema', () => {
                 size: 369,
                 absolutePath:
                   '/Users/nkl/elek.io/projects/a6bb8e5a-b2f2-4304-9ab9-9822600115aa/lfs/6e40e9b2-6393-46a4-be0c-1e151a947373.en.png',
+                history: [],
               },
             ],
           },
@@ -773,7 +773,6 @@ describe('Dynamic zod schema', () => {
                           id: '6e40e9b2-6393-46a4-be0c-1e151a947373',
                           created: '2024-07-16T12:42:27.897Z',
                           updated: null,
-                          language: 'en',
                           objectType: 'asset',
                           name: 'elek.io',
                           description: 'A 150x150 image of the text "elek.ioo"',
@@ -782,6 +781,7 @@ describe('Dynamic zod schema', () => {
                           size: 369,
                           absolutePath:
                             '/Users/nkl/elek.io/projects/a6bb8e5a-b2f2-4304-9ab9-9822600115aa/lfs/6e40e9b2-6393-46a4-be0c-1e151a947373.en.png',
+                          history: [],
                         },
                       ],
                     },

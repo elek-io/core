@@ -3,7 +3,6 @@ import {
   collectionFileSchema,
   countCollectionsSchema,
   createCollectionSchema,
-  CrudServiceWithHistory,
   deleteCollectionSchema,
   GetHistoryCollectionProps,
   getHistoryCollectionSchema,
@@ -39,9 +38,7 @@ import { JsonFileService } from './JsonFileService.js';
  */
 export class CollectionService
   extends AbstractCrudService
-  implements
-    CrudServiceWithListCount<Collection>,
-    CrudServiceWithHistory<Collection>
+  implements CrudServiceWithListCount<Collection>
 {
   private jsonFileService: JsonFileService;
   private gitService: GitService;
@@ -129,7 +126,7 @@ export class CollectionService
 
     const collection = collectionFileSchema.parse(
       JSON.parse(
-        await this.gitService.show(
+        await this.gitService.getFileContentAtCommit(
           pathTo.project(props.projectId),
           pathTo.collectionFile(props.projectId, props.id),
           props.hash
@@ -388,5 +385,14 @@ export class CollectionService
    */
   public isCollection(obj: BaseFile | unknown): obj is Collection {
     return collectionFileSchema.safeParse(obj).success;
+  }
+
+  /**
+   * Migrates an potentially outdated Collection file to the current schema
+   */
+  public migrate(potentiallyOutdatedCollectionFile: unknown) {
+    // @todo
+
+    return collectionFileSchema.parse(potentiallyOutdatedCollectionFile);
   }
 }

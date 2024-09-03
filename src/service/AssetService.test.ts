@@ -1,7 +1,7 @@
 import Fs from 'fs-extra';
 import Os from 'os';
 import Path from 'path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import core, { type Asset, type Project } from '../test/setup.js';
 import { createAsset, createProject, getFileHash } from '../test/util.js';
 
@@ -13,9 +13,9 @@ describe.sequential('Integration', function () {
     project = await createProject();
   });
 
-  // afterAll(async function () {
-  //   await project.destroy();
-  // });
+  afterAll(async function () {
+    await project.destroy();
+  });
 
   it.sequential('should be able to create a new Asset', async function () {
     asset = await createAsset(project.id);
@@ -139,6 +139,7 @@ describe.sequential('Integration', function () {
       );
     }
   );
+
   it.sequential(
     'should be able to save an Asset from history on disk',
     async function () {
@@ -186,16 +187,16 @@ describe.sequential('Integration', function () {
     expect(core.assets.isAsset({ objectType: 'asset' })).to.be.false;
   });
 
-  // it.sequential('should be able to delete an Asset', async function () {
-  //   await core.assets.delete({ projectId: project.id, ...asset });
+  it.sequential('should be able to delete an Asset', async function () {
+    await core.assets.delete({ projectId: project.id, ...asset });
 
-  //   expect(
-  //     await Fs.pathExists(
-  //       core.util.pathTo.asset(project.id, asset.id, asset.extension)
-  //     )
-  //   ).to.be.false;
-  //   expect(
-  //     await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id))
-  //   ).to.be.false;
-  // });
+    expect(
+      await Fs.pathExists(
+        core.util.pathTo.asset(project.id, asset.id, asset.extension)
+      )
+    ).to.be.false;
+    expect(
+      await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id))
+    ).to.be.false;
+  });
 });
