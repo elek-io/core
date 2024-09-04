@@ -8,13 +8,10 @@ import {
   RequiredParameterMissingError,
 } from '../error/index.js';
 import {
-  assetFileSchema,
   cloneProjectSchema,
-  collectionFileSchema,
   createProjectSchema,
   currentBranchProjectSchema,
   deleteProjectSchema,
-  entryFileSchema,
   FileReference,
   getChangesProjectSchema,
   getRemoteOriginUrlProjectSchema,
@@ -248,6 +245,7 @@ export class ProjectService
       ...prevProjectFile,
       name: props.name || prevProjectFile.name,
       description: props.description || prevProjectFile.description,
+      coreVersion: this.coreVersion,
       settings: {
         language: {
           supported:
@@ -353,14 +351,7 @@ export class ProjectService
 
       // Upgrade the Project file itself
       const migratedProjectFile = this.migrate(prevProjectFile);
-      await this.jsonFileService.update(
-        {
-          ...migratedProjectFile,
-          coreVersion: this.coreVersion, // Override the Projects core version
-        },
-        projectFilePath,
-        projectFileSchema
-      );
+      await this.update(migratedProjectFile);
       this.logService.info(`Upgraded project "${projectFilePath}"`, {
         previous: prevProjectFile,
         migrated: migratedProjectFile,
@@ -669,11 +660,7 @@ export class ProjectService
           assetFilePath
         );
         const migratedAssetFile = this.assetService.migrate(prevAssetFile);
-        await this.jsonFileService.update(
-          migratedAssetFile,
-          assetFilePath,
-          assetFileSchema
-        );
+        await this.assetService.update({ projectId, ...migratedAssetFile });
         this.logService.info(`Upgraded ${objectType} "${assetFilePath}"`, {
           previous: prevAssetFile,
           migrated: migratedAssetFile,
@@ -690,11 +677,10 @@ export class ProjectService
         );
         const migratedCollectionFile =
           this.collectionService.migrate(prevCollectionFile);
-        await this.jsonFileService.update(
-          migratedCollectionFile,
-          collectionFilePath,
-          collectionFileSchema
-        );
+        await this.collectionService.update({
+          projectId,
+          ...migratedCollectionFile,
+        });
         this.logService.info(`Upgraded ${objectType} "${collectionFilePath}"`, {
           previous: prevCollectionFile,
           migrated: migratedCollectionFile,
@@ -714,11 +700,12 @@ export class ProjectService
           entryFilePath
         );
         const migratedEntryFile = this.entryService.migrate(prevEntryFile);
-        await this.jsonFileService.update(
-          migratedEntryFile,
-          entryFilePath,
-          entryFileSchema
-        );
+        // @ts-expect-error
+        await this.entryService.update({
+          projectId,
+          collectionId,
+          ...migratedEntryFile,
+        });
         this.logService.info(`Upgraded ${objectType} "${entryFilePath}"`, {
           previous: prevEntryFile,
           migrated: migratedEntryFile,
