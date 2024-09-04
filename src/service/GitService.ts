@@ -142,6 +142,26 @@ export class GitService {
     await this.git(path, args);
   }
 
+  public async status(path: string) {
+    const args = ['status', '--porcelain=2'];
+    const result = await this.git(path, args);
+
+    const normalizedLinesArr = result.stdout
+      .split('\n')
+      .filter((line) => {
+        return line.trim() !== '';
+      })
+      .map((line) => {
+        const lineArr = line.trim().split(' ');
+
+        return {
+          filePath: lineArr[8],
+        };
+      });
+
+    return normalizedLinesArr;
+  }
+
   public branches = {
     /**
      * List branches
