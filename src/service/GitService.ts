@@ -151,8 +151,11 @@ export class GitService {
       const args = ['branch', '--list', '--all'];
       const result = await this.git(path, args);
 
+      console.log('Branches:', result.stdout);
+      console.log('Line ending:', EOL);
+
       const normalizedLinesArr = result.stdout
-        .split(EOL)
+        .split(EOL) // @todo there might be a problem with Windows EOL not splitting "main\nstage"
         .filter((line) => {
           return line.trim() !== '';
         })
