@@ -1,6 +1,5 @@
 import { ChildProcess } from 'child_process';
 import { GitProcess, IGitExecutionOptions, type IGitResult } from 'dugite';
-import { EOL } from 'os';
 import PQueue from 'p-queue';
 import Path from 'path';
 import { GitError, NoCurrentUserError } from '../error/index.js';
@@ -151,11 +150,8 @@ export class GitService {
       const args = ['branch', '--list', '--all'];
       const result = await this.git(path, args);
 
-      console.log('Branches:', JSON.stringify(result.stdout));
-      console.log('Line ending:', JSON.stringify(EOL));
-
       const normalizedLinesArr = result.stdout
-        .split(EOL) // @todo there might be a problem with Windows EOL not splitting "main\nstage"
+        .split('\n')
         .filter((line) => {
           return line.trim() !== '';
         })
@@ -229,7 +225,7 @@ export class GitService {
     list: async (path: string) => {
       const args = ['remote'];
       const result = await this.git(path, args);
-      const normalizedLinesArr = result.stdout.split(EOL).filter((line) => {
+      const normalizedLinesArr = result.stdout.split('\n').filter((line) => {
         return line.trim() !== '';
       });
 
@@ -442,7 +438,7 @@ export class GitService {
 
     const result = await this.git(path, args);
 
-    const noEmptyLinesArr = result.stdout.split(EOL).filter((line) => {
+    const noEmptyLinesArr = result.stdout.split('\n').filter((line) => {
       return line.trim() !== '';
     });
 
