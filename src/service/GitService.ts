@@ -133,7 +133,11 @@ export class GitService {
    * @param files Files to add
    */
   public async add(path: string, files: string[]): Promise<void> {
-    const args = ['add', '--', ...files];
+    const relativePathsFromRepositoryRoot = files.map((filePath) => {
+      return filePath.replace(`${path}${Path.sep}`, '');
+    });
+
+    const args = ['add', '--', ...relativePathsFromRepositoryRoot];
 
     await this.git(path, args);
   }
