@@ -36,7 +36,7 @@ export class LogService {
         new transports.Console({
           handleExceptions: true,
           handleRejections: true,
-          format: format.cli(),
+          format: format.json(),
         }),
       ],
     });
