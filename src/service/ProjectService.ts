@@ -700,7 +700,6 @@ export class ProjectService
           entryFilePath
         );
         const migratedEntryFile = this.entryService.migrate(prevEntryFile);
-        // @ts-expect-error
         await this.entryService.update({
           projectId,
           collectionId,

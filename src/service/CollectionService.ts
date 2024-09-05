@@ -4,14 +4,9 @@ import {
   countCollectionsSchema,
   createCollectionSchema,
   deleteCollectionSchema,
-  GetHistoryCollectionProps,
-  getHistoryCollectionSchema,
-  GitCommit,
   listCollectionsSchema,
   objectTypeSchema,
   readCollectionSchema,
-  ReadFromHistoryCollectionProps,
-  readFromHistoryCollectionSchema,
   serviceTypeSchema,
   updateCollectionSchema,
   type BaseFile,
@@ -86,55 +81,37 @@ export class CollectionService
     await this.gitService.add(projectPath, [collectionFilePath]);
     await this.gitService.commit(projectPath, this.gitMessage.create);
 
-    return collectionFile;
+    return this.toCollection(props.projectId, collectionFile);
   }
 
   /**
    * Returns a Collection by ID
+   *
+   * If a commit hash is provided, the Collection is read from history
    */
   public async read(props: ReadCollectionProps): Promise<Collection> {
     readCollectionSchema.parse(props);
 
-    const collection = await this.jsonFileService.read(
-      pathTo.collectionFile(props.projectId, props.id),
-      collectionFileSchema
-    );
+    if (!props.commitHash) {
+      const collectionFile = await this.jsonFileService.read(
+        pathTo.collectionFile(props.projectId, props.id),
+        collectionFileSchema
+      );
 
-    return collection;
-  }
-
-  /**
-   * Returns the Collection file commit history
-   */
-  public async getHistory(
-    props: GetHistoryCollectionProps
-  ): Promise<GitCommit[]> {
-    getHistoryCollectionSchema.parse(props);
-
-    return await this.gitService.log(pathTo.project(props.projectId), {
-      filePath: pathTo.collectionFile(props.projectId, props.id),
-    });
-  }
-
-  /**
-   * Returns the Collection file content at a specific commit hash
-   */
-  public async readFromHistory(
-    props: ReadFromHistoryCollectionProps
-  ): Promise<Collection> {
-    readFromHistoryCollectionSchema.parse(props);
-
-    const collection = collectionFileSchema.parse(
-      JSON.parse(
-        await this.gitService.getFileContentAtCommit(
-          pathTo.project(props.projectId),
-          pathTo.collectionFile(props.projectId, props.id),
-          props.hash
+      return this.toCollection(props.projectId, collectionFile);
+    } else {
+      const collectionFile = this.migrate(
+        JSON.parse(
+          await this.gitService.getFileContentAtCommit(
+            pathTo.project(props.projectId),
+            pathTo.collectionFile(props.projectId, props.id),
+            props.commitHash
+          )
         )
-      )
-    );
+      );
 
-    return collection;
+      return this.toCollection(props.projectId, collectionFile);
+    }
   }
 
   /**
@@ -313,7 +290,8 @@ export class CollectionService
     );
     await this.gitService.add(projectPath, [collectionFilePath]);
     await this.gitService.commit(projectPath, this.gitMessage.update);
-    return collectionFile;
+
+    return this.toCollection(props.projectId, collectionFile);
   }
 
   /**
@@ -394,5 +372,27 @@ export class CollectionService
     // @todo
 
     return collectionFileSchema.parse(potentiallyOutdatedCollectionFile);
+  }
+
+  /**
+   * Creates an Collection from given CollectionFile
+   *
+   * @param projectId   The project's ID
+   * @param collectionFile   The CollectionFile to convert
+   */
+  private async toCollection(
+    projectId: string,
+    collectionFile: CollectionFile
+  ): Promise<Collection> {
+    const history = await this.gitService.log(pathTo.project(projectId), {
+      filePath: pathTo.collectionFile(projectId, collectionFile.id),
+    });
+
+    const collection: Collection = {
+      ...collectionFile,
+      history,
+    };
+
+    return collection;
   }
 }

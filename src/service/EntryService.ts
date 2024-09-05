@@ -1,21 +1,16 @@
 import Fs from 'fs-extra';
 import {
   FieldDefinition,
-  GetHistoryEntryProps,
-  GitCommit,
-  ReadFromHistoryEntryProps,
   ValueTypeSchema,
   countEntriesSchema,
   createEntrySchema,
   deleteEntrySchema,
   entryFileSchema,
   entrySchema,
-  getHistoryEntrySchema,
   getValueContentSchemaFromFieldDefinition,
   listEntriesSchema,
   objectTypeSchema,
   readEntrySchema,
-  readFromHistoryEntrySchema,
   serviceTypeSchema,
   updateEntrySchema,
   type BaseFile,
@@ -103,11 +98,11 @@ export class EntryService
       updated: null,
     };
 
-    const entry: Entry = await this.toEntry({
-      projectId: props.projectId,
-      collectionId: props.collectionId,
-      entryFile,
-    });
+    const entry: Entry = await this.toEntry(
+      props.projectId,
+      props.collectionId,
+      entryFile
+    );
 
     this.validateValues({
       collectionId: props.collectionId,
@@ -127,59 +122,33 @@ export class EntryService
   }
 
   /**
-   * Returns an Entry from given Collection by ID and language
+   * Returns an Entry from given Collection by ID
+   *
+   * If a commit hash is provided, the Entry is read from history
    */
   public async read(props: ReadEntryProps): Promise<Entry> {
     readEntrySchema.parse(props);
 
-    const entryFile: EntryFile = await this.jsonFileService.read(
-      pathTo.entryFile(props.projectId, props.collectionId, props.id),
-      entryFileSchema
-    );
+    if (!props.commitHash) {
+      const entryFile: EntryFile = await this.jsonFileService.read(
+        pathTo.entryFile(props.projectId, props.collectionId, props.id),
+        entryFileSchema
+      );
 
-    return await this.toEntry({
-      projectId: props.projectId,
-      collectionId: props.collectionId,
-      entryFile,
-    });
-  }
-
-  /**
-   * Returns the Entry file commit history
-   */
-  public async getHistory(props: GetHistoryEntryProps): Promise<GitCommit[]> {
-    getHistoryEntrySchema.parse(props);
-
-    return await this.gitService.log(pathTo.project(props.projectId), {
-      filePath: pathTo.entryFile(props.projectId, props.collectionId, props.id),
-    });
-  }
-
-  /**
-   * Returns the Entry file content at a specific commit hash
-   *
-   * @todo toEntry probably needs to also use the / a hash to resolve the content references from a specific commit
-   */
-  public async readFromHistory(
-    props: ReadFromHistoryEntryProps
-  ): Promise<Entry> {
-    readFromHistoryEntrySchema.parse(props);
-
-    const entryFile = entryFileSchema.parse(
-      JSON.parse(
-        await this.gitService.getFileContentAtCommit(
-          pathTo.project(props.projectId),
-          pathTo.entryFile(props.projectId, props.collectionId, props.id),
-          props.hash
+      return this.toEntry(props.projectId, props.collectionId, entryFile);
+    } else {
+      const entryFile = entryFileSchema.parse(
+        JSON.parse(
+          await this.gitService.getFileContentAtCommit(
+            pathTo.project(props.projectId),
+            pathTo.entryFile(props.projectId, props.collectionId, props.id),
+            props.commitHash
+          )
         )
-      )
-    );
+      );
 
-    return await this.toEntry({
-      projectId: props.projectId,
-      collectionId: props.collectionId,
-      entryFile,
-    });
+      return this.toEntry(props.projectId, props.collectionId, entryFile);
+    }
   }
 
   /**
@@ -211,11 +180,11 @@ export class EntryService
       updated: datetime(),
     };
 
-    const entry: Entry = await this.toEntry({
-      projectId: props.projectId,
-      collectionId: props.collectionId,
-      entryFile,
-    });
+    const entry: Entry = await this.toEntry(
+      props.projectId,
+      props.collectionId,
+      entryFile
+    );
 
     this.validateValues({
       collectionId: props.collectionId,
@@ -460,21 +429,26 @@ export class EntryService
   /**
    * Creates an Entry from given EntryFile by resolving it's Values
    */
-  private async toEntry(props: {
-    projectId: string;
-    collectionId: string;
-    entryFile: EntryFile;
-  }): Promise<Entry> {
+  private async toEntry(
+    projectId: string,
+    collectionId: string,
+    entryFile: EntryFile
+  ): Promise<Entry> {
+    const history = await this.gitService.log(pathTo.project(projectId), {
+      filePath: pathTo.entryFile(projectId, collectionId, entryFile.id),
+    });
+
     return {
-      ...props.entryFile,
+      ...entryFile,
+      history,
       // @ts-ignore @todo fixme - I have no idea why this happens. The types seem to be compatible to me and they work
       values: await Promise.all(
-        props.entryFile.values.map(async (value) => {
+        entryFile.values.map(async (value) => {
           if (value.valueType === ValueTypeSchema.Enum.reference) {
             const resolvedContentReferences =
               await this.resolveValueContentReferences({
-                projectId: props.projectId,
-                collectionId: props.collectionId,
+                projectId: projectId,
+                collectionId: collectionId,
                 valueReference: value,
               });
 

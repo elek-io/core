@@ -59,33 +59,24 @@ describe.sequential('Integration', function () {
   });
 
   it.sequential('should be able to update an Entry', async function () {
-    const updatedEntry = await core.entries.update({
+    entry = await core.entries.update({
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
       values: [],
     });
 
-    expect(updatedEntry.values).to.be.an('array').that.is.empty;
+    expect(entry.values).to.be.an('array').that.is.empty;
   });
 
   it.sequential(
-    'should be able to get an Entrys commit history and the content of a specific commit',
+    'should be able to get an Entry of a specific commit',
     async function () {
-      const history = await core.entries.getHistory({
+      const entryFromHistory = await core.entries.read({
         projectId: project.id,
         collectionId: collection.id,
         id: entry.id,
-      });
-
-      expect(history.length).to.equal(2);
-
-      const entryFromHistory = await core.entries.readFromHistory({
-        projectId: project.id,
-        collectionId: collection.id,
-        id: entry.id,
-        // @ts-ignore - we know that the history entry exists
-        hash: history[1].hash,
+        commitHash: entry.history.pop()?.hash,
       });
 
       expect(entryFromHistory.values.length).to.equal(3);

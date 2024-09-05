@@ -795,11 +795,13 @@ describe('Dynamic zod schema', () => {
                     },
                   },
                 ],
+                history: [],
               },
             ],
           },
         },
       ],
+      history: [],
       created: '2024-07-16T12:42:27.897Z',
       updated: null,
     };
