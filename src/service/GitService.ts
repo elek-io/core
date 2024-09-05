@@ -498,7 +498,8 @@ export class GitService {
       `${path}${Path.sep}`,
       ''
     );
-    const args = ['show', `${commitHash}:${relativePathFromRepositoryRoot}`];
+    const normalizedPath = relativePathFromRepositoryRoot.split('\\').join('/');
+    const args = ['show', `${commitHash}:${normalizedPath}`];
     const setEncoding: (process: ChildProcess) => void = (cb) => {
       if (cb.stdout) {
         cb.stdout.setEncoding(encoding);
