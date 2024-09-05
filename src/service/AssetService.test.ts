@@ -3,7 +3,12 @@ import Os from 'os';
 import Path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import core, { type Asset, type Project } from '../test/setup.js';
-import { createAsset, createProject, getFileHash } from '../test/util.js';
+import {
+  createAsset,
+  createProject,
+  ensureCleanGitStatus,
+  getFileHash,
+} from '../test/util.js';
 
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -17,34 +22,38 @@ describe.sequential('Integration', function () {
     await project.destroy();
   });
 
-  it.sequential('should be able to create a new Asset', async function () {
-    asset = await createAsset(project.id);
+  it.sequential(
+    'should be able to create a new Asset',
+    async function ({ task }) {
+      asset = await createAsset(project.id);
 
-    expect(asset.id).to.not.be.undefined;
-    expect(
-      Math.floor(new Date(asset.created).getTime() / 1000)
-    ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
-    expect(asset.extension).to.equal('png');
-    expect(asset.mimeType).to.equal('image/png');
-    expect(asset.history.length).to.equal(1);
-    expect(
-      await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id)),
-      'the AssetFile to be created for saving additional meta data of the Asset'
-    ).to.be.true;
-    expect(
-      await Fs.pathExists(
-        core.util.pathTo.asset(project.id, asset.id, asset.extension)
-      ),
-      'the Asset to be copied into the LFS directory of the Project'
-    ).to.be.true;
-    expect(
-      await getFileHash(asset.absolutePath),
-      'the copied file hash'
-    ).to.equal(
-      await getFileHash(Path.resolve('src/test/data/150x150.png')),
-      'the original file hash'
-    );
-  });
+      expect(asset.id).to.not.be.undefined;
+      expect(
+        Math.floor(new Date(asset.created).getTime() / 1000)
+      ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
+      expect(asset.extension).to.equal('png');
+      expect(asset.mimeType).to.equal('image/png');
+      expect(asset.history.length).to.equal(1);
+      expect(
+        await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id)),
+        'the AssetFile to be created for saving additional meta data of the Asset'
+      ).to.be.true;
+      expect(
+        await Fs.pathExists(
+          core.util.pathTo.asset(project.id, asset.id, asset.extension)
+        ),
+        'the Asset to be copied into the LFS directory of the Project'
+      ).to.be.true;
+      expect(
+        await getFileHash(asset.absolutePath),
+        'the copied file hash'
+      ).to.equal(
+        await getFileHash(Path.resolve('src/test/data/150x150.png')),
+        'the original file hash'
+      );
+      await ensureCleanGitStatus(task, project.id);
+    }
+  );
 
   it.sequential('should be able to read an Asset', async function () {
     const readAsset = await core.assets.read({
@@ -55,7 +64,7 @@ describe.sequential('Integration', function () {
     expect(readAsset.name).to.equal(asset.name);
   });
 
-  it.sequential('should be able to update an Asset', async function () {
+  it.sequential('should be able to update an Asset', async function ({ task }) {
     asset.description = 'A 150x150 image of the text "elek.io"';
     asset = await core.assets.update({
       projectId: project.id,
@@ -64,11 +73,12 @@ describe.sequential('Integration', function () {
 
     expect(asset.description).to.equal('A 150x150 image of the text "elek.io"');
     expect(asset.history.length).to.equal(2);
+    await ensureCleanGitStatus(task, project.id);
   });
 
   it.sequential(
     'should be able to update an Asset with a new file',
-    async function () {
+    async function ({ task }) {
       const newFilePath = Path.resolve('src/test/data/150x150.jpg');
       asset = await core.assets.update({
         projectId: project.id,
@@ -79,6 +89,7 @@ describe.sequential('Integration', function () {
       expect(asset.extension).to.equal('jpg');
       expect(asset.size).to.equal(1342);
       expect(asset.history.length).to.equal(3);
+      await ensureCleanGitStatus(task, project.id);
     }
   );
 
