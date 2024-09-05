@@ -94,6 +94,9 @@ describe.sequential('Integration', function () {
   it.sequential(
     'should be able to get an Asset of a specific commit',
     async function () {
+      const log = await core.git.log(core.util.pathTo.project(project.id));
+      console.log('Log:', log);
+      console.log('History:', asset.history);
       const assetFromHistory = await core.assets.read({
         projectId: project.id,
         id: asset.id,
