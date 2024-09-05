@@ -1,4 +1,3 @@
-import { EOL } from 'os';
 import { GitError } from '../error/index.js';
 import {
   countGitTagsSchema,
@@ -129,7 +128,7 @@ export class GitTagService
     ];
     const result = await this.git(props.path, args);
 
-    const noEmptyLinesArr = result.stdout.split(EOL).filter((line) => {
+    const noEmptyLinesArr = result.stdout.split('\n').filter((line) => {
       return line.trim() !== '';
     });
 
