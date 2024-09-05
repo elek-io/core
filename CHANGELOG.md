@@ -1,5 +1,19 @@
 # @elek-io/core
 
+## 0.10.0
+
+### Minor Changes
+
+- cc6a1a4: Removed unused options and added file cache option
+- 2b3f3b5: Added history key to all objects (Project, Asset, Collection and Entry) and the `read` method of their services now support reading from history by providing a commit hash. Also added `save` method for Assets to let the user copy given file somewhere to his filesystem. This also works for Assets from history.
+- 9b79cac: Changed the way the `upgrade` method for Projects work by migrating objects on disk directly. Reading from history also applies this migration step to comply with the current schema.
+
+### Patch Changes
+
+- 938c0a1: Added logging
+- 17dbf20: Added matrix testing on all supported platforms and fixed EOL and path seperation issues with git commands in windows.
+- 2605542: Removed usage of LFS and improved git command logging
+
 ## 0.9.1
 
 ### Patch Changes
