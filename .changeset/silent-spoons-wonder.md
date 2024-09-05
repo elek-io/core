@@ -2,4 +2,4 @@
 '@elek-io/core': minor
 ---
 
-Added getHistory and readFromHistory methods to services to easily retrieve commit history and content of files at specific commits
+Added history key to all objects (Project, Asset, Collection and Entry) and the `read` method of their services now support reading from history by providing a commit hash.
