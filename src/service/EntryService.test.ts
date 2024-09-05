@@ -1,5 +1,5 @@
 import Fs from 'fs-extra';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import core, {
   type Asset,
   type Collection,
@@ -11,6 +11,7 @@ import {
   createCollection,
   createEntry,
   createProject,
+  ensureCleanGitStatus,
 } from '../test/util.js';
 
 describe.sequential('Integration', function () {
@@ -30,6 +31,10 @@ describe.sequential('Integration', function () {
 
   afterAll(async function () {
     await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
   });
 
   it.sequential('should be able to create a new Entry', async function () {

@@ -1,7 +1,11 @@
 import Fs from 'fs-extra';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import core, { type Collection, type Project } from '../test/setup.js';
-import { createCollection, createProject } from '../test/util.js';
+import {
+  createCollection,
+  createProject,
+  ensureCleanGitStatus,
+} from '../test/util.js';
 
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -13,6 +17,10 @@ describe.sequential('Integration', function () {
 
   afterAll(async function () {
     await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
   });
 
   it.sequential('should be able to create a new Collection', async function () {
