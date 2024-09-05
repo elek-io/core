@@ -137,7 +137,7 @@ export class EntryService
 
       return this.toEntry(props.projectId, props.collectionId, entryFile);
     } else {
-      const entryFile = entryFileSchema.parse(
+      const entryFile = this.migrate(
         JSON.parse(
           await this.gitService.getFileContentAtCommit(
             pathTo.project(props.projectId),
