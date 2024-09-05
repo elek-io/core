@@ -126,6 +126,14 @@ describe.sequential('Integration', function () {
   );
 
   it.sequential(
+    'should upgrade a Project to the same version of Core if forced to do so',
+    async function ({ task }) {
+      await core.projects.upgrade({ id: project.id, force: true });
+      await ensureCleanGitStatus(task, project.id);
+    }
+  );
+
+  it.sequential(
     'should throw when trying to upgrade a Project with a lower version of Core than the Project was created with',
     async function ({ task }) {
       const readProject = await core.projects.read({ id: project.id });

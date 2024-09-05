@@ -103,6 +103,9 @@ export type UpdateProjectProps = z.infer<typeof updateProjectSchema>;
 
 export const upgradeProjectSchema = z.object({
   id: uuidSchema.readonly(),
+  /**
+   * Force the upgrade even if the Project is up-to-date
+   */
   force: z.boolean().optional(),
 });
 export type UpgradeProjectProps = z.infer<typeof upgradeProjectSchema>;
