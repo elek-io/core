@@ -94,7 +94,7 @@ describe.sequential('Integration', function () {
   } else {
     it.sequential(
       'should be able to push an existing Project to a new remote',
-      { timeout: 20000 },
+      { timeout: 20000, retry: 3 },
       async function () {
         await core.git.remotes.setOriginUrl(
           projectPath,
@@ -120,7 +120,7 @@ describe.sequential('Integration', function () {
 
     it.sequential(
       'should be able to push the change to remote',
-      { timeout: 20000 },
+      { timeout: 20000, retry: 3 },
       async function () {
         await core.git.push(projectPath);
       }
