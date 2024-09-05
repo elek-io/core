@@ -6,16 +6,12 @@ import {
   assetSchema,
   countAssetsSchema,
   createAssetSchema,
-  CrudServiceWithHistory,
   deleteAssetSchema,
-  GetHistoryAssetProps,
-  getHistoryAssetSchema,
-  GitCommit,
   listAssetsSchema,
   objectTypeSchema,
   readAssetSchema,
-  ReadFromHistoryAssetProps,
-  readFromHistoryAssetSchema,
+  SaveAssetProps,
+  saveAssetSchema,
   serviceTypeSchema,
   supportedAssetExtensionSchema,
   supportedAssetMimeTypeSchema,
@@ -35,28 +31,33 @@ import {
   type UpdateAssetProps,
 } from '../schema/index.js';
 import { pathTo, returnResolved } from '../util/node.js';
-import { datetime, uuid } from '../util/shared.js';
+import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import type { GitService } from './GitService.js';
 import { JsonFileService } from './JsonFileService.js';
+import { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for Asset files on disk
  */
 export class AssetService
   extends AbstractCrudService
-  implements CrudServiceWithListCount<Asset>, CrudServiceWithHistory<Asset>
+  implements CrudServiceWithListCount<Asset>
 {
+  // @ts-ignore
+  private readonly logService: LogService;
   private readonly jsonFileService: JsonFileService;
   private readonly gitService: GitService;
 
   constructor(
     options: ElekIoCoreOptions,
+    logService: LogService,
     jsonFileService: JsonFileService,
     gitService: GitService
   ) {
     super(serviceTypeSchema.Enum.Asset, options);
 
+    this.logService = logService;
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
   }
@@ -76,6 +77,7 @@ export class AssetService
 
     const assetFile: AssetFile = {
       ...props,
+      name: slug(props.name),
       objectType: 'asset',
       id,
       created: datetime(),
@@ -107,64 +109,53 @@ export class AssetService
   /**
    * Returns an Asset by ID
    *
-   * Can also be used to get the Asset's content at a specific commit hash
+   * If a commit hash is provided, the Asset is read from history
    */
   public async read(props: ReadAssetProps): Promise<Asset> {
     readAssetSchema.parse(props);
 
-    const assetFile = await this.jsonFileService.read(
-      pathTo.assetFile(props.projectId, props.id),
-      assetFileSchema
-    );
+    if (!props.commitHash) {
+      const assetFile = await this.jsonFileService.read(
+        pathTo.assetFile(props.projectId, props.id),
+        assetFileSchema
+      );
 
-    return this.toAsset(props.projectId, assetFile);
-  }
-
-  /**
-   * Returns the Asset file commit history
-   */
-  public async getHistory(props: GetHistoryAssetProps): Promise<GitCommit[]> {
-    getHistoryAssetSchema.parse(props);
-
-    return await this.gitService.log(pathTo.project(props.projectId), {
-      filePath: pathTo.assetFile(props.projectId, props.id),
-    });
-  }
-
-  /**
-   * Returns the Asset file content at a specific commit hash
-   *
-   * Also resolves to the Asset itself at that point in time.
-   * Works by copying the Asset from the object store into the tmp folder.
-   */
-  public async readFromHistory(
-    props: ReadFromHistoryAssetProps
-  ): Promise<Asset> {
-    readFromHistoryAssetSchema.parse(props);
-
-    const assetFile = assetFileSchema.parse(
-      JSON.parse(
-        await this.gitService.show(
-          pathTo.project(props.projectId),
-          pathTo.assetFile(props.projectId, props.id),
-          props.hash
+      return this.toAsset(props.projectId, assetFile);
+    } else {
+      const assetFile = this.migrate(
+        JSON.parse(
+          await this.gitService.getFileContentAtCommit(
+            pathTo.project(props.projectId),
+            pathTo.assetFile(props.projectId, props.id),
+            props.commitHash
+          )
         )
-      )
-    );
+      );
 
-    const blob = await this.gitService.show(
-      pathTo.project(props.projectId),
-      pathTo.asset(props.projectId, props.id, assetFile.extension),
-      props.hash,
-      'binary'
-    );
-    await Fs.writeFile(
-      pathTo.tmpAsset(assetFile.id, assetFile.extension),
-      blob,
-      'binary'
-    );
+      const assetBlob = await this.gitService.getFileContentAtCommit(
+        pathTo.project(props.projectId),
+        pathTo.asset(props.projectId, props.id, assetFile.extension),
+        props.commitHash,
+        'binary'
+      );
+      await Fs.writeFile(
+        pathTo.tmpAsset(assetFile.id, assetFile.extension),
+        assetBlob,
+        'binary'
+      );
 
-    return this.toAsset(props.projectId, assetFile, true);
+      return this.toAsset(props.projectId, assetFile, true);
+    }
+  }
+
+  /**
+   * Copies an Asset to given file path on disk
+   */
+  public async save(props: SaveAssetProps) {
+    saveAssetSchema.parse(props);
+
+    const asset = await this.read(props);
+    await Fs.copyFile(asset.absolutePath, props.filePath);
   }
 
   /**
@@ -184,6 +175,7 @@ export class AssetService
     const assetFile: AssetFile = {
       ...prevAssetFile,
       ...props,
+      name: slug(props.name),
       updated: datetime(),
     };
 
@@ -314,9 +306,14 @@ export class AssetService
         ? pathTo.asset(projectId, assetFile.id, assetFile.extension)
         : pathTo.tmpAsset(assetFile.id, assetFile.extension);
 
+    const history = await this.gitService.log(pathTo.project(projectId), {
+      filePath: pathTo.assetFile(projectId, assetFile.id),
+    });
+
     const asset: Asset = {
       ...assetFile,
       absolutePath: assetPath,
+      history,
     };
 
     return asset;
@@ -353,5 +350,14 @@ export class AssetService
     });
 
     return result;
+  }
+
+  /**
+   * Migrates an potentially outdated Asset file to the current schema
+   */
+  public migrate(potentiallyOutdatedAssetFile: unknown) {
+    // @todo
+
+    return assetFileSchema.parse(potentiallyOutdatedAssetFile);
   }
 }

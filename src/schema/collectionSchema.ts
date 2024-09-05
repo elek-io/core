@@ -8,6 +8,7 @@ import {
 import { entryExportSchema } from './entrySchema.js';
 import { fieldDefinitionSchema } from './fieldSchema.js';
 import { baseFileSchema } from './fileSchema.js';
+import { gitCommitSchema } from './gitSchema.js';
 
 export const collectionFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.Enum.collection).readonly(),
@@ -25,7 +26,12 @@ export const collectionFileSchema = baseFileSchema.extend({
 });
 export type CollectionFile = z.infer<typeof collectionFileSchema>;
 
-export const collectionSchema = collectionFileSchema.extend({});
+export const collectionSchema = collectionFileSchema.extend({
+  /**
+   * Commit history of this Collection
+   */
+  history: z.array(gitCommitSchema),
+});
 export type Collection = z.infer<typeof collectionSchema>;
 
 export const collectionExportSchema = collectionSchema.extend({
@@ -33,7 +39,7 @@ export const collectionExportSchema = collectionSchema.extend({
 });
 export type CollectionExport = z.infer<typeof collectionExportSchema>;
 
-export const createCollectionSchema = collectionSchema
+export const createCollectionSchema = collectionFileSchema
   .omit({
     id: true,
     objectType: true,
@@ -48,25 +54,9 @@ export type CreateCollectionProps = z.infer<typeof createCollectionSchema>;
 export const readCollectionSchema = z.object({
   id: uuidSchema.readonly(),
   projectId: uuidSchema.readonly(),
+  commitHash: z.string().optional().readonly(),
 });
 export type ReadCollectionProps = z.infer<typeof readCollectionSchema>;
-
-export const getHistoryCollectionSchema = readCollectionSchema;
-export type GetHistoryCollectionProps = z.infer<
-  typeof getHistoryCollectionSchema
->;
-
-export const readFromHistoryCollectionSchema = collectionFileSchema
-  .pick({
-    id: true,
-  })
-  .extend({
-    projectId: uuidSchema.readonly(),
-    hash: z.string().readonly(),
-  });
-export type ReadFromHistoryCollectionProps = z.infer<
-  typeof readFromHistoryCollectionSchema
->;
 
 export const updateCollectionSchema = collectionFileSchema
   .pick({

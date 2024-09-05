@@ -1,7 +1,11 @@
 import Fs from 'fs-extra';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import core, { type Collection, type Project } from '../test/setup.js';
-import { createCollection, createProject } from '../test/util.js';
+import {
+  createCollection,
+  createProject,
+  ensureCleanGitStatus,
+} from '../test/util.js';
 
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -13,6 +17,10 @@ describe.sequential('Integration', function () {
 
   afterAll(async function () {
     await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
   });
 
   it.sequential('should be able to create a new Collection', async function () {
@@ -35,31 +43,23 @@ describe.sequential('Integration', function () {
   it.sequential('should be able to update an Collection', async function () {
     collection.description.en =
       'The title should be short and catchy, to grab the users attention.';
-    const updatedCollection = await core.collections.update({
+    collection = await core.collections.update({
       projectId: project.id,
       ...collection,
     });
 
-    expect(updatedCollection.description.en).to.equal(
+    expect(collection.description.en).to.equal(
       'The title should be short and catchy, to grab the users attention.'
     );
   });
 
   it.sequential(
-    'should be able to get an Collections commit history and the content of a specific commit',
+    'should be able to get a Collection of a specific commit',
     async function () {
-      const history = await core.collections.getHistory({
+      const collectionFromHistory = await core.collections.read({
         projectId: project.id,
         id: collection.id,
-      });
-
-      expect(history.length).to.equal(3); // 3 not 2 because of the circular reference createCollection is creating
-
-      const collectionFromHistory = await core.collections.readFromHistory({
-        projectId: project.id,
-        id: collection.id,
-        // @ts-ignore - we know that the history entry exists
-        hash: history[1].hash,
+        commitHash: collection.history.pop()?.hash,
       });
 
       expect(collectionFromHistory.description.en).to.equal(

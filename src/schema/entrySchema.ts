@@ -6,6 +6,7 @@ import {
   type SupportedLanguage,
 } from './baseSchema.js';
 import { baseFileSchema } from './fileSchema.js';
+import { GitCommit, gitCommitSchema } from './gitSchema.js';
 import {
   resolvedValueSchema,
   valueSchema,
@@ -27,9 +28,17 @@ export type Entry = z.infer<typeof entryFileSchema> & {
         content: Partial<Record<SupportedLanguage, (Asset | Entry)[]>>;
       })
   )[];
+  /**
+   * Commit history of this Entry
+   */
+  history: GitCommit[];
 };
 export const entrySchema = entryFileSchema.extend({
   values: z.array(z.lazy(() => resolvedValueSchema)),
+  /**
+   * Commit history of this Entry
+   */
+  history: z.array(gitCommitSchema),
 }) satisfies z.ZodType<Entry>;
 
 export const entryExportSchema = entrySchema.extend({});
@@ -53,26 +62,11 @@ export const readEntrySchema = z.object({
   id: uuidSchema.readonly(),
   projectId: uuidSchema.readonly(),
   collectionId: uuidSchema.readonly(),
+  commitHash: z.string().optional().readonly(),
 });
 export type ReadEntryProps = z.infer<typeof readEntrySchema>;
 
-export const getHistoryEntrySchema = readEntrySchema;
-export type GetHistoryEntryProps = z.infer<typeof getHistoryEntrySchema>;
-
-export const readFromHistoryEntrySchema = entryFileSchema
-  .pick({
-    id: true,
-  })
-  .extend({
-    projectId: uuidSchema.readonly(),
-    collectionId: uuidSchema.readonly(),
-    hash: z.string().readonly(),
-  });
-export type ReadFromHistoryEntryProps = z.infer<
-  typeof readFromHistoryEntrySchema
->;
-
-export const updateEntrySchema = entrySchema
+export const updateEntrySchema = entryFileSchema
   .omit({
     objectType: true,
     created: true,

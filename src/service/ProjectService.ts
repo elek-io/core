@@ -2,26 +2,28 @@ import Fs from 'fs-extra';
 import Os from 'os';
 import Path from 'path';
 import Semver from 'semver';
-import { NoCurrentUserError, ProjectUpgradeError } from '../error/index.js';
+import {
+  NoCurrentUserError,
+  ProjectUpgradeError,
+  RequiredParameterMissingError,
+} from '../error/index.js';
 import {
   cloneProjectSchema,
   createProjectSchema,
-  CrudServiceWithHistory,
   currentBranchProjectSchema,
   deleteProjectSchema,
+  FileReference,
   getChangesProjectSchema,
-  GetHistoryProjectProps,
-  getHistoryProjectSchema,
   getRemoteOriginUrlProjectSchema,
-  GitCommit,
   gitCommitIconSchema,
   listBranchesProjectSchema,
   listProjectsSchema,
+  ObjectType,
   objectTypeSchema,
+  OutdatedProject,
+  outdatedProjectSchema,
   projectFileSchema,
   projectFolderSchema,
-  ReadFromHistoryProjectProps,
-  readFromHistoryProjectSchema,
   readProjectSchema,
   serviceTypeSchema,
   setRemoteOriginUrlProjectSchema,
@@ -54,8 +56,7 @@ import {
   type UpdateProjectProps,
   type UpgradeProjectProps,
 } from '../schema/index.js';
-import type { ProjectUpgradeImport } from '../upgrade/example.js';
-import { files, pathTo, returnResolved } from '../util/node.js';
+import { notEmpty, pathTo, returnResolved } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import { AssetService } from './AssetService.js';
@@ -63,6 +64,7 @@ import { CollectionService } from './CollectionService.js';
 import type { EntryService } from './EntryService.js';
 import { GitService } from './GitService.js';
 import { JsonFileService } from './JsonFileService.js';
+import { LogService } from './LogService.js';
 import { UserService } from './UserService.js';
 
 /**
@@ -70,9 +72,10 @@ import { UserService } from './UserService.js';
  */
 export class ProjectService
   extends AbstractCrudService
-  implements CrudServiceWithListCount<Project>, CrudServiceWithHistory<Project>
+  implements CrudServiceWithListCount<Project>
 {
-  private version: Version;
+  private coreVersion: Version;
+  private logService: LogService;
   private jsonFileService: JsonFileService;
   private userService: UserService;
   private gitService: GitService;
@@ -81,8 +84,9 @@ export class ProjectService
   private entryService: EntryService;
 
   constructor(
-    version: Version,
+    coreVersion: Version,
     options: ElekIoCoreOptions,
+    logService: LogService,
     jsonFileService: JsonFileService,
     userService: UserService,
     gitService: GitService,
@@ -92,7 +96,8 @@ export class ProjectService
   ) {
     super(serviceTypeSchema.Enum.Project, options);
 
-    this.version = version;
+    this.coreVersion = coreVersion;
+    this.logService = logService;
     this.jsonFileService = jsonFileService;
     this.userService = userService;
     this.gitService = gitService;
@@ -128,7 +133,7 @@ export class ProjectService
       settings: Object.assign({}, defaultSettings, props.settings),
       created: datetime(),
       updated: null,
-      coreVersion: this.version,
+      coreVersion: this.coreVersion,
       status: 'todo',
       version: '0.0.1',
     };
@@ -141,7 +146,6 @@ export class ProjectService
       await this.createFolderStructure(projectPath);
       await this.createGitignore(projectPath);
       await this.gitService.init(projectPath, { initialBranch: 'main' });
-      await this.gitService.remotes.addOrigin(projectPath, '');
       await this.jsonFileService.create(
         projectFile,
         pathTo.projectFile(id),
@@ -163,9 +167,7 @@ export class ProjectService
       throw error;
     }
 
-    return await this.toProject({
-      projectFile,
-    });
+    return await this.toProject(projectFile);
   }
 
   /**
@@ -196,70 +198,37 @@ export class ProjectService
     await Fs.copy(tmpProjectPath, projectPath);
     await Fs.remove(tmpProjectPath);
 
-    return await this.toProject({
-      projectFile,
-    });
+    return await this.toProject(projectFile);
   }
 
   /**
    * Returns a Project by ID
+   *
+   * If a commit hash is provided, the Project is read from history
    */
   public async read(props: ReadProjectProps): Promise<Project> {
     readProjectSchema.parse(props);
 
-    const projectFile = await this.jsonFileService.read(
-      pathTo.projectFile(props.id),
-      projectFileSchema
-    );
+    if (!props.commitHash) {
+      const projectFile = await this.jsonFileService.read(
+        pathTo.projectFile(props.id),
+        projectFileSchema
+      );
 
-    return await this.toProject({
-      projectFile,
-    });
-  }
-
-  /**
-   * Returns the whole Project's commit history
-   */
-  public async getAllHistory(
-    props: GetHistoryProjectProps
-  ): Promise<GitCommit[]> {
-    getHistoryProjectSchema.parse(props);
-
-    return await this.gitService.log(pathTo.project(props.id));
-  }
-
-  /**
-   * Returns the Project file commit history
-   */
-  public async getHistory(props: GetHistoryProjectProps): Promise<GitCommit[]> {
-    getHistoryProjectSchema.parse(props);
-
-    return await this.gitService.log(pathTo.project(props.id), {
-      filePath: pathTo.projectFile(props.id),
-    });
-  }
-
-  /**
-   * Returns the Project file content at a specific commit hash
-   */
-  public async readFromHistory(
-    props: ReadFromHistoryProjectProps
-  ): Promise<Project> {
-    readFromHistoryProjectSchema.parse(props);
-
-    const projectFile = projectFileSchema.parse(
-      JSON.parse(
-        await this.gitService.show(
-          pathTo.project(props.id),
-          pathTo.projectFile(props.id),
-          props.hash
+      return await this.toProject(projectFile);
+    } else {
+      const projectFile = this.migrate(
+        JSON.parse(
+          await this.gitService.getFileContentAtCommit(
+            pathTo.project(props.id),
+            pathTo.projectFile(props.id),
+            props.commitHash
+          )
         )
-      )
-    );
+      );
 
-    return await this.toProject({
-      projectFile,
-    });
+      return await this.toProject(projectFile);
+    }
   }
 
   /**
@@ -276,6 +245,7 @@ export class ProjectService
       ...prevProjectFile,
       name: props.name || prevProjectFile.name,
       description: props.description || prevProjectFile.description,
+      coreVersion: this.coreVersion,
       settings: {
         language: {
           supported:
@@ -293,103 +263,116 @@ export class ProjectService
     await this.gitService.add(projectPath, [filePath]);
     await this.gitService.commit(projectPath, this.gitMessage.update);
 
-    return await this.toProject({
-      projectFile,
-    });
+    return await this.toProject(projectFile);
   }
 
   /**
-   * Upgrades given Project to the latest version of this client
+   * Upgrades given Project to the current version of Core
    *
-   * Needed when a new core version is requiring changes to existing files or structure.
+   * Needed when a new Core version is requiring changes to existing files or structure.
    */
   public async upgrade(props: UpgradeProjectProps): Promise<void> {
     upgradeProjectSchema.parse(props);
 
-    const project = await this.read(props);
-    const projectPath = pathTo.project(project.id);
+    const projectPath = pathTo.project(props.id);
+    const projectFilePath = pathTo.projectFile(props.id);
 
-    if (Semver.gt(project.coreVersion, this.version)) {
+    // Get the current Project file
+    const prevProjectFile = outdatedProjectSchema
+      .passthrough() // Allow unknown properties
+      .parse(await this.jsonFileService.unsafeRead(projectFilePath));
+
+    if (Semver.gt(prevProjectFile.coreVersion, this.coreVersion)) {
       // Upgrade of the client needed before the project can be upgraded
-      throw new Error(
-        `Failed upgrading project. The projects core version "${project.coreVersion}" is higher than the current core version "${this.version}" of this client. A client upgrade is needed beforehand.`
+      throw new ProjectUpgradeError(
+        `The Projects Core version "${prevProjectFile.coreVersion}" is higher than the current Core version "${this.coreVersion}".`
       );
     }
 
-    if (Semver.eq(project.coreVersion, this.version)) {
+    if (
+      Semver.eq(prevProjectFile.coreVersion, this.coreVersion) &&
+      props.force !== true
+    ) {
       // Nothing, since both are equal
-      return;
+      throw new ProjectUpgradeError(
+        `The Projects Core version "${prevProjectFile.coreVersion}" is already up to date.`
+      );
     }
 
-    // Get all available upgrade scripts
-    const upgradeFiles = await files(
-      Path.resolve(__dirname, '../upgrade'),
-      'ts'
+    const assetReferences = await this.listReferences('asset', props.id);
+    const collectionReferences = await this.listReferences(
+      'collection',
+      props.id
     );
 
-    // Import all objects
-    const upgrades = (
-      await Promise.all(
-        upgradeFiles.map((file) => {
-          return import(
-            Path.join('../upgrade', file.name)
-          ) as Promise<ProjectUpgradeImport>;
-        })
-      )
-    ).map((upgradeImport) => {
-      return upgradeImport.default;
+    this.logService.info(
+      `Attempting to upgrade Project "${props.id}" from Core version ${prevProjectFile.coreVersion} to ${this.coreVersion}`
+    );
+
+    // Make a tag to revert back to on failure
+    const failsafeTag = await this.gitService.tags.create({
+      path: projectPath,
+      message: `Attempting to upgrade Project from Core version ${prevProjectFile.coreVersion} to ${this.coreVersion}`,
     });
 
-    // Sort them by core version and filter out the example one
-    const sortedUpgrades = upgrades
-      .sort((a, b) => {
-        return Semver.compare(a.to, b.to);
-      })
-      .filter((upgrade) => {
-        if (upgrade.to !== '0.0.0') {
-          return upgrade;
-        }
-        return;
+    try {
+      await Promise.all(
+        assetReferences.map(async (reference) => {
+          await this.upgradeObjectFile(props.id, 'asset', reference);
+        })
+      );
+
+      await Promise.all(
+        collectionReferences.map(async (reference) => {
+          await this.upgradeObjectFile(props.id, 'collection', reference);
+        })
+      );
+
+      await Promise.all(
+        collectionReferences.map(async (collectionReference) => {
+          const entryReferences = await this.listReferences(
+            'entry',
+            props.id,
+            collectionReference.id
+          );
+
+          await Promise.all(
+            entryReferences.map(async (reference) => {
+              await this.upgradeObjectFile(
+                props.id,
+                'entry',
+                reference,
+                collectionReference.id
+              );
+            })
+          );
+        })
+      );
+
+      // Upgrade the Project file itself
+      const migratedProjectFile = this.migrate(prevProjectFile);
+      await this.update(migratedProjectFile);
+      this.logService.info(`Upgraded project "${projectFilePath}"`, {
+        previous: prevProjectFile,
+        migrated: migratedProjectFile,
       });
 
-    for (let index = 0; index < sortedUpgrades.length; index++) {
-      const upgrade = sortedUpgrades[index];
-      if (!upgrade) {
-        throw new Error('Expected ProjectUpgrade but got undefined');
-      }
-
-      // Make a tag to revert to on failure
-      const failsafeTag = await this.gitService.tags.create({
+      // And create another tag to show the successfull upgrade in git log
+      await this.gitService.tags.create({
         path: projectPath,
-        message: `Attempting to upgrade Project to Core version "${upgrade.to}"`,
+        message: `Upgraded Project to Core version "${this.coreVersion}"`,
       });
 
-      try {
-        await upgrade.run(project);
+      // Done, remove the failsafe tag again
+      await this.gitService.tags.delete({
+        path: projectPath,
+        id: failsafeTag.id,
+      });
+    } catch (error) {
+      // Reset Project to the tag made before
+      await this.gitService.reset(projectPath, 'hard', failsafeTag.id);
 
-        // Override the projects core version
-        project.coreVersion = upgrade.to;
-        await this.update(project);
-
-        // And create another tag to show successfull upgrade in git log
-        await this.gitService.tags.create({
-          path: projectPath,
-          message: `Upgraded Project to Core version "${upgrade.to}"`,
-        });
-
-        // Done, remove the failsafe tag again
-        await this.gitService.tags.delete({
-          path: projectPath,
-          id: failsafeTag.id,
-        });
-      } catch (error) {
-        // Reset Project to the tag made before
-        await this.gitService.reset(projectPath, 'hard', failsafeTag.id);
-
-        throw new ProjectUpgradeError(
-          `Failed to upgrade Project to Core version "${upgrade.to}"`
-        );
-      }
+      throw error;
     }
   }
 
@@ -397,7 +380,10 @@ export class ProjectService
     list: async (props: ListBranchesProjectProps) => {
       listBranchesProjectSchema.parse(props);
       const projectPath = pathTo.project(props.id);
-      await this.gitService.fetch(projectPath);
+      const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
+      if (hasOrigin) {
+        await this.gitService.fetch(projectPath);
+      }
       return await this.gitService.branches.list(projectPath);
     },
     current: async (props: CurrentBranchProjectProps) => {
@@ -420,7 +406,12 @@ export class ProjectService
     getOriginUrl: async (props: GetRemoteOriginUrlProjectProps) => {
       getRemoteOriginUrlProjectSchema.parse(props);
       const projectPath = pathTo.project(props.id);
-      return await this.gitService.remotes.getOriginUrl(projectPath);
+      const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
+      if (!hasOrigin) {
+        return null;
+      } else {
+        return await this.gitService.remotes.getOriginUrl(projectPath);
+      }
     },
     setOriginUrl: async (props: SetRemoteOriginUrlProjectProps) => {
       setRemoteOriginUrlProjectSchema.parse(props);
@@ -483,6 +474,32 @@ export class ProjectService
     deleteProjectSchema.parse(props);
 
     await Fs.remove(pathTo.project(props.id));
+  }
+
+  /**
+   * Lists outdated Projects that need to be upgraded
+   */
+  public async listOutdated(): Promise<OutdatedProject[]> {
+    const projectReferences = await this.listReferences(
+      objectTypeSchema.Enum.project
+    );
+
+    const result = await Promise.all(
+      projectReferences.map(async (reference) => {
+        const json = await this.jsonFileService.unsafeRead(
+          pathTo.projectFile(reference.id)
+        );
+        const projectFile = outdatedProjectSchema.parse(json);
+
+        if (projectFile.coreVersion !== this.coreVersion) {
+          return projectFile;
+        }
+
+        return null;
+      })
+    );
+
+    return result.filter(notEmpty);
   }
 
   public async list(
@@ -565,13 +582,29 @@ export class ProjectService
   }
 
   /**
+   * Migrates an potentially outdated Project file to the current schema
+   */
+  public migrate(potentiallyOutdatedProjectFile: unknown) {
+    // @todo
+
+    return projectFileSchema.parse(potentiallyOutdatedProjectFile);
+  }
+
+  /**
    * Creates a Project from given ProjectFile
    */
-  private async toProject(props: {
-    projectFile: ProjectFile;
-  }): Promise<Project> {
+  private async toProject(projectFile: ProjectFile): Promise<Project> {
+    const fullHistory = await this.gitService.log(
+      pathTo.project(projectFile.id)
+    );
+    const history = await this.gitService.log(pathTo.project(projectFile.id), {
+      filePath: pathTo.projectFile(projectFile.id),
+    });
+
     return {
-      ...props.projectFile,
+      ...projectFile,
+      history,
+      fullHistory,
     };
   }
 
@@ -612,5 +645,76 @@ export class ProjectService
       // projectFolderSchema.Enum.logs + '/',
     ];
     await Fs.writeFile(Path.join(path, '.gitignore'), lines.join(Os.EOL));
+  }
+
+  private async upgradeObjectFile(
+    projectId: string,
+    objectType: ObjectType,
+    reference: FileReference,
+    collectionId?: string
+  ) {
+    switch (objectType) {
+      case 'asset': {
+        const assetFilePath = pathTo.assetFile(projectId, reference.id);
+        const prevAssetFile = await this.jsonFileService.unsafeRead(
+          assetFilePath
+        );
+        const migratedAssetFile = this.assetService.migrate(prevAssetFile);
+        await this.assetService.update({ projectId, ...migratedAssetFile });
+        this.logService.info(`Upgraded ${objectType} "${assetFilePath}"`, {
+          previous: prevAssetFile,
+          migrated: migratedAssetFile,
+        });
+        return;
+      }
+      case 'collection': {
+        const collectionFilePath = pathTo.collectionFile(
+          projectId,
+          reference.id
+        );
+        const prevCollectionFile = await this.jsonFileService.unsafeRead(
+          collectionFilePath
+        );
+        const migratedCollectionFile =
+          this.collectionService.migrate(prevCollectionFile);
+        await this.collectionService.update({
+          projectId,
+          ...migratedCollectionFile,
+        });
+        this.logService.info(`Upgraded ${objectType} "${collectionFilePath}"`, {
+          previous: prevCollectionFile,
+          migrated: migratedCollectionFile,
+        });
+        return;
+      }
+      case 'entry': {
+        if (!collectionId) {
+          throw new RequiredParameterMissingError('collectionId');
+        }
+        const entryFilePath = pathTo.entryFile(
+          projectId,
+          collectionId,
+          reference.id
+        );
+        const prevEntryFile = await this.jsonFileService.unsafeRead(
+          entryFilePath
+        );
+        const migratedEntryFile = this.entryService.migrate(prevEntryFile);
+        await this.entryService.update({
+          projectId,
+          collectionId,
+          ...migratedEntryFile,
+        });
+        this.logService.info(`Upgraded ${objectType} "${entryFilePath}"`, {
+          previous: prevEntryFile,
+          migrated: migratedEntryFile,
+        });
+        return;
+      }
+      default:
+        throw new Error(
+          `Trying to upgrade unsupported object file of type "${objectType}"`
+        );
+    }
   }
 }

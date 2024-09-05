@@ -1,22 +1,26 @@
 import Fs from 'fs-extra';
-import { beforeAll, describe, expect, it } from 'vitest';
-import core, { type Project } from '../test/setup.js';
-import { createAsset, createProject } from '../test/util.js';
+import { afterAll, describe, expect, it } from 'vitest';
+import { ProjectUpgradeError } from '../error/ProjectUpgradeError.js';
+import core, { projectFileSchema, type Project } from '../test/setup.js';
+import {
+  createAsset,
+  createProject,
+  ensureCleanGitStatus,
+} from '../test/util.js';
 
 describe.sequential('Integration', function () {
-  let project: Project;
+  let project: Project & { destroy: () => Promise<void> };
   let clonedProject: Project;
   const isGithubAction = process.env?.['GITHUB_ACTIONS'];
   const gitUrl = 'git@github.com:elek-io/project-test-1.git';
 
-  beforeAll(async function () {
-    // Start clean
-    await Fs.emptyDir(core.util.pathTo.projects);
+  afterAll(async function () {
+    await project.destroy();
   });
 
   it.sequential(
     'should be able to create a new Project locally',
-    async function () {
+    async function ({ task }) {
       project = await createProject('project #1');
 
       expect(project.name).to.equal('project #1');
@@ -32,6 +36,9 @@ describe.sequential('Integration', function () {
       expect(project.updated).to.be.null;
       expect(await Fs.pathExists(core.util.pathTo.project(project.id))).to.be
         .true;
+      expect(project.history.length).to.equal(1);
+      expect(project.fullHistory.length).to.equal(1);
+      await ensureCleanGitStatus(task, project.id);
     }
   );
 
@@ -41,45 +48,46 @@ describe.sequential('Integration', function () {
     expect(readProject.name).to.equal('project #1');
   });
 
-  it.sequential('should be able to update a Project', async function () {
-    project.name = 'Project #1';
-    await core.projects.update(project);
-    const updatedProject = await core.projects.read({ id: project.id });
-
-    expect(updatedProject.name).to.equal('Project #1');
-    expect(
-      // @ts-expect-error updated is not allowed to be null
-      Math.floor(new Date(updatedProject.updated).getTime() / 1000)
-    ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
-  });
-
   it.sequential(
-    'should be able to get the full commit history of the Project',
-    async function () {
-      const history = await core.projects.getAllHistory({ id: project.id });
-      expect(history.length).to.equal(2); // Created and updated once
+    'should be able to update a Project',
+    async function ({ task }) {
+      project.name = 'Project #1';
+      await core.projects.update(project);
+      const updatedProject = await core.projects.read({ id: project.id });
 
-      await createAsset(project.id);
-      const historyWithAsset = await core.projects.getAllHistory({
-        id: project.id,
-      });
-      expect(historyWithAsset.length).to.equal(3); // Now with new Asset
+      expect(updatedProject.name).to.equal('Project #1');
+      expect(
+        // @ts-expect-error updated is not allowed to be null
+        Math.floor(new Date(updatedProject.updated).getTime() / 1000)
+      ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
+      expect(updatedProject.history.length).to.equal(2);
+      expect(updatedProject.fullHistory.length).to.equal(2);
+      await ensureCleanGitStatus(task, project.id);
     }
   );
 
   it.sequential(
-    'should be able to get an Projects file commit history and the content of a specific commit',
+    'should be able to get the full commit history of the Project',
+    async function ({ task }) {
+      await createAsset(project.id);
+      const readProject = await core.projects.read({ id: project.id });
+
+      expect(readProject.history.length).to.equal(2);
+      expect(readProject.fullHistory.length).to.equal(3); // Now with new Asset
+      await ensureCleanGitStatus(task, project.id);
+    }
+  );
+
+  it.sequential(
+    'should be able to get the content of a Project at a specific commit',
     async function () {
-      const history = await core.projects.getHistory({
-        id: project.id,
-      });
+      const readProject = await core.projects.read({ id: project.id });
 
-      expect(history.length).to.equal(2);
+      expect(readProject.history.length).to.equal(2);
 
-      const projectFromHistory = await core.projects.readFromHistory({
+      const projectFromHistory = await core.projects.read({
         id: project.id,
-        // @ts-ignore - we know that the history entry exists
-        hash: history[1].hash,
+        commitHash: readProject.history.pop()?.hash,
       });
 
       expect(projectFromHistory.name).to.equal('project #1');
@@ -107,6 +115,124 @@ describe.sequential('Integration', function () {
     expect(core.projects.isProject({ objectType: 'project' })).to.be.false;
   });
 
+  it.sequential(
+    'should throw when trying to upgrade a Project to the same version of Core',
+    async function ({ task }) {
+      await expect(
+        core.projects.upgrade({ id: project.id })
+      ).rejects.toThrowError(ProjectUpgradeError);
+      await ensureCleanGitStatus(task, project.id);
+    }
+  );
+
+  it.sequential(
+    'should upgrade a Project to the same version of Core if forced to do so',
+    async function ({ task }) {
+      await core.projects.upgrade({ id: project.id, force: true });
+      await ensureCleanGitStatus(task, project.id);
+    }
+  );
+
+  it.sequential(
+    'should throw when trying to upgrade a Project with a lower version of Core than the Project was created with',
+    async function ({ task }) {
+      const readProject = await core.projects.read({ id: project.id });
+      readProject.coreVersion = '999.0.0';
+      await Fs.writeFile(
+        core.util.pathTo.projectFile(project.id),
+        JSON.stringify(projectFileSchema.parse(readProject))
+      );
+      await core.git.add(core.util.pathTo.project(project.id), [
+        core.util.pathTo.projectFile(project.id),
+      ]);
+      await core.git.commit(
+        core.util.pathTo.project(project.id),
+        'TEST: Modified core version'
+      );
+
+      await expect(
+        core.projects.upgrade({ id: project.id })
+      ).rejects.toThrowError(ProjectUpgradeError);
+      await ensureCleanGitStatus(task, project.id);
+    }
+  );
+
+  it.sequential(
+    'should be able to list all outdated Projects',
+    async function () {
+      const outdatedProjects = await core.projects.listOutdated();
+
+      expect(outdatedProjects.length).to.equal(1);
+    }
+  );
+
+  it.sequential(
+    'should be able to upgrade a Project with a higher version of Core than the Project was created with',
+    async function ({ task }) {
+      const readProject = await core.projects.read({ id: project.id });
+      readProject.coreVersion = '0.0.0';
+      await Fs.writeFile(
+        core.util.pathTo.projectFile(project.id),
+        JSON.stringify(projectFileSchema.parse(readProject))
+      );
+      await core.git.add(core.util.pathTo.project(project.id), [
+        core.util.pathTo.projectFile(project.id),
+      ]);
+      await core.git.commit(
+        core.util.pathTo.project(project.id),
+        'TEST: Modified core version'
+      );
+
+      await core.projects.upgrade({ id: project.id });
+      await ensureCleanGitStatus(task, project.id);
+    }
+  );
+
+  it.sequential(
+    'should be able to list no outdated Projects anymore',
+    async function () {
+      const outdatedProjects = await core.projects.listOutdated();
+
+      expect(outdatedProjects.length).to.equal(0);
+    }
+  );
+
+  it.sequential(
+    'should be able to list the branches of a Project',
+    async function () {
+      const branches = await core.projects.branches.list({ id: project.id });
+
+      expect(branches.local).to.include('main', 'stage');
+    }
+  );
+
+  it.sequential(
+    'should be able to get the current branch of a Project',
+    async function () {
+      const currentBranch = await core.projects.branches.current({
+        id: project.id,
+      });
+
+      expect(currentBranch).to.equal('stage');
+    }
+  );
+
+  it.sequential(
+    'should be able to switch the current branch of a Project',
+    async function ({ task }) {
+      await core.projects.branches.switch({
+        id: project.id,
+        branch: 'main',
+      });
+      const currentBranch = await core.projects.branches.current({
+        id: project.id,
+      });
+
+      expect(currentBranch).to.equal('main');
+      await ensureCleanGitStatus(task, project.id);
+    }
+  );
+
   it.sequential('should be able to delete a Project', async function () {
     await core.projects.delete({ id: project.id });
     expect(
@@ -121,10 +247,11 @@ describe.sequential('Integration', function () {
     it.sequential(
       'should be able to clone an existing Project',
       { timeout: 20000 },
-      async function () {
+      async function ({ task }) {
         clonedProject = await core.projects.clone({ url: gitUrl });
         expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id)))
           .to.be.true;
+        await ensureCleanGitStatus(task, clonedProject.id);
       }
     );
 
@@ -140,7 +267,7 @@ describe.sequential('Integration', function () {
 
     it.sequential(
       'should be able to update the cloned Project and verify there is a change',
-      async function () {
+      async function ({ task }) {
         await core.projects.update({ ...clonedProject, name: 'A new name' });
         await createAsset(clonedProject.id);
         const changes = await core.projects.getChanges({
@@ -148,19 +275,41 @@ describe.sequential('Integration', function () {
         });
 
         expect(changes.ahead.length).to.equal(2);
+        await ensureCleanGitStatus(task, clonedProject.id);
       }
     );
 
     it.sequential(
       'should be able to synchronize the cloned Project with its remote',
-      { timeout: 20000 },
-      async function () {
+      { timeout: 20000, retry: 3 }, // Sometimes git fetch fails with "ssh: connect to host github.com port 22: Cannot allocate memory"
+      async function ({ task }) {
         await core.projects.synchronize({ id: clonedProject.id });
         const changes = await core.projects.getChanges({
           id: clonedProject.id,
         });
 
         expect(changes.ahead.length).to.equal(0);
+        await ensureCleanGitStatus(task, clonedProject.id);
+      }
+    );
+
+    it.sequential(
+      'should fail when trying to clone a Project twice',
+      { timeout: 20000 },
+      async function () {
+        await expect(
+          core.projects.clone({ url: gitUrl })
+        ).rejects.toThrowError();
+      }
+    );
+
+    it.sequential(
+      'should be able to delete the cloned Project locally',
+      async function () {
+        await core.projects.delete({ id: clonedProject.id });
+
+        expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id)))
+          .to.be.false;
       }
     );
   }

@@ -6,6 +6,7 @@ import {
   uuidSchema,
 } from './baseSchema.js';
 import { baseFileSchema } from './fileSchema.js';
+import { gitCommitSchema } from './gitSchema.js';
 
 export const assetFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.Enum.asset).readonly(),
@@ -25,6 +26,10 @@ export const assetSchema = assetFileSchema.extend({
    * Absolute path on this filesystem
    */
   absolutePath: z.string().readonly(),
+  /**
+   * Commit history of this Asset
+   */
+  history: z.array(gitCommitSchema),
 });
 export type Asset = z.infer<typeof assetSchema>;
 
@@ -51,23 +56,20 @@ export const readAssetSchema = assetFileSchema
   })
   .extend({
     projectId: uuidSchema.readonly(),
+    commitHash: z.string().optional().readonly(),
   });
 export type ReadAssetProps = z.infer<typeof readAssetSchema>;
 
-export const getHistoryAssetSchema = readAssetSchema;
-export type GetHistoryAssetProps = z.infer<typeof getHistoryAssetSchema>;
-
-export const readFromHistoryAssetSchema = assetFileSchema
+export const saveAssetSchema = assetFileSchema
   .pick({
     id: true,
   })
   .extend({
     projectId: uuidSchema.readonly(),
-    hash: z.string().readonly(),
+    filePath: z.string().readonly(),
+    commitHash: z.string().optional().readonly(),
   });
-export type ReadFromHistoryAssetProps = z.infer<
-  typeof readFromHistoryAssetSchema
->;
+export type SaveAssetProps = z.infer<typeof saveAssetSchema>;
 
 export const updateAssetSchema = assetFileSchema
   .pick({

@@ -76,6 +76,29 @@ export class JsonFileService extends AbstractCrudService {
   }
 
   /**
+   * Reads the content of a file on disk. Fails if path does not exist.
+   * Does not validate the content of the file against a schema and
+   * therefore is only to be used when retrieving data we do not have
+   * a current schema for. E.g. reading from history or while upgrading
+   * the old schema of a file to a new, current schema.
+   *
+   * Does not read from or write to cache.
+   *
+   * @param path Path to read the file from
+   * @returns Unvalidated content of the file from disk
+   */
+  public async unsafeRead(path: string): Promise<unknown> {
+    this.logService.warn(`Unsafe reading of file "${path}"`);
+    const data = await Fs.readFile(path, {
+      flag: 'r',
+      encoding: 'utf8',
+    });
+    const json = this.deserialize(data);
+
+    return json;
+  }
+
+  /**
    * Overwrites an existing file on disk
    *
    * @todo Check how to error out if the file does not exist already

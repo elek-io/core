@@ -2,6 +2,7 @@ import { faker } from '@faker-js/faker';
 import crypto from 'crypto';
 import Fs from 'fs-extra';
 import Path from 'path';
+import { Custom, expect, Test } from 'vitest';
 import core, {
   EntryFieldDefinition,
   uuid,
@@ -13,6 +14,21 @@ const id = {
   assetReferenceFieldDefinition: uuid(),
   entryReferenceFieldDefinition: uuid(),
 };
+
+export async function ensureCleanGitStatus(
+  task: Readonly<Test<{}> | Custom<{}>>,
+  projectId: string
+) {
+  const status = await core.git.status(core.util.pathTo.project(projectId));
+  if (status.length > 0) {
+    core.logger.error(
+      `Task "${
+        task.name
+      }" finished with an unclean git status: ${JSON.stringify(status)}`
+    );
+  }
+  expect(status.length).to.equal(0);
+}
 
 /**
  * Returns the MD5 hash of given file

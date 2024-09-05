@@ -1,6 +1,5 @@
 import { ChildProcess } from 'child_process';
 import { GitProcess, IGitExecutionOptions, type IGitResult } from 'dugite';
-import { EOL } from 'os';
 import PQueue from 'p-queue';
 import Path from 'path';
 import { GitError, NoCurrentUserError } from '../error/index.js';
@@ -53,7 +52,7 @@ export class GitService {
     this.queue = new PQueue({
       concurrency: 1, // No concurrency because git operations are sequencial
     });
-    this.gitTagService = new GitTagService(options, this.git);
+    this.gitTagService = new GitTagService(options, this.git.bind(this));
     this.logService = logService;
     this.userService = userService;
 
@@ -134,9 +133,33 @@ export class GitService {
    * @param files Files to add
    */
   public async add(path: string, files: string[]): Promise<void> {
-    const args = ['add', '--', ...files];
+    const relativePathsFromRepositoryRoot = files.map((filePath) => {
+      return filePath.replace(`${path}${Path.sep}`, '');
+    });
+
+    const args = ['add', '--', ...relativePathsFromRepositoryRoot];
 
     await this.git(path, args);
+  }
+
+  public async status(path: string) {
+    const args = ['status', '--porcelain=2'];
+    const result = await this.git(path, args);
+
+    const normalizedLinesArr = result.stdout
+      .split('\n')
+      .filter((line) => {
+        return line.trim() !== '';
+      })
+      .map((line) => {
+        const lineArr = line.trim().split(' ');
+
+        return {
+          filePath: lineArr[8],
+        };
+      });
+
+    return normalizedLinesArr;
   }
 
   public branches = {
@@ -152,7 +175,7 @@ export class GitService {
       const result = await this.git(path, args);
 
       const normalizedLinesArr = result.stdout
-        .split(EOL)
+        .split('\n')
         .filter((line) => {
           return line.trim() !== '';
         })
@@ -226,7 +249,7 @@ export class GitService {
     list: async (path: string) => {
       const args = ['remote'];
       const result = await this.git(path, args);
-      const normalizedLinesArr = result.stdout.split(EOL).filter((line) => {
+      const normalizedLinesArr = result.stdout.split('\n').filter((line) => {
         return line.trim() !== '';
       });
 
@@ -439,7 +462,7 @@ export class GitService {
 
     const result = await this.git(path, args);
 
-    const noEmptyLinesArr = result.stdout.split(EOL).filter((line) => {
+    const noEmptyLinesArr = result.stdout.split('\n').filter((line) => {
       return line.trim() !== '';
     });
 
@@ -465,17 +488,18 @@ export class GitService {
    *
    * @see https://git-scm.com/docs/git-show
    */
-  public async show(
+  public async getFileContentAtCommit(
     path: string,
     filePath: string,
-    hash: string,
+    commitHash: string,
     encoding: 'utf8' | 'binary' = 'utf8'
   ) {
     const relativePathFromRepositoryRoot = filePath.replace(
       `${path}${Path.sep}`,
       ''
     );
-    const args = ['show', `${hash}:${relativePathFromRepositoryRoot}`];
+    const normalizedPath = relativePathFromRepositoryRoot.split('\\').join('/');
+    const args = ['show', `${commitHash}:${normalizedPath}`];
     const setEncoding: (process: ChildProcess) => void = (cb) => {
       if (cb.stdout) {
         cb.stdout.setEncoding(encoding);
@@ -487,37 +511,6 @@ export class GitService {
         processCallback: setEncoding,
       })
     ).stdout;
-  }
-
-  /**
-   * Retrieve the binary contents of a blob from the repository at a given commit
-   *
-   * Returns a promise that will produce a Buffer instance containing
-   * the binary contents of the blob.
-   *
-   * @see https://github.com/desktop/desktop/blob/development/app/src/lib/git/show.ts#L24
-   * @see https://git-scm.com/docs/git-show
-   *
-   * @param path Path to the repository
-   * @param filePath Path to the file in the repository to retrieve the contents of. Can be a relative or absolute path.
-   * @param hash The hash of the commit
-   */
-  public async getBlobContents(path: string, filePath: string, hash: string) {
-    const relativePathFromRepositoryRoot = filePath.replace(
-      `${path}${Path.sep}`,
-      ''
-    );
-    const args = ['show', `${hash}:${relativePathFromRepositoryRoot}`];
-    const setBinaryEncoding: (process: ChildProcess) => void = (cb) => {
-      if (cb.stdout) {
-        cb.stdout.setEncoding('binary');
-      }
-    };
-    const blobContents = await this.git(path, args, {
-      processCallback: setBinaryEncoding,
-    });
-
-    return Buffer.from(blobContents.stdout, 'binary');
   }
 
   public refNameToTagName(refName: string) {
@@ -633,9 +626,12 @@ export class GitService {
       );
     }
 
-    this.logService.debug(
-      `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`
-    );
+    const gitLog = `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`;
+    if (result.durationMs >= 100) {
+      this.logService.warn(gitLog);
+    } else {
+      this.logService.debug(gitLog);
+    }
 
     if (result.gitResult.exitCode !== 0) {
       throw new GitError(

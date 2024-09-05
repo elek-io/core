@@ -29,7 +29,7 @@ export * from './util/shared.js';
  * Provides access to all services Core is offering
  */
 export default class ElekIoCore {
-  public readonly version: Version;
+  public readonly coreVersion: Version;
   public readonly options: ElekIoCoreOptions;
   private readonly logService: LogService;
   private readonly userService: UserService;
@@ -41,7 +41,7 @@ export default class ElekIoCore {
   private readonly entryService: EntryService;
 
   constructor(props?: ConstructorElekIoCoreProps) {
-    this.version = coreVersion;
+    this.coreVersion = coreVersion;
     const parsedProps = constructorElekIoCoreSchema.parse(props);
 
     const defaults: ElekIoCoreOptions = {
@@ -64,6 +64,7 @@ export default class ElekIoCore {
     );
     this.assetService = new AssetService(
       this.options,
+      this.logService,
       this.jsonFileService,
       this.gitService
     );
@@ -81,8 +82,9 @@ export default class ElekIoCore {
       this.assetService
     );
     this.projectService = new ProjectService(
-      this.version,
+      this.coreVersion,
       this.options,
+      this.logService,
       this.jsonFileService,
       this.userService,
       this.gitService,
@@ -91,7 +93,7 @@ export default class ElekIoCore {
       this.entryService
     );
 
-    this.logService.info(`Initializing elek.io Core ${this.version}`, {
+    this.logService.info(`Initializing elek.io Core ${this.coreVersion}`, {
       options: this.options,
     });
 

@@ -38,7 +38,20 @@ describe.sequential('Integration', function () {
   );
 
   it.sequential(
-    'should be able to tell that there is a remote origin already',
+    'should be able to tell that there is no remote origin yet',
+    async function () {
+      const hasOrigin = await core.git.remotes.hasOrigin(projectPath);
+
+      expect(hasOrigin).to.be.false;
+    }
+  );
+
+  it.sequential('should be able to set the remote origin', async function () {
+    await core.git.remotes.addOrigin(projectPath, gitUrl);
+  });
+
+  it.sequential(
+    'should be able to tell that there is a remote origin now',
     async function () {
       const hasOrigin = await core.git.remotes.hasOrigin(projectPath);
 
@@ -47,11 +60,11 @@ describe.sequential('Integration', function () {
   );
 
   it.sequential(
-    'should be able to get the default remote origin URL',
+    'should be able to get the current remote origin URL',
     async function () {
       const remoteOriginUrl = await core.git.remotes.getOriginUrl(projectPath);
 
-      expect(remoteOriginUrl).to.equal(null);
+      expect(remoteOriginUrl).to.equal(gitUrl);
     }
   );
 
@@ -81,7 +94,7 @@ describe.sequential('Integration', function () {
   } else {
     it.sequential(
       'should be able to push an existing Project to a new remote',
-      { timeout: 20000 },
+      { timeout: 20000, retry: 3 },
       async function () {
         await core.git.remotes.setOriginUrl(
           projectPath,
@@ -107,7 +120,7 @@ describe.sequential('Integration', function () {
 
     it.sequential(
       'should be able to push the change to remote',
-      { timeout: 20000 },
+      { timeout: 20000, retry: 3 },
       async function () {
         await core.git.push(projectPath);
       }

@@ -1,5 +1,6 @@
 import z from 'zod';
 import {
+  objectTypeSchema,
   supportedAssetExtensionSchema,
   supportedLanguageSchema,
   uuidSchema,
@@ -9,6 +10,10 @@ import {
  * A basic file structure every elek.io file on disk has to follow
  */
 export const baseFileSchema = z.object({
+  /**
+   * The object type of the file
+   */
+  objectType: objectTypeSchema.readonly(),
   /**
    * The ID of the file
    *
