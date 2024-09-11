@@ -7,6 +7,8 @@ import {
   ProjectUpgradeError,
   RequiredParameterMissingError,
 } from '../error/index.js';
+import { RemoteOriginMissingError } from '../error/RemoteOriginMissingError.js';
+import { SynchronizeLocalChangesError } from '../error/SynchronizeLocalChangesError.js';
 import {
   cloneProjectSchema,
   createProjectSchema,
@@ -14,14 +16,13 @@ import {
   deleteProjectSchema,
   FileReference,
   getChangesProjectSchema,
-  getRemoteOriginUrlProjectSchema,
-  gitCommitIconSchema,
   listBranchesProjectSchema,
   listProjectsSchema,
   ObjectType,
   objectTypeSchema,
   OutdatedProject,
   outdatedProjectSchema,
+  projectBranchSchema,
   projectFileSchema,
   projectFolderSchema,
   readProjectSchema,
@@ -41,7 +42,6 @@ import {
   type DeleteProjectProps,
   type ElekIoCoreOptions,
   type GetChangesProjectProps,
-  type GetRemoteOriginUrlProjectProps,
   type ListBranchesProjectProps,
   type ListProjectsProps,
   type PaginatedList,
@@ -145,20 +145,26 @@ export class ProjectService
     try {
       await this.createFolderStructure(projectPath);
       await this.createGitignore(projectPath);
-      await this.gitService.init(projectPath, { initialBranch: 'main' });
+      await this.gitService.init(projectPath, {
+        initialBranch: projectBranchSchema.Enum.production,
+      });
       await this.jsonFileService.create(
         projectFile,
         pathTo.projectFile(id),
         projectFileSchema
       );
       await this.gitService.add(projectPath, ['.']);
-      await this.gitService.commit(
-        projectPath,
-        `${gitCommitIconSchema.enum.INIT} Created this new elek.io project`
-      );
-      await this.gitService.branches.switch(projectPath, 'stage', {
-        isNew: true,
+      await this.gitService.commit(projectPath, {
+        method: 'create',
+        reference: { objectType: 'project', id },
       });
+      await this.gitService.branches.switch(
+        projectPath,
+        projectBranchSchema.Enum.work,
+        {
+          isNew: true,
+        }
+      );
     } catch (error) {
       // To avoid partial data being added to the repository / git status reporting uncommitted files
       await this.delete({
@@ -261,7 +267,10 @@ export class ProjectService
 
     await this.jsonFileService.update(projectFile, filePath, projectFileSchema);
     await this.gitService.add(projectPath, [filePath]);
-    await this.gitService.commit(projectPath, this.gitMessage.update);
+    await this.gitService.commit(projectPath, {
+      method: 'update',
+      reference: { objectType: 'project', id: projectFile.id },
+    });
 
     return await this.toProject(projectFile);
   }
@@ -276,26 +285,34 @@ export class ProjectService
 
     const projectPath = pathTo.project(props.id);
     const projectFilePath = pathTo.projectFile(props.id);
+    const currentBranch = await this.gitService.branches.current(projectPath);
+
+    if (currentBranch !== projectBranchSchema.Enum.work) {
+      await this.gitService.branches.switch(
+        projectPath,
+        projectBranchSchema.Enum.work
+      );
+    }
 
     // Get the current Project file
-    const prevProjectFile = outdatedProjectSchema
+    const currentProjectFile = outdatedProjectSchema
       .passthrough() // Allow unknown properties
       .parse(await this.jsonFileService.unsafeRead(projectFilePath));
 
-    if (Semver.gt(prevProjectFile.coreVersion, this.coreVersion)) {
+    if (Semver.gt(currentProjectFile.coreVersion, this.coreVersion)) {
       // Upgrade of the client needed before the project can be upgraded
       throw new ProjectUpgradeError(
-        `The Projects Core version "${prevProjectFile.coreVersion}" is higher than the current Core version "${this.coreVersion}".`
+        `The Projects Core version "${currentProjectFile.coreVersion}" is higher than the current Core version "${this.coreVersion}".`
       );
     }
 
     if (
-      Semver.eq(prevProjectFile.coreVersion, this.coreVersion) &&
+      Semver.eq(currentProjectFile.coreVersion, this.coreVersion) &&
       props.force !== true
     ) {
       // Nothing, since both are equal
       throw new ProjectUpgradeError(
-        `The Projects Core version "${prevProjectFile.coreVersion}" is already up to date.`
+        `The Projects Core version "${currentProjectFile.coreVersion}" is already up to date.`
       );
     }
 
@@ -306,13 +323,13 @@ export class ProjectService
     );
 
     this.logService.info(
-      `Attempting to upgrade Project "${props.id}" from Core version ${prevProjectFile.coreVersion} to ${this.coreVersion}`
+      `Attempting to upgrade Project "${props.id}" from Core version ${currentProjectFile.coreVersion} to ${this.coreVersion}`
     );
 
-    // Make a tag to revert back to on failure
-    const failsafeTag = await this.gitService.tags.create({
-      path: projectPath,
-      message: `Attempting to upgrade Project from Core version ${prevProjectFile.coreVersion} to ${this.coreVersion}`,
+    // Create a new branch to work on this migration
+    const upgradeBranchName = `upgrade/core-${currentProjectFile.coreVersion}-to-${this.coreVersion}`;
+    await this.gitService.branches.switch(projectPath, upgradeBranchName, {
+      isNew: true,
     });
 
     try {
@@ -350,27 +367,49 @@ export class ProjectService
       );
 
       // Upgrade the Project file itself
-      const migratedProjectFile = this.migrate(prevProjectFile);
+      const migratedProjectFile = this.migrate(currentProjectFile);
       await this.update(migratedProjectFile);
-      this.logService.info(`Upgraded project "${projectFilePath}"`, {
-        previous: prevProjectFile,
-        migrated: migratedProjectFile,
-      });
 
-      // And create another tag to show the successfull upgrade in git log
+      // Merge the upgrade branch back into the work branch
+      await this.gitService.branches.switch(
+        projectPath,
+        projectBranchSchema.Enum.work
+      );
+      await this.gitService.merge(projectPath, upgradeBranchName, {
+        squash: true,
+      });
+      await this.gitService.commit(projectPath, {
+        method: 'upgrade',
+        reference: { objectType: 'project', id: migratedProjectFile.id },
+      });
       await this.gitService.tags.create({
         path: projectPath,
-        message: `Upgraded Project to Core version "${this.coreVersion}"`,
+        message: `Upgraded Project to Core version ${migratedProjectFile.coreVersion}`,
       });
+      await this.gitService.branches.delete(
+        projectPath,
+        upgradeBranchName,
+        true
+      );
 
-      // Done, remove the failsafe tag again
-      await this.gitService.tags.delete({
-        path: projectPath,
-        id: failsafeTag.id,
-      });
+      this.logService.info(
+        `Upgraded Project "${projectFilePath}" to Core version "${this.coreVersion}"`,
+        {
+          previous: currentProjectFile,
+          migrated: migratedProjectFile,
+        }
+      );
     } catch (error) {
-      // Reset Project to the tag made before
-      await this.gitService.reset(projectPath, 'hard', failsafeTag.id);
+      // Revert back to the work branch and delete the upgrade branch
+      await this.gitService.branches.switch(
+        projectPath,
+        projectBranchSchema.Enum.work
+      );
+      await this.gitService.branches.delete(
+        projectPath,
+        upgradeBranchName,
+        true
+      );
 
       throw error;
     }
@@ -402,32 +441,25 @@ export class ProjectService
     },
   };
 
-  public remotes = {
-    getOriginUrl: async (props: GetRemoteOriginUrlProjectProps) => {
-      getRemoteOriginUrlProjectSchema.parse(props);
-      const projectPath = pathTo.project(props.id);
-      const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
-      if (!hasOrigin) {
-        return null;
-      } else {
-        return await this.gitService.remotes.getOriginUrl(projectPath);
-      }
-    },
-    setOriginUrl: async (props: SetRemoteOriginUrlProjectProps) => {
-      setRemoteOriginUrlProjectSchema.parse(props);
-      const projectPath = pathTo.project(props.id);
-      const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
-      if (!hasOrigin) {
-        await this.gitService.remotes.addOrigin(projectPath, props.url);
-      } else {
-        await this.gitService.remotes.setOriginUrl(projectPath, props.url);
-      }
-    },
-  };
+  /**
+   * Updates the remote origin URL of given Project
+   */
+  public async setRemoteOriginUrl(props: SetRemoteOriginUrlProjectProps) {
+    setRemoteOriginUrlProjectSchema.parse(props);
+    const projectPath = pathTo.project(props.id);
+    const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
+    if (!hasOrigin) {
+      await this.gitService.remotes.addOrigin(projectPath, props.url);
+    } else {
+      await this.gitService.remotes.setOriginUrl(projectPath, props.url);
+    }
+  }
 
   /**
    * Returns the differences of the given Projects current branch
    * between the local and remote `origin` (commits ahead & behind)
+   *
+   * Throws an error if the Project does not have a remote origin.
    *
    * - `behind` contains a list of commits on the current branch that are available on the remote `origin` but not yet locally
    * - `ahead` contains a list of commits on the current branch that are available locally but not yet on the remote `origin`
@@ -435,6 +467,12 @@ export class ProjectService
   public async getChanges(props: GetChangesProjectProps) {
     getChangesProjectSchema.parse(props);
     const projectPath = pathTo.project(props.id);
+    const hasRemoteOrigin = await this.gitService.remotes.hasOrigin(
+      projectPath
+    );
+    if (hasRemoteOrigin === false) {
+      throw new Error(`Project "${props.id}" does not have a remote origin`);
+    }
     const currentBranch = await this.gitService.branches.current(projectPath);
 
     await this.gitService.fetch(projectPath);
@@ -467,11 +505,26 @@ export class ProjectService
    * Deletes given Project
    *
    * Deletes the whole Project folder including the history, not only the config file.
-   * Use with caution, since a Project that is only available locally could be lost forever.
-   * Or changes that are not pushed to a remote yet, will be lost too.
+   * Throws in case a Project is only available locally and could be lost forever,
+   * or changes are not pushed to a remote yet.
    */
   public async delete(props: DeleteProjectProps): Promise<void> {
     deleteProjectSchema.parse(props);
+
+    const hasRemoteOrigin = await this.gitService.remotes.hasOrigin(
+      pathTo.project(props.id)
+    );
+
+    if (hasRemoteOrigin === false && props.force !== true) {
+      throw new RemoteOriginMissingError(props.id);
+    }
+
+    if (hasRemoteOrigin === true && props.force !== true) {
+      const changes = await this.getChanges({ id: props.id });
+      if (changes.ahead.length > 0) {
+        throw new SynchronizeLocalChangesError(props.id);
+      }
+    }
 
     await Fs.remove(pathTo.project(props.id));
   }
@@ -594,6 +647,14 @@ export class ProjectService
    * Creates a Project from given ProjectFile
    */
   private async toProject(projectFile: ProjectFile): Promise<Project> {
+    const projectPath = pathTo.project(projectFile.id);
+
+    let remoteOriginUrl = null;
+    const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
+    if (hasOrigin) {
+      remoteOriginUrl = await this.gitService.remotes.getOriginUrl(projectPath);
+    }
+
     const fullHistory = await this.gitService.log(
       pathTo.project(projectFile.id)
     );
@@ -603,6 +664,7 @@ export class ProjectService
 
     return {
       ...projectFile,
+      remoteOriginUrl,
       history,
       fullHistory,
     };

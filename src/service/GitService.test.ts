@@ -1,8 +1,6 @@
-import Fs from 'fs-extra';
-import path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import core, { type Project } from '../test/setup.js';
-import { createProject } from '../test/util.js';
+import { createAsset, createProject } from '../test/util.js';
 
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -24,7 +22,7 @@ describe.sequential('Integration', function () {
     async function () {
       const currentBranch = await core.git.branches.current(projectPath);
 
-      expect(currentBranch).to.equal('stage');
+      expect(currentBranch).to.equal('work');
     }
   );
 
@@ -33,7 +31,7 @@ describe.sequential('Integration', function () {
     async function () {
       const branches = await core.git.branches.list(projectPath);
 
-      expect(branches.local).to.contain('main').and.to.contain('stage');
+      expect(branches.local).to.contain('production').and.to.contain('work');
     }
   );
 
@@ -107,9 +105,7 @@ describe.sequential('Integration', function () {
     it.sequential(
       'should be able to make a local change and see the difference between local and remote',
       async function () {
-        await Fs.writeFile(path.join(projectPath, 'README.md'), 'Hello World!');
-        await core.git.add(projectPath, ['README.md']);
-        await core.git.commit(projectPath, 'Added a README');
+        await createAsset(project.id);
 
         const changes = await core.projects.getChanges({ id: project.id });
 

@@ -1,14 +1,11 @@
 import { RequiredParameterMissingError } from '../error/index.js';
 import {
   fileReferenceSchema,
-  gitCommitIconSchema,
   objectTypeSchema,
   type ElekIoCoreOptions,
   type FileReference,
   type ObjectType,
   type ServiceType,
-  type SupportedAssetExtension,
-  type SupportedLanguage,
 } from '../schema/index.js';
 import { files, folders, notEmpty, pathTo } from '../util/node.js';
 
@@ -20,25 +17,11 @@ export abstract class AbstractCrudService {
   public readonly options: ElekIoCoreOptions;
 
   /**
-   * Dynamically generated git messages for operations
-   */
-  public readonly gitMessage: {
-    create: string;
-    update: string;
-    delete: string;
-  };
-
-  /**
    * Do not instantiate directly as this is an abstract class
    */
   protected constructor(type: ServiceType, options: ElekIoCoreOptions) {
     this.type = type;
     this.options = options;
-    this.gitMessage = {
-      create: `${gitCommitIconSchema.enum.CREATE} Created ${this.type}`,
-      update: `${gitCommitIconSchema.enum.UPDATE} Updated ${this.type}`,
-      delete: `${gitCommitIconSchema.enum.DELETE} Deleted ${this.type}`,
-    };
   }
 
   /**
@@ -112,8 +95,7 @@ export abstract class AbstractCrudService {
    * Searches for all files inside given folder,
    * parses their names and returns them as FileReference
    *
-   * Ignores files not matching the [id].[language].[extension]
-   * or [id].[extension] format for their names
+   * Ignores files if the extension is not supported.
    */
   private async getFileReferences(path: string): Promise<FileReference[]> {
     const possibleFiles = await files(path);
@@ -122,16 +104,9 @@ export abstract class AbstractCrudService {
       possibleFiles.map(async (possibleFile) => {
         const fileNameArray = possibleFile.name.split('.');
 
-        const fileReference: FileReference = {
-          id: fileNameArray[0] || '',
-          language:
-            fileNameArray.length === 3
-              ? (fileNameArray[1] as SupportedLanguage)
-              : undefined,
-          extension:
-            fileNameArray.length === 2
-              ? (fileNameArray[1] as SupportedAssetExtension)
-              : (fileNameArray[2] as SupportedAssetExtension),
+        const fileReference = {
+          id: fileNameArray[0],
+          extension: fileNameArray[1],
         };
 
         try {

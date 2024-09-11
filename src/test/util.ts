@@ -56,7 +56,7 @@ export async function createProject(name?: string, settings?: ProjectSettings) {
   });
 
   const destroy = async () => {
-    await core.projects.delete({ id: project.id });
+    await core.projects.delete({ id: project.id, force: true });
   };
 
   return { ...project, destroy };

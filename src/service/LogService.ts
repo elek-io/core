@@ -36,7 +36,13 @@ export class LogService {
         new transports.Console({
           handleExceptions: true,
           handleRejections: true,
-          format: format.cli(),
+          format: format.combine(
+            format.colorize(),
+            format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+            format.printf((info) => {
+              return `${info.level} [${info['timestamp']}]: ${info.message}`;
+            })
+          ),
         }),
       ],
     });
@@ -48,20 +54,20 @@ export class LogService {
     });
   }
 
-  public debug(message: string, ...meta: any[]): Logger {
-    return this.logger.debug(message, ...meta);
+  public debug(message: string, ...meta: any[]) {
+    this.logger.debug(message, ...meta);
   }
 
-  public info(message: string, ...meta: any[]): Logger {
-    return this.logger.info(message, ...meta);
+  public info(message: string, ...meta: any[]) {
+    this.logger.info(message, ...meta);
   }
 
-  public warn(message: string, ...meta: any[]): Logger {
-    return this.logger.warn(message, ...meta);
+  public warn(message: string, ...meta: any[]) {
+    this.logger.warn(message, ...meta);
   }
 
-  public error(message: string, ...meta: any[]): Logger {
-    return this.logger.error(message, ...meta);
+  public error(message: string, ...meta: any[]) {
+    this.logger.error(message, ...meta);
   }
 
   public read(options?: QueryOptions) {

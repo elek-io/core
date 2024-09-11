@@ -32,6 +32,9 @@ export const projectFolderSchema = z.enum([
 ]);
 export type ProjectFolder = z.infer<typeof projectFolderSchema>;
 
+export const projectBranchSchema = z.enum(['production', 'work']);
+export type ProjectBranch = z.infer<typeof projectBranchSchema>;
+
 export const projectFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.Enum.project).readonly(),
   coreVersion: versionSchema,
@@ -44,6 +47,7 @@ export const projectFileSchema = baseFileSchema.extend({
 export type ProjectFile = z.infer<typeof projectFileSchema>;
 
 export const projectSchema = projectFileSchema.extend({
+  remoteOriginUrl: z.string().nullable(),
   /**
    * Commit history of this Project
    */
@@ -110,7 +114,9 @@ export const upgradeProjectSchema = z.object({
 });
 export type UpgradeProjectProps = z.infer<typeof upgradeProjectSchema>;
 
-export const deleteProjectSchema = readProjectSchema.extend({});
+export const deleteProjectSchema = readProjectSchema.extend({
+  force: z.boolean().optional(),
+});
 export type DeleteProjectProps = z.infer<typeof deleteProjectSchema>;
 
 export const projectUpgradeSchema = z.object({

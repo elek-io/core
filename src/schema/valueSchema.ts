@@ -2,7 +2,6 @@ import z from 'zod';
 import { assetSchema, type Asset } from './assetSchema.js';
 import {
   objectTypeSchema,
-  supportedLanguageSchema,
   translatableArrayOf,
   translatableBooleanSchema,
   translatableNumberSchema,
@@ -22,11 +21,6 @@ export type ValueType = z.infer<typeof ValueTypeSchema>;
 export const valueContentReferenceBase = z.object({
   id: uuidSchema,
 });
-
-export const valueContentReferenceWithLanguageBase =
-  valueContentReferenceBase.extend({
-    language: supportedLanguageSchema,
-  });
 
 export const valueContentReferenceToAssetSchema =
   valueContentReferenceBase.extend({

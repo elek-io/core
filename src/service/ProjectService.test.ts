@@ -1,6 +1,8 @@
 import Fs from 'fs-extra';
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { ProjectUpgradeError } from '../error/ProjectUpgradeError.js';
+import { RemoteOriginMissingError } from '../error/RemoteOriginMissingError.js';
+import { SynchronizeLocalChangesError } from '../error/SynchronizeLocalChangesError.js';
 import core, { projectFileSchema, type Project } from '../test/setup.js';
 import {
   createAsset,
@@ -14,9 +16,9 @@ describe.sequential('Integration', function () {
   const isGithubAction = process.env?.['GITHUB_ACTIONS'];
   const gitUrl = 'git@github.com:elek-io/project-test-1.git';
 
-  afterAll(async function () {
-    await project.destroy();
-  });
+  // afterAll(async function () {
+  //   await project.destroy();
+  // });
 
   it.sequential(
     'should be able to create a new Project locally',
@@ -145,10 +147,10 @@ describe.sequential('Integration', function () {
       await core.git.add(core.util.pathTo.project(project.id), [
         core.util.pathTo.projectFile(project.id),
       ]);
-      await core.git.commit(
-        core.util.pathTo.project(project.id),
-        'TEST: Modified core version'
-      );
+      await core.git.commit(core.util.pathTo.project(project.id), {
+        method: 'update',
+        reference: { objectType: 'project', id: project.id },
+      });
 
       await expect(
         core.projects.upgrade({ id: project.id })
@@ -178,10 +180,10 @@ describe.sequential('Integration', function () {
       await core.git.add(core.util.pathTo.project(project.id), [
         core.util.pathTo.projectFile(project.id),
       ]);
-      await core.git.commit(
-        core.util.pathTo.project(project.id),
-        'TEST: Modified core version'
-      );
+      await core.git.commit(core.util.pathTo.project(project.id), {
+        method: 'update',
+        reference: { objectType: 'project', id: project.id },
+      });
 
       await core.projects.upgrade({ id: project.id });
       await ensureCleanGitStatus(task, project.id);
@@ -202,7 +204,7 @@ describe.sequential('Integration', function () {
     async function () {
       const branches = await core.projects.branches.list({ id: project.id });
 
-      expect(branches.local).to.include('main', 'stage');
+      expect(branches.local).to.include('production', 'work');
     }
   );
 
@@ -213,7 +215,7 @@ describe.sequential('Integration', function () {
         id: project.id,
       });
 
-      expect(currentBranch).to.equal('stage');
+      expect(currentBranch).to.equal('work');
     }
   );
 
@@ -222,19 +224,40 @@ describe.sequential('Integration', function () {
     async function ({ task }) {
       await core.projects.branches.switch({
         id: project.id,
-        branch: 'main',
+        branch: 'production',
       });
       const currentBranch = await core.projects.branches.current({
         id: project.id,
       });
 
-      expect(currentBranch).to.equal('main');
+      expect(currentBranch).to.equal('production');
       await ensureCleanGitStatus(task, project.id);
     }
   );
 
-  it.sequential('should be able to delete a Project', async function () {
-    await core.projects.delete({ id: project.id });
+  it.sequential(
+    'should fail to delete a Project without a remote origin',
+    async function () {
+      await expect(
+        core.projects.delete({ id: project.id })
+      ).rejects.toThrowError(RemoteOriginMissingError);
+    }
+  );
+
+  it.sequential(
+    'should fail to delete a Project with a remote origin but changes to push',
+    async function () {
+      await core.projects.setRemoteOriginUrl({ id: project.id, url: gitUrl });
+      await createAsset(project.id);
+
+      await expect(
+        core.projects.delete({ id: project.id })
+      ).rejects.toThrowError(SynchronizeLocalChangesError);
+    }
+  );
+
+  it.sequential('should be able to force delete a Project', async function () {
+    await core.projects.delete({ id: project.id, force: true });
     expect(
       await Fs.pathExists(core.util.pathTo.project(project.id))
     ).to.be.false;
@@ -245,23 +268,14 @@ describe.sequential('Integration', function () {
     console.warn('Running inside a Github Action - some tests are skipped');
   } else {
     it.sequential(
-      'should be able to clone an existing Project',
+      'should be able to clone an existing Project and verify that the remote origin URL was set',
       { timeout: 20000 },
       async function ({ task }) {
         clonedProject = await core.projects.clone({ url: gitUrl });
         expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id)))
           .to.be.true;
+        expect(clonedProject.remoteOriginUrl).to.equal(gitUrl);
         await ensureCleanGitStatus(task, clonedProject.id);
-      }
-    );
-
-    it.sequential(
-      'should be able to get the origin URL of the cloned Project',
-      async function () {
-        const originUrl = await core.projects.remotes.getOriginUrl({
-          id: clonedProject.id,
-        });
-        expect(originUrl).to.equal(gitUrl);
       }
     );
 

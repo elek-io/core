@@ -187,7 +187,7 @@ export function spawnChildProcess(
 }
 
 /**
- * Returns all folders of given path
+ * Returns all folders of given path to a directory
  */
 export async function folders(path: string): Promise<Fs.Dirent[]> {
   const dirent = await Fs.readdir(path, { withFileTypes: true });
@@ -197,7 +197,8 @@ export async function folders(path: string): Promise<Fs.Dirent[]> {
 }
 
 /**
- * Returns all files of given path which can be filtered by extension
+ * Returns all files of given path to a directory,
+ * which can be filtered by extension
  */
 export async function files(
   path: string,
