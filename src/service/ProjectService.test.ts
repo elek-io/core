@@ -6,6 +6,8 @@ import { SynchronizeLocalChangesError } from '../error/SynchronizeLocalChangesEr
 import core, { projectFileSchema, type Project } from '../test/setup.js';
 import {
   createAsset,
+  createCollection,
+  createEntry,
   createProject,
   ensureCleanGitStatus,
 } from '../test/util.js';
@@ -67,11 +69,13 @@ describe.sequential('Integration', function () {
   it.sequential(
     'should be able to get the full commit history of the Project',
     async function ({ task }) {
-      await createAsset(project.id);
+      const asset = await createAsset(project.id);
+      const collection = await createCollection(project.id);
+      await createEntry(project.id, collection.id, asset.id);
       const readProject = await core.projects.read({ id: project.id });
 
       expect(readProject.history.length).to.equal(2);
-      expect(readProject.fullHistory.length).to.equal(3); // Now with new Asset
+      expect(readProject.fullHistory.length).to.equal(6); // Now with new Asset, Collection and Entry
       await ensureCleanGitStatus(task, project.id);
     }
   );

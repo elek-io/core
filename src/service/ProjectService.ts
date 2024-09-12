@@ -169,6 +169,7 @@ export class ProjectService
       // To avoid partial data being added to the repository / git status reporting uncommitted files
       await this.delete({
         id,
+        force: true,
       });
       throw error;
     }
