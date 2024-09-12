@@ -78,14 +78,14 @@ describe.sequential('Integration', function () {
   it.sequential(
     'should be able to update an Asset with a new file',
     async function () {
-      const newFilePath = Path.resolve('src/test/data/150x150.jpg');
+      const newFilePath = Path.resolve('src/test/data/150x150.jpeg');
       asset = await core.assets.update({
         projectId: project.id,
         ...asset,
         newFilePath,
       });
 
-      expect(asset.extension).to.equal('jpg');
+      expect(asset.extension).to.equal('jpeg');
       expect(asset.size).to.equal(1342);
       expect(asset.history.length).to.equal(3);
     }

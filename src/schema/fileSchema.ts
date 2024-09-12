@@ -1,9 +1,5 @@
 import z from 'zod';
-import {
-  objectTypeSchema,
-  supportedAssetExtensionSchema,
-  uuidSchema,
-} from './baseSchema.js';
+import { objectTypeSchema, uuidSchema } from './baseSchema.js';
 
 /**
  * A basic file structure every elek.io file on disk has to follow
@@ -32,6 +28,6 @@ export type BaseFile = z.infer<typeof baseFileSchema>;
 
 export const fileReferenceSchema = z.object({
   id: uuidSchema,
-  extension: supportedAssetExtensionSchema.optional(),
+  extension: z.string().optional(),
 });
 export type FileReference = z.infer<typeof fileReferenceSchema>;
