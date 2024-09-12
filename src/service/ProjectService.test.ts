@@ -16,10 +16,6 @@ describe.sequential('Integration', function () {
   const isGithubAction = process.env?.['GITHUB_ACTIONS'];
   const gitUrl = 'git@github.com:elek-io/project-test-1.git';
 
-  // afterAll(async function () {
-  //   await project.destroy();
-  // });
-
   it.sequential(
     'should be able to create a new Project locally',
     async function ({ task }) {
@@ -244,18 +240,6 @@ describe.sequential('Integration', function () {
     }
   );
 
-  it.sequential(
-    'should fail to delete a Project with a remote origin but changes to push',
-    async function () {
-      await core.projects.setRemoteOriginUrl({ id: project.id, url: gitUrl });
-      await createAsset(project.id);
-
-      await expect(
-        core.projects.delete({ id: project.id })
-      ).rejects.toThrowError(SynchronizeLocalChangesError);
-    }
-  );
-
   it.sequential('should be able to force delete a Project', async function () {
     await core.projects.delete({ id: project.id, force: true });
     expect(
@@ -290,6 +274,15 @@ describe.sequential('Integration', function () {
 
         expect(changes.ahead.length).to.equal(2);
         await ensureCleanGitStatus(task, clonedProject.id);
+      }
+    );
+
+    it.sequential(
+      'should fail to delete a Project with a remote origin but changes to push',
+      async function () {
+        await expect(
+          core.projects.delete({ id: clonedProject.id })
+        ).rejects.toThrowError(SynchronizeLocalChangesError);
       }
     );
 
