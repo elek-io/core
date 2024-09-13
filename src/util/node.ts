@@ -1,4 +1,3 @@
-import { spawn, type SpawnOptionsWithoutStdio } from 'child_process';
 import Fs from 'fs-extra';
 import Os from 'os';
 import Path from 'path';
@@ -83,16 +82,6 @@ export const pathTo = {
 };
 
 /**
- * Returns a complete default type, hydrated with the partials of value
- */
-export function assignDefaultIfMissing<T extends {}>(
-  value: Partial<T> | undefined | null,
-  defaultsTo: T
-): T {
-  return Object.assign(defaultsTo, value);
-}
-
-/**
  * Used as parameter for filter() methods to assure,
  * only values not null, undefined or empty strings are returned
  *
@@ -146,48 +135,12 @@ export async function returnResolved<T>(promises: Promise<T>[]) {
   // This way we can easily filter out any Errors by type
   // Note that we also need to use a User-Defined Type Guard here,
   // because otherwise TS does not recognize we are filtering the errors out
-  //                         >       |        <
+  //                >       |        <
   return checked.filter(isNoError);
 }
 
 /**
- * Custom async typescript ready implementation of Node.js child_process
- *
- * @see https://nodejs.org/api/child_process.html
- * @see https://github.com/ralphtheninja/await-spawn
- */
-export function spawnChildProcess(
-  command: string,
-  args: ReadonlyArray<string>,
-  options?: SpawnOptionsWithoutStdio
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const childProcess = spawn(command, args, options);
-    let log = '';
-
-    childProcess.stdout.on('data', (data) => {
-      log += data;
-    });
-
-    childProcess.stderr.on('data', (data) => {
-      log += data;
-    });
-
-    childProcess.on('error', (error) => {
-      throw error;
-    });
-
-    childProcess.on('exit', (code) => {
-      if (code === 0) {
-        return resolve(log);
-      }
-      return reject(log);
-    });
-  });
-}
-
-/**
- * Returns all folders of given path
+ * Returns all folders of given path to a directory
  */
 export async function folders(path: string): Promise<Fs.Dirent[]> {
   const dirent = await Fs.readdir(path, { withFileTypes: true });
@@ -197,7 +150,8 @@ export async function folders(path: string): Promise<Fs.Dirent[]> {
 }
 
 /**
- * Returns all files of given path which can be filtered by extension
+ * Returns all files of given path to a directory,
+ * which can be filtered by extension
  */
 export async function files(
   path: string,

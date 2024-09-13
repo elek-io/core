@@ -5,6 +5,9 @@ import Path from 'path';
 import { GitError, NoCurrentUserError } from '../error/index.js';
 import {
   gitCommitSchema,
+  GitMergeOptions,
+  GitMessage,
+  gitMessageSchema,
   uuidSchema,
   type ElekIoCoreOptions,
   type GitCloneOptions,
@@ -107,6 +110,10 @@ export class GitService {
     options?: Partial<GitCloneOptions>
   ): Promise<void> {
     let args = ['clone', '--progress'];
+
+    if (options?.bare) {
+      args = [...args, '--bare'];
+    }
 
     if (options?.branch) {
       args = [...args, '--branch', options.branch];
@@ -236,6 +243,23 @@ export class GitService {
 
       await this.git(path, args);
     },
+    /**
+     * Delete a branch
+     *
+     * @see https://git-scm.com/docs/git-branch#Documentation/git-branch.txt---delete
+     *
+     * @param path Path to the repository
+     * @param branch Name of the branch to delete
+     */
+    delete: async (path: string, branch: string, force?: boolean) => {
+      let args = ['branch', '--delete'];
+
+      if (force === true) {
+        args = [...args, '--force'];
+      }
+
+      await this.git(path, [...args, branch]);
+    },
   };
 
   public remotes = {
@@ -310,6 +334,27 @@ export class GitService {
       await this.git(path, args);
     },
   };
+
+  /**
+   * Join two development histories together
+   *
+   * @see https://git-scm.com/docs/git-merge
+   */
+  public async merge(
+    path: string,
+    branch: string,
+    options?: Partial<GitMergeOptions>
+  ) {
+    let args = ['merge'];
+
+    if (options?.squash === true) {
+      args = [...args, '--squash'];
+    }
+
+    args = [...args, branch];
+
+    await this.git(path, args);
+  }
 
   /**
    * Reset current HEAD to the specified state
@@ -410,9 +455,11 @@ export class GitService {
    * @see https://git-scm.com/docs/git-commit
    *
    * @param path    Path to the repository
-   * @param message A message that describes the changes
+   * @param message An object describing the changes
    */
-  public async commit(path: string, message: string): Promise<void> {
+  public async commit(path: string, message: GitMessage): Promise<void> {
+    gitMessageSchema.parse(message);
+
     const user = await this.userService.get();
     if (!user) {
       throw new NoCurrentUserError();
@@ -420,7 +467,7 @@ export class GitService {
 
     const args = [
       'commit',
-      `--message=${message}`,
+      `--message=${JSON.stringify(message)}`,
       `--author=${user.name} <${user.email}>`,
     ];
     await this.git(path, args);
@@ -466,19 +513,24 @@ export class GitService {
       return line.trim() !== '';
     });
 
-    const lineObjArr = noEmptyLinesArr.map((line) => {
-      const lineArray = line.split('|');
-      return {
-        hash: lineArray[0],
-        message: lineArray[1],
-        author: {
-          name: lineArray[2],
-          email: lineArray[3],
-        },
-        datetime: datetime(lineArray[4]),
-        tag: this.refNameToTagName(lineArray[5] || ''),
-      };
-    });
+    const lineObjArr = await Promise.all(
+      noEmptyLinesArr.map(async (line) => {
+        const lineArray = line.split('|');
+        const tagId = this.refNameToTagName(lineArray[5] || '');
+        const tag = tagId ? await this.tags.read({ path, id: tagId }) : null;
+
+        return {
+          hash: lineArray[0],
+          message: JSON.parse(lineArray[1] || ''),
+          author: {
+            name: lineArray[2],
+            email: lineArray[3],
+          },
+          datetime: datetime(lineArray[4]),
+          tag,
+        };
+      })
+    );
 
     return lineObjArr.filter(this.isGitCommit.bind(this));
   }

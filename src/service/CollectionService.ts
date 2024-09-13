@@ -79,7 +79,10 @@ export class CollectionService
       collectionFileSchema
     );
     await this.gitService.add(projectPath, [collectionFilePath]);
-    await this.gitService.commit(projectPath, this.gitMessage.create);
+    await this.gitService.commit(projectPath, {
+      method: 'create',
+      reference: { objectType: 'collection', id },
+    });
 
     return this.toCollection(props.projectId, collectionFile);
   }
@@ -289,7 +292,10 @@ export class CollectionService
       collectionFileSchema
     );
     await this.gitService.add(projectPath, [collectionFilePath]);
-    await this.gitService.commit(projectPath, this.gitMessage.update);
+    await this.gitService.commit(projectPath, {
+      method: 'update',
+      reference: { objectType: 'collection', id: collectionFile.id },
+    });
 
     return this.toCollection(props.projectId, collectionFile);
   }
@@ -307,7 +313,10 @@ export class CollectionService
 
     await Fs.remove(collectionPath);
     await this.gitService.add(projectPath, [collectionPath]);
-    await this.gitService.commit(projectPath, this.gitMessage.delete);
+    await this.gitService.commit(projectPath, {
+      method: 'delete',
+      reference: { objectType: 'collection', id: props.id },
+    });
   }
 
   public async list(

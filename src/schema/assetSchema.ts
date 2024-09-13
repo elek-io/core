@@ -1,10 +1,5 @@
 import z from 'zod';
-import {
-  objectTypeSchema,
-  supportedAssetExtensionSchema,
-  supportedAssetMimeTypeSchema,
-  uuidSchema,
-} from './baseSchema.js';
+import { objectTypeSchema, uuidSchema } from './baseSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 import { gitCommitSchema } from './gitSchema.js';
 
@@ -12,8 +7,8 @@ export const assetFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.Enum.asset).readonly(),
   name: z.string(),
   description: z.string(),
-  extension: supportedAssetExtensionSchema.readonly(),
-  mimeType: supportedAssetMimeTypeSchema.readonly(),
+  extension: z.string().readonly(),
+  mimeType: z.string().readonly(),
   /**
    * Total size in bytes
    */

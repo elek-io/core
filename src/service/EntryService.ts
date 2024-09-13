@@ -116,7 +116,14 @@ export class EntryService
       entryFileSchema
     );
     await this.gitService.add(projectPath, [entryFilePath]);
-    await this.gitService.commit(projectPath, this.gitMessage.create);
+    await this.gitService.commit(projectPath, {
+      method: 'create',
+      reference: {
+        objectType: 'entry',
+        id: entryFile.id,
+        collectionId: props.collectionId,
+      },
+    });
 
     return entry;
   }
@@ -198,7 +205,14 @@ export class EntryService
       entryFileSchema
     );
     await this.gitService.add(projectPath, [entryFilePath]);
-    await this.gitService.commit(projectPath, this.gitMessage.update);
+    await this.gitService.commit(projectPath, {
+      method: 'update',
+      reference: {
+        objectType: 'entry',
+        id: entryFile.id,
+        collectionId: props.collectionId,
+      },
+    });
 
     return entry;
   }
@@ -218,7 +232,14 @@ export class EntryService
 
     await Fs.remove(entryFilePath);
     await this.gitService.add(projectPath, [entryFilePath]);
-    await this.gitService.commit(projectPath, this.gitMessage.delete);
+    await this.gitService.commit(projectPath, {
+      method: 'delete',
+      reference: {
+        objectType: 'entry',
+        id: props.id,
+        collectionId: props.collectionId,
+      },
+    });
   }
 
   public async list(props: ListEntriesProps) {

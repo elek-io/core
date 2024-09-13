@@ -1,6 +1,5 @@
-import { fileTypeFromFile } from 'file-type';
 import Fs from 'fs-extra';
-import isSvg from 'is-svg';
+import mime from 'mime';
 import {
   assetFileSchema,
   assetSchema,
@@ -13,9 +12,6 @@ import {
   SaveAssetProps,
   saveAssetSchema,
   serviceTypeSchema,
-  supportedAssetExtensionSchema,
-  supportedAssetMimeTypeSchema,
-  supportedAssetTypeSchema,
   updateAssetSchema,
   type Asset,
   type AssetFile,
@@ -70,8 +66,8 @@ export class AssetService
 
     const id = uuid();
     const projectPath = pathTo.project(props.projectId);
-    const fileType = await this.getSupportedFileTypeOrThrow(props.filePath);
-    const size = await this.getAssetSize(props.filePath);
+    const fileType = this.getFileType(props.filePath);
+    const size = await this.getFileSize(props.filePath);
     const assetPath = pathTo.asset(props.projectId, id, fileType.extension);
     const assetFilePath = pathTo.assetFile(props.projectId, id);
 
@@ -101,7 +97,10 @@ export class AssetService
     }
 
     await this.gitService.add(projectPath, [assetFilePath, assetPath]);
-    await this.gitService.commit(projectPath, this.gitMessage.create);
+    await this.gitService.commit(projectPath, {
+      method: 'create',
+      reference: { objectType: 'asset', id },
+    });
 
     return this.toAsset(props.projectId, assetFile);
   }
@@ -182,10 +181,8 @@ export class AssetService
     if (props.newFilePath) {
       // Overwrite the file itself (in LFS folder)...
 
-      const fileType = await this.getSupportedFileTypeOrThrow(
-        props.newFilePath
-      );
-      const size = await this.getAssetSize(props.newFilePath);
+      const fileType = this.getFileType(props.newFilePath);
+      const size = await this.getFileSize(props.newFilePath);
       const prevAssetPath = pathTo.asset(
         props.projectId,
         props.id,
@@ -214,7 +211,10 @@ export class AssetService
       assetFileSchema
     );
     await this.gitService.add(projectPath, [assetFilePath]);
-    await this.gitService.commit(projectPath, this.gitMessage.update);
+    await this.gitService.commit(projectPath, {
+      method: 'update',
+      reference: { objectType: 'asset', id: assetFile.id },
+    });
 
     return this.toAsset(props.projectId, assetFile);
   }
@@ -231,7 +231,10 @@ export class AssetService
     await Fs.remove(assetPath);
     await Fs.remove(assetFilePath);
     await this.gitService.add(projectPath, [assetFilePath, assetPath]);
-    await this.gitService.commit(projectPath, this.gitMessage.delete);
+    await this.gitService.commit(projectPath, {
+      method: 'delete',
+      reference: { objectType: 'asset', id: props.id },
+    });
   }
 
   public async list(props: ListAssetsProps): Promise<PaginatedList<Asset>> {
@@ -282,11 +285,11 @@ export class AssetService
   }
 
   /**
-   * Returns the size of an Asset in bytes
+   * Returns the size of an file in bytes
    *
-   * @param path Path of the Asset to get the size from
+   * @param path Path of the file to get the size from
    */
-  private async getAssetSize(path: string) {
+  private async getFileSize(path: string) {
     return (await Fs.stat(path)).size;
   }
 
@@ -325,31 +328,25 @@ export class AssetService
    *
    * @param filePath Path to the file to check
    */
-  private async getSupportedFileTypeOrThrow(filePath: string) {
-    const fileSize = (await Fs.stat(filePath)).size;
+  private getFileType(filePath: string) {
+    const mimeType = mime.getType(filePath);
 
-    // Only try to parse potential SVG's
-    // that are smaller than 500 kB
-    if (fileSize / 1000 <= 500) {
-      const fileBuffer = await Fs.readFile(filePath);
-      if (isSvg(fileBuffer.toString()) === true) {
-        return {
-          extension: supportedAssetExtensionSchema.Enum.svg,
-          mimeType: supportedAssetMimeTypeSchema.Enum['image/svg+xml'],
-        };
-      }
+    if (mimeType === null) {
+      throw new Error(`Unsupported MIME type of file "${filePath}"`);
     }
 
-    // We do not use fileBuffer here again because fromFile() is recommended
-    // @see https://www.npmjs.com/package/file-type#filetypefrombufferbuffer
-    const fileType = await fileTypeFromFile(filePath);
+    const extension = mime.getExtension(mimeType);
 
-    const result = supportedAssetTypeSchema.parse({
-      extension: fileType?.ext,
-      mimeType: fileType?.mime,
-    });
+    if (extension === null) {
+      throw new Error(
+        `Unsupported extension for MIME type "${mimeType}" of file "${filePath}"`
+      );
+    }
 
-    return result;
+    return {
+      extension,
+      mimeType,
+    };
   }
 
   /**

@@ -1,9 +1,5 @@
 import { z } from 'zod';
-import {
-  supportedAssetMimeTypeSchema,
-  translatableStringSchema,
-  uuidSchema,
-} from './baseSchema.js';
+import { translatableStringSchema, uuidSchema } from './baseSchema.js';
 import {
   valueContentReferenceToAssetSchema,
   valueContentReferenceToEntrySchema,
@@ -211,7 +207,6 @@ export const ReferenceFieldDefinitionBaseSchema =
 export const assetFieldDefinitionSchema =
   ReferenceFieldDefinitionBaseSchema.extend({
     fieldType: z.literal(FieldTypeSchema.Enum.asset),
-    allowedMimeTypes: z.array(supportedAssetMimeTypeSchema).min(1),
     min: z.number().nullable(),
     max: z.number().nullable(),
   });

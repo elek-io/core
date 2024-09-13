@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { uuidSchema } from './baseSchema.js';
-import { gitRepositoryPathSchema } from './gitSchema.js';
 
 export const serviceTypeSchema = z.enum([
   'Git',
@@ -82,6 +81,6 @@ export const listProjectsSchema = listSchema.omit({
 export type ListProjectsProps = z.infer<typeof listProjectsSchema>;
 
 export const listGitTagsSchema = z.object({
-  path: gitRepositoryPathSchema,
+  path: z.string(),
 });
 export type ListGitTagsProps = z.infer<typeof listGitTagsSchema>;

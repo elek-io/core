@@ -44,6 +44,24 @@ export async function getFileHash(path: string): Promise<string> {
 }
 
 /**
+ * Creates a new local "remote" repository.
+ * Meaning, simulating a remote repository on the local file system.
+ * Returns the path to the remote repository.
+ */
+export async function createLocalRemoteRepository() {
+  const remoteProject = await createProject('Remote Project');
+  const remoteProjectPath = Path.join(core.util.pathTo.tmp, remoteProject.id);
+  await core.git.clone(
+    core.util.pathTo.project(remoteProject.id),
+    remoteProjectPath,
+    { bare: true }
+  );
+  await Fs.remove(core.util.pathTo.project(remoteProject.id));
+
+  return remoteProjectPath;
+}
+
+/**
  * Creates a new Project for testing
  *
  * The Project has a special destroy method, that removes the Project again.
@@ -56,7 +74,7 @@ export async function createProject(name?: string, settings?: ProjectSettings) {
   });
 
   const destroy = async () => {
-    await core.projects.delete({ id: project.id });
+    await core.projects.delete({ id: project.id, force: true });
   };
 
   return { ...project, destroy };
@@ -125,7 +143,6 @@ export async function createCollection(projectId: string) {
         isDisabled: false,
         isRequired: true,
         isUnique: false,
-        allowedMimeTypes: ['image/jpeg'],
         min: null,
         max: null,
       },
