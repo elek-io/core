@@ -1,5 +1,5 @@
 import Fs from 'fs-extra';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { ProjectUpgradeError } from '../error/ProjectUpgradeError.js';
 import { RemoteOriginMissingError } from '../error/RemoteOriginMissingError.js';
 import { SynchronizeLocalChangesError } from '../error/SynchronizeLocalChangesError.js';
@@ -8,6 +8,7 @@ import {
   createAsset,
   createCollection,
   createEntry,
+  createLocalRemoteRepository,
   createProject,
   ensureCleanGitStatus,
 } from '../test/util.js';
@@ -15,8 +16,11 @@ import {
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
   let clonedProject: Project;
-  const isGithubAction = process.env?.['GITHUB_ACTIONS'];
-  const gitUrl = 'git@github.com:elek-io/project-test-1.git';
+  let remoteProjectPath: string;
+
+  afterAll(async function () {
+    await Fs.remove(remoteProjectPath);
+  });
 
   it.sequential(
     'should be able to create a new Project locally',
@@ -251,77 +255,71 @@ describe.sequential('Integration', function () {
     ).to.be.false;
   });
 
-  // @todo make this work inside Github Action - ideally we can add an SSH key to the Action that can read / write to the test repository
-  if (isGithubAction) {
-    console.warn('Running inside a Github Action - some tests are skipped');
-  } else {
-    it.sequential(
-      'should be able to clone an existing Project and verify that the remote origin URL was set',
-      { timeout: 20000 },
-      async function ({ task }) {
-        clonedProject = await core.projects.clone({ url: gitUrl });
-        expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id)))
-          .to.be.true;
-        expect(clonedProject.remoteOriginUrl).to.equal(gitUrl);
-        await ensureCleanGitStatus(task, clonedProject.id);
-      }
-    );
+  it.sequential(
+    'should be able to clone an existing Project and verify that the remote origin URL was set',
+    async function ({ task }) {
+      remoteProjectPath = await createLocalRemoteRepository();
 
-    it.sequential(
-      'should be able to update the cloned Project and verify there is a change',
-      async function ({ task }) {
-        await core.projects.update({ ...clonedProject, name: 'A new name' });
-        await createAsset(clonedProject.id);
-        const changes = await core.projects.getChanges({
-          id: clonedProject.id,
-        });
+      clonedProject = await core.projects.clone({ url: remoteProjectPath });
+      expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id))).to
+        .be.true;
+      expect(clonedProject.remoteOriginUrl).to.equal(remoteProjectPath);
+      await ensureCleanGitStatus(task, clonedProject.id);
+    }
+  );
 
-        expect(changes.ahead.length).to.equal(2);
-        await ensureCleanGitStatus(task, clonedProject.id);
-      }
-    );
+  it.sequential(
+    'should be able to update the cloned Project and verify there is a change',
+    async function ({ task }) {
+      await core.projects.update({ ...clonedProject, name: 'A new name' });
+      await createAsset(clonedProject.id);
+      const changes = await core.projects.getChanges({
+        id: clonedProject.id,
+      });
 
-    it.sequential(
-      'should fail to delete a Project with a remote origin but changes to push',
-      async function () {
-        await expect(
-          core.projects.delete({ id: clonedProject.id })
-        ).rejects.toThrowError(SynchronizeLocalChangesError);
-      }
-    );
+      expect(changes.ahead.length).to.equal(2);
+      await ensureCleanGitStatus(task, clonedProject.id);
+    }
+  );
 
-    it.sequential(
-      'should be able to synchronize the cloned Project with its remote',
-      { timeout: 20000, retry: 3 }, // Sometimes git fetch fails with "ssh: connect to host github.com port 22: Cannot allocate memory"
-      async function ({ task }) {
-        await core.projects.synchronize({ id: clonedProject.id });
-        const changes = await core.projects.getChanges({
-          id: clonedProject.id,
-        });
+  it.sequential(
+    'should fail to delete a Project with a remote origin but changes to push',
+    async function () {
+      await expect(
+        core.projects.delete({ id: clonedProject.id })
+      ).rejects.toThrowError(SynchronizeLocalChangesError);
+    }
+  );
 
-        expect(changes.ahead.length).to.equal(0);
-        await ensureCleanGitStatus(task, clonedProject.id);
-      }
-    );
+  it.sequential(
+    'should be able to synchronize the cloned Project with its remote',
+    async function ({ task }) {
+      await core.projects.synchronize({ id: clonedProject.id });
+      const changes = await core.projects.getChanges({
+        id: clonedProject.id,
+      });
 
-    it.sequential(
-      'should fail when trying to clone a Project twice',
-      { timeout: 20000 },
-      async function () {
-        await expect(
-          core.projects.clone({ url: gitUrl })
-        ).rejects.toThrowError();
-      }
-    );
+      expect(changes.ahead.length).to.equal(0);
+      await ensureCleanGitStatus(task, clonedProject.id);
+    }
+  );
 
-    it.sequential(
-      'should be able to delete the cloned Project locally',
-      async function () {
-        await core.projects.delete({ id: clonedProject.id });
+  it.sequential(
+    'should fail when trying to clone a Project twice',
+    async function () {
+      await expect(
+        core.projects.clone({ url: remoteProjectPath })
+      ).rejects.toThrowError();
+    }
+  );
 
-        expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id)))
-          .to.be.false;
-      }
-    );
-  }
+  it.sequential(
+    'should be able to delete the cloned Project locally',
+    async function () {
+      await core.projects.delete({ id: clonedProject.id });
+
+      expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id))).to
+        .be.false;
+    }
+  );
 });

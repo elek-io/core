@@ -111,6 +111,10 @@ export class GitService {
   ): Promise<void> {
     let args = ['clone', '--progress'];
 
+    if (options?.bare) {
+      args = [...args, '--bare'];
+    }
+
     if (options?.branch) {
       args = [...args, '--branch', options.branch];
     }
