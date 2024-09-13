@@ -143,7 +143,6 @@ export async function createCollection(projectId: string) {
         isDisabled: false,
         isRequired: true,
         isUnique: false,
-        allowedMimeTypes: ['image/jpeg'],
         min: null,
         max: null,
       },

@@ -207,7 +207,6 @@ export const ReferenceFieldDefinitionBaseSchema =
 export const assetFieldDefinitionSchema =
   ReferenceFieldDefinitionBaseSchema.extend({
     fieldType: z.literal(FieldTypeSchema.Enum.asset),
-    allowedMimeTypes: z.array(z.string()).min(1),
     min: z.number().nullable(),
     max: z.number().nullable(),
   });
