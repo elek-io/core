@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.11.1
+
+### Patch Changes
+
+- 609cd30: fix: reading multiple Assets with the same ID but different commit hashes from history, do not overwrite each other anymore
+
 ## 0.11.0
 
 ### Minor Changes
