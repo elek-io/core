@@ -94,10 +94,16 @@ describe.sequential('Integration', function () {
   it.sequential(
     'should be able to get an Asset of a specific commit',
     async function () {
+      const commitHash = asset.history.at(-1)?.hash;
+
+      if (!commitHash) {
+        throw new Error('No commit hash found');
+      }
+
       const assetFromHistory = await core.assets.read({
         projectId: project.id,
         id: asset.id,
-        commitHash: asset.history.pop()?.hash,
+        commitHash: commitHash,
       });
 
       expect(assetFromHistory.extension).to.equal('png');
@@ -109,6 +115,7 @@ describe.sequential('Integration', function () {
         await Fs.pathExists(
           core.util.pathTo.tmpAsset(
             assetFromHistory.id,
+            commitHash,
             assetFromHistory.extension
           )
         ),
@@ -119,6 +126,76 @@ describe.sequential('Integration', function () {
         'the copied file hash'
       ).to.equal(
         await getFileHash(Path.resolve('src/test/data/150x150.png')),
+        'the original file hash'
+      );
+    }
+  );
+
+  it.sequential(
+    'should be able to get the same Asset from multiple commits',
+    async function () {
+      const previousCommitHash = asset.history.at(-1)?.hash;
+      const currentCommitHash = asset.history.shift()?.hash;
+
+      if (!previousCommitHash || !currentCommitHash) {
+        throw new Error('No commit hash found');
+      }
+
+      const previousAssetFromHistory = await core.assets.read({
+        projectId: project.id,
+        id: asset.id,
+        commitHash: previousCommitHash,
+      });
+
+      const currentAssetFromHistory = await core.assets.read({
+        projectId: project.id,
+        id: asset.id,
+        commitHash: currentCommitHash,
+      });
+
+      expect(previousAssetFromHistory.extension).to.equal('png');
+      expect(previousAssetFromHistory.mimeType).to.equal('image/png');
+      expect(
+        previousAssetFromHistory.absolutePath.startsWith(core.util.pathTo.tmp)
+      ).to.equal(true);
+      expect(
+        await Fs.pathExists(
+          core.util.pathTo.tmpAsset(
+            previousAssetFromHistory.id,
+            previousCommitHash,
+            previousAssetFromHistory.extension
+          )
+        ),
+        'the Asset to be copied into the tmp directory'
+      ).to.be.true;
+      expect(
+        await getFileHash(previousAssetFromHistory.absolutePath),
+        'the copied file hash'
+      ).to.equal(
+        await getFileHash(Path.resolve('src/test/data/150x150.png')),
+        'the original file hash'
+      );
+
+      expect(currentAssetFromHistory.extension).to.equal('jpeg');
+      expect(currentAssetFromHistory.mimeType).to.equal('image/jpeg');
+      expect(
+        currentAssetFromHistory.absolutePath.startsWith(core.util.pathTo.tmp)
+      ).to.equal(true);
+      expect(
+        await Fs.pathExists(
+          core.util.pathTo.tmpAsset(
+            currentAssetFromHistory.id,
+            currentCommitHash,
+            currentAssetFromHistory.extension
+          )
+        ),
+        'the Asset to be copied into the tmp directory'
+      ).to.be.true;
+      expect(
+        await getFileHash(currentAssetFromHistory.absolutePath),
+        'the copied file hash'
+      ).to.equal(
+        await getFileHash(Path.resolve('src/test/data/150x150.jpeg')),
         'the original file hash'
       );
     }
@@ -160,7 +237,7 @@ describe.sequential('Integration', function () {
       await core.assets.save({
         projectId: project.id,
         id: asset.id,
-        commitHash: asset.history.pop()?.hash,
+        commitHash: asset.history.at(-1)?.hash,
         filePath: filePathToSaveToFromHistory,
       });
 

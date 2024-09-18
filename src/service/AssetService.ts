@@ -138,12 +138,12 @@ export class AssetService
         'binary'
       );
       await Fs.writeFile(
-        pathTo.tmpAsset(assetFile.id, assetFile.extension),
+        pathTo.tmpAsset(assetFile.id, props.commitHash, assetFile.extension),
         assetBlob,
         'binary'
       );
 
-      return this.toAsset(props.projectId, assetFile, true);
+      return this.toAsset(props.projectId, assetFile, props.commitHash);
     }
   }
 
@@ -302,12 +302,11 @@ export class AssetService
   private async toAsset(
     projectId: string,
     assetFile: AssetFile,
-    isFromHistory: boolean = false
+    commitHash?: string
   ): Promise<Asset> {
-    const assetPath =
-      isFromHistory === false
-        ? pathTo.asset(projectId, assetFile.id, assetFile.extension)
-        : pathTo.tmpAsset(assetFile.id, assetFile.extension);
+    const assetPath = commitHash
+      ? pathTo.tmpAsset(assetFile.id, commitHash, assetFile.extension)
+      : pathTo.asset(projectId, assetFile.id, assetFile.extension);
 
     const history = await this.gitService.log(pathTo.project(projectId), {
       filePath: pathTo.assetFile(projectId, assetFile.id),
