@@ -76,8 +76,8 @@ export const pathTo = {
   asset: (projectId: string, id: string, extension: string): string => {
     return Path.join(pathTo.lfs(projectId), `${id}.${extension}`);
   },
-  tmpAsset: (id: string, extension: string) => {
-    return Path.join(pathTo.tmp, `${id}.${extension}`);
+  tmpAsset: (id: string, commitHash: string, extension: string) => {
+    return Path.join(pathTo.tmp, `${id}.${commitHash}.${extension}`);
   },
 };
 
