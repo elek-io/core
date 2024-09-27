@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { assetExportSchema } from './assetSchema.js';
 import {
   objectTypeSchema,
@@ -46,18 +46,20 @@ export const projectFileSchema = baseFileSchema.extend({
 });
 export type ProjectFile = z.infer<typeof projectFileSchema>;
 
-export const projectSchema = projectFileSchema.extend({
-  remoteOriginUrl: z.string().nullable(),
-  /**
-   * Commit history of this Project
-   */
-  history: z.array(gitCommitSchema),
-  /**
-   * Full commit history of this Project
-   * including all Assets, Collections, Entries and other files
-   */
-  fullHistory: z.array(gitCommitSchema),
-});
+export const projectSchema = projectFileSchema
+  .extend({
+    remoteOriginUrl: z.string().nullable().openapi({
+      description: 'URL of the remote Git repository',
+    }),
+    history: z.array(gitCommitSchema).openapi({
+      description: 'Commit history of this Project',
+    }),
+    fullHistory: z.array(gitCommitSchema).openapi({
+      description:
+        'Full commit history of this Project including all Assets, Collections, Entries and other files',
+    }),
+  })
+  .openapi('Project');
 export type Project = z.infer<typeof projectSchema>;
 
 export const outdatedProjectSchema = projectFileSchema.pick({
