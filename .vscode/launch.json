@@ -5,10 +5,18 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Test",
+      "name": "All tests",
       "request": "launch",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "test", "ProjectService.test.ts"],
+      "runtimeArgs": ["run", "test"],
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node"
+    },
+    {
+      "name": "API tests",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "test", "api.test.ts"],
       "skipFiles": ["<node_internals>/**"],
       "type": "node"
     }
