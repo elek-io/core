@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.12.0
+
+### Minor Changes
+
+- 6e283f3: Added first local API routes to test inside elek.io Client
+
 ## 0.11.1
 
 ### Patch Changes
