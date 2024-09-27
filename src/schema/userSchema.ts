@@ -7,6 +7,16 @@ export const UserTypeSchema = z.enum(['local', 'cloud']);
 export const baseUserSchema = gitSignatureSchema.extend({
   userType: UserTypeSchema,
   language: supportedLanguageSchema,
+  localApi: z.object({
+    /**
+     * If set to true the local API is started whenever Core is initialized
+     */
+    isEnabled: z.boolean(),
+    /**
+     * The port the local API uses
+     */
+    port: z.number(),
+  }),
   window: z
     .object({
       width: z.number(),

@@ -12,6 +12,10 @@ await core.user.set({
   email: 'john.doe@test.com',
   language: 'en',
   window: null,
+  localApi: {
+    isEnabled: false,
+    port: 31310,
+  },
 });
 
 export default core;

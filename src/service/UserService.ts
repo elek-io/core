@@ -25,13 +25,13 @@ export class UserService {
   /**
    * Returns the User currently working with Core
    */
-  public async get(): Promise<User | undefined> {
+  public async get(): Promise<User | null> {
     try {
       return await this.jsonFileService.read(pathTo.userFile, userFileSchema);
     } catch (error) {
       this.logService.info('No User found');
 
-      return undefined;
+      return null;
     }
   }
 

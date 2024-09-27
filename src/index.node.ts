@@ -1,5 +1,6 @@
 import Fs from 'fs-extra';
 import { version as coreVersion } from '../package.json';
+import { LocalApi } from './api/index.js';
 import {
   constructorElekIoCoreSchema,
   Version,
@@ -39,6 +40,7 @@ export default class ElekIoCore {
   private readonly projectService: ProjectService;
   private readonly collectionService: CollectionService;
   private readonly entryService: EntryService;
+  private readonly localApi: LocalApi;
 
   constructor(props?: ConstructorElekIoCoreProps) {
     this.coreVersion = coreVersion;
@@ -92,6 +94,7 @@ export default class ElekIoCore {
       this.collectionService,
       this.entryService
     );
+    this.localApi = new LocalApi(this.logService, this.projectService);
 
     this.logService.info(`Initializing elek.io Core ${this.coreVersion}`, {
       options: this.options,
@@ -156,5 +159,13 @@ export default class ElekIoCore {
    */
   public get entries(): EntryService {
     return this.entryService;
+  }
+
+  /**
+   * Allows starting and stopping a REST API
+   * to allow developers to read local Project data
+   */
+  public get api(): LocalApi {
+    return this.localApi;
   }
 }

@@ -22,6 +22,15 @@ export interface PaginatedList<T> {
   list: T[];
 }
 
+export function paginatedListOf<T extends z.ZodTypeAny>(schema: T) {
+  return z.object({
+    total: z.number(),
+    limit: z.number(),
+    offset: z.number(),
+    list: z.array(schema),
+  });
+}
+
 export interface PaginationOptions {
   limit: number;
   offset: number;
@@ -57,8 +66,15 @@ export interface CrudServiceWithListCount<T> extends CrudService<T> {
 
 const listSchema = z.object({
   projectId: uuidSchema,
-  limit: z.number().optional(),
-  offset: z.number().optional(),
+  limit: z.number().optional().openapi({
+    default: 15,
+    description: 'The maximum number of items to return',
+  }),
+  offset: z.number().optional().openapi({
+    default: 0,
+    description:
+      'The number of items to skip before starting to collect the result set',
+  }),
 });
 
 export const listCollectionsSchema = listSchema;
