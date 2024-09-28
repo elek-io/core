@@ -66,15 +66,8 @@ export interface CrudServiceWithListCount<T> extends CrudService<T> {
 
 const listSchema = z.object({
   projectId: uuidSchema,
-  limit: z.number().optional().openapi({
-    default: 15,
-    description: 'The maximum number of items to return',
-  }),
-  offset: z.number().optional().openapi({
-    default: 0,
-    description:
-      'The number of items to skip before starting to collect the result set',
-  }),
+  limit: z.number().optional(),
+  offset: z.number().optional(),
 });
 
 export const listCollectionsSchema = listSchema;

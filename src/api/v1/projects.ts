@@ -1,6 +1,5 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  listProjectsSchema,
   paginatedListOf,
   projectSchema,
   uuidSchema,
@@ -68,7 +67,17 @@ export const listProjectsRoute = createRoute({
   path: '/',
   operationId: 'listProjects',
   request: {
-    query: listProjectsSchema,
+    query: z.object({
+      limit: z.string().pipe(z.coerce.number()).optional().openapi({
+        default: '15',
+        description: 'The maximum number of items to return',
+      }),
+      offset: z.string().pipe(z.coerce.number()).optional().openapi({
+        default: '0',
+        description:
+          'The number of items to skip before starting to collect the result set',
+      }),
+    }),
   },
   responses: {
     200: {
