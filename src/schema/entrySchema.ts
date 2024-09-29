@@ -1,18 +1,8 @@
-import z from 'zod';
-import type { Asset } from './assetSchema.js';
-import {
-  objectTypeSchema,
-  uuidSchema,
-  type SupportedLanguage,
-} from './baseSchema.js';
+import { z } from '@hono/zod-openapi';
+import { objectTypeSchema, uuidSchema } from './baseSchema.js';
 import { baseFileSchema } from './fileSchema.js';
-import { GitCommit, gitCommitSchema } from './gitSchema.js';
-import {
-  resolvedValueSchema,
-  valueSchema,
-  type DirectValue,
-  type ReferencedValue,
-} from './valueSchema.js';
+import { gitCommitSchema } from './gitSchema.js';
+import { valueSchema } from './valueSchema.js';
 
 export const entryFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.Enum.entry).readonly(),
@@ -20,26 +10,15 @@ export const entryFileSchema = baseFileSchema.extend({
 });
 export type EntryFile = z.infer<typeof entryFileSchema>;
 
-// @see https://github.com/colinhacks/zod?tab=readme-ov-file#recursive-types
-export type Entry = z.infer<typeof entryFileSchema> & {
-  values: (
-    | DirectValue
-    | (ReferencedValue & {
-        content: Partial<Record<SupportedLanguage, (Asset | Entry)[]>>;
-      })
-  )[];
-  /**
-   * Commit history of this Entry
-   */
-  history: GitCommit[];
-};
-export const entrySchema = entryFileSchema.extend({
-  values: z.array(z.lazy(() => resolvedValueSchema)),
-  /**
-   * Commit history of this Entry
-   */
-  history: z.array(gitCommitSchema),
-}) satisfies z.ZodType<Entry>;
+export const entrySchema = entryFileSchema
+  .extend({
+    /**
+     * Commit history of this Entry
+     */
+    history: z.array(gitCommitSchema),
+  })
+  .openapi('Entry');
+export type Entry = z.infer<typeof entrySchema>;
 
 export const entryExportSchema = entrySchema.extend({});
 export type EntryExport = z.infer<typeof entryExportSchema>;
