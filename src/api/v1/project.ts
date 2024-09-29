@@ -18,18 +18,18 @@ export class ProjectApiV1 {
   }
 
   private registerRoutes(): void {
-    this.api.openapi(countProjectsRoute, async (context) => {
-      const count = await this.projectService.count();
-
-      return context.json(count, 200);
-    });
-
     this.api.openapi(listProjectsRoute, async (context) => {
       const { limit, offset } = context.req.valid('query');
 
       const projects = await this.projectService.list({ limit, offset });
 
       return context.json(projects, 200);
+    });
+
+    this.api.openapi(countProjectsRoute, async (context) => {
+      const count = await this.projectService.count();
+
+      return context.json(count, 200);
     });
 
     this.api.openapi(readProjectRoute, async (context) => {
@@ -41,24 +41,6 @@ export class ProjectApiV1 {
     });
   }
 }
-
-export const countProjectsRoute = createRoute({
-  tags: ['Projects'],
-  description: 'Counts all Projects you currently have access to',
-  method: 'get',
-  path: '/count',
-  operationId: 'countProjects',
-  responses: {
-    200: {
-      content: {
-        'application/json': {
-          schema: z.number(),
-        },
-      },
-      description: 'The number of Projects you have acces to',
-    },
-  },
-});
 
 export const listProjectsRoute = createRoute({
   tags: ['Projects'],
@@ -87,6 +69,24 @@ export const listProjectsRoute = createRoute({
         },
       },
       description: 'A list of Projects you have access to',
+    },
+  },
+});
+
+export const countProjectsRoute = createRoute({
+  tags: ['Projects'],
+  description: 'Counts all Projects you currently have access to',
+  method: 'get',
+  path: '/count',
+  operationId: 'countProjects',
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.number(),
+        },
+      },
+      description: 'The number of Projects you have acces to',
     },
   },
 });

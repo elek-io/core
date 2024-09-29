@@ -18,13 +18,6 @@ export class EntryApiV1 {
   }
 
   private registerRoutes(): void {
-    this.api.openapi(countEntriesRoute, async (context) => {
-      const { projectId, collectionId } = context.req.valid('param');
-      const count = await this.entryService.count({ projectId, collectionId });
-
-      return context.json(count, 200);
-    });
-
     this.api.openapi(listEntriesRoute, async (context) => {
       const { projectId, collectionId } = context.req.valid('param');
       const { limit, offset } = context.req.valid('query');
@@ -37,6 +30,13 @@ export class EntryApiV1 {
       });
 
       return context.json(entries, 200);
+    });
+
+    this.api.openapi(countEntriesRoute, async (context) => {
+      const { projectId, collectionId } = context.req.valid('param');
+      const count = await this.entryService.count({ projectId, collectionId });
+
+      return context.json(count, 200);
     });
 
     this.api.openapi(readEntryRoute, async (context) => {
@@ -52,40 +52,6 @@ export class EntryApiV1 {
     });
   }
 }
-
-export const countEntriesRoute = createRoute({
-  tags: ['Entries'],
-  description: 'Counts all Entries of the given Project',
-  method: 'get',
-  path: '/count',
-  operationId: 'countEntries',
-  request: {
-    params: z.object({
-      projectId: uuidSchema.openapi({
-        param: {
-          name: 'projectId',
-          in: 'path',
-        },
-      }),
-      collectionId: uuidSchema.openapi({
-        param: {
-          name: 'collectionId',
-          in: 'path',
-        },
-      }),
-    }),
-  },
-  responses: {
-    200: {
-      content: {
-        'application/json': {
-          schema: z.number(),
-        },
-      },
-      description: 'The number of Entries of the given Project',
-    },
-  },
-});
 
 export const listEntriesRoute = createRoute({
   tags: ['Entries'],
@@ -128,6 +94,40 @@ export const listEntriesRoute = createRoute({
         },
       },
       description: 'A list of Entries of the given Project',
+    },
+  },
+});
+
+export const countEntriesRoute = createRoute({
+  tags: ['Entries'],
+  description: 'Counts all Entries of the given Project',
+  method: 'get',
+  path: '/count',
+  operationId: 'countEntries',
+  request: {
+    params: z.object({
+      projectId: uuidSchema.openapi({
+        param: {
+          name: 'projectId',
+          in: 'path',
+        },
+      }),
+      collectionId: uuidSchema.openapi({
+        param: {
+          name: 'collectionId',
+          in: 'path',
+        },
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.number(),
+        },
+      },
+      description: 'The number of Entries of the given Project',
     },
   },
 });

@@ -18,13 +18,6 @@ export class CollectionApiV1 {
   }
 
   private registerRoutes(): void {
-    this.api.openapi(countCollectionsRoute, async (context) => {
-      const { projectId } = context.req.valid('param');
-      const count = await this.collectionService.count({ projectId });
-
-      return context.json(count, 200);
-    });
-
     this.api.openapi(listCollectionsRoute, async (context) => {
       const { projectId } = context.req.valid('param');
       const { limit, offset } = context.req.valid('query');
@@ -36,6 +29,13 @@ export class CollectionApiV1 {
       });
 
       return context.json(collections, 200);
+    });
+
+    this.api.openapi(countCollectionsRoute, async (context) => {
+      const { projectId } = context.req.valid('param');
+      const count = await this.collectionService.count({ projectId });
+
+      return context.json(count, 200);
     });
 
     this.api.openapi(readCollectionRoute, async (context) => {
@@ -50,34 +50,6 @@ export class CollectionApiV1 {
     });
   }
 }
-
-export const countCollectionsRoute = createRoute({
-  tags: ['Collections'],
-  description: 'Counts all Collections of the given Project',
-  method: 'get',
-  path: '/count',
-  operationId: 'countCollections',
-  request: {
-    params: z.object({
-      projectId: uuidSchema.openapi({
-        param: {
-          name: 'projectId',
-          in: 'path',
-        },
-      }),
-    }),
-  },
-  responses: {
-    200: {
-      content: {
-        'application/json': {
-          schema: z.number(),
-        },
-      },
-      description: 'The number of Collections of the given Project',
-    },
-  },
-});
 
 export const listCollectionsRoute = createRoute({
   tags: ['Collections'],
@@ -114,6 +86,34 @@ export const listCollectionsRoute = createRoute({
         },
       },
       description: 'A list of Collections of the given Project',
+    },
+  },
+});
+
+export const countCollectionsRoute = createRoute({
+  tags: ['Collections'],
+  description: 'Counts all Collections of the given Project',
+  method: 'get',
+  path: '/count',
+  operationId: 'countCollections',
+  request: {
+    params: z.object({
+      projectId: uuidSchema.openapi({
+        param: {
+          name: 'projectId',
+          in: 'path',
+        },
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.number(),
+        },
+      },
+      description: 'The number of Collections of the given Project',
     },
   },
 });
