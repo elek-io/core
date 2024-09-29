@@ -80,8 +80,7 @@ export default class ElekIoCore {
       this.logService,
       this.jsonFileService,
       this.gitService,
-      this.collectionService,
-      this.assetService
+      this.collectionService
     );
     this.projectService = new ProjectService(
       this.coreVersion,
@@ -94,7 +93,12 @@ export default class ElekIoCore {
       this.collectionService,
       this.entryService
     );
-    this.localApi = new LocalApi(this.logService, this.projectService);
+    this.localApi = new LocalApi(
+      this.logService,
+      this.projectService,
+      this.collectionService,
+      this.entryService
+    );
 
     this.logService.info(`Initializing elek.io Core ${this.coreVersion}`, {
       options: this.options,

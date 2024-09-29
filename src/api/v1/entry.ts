@@ -1,129 +1,64 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  collectionSchema,
+  entrySchema,
   paginatedListOf,
   uuidSchema,
 } from '../../schema/index.js';
-import { CollectionService } from '../../service/index.js';
+import { EntryService } from '../../service/index.js';
 
-export class CollectionApiV1 {
+export class EntryApiV1 {
   public readonly api: OpenAPIHono;
-  private collectionService: CollectionService;
+  private entryService: EntryService;
 
-  constructor(collectionService: CollectionService) {
-    this.collectionService = collectionService;
+  constructor(entryService: EntryService) {
+    this.entryService = entryService;
     this.api = new OpenAPIHono();
 
     this.registerRoutes();
   }
 
   private registerRoutes(): void {
-    this.api.openapi(countCollectionsRoute, async (context) => {
-      const { projectId } = context.req.valid('param');
-      const count = await this.collectionService.count({ projectId });
+    this.api.openapi(countEntriesRoute, async (context) => {
+      const { projectId, collectionId } = context.req.valid('param');
+      const count = await this.entryService.count({ projectId, collectionId });
 
       return context.json(count, 200);
     });
 
-    this.api.openapi(listCollectionsRoute, async (context) => {
-      const { projectId } = context.req.valid('param');
+    this.api.openapi(listEntriesRoute, async (context) => {
+      const { projectId, collectionId } = context.req.valid('param');
       const { limit, offset } = context.req.valid('query');
 
-      const collections = await this.collectionService.list({
+      const entries = await this.entryService.list({
         projectId,
+        collectionId,
         limit,
         offset,
       });
 
-      return context.json(collections, 200);
+      return context.json(entries, 200);
     });
 
-    this.api.openapi(readCollectionRoute, async (context) => {
-      const { projectId, collectionId } = context.req.valid('param');
+    this.api.openapi(readEntryRoute, async (context) => {
+      const { projectId, collectionId, entryId } = context.req.valid('param');
 
-      const collection = await this.collectionService.read({
+      const entry = await this.entryService.read({
         projectId,
-        id: collectionId,
+        collectionId,
+        id: entryId,
       });
 
-      return context.json(collection, 200);
+      return context.json(entry, 200);
     });
   }
 }
 
-export const countCollectionsRoute = createRoute({
-  tags: ['Collections'],
-  description: 'Counts all Collections of the given Project',
+export const countEntriesRoute = createRoute({
+  tags: ['Entries'],
+  description: 'Counts all Entries of the given Project',
   method: 'get',
   path: '/count',
-  operationId: 'countCollections',
-  request: {
-    params: z.object({
-      projectId: uuidSchema.openapi({
-        param: {
-          name: 'projectId',
-          in: 'path',
-        },
-      }),
-    }),
-  },
-  responses: {
-    200: {
-      content: {
-        'application/json': {
-          schema: z.number(),
-        },
-      },
-      description: 'The number of Collections of the given Project',
-    },
-  },
-});
-
-export const listCollectionsRoute = createRoute({
-  tags: ['Collections'],
-  description: 'Lists all Collections of the given Project',
-  method: 'get',
-  path: '/',
-  operationId: 'listCollections',
-  request: {
-    params: z.object({
-      projectId: uuidSchema.openapi({
-        param: {
-          name: 'projectId',
-          in: 'path',
-        },
-      }),
-    }),
-    query: z.object({
-      limit: z.string().pipe(z.coerce.number()).optional().openapi({
-        default: '15',
-        description: 'The maximum number of items to return',
-      }),
-      offset: z.string().pipe(z.coerce.number()).optional().openapi({
-        default: '0',
-        description:
-          'The number of items to skip before starting to collect the result set',
-      }),
-    }),
-  },
-  responses: {
-    200: {
-      content: {
-        'application/json': {
-          schema: paginatedListOf(collectionSchema),
-        },
-      },
-      description: 'A list of Collections of the given Project',
-    },
-  },
-});
-
-export const readCollectionRoute = createRoute({
-  tags: ['Collections'],
-  description: 'Retrieve a Project by ID',
-  method: 'get',
-  path: '/{collectionId}',
-  operationId: 'readCollection',
+  operationId: 'countEntries',
   request: {
     params: z.object({
       projectId: uuidSchema.openapi({
@@ -144,7 +79,92 @@ export const readCollectionRoute = createRoute({
     200: {
       content: {
         'application/json': {
-          schema: collectionSchema,
+          schema: z.number(),
+        },
+      },
+      description: 'The number of Entries of the given Project',
+    },
+  },
+});
+
+export const listEntriesRoute = createRoute({
+  tags: ['Entries'],
+  description: 'Lists all Entries of the given Project',
+  method: 'get',
+  path: '/',
+  operationId: 'listEntries',
+  request: {
+    params: z.object({
+      projectId: uuidSchema.openapi({
+        param: {
+          name: 'projectId',
+          in: 'path',
+        },
+      }),
+      collectionId: uuidSchema.openapi({
+        param: {
+          name: 'collectionId',
+          in: 'path',
+        },
+      }),
+    }),
+    query: z.object({
+      limit: z.string().pipe(z.coerce.number()).optional().openapi({
+        default: '15',
+        description: 'The maximum number of items to return',
+      }),
+      offset: z.string().pipe(z.coerce.number()).optional().openapi({
+        default: '0',
+        description:
+          'The number of items to skip before starting to collect the result set',
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: paginatedListOf(entrySchema),
+        },
+      },
+      description: 'A list of Entries of the given Project',
+    },
+  },
+});
+
+export const readEntryRoute = createRoute({
+  tags: ['Entries'],
+  description: 'Retrieve a Project by ID',
+  method: 'get',
+  path: '/{entryId}',
+  operationId: 'readCollection',
+  request: {
+    params: z.object({
+      projectId: uuidSchema.openapi({
+        param: {
+          name: 'projectId',
+          in: 'path',
+        },
+      }),
+      collectionId: uuidSchema.openapi({
+        param: {
+          name: 'collectionId',
+          in: 'path',
+        },
+      }),
+      entryId: uuidSchema.openapi({
+        param: {
+          name: 'entryId',
+          in: 'path',
+        },
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: entrySchema,
         },
       },
       description: 'The requested Collection',

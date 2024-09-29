@@ -6,27 +6,32 @@ import type { Server } from 'node:http';
 import { Http2SecureServer, Http2Server } from 'node:http2';
 import {
   CollectionService,
+  EntryService,
   LogService,
   ProjectService,
 } from '../service/index.js';
 import { CollectionApiV1 } from './v1/collection.js';
+import { EntryApiV1 } from './v1/entry.js';
 import { ProjectApiV1 } from './v1/project.js';
 
 export class LocalApi {
   private logService: LogService;
   private projectService: ProjectService;
   private collectionService: CollectionService;
+  private entryService: EntryService;
   private api: OpenAPIHono;
   private server: Server | Http2Server | Http2SecureServer | null = null;
 
   constructor(
     logService: LogService,
     projectService: ProjectService,
-    collectionService: CollectionService
+    collectionService: CollectionService,
+    entryService: EntryService
   ) {
     this.logService = logService;
     this.projectService = projectService;
     this.collectionService = collectionService;
+    this.entryService = entryService;
     this.api = new OpenAPIHono();
 
     this.registerRoutesV1();
@@ -133,6 +138,10 @@ export class LocalApi {
     apiV1.route(
       '/projects/{projectId}/collections',
       new CollectionApiV1(this.collectionService).api
+    );
+    apiV1.route(
+      '/projects/{projectId}/collections/{collectionId}/entries',
+      new EntryApiV1(this.entryService).api
     );
 
     this.api.route('/v1', apiV1);
