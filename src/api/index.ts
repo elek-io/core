@@ -4,18 +4,29 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { cors } from 'hono/cors';
 import type { Server } from 'node:http';
 import { Http2SecureServer, Http2Server } from 'node:http2';
-import { LogService, ProjectService } from '../service/index.js';
-import { ProjectsApiV1 } from './v1/projects.js';
+import {
+  CollectionService,
+  LogService,
+  ProjectService,
+} from '../service/index.js';
+import { CollectionApiV1 } from './v1/collection.js';
+import { ProjectApiV1 } from './v1/project.js';
 
 export class LocalApi {
   private logService: LogService;
   private projectService: ProjectService;
+  private collectionService: CollectionService;
   private api: OpenAPIHono;
   private server: Server | Http2Server | Http2SecureServer | null = null;
 
-  constructor(logService: LogService, projectService: ProjectService) {
+  constructor(
+    logService: LogService,
+    projectService: ProjectService,
+    collectionService: CollectionService
+  ) {
     this.logService = logService;
     this.projectService = projectService;
+    this.collectionService = collectionService;
     this.api = new OpenAPIHono();
 
     this.registerRoutesV1();
@@ -118,8 +129,11 @@ export class LocalApi {
 
     apiV1.get('/ui', swaggerUI({ url: '/v1/openapi.json' }));
 
-    const projectsV1 = new ProjectsApiV1(this.projectService);
-    apiV1.route('/projects', projectsV1.api);
+    apiV1.route('/projects', new ProjectApiV1(this.projectService).api);
+    apiV1.route(
+      '/projects/{projectId}/collections',
+      new CollectionApiV1(this.collectionService).api
+    );
 
     this.api.route('/v1', apiV1);
   }

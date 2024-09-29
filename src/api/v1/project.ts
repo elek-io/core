@@ -6,7 +6,7 @@ import {
 } from '../../schema/index.js';
 import { ProjectService } from '../../service/index.js';
 
-export class ProjectsApiV1 {
+export class ProjectApiV1 {
   public readonly api: OpenAPIHono;
   private projectService: ProjectService;
 
@@ -33,9 +33,9 @@ export class ProjectsApiV1 {
     });
 
     this.api.openapi(readProjectRoute, async (context) => {
-      const { id } = context.req.valid('param');
+      const { projectId } = context.req.valid('param');
 
-      const project = await this.projectService.read({ id });
+      const project = await this.projectService.read({ id: projectId });
 
       return context.json(project, 200);
     });
@@ -95,13 +95,13 @@ export const readProjectRoute = createRoute({
   tags: ['Projects'],
   description: 'Retrieve a Project by ID',
   method: 'get',
-  path: '/{id}',
+  path: '/{projectId}',
   operationId: 'readProject',
   request: {
     params: z.object({
-      id: uuidSchema.openapi({
+      projectId: uuidSchema.openapi({
         param: {
-          name: 'id',
+          name: 'projectId',
           in: 'path',
         },
       }),
