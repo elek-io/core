@@ -97,7 +97,8 @@ export default class ElekIoCore {
       this.logService,
       this.projectService,
       this.collectionService,
-      this.entryService
+      this.entryService,
+      this.assetService
     );
 
     this.logService.info(`Initializing elek.io Core ${this.coreVersion}`, {

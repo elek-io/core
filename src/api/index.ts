@@ -5,11 +5,13 @@ import { cors } from 'hono/cors';
 import type { Server } from 'node:http';
 import { Http2SecureServer, Http2Server } from 'node:http2';
 import {
+  AssetService,
   CollectionService,
   EntryService,
   LogService,
   ProjectService,
 } from '../service/index.js';
+import { AssetApiV1 } from './v1/asset.js';
 import { CollectionApiV1 } from './v1/collection.js';
 import { EntryApiV1 } from './v1/entry.js';
 import { ProjectApiV1 } from './v1/project.js';
@@ -19,6 +21,7 @@ export class LocalApi {
   private projectService: ProjectService;
   private collectionService: CollectionService;
   private entryService: EntryService;
+  private assetService: AssetService;
   private api: OpenAPIHono;
   private server: Server | Http2Server | Http2SecureServer | null = null;
 
@@ -26,12 +29,14 @@ export class LocalApi {
     logService: LogService,
     projectService: ProjectService,
     collectionService: CollectionService,
-    entryService: EntryService
+    entryService: EntryService,
+    assetService: AssetService
   ) {
     this.logService = logService;
     this.projectService = projectService;
     this.collectionService = collectionService;
     this.entryService = entryService;
+    this.assetService = assetService;
     this.api = new OpenAPIHono();
 
     this.registerRoutesV1();
@@ -142,6 +147,10 @@ export class LocalApi {
     apiV1.route(
       '/projects/{projectId}/collections/{collectionId}/entries',
       new EntryApiV1(this.entryService).api
+    );
+    apiV1.route(
+      '/projects/{projectId}/assets',
+      new AssetApiV1(this.assetService).api
     );
 
     this.api.route('/v1', apiV1);
