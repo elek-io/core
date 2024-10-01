@@ -11,10 +11,12 @@ import {
   LogService,
   ProjectService,
 } from '../service/index.js';
-import { AssetApiV1 } from './v1/asset.js';
-import { CollectionApiV1 } from './v1/collection.js';
-import { EntryApiV1 } from './v1/entry.js';
-import { ProjectApiV1 } from './v1/project.js';
+import {
+  AssetApiV1,
+  CollectionApiV1,
+  EntryApiV1,
+  ProjectApiV1,
+} from './v1/index.js';
 
 export class LocalApi {
   private logService: LogService;
@@ -139,19 +141,10 @@ export class LocalApi {
 
     apiV1.get('/ui', swaggerUI({ url: '/v1/openapi.json' }));
 
-    apiV1.route('/projects', new ProjectApiV1(this.projectService).api);
-    apiV1.route(
-      '/projects/{projectId}/collections',
-      new CollectionApiV1(this.collectionService).api
-    );
-    apiV1.route(
-      '/projects/{projectId}/collections/{collectionId}/entries',
-      new EntryApiV1(this.entryService).api
-    );
-    apiV1.route(
-      '/projects/{projectId}/assets',
-      new AssetApiV1(this.assetService).api
-    );
+    apiV1.route('/', new ProjectApiV1(this.projectService).api);
+    apiV1.route('/', new CollectionApiV1(this.collectionService).api);
+    apiV1.route('/', new EntryApiV1(this.entryService).api);
+    apiV1.route('/', new AssetApiV1(this.assetService).api);
 
     this.api.route('/v1', apiV1);
   }

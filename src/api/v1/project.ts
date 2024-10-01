@@ -46,7 +46,7 @@ export const listProjectsRoute = createRoute({
   tags: ['Projects'],
   description: 'Lists all Projects you currently have access to',
   method: 'get',
-  path: '/',
+  path: '/projects',
   operationId: 'listProjects',
   request: {
     query: z.object({
@@ -77,7 +77,7 @@ export const countProjectsRoute = createRoute({
   tags: ['Projects'],
   description: 'Counts all Projects you currently have access to',
   method: 'get',
-  path: '/count',
+  path: '/projects/count',
   operationId: 'countProjects',
   responses: {
     200: {
@@ -95,7 +95,7 @@ export const readProjectRoute = createRoute({
   tags: ['Projects'],
   description: 'Retrieve a Project by ID',
   method: 'get',
-  path: '/{projectId}',
+  path: '/projects/{projectId}',
   operationId: 'readProject',
   request: {
     params: z.object({

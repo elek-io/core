@@ -55,7 +55,7 @@ export const listCollectionsRoute = createRoute({
   tags: ['Collections'],
   description: 'Lists all Collections of the given Project',
   method: 'get',
-  path: '/',
+  path: '/projects/{projectId}/collections',
   operationId: 'listCollections',
   request: {
     params: z.object({
@@ -94,7 +94,7 @@ export const countCollectionsRoute = createRoute({
   tags: ['Collections'],
   description: 'Counts all Collections of the given Project',
   method: 'get',
-  path: '/count',
+  path: '/projects/{projectId}/collections/count',
   operationId: 'countCollections',
   request: {
     params: z.object({
@@ -122,7 +122,7 @@ export const readCollectionRoute = createRoute({
   tags: ['Collections'],
   description: 'Retrieve a Project by ID',
   method: 'get',
-  path: '/{collectionId}',
+  path: '/projects/{projectId}/collections/{collectionId}',
   operationId: 'readCollection',
   request: {
     params: z.object({

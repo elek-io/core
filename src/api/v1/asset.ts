@@ -55,7 +55,7 @@ export const listAssetsRoute = createRoute({
   tags: ['Assets'],
   description: 'Lists all Assets of the given Project',
   method: 'get',
-  path: '/',
+  path: '/projects/{projectId}/assets',
   operationId: 'listAssets',
   request: {
     params: z.object({
@@ -94,7 +94,7 @@ export const countAssetsRoute = createRoute({
   tags: ['Assets'],
   description: 'Counts all Assets of the given Project',
   method: 'get',
-  path: '/count',
+  path: '/projects/{projectId}/assets/count',
   operationId: 'countAssets',
   request: {
     params: z.object({
@@ -122,7 +122,7 @@ export const readAssetRoute = createRoute({
   tags: ['Assets'],
   description: 'Retrieve an Asset by ID',
   method: 'get',
-  path: '/{assetId}',
+  path: '/projects/{projectId}/assets/{assetId}',
   operationId: 'readAsset',
   request: {
     params: z.object({
