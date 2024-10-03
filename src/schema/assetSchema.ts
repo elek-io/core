@@ -1,4 +1,4 @@
-import z from 'zod';
+import { z } from '@hono/zod-openapi';
 import { objectTypeSchema, uuidSchema } from './baseSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 import { gitCommitSchema } from './gitSchema.js';
@@ -16,16 +16,18 @@ export const assetFileSchema = baseFileSchema.extend({
 });
 export type AssetFile = z.infer<typeof assetFileSchema>;
 
-export const assetSchema = assetFileSchema.extend({
-  /**
-   * Absolute path on this filesystem
-   */
-  absolutePath: z.string().readonly(),
-  /**
-   * Commit history of this Asset
-   */
-  history: z.array(gitCommitSchema),
-});
+export const assetSchema = assetFileSchema
+  .extend({
+    /**
+     * Absolute path on this filesystem
+     */
+    absolutePath: z.string().readonly(),
+    /**
+     * Commit history of this Asset
+     */
+    history: z.array(gitCommitSchema),
+  })
+  .openapi('Asset');
 export type Asset = z.infer<typeof assetSchema>;
 
 export const assetExportSchema = assetSchema.extend({});

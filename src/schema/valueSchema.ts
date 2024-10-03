@@ -1,5 +1,4 @@
 import z from 'zod';
-import { assetSchema, type Asset } from './assetSchema.js';
 import {
   objectTypeSchema,
   translatableArrayOf,
@@ -8,7 +7,6 @@ import {
   translatableStringSchema,
   uuidSchema,
 } from './baseSchema.js';
-import { entrySchema, type Entry } from './entrySchema.js';
 
 export const ValueTypeSchema = z.enum([
   'string',
@@ -100,17 +98,6 @@ export const valueContentReferenceSchema = z.union([
 ]);
 export type ValueContentReference = z.infer<typeof valueContentReferenceSchema>;
 
-export const resolvedValueContentReferenceSchema: z.ZodUnion<
-  [z.ZodType<Asset>, z.ZodType<Entry>]
-> = z.union([
-  assetSchema,
-  z.lazy(() => entrySchema), // Circular dependency / recursive type @see https://github.com/colinhacks/zod?tab=readme-ov-file#recursive-types
-  // resolvedValueContentReferenceToSharedValueSchema,
-]);
-export type ResolvedValueContentReference = z.infer<
-  typeof resolvedValueContentReferenceSchema
->;
-
 export const directValueBaseSchema = z.object({
   objectType: z.literal(objectTypeSchema.Enum.value).readonly(),
   fieldDefinitionId: uuidSchema.readonly(),
@@ -151,19 +138,6 @@ export type ReferencedValue = z.infer<typeof referencedValueSchema>;
 
 export const valueSchema = z.union([directValueSchema, referencedValueSchema]);
 export type Value = z.infer<typeof valueSchema>;
-
-export const resolvedReferencedValueSchema = referencedValueSchema.extend({
-  content: translatableArrayOf(resolvedValueContentReferenceSchema),
-});
-export type ResolvedReferencedValue = z.infer<
-  typeof resolvedReferencedValueSchema
->;
-
-export const resolvedValueSchema = z.union([
-  directValueSchema,
-  resolvedReferencedValueSchema,
-]);
-export type ResolvedValue = z.infer<typeof resolvedValueSchema>;
 
 /**
  * ---

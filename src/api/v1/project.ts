@@ -1,13 +1,12 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import {
-  listProjectsSchema,
   paginatedListOf,
   projectSchema,
   uuidSchema,
 } from '../../schema/index.js';
 import { ProjectService } from '../../service/index.js';
 
-export class ProjectsApiV1 {
+export class ProjectApiV1 {
   public readonly api: OpenAPIHono;
   private projectService: ProjectService;
 
@@ -19,12 +18,6 @@ export class ProjectsApiV1 {
   }
 
   private registerRoutes(): void {
-    this.api.openapi(countProjectsRoute, async (context) => {
-      const count = await this.projectService.count();
-
-      return context.json(count, 200);
-    });
-
     this.api.openapi(listProjectsRoute, async (context) => {
       const { limit, offset } = context.req.valid('query');
 
@@ -33,42 +26,40 @@ export class ProjectsApiV1 {
       return context.json(projects, 200);
     });
 
-    this.api.openapi(readProjectRoute, async (context) => {
-      const { id } = context.req.valid('param');
+    this.api.openapi(countProjectsRoute, async (context) => {
+      const count = await this.projectService.count();
 
-      const project = await this.projectService.read({ id });
+      return context.json(count, 200);
+    });
+
+    this.api.openapi(readProjectRoute, async (context) => {
+      const { projectId } = context.req.valid('param');
+
+      const project = await this.projectService.read({ id: projectId });
 
       return context.json(project, 200);
     });
   }
 }
 
-export const countProjectsRoute = createRoute({
-  tags: ['Projects'],
-  description: 'Counts all Projects you currently have access to',
-  method: 'get',
-  path: '/count',
-  operationId: 'countProjects',
-  responses: {
-    200: {
-      content: {
-        'application/json': {
-          schema: z.number(),
-        },
-      },
-      description: 'The number of Projects you have acces to',
-    },
-  },
-});
-
 export const listProjectsRoute = createRoute({
   tags: ['Projects'],
   description: 'Lists all Projects you currently have access to',
   method: 'get',
-  path: '/',
+  path: '/projects',
   operationId: 'listProjects',
   request: {
-    query: listProjectsSchema,
+    query: z.object({
+      limit: z.string().pipe(z.coerce.number()).optional().openapi({
+        default: '15',
+        description: 'The maximum number of items to return',
+      }),
+      offset: z.string().pipe(z.coerce.number()).optional().openapi({
+        default: '0',
+        description:
+          'The number of items to skip before starting to collect the result set',
+      }),
+    }),
   },
   responses: {
     200: {
@@ -82,17 +73,35 @@ export const listProjectsRoute = createRoute({
   },
 });
 
+export const countProjectsRoute = createRoute({
+  tags: ['Projects'],
+  description: 'Counts all Projects you currently have access to',
+  method: 'get',
+  path: '/projects/count',
+  operationId: 'countProjects',
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.number(),
+        },
+      },
+      description: 'The number of Projects you have acces to',
+    },
+  },
+});
+
 export const readProjectRoute = createRoute({
   tags: ['Projects'],
   description: 'Retrieve a Project by ID',
   method: 'get',
-  path: '/{id}',
+  path: '/projects/{projectId}',
   operationId: 'readProject',
   request: {
     params: z.object({
-      id: uuidSchema.openapi({
+      projectId: uuidSchema.openapi({
         param: {
-          name: 'id',
+          name: 'projectId',
           in: 'path',
         },
       }),

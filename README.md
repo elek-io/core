@@ -6,6 +6,9 @@ Handles core functionality of elek.io Projects like file IO and version control 
 
 ```
 |-- src
+|   |-- api
+|   |   Exports a local API that allows reading Project data
+|   |   mainly for development of websites or apps on the same device.
 |   |-- error
 |   |   Different classes extending Error.
 |   |-- schema
@@ -16,10 +19,6 @@ Handles core functionality of elek.io Projects like file IO and version control 
 |   |   so their input is validated against our zod schemas.
 |   |-- test
 |   |   Additional files and utility functions only used for testing.
-|   |-- upgrade
-|   |   Files containing logic to upgrade each Project to support a higher Core version.
-|   |   This may include iterating over all Assets to add a new key / value
-|   |   because the new Core version uses it to store additional information.
 |   |-- util
 |   |   Utility functions like path generation.
 |   |-- index.browser.ts
@@ -27,8 +26,8 @@ Handles core functionality of elek.io Projects like file IO and version control 
 |   |   but does not export the ElekIoCore main class,
 |   |   since it is not actually usable in a browser environment.
 |   |-- index.node.ts
-|   |   Exports the ElekIoCore main class which makes the services endpoints accessible
-|   |   as well as schemas and utility functions.
+|   |   Exports the ElekIoCore main class which makes the services and API
+|   |   endpoints accessible as well as schemas and utility functions.
 ```
 
 ## The concept behind Projects, Collections, Entries, Values and Assets

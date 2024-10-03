@@ -1,7 +1,6 @@
 import Fs from 'fs-extra';
 import {
   FieldDefinition,
-  ValueTypeSchema,
   countEntriesSchema,
   createEntrySchema,
   deleteEntrySchema,
@@ -23,17 +22,12 @@ import {
   type EntryFile,
   type ListEntriesProps,
   type ReadEntryProps,
-  type ReferencedValue,
-  type ResolvedValueContentReference,
-  type SupportedLanguage,
   type UpdateEntryProps,
   type Value,
-  type ValueContentReference,
 } from '../schema/index.js';
 import { pathTo, returnResolved } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
-import type { AssetService } from './AssetService.js';
 import type { CollectionService } from './CollectionService.js';
 import type { GitService } from './GitService.js';
 import { JsonFileService } from './JsonFileService.js';
@@ -50,7 +44,6 @@ export class EntryService
   private jsonFileService: JsonFileService;
   private gitService: GitService;
   private collectionService: CollectionService;
-  private assetService: AssetService;
   // private sharedValueService: SharedValueService;
 
   constructor(
@@ -58,8 +51,7 @@ export class EntryService
     logService: LogService,
     jsonFileService: JsonFileService,
     gitService: GitService,
-    collectionService: CollectionService,
-    assetService: AssetService
+    collectionService: CollectionService
     // sharedValueService: SharedValueService
   ) {
     super(serviceTypeSchema.Enum.Entry, options);
@@ -68,7 +60,6 @@ export class EntryService
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
     this.collectionService = collectionService;
-    this.assetService = assetService;
     // this.sharedValueService = sharedValueService;
   }
 
@@ -359,95 +350,6 @@ export class EntryService
   }
 
   /**
-   * Validates given shared Value references against it's Collections definitions
-   */
-  // private validateResolvedSharedValues(props: {
-  //   collectionId: string;
-  //   valueDefinitions: ValueDefinition[];
-  //   resolvedSharedValues: ResolvedSharedValueReference[];
-  // }) {
-  //   props.resolvedSharedValues.map((value) => {
-  //     const definition = this.getValueDefinitionById({
-  //       collectionId: props.collectionId,
-  //       valueDefinitions: props.valueDefinitions,
-  //       id: value.definitionId,
-  //     });
-  //     const schema = getValueSchemaFromDefinition(definition);
-  //     schema.parse(value.resolved.content);
-  //   });
-  // }
-
-  private async resolveValueContentReference(props: {
-    projectId: string;
-    collectionId: string;
-    valueContentReference: ValueContentReference;
-  }): Promise<ResolvedValueContentReference> {
-    switch (props.valueContentReference.objectType) {
-      case objectTypeSchema.Enum.asset:
-        return await this.assetService.read({
-          projectId: props.projectId,
-          id: props.valueContentReference.id,
-        });
-      case objectTypeSchema.Enum.entry:
-        return await this.read({
-          projectId: props.projectId,
-          collectionId: props.collectionId,
-          id: props.valueContentReference.id,
-        });
-      // case objectTypeSchema.Enum.sharedValue:
-      //   return this.resolveValueContentReferenceToSharedValue({
-      //     projectId: props.projectId,
-      //     valueContentReferenceToSharedValue: props.valueContentReference,
-      //   });
-
-      default:
-        throw new Error(
-          // @ts-ignore
-          `Tried to resolve unsupported Value reference "${props.valueContentReference.referenceObjectType}"`
-        );
-    }
-  }
-
-  private async resolveValueContentReferences(props: {
-    projectId: string;
-    collectionId: string;
-    valueReference: ReferencedValue;
-  }): Promise<
-    Partial<Record<SupportedLanguage, ResolvedValueContentReference>>
-  > {
-    let resolvedContent: Partial<
-      Record<SupportedLanguage, ResolvedValueContentReference>
-    > = {};
-
-    for (const language in props.valueReference.content) {
-      const referencesOfLanguage =
-        props.valueReference.content[language as SupportedLanguage];
-      if (!referencesOfLanguage) {
-        throw new Error(
-          `Trying to access content references by language "${language}" failed`
-        );
-      }
-
-      const resolvedReferencesOfLanguage = await Promise.all(
-        referencesOfLanguage.map(async (reference) => {
-          return await this.resolveValueContentReference({
-            projectId: props.projectId,
-            collectionId: props.collectionId,
-            valueContentReference: reference,
-          });
-        })
-      );
-
-      resolvedContent = {
-        ...resolvedContent,
-        [language as SupportedLanguage]: resolvedReferencesOfLanguage,
-      };
-    }
-
-    return resolvedContent;
-  }
-
-  /**
    * Creates an Entry from given EntryFile by resolving it's Values
    */
   private async toEntry(
@@ -462,26 +364,6 @@ export class EntryService
     return {
       ...entryFile,
       history,
-      // @ts-ignore @todo fixme - I have no idea why this happens. The types seem to be compatible to me and they work
-      values: await Promise.all(
-        entryFile.values.map(async (value) => {
-          if (value.valueType === ValueTypeSchema.Enum.reference) {
-            const resolvedContentReferences =
-              await this.resolveValueContentReferences({
-                projectId: projectId,
-                collectionId: collectionId,
-                valueReference: value,
-              });
-
-            return {
-              ...value,
-              content: resolvedContentReferences,
-            };
-          }
-
-          return value;
-        })
-      ),
     };
   }
 }
