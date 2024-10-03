@@ -11,6 +11,7 @@ import {
   LogService,
   ProjectService,
 } from '../service/index.js';
+import { LoggerMiddleware } from './middleware/logger.js';
 import {
   AssetApiV1,
   CollectionApiV1,
@@ -40,6 +41,14 @@ export class LocalApi {
     this.entryService = entryService;
     this.assetService = assetService;
     this.api = new OpenAPIHono();
+
+    // Register middleware
+    this.api.use(
+      cors({
+        origin: ['http://localhost'],
+      })
+    );
+    this.api.use(new LoggerMiddleware(logService).handler);
 
     this.registerRoutesV1();
   }
@@ -82,12 +91,6 @@ export class LocalApi {
 
   private registerRoutesV1(): void {
     const apiV1 = new OpenAPIHono();
-
-    apiV1.use(
-      cors({
-        origin: ['http://localhost'],
-      })
-    );
 
     apiV1.doc('/openapi.json', {
       openapi: '3.0.0',
