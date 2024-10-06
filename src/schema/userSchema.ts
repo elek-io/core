@@ -17,16 +17,6 @@ export const baseUserSchema = gitSignatureSchema.extend({
      */
     port: z.number(),
   }),
-  window: z
-    .object({
-      width: z.number(),
-      height: z.number(),
-      position: z.object({
-        x: z.number(),
-        y: z.number(),
-      }),
-    })
-    .nullable(),
 });
 export type BaseUser = z.infer<typeof baseUserSchema>;
 
