@@ -1,5 +1,18 @@
 # @elek-io/core
 
+## 0.13.0
+
+### Minor Changes
+
+- 1b1c0ce: Added local API endpoints for Projects, Assets, Collections and Entries. Also added custom logger middleware that uses our LogService.
+  Removed the ability to directly resolve Entry reference Values - this needs to now be handled Client-side.
+
+## 0.12.0
+
+### Minor Changes
+
+- 6e283f3: Added first local API routes to test inside elek.io Client
+
 ## 0.11.1
 
 ### Patch Changes
