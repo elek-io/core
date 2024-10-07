@@ -134,6 +134,14 @@ export class GitTagService
 
     const lineObjArr = noEmptyLinesArr.map((line) => {
       const lineArray = line.split('|');
+
+      // Remove the '<' and '>' enclosing the email
+      // @todo is there another format like authoremail that returns the original email?
+      if (lineArray[3]?.startsWith('<') && lineArray[3]?.endsWith('>')) {
+        lineArray[3] = lineArray[3].slice(1, -1);
+        lineArray[3] = lineArray[3].slice(0, -1);
+      }
+
       return {
         id: lineArray[0],
         message: lineArray[1],
