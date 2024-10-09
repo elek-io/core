@@ -444,6 +444,8 @@ export class ProjectService
 
   /**
    * Updates the remote origin URL of given Project
+   *
+   * @todo maybe add this logic to the update method
    */
   public async setRemoteOriginUrl(props: SetRemoteOriginUrlProjectProps) {
     setRemoteOriginUrlProjectSchema.parse(props);

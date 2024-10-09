@@ -6,7 +6,7 @@ import { objectTypeSchema, uuidSchema } from './baseSchema.js';
  */
 export const gitSignatureSchema = z.object({
   name: z.string(),
-  email: z.string(),
+  email: z.string().email(),
 });
 export type GitSignature = z.infer<typeof gitSignatureSchema>;
 

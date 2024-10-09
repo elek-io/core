@@ -18,12 +18,12 @@ const core = new ElekIoCore({
     level: 'debug',
   },
 });
+
 await core.user.set({
   userType: 'local',
   name: 'John Doe',
   email: 'john.doe@test.com',
   language: 'en',
-  window: null,
   // The localApi object is actually ignored by Core
   // and used by Client to instruct Core how and when to start the API
   localApi: {
@@ -68,12 +68,13 @@ describe.sequential('Integration', function () {
   it.sequential(
     'should be able to start the API and verify it is running',
     async function () {
-      const isRunningBefore = core.api.isRunning();
-      core.api.start(31310);
+      const isRunningBefore = await core.api.isRunning();
+      await core.api.start(31310);
 
       await vi.waitFor(
-        () => {
-          if (core.api.isRunning() === false) {
+        async () => {
+          const isCurrentlyRunning = await core.api.isRunning();
+          if (isCurrentlyRunning === false) {
             throw new Error('Server not started yet');
           }
         },
@@ -83,7 +84,7 @@ describe.sequential('Integration', function () {
         }
       );
 
-      const isRunningAfter = core.api.isRunning();
+      const isRunningAfter = await core.api.isRunning();
 
       expect(isRunningBefore).to.equal(false);
       expect(isRunningAfter).to.equal(true);
@@ -239,12 +240,13 @@ describe.sequential('Integration', function () {
   it.sequential(
     'should be able to stop the API and verify it is not running anymore',
     async function () {
-      const isRunningBefore = core.api.isRunning();
-      core.api.stop();
+      const isRunningBefore = await core.api.isRunning();
+      await core.api.stop();
 
       await vi.waitFor(
-        () => {
-          if (core.api.isRunning() === true) {
+        async () => {
+          const isCurrentlyRunning = await core.api.isRunning();
+          if (isCurrentlyRunning === true) {
             throw new Error('Server is still running');
           }
         },
@@ -254,7 +256,7 @@ describe.sequential('Integration', function () {
         }
       );
 
-      const isRunningAfter = core.api.isRunning();
+      const isRunningAfter = await core.api.isRunning();
 
       expect(isRunningBefore).to.equal(true);
       expect(isRunningAfter).to.equal(false);

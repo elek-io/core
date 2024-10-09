@@ -6,12 +6,12 @@ const core = new ElekIoCore({
     level: 'debug',
   },
 });
+
 await core.user.set({
   userType: 'local',
   name: 'John Doe',
   email: 'john.doe@test.com',
   language: 'en',
-  window: null,
   localApi: {
     isEnabled: false,
     port: 31310,
