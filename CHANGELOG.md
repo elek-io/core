@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.14.0
+
+### Minor Changes
+
+- 62bb27e: Made all API methods async to return Promisses for easier use in IPC. Git signature type now expects the email to actually be one instead of any string. Removed window object inside the Users config file.
+
 ## 0.13.0
 
 ### Minor Changes
