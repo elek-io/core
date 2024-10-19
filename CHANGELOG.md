@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.14.1
+
+### Patch Changes
+
+- b28ba2d: Updated GitHub action runner
+
 ## 0.14.0
 
 ### Minor Changes
