@@ -11,9 +11,9 @@ jobs:
       fail-fast: false
       matrix:
         # @see https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
-        # macos-12 = intel
+        # macos-13 = intel
         # macos-14 = M1 (arm)
-        platform: [ubuntu-22.04, macos-12, macos-14, windows-2022]
+        platform: [ubuntu-24.04, macos-13, macos-14, windows-2022]
         node-version: [20]
     runs-on: ${{ matrix.platform }}
     steps:
