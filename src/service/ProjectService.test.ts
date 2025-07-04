@@ -1,4 +1,5 @@
 import Fs from 'fs-extra';
+import Path from 'path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { ProjectUpgradeError } from '../error/ProjectUpgradeError.js';
 import { RemoteOriginMissingError } from '../error/RemoteOriginMissingError.js';
@@ -16,6 +17,7 @@ import {
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
   let clonedProject: Project;
+  let remoteProject: Project;
   let remoteProjectPath: string;
 
   afterAll(async function () {
@@ -258,7 +260,8 @@ describe.sequential('Integration', function () {
   it.sequential(
     'should be able to clone an existing Project and verify that the remote origin URL was set',
     async function ({ task }) {
-      remoteProjectPath = await createLocalRemoteRepository();
+      remoteProject = await createLocalRemoteRepository();
+      remoteProjectPath = Path.join(core.util.pathTo.tmp, remoteProject.id);
 
       clonedProject = await core.projects.clone({ url: remoteProjectPath });
       expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id))).to

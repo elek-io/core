@@ -1,6 +1,7 @@
 import Fs from 'fs-extra';
+import Path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import core, { type Project } from '../test/setup.js';
+import core, { uuid, type Asset, type Project } from '../test/setup.js';
 import {
   createAsset,
   createLocalRemoteRepository,
@@ -10,12 +11,15 @@ import {
 describe.sequential('Integration', function () {
   let project: Project & { destroy: () => Promise<void> };
   let projectPath = '';
+  let remoteProject: Project;
   let remoteProjectPath: string;
+  let createdAsset: Asset;
 
   beforeAll(async function () {
     project = await createProject();
     projectPath = core.util.pathTo.project(project.id);
-    remoteProjectPath = await createLocalRemoteRepository();
+    remoteProject = await createLocalRemoteRepository();
+    remoteProjectPath = Path.join(core.util.pathTo.tmp, remoteProject.id);
   });
 
   afterAll(async function () {
@@ -92,6 +96,8 @@ describe.sequential('Integration', function () {
     }
   );
 
+  // Pushing to a remote repository
+
   it.sequential(
     'should be able to force push an existing Project to a new remote',
     async function () {
@@ -103,11 +109,14 @@ describe.sequential('Integration', function () {
   it.sequential(
     'should be able to make a local change and see the difference between local and remote',
     async function () {
-      await createAsset(project.id);
+      createdAsset = await createAsset(project.id);
 
       const changes = await core.projects.getChanges({ id: project.id });
 
       expect(changes.ahead).to.have.lengthOf(1);
+      expect(changes.ahead[0]?.message.method).to.equal('create');
+      expect(changes.ahead[0]?.message.reference.objectType).to.equal('asset');
+      expect(changes.ahead[0]?.message.reference.id).to.equal(createdAsset.id);
       expect(changes.behind).to.have.lengthOf(0);
     }
   );
@@ -116,6 +125,49 @@ describe.sequential('Integration', function () {
     'should be able to push the change to remote',
     async function () {
       await core.git.push(projectPath);
+    }
+  );
+
+  it.sequential(
+    'should be able to see there is no difference between local and remote anymore',
+    async function () {
+      const changes = await core.projects.getChanges({ id: project.id });
+
+      expect(changes.ahead).to.have.lengthOf(0);
+      expect(changes.behind).to.have.lengthOf(0);
+    }
+  );
+
+  // Pulling from a remote repository
+
+  it.sequential(
+    'should be able to make a change on the remote and see the difference',
+    async function () {
+      // To make a change on the remote, we first need to copy the local project
+      // then make changes to the copy and then push those changes to the remote.
+      // This is needed because the remote repository is a bare repository and cannot be modified directly.
+      const newProjectId = uuid();
+      const newProjectPath = core.util.pathTo.project(newProjectId);
+      await Fs.copy(projectPath, newProjectPath);
+      const anotherCreatedAsset = await createAsset(newProjectId);
+      await core.git.push(newProjectPath);
+
+      const changes = await core.projects.getChanges({ id: project.id });
+
+      expect(changes.ahead).to.have.lengthOf(0);
+      expect(changes.behind).to.have.lengthOf(1);
+      expect(changes.behind[0]?.message.method).to.equal('create');
+      expect(changes.behind[0]?.message.reference.objectType).to.equal('asset');
+      expect(changes.behind[0]?.message.reference.id).to.equal(
+        anotherCreatedAsset.id
+      );
+    }
+  );
+
+  it.sequential(
+    'should be able to pull the change from remote',
+    async function () {
+      await core.git.pull(projectPath);
     }
   );
 
