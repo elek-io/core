@@ -58,7 +58,7 @@ export async function createLocalRemoteRepository() {
   );
   await Fs.remove(core.util.pathTo.project(remoteProject.id));
 
-  return remoteProjectPath;
+  return remoteProject;
 }
 
 /**

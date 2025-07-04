@@ -415,6 +415,7 @@ export class GitService {
    */
   public async pull(path: string): Promise<void> {
     const args = ['pull'];
+
     await this.git(path, args);
   }
 
@@ -633,10 +634,14 @@ export class GitService {
       'push.autoSetupRemote',
       'true',
     ];
+    // By default `git pull` will try to rebase first
+    // to reduce the amount of merge commits
+    const pullRebaseArgs = ['config', '--local', 'pull.rebase', 'true'];
 
     await this.git(path, userNameArgs);
     await this.git(path, userEmailArgs);
     await this.git(path, autoSetupRemoteArgs);
+    await this.git(path, pullRebaseArgs);
   }
 
   /**
