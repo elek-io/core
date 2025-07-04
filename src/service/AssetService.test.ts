@@ -85,7 +85,7 @@ describe.sequential('Integration', function () {
         newFilePath,
       });
 
-      expect(asset.extension).to.equal('jpeg');
+      expect(asset.extension).to.equal('jpg');
       expect(asset.size).to.equal(1342);
       expect(asset.history.length).to.equal(3);
     }
@@ -176,7 +176,7 @@ describe.sequential('Integration', function () {
         'the original file hash'
       );
 
-      expect(currentAssetFromHistory.extension).to.equal('jpeg');
+      expect(currentAssetFromHistory.extension).to.equal('jpg');
       expect(currentAssetFromHistory.mimeType).to.equal('image/jpeg');
       expect(
         currentAssetFromHistory.absolutePath.startsWith(core.util.pathTo.tmp)
