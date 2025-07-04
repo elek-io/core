@@ -6,7 +6,7 @@
   // Using TypeScript Node.js with native ESM
   // @see https://gist.github.com/slavafomin/cd7a54035eff5dc1c7c2eff096b23b6b
   "extends": [
-    "@tsconfig/node20/tsconfig.json",
+    "@tsconfig/node22/tsconfig.json",
     "@tsconfig/strictest/tsconfig.json"
   ],
   "compilerOptions": {

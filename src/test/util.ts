@@ -2,7 +2,7 @@ import { faker } from '@faker-js/faker';
 import crypto from 'crypto';
 import Fs from 'fs-extra';
 import Path from 'path';
-import { Custom, expect, Test } from 'vitest';
+import { expect, RunnerTestCase } from 'vitest';
 import core, {
   EntryFieldDefinition,
   uuid,
@@ -16,7 +16,7 @@ const id = {
 };
 
 export async function ensureCleanGitStatus(
-  task: Readonly<Test<{}> | Custom<{}>>,
+  task: Readonly<RunnerTestCase>,
   projectId: string
 ) {
   const status = await core.git.status(core.util.pathTo.project(projectId));

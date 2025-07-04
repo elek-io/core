@@ -1,5 +1,5 @@
 import Fs from 'fs-extra';
-import { version as coreVersion } from '../package.json';
+import * as packageJson from '../package.json' with { type: "json" };
 import { LocalApi } from './api/index.js';
 import {
   constructorElekIoCoreSchema,
@@ -43,7 +43,7 @@ export default class ElekIoCore {
   private readonly localApi: LocalApi;
 
   constructor(props?: ConstructorElekIoCoreProps) {
-    this.coreVersion = coreVersion;
+    this.coreVersion = packageJson.default.version;
     const parsedProps = constructorElekIoCoreSchema.parse(props);
 
     const defaults: ElekIoCoreOptions = {
