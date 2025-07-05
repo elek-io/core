@@ -1,5 +1,12 @@
 # @elek-io/core
 
+## 0.14.2
+
+### Patch Changes
+
+- b0df691: Upgraded dependencies
+- db8f71b: Git pull now tries to rebase first to reduce merge commits
+
 ## 0.14.1
 
 ### Patch Changes
