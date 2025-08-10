@@ -37,22 +37,22 @@ export abstract class AbstractCrudService {
     collectionId?: string
   ): Promise<FileReference[]> {
     switch (type) {
-      case objectTypeSchema.Enum.asset:
+      case objectTypeSchema.enum.asset:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
         return this.getFileReferences(pathTo.lfs(projectId)); // LFS folder is correct, since we want the extension of the file itself, not the AssetFile (.json)
 
-      case objectTypeSchema.Enum.project:
+      case objectTypeSchema.enum.project:
         return this.getFolderReferences(pathTo.projects);
 
-      case objectTypeSchema.Enum.collection:
+      case objectTypeSchema.enum.collection:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
         return this.getFolderReferences(pathTo.collections(projectId));
 
-      case objectTypeSchema.Enum.entry:
+      case objectTypeSchema.enum.entry:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }
@@ -63,7 +63,7 @@ export abstract class AbstractCrudService {
           pathTo.collection(projectId, collectionId)
         );
 
-      case objectTypeSchema.Enum.sharedValue:
+      case objectTypeSchema.enum.sharedValue:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
         }

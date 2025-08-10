@@ -49,7 +49,7 @@ export class UserService {
       ...props,
     };
 
-    if (userFile.userType === UserTypeSchema.Enum.cloud) {
+    if (userFile.userType === UserTypeSchema.enum.cloud) {
       // Try logging in the user
       // Throw on Error
     }

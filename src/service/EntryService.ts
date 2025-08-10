@@ -54,7 +54,7 @@ export class EntryService
     collectionService: CollectionService
     // sharedValueService: SharedValueService
   ) {
-    super(serviceTypeSchema.Enum.Entry, options);
+    super(serviceTypeSchema.enum.Entry, options);
 
     this.logService = logService;
     this.jsonFileService = jsonFileService;
@@ -240,7 +240,7 @@ export class EntryService
     const limit = props.limit || 15;
 
     const entryReferences = await this.listReferences(
-      objectTypeSchema.Enum.entry,
+      objectTypeSchema.enum.entry,
       props.projectId,
       props.collectionId
     );
@@ -270,7 +270,7 @@ export class EntryService
 
     return (
       await this.listReferences(
-        objectTypeSchema.Enum.entry,
+        objectTypeSchema.enum.entry,
         props.projectId,
         props.collectionId
       )

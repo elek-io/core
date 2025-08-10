@@ -15,7 +15,7 @@ export class JsonFileService extends AbstractCrudService {
   private readonly logService: LogService;
 
   constructor(options: ElekIoCoreOptions, logService: LogService) {
-    super(serviceTypeSchema.Enum.JsonFile, options);
+    super(serviceTypeSchema.enum.JsonFile, options);
 
     this.logService = logService;
   }

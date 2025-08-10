@@ -13,7 +13,7 @@ export const FieldTypeSchema = z.enum([
   'email',
   // 'password', @todo maybe if there is a usecase
   'url',
-  'ip',
+  'ipv4',
   'date',
   'time',
   'datetime',
@@ -49,14 +49,14 @@ export type FieldDefinitionBase = z.infer<typeof FieldDefinitionBaseSchema>;
 
 export const StringFieldDefinitionBaseSchema = FieldDefinitionBaseSchema.extend(
   {
-    valueType: z.literal(ValueTypeSchema.Enum.string),
+    valueType: z.literal(ValueTypeSchema.enum.string),
     defaultValue: z.string().nullable(),
   }
 );
 
 export const textFieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend(
   {
-    fieldType: z.literal(FieldTypeSchema.Enum.text),
+    fieldType: z.literal(FieldTypeSchema.enum.text),
     min: z.number().nullable(),
     max: z.number().nullable(),
   }
@@ -65,7 +65,7 @@ export type TextFieldDefinition = z.infer<typeof textFieldDefinitionSchema>;
 
 export const textareaFieldDefinitionSchema =
   StringFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.Enum.textarea),
+    fieldType: z.literal(FieldTypeSchema.enum.textarea),
     min: z.number().nullable(),
     max: z.number().nullable(),
   });
@@ -75,49 +75,51 @@ export type TextareaFieldDefinition = z.infer<
 
 export const emailFieldDefinitionSchema =
   StringFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.Enum.email),
-    defaultValue: z.string().email().nullable(),
+    fieldType: z.literal(FieldTypeSchema.enum.email),
+    defaultValue: z.email().nullable(),
   });
 export type EmailFieldDefinition = z.infer<typeof emailFieldDefinitionSchema>;
 
 // @todo why should we support password Values? Client saves it in clear text anyways
 // export const passwordFieldDefinitionSchema =
 //   StringFieldDefinitionBaseSchema.extend({
-//     fieldType: z.literal(FieldfieldTypeSchema.Enum.password),
+//     fieldType: z.literal(FieldfieldTypeSchema.enum.password),
 //   });
 
 export const urlFieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend({
-  fieldType: z.literal(FieldTypeSchema.Enum.url),
-  defaultValue: z.string().url().nullable(),
+  fieldType: z.literal(FieldTypeSchema.enum.url),
+  defaultValue: z.url().nullable(),
 });
 export type UrlFieldDefinition = z.infer<typeof urlFieldDefinitionSchema>;
 
-export const ipFieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend({
-  fieldType: z.literal(FieldTypeSchema.Enum.ip),
-  defaultValue: z.string().ip().nullable(),
-});
-export type IpFieldDefinition = z.infer<typeof ipFieldDefinitionSchema>;
+export const ipv4FieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend(
+  {
+    fieldType: z.literal(FieldTypeSchema.enum.ipv4),
+    defaultValue: z.ipv4().nullable(),
+  }
+);
+export type Ipv4FieldDefinition = z.infer<typeof ipv4FieldDefinitionSchema>;
 
 export const dateFieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend(
   {
-    fieldType: z.literal(FieldTypeSchema.Enum.date),
-    defaultValue: z.string().date().nullable(),
+    fieldType: z.literal(FieldTypeSchema.enum.date),
+    defaultValue: z.iso.date().nullable(),
   }
 );
 export type DateFieldDefinition = z.infer<typeof dateFieldDefinitionSchema>;
 
 export const timeFieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend(
   {
-    fieldType: z.literal(FieldTypeSchema.Enum.time),
-    defaultValue: z.string().time().nullable(),
+    fieldType: z.literal(FieldTypeSchema.enum.time),
+    defaultValue: z.iso.time().nullable(),
   }
 );
 export type TimeFieldDefinition = z.infer<typeof timeFieldDefinitionSchema>;
 
 export const datetimeFieldDefinitionSchema =
   StringFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.Enum.datetime),
-    defaultValue: z.string().datetime().nullable(),
+    fieldType: z.literal(FieldTypeSchema.enum.datetime),
+    defaultValue: z.iso.datetime().nullable(),
   });
 export type DatetimeFieldDefinition = z.infer<
   typeof datetimeFieldDefinitionSchema
@@ -125,8 +127,8 @@ export type DatetimeFieldDefinition = z.infer<
 
 export const telephoneFieldDefinitionSchema =
   StringFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.Enum.telephone),
-    // defaultValue: z.string().e164(), @todo when zod v4 releases @see https://github.com/colinhacks/zod/pull/3476
+    fieldType: z.literal(FieldTypeSchema.enum.telephone),
+    defaultValue: z.e164().nullable(),
   });
 export type TelephoneFieldDefinition = z.infer<
   typeof telephoneFieldDefinitionSchema
@@ -137,7 +139,7 @@ export const stringFieldDefinitionSchema = z.union([
   textareaFieldDefinitionSchema,
   emailFieldDefinitionSchema,
   urlFieldDefinitionSchema,
-  ipFieldDefinitionSchema,
+  ipv4FieldDefinitionSchema,
   dateFieldDefinitionSchema,
   timeFieldDefinitionSchema,
   datetimeFieldDefinitionSchema,
@@ -151,7 +153,7 @@ export type StringFieldDefinition = z.infer<typeof stringFieldDefinitionSchema>;
 
 export const NumberFieldDefinitionBaseSchema = FieldDefinitionBaseSchema.extend(
   {
-    valueType: z.literal(ValueTypeSchema.Enum.number),
+    valueType: z.literal(ValueTypeSchema.enum.number),
     min: z.number().nullable(),
     max: z.number().nullable(),
     isUnique: z.literal(false),
@@ -161,13 +163,13 @@ export const NumberFieldDefinitionBaseSchema = FieldDefinitionBaseSchema.extend(
 
 export const numberFieldDefinitionSchema =
   NumberFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.Enum.number),
+    fieldType: z.literal(FieldTypeSchema.enum.number),
   });
 export type NumberFieldDefinition = z.infer<typeof numberFieldDefinitionSchema>;
 
 export const rangeFieldDefinitionSchema =
   NumberFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.Enum.range),
+    fieldType: z.literal(FieldTypeSchema.enum.range),
     // Overwrite from nullable to required because a range needs min, max and default to work and is required, since it always returns a number
     isRequired: z.literal(true),
     min: z.number(),
@@ -182,7 +184,7 @@ export type RangeFieldDefinition = z.infer<typeof rangeFieldDefinitionSchema>;
 
 export const BooleanFieldDefinitionBaseSchema =
   FieldDefinitionBaseSchema.extend({
-    valueType: z.literal(ValueTypeSchema.Enum.boolean),
+    valueType: z.literal(ValueTypeSchema.enum.boolean),
     // Overwrite from nullable to required because a boolean needs a default to work and is required, since it always is either true or false
     isRequired: z.literal(true),
     defaultValue: z.boolean(),
@@ -191,7 +193,7 @@ export const BooleanFieldDefinitionBaseSchema =
 
 export const toggleFieldDefinitionSchema =
   BooleanFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.Enum.toggle),
+    fieldType: z.literal(FieldTypeSchema.enum.toggle),
   });
 export type ToggleFieldDefinition = z.infer<typeof toggleFieldDefinitionSchema>;
 
@@ -201,12 +203,12 @@ export type ToggleFieldDefinition = z.infer<typeof toggleFieldDefinitionSchema>;
 
 export const ReferenceFieldDefinitionBaseSchema =
   FieldDefinitionBaseSchema.extend({
-    valueType: z.literal(ValueTypeSchema.Enum.reference),
+    valueType: z.literal(ValueTypeSchema.enum.reference),
   });
 
 export const assetFieldDefinitionSchema =
   ReferenceFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.Enum.asset),
+    fieldType: z.literal(FieldTypeSchema.enum.asset),
     min: z.number().nullable(),
     max: z.number().nullable(),
   });
@@ -214,7 +216,7 @@ export type AssetFieldDefinition = z.infer<typeof assetFieldDefinitionSchema>;
 
 export const entryFieldDefinitionSchema =
   ReferenceFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.Enum.entry),
+    fieldType: z.literal(FieldTypeSchema.enum.entry),
     ofCollections: z.array(uuidSchema),
     min: z.number().nullable(),
     max: z.number().nullable(),
@@ -223,13 +225,13 @@ export type EntryFieldDefinition = z.infer<typeof entryFieldDefinitionSchema>;
 
 // export const sharedValueDefinitionSchema =
 //   ReferenceValueDefinitionBaseSchema.extend({
-//     fieldType: z.literal(ValueInputTypeSchema.Enum.sharedValue),
+//     fieldType: z.literal(ValueInputTypeSchema.enum.sharedValue),
 //     // The shared Value can have any of the direct types
 //     // but not any reference itself (a shared Value cannot have a reference to another shared Value / Asset or any other future reference)
 //     sharedValueType: z.union([
-//       z.literal(ValueTypeSchema.Enum.boolean),
-//       z.literal(ValueTypeSchema.Enum.number),
-//       z.literal(ValueTypeSchema.Enum.string),
+//       z.literal(ValueTypeSchema.enum.boolean),
+//       z.literal(ValueTypeSchema.enum.number),
+//       z.literal(ValueTypeSchema.enum.string),
 //     ]),
 //   });
 // export type SharedValueValueDefinition = z.infer<
@@ -258,13 +260,13 @@ export function getValueContentSchemaFromFieldDefinition(
   fieldDefinition: FieldDefinition
 ) {
   switch (fieldDefinition.valueType) {
-    case ValueTypeSchema.Enum.boolean:
+    case ValueTypeSchema.enum.boolean:
       return getBooleanValueContentSchema();
-    case ValueTypeSchema.Enum.number:
+    case ValueTypeSchema.enum.number:
       return getNumberValueContentSchema(fieldDefinition);
-    case ValueTypeSchema.Enum.string:
+    case ValueTypeSchema.enum.string:
       return getStringValueContentSchema(fieldDefinition);
-    case ValueTypeSchema.Enum.reference:
+    case ValueTypeSchema.enum.reference:
       return getReferenceValueContentSchema(fieldDefinition);
     default:
       throw new Error(
@@ -298,37 +300,41 @@ function getNumberValueContentSchema(
 }
 
 function getStringValueContentSchema(definition: StringFieldDefinition) {
-  let schema = z.string().trim(); // Additionally trim whitespace
+  let schema = null;
+
+  switch (definition.fieldType) {
+    case FieldTypeSchema.enum.email:
+      schema = z.email();
+      break;
+    case FieldTypeSchema.enum.url:
+      schema = z.url();
+      break;
+    case FieldTypeSchema.enum.ipv4:
+      schema = z.ipv4();
+      break;
+    case FieldTypeSchema.enum.date:
+      schema = z.iso.date();
+      break;
+    case FieldTypeSchema.enum.time:
+      schema = z.iso.time();
+      break;
+    case FieldTypeSchema.enum.datetime:
+      schema = z.iso.datetime();
+      break;
+    case FieldTypeSchema.enum.telephone:
+      schema = z.e164();
+      break;
+    case FieldTypeSchema.enum.text:
+    case FieldTypeSchema.enum.textarea:
+      schema = z.string().trim();
+      break;
+  }
 
   if ('min' in definition && definition.min) {
     schema = schema.min(definition.min);
   }
   if ('max' in definition && definition.max) {
     schema = schema.max(definition.max);
-  }
-
-  switch (definition.fieldType) {
-    case FieldTypeSchema.Enum.email:
-      schema = schema.email();
-      break;
-    case FieldTypeSchema.Enum.url:
-      schema = schema.url();
-      break;
-    case FieldTypeSchema.Enum.ip:
-      schema = schema.ip();
-      break;
-    case FieldTypeSchema.Enum.date:
-      schema = schema.date();
-      break;
-    case FieldTypeSchema.Enum.time:
-      schema = schema.time();
-      break;
-    case FieldTypeSchema.Enum.datetime:
-      schema = schema.datetime();
-      break;
-    case FieldTypeSchema.Enum.telephone:
-      // @todo z.string().e164() when zod v4 releases @see https://github.com/colinhacks/zod/pull/3476
-      break;
   }
 
   if (definition.isRequired === false) {
@@ -344,17 +350,17 @@ function getReferenceValueContentSchema(
   let schema;
 
   switch (definition.fieldType) {
-    case FieldTypeSchema.Enum.asset:
+    case FieldTypeSchema.enum.asset:
       {
         schema = z.array(valueContentReferenceToAssetSchema);
       }
       break;
-    case FieldTypeSchema.Enum.entry:
+    case FieldTypeSchema.enum.entry:
       {
         schema = z.array(valueContentReferenceToEntrySchema);
       }
       break;
-    // case ValueInputTypeSchema.Enum.sharedValue: {
+    // case ValueInputTypeSchema.enum.sharedValue: {
     //   let schema = valueContentReferenceToSharedValueSchema.extend({}); // Deep copy to not overwrite the base schema
 
     //   if (definition.isRequired) {

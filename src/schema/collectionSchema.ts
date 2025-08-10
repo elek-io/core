@@ -11,7 +11,7 @@ import { baseFileSchema } from './fileSchema.js';
 import { gitCommitSchema } from './gitSchema.js';
 
 export const collectionFileSchema = baseFileSchema.extend({
-  objectType: z.literal(objectTypeSchema.Enum.collection).readonly(),
+  objectType: z.literal(objectTypeSchema.enum.collection).readonly(),
   name: z.object({
     singular: translatableStringSchema,
     plural: translatableStringSchema,

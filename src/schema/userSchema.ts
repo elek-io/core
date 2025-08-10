@@ -21,12 +21,12 @@ export const baseUserSchema = gitSignatureSchema.extend({
 export type BaseUser = z.infer<typeof baseUserSchema>;
 
 export const localUserSchema = baseUserSchema.extend({
-  userType: z.literal(UserTypeSchema.Enum.local),
+  userType: z.literal(UserTypeSchema.enum.local),
 });
 export type LocalUser = z.infer<typeof localUserSchema>;
 
 export const cloudUserSchema = baseUserSchema.extend({
-  userType: z.literal(UserTypeSchema.Enum.cloud),
+  userType: z.literal(UserTypeSchema.enum.cloud),
   id: uuidSchema,
 });
 export type CloudUser = z.infer<typeof cloudUserSchema>;

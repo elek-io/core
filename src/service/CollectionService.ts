@@ -43,7 +43,7 @@ export class CollectionService
     jsonFileService: JsonFileService,
     gitService: GitService
   ) {
-    super(serviceTypeSchema.Enum.Collection, options);
+    super(serviceTypeSchema.enum.Collection, options);
 
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
@@ -328,7 +328,7 @@ export class CollectionService
     const limit = props.limit || 15;
 
     const collectionReferences = await this.listReferences(
-      objectTypeSchema.Enum.collection,
+      objectTypeSchema.enum.collection,
       props.projectId
     );
 
@@ -359,7 +359,7 @@ export class CollectionService
 
     const count = (
       await this.listReferences(
-        objectTypeSchema.Enum.collection,
+        objectTypeSchema.enum.collection,
         props.projectId
       )
     ).length;

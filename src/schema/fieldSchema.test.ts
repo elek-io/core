@@ -345,11 +345,11 @@ describe('Dynamic zod schema', () => {
     expect(() => optionalUrlValueschema.parse({})).toThrow();
   });
 
-  it('from required ip Field type definition can be generated and parsed with', () => {
+  it('from required ipv4 Field type definition can be generated and parsed with', () => {
     const requiredIpValueschema = getValueContentSchemaFromFieldDefinition({
       id: uuid(),
       valueType: 'string',
-      fieldType: 'ip',
+      fieldType: 'ipv4',
       label: {
         en: 'Test',
       },
@@ -364,8 +364,8 @@ describe('Dynamic zod schema', () => {
     });
 
     requiredIpValueschema.parse(faker.internet.ipv4());
-    requiredIpValueschema.parse(faker.internet.ipv6());
 
+    expect(() => requiredIpValueschema.parse(faker.internet.ipv6())).toThrow();
     expect(() => requiredIpValueschema.parse('')).toThrow();
     expect(() => requiredIpValueschema.parse(undefined)).toThrow();
     expect(() => requiredIpValueschema.parse(null)).toThrow();
@@ -463,7 +463,7 @@ describe('Dynamic zod schema', () => {
   });
 
   it('from required telephone Field type definition can be generated and parsed with', () => {
-    const requiredDatetimeValueschema =
+    const requiredTelephoneValueschema =
       getValueContentSchemaFromFieldDefinition({
         id: uuid(),
         valueType: 'string',
@@ -481,14 +481,16 @@ describe('Dynamic zod schema', () => {
         isUnique: false,
       });
 
-    requiredDatetimeValueschema.parse(faker.phone.number());
+    requiredTelephoneValueschema.parse(
+      faker.phone.number({ style: 'international' })
+    );
 
-    expect(() => requiredDatetimeValueschema.parse('')).toThrow();
-    expect(() => requiredDatetimeValueschema.parse(undefined)).toThrow();
-    expect(() => requiredDatetimeValueschema.parse(null)).toThrow();
-    expect(() => requiredDatetimeValueschema.parse(0)).toThrow();
-    expect(() => requiredDatetimeValueschema.parse([])).toThrow();
-    expect(() => requiredDatetimeValueschema.parse({})).toThrow();
+    expect(() => requiredTelephoneValueschema.parse('')).toThrow();
+    expect(() => requiredTelephoneValueschema.parse(undefined)).toThrow();
+    expect(() => requiredTelephoneValueschema.parse(null)).toThrow();
+    expect(() => requiredTelephoneValueschema.parse(0)).toThrow();
+    expect(() => requiredTelephoneValueschema.parse([])).toThrow();
+    expect(() => requiredTelephoneValueschema.parse({})).toThrow();
   });
 
   it('from required Asset Field type definition can be generated and parsed with', () => {
