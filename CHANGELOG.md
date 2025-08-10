@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.14.3
+
+### Patch Changes
+
+- 401906f: Fix: same export for Node and Browser
+
 ## 0.14.2
 
 ### Patch Changes
