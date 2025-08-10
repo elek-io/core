@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.14.4
+
+### Patch Changes
+
+- 17a51df: Upgraded to zod v4
+
 ## 0.14.3
 
 ### Patch Changes
