@@ -35,19 +35,19 @@
     "release": "changeset publish"
   },
   "dependencies": {
-    "@hono/node-server": "1.15.0",
+    "@hono/node-server": "1.18.1",
     "@hono/swagger-ui": "0.5.2",
-    "@hono/zod-openapi": "0.19.9",
+    "@hono/zod-openapi": "1.1.0",
     "@sindresorhus/slugify": "2.2.1",
-    "fs-extra": "11.3.0",
-    "hono": "4.8.4",
+    "fs-extra": "11.3.1",
+    "hono": "4.9.0",
     "mime": "4.0.7",
     "p-queue": "8.1.0",
     "semver": "7.7.2",
     "uuid": "11.1.0",
     "winston": "3.17.0",
     "winston-daily-rotate-file": "5.0.0",
-    "zod": "3.25.74"
+    "zod": "4.0.17"
   },
   "devDependencies": {
     "@changesets/cli": "2.29.5",
@@ -60,7 +60,7 @@
     "@types/uuid": "10.0.0",
     "@vitest/coverage-v8": "3.2.4",
     "tsup": "8.5.0",
-    "typescript": "5.8.3",
+    "typescript": "5.9.2",
     "vitest": "3.2.4"
   },
   "peerDependencies": {

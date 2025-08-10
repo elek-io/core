@@ -36,7 +36,7 @@ export const projectBranchSchema = z.enum(['production', 'work']);
 export type ProjectBranch = z.infer<typeof projectBranchSchema>;
 
 export const projectFileSchema = baseFileSchema.extend({
-  objectType: z.literal(objectTypeSchema.Enum.project).readonly(),
+  objectType: z.literal(objectTypeSchema.enum.project).readonly(),
   coreVersion: versionSchema,
   name: z.string().trim().min(1, 'shared.projectNameRequired'),
   description: z.string().trim().min(1, 'shared.projectDescriptionRequired'),
@@ -129,7 +129,10 @@ export const projectUpgradeSchema = z.object({
   /**
    * Function that will be executed in the process of upgrading a Project
    */
-  run: z.function().args(projectFileSchema).returns(z.promise(z.void())),
+  run: z.function({
+    input: [projectFileSchema],
+    output: z.promise(z.void()),
+  }),
 });
 export type ProjectUpgrade = z.infer<typeof projectUpgradeSchema>;
 

@@ -94,7 +94,7 @@ export class ProjectService
     collectionService: CollectionService,
     entryService: EntryService
   ) {
-    super(serviceTypeSchema.Enum.Project, options);
+    super(serviceTypeSchema.enum.Project, options);
 
     this.coreVersion = coreVersion;
     this.logService = logService;
@@ -146,7 +146,7 @@ export class ProjectService
       await this.createFolderStructure(projectPath);
       await this.createGitignore(projectPath);
       await this.gitService.init(projectPath, {
-        initialBranch: projectBranchSchema.Enum.production,
+        initialBranch: projectBranchSchema.enum.production,
       });
       await this.jsonFileService.create(
         projectFile,
@@ -160,7 +160,7 @@ export class ProjectService
       });
       await this.gitService.branches.switch(
         projectPath,
-        projectBranchSchema.Enum.work,
+        projectBranchSchema.enum.work,
         {
           isNew: true,
         }
@@ -288,10 +288,10 @@ export class ProjectService
     const projectFilePath = pathTo.projectFile(props.id);
     const currentBranch = await this.gitService.branches.current(projectPath);
 
-    if (currentBranch !== projectBranchSchema.Enum.work) {
+    if (currentBranch !== projectBranchSchema.enum.work) {
       await this.gitService.branches.switch(
         projectPath,
-        projectBranchSchema.Enum.work
+        projectBranchSchema.enum.work
       );
     }
 
@@ -374,7 +374,7 @@ export class ProjectService
       // Merge the upgrade branch back into the work branch
       await this.gitService.branches.switch(
         projectPath,
-        projectBranchSchema.Enum.work
+        projectBranchSchema.enum.work
       );
       await this.gitService.merge(projectPath, upgradeBranchName, {
         squash: true,
@@ -404,7 +404,7 @@ export class ProjectService
       // Revert back to the work branch and delete the upgrade branch
       await this.gitService.branches.switch(
         projectPath,
-        projectBranchSchema.Enum.work
+        projectBranchSchema.enum.work
       );
       await this.gitService.branches.delete(
         projectPath,
@@ -537,7 +537,7 @@ export class ProjectService
    */
   public async listOutdated(): Promise<OutdatedProject[]> {
     const projectReferences = await this.listReferences(
-      objectTypeSchema.Enum.project
+      objectTypeSchema.enum.project
     );
 
     const result = await Promise.all(
@@ -569,7 +569,7 @@ export class ProjectService
     const limit = props?.limit || 15;
 
     const projectReferences = await this.listReferences(
-      objectTypeSchema.Enum.project
+      objectTypeSchema.enum.project
     );
 
     const partialProjectReferences = projectReferences.slice(offset, limit);
@@ -589,7 +589,7 @@ export class ProjectService
   }
 
   public async count(): Promise<number> {
-    return (await this.listReferences(objectTypeSchema.Enum.project)).length;
+    return (await this.listReferences(objectTypeSchema.enum.project)).length;
   }
 
   /**
@@ -679,7 +679,7 @@ export class ProjectService
    * committed
    */
   private async createFolderStructure(path: string): Promise<void> {
-    const folders = Object.values(projectFolderSchema.Values);
+    const folders = Object.values(projectFolderSchema.enum);
 
     await Promise.all(
       folders.map(async (folder) => {
@@ -705,9 +705,9 @@ export class ProjectService
       '!/**/.gitkeep',
       '',
       '# elek.io related ignores',
-      // projectFolderSchema.Enum.theme + '/',
-      // projectFolderSchema.Enum.public + '/',
-      // projectFolderSchema.Enum.logs + '/',
+      // projectFolderSchema.enum.theme + '/',
+      // projectFolderSchema.enum.public + '/',
+      // projectFolderSchema.enum.logs + '/',
     ];
     await Fs.writeFile(Path.join(path, '.gitignore'), lines.join(Os.EOL));
   }

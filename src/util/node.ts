@@ -26,7 +26,7 @@ export const pathTo = {
     return Path.join(pathTo.project(projectId), 'project.json');
   },
   // projectLogs: (projectId: string): string => {
-  //   return Path.join(pathTo.project(projectId), projectFolderSchema.Enum.logs);
+  //   return Path.join(pathTo.project(projectId), projectFolderSchema.enum.logs);
   // },
 
   // public: (projectId: string): string => {
@@ -34,13 +34,13 @@ export const pathTo = {
   // },
 
   lfs: (projectId: string): string => {
-    return Path.join(pathTo.project(projectId), projectFolderSchema.Enum.lfs);
+    return Path.join(pathTo.project(projectId), projectFolderSchema.enum.lfs);
   },
 
   collections: (projectId: string): string => {
     return Path.join(
       pathTo.project(projectId),
-      projectFolderSchema.Enum.collections
+      projectFolderSchema.enum.collections
     );
   },
   collection: (projectId: string, id: string) => {
@@ -67,7 +67,7 @@ export const pathTo = {
   assets: (projectId: string): string => {
     return Path.join(
       pathTo.project(projectId),
-      projectFolderSchema.Enum.assets
+      projectFolderSchema.enum.assets
     );
   },
   assetFile: (projectId: string, id: string): string => {

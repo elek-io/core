@@ -5,7 +5,7 @@ import { gitCommitSchema } from './gitSchema.js';
 import { valueSchema } from './valueSchema.js';
 
 export const entryFileSchema = baseFileSchema.extend({
-  objectType: z.literal(objectTypeSchema.Enum.entry).readonly(),
+  objectType: z.literal(objectTypeSchema.enum.entry).readonly(),
   values: z.array(valueSchema),
 });
 export type EntryFile = z.infer<typeof entryFileSchema>;

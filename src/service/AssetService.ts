@@ -51,7 +51,7 @@ export class AssetService
     jsonFileService: JsonFileService,
     gitService: GitService
   ) {
-    super(serviceTypeSchema.Enum.Asset, options);
+    super(serviceTypeSchema.enum.Asset, options);
 
     this.logService = logService;
     this.jsonFileService = jsonFileService;
@@ -244,7 +244,7 @@ export class AssetService
     const limit = props.limit || 15;
 
     const assetReferences = await this.listReferences(
-      objectTypeSchema.Enum.asset,
+      objectTypeSchema.enum.asset,
       props.projectId
     );
 
@@ -271,7 +271,7 @@ export class AssetService
     countAssetsSchema.parse(props);
 
     const count = (
-      await this.listReferences(objectTypeSchema.Enum.asset, props.projectId)
+      await this.listReferences(objectTypeSchema.enum.asset, props.projectId)
     ).length;
 
     return count;

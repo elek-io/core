@@ -31,7 +31,7 @@ export class GitTagService
   private git: GitService['git'];
 
   public constructor(options: ElekIoCoreOptions, git: GitService['git']) {
-    super(serviceTypeSchema.Enum.GitTag, options);
+    super(serviceTypeSchema.enum.GitTag, options);
 
     this.git = git;
   }

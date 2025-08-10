@@ -4,7 +4,7 @@ import { baseFileSchema } from './fileSchema.js';
 import { gitCommitSchema } from './gitSchema.js';
 
 export const assetFileSchema = baseFileSchema.extend({
-  objectType: z.literal(objectTypeSchema.Enum.asset).readonly(),
+  objectType: z.literal(objectTypeSchema.enum.asset).readonly(),
   name: z.string(),
   description: z.string(),
   extension: z.string().readonly(),

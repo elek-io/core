@@ -50,7 +50,7 @@
 //     gitService: GitService,
 //     assetService: AssetService
 //   ) {
-//     super(serviceTypeSchema.Enum.Value, options);
+//     super(serviceTypeSchema.enum.Value, options);
 
 //     this.jsonFileService = jsonFileService;
 //     this.gitService = gitService;
@@ -167,7 +167,7 @@
 //     listSharedValuesSchema.parse(props);
 
 //     const references = await this.listReferences(
-//       objectTypeSchema.Enum.sharedValue,
+//       objectTypeSchema.enum.sharedValue,
 //       props.projectId
 //     );
 //     const list = await CoreUtil.returnResolved(
@@ -197,7 +197,7 @@
 
 //     const count = (
 //       await this.listReferences(
-//         objectTypeSchema.Enum.sharedValue,
+//         objectTypeSchema.enum.sharedValue,
 //         props.projectId
 //       )
 //     ).length;
@@ -217,13 +217,13 @@
 //    */
 //   private validate(sharedValue: SharedValueFile) {
 //     switch (sharedValue.valueType) {
-//       case ValueTypeSchema.Enum.boolean:
+//       case ValueTypeSchema.enum.boolean:
 //         z.boolean().parse(sharedValue.content);
 //         break;
-//       case ValueTypeSchema.Enum.number:
+//       case ValueTypeSchema.enum.number:
 //         z.number().parse(sharedValue.content);
 //         break;
-//       case ValueTypeSchema.Enum.string:
+//       case ValueTypeSchema.enum.string:
 //         z.string().parse(sharedValue.content);
 //         break;
 //       default:
