@@ -1,9 +1,5 @@
 {
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "editor.codeActionsOnSave": {
-    "source.organizeImports": "explicit",
-    "source.sortMembers": "explicit"
-  },
   "typescript.tsdk": "./node_modules/typescript/lib"
 }

@@ -26,9 +26,9 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - name: Install dependencies
-        run: npm ic
-      - name: Run linter
-        run: npm run lint
+        run: npm clean-install
+      - name: Run lint, check types and formatting
+        run: npm run lint && npm run check-types && npm run check-format
       - name: Run tests with coverage
         run: npm run coverage
       - name: Upload coverage reports to Codecov
