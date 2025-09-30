@@ -7,6 +7,8 @@ export * from './fieldSchema.js';
 export * from './fileSchema.js';
 export * from './gitSchema.js';
 export * from './projectSchema.js';
+export * from './schemaFromFieldDefinition.js';
 export * from './serviceSchema.js';
 export * from './userSchema.js';
 export * from './valueSchema.js';
+

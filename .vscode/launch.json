@@ -19,6 +19,14 @@
       "runtimeArgs": ["run", "test", "api.test.ts"],
       "skipFiles": ["<node_internals>/**"],
       "type": "node"
+    },
+    {
+      "name": "Schema generation tests",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "test", "schemaFromFieldDefinition.test.ts"],
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node"
     }
   ]
 }
