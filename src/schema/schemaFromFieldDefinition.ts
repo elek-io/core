@@ -8,8 +8,25 @@
 import z from 'zod';
 import { supportedLanguageSchema } from './baseSchema.js';
 import { createEntrySchema, updateEntrySchema } from './entrySchema.js';
-import { AssetFieldDefinition, EntryFieldDefinition, FieldDefinition, FieldTypeSchema, NumberFieldDefinition, RangeFieldDefinition, StringFieldDefinition } from './fieldSchema.js';
-import { directBooleanValueSchema, directNumberValueSchema, directStringValueSchema, referencedValueSchema, Value, valueContentReferenceToAssetSchema, valueContentReferenceToEntrySchema, ValueTypeSchema } from './valueSchema.js';
+import {
+  AssetFieldDefinition,
+  EntryFieldDefinition,
+  FieldDefinition,
+  FieldTypeSchema,
+  NumberFieldDefinition,
+  RangeFieldDefinition,
+  StringFieldDefinition,
+} from './fieldSchema.js';
+import {
+  directBooleanValueSchema,
+  directNumberValueSchema,
+  directStringValueSchema,
+  referencedValueSchema,
+  Value,
+  valueContentReferenceToAssetSchema,
+  valueContentReferenceToEntrySchema,
+  ValueTypeSchema,
+} from './valueSchema.js';
 
 /**
  * Boolean Values are always either true or false, so we don't need the Field definition here
@@ -44,7 +61,9 @@ function getNumberValueContentSchemaFromFieldDefinition(
  * String Values can have different formats (email, url, ipv4, date, time, ...)
  * and can have min and max length and can be required or not
  */
-function getStringValueContentSchemaFromFieldDefinition(fieldDefinition: StringFieldDefinition) {
+function getStringValueContentSchemaFromFieldDefinition(
+  fieldDefinition: StringFieldDefinition
+) {
   let schema = null;
 
   switch (fieldDefinition.fieldType) {
@@ -139,20 +158,38 @@ function getReferenceValueContentSchemaFromFieldDefinition(
   return schema;
 }
 
-function getTranslatableStringValueContentSchemaFromFieldDefinition(fieldDefinition: StringFieldDefinition) {
-  return z.partialRecord(supportedLanguageSchema, getStringValueContentSchemaFromFieldDefinition(fieldDefinition));
+function getTranslatableStringValueContentSchemaFromFieldDefinition(
+  fieldDefinition: StringFieldDefinition
+) {
+  return z.partialRecord(
+    supportedLanguageSchema,
+    getStringValueContentSchemaFromFieldDefinition(fieldDefinition)
+  );
 }
 
-function getTranslatableNumberValueContentSchemaFromFieldDefinition(fieldDefinition: NumberFieldDefinition | RangeFieldDefinition) {
-  return z.partialRecord(supportedLanguageSchema, getNumberValueContentSchemaFromFieldDefinition(fieldDefinition));
+function getTranslatableNumberValueContentSchemaFromFieldDefinition(
+  fieldDefinition: NumberFieldDefinition | RangeFieldDefinition
+) {
+  return z.partialRecord(
+    supportedLanguageSchema,
+    getNumberValueContentSchemaFromFieldDefinition(fieldDefinition)
+  );
 }
 
 function getTranslatableBooleanValueContentSchemaFromFieldDefinition() {
-  return z.partialRecord(supportedLanguageSchema, getBooleanValueContentSchemaFromFieldDefinition());
+  return z.partialRecord(
+    supportedLanguageSchema,
+    getBooleanValueContentSchemaFromFieldDefinition()
+  );
 }
 
-function getTranslatableReferenceValueContentSchemaFromFieldDefinition(fieldDefinition: AssetFieldDefinition | EntryFieldDefinition) {
-  return z.partialRecord(supportedLanguageSchema, getReferenceValueContentSchemaFromFieldDefinition(fieldDefinition));
+function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
+  fieldDefinition: AssetFieldDefinition | EntryFieldDefinition
+) {
+  return z.partialRecord(
+    supportedLanguageSchema,
+    getReferenceValueContentSchemaFromFieldDefinition(fieldDefinition)
+  );
 }
 
 /**
@@ -168,15 +205,24 @@ export function getValueSchemaFromFieldDefinition(
       });
     case ValueTypeSchema.enum.number:
       return directNumberValueSchema.extend({
-        content: getTranslatableNumberValueContentSchemaFromFieldDefinition(fieldDefinition),
+        content:
+          getTranslatableNumberValueContentSchemaFromFieldDefinition(
+            fieldDefinition
+          ),
       });
     case ValueTypeSchema.enum.string:
       return directStringValueSchema.extend({
-        content: getTranslatableStringValueContentSchemaFromFieldDefinition(fieldDefinition),
+        content:
+          getTranslatableStringValueContentSchemaFromFieldDefinition(
+            fieldDefinition
+          ),
       });
     case ValueTypeSchema.enum.reference:
       return referencedValueSchema.extend({
-        content: getTranslatableReferenceValueContentSchemaFromFieldDefinition(fieldDefinition),
+        content:
+          getTranslatableReferenceValueContentSchemaFromFieldDefinition(
+            fieldDefinition
+          ),
       });
     default:
       throw new Error(
@@ -189,33 +235,47 @@ export function getValueSchemaFromFieldDefinition(
 /**
  * Generates a schema for creating a new Entry based on the given Field definitions and Values
  */
-export function getCreateEntrySchemaFromFieldDefinitions(fieldDefinitions: FieldDefinition[], values: Value[]) {
+export function getCreateEntrySchemaFromFieldDefinitions(
+  fieldDefinitions: FieldDefinition[],
+  values: Value[]
+) {
   return {
     ...createEntrySchema,
     values: values.map((value) => {
-      const fieldDefinition = fieldDefinitions.find(fieldDefinition => fieldDefinition.id === value.fieldDefinitionId);
+      const fieldDefinition = fieldDefinitions.find(
+        (fieldDefinition) => fieldDefinition.id === value.fieldDefinitionId
+      );
       if (!fieldDefinition) {
-        throw new Error(`Field definition with ID "${value.fieldDefinitionId}" not found`);
+        throw new Error(
+          `Field definition with ID "${value.fieldDefinitionId}" not found`
+        );
       }
 
       return getValueSchemaFromFieldDefinition(fieldDefinition);
-    })
-  }
+    }),
+  };
 }
 
 /**
  * Generates a schema for updating an existing Entry based on the given Field definitions and Values
  */
-export function getUpdateEntrySchemaFromFieldDefinitions(fieldDefinitions: FieldDefinition[], values: Value[]) {
+export function getUpdateEntrySchemaFromFieldDefinitions(
+  fieldDefinitions: FieldDefinition[],
+  values: Value[]
+) {
   return {
     ...updateEntrySchema,
     values: values.map((value) => {
-      const fieldDefinition = fieldDefinitions.find(fieldDefinition => fieldDefinition.id === value.fieldDefinitionId);
+      const fieldDefinition = fieldDefinitions.find(
+        (fieldDefinition) => fieldDefinition.id === value.fieldDefinitionId
+      );
       if (!fieldDefinition) {
-        throw new Error(`Field definition with ID "${value.fieldDefinitionId}" not found`);
+        throw new Error(
+          `Field definition with ID "${value.fieldDefinitionId}" not found`
+        );
       }
 
       return getValueSchemaFromFieldDefinition(fieldDefinition);
-    })
-  }
+    }),
+  };
 }

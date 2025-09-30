@@ -32,7 +32,7 @@ describe.sequential('Integration', function () {
     async function () {
       const currentBranch = await core.git.branches.current(projectPath);
 
-      expect(currentBranch).to.equal('work');
+      expect(currentBranch).toEqual('work');
     }
   );
 
@@ -50,7 +50,7 @@ describe.sequential('Integration', function () {
     async function () {
       const hasOrigin = await core.git.remotes.hasOrigin(projectPath);
 
-      expect(hasOrigin).to.be.false;
+      expect(hasOrigin).toBe(false);
     }
   );
 
@@ -63,7 +63,7 @@ describe.sequential('Integration', function () {
     async function () {
       const hasOrigin = await core.git.remotes.hasOrigin(projectPath);
 
-      expect(hasOrigin).to.be.true;
+      expect(hasOrigin).toBe(true);
     }
   );
 
@@ -72,7 +72,7 @@ describe.sequential('Integration', function () {
     async function () {
       const remoteOriginUrl = await core.git.remotes.getOriginUrl(projectPath);
 
-      expect(remoteOriginUrl).to.equal(remoteProjectPath);
+      expect(remoteOriginUrl).toEqual(remoteProjectPath);
     }
   );
 
@@ -83,7 +83,7 @@ describe.sequential('Integration', function () {
       await core.git.remotes.setOriginUrl(projectPath, newGitUrl);
       const remoteOriginUrl = await core.git.remotes.getOriginUrl(projectPath);
 
-      expect(remoteOriginUrl).to.equal(newGitUrl);
+      expect(remoteOriginUrl).toEqual(newGitUrl);
     }
   );
 
@@ -114,9 +114,9 @@ describe.sequential('Integration', function () {
       const changes = await core.projects.getChanges({ id: project.id });
 
       expect(changes.ahead).to.have.lengthOf(1);
-      expect(changes.ahead[0]?.message.method).to.equal('create');
-      expect(changes.ahead[0]?.message.reference.objectType).to.equal('asset');
-      expect(changes.ahead[0]?.message.reference.id).to.equal(createdAsset.id);
+      expect(changes.ahead[0]?.message.method).toEqual('create');
+      expect(changes.ahead[0]?.message.reference.objectType).toEqual('asset');
+      expect(changes.ahead[0]?.message.reference.id).toEqual(createdAsset.id);
       expect(changes.behind).to.have.lengthOf(0);
     }
   );
@@ -156,9 +156,9 @@ describe.sequential('Integration', function () {
 
       expect(changes.ahead).to.have.lengthOf(0);
       expect(changes.behind).to.have.lengthOf(1);
-      expect(changes.behind[0]?.message.method).to.equal('create');
-      expect(changes.behind[0]?.message.reference.objectType).to.equal('asset');
-      expect(changes.behind[0]?.message.reference.id).to.equal(
+      expect(changes.behind[0]?.message.method).toEqual('create');
+      expect(changes.behind[0]?.message.reference.objectType).toEqual('asset');
+      expect(changes.behind[0]?.message.reference.id).toEqual(
         anotherCreatedAsset.id
       );
     }

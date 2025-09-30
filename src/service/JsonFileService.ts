@@ -39,7 +39,9 @@ export class JsonFileService extends AbstractCrudService {
       flag: 'wx',
       encoding: 'utf8',
     });
-    this.options.file.cache === true && this.cache.set(path, parsedData);
+    if (this.options.file.cache === true) {
+      this.cache.set(path, parsedData);
+    }
     this.logService.debug(`Created file "${path}"`);
 
     return parsedData;
@@ -70,7 +72,9 @@ export class JsonFileService extends AbstractCrudService {
     });
     const json = this.deserialize(data);
     const parsedData = schema.parse(json);
-    this.options.file.cache === true && this.cache.set(path, parsedData);
+    if (this.options.file.cache === true) {
+      this.cache.set(path, parsedData);
+    }
 
     return parsedData;
   }
@@ -119,7 +123,9 @@ export class JsonFileService extends AbstractCrudService {
       flag: 'w',
       encoding: 'utf8',
     });
-    this.options.file.cache === true && this.cache.set(path, parsedData);
+    if (this.options.file.cache === true) {
+      this.cache.set(path, parsedData);
+    }
     this.logService.debug(`Updated file "${path}"`);
 
     return parsedData;

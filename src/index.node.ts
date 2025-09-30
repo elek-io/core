@@ -1,5 +1,5 @@
 import Fs from 'fs-extra';
-import * as packageJson from '../package.json' with { type: "json" };
+import * as packageJson from '../package.json' with { type: 'json' };
 import { LocalApi } from './api/index.js';
 import {
   constructorElekIoCoreSchema,

@@ -29,30 +29,27 @@ describe.sequential('Integration', function () {
   it.sequential('should be able to create a new Asset', async function () {
     asset = await createAsset(project.id);
 
-    expect(asset.id).to.not.be.undefined;
+    expect(asset.id).toBeDefined();
     expect(
       Math.floor(new Date(asset.created).getTime() / 1000)
     ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
-    expect(asset.extension).to.equal('png');
-    expect(asset.mimeType).to.equal('image/png');
-    expect(asset.history.length).to.equal(1);
+    expect(asset.extension).toEqual('png');
+    expect(asset.mimeType).toEqual('image/png');
+    expect(asset.history.length).toEqual(1);
     expect(
       await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id)),
       'the AssetFile to be created for saving additional meta data of the Asset'
-    ).to.be.true;
+    ).toBe(true);
     expect(
       await Fs.pathExists(
         core.util.pathTo.asset(project.id, asset.id, asset.extension)
       ),
       'the Asset to be copied into the LFS directory of the Project'
-    ).to.be.true;
+    ).toBe(true);
     expect(
       await getFileHash(asset.absolutePath),
-      'the copied file hash'
-    ).to.equal(
-      await getFileHash(Path.resolve('src/test/data/150x150.png')),
-      'the original file hash'
-    );
+      'the copied file hash to equal the original file hash'
+    ).toEqual(await getFileHash(Path.resolve('src/test/data/150x150.png')));
   });
 
   it.sequential('should be able to read an Asset', async function () {
@@ -61,7 +58,7 @@ describe.sequential('Integration', function () {
       id: asset.id,
     });
 
-    expect(readAsset.name).to.equal(asset.name);
+    expect(readAsset.name).toEqual(asset.name);
   });
 
   it.sequential('should be able to update an Asset', async function () {
@@ -71,8 +68,8 @@ describe.sequential('Integration', function () {
       ...asset,
     });
 
-    expect(asset.description).to.equal('A 150x150 image of the text "elek.io"');
-    expect(asset.history.length).to.equal(2);
+    expect(asset.description).toEqual('A 150x150 image of the text "elek.io"');
+    expect(asset.history.length).toEqual(2);
   });
 
   it.sequential(
@@ -85,9 +82,9 @@ describe.sequential('Integration', function () {
         newFilePath,
       });
 
-      expect(asset.extension).to.equal('jpg');
-      expect(asset.size).to.equal(1342);
-      expect(asset.history.length).to.equal(3);
+      expect(asset.extension).toEqual('jpg');
+      expect(asset.size).toEqual(1342);
+      expect(asset.history.length).toEqual(3);
     }
   );
 
@@ -106,11 +103,11 @@ describe.sequential('Integration', function () {
         commitHash: commitHash,
       });
 
-      expect(assetFromHistory.extension).to.equal('png');
-      expect(assetFromHistory.mimeType).to.equal('image/png');
+      expect(assetFromHistory.extension).toEqual('png');
+      expect(assetFromHistory.mimeType).toEqual('image/png');
       expect(
         assetFromHistory.absolutePath.startsWith(core.util.pathTo.tmp)
-      ).to.equal(true);
+      ).toEqual(true);
       expect(
         await Fs.pathExists(
           core.util.pathTo.tmpAsset(
@@ -120,14 +117,11 @@ describe.sequential('Integration', function () {
           )
         ),
         'the Asset to be copied into the tmp directory'
-      ).to.be.true;
+      ).toBe(true);
       expect(
         await getFileHash(assetFromHistory.absolutePath),
-        'the copied file hash'
-      ).to.equal(
-        await getFileHash(Path.resolve('src/test/data/150x150.png')),
-        'the original file hash'
-      );
+        'the copied file hash to equal the original file hash'
+      ).toEqual(await getFileHash(Path.resolve('src/test/data/150x150.png')));
     }
   );
 
@@ -153,11 +147,11 @@ describe.sequential('Integration', function () {
         commitHash: currentCommitHash,
       });
 
-      expect(previousAssetFromHistory.extension).to.equal('png');
-      expect(previousAssetFromHistory.mimeType).to.equal('image/png');
+      expect(previousAssetFromHistory.extension).toEqual('png');
+      expect(previousAssetFromHistory.mimeType).toEqual('image/png');
       expect(
         previousAssetFromHistory.absolutePath.startsWith(core.util.pathTo.tmp)
-      ).to.equal(true);
+      ).toEqual(true);
       expect(
         await Fs.pathExists(
           core.util.pathTo.tmpAsset(
@@ -167,20 +161,17 @@ describe.sequential('Integration', function () {
           )
         ),
         'the Asset to be copied into the tmp directory'
-      ).to.be.true;
+      ).toBe(true);
       expect(
         await getFileHash(previousAssetFromHistory.absolutePath),
-        'the copied file hash'
-      ).to.equal(
-        await getFileHash(Path.resolve('src/test/data/150x150.png')),
-        'the original file hash'
-      );
+        'the copied file hash to equal the original file hash'
+      ).toEqual(await getFileHash(Path.resolve('src/test/data/150x150.png')));
 
-      expect(currentAssetFromHistory.extension).to.equal('jpg');
-      expect(currentAssetFromHistory.mimeType).to.equal('image/jpeg');
+      expect(currentAssetFromHistory.extension).toEqual('jpg');
+      expect(currentAssetFromHistory.mimeType).toEqual('image/jpeg');
       expect(
         currentAssetFromHistory.absolutePath.startsWith(core.util.pathTo.tmp)
-      ).to.equal(true);
+      ).toEqual(true);
       expect(
         await Fs.pathExists(
           core.util.pathTo.tmpAsset(
@@ -190,14 +181,11 @@ describe.sequential('Integration', function () {
           )
         ),
         'the Asset to be copied into the tmp directory'
-      ).to.be.true;
+      ).toBe(true);
       expect(
         await getFileHash(currentAssetFromHistory.absolutePath),
-        'the copied file hash'
-      ).to.equal(
-        await getFileHash(Path.resolve('src/test/data/150x150.jpeg')),
-        'the original file hash'
-      );
+        'the copied file hash to equal the original file hash'
+      ).toEqual(await getFileHash(Path.resolve('src/test/data/150x150.jpeg')));
     }
   );
 
@@ -215,14 +203,11 @@ describe.sequential('Integration', function () {
       expect(
         await Fs.pathExists(filePathToSaveTo),
         'the Asset to be copied into given directory'
-      ).to.be.true;
+      ).toBe(true);
       expect(
         await getFileHash(filePathToSaveTo),
-        'the copied file hash'
-      ).to.equal(
-        await getFileHash(asset.absolutePath),
-        'the original file hash'
-      );
+        'the copied file hash to equal the original file hash'
+      ).toEqual(await getFileHash(asset.absolutePath));
     }
   );
 
@@ -244,33 +229,30 @@ describe.sequential('Integration', function () {
       expect(
         await Fs.pathExists(filePathToSaveToFromHistory),
         'the Asset to be copied into given directory'
-      ).to.be.true;
+      ).toBe(true);
       expect(
         await getFileHash(filePathToSaveToFromHistory),
-        'the copied file hash'
-      ).to.equal(
-        await getFileHash(Path.resolve('src/test/data/150x150.png')),
-        'the original file hash'
-      );
+        'the copied file hash to equal the original file hash'
+      ).toEqual(await getFileHash(Path.resolve('src/test/data/150x150.png')));
     }
   );
 
   it.sequential('should be able to list all Assets', async function () {
     const assets = await core.assets.list({ projectId: project.id });
 
-    expect(assets.total).to.equal(1);
-    expect(assets.list.find((a) => a.id === asset.id)?.id).to.equal(asset.id);
+    expect(assets.total).toEqual(1);
+    expect(assets.list.find((a) => a.id === asset.id)?.id).toEqual(asset.id);
   });
 
   it.sequential('should be able to count all Assets', async function () {
     const counted = await core.assets.count({ projectId: project.id });
 
-    expect(counted).to.equal(1);
+    expect(counted).toEqual(1);
   });
 
   it.sequential('should be able to identify an Asset', async function () {
-    expect(core.assets.isAsset(asset)).to.be.true;
-    expect(core.assets.isAsset({ objectType: 'asset' })).to.be.false;
+    expect(core.assets.isAsset(asset)).toBe(true);
+    expect(core.assets.isAsset({ objectType: 'asset' })).toBe(false);
   });
 
   it.sequential('should be able to delete an Asset', async function () {
@@ -280,9 +262,9 @@ describe.sequential('Integration', function () {
       await Fs.pathExists(
         core.util.pathTo.asset(project.id, asset.id, asset.extension)
       )
-    ).to.be.false;
+    ).toBe(false);
     expect(
       await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id))
-    ).to.be.false;
+    ).toBe(false);
   });
 });

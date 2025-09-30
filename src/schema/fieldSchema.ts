@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { translatableStringSchema, uuidSchema } from './baseSchema.js';
-import {
-  ValueTypeSchema
-} from './valueSchema.js';
+import { ValueTypeSchema } from './valueSchema.js';
 
 export const FieldTypeSchema = z.enum([
   // String Values
@@ -246,4 +244,3 @@ export const fieldDefinitionSchema = z.union([
   // sharedValueDefinitionSchema,
 ]);
 export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
-

@@ -86,8 +86,8 @@ describe.sequential('Integration', function () {
 
       const isRunningAfter = await core.api.isRunning();
 
-      expect(isRunningBefore).to.equal(false);
-      expect(isRunningAfter).to.equal(true);
+      expect(isRunningBefore).toEqual(false);
+      expect(isRunningAfter).toEqual(true);
     }
   );
 
@@ -100,9 +100,9 @@ describe.sequential('Integration', function () {
         'http://localhost:31310/v1/projects'
       )) as PaginatedList<Project>;
 
-      expect(projects.list.length).to.equal(1);
-      expect(projects.total).to.equal(1);
-      expect(projects.list.find((p) => p.id === project.id)?.id).to.equal(
+      expect(projects.list.length).toEqual(1);
+      expect(projects.total).toEqual(1);
+      expect(projects.list.find((p) => p.id === project.id)?.id).toEqual(
         project.id
       );
     }
@@ -113,8 +113,8 @@ describe.sequential('Integration', function () {
       `http://localhost:31310/v1/projects/${project.id}`
     )) as Project;
 
-    expect(core.projects.isProject(readProject)).to.equal(true);
-    expect(readProject.id).to.equal(project.id);
+    expect(core.projects.isProject(readProject)).toEqual(true);
+    expect(readProject.id).toEqual(project.id);
   });
 
   it.sequential(
@@ -124,7 +124,7 @@ describe.sequential('Integration', function () {
         'http://localhost:31310/v1/projects/count'
       )) as number;
 
-      expect(count).to.equal(1);
+      expect(count).toEqual(1);
     }
   );
 
@@ -137,9 +137,9 @@ describe.sequential('Integration', function () {
         `http://localhost:31310/v1/projects/${project.id}/collections`
       )) as PaginatedList<Collection>;
 
-      expect(collections.list.length).to.equal(1);
-      expect(collections.total).to.equal(1);
-      expect(collections.list.find((p) => p.id === collection.id)?.id).to.equal(
+      expect(collections.list.length).toEqual(1);
+      expect(collections.total).toEqual(1);
+      expect(collections.list.find((p) => p.id === collection.id)?.id).toEqual(
         collection.id
       );
     }
@@ -152,8 +152,8 @@ describe.sequential('Integration', function () {
         `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}`
       )) as Collection;
 
-      expect(core.collections.isCollection(readCollection)).to.equal(true);
-      expect(readCollection.id).to.equal(collection.id);
+      expect(core.collections.isCollection(readCollection)).toEqual(true);
+      expect(readCollection.id).toEqual(collection.id);
     }
   );
 
@@ -164,7 +164,7 @@ describe.sequential('Integration', function () {
         `http://localhost:31310/v1/projects/${project.id}/collections/count`
       )) as number;
 
-      expect(count).to.equal(1);
+      expect(count).toEqual(1);
     }
   );
 
@@ -177,11 +177,9 @@ describe.sequential('Integration', function () {
         `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}/entries`
       )) as PaginatedList<Entry>;
 
-      expect(entries.list.length).to.equal(1);
-      expect(entries.total).to.equal(1);
-      expect(entries.list.find((p) => p.id === entry.id)?.id).to.equal(
-        entry.id
-      );
+      expect(entries.list.length).toEqual(1);
+      expect(entries.total).toEqual(1);
+      expect(entries.list.find((p) => p.id === entry.id)?.id).toEqual(entry.id);
     }
   );
 
@@ -190,8 +188,8 @@ describe.sequential('Integration', function () {
       `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}/entries/${entry.id}`
     )) as Entry;
 
-    expect(core.entries.isEntry(readEntry)).to.equal(true);
-    expect(readEntry.id).to.equal(entry.id);
+    expect(core.entries.isEntry(readEntry)).toEqual(true);
+    expect(readEntry.id).toEqual(entry.id);
   });
 
   it.sequential(
@@ -201,7 +199,7 @@ describe.sequential('Integration', function () {
         `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}/entries/count`
       )) as number;
 
-      expect(count).to.equal(1);
+      expect(count).toEqual(1);
     }
   );
 
@@ -212,9 +210,9 @@ describe.sequential('Integration', function () {
       `http://localhost:31310/v1/projects/${project.id}/assets`
     )) as PaginatedList<Asset>;
 
-    expect(assets.list.length).to.equal(1);
-    expect(assets.total).to.equal(1);
-    expect(assets.list.find((p) => p.id === asset.id)?.id).to.equal(asset.id);
+    expect(assets.list.length).toEqual(1);
+    expect(assets.total).toEqual(1);
+    expect(assets.list.find((p) => p.id === asset.id)?.id).toEqual(asset.id);
   });
 
   it.sequential('should be able to read an Asset via API', async function () {
@@ -222,8 +220,8 @@ describe.sequential('Integration', function () {
       `http://localhost:31310/v1/projects/${project.id}/assets/${asset.id}`
     )) as Asset;
 
-    expect(core.assets.isAsset(readAsset)).to.equal(true);
-    expect(readAsset.id).to.equal(asset.id);
+    expect(core.assets.isAsset(readAsset)).toEqual(true);
+    expect(readAsset.id).toEqual(asset.id);
   });
 
   it.sequential(
@@ -233,7 +231,7 @@ describe.sequential('Integration', function () {
         `http://localhost:31310/v1/projects/${project.id}/assets/count`
       )) as number;
 
-      expect(count).to.equal(1);
+      expect(count).toEqual(1);
     }
   );
 
@@ -258,8 +256,8 @@ describe.sequential('Integration', function () {
 
       const isRunningAfter = await core.api.isRunning();
 
-      expect(isRunningBefore).to.equal(true);
-      expect(isRunningAfter).to.equal(false);
+      expect(isRunningBefore).toEqual(true);
+      expect(isRunningAfter).toEqual(false);
     }
   );
 });

@@ -40,7 +40,7 @@ describe.sequential('Integration', function () {
       referencedEntry.id
     );
 
-    expect(entry.id).to.not.be.undefined;
+    expect(entry.id).toBeDefined();
   });
 
   it.sequential(

@@ -29,7 +29,7 @@ describe.sequential('Integration', function () {
     async function ({ task }) {
       project = await createProject('project #1');
 
-      expect(project.name).to.equal('project #1');
+      expect(project.name).toEqual('project #1');
       expect(project.settings, 'settings to default to').to.deep.equal({
         language: {
           supported: ['en'],
@@ -39,11 +39,12 @@ describe.sequential('Integration', function () {
       expect(
         Math.floor(new Date(project.created).getTime() / 1000)
       ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
-      expect(project.updated).to.be.null;
-      expect(await Fs.pathExists(core.util.pathTo.project(project.id))).to.be
-        .true;
-      expect(project.history.length).to.equal(1);
-      expect(project.fullHistory.length).to.equal(1);
+      expect(project.updated).toBeNull();
+      expect(await Fs.pathExists(core.util.pathTo.project(project.id))).toBe(
+        true
+      );
+      expect(project.history.length).toEqual(1);
+      expect(project.fullHistory.length).toEqual(1);
       await ensureCleanGitStatus(task, project.id);
     }
   );
@@ -51,7 +52,7 @@ describe.sequential('Integration', function () {
   it.sequential('should be able to read a Project', async function () {
     const readProject = await core.projects.read({ id: project.id });
 
-    expect(readProject.name).to.equal('project #1');
+    expect(readProject.name).toEqual('project #1');
   });
 
   it.sequential(
@@ -61,13 +62,13 @@ describe.sequential('Integration', function () {
       await core.projects.update(project);
       const updatedProject = await core.projects.read({ id: project.id });
 
-      expect(updatedProject.name).to.equal('Project #1');
+      expect(updatedProject.name).toEqual('Project #1');
       expect(
         // @ts-expect-error updated is not allowed to be null
         Math.floor(new Date(updatedProject.updated).getTime() / 1000)
       ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
-      expect(updatedProject.history.length).to.equal(2);
-      expect(updatedProject.fullHistory.length).to.equal(2);
+      expect(updatedProject.history.length).toEqual(2);
+      expect(updatedProject.fullHistory.length).toEqual(2);
       await ensureCleanGitStatus(task, project.id);
     }
   );
@@ -80,8 +81,8 @@ describe.sequential('Integration', function () {
       await createEntry(project.id, collection.id, asset.id);
       const readProject = await core.projects.read({ id: project.id });
 
-      expect(readProject.history.length).to.equal(2);
-      expect(readProject.fullHistory.length).to.equal(6); // Now with new Asset, Collection and Entry
+      expect(readProject.history.length).toEqual(2);
+      expect(readProject.fullHistory.length).toEqual(6); // Now with new Asset, Collection and Entry
       await ensureCleanGitStatus(task, project.id);
     }
   );
@@ -91,23 +92,23 @@ describe.sequential('Integration', function () {
     async function () {
       const readProject = await core.projects.read({ id: project.id });
 
-      expect(readProject.history.length).to.equal(2);
+      expect(readProject.history.length).toEqual(2);
 
       const projectFromHistory = await core.projects.read({
         id: project.id,
         commitHash: readProject.history.pop()?.hash,
       });
 
-      expect(projectFromHistory.name).to.equal('project #1');
+      expect(projectFromHistory.name).toEqual('project #1');
     }
   );
 
   it.sequential('should be able to list all Projects', async function () {
     const projects = await core.projects.list();
 
-    expect(projects.list.length).to.equal(1);
-    expect(projects.total).to.equal(1);
-    expect(projects.list.find((p) => p.id === project.id)?.id).to.equal(
+    expect(projects.list.length).toEqual(1);
+    expect(projects.total).toEqual(1);
+    expect(projects.list.find((p) => p.id === project.id)?.id).toEqual(
       project.id
     );
   });
@@ -115,12 +116,12 @@ describe.sequential('Integration', function () {
   it.sequential('should be able to count all Projects', async function () {
     const counted = await core.projects.count();
 
-    expect(counted).to.equal(1);
+    expect(counted).toEqual(1);
   });
 
   it.sequential('should be able to identify a Project', async function () {
-    expect(core.projects.isProject(project)).to.be.true;
-    expect(core.projects.isProject({ objectType: 'project' })).to.be.false;
+    expect(core.projects.isProject(project)).toBe(true);
+    expect(core.projects.isProject({ objectType: 'project' })).toBe(false);
   });
 
   it.sequential(
@@ -170,7 +171,7 @@ describe.sequential('Integration', function () {
     async function () {
       const outdatedProjects = await core.projects.listOutdated();
 
-      expect(outdatedProjects.length).to.equal(1);
+      expect(outdatedProjects.length).toEqual(1);
     }
   );
 
@@ -201,7 +202,7 @@ describe.sequential('Integration', function () {
     async function () {
       const outdatedProjects = await core.projects.listOutdated();
 
-      expect(outdatedProjects.length).to.equal(0);
+      expect(outdatedProjects.length).toEqual(0);
     }
   );
 
@@ -221,7 +222,7 @@ describe.sequential('Integration', function () {
         id: project.id,
       });
 
-      expect(currentBranch).to.equal('work');
+      expect(currentBranch).toEqual('work');
     }
   );
 
@@ -236,7 +237,7 @@ describe.sequential('Integration', function () {
         id: project.id,
       });
 
-      expect(currentBranch).to.equal('production');
+      expect(currentBranch).toEqual('production');
       await ensureCleanGitStatus(task, project.id);
     }
   );
@@ -252,9 +253,9 @@ describe.sequential('Integration', function () {
 
   it.sequential('should be able to force delete a Project', async function () {
     await core.projects.delete({ id: project.id, force: true });
-    expect(
-      await Fs.pathExists(core.util.pathTo.project(project.id))
-    ).to.be.false;
+    expect(await Fs.pathExists(core.util.pathTo.project(project.id))).toBe(
+      false
+    );
   });
 
   it.sequential(
@@ -264,9 +265,10 @@ describe.sequential('Integration', function () {
       remoteProjectPath = Path.join(core.util.pathTo.tmp, remoteProject.id);
 
       clonedProject = await core.projects.clone({ url: remoteProjectPath });
-      expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id))).to
-        .be.true;
-      expect(clonedProject.remoteOriginUrl).to.equal(remoteProjectPath);
+      expect(
+        await Fs.pathExists(core.util.pathTo.project(clonedProject.id))
+      ).toBe(true);
+      expect(clonedProject.remoteOriginUrl).toEqual(remoteProjectPath);
       await ensureCleanGitStatus(task, clonedProject.id);
     }
   );
@@ -280,7 +282,7 @@ describe.sequential('Integration', function () {
         id: clonedProject.id,
       });
 
-      expect(changes.ahead.length).to.equal(2);
+      expect(changes.ahead.length).toEqual(2);
       await ensureCleanGitStatus(task, clonedProject.id);
     }
   );
@@ -302,7 +304,7 @@ describe.sequential('Integration', function () {
         id: clonedProject.id,
       });
 
-      expect(changes.ahead.length).to.equal(0);
+      expect(changes.ahead.length).toEqual(0);
       await ensureCleanGitStatus(task, clonedProject.id);
     }
   );
@@ -321,8 +323,9 @@ describe.sequential('Integration', function () {
     async function () {
       await core.projects.delete({ id: clonedProject.id });
 
-      expect(await Fs.pathExists(core.util.pathTo.project(clonedProject.id))).to
-        .be.false;
+      expect(
+        await Fs.pathExists(core.util.pathTo.project(clonedProject.id))
+      ).toBe(false);
     }
   );
 });

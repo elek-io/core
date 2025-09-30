@@ -26,7 +26,7 @@ describe.sequential('Integration', function () {
   it.sequential('should be able to create a new Collection', async function () {
     collection = await createCollection(project.id);
 
-    expect(collection.id).to.not.be.undefined;
+    expect(collection.id).toBeUndefined();
   });
 
   it.sequential('should be able to read an Collection', async function () {
@@ -35,7 +35,7 @@ describe.sequential('Integration', function () {
       id: collection.id,
     });
 
-    expect(readCollection.name.singular.en).to.equal(
+    expect(readCollection.name.singular.en).toEqual(
       collection.name.singular.en
     );
   });
@@ -48,7 +48,7 @@ describe.sequential('Integration', function () {
       ...collection,
     });
 
-    expect(collection.description.en).to.equal(
+    expect(collection.description.en).toEqual(
       'The title should be short and catchy, to grab the users attention.'
     );
   });
@@ -62,7 +62,7 @@ describe.sequential('Integration', function () {
         commitHash: collection.history.pop()?.hash,
       });
 
-      expect(collectionFromHistory.description.en).to.equal(
+      expect(collectionFromHistory.description.en).toEqual(
         'A Collection that contains our Products'
       );
     }
@@ -71,9 +71,9 @@ describe.sequential('Integration', function () {
   it.sequential('should be able to list all Collections', async function () {
     const collections = await core.collections.list({ projectId: project.id });
 
-    expect(collections.list.length).to.equal(1);
-    expect(collections.total).to.equal(1);
-    expect(collections.list.find((a) => a.id === collection.id)?.id).to.equal(
+    expect(collections.list.length).toEqual(1);
+    expect(collections.total).toEqual(1);
+    expect(collections.list.find((a) => a.id === collection.id)?.id).toEqual(
       collection.id
     );
   });
@@ -81,14 +81,14 @@ describe.sequential('Integration', function () {
   it.sequential('should be able to count all Collections', async function () {
     const counted = await core.collections.count({ projectId: project.id });
 
-    expect(counted).to.equal(1);
+    expect(counted).toEqual(1);
   });
 
   it.sequential('should be able to identify an Collection', async function () {
-    expect(core.collections.isCollection(collection)).to.be.true;
-    expect(
-      core.collections.isCollection({ objectType: 'collection' })
-    ).to.be.false;
+    expect(core.collections.isCollection(collection)).toEqual(true);
+    expect(core.collections.isCollection({ objectType: 'collection' })).toEqual(
+      false
+    );
   });
 
   it.sequential('should be able to delete an Collection', async function () {
@@ -98,11 +98,11 @@ describe.sequential('Integration', function () {
       await Fs.pathExists(
         core.util.pathTo.collection(project.id, collection.id)
       )
-    ).to.be.false;
+    ).toBe(false);
     expect(
       await Fs.pathExists(
         core.util.pathTo.collectionFile(project.id, collection.id)
       )
-    ).to.be.false;
+    ).toBe(false);
   });
 });

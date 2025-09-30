@@ -5,11 +5,11 @@
 
 version: 2
 updates:
-  - package-ecosystem: "npm" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: 'npm' # See documentation for possible values
+    directory: '/' # Location of package manifests
     schedule:
-      interval: "daily"
+      interval: 'daily'
     ignore:
-    - dependency-name: "@types/node"
-      # Node.js types, ignore major updates since we don't want to use types for 22.x.x if we are using 20.x.x
-      update-types: ["version-update:semver-major"]
+      - dependency-name: '@types/node'
+        # Node.js types, ignore major updates since we don't want to use types for 22.x.x if we are using 20.x.x
+        update-types: ['version-update:semver-major']

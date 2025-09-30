@@ -22,7 +22,7 @@ import {
   type EntryFile,
   type ListEntriesProps,
   type ReadEntryProps,
-  type UpdateEntryProps
+  type UpdateEntryProps,
 } from '../schema/index.js';
 import { pathTo, returnResolved } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
@@ -95,7 +95,11 @@ export class EntryService
     );
 
     // Validate all Values against their Field Definitions
-    const createEntrySchemaFromFieldDefinitions = getCreateEntrySchemaFromFieldDefinitions(collection.fieldDefinitions, entry.values);
+    const createEntrySchemaFromFieldDefinitions =
+      getCreateEntrySchemaFromFieldDefinitions(
+        collection.fieldDefinitions,
+        entry.values
+      );
     createEntrySchemaFromFieldDefinitions.parse(props);
 
     await this.jsonFileService.create(
@@ -182,7 +186,11 @@ export class EntryService
     );
 
     // Validate all Values against their Field Definitions
-    const updateEntrySchemaFromFieldDefinitions = getUpdateEntrySchemaFromFieldDefinitions(collection.fieldDefinitions, entry.values);
+    const updateEntrySchemaFromFieldDefinitions =
+      getUpdateEntrySchemaFromFieldDefinitions(
+        collection.fieldDefinitions,
+        entry.values
+      );
     updateEntrySchemaFromFieldDefinitions.parse(props);
 
     await this.jsonFileService.update(
