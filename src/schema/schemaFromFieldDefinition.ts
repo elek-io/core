@@ -7,7 +7,12 @@
 
 import z from 'zod';
 import { supportedLanguageSchema } from './baseSchema.js';
-import { createEntrySchema, updateEntrySchema } from './entrySchema.js';
+import {
+  CreateEntryProps,
+  createEntrySchema,
+  UpdateEntryProps,
+  updateEntrySchema,
+} from './entrySchema.js';
 import {
   AssetFieldDefinition,
   EntryFieldDefinition,
@@ -234,12 +239,16 @@ export function getValueSchemaFromFieldDefinition(
 
 /**
  * Generates a schema for creating a new Entry based on the given Field definitions and Values
+ *
+ * @todo The return type of z.ZodType<CreateEntryProps> is added because otherwise TS complains with
+ *       error TS2742: The inferred type of 'getCreateEntrySchemaFromFieldDefinitions' cannot be named without a reference to '.pnpm/@asteasolutions+zod-to-openapi@8.1.0_zod@4.1.11/node_modules/@asteasolutions/zod-to-openapi'. This is likely not portable. A type annotation is necessary.
+ *       This should be investigated further and fixed properly.
  */
 export function getCreateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
   values: Value[]
-) {
-  return {
+): z.ZodType<CreateEntryProps> {
+  const schema = {
     ...createEntrySchema,
     values: values.map((value) => {
       const fieldDefinition = fieldDefinitions.find(
@@ -254,16 +263,22 @@ export function getCreateEntrySchemaFromFieldDefinitions(
       return getValueSchemaFromFieldDefinition(fieldDefinition);
     }),
   };
+
+  return schema;
 }
 
 /**
  * Generates a schema for updating an existing Entry based on the given Field definitions and Values
+ *
+ * @todo The return type of z.ZodType<UpdateEntryProps> is added because otherwise TS complains with
+ *       error TS2742: The inferred type of 'getUpdateEntrySchemaFromFieldDefinitions' cannot be named without a reference to '.pnpm/@asteasolutions+zod-to-openapi@8.1.0_zod@4.1.11/node_modules/@asteasolutions/zod-to-openapi'. This is likely not portable. A type annotation is necessary.
+ *       This should be investigated further and fixed properly.
  */
 export function getUpdateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
   values: Value[]
-) {
-  return {
+): z.ZodType<UpdateEntryProps> {
+  const schema = {
     ...updateEntrySchema,
     values: values.map((value) => {
       const fieldDefinition = fieldDefinitions.find(
@@ -278,4 +293,6 @@ export function getUpdateEntrySchemaFromFieldDefinitions(
       return getValueSchemaFromFieldDefinition(fieldDefinition);
     }),
   };
+
+  return schema;
 }
