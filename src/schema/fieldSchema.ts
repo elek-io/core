@@ -1,10 +1,6 @@
 import { z } from 'zod';
 import { translatableStringSchema, uuidSchema } from './baseSchema.js';
-import {
-  valueContentReferenceToAssetSchema,
-  valueContentReferenceToEntrySchema,
-  ValueTypeSchema,
-} from './valueSchema.js';
+import { ValueTypeSchema } from './valueSchema.js';
 
 export const FieldTypeSchema = z.enum([
   // String Values
@@ -35,7 +31,7 @@ export const FieldWidthSchema = z.enum(['12', '6', '4', '3']);
 export const FieldDefinitionBaseSchema = z.object({
   id: uuidSchema.readonly(),
   label: translatableStringSchema,
-  description: translatableStringSchema,
+  description: translatableStringSchema.nullable(),
   isRequired: z.boolean(),
   isDisabled: z.boolean(),
   isUnique: z.boolean(),
@@ -248,146 +244,3 @@ export const fieldDefinitionSchema = z.union([
   // sharedValueDefinitionSchema,
 ]);
 export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
-
-/**
- * Dynamic zod schema generation
- */
-
-/**
- * Generates a zod schema to check a Values content, based on given Fields definition
- */
-export function getValueContentSchemaFromFieldDefinition(
-  fieldDefinition: FieldDefinition
-) {
-  switch (fieldDefinition.valueType) {
-    case ValueTypeSchema.enum.boolean:
-      return getBooleanValueContentSchema();
-    case ValueTypeSchema.enum.number:
-      return getNumberValueContentSchema(fieldDefinition);
-    case ValueTypeSchema.enum.string:
-      return getStringValueContentSchema(fieldDefinition);
-    case ValueTypeSchema.enum.reference:
-      return getReferenceValueContentSchema(fieldDefinition);
-    default:
-      throw new Error(
-        // @ts-expect-error
-        `Error generating schema for unsupported ValueType "${fieldDefinition.valueType}"`
-      );
-  }
-}
-
-function getBooleanValueContentSchema() {
-  return z.boolean();
-}
-
-function getNumberValueContentSchema(
-  definition: NumberFieldDefinition | RangeFieldDefinition
-) {
-  let schema = z.number();
-
-  if (definition.min) {
-    schema = schema.min(definition.min);
-  }
-  if (definition.max) {
-    schema = schema.max(definition.max);
-  }
-
-  if (definition.isRequired === false) {
-    return schema.nullable();
-  }
-
-  return schema;
-}
-
-function getStringValueContentSchema(definition: StringFieldDefinition) {
-  let schema = null;
-
-  switch (definition.fieldType) {
-    case FieldTypeSchema.enum.email:
-      schema = z.email();
-      break;
-    case FieldTypeSchema.enum.url:
-      schema = z.url();
-      break;
-    case FieldTypeSchema.enum.ipv4:
-      schema = z.ipv4();
-      break;
-    case FieldTypeSchema.enum.date:
-      schema = z.iso.date();
-      break;
-    case FieldTypeSchema.enum.time:
-      schema = z.iso.time();
-      break;
-    case FieldTypeSchema.enum.datetime:
-      schema = z.iso.datetime();
-      break;
-    case FieldTypeSchema.enum.telephone:
-      schema = z.e164();
-      break;
-    case FieldTypeSchema.enum.text:
-    case FieldTypeSchema.enum.textarea:
-      schema = z.string().trim();
-      break;
-  }
-
-  if ('min' in definition && definition.min) {
-    schema = schema.min(definition.min);
-  }
-  if ('max' in definition && definition.max) {
-    schema = schema.max(definition.max);
-  }
-
-  if (definition.isRequired === false) {
-    return schema.nullable();
-  }
-
-  return schema.min(1, 'shared.stringValueRequired'); // @see https://github.com/colinhacks/zod/issues/2466
-}
-
-function getReferenceValueContentSchema(
-  definition: AssetFieldDefinition | EntryFieldDefinition // | SharedValueFieldDefinition
-) {
-  let schema;
-
-  switch (definition.fieldType) {
-    case FieldTypeSchema.enum.asset:
-      {
-        schema = z.array(valueContentReferenceToAssetSchema);
-      }
-      break;
-    case FieldTypeSchema.enum.entry:
-      {
-        schema = z.array(valueContentReferenceToEntrySchema);
-      }
-      break;
-    // case ValueInputTypeSchema.enum.sharedValue: {
-    //   let schema = valueContentReferenceToSharedValueSchema.extend({}); // Deep copy to not overwrite the base schema
-
-    //   if (definition.isRequired) {
-    //     const requiredReferences = schema.shape.references.min(
-    //       1,
-    //       'shared.assetValueRequired'
-    //     );
-    //     schema = schema.extend({
-    //       references: requiredReferences,
-    //     });
-    //   }
-
-    //   return valueContentReferenceToSharedValueSchema;
-    // }
-  }
-
-  if (definition.isRequired) {
-    schema = schema.min(1, 'shared.referenceRequired');
-  }
-
-  if (definition.min) {
-    schema = schema.min(definition.min);
-  }
-
-  if (definition.max) {
-    schema = schema.max(definition.max);
-  }
-
-  return schema;
-}

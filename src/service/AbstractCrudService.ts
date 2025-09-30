@@ -8,6 +8,7 @@ import {
   type ServiceType,
 } from '../schema/index.js';
 import { files, folders, notEmpty, pathTo } from '../util/node.js';
+import { LogService } from './LogService.js';
 
 /**
  * A base service that provides properties for most other services
@@ -15,13 +16,19 @@ import { files, folders, notEmpty, pathTo } from '../util/node.js';
 export abstract class AbstractCrudService {
   public readonly type: ServiceType;
   public readonly options: ElekIoCoreOptions;
+  protected readonly logService: LogService;
 
   /**
    * Do not instantiate directly as this is an abstract class
    */
-  protected constructor(type: ServiceType, options: ElekIoCoreOptions) {
+  protected constructor(
+    type: ServiceType,
+    options: ElekIoCoreOptions,
+    logService: LogService
+  ) {
     this.type = type;
     this.options = options;
+    this.logService = logService;
   }
 
   /**
@@ -83,7 +90,10 @@ export abstract class AbstractCrudService {
 
       try {
         return fileReferenceSchema.parse(folderReference);
-      } catch (error) {
+      } catch {
+        this.logService.warn(
+          `[getFolderReferences] Ignoring folder "${possibleFolder.name}" in "${path}" as it does not match the expected format`
+        );
         return null;
       }
     });
@@ -111,7 +121,10 @@ export abstract class AbstractCrudService {
 
         try {
           return fileReferenceSchema.parse(fileReference);
-        } catch (error) {
+        } catch {
+          this.logService.warn(
+            `[getFileReferences] Ignoring file "${possibleFile.name}" in "${path}" as it does not match the expected format`
+          );
           return null;
         }
       })

@@ -27,7 +27,7 @@ export async function ensureCleanGitStatus(
       }" finished with an unclean git status: ${JSON.stringify(status)}`
     );
   }
-  expect(status.length).to.equal(0);
+  expect(status.length).toEqual(0);
 }
 
 /**

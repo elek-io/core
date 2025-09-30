@@ -10,33 +10,41 @@ jobs:
     name: Release
     timeout-minutes: 15
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22]
     steps:
       - name: Check out code
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-      - name: Setup Node.js 20 environment
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Setup Node.js ${{ matrix.node-version }} environment
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
       - name: Install dependencies
-        run: npm ic
-      - name: Run linter
-        run: npm run lint
+        run: pnpm install --frozen-lockfile
+      - name: Run lint, check types and formatting
+        run: pnpm run lint && pnpm run check-types && pnpm run check-format
       - name: Run tests with coverage
-        run: npm run coverage
+        run: pnpm run coverage
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       - name: Build
-        run: npm run build
+        run: pnpm run build
       - name: Create pull request or publish to NPM
         uses: changesets/action@v1
         with:
           title: 'WIP: Release x.x.x'
           commit: Release new version
-          publish: npm run release
+          publish: pnpm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -75,7 +75,6 @@ export class ProjectService
   implements CrudServiceWithListCount<Project>
 {
   private coreVersion: Version;
-  private logService: LogService;
   private jsonFileService: JsonFileService;
   private userService: UserService;
   private gitService: GitService;
@@ -94,10 +93,9 @@ export class ProjectService
     collectionService: CollectionService,
     entryService: EntryService
   ) {
-    super(serviceTypeSchema.enum.Project, options);
+    super(serviceTypeSchema.enum.Project, options, logService);
 
     this.coreVersion = coreVersion;
-    this.logService = logService;
     this.jsonFileService = jsonFileService;
     this.userService = userService;
     this.gitService = gitService;
@@ -470,9 +468,8 @@ export class ProjectService
   public async getChanges(props: GetChangesProjectProps) {
     getChangesProjectSchema.parse(props);
     const projectPath = pathTo.project(props.id);
-    const hasRemoteOrigin = await this.gitService.remotes.hasOrigin(
-      projectPath
-    );
+    const hasRemoteOrigin =
+      await this.gitService.remotes.hasOrigin(projectPath);
     if (hasRemoteOrigin === false) {
       throw new Error(`Project "${props.id}" does not have a remote origin`);
     }
@@ -721,9 +718,8 @@ export class ProjectService
     switch (objectType) {
       case 'asset': {
         const assetFilePath = pathTo.assetFile(projectId, reference.id);
-        const prevAssetFile = await this.jsonFileService.unsafeRead(
-          assetFilePath
-        );
+        const prevAssetFile =
+          await this.jsonFileService.unsafeRead(assetFilePath);
         const migratedAssetFile = this.assetService.migrate(prevAssetFile);
         await this.assetService.update({ projectId, ...migratedAssetFile });
         this.logService.info(`Upgraded ${objectType} "${assetFilePath}"`, {
@@ -737,9 +733,8 @@ export class ProjectService
           projectId,
           reference.id
         );
-        const prevCollectionFile = await this.jsonFileService.unsafeRead(
-          collectionFilePath
-        );
+        const prevCollectionFile =
+          await this.jsonFileService.unsafeRead(collectionFilePath);
         const migratedCollectionFile =
           this.collectionService.migrate(prevCollectionFile);
         await this.collectionService.update({
@@ -761,9 +756,8 @@ export class ProjectService
           collectionId,
           reference.id
         );
-        const prevEntryFile = await this.jsonFileService.unsafeRead(
-          entryFilePath
-        );
+        const prevEntryFile =
+          await this.jsonFileService.unsafeRead(entryFilePath);
         const migratedEntryFile = this.entryService.migrate(prevEntryFile);
         await this.entryService.update({
           projectId,

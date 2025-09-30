@@ -22,7 +22,7 @@ describe.sequential('Integration', function () {
       message: 'Initial tag',
     });
 
-    expect(tag.message).to.equal('Initial tag');
+    expect(tag.message).toEqual('Initial tag');
   });
 
   it.sequential('should be able to read a tag', async function () {
@@ -31,7 +31,7 @@ describe.sequential('Integration', function () {
       id: tag.id,
     });
 
-    expect(readTag.message).to.equal('Initial tag');
+    expect(readTag.message).toEqual('Initial tag');
   });
 
   it.sequential('should throw when trying to update a tag', async function () {
@@ -43,7 +43,7 @@ describe.sequential('Integration', function () {
       path: projectPath,
     });
 
-    expect(numberOfTags).to.equal(1);
+    expect(numberOfTags).toEqual(1);
   });
 
   it.sequential('should be able to list all tags', async function () {
@@ -51,7 +51,7 @@ describe.sequential('Integration', function () {
       path: projectPath,
     });
 
-    expect(tags.list.length).to.equal(1);
+    expect(tags.list.length).toEqual(1);
   });
 
   it.sequential('should be able to delete the tag', async function () {
@@ -62,7 +62,7 @@ describe.sequential('Integration', function () {
 
     const numberOfTags = await core.git.tags.count({ path: projectPath });
 
-    expect(numberOfTags).to.equal(0);
+    expect(numberOfTags).toEqual(0);
   });
 
   it.sequential(
@@ -74,7 +74,7 @@ describe.sequential('Integration', function () {
         hash: 'HEAD',
       });
 
-      expect(tag.message).to.equal('Tagged HEAD');
+      expect(tag.message).toEqual('Tagged HEAD');
     }
   );
 });

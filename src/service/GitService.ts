@@ -55,7 +55,11 @@ export class GitService {
     this.queue = new PQueue({
       concurrency: 1, // No concurrency because git operations are sequencial
     });
-    this.gitTagService = new GitTagService(options, this.git.bind(this));
+    this.gitTagService = new GitTagService(
+      options,
+      this.git.bind(this),
+      logService
+    );
     this.logService = logService;
     this.userService = userService;
 

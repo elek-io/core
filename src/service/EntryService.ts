@@ -1,12 +1,12 @@
 import Fs from 'fs-extra';
 import {
-  FieldDefinition,
   countEntriesSchema,
   createEntrySchema,
   deleteEntrySchema,
   entryFileSchema,
   entrySchema,
-  getValueContentSchemaFromFieldDefinition,
+  getCreateEntrySchemaFromFieldDefinitions,
+  getUpdateEntrySchemaFromFieldDefinitions,
   listEntriesSchema,
   objectTypeSchema,
   readEntrySchema,
@@ -23,7 +23,6 @@ import {
   type ListEntriesProps,
   type ReadEntryProps,
   type UpdateEntryProps,
-  type Value,
 } from '../schema/index.js';
 import { pathTo, returnResolved } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
@@ -40,7 +39,6 @@ export class EntryService
   extends AbstractCrudService
   implements CrudServiceWithListCount<Entry>
 {
-  private logService: LogService;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
   private collectionService: CollectionService;
@@ -54,9 +52,8 @@ export class EntryService
     collectionService: CollectionService
     // sharedValueService: SharedValueService
   ) {
-    super(serviceTypeSchema.enum.Entry, options);
+    super(serviceTypeSchema.enum.Entry, options, logService);
 
-    this.logService = logService;
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
     this.collectionService = collectionService;
@@ -89,17 +86,19 @@ export class EntryService
       updated: null,
     };
 
-    const entry: Entry = await this.toEntry(
+    const entry = await this.toEntry(
       props.projectId,
       props.collectionId,
       entryFile
     );
 
-    this.validateValues({
-      collectionId: props.collectionId,
-      fieldDefinitions: collection.fieldDefinitions,
-      values: entry.values,
-    });
+    // Validate all Values against their Field Definitions
+    const createEntrySchemaFromFieldDefinitions =
+      getCreateEntrySchemaFromFieldDefinitions(
+        collection.fieldDefinitions,
+        entry.values
+      );
+    createEntrySchemaFromFieldDefinitions.parse(props);
 
     await this.jsonFileService.create(
       entryFile,
@@ -178,17 +177,19 @@ export class EntryService
       updated: datetime(),
     };
 
-    const entry: Entry = await this.toEntry(
+    const entry = await this.toEntry(
       props.projectId,
       props.collectionId,
       entryFile
     );
 
-    this.validateValues({
-      collectionId: props.collectionId,
-      fieldDefinitions: collection.fieldDefinitions,
-      values: entry.values,
-    });
+    // Validate all Values against their Field Definitions
+    const updateEntrySchemaFromFieldDefinitions =
+      getUpdateEntrySchemaFromFieldDefinitions(
+        collection.fieldDefinitions,
+        entry.values
+      );
+    updateEntrySchemaFromFieldDefinitions.parse(props);
 
     await this.jsonFileService.update(
       entryFile,
@@ -291,62 +292,6 @@ export class EntryService
     // @todo
 
     return entryFileSchema.parse(potentiallyOutdatedEntryFile);
-  }
-
-  /**
-   * Returns a Field definition by ID
-   */
-  private getFieldDefinitionById(props: {
-    fieldDefinitions: FieldDefinition[];
-    id: string;
-    collectionId: string;
-  }) {
-    const fieldDefinition = props.fieldDefinitions.find((definition) => {
-      if (definition.id === props.id) {
-        return true;
-      }
-      return false;
-    });
-
-    if (!fieldDefinition) {
-      throw new Error(
-        `No Field definition with ID "${props.id}" found in Collection "${props.collectionId}" for given Value reference`
-      );
-    }
-
-    return fieldDefinition;
-  }
-
-  /**
-   * Validates given Values against their Collections Field definitions
-   */
-  private validateValues(props: {
-    collectionId: string;
-    fieldDefinitions: FieldDefinition[];
-    values: Value[];
-  }) {
-    props.values.map((value) => {
-      const fieldDefinition = this.getFieldDefinitionById({
-        collectionId: props.collectionId,
-        fieldDefinitions: props.fieldDefinitions,
-        id: value.fieldDefinitionId,
-      });
-      const contentSchema =
-        getValueContentSchemaFromFieldDefinition(fieldDefinition);
-
-      this.logService.debug(
-        'Validating Value against content schema generated from Field definition',
-        {
-          value,
-          contentSchema,
-          fieldDefinition,
-        }
-      );
-
-      for (const [_language, content] of Object.entries(value.content)) {
-        contentSchema.parse(content);
-      }
-    });
   }
 
   /**

@@ -27,6 +27,7 @@ import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import { GitService } from './GitService.js';
 import { JsonFileService } from './JsonFileService.js';
+import { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for Collection files on disk
@@ -40,10 +41,11 @@ export class CollectionService
 
   constructor(
     options: ElekIoCoreOptions,
+    logService: LogService,
     jsonFileService: JsonFileService,
     gitService: GitService
   ) {
-    super(serviceTypeSchema.enum.Collection, options);
+    super(serviceTypeSchema.enum.Collection, options, logService);
 
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;

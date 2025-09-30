@@ -40,8 +40,6 @@ export class AssetService
   extends AbstractCrudService
   implements CrudServiceWithListCount<Asset>
 {
-  // @ts-ignore
-  private readonly logService: LogService;
   private readonly jsonFileService: JsonFileService;
   private readonly gitService: GitService;
 
@@ -51,9 +49,8 @@ export class AssetService
     jsonFileService: JsonFileService,
     gitService: GitService
   ) {
-    super(serviceTypeSchema.enum.Asset, options);
+    super(serviceTypeSchema.enum.Asset, options, logService);
 
-    this.logService = logService;
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
   }

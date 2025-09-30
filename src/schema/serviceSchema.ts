@@ -40,10 +40,10 @@ export interface PaginationOptions {
  * Implements create, read, update and delete methods
  */
 export interface CrudService<T> {
-  create: (props: any) => Promise<T>;
-  read: (props: any) => Promise<T>;
-  update: (props: any) => Promise<T>;
-  delete: (props: any) => Promise<void>;
+  create: (props: never) => Promise<T>;
+  read: (props: never) => Promise<T>;
+  update: (props: never) => Promise<T>;
+  delete: (props: never) => Promise<void>;
 }
 
 /**
@@ -57,11 +57,11 @@ export interface CrudServiceWithListCount<T> extends CrudService<T> {
    * Does not return objects where the schema validation fails.
    * If that is the case, upgrade the Client and then Project to the latest version.
    */
-  list: (...props: any) => Promise<PaginatedList<T>>;
+  list: (...props: never[]) => Promise<PaginatedList<T>>;
   /**
    * Returns the total number of this services objects
    */
-  count: (...props: any) => Promise<number>;
+  count: (...props: never[]) => Promise<number>;
 }
 
 const listSchema = z.object({

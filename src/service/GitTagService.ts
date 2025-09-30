@@ -20,6 +20,7 @@ import {
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import { GitService } from './GitService.js';
+import { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for GitTags
@@ -30,8 +31,12 @@ export class GitTagService
 {
   private git: GitService['git'];
 
-  public constructor(options: ElekIoCoreOptions, git: GitService['git']) {
-    super(serviceTypeSchema.enum.GitTag, options);
+  public constructor(
+    options: ElekIoCoreOptions,
+    git: GitService['git'],
+    logService: LogService
+  ) {
+    super(serviceTypeSchema.enum.GitTag, options, logService);
 
     this.git = git;
   }

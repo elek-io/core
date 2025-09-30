@@ -45,7 +45,7 @@ describe.sequential('Integration', function () {
       referencedEntry.id
     );
 
-    expect(entry.id).to.not.be.undefined;
+    expect(entry.id).toBeDefined();
   });
 
   it.sequential('should be able to read an Entry', async function () {
@@ -55,7 +55,7 @@ describe.sequential('Integration', function () {
       id: entry.id,
     });
 
-    expect(readEntry.id).to.equal(entry.id);
+    expect(readEntry.id).toEqual(entry.id);
   });
 
   it.sequential('should be able to update an Entry', async function () {
@@ -66,7 +66,7 @@ describe.sequential('Integration', function () {
       values: [],
     });
 
-    expect(entry.values).to.be.an('array').that.is.empty;
+    expect(entry.values).toEqual([]);
   });
 
   it.sequential(
@@ -79,7 +79,7 @@ describe.sequential('Integration', function () {
         commitHash: entry.history.pop()?.hash,
       });
 
-      expect(entryFromHistory.values.length).to.equal(3);
+      expect(entryFromHistory.values.length).toEqual(3);
     }
   );
 
@@ -89,9 +89,9 @@ describe.sequential('Integration', function () {
       collectionId: collection.id,
     });
 
-    expect(entries.list.length).to.equal(2);
-    expect(entries.total).to.equal(2);
-    expect(entries.list.find((a) => a.id === entry.id)?.id).to.equal(entry.id);
+    expect(entries.list.length).toEqual(2);
+    expect(entries.total).toEqual(2);
+    expect(entries.list.find((a) => a.id === entry.id)?.id).toEqual(entry.id);
   });
 
   it.sequential('should be able to count all Entries', async function () {
@@ -100,12 +100,12 @@ describe.sequential('Integration', function () {
       collectionId: collection.id,
     });
 
-    expect(counted).to.equal(2);
+    expect(counted).toEqual(2);
   });
 
   it.sequential('should be able to identify an Entry', async function () {
-    expect(core.entries.isEntry(entry)).to.be.true;
-    expect(core.entries.isEntry({ objectType: 'entry' })).to.be.false;
+    expect(core.entries.isEntry(entry)).toBe(true);
+    expect(core.entries.isEntry({ objectType: 'entry' })).toBe(false);
   });
 
   it.sequential('should be able to delete an Entry', async function () {
@@ -119,6 +119,6 @@ describe.sequential('Integration', function () {
       await Fs.pathExists(
         core.util.pathTo.entryFile(project.id, collection.id, entry.id)
       )
-    ).to.be.false;
+    ).toBe(false);
   });
 });
