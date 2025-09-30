@@ -7,7 +7,7 @@
     {
       "name": "All tests",
       "request": "launch",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "pnpm",
       "runtimeArgs": ["run", "test"],
       "skipFiles": ["<node_internals>/**"],
       "type": "node"
@@ -15,7 +15,7 @@
     {
       "name": "API tests",
       "request": "launch",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "pnpm",
       "runtimeArgs": ["run", "test", "api.test.ts"],
       "skipFiles": ["<node_internals>/**"],
       "type": "node"
@@ -23,7 +23,7 @@
     {
       "name": "Schema generation tests",
       "request": "launch",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "pnpm",
       "runtimeArgs": ["run", "test", "schemaFromFieldDefinition.test.ts"],
       "skipFiles": ["<node_internals>/**"],
       "type": "node"
