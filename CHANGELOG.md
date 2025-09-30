@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.15.0
+
+### Minor Changes
+
+- 418faa4: Refactored existing schema generation via fieldDefinition and added schema generation for create and update methods of the Entry service
+
 ## 0.14.4
 
 ### Patch Changes
