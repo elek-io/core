@@ -28,7 +28,7 @@ export class UserService {
   public async get(): Promise<User | null> {
     try {
       return await this.jsonFileService.read(pathTo.userFile, userFileSchema);
-    } catch (error) {
+    } catch {
       this.logService.info('No User found');
 
       return null;

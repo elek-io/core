@@ -26,7 +26,7 @@ describe.sequential('Integration', function () {
   it.sequential('should be able to create a new Collection', async function () {
     collection = await createCollection(project.id);
 
-    expect(collection.id).toBeUndefined();
+    expect(collection.id).toBeDefined();
   });
 
   it.sequential('should be able to read an Collection', async function () {

@@ -12,12 +12,9 @@ import { LogService } from './LogService.js';
  */
 export class JsonFileService extends AbstractCrudService {
   private cache: Map<string, unknown> = new Map();
-  private readonly logService: LogService;
 
   constructor(options: ElekIoCoreOptions, logService: LogService) {
-    super(serviceTypeSchema.enum.JsonFile, options);
-
-    this.logService = logService;
+    super(serviceTypeSchema.enum.JsonFile, options, logService);
   }
 
   /**

@@ -72,6 +72,7 @@ export default class ElekIoCore {
     );
     this.collectionService = new CollectionService(
       this.options,
+      this.logService,
       this.jsonFileService,
       this.gitService
     );

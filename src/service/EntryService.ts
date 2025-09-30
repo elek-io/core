@@ -39,7 +39,6 @@ export class EntryService
   extends AbstractCrudService
   implements CrudServiceWithListCount<Entry>
 {
-  private logService: LogService;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
   private collectionService: CollectionService;
@@ -53,9 +52,8 @@ export class EntryService
     collectionService: CollectionService
     // sharedValueService: SharedValueService
   ) {
-    super(serviceTypeSchema.enum.Entry, options);
+    super(serviceTypeSchema.enum.Entry, options, logService);
 
-    this.logService = logService;
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
     this.collectionService = collectionService;

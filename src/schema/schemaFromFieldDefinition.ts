@@ -226,7 +226,7 @@ export function getValueSchemaFromFieldDefinition(
       });
     default:
       throw new Error(
-        // @ts-expect-error
+        // @ts-expect-error Code cannot be reached, but if we add a new ValueType and forget to update this function, we want to be notified about it
         `Error generating schema for unsupported ValueType "${fieldDefinition.valueType}"`
       );
   }
