@@ -1,5 +1,12 @@
 # @elek-io/core
 
+## 0.15.1
+
+### Patch Changes
+
+- 1f83621: Fix: OpenApi function usage on schemas
+- 350388e: Fix: Refactor schema imports to use @hono/zod-openapi
+
 ## 0.15.0
 
 ### Minor Changes
