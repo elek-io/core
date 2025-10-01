@@ -7,7 +7,7 @@ import {
   ensureCleanGitStatus,
 } from '../test/util.js';
 
-describe.sequential('Integration', function () {
+describe('CollectionService', function () {
   let project: Project & { destroy: () => Promise<void> };
   let collection: Collection;
 
@@ -23,13 +23,13 @@ describe.sequential('Integration', function () {
     await ensureCleanGitStatus(task, project.id);
   });
 
-  it.sequential('should be able to create a new Collection', async function () {
+  it('should be able to create a new Collection', async function () {
     collection = await createCollection(project.id);
 
     expect(collection.id).toBeDefined();
   });
 
-  it.sequential('should be able to read an Collection', async function () {
+  it('should be able to read an Collection', async function () {
     const readCollection = await core.collections.read({
       projectId: project.id,
       id: collection.id,
@@ -40,7 +40,7 @@ describe.sequential('Integration', function () {
     );
   });
 
-  it.sequential('should be able to update an Collection', async function () {
+  it('should be able to update an Collection', async function () {
     collection.description.en =
       'The title should be short and catchy, to grab the users attention.';
     collection = await core.collections.update({
@@ -53,22 +53,19 @@ describe.sequential('Integration', function () {
     );
   });
 
-  it.sequential(
-    'should be able to get a Collection of a specific commit',
-    async function () {
-      const collectionFromHistory = await core.collections.read({
-        projectId: project.id,
-        id: collection.id,
-        commitHash: collection.history.pop()?.hash,
-      });
+  it('should be able to get a Collection of a specific commit', async function () {
+    const collectionFromHistory = await core.collections.read({
+      projectId: project.id,
+      id: collection.id,
+      commitHash: collection.history.pop()?.hash,
+    });
 
-      expect(collectionFromHistory.description.en).toEqual(
-        'A Collection that contains our Products'
-      );
-    }
-  );
+    expect(collectionFromHistory.description.en).toEqual(
+      'A Collection that contains our Products'
+    );
+  });
 
-  it.sequential('should be able to list all Collections', async function () {
+  it('should be able to list all Collections', async function () {
     const collections = await core.collections.list({ projectId: project.id });
 
     expect(collections.list.length).toEqual(1);
@@ -78,20 +75,20 @@ describe.sequential('Integration', function () {
     );
   });
 
-  it.sequential('should be able to count all Collections', async function () {
+  it('should be able to count all Collections', async function () {
     const counted = await core.collections.count({ projectId: project.id });
 
     expect(counted).toEqual(1);
   });
 
-  it.sequential('should be able to identify an Collection', async function () {
+  it('should be able to identify an Collection', async function () {
     expect(core.collections.isCollection(collection)).toEqual(true);
     expect(core.collections.isCollection({ objectType: 'collection' })).toEqual(
       false
     );
   });
 
-  it.sequential('should be able to delete an Collection', async function () {
+  it('should be able to delete an Collection', async function () {
     await core.collections.delete({ projectId: project.id, id: collection.id });
 
     expect(

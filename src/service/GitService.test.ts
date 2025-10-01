@@ -8,7 +8,7 @@ import {
   createProject,
 } from '../test/util.js';
 
-describe.sequential('Integration', function () {
+describe('GitService', function () {
   let project: Project & { destroy: () => Promise<void> };
   let projectPath = '';
   let remoteProject: Project;
@@ -27,157 +27,117 @@ describe.sequential('Integration', function () {
     await Fs.remove(remoteProjectPath);
   });
 
-  it.sequential(
-    'should be able to get the current Branch name',
-    async function () {
-      const currentBranch = await core.git.branches.current(projectPath);
+  it('should be able to get the current Branch name', async function () {
+    const currentBranch = await core.git.branches.current(projectPath);
 
-      expect(currentBranch).toEqual('work');
-    }
-  );
+    expect(currentBranch).toEqual('work');
+  });
 
-  it.sequential(
-    'should be able to get all available Branch names',
-    async function () {
-      const branches = await core.git.branches.list(projectPath);
+  it('should be able to get all available Branch names', async function () {
+    const branches = await core.git.branches.list(projectPath);
 
-      expect(branches.local).to.contain('production').and.to.contain('work');
-    }
-  );
+    expect(branches.local).to.contain('production').and.to.contain('work');
+  });
 
-  it.sequential(
-    'should be able to tell that there is no remote origin yet',
-    async function () {
-      const hasOrigin = await core.git.remotes.hasOrigin(projectPath);
+  it('should be able to tell that there is no remote origin yet', async function () {
+    const hasOrigin = await core.git.remotes.hasOrigin(projectPath);
 
-      expect(hasOrigin).toBe(false);
-    }
-  );
+    expect(hasOrigin).toBe(false);
+  });
 
-  it.sequential('should be able to set the remote origin', async function () {
+  it('should be able to set the remote origin', async function () {
     await core.git.remotes.addOrigin(projectPath, remoteProjectPath);
   });
 
-  it.sequential(
-    'should be able to tell that there is a remote origin now',
-    async function () {
-      const hasOrigin = await core.git.remotes.hasOrigin(projectPath);
+  it('should be able to tell that there is a remote origin now', async function () {
+    const hasOrigin = await core.git.remotes.hasOrigin(projectPath);
 
-      expect(hasOrigin).toBe(true);
-    }
-  );
+    expect(hasOrigin).toBe(true);
+  });
 
-  it.sequential(
-    'should be able to get the current remote origin URL',
-    async function () {
-      const remoteOriginUrl = await core.git.remotes.getOriginUrl(projectPath);
+  it('should be able to get the current remote origin URL', async function () {
+    const remoteOriginUrl = await core.git.remotes.getOriginUrl(projectPath);
 
-      expect(remoteOriginUrl).toEqual(remoteProjectPath);
-    }
-  );
+    expect(remoteOriginUrl).toEqual(remoteProjectPath);
+  });
 
-  it.sequential(
-    'should be able to set a new remote origin URL',
-    async function () {
-      const newGitUrl = 'git@elek.io:organisation/repository.git';
-      await core.git.remotes.setOriginUrl(projectPath, newGitUrl);
-      const remoteOriginUrl = await core.git.remotes.getOriginUrl(projectPath);
+  it('should be able to set a new remote origin URL', async function () {
+    const newGitUrl = 'git@elek.io:organisation/repository.git';
+    await core.git.remotes.setOriginUrl(projectPath, newGitUrl);
+    const remoteOriginUrl = await core.git.remotes.getOriginUrl(projectPath);
 
-      expect(remoteOriginUrl).toEqual(newGitUrl);
-    }
-  );
+    expect(remoteOriginUrl).toEqual(newGitUrl);
+  });
 
-  it.sequential(
-    'should throw trying to add the remote origin if origin is added already',
-    async function () {
-      await expect(() =>
-        core.git.remotes.addOrigin(projectPath, remoteProjectPath)
-      ).rejects.toThrow();
-    }
-  );
+  it('should throw trying to add the remote origin if origin is added already', async function () {
+    await expect(() =>
+      core.git.remotes.addOrigin(projectPath, remoteProjectPath)
+    ).rejects.toThrow();
+  });
 
   // Pushing to a remote repository
 
-  it.sequential(
-    'should be able to force push an existing Project to a new remote',
-    async function () {
-      await core.git.remotes.setOriginUrl(projectPath, remoteProjectPath);
-      await core.git.push(projectPath, { all: true, force: true }); // Force all branches because remote origin is not the same as local origin
-    }
-  );
+  it('should be able to force push an existing Project to a new remote', async function () {
+    await core.git.remotes.setOriginUrl(projectPath, remoteProjectPath);
+    await core.git.push(projectPath, { all: true, force: true }); // Force all branches because remote origin is not the same as local origin
+  });
 
-  it.sequential(
-    'should be able to make a local change and see the difference between local and remote',
-    async function () {
-      createdAsset = await createAsset(project.id);
+  it('should be able to make a local change and see the difference between local and remote', async function () {
+    createdAsset = await createAsset(project.id);
 
-      const changes = await core.projects.getChanges({ id: project.id });
+    const changes = await core.projects.getChanges({ id: project.id });
 
-      expect(changes.ahead).to.have.lengthOf(1);
-      expect(changes.ahead[0]?.message.method).toEqual('create');
-      expect(changes.ahead[0]?.message.reference.objectType).toEqual('asset');
-      expect(changes.ahead[0]?.message.reference.id).toEqual(createdAsset.id);
-      expect(changes.behind).to.have.lengthOf(0);
-    }
-  );
+    expect(changes.ahead).to.have.lengthOf(1);
+    expect(changes.ahead[0]?.message.method).toEqual('create');
+    expect(changes.ahead[0]?.message.reference.objectType).toEqual('asset');
+    expect(changes.ahead[0]?.message.reference.id).toEqual(createdAsset.id);
+    expect(changes.behind).to.have.lengthOf(0);
+  });
 
-  it.sequential(
-    'should be able to push the change to remote',
-    async function () {
-      await core.git.push(projectPath);
-    }
-  );
+  it('should be able to push the change to remote', async function () {
+    await core.git.push(projectPath);
+  });
 
-  it.sequential(
-    'should be able to see there is no difference between local and remote anymore',
-    async function () {
-      const changes = await core.projects.getChanges({ id: project.id });
+  it('should be able to see there is no difference between local and remote anymore', async function () {
+    const changes = await core.projects.getChanges({ id: project.id });
 
-      expect(changes.ahead).to.have.lengthOf(0);
-      expect(changes.behind).to.have.lengthOf(0);
-    }
-  );
+    expect(changes.ahead).to.have.lengthOf(0);
+    expect(changes.behind).to.have.lengthOf(0);
+  });
 
   // Pulling from a remote repository
 
-  it.sequential(
-    'should be able to make a change on the remote and see the difference',
-    async function () {
-      // To make a change on the remote, we first need to copy the local project
-      // then make changes to the copy and then push those changes to the remote.
-      // This is needed because the remote repository is a bare repository and cannot be modified directly.
-      const newProjectId = uuid();
-      const newProjectPath = core.util.pathTo.project(newProjectId);
-      await Fs.copy(projectPath, newProjectPath);
-      const anotherCreatedAsset = await createAsset(newProjectId);
-      await core.git.push(newProjectPath);
+  it('should be able to make a change on the remote and see the difference', async function () {
+    // To make a change on the remote, we first need to copy the local project
+    // then make changes to the copy and then push those changes to the remote.
+    // This is needed because the remote repository is a bare repository and cannot be modified directly.
+    const newProjectId = uuid();
+    const newProjectPath = core.util.pathTo.project(newProjectId);
+    await Fs.copy(projectPath, newProjectPath);
+    const anotherCreatedAsset = await createAsset(newProjectId);
+    await core.git.push(newProjectPath);
 
-      const changes = await core.projects.getChanges({ id: project.id });
+    const changes = await core.projects.getChanges({ id: project.id });
 
-      expect(changes.ahead).to.have.lengthOf(0);
-      expect(changes.behind).to.have.lengthOf(1);
-      expect(changes.behind[0]?.message.method).toEqual('create');
-      expect(changes.behind[0]?.message.reference.objectType).toEqual('asset');
-      expect(changes.behind[0]?.message.reference.id).toEqual(
-        anotherCreatedAsset.id
-      );
-    }
-  );
+    expect(changes.ahead).to.have.lengthOf(0);
+    expect(changes.behind).to.have.lengthOf(1);
+    expect(changes.behind[0]?.message.method).toEqual('create');
+    expect(changes.behind[0]?.message.reference.objectType).toEqual('asset');
+    expect(changes.behind[0]?.message.reference.id).toEqual(
+      anotherCreatedAsset.id
+    );
 
-  it.sequential(
-    'should be able to pull the change from remote',
-    async function () {
-      await core.git.pull(projectPath);
-    }
-  );
+    await Fs.remove(newProjectPath);
+  });
 
-  it.sequential(
-    'should be able to see there is no difference between local and remote anymore',
-    async function () {
-      const changes = await core.projects.getChanges({ id: project.id });
+  it('should be able to pull the change from remote', async function () {
+    await core.git.pull(projectPath);
+  });
 
-      expect(changes.ahead).to.have.lengthOf(0);
-      expect(changes.behind).to.have.lengthOf(0);
-    }
-  );
+  it('should be able to see there is no difference between local and remote anymore', async function () {
+    const changes = await core.projects.getChanges({ id: project.id });
+
+    expect(changes.ahead).to.have.lengthOf(0);
+    expect(changes.behind).to.have.lengthOf(0);
+  });
 });

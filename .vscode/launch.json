@@ -27,6 +27,54 @@
       "runtimeArgs": ["run", "test", "schemaFromFieldDefinition.test.ts"],
       "skipFiles": ["<node_internals>/**"],
       "type": "node"
+    },
+    {
+      "name": "AssetService tests",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "test", "assetService.test.ts"],
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node"
+    },
+    {
+      "name": "CollectionService tests",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "test", "collectionService.test.ts"],
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node"
+    },
+    {
+      "name": "EntryService tests",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "test", "entryService.test.ts"],
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node"
+    },
+    {
+      "name": "GitService tests",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "test", "gitService.test.ts"],
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node"
+    },
+    {
+      "name": "GitTagService tests",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "test", "gitTagService.test.ts"],
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node"
+    },
+    {
+      "name": "ProjectService tests",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "test", "projectService.test.ts"],
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node"
     }
   ]
 }
