@@ -1,4 +1,4 @@
-import z from 'zod';
+import { z } from '@hono/zod-openapi';
 
 /**
  * All currently supported, BCP 47 compliant language tags
