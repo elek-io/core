@@ -22,7 +22,6 @@ import {
   directNumberValueSchema,
   directStringValueSchema,
   referencedValueSchema,
-  Value,
   valueContentReferenceToAssetSchema,
   valueContentReferenceToEntrySchema,
   ValueTypeSchema,
@@ -236,22 +235,20 @@ export function getValueSchemaFromFieldDefinition(
  * Generates a schema for creating a new Entry based on the given Field definitions and Values
  */
 export function getCreateEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[],
-  values: Value[]
+  fieldDefinitions: FieldDefinition[]
 ) {
-  return createEntrySchema.extend({
-    values: values.map((value) => {
-      const fieldDefinition = fieldDefinitions.find(
-        (fieldDefinition) => fieldDefinition.id === value.fieldDefinitionId
-      );
-      if (!fieldDefinition) {
-        throw new Error(
-          `Field definition with ID "${value.fieldDefinitionId}" not found`
-        );
-      }
+  const valueSchemas = fieldDefinitions.map((fieldDefinition) => {
+    return getValueSchemaFromFieldDefinition(fieldDefinition);
+  });
 
-      return getValueSchemaFromFieldDefinition(fieldDefinition);
-    }),
+  return z.object({
+    ...createEntrySchema.shape,
+    values: z.tuple(
+      valueSchemas as [
+        (typeof valueSchemas)[number],
+        ...(typeof valueSchemas)[number][],
+      ] // At least one element is required in a tuple
+    ),
   });
 }
 
@@ -259,21 +256,19 @@ export function getCreateEntrySchemaFromFieldDefinitions(
  * Generates a schema for updating an existing Entry based on the given Field definitions and Values
  */
 export function getUpdateEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[],
-  values: Value[]
+  fieldDefinitions: FieldDefinition[]
 ) {
-  return updateEntrySchema.extend({
-    values: values.map((value) => {
-      const fieldDefinition = fieldDefinitions.find(
-        (fieldDefinition) => fieldDefinition.id === value.fieldDefinitionId
-      );
-      if (!fieldDefinition) {
-        throw new Error(
-          `Field definition with ID "${value.fieldDefinitionId}" not found`
-        );
-      }
+  const valueSchemas = fieldDefinitions.map((fieldDefinition) => {
+    return getValueSchemaFromFieldDefinition(fieldDefinition);
+  });
 
-      return getValueSchemaFromFieldDefinition(fieldDefinition);
-    }),
+  return z.object({
+    ...updateEntrySchema.shape,
+    values: z.tuple(
+      valueSchemas as [
+        (typeof valueSchemas)[number],
+        ...(typeof valueSchemas)[number][],
+      ] // At least one element is required in a tuple
+    ),
   });
 }

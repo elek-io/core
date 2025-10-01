@@ -94,10 +94,7 @@ export class EntryService
 
     // Validate all Values against their Field Definitions
     const createEntrySchemaFromFieldDefinitions =
-      getCreateEntrySchemaFromFieldDefinitions(
-        collection.fieldDefinitions,
-        entry.values
-      );
+      getCreateEntrySchemaFromFieldDefinitions(collection.fieldDefinitions);
     createEntrySchemaFromFieldDefinitions.parse(props);
 
     await this.jsonFileService.create(
@@ -185,10 +182,7 @@ export class EntryService
 
     // Validate all Values against their Field Definitions
     const updateEntrySchemaFromFieldDefinitions =
-      getUpdateEntrySchemaFromFieldDefinitions(
-        collection.fieldDefinitions,
-        entry.values
-      );
+      getUpdateEntrySchemaFromFieldDefinitions(collection.fieldDefinitions);
     updateEntrySchemaFromFieldDefinitions.parse(props);
 
     await this.jsonFileService.update(
