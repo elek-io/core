@@ -1,6 +1,7 @@
 import Fs from 'fs-extra';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import core, {
+  Value,
   type Asset,
   type Collection,
   type Entry,
@@ -58,16 +59,69 @@ describe.sequential('Integration', function () {
     expect(readEntry.id).toEqual(entry.id);
   });
 
-  it.sequential('should be able to update an Entry', async function () {
-    entry = await core.entries.update({
-      projectId: project.id,
-      collectionId: collection.id,
-      id: entry.id,
-      values: [],
-    });
+  it.sequential(
+    'should fail to update an Entry with no values while there are fieldDefinitions',
+    async function () {
+      await expect(() =>
+        core.entries.update({
+          projectId: project.id,
+          collectionId: collection.id,
+          id: entry.id,
+          values: [],
+        })
+      ).rejects.toThrow();
+    }
+  );
 
-    expect(entry.values).toEqual([]);
-  });
+  it.sequential(
+    'should fail to update an Entry with values not matching their fieldDefinitions',
+    async function () {
+      const changedValue: Value = {
+        ...(entry.values[0] as Value),
+        valueType: 'number',
+        content: { en: 123 },
+      };
+      const values: Value[] = [
+        changedValue,
+        entry.values[1] as Value,
+        entry.values[2] as Value,
+      ];
+
+      await expect(() =>
+        core.entries.update({
+          projectId: project.id,
+          collectionId: collection.id,
+          id: entry.id,
+          values,
+        })
+      ).rejects.toThrow();
+    }
+  );
+
+  it.sequential(
+    'should be able to update an Entry with values that match the Collections fieldDefinitions',
+    async function () {
+      const changedValue: Value = {
+        ...(entry.values[0] as Value),
+        valueType: 'string',
+        content: { en: 'Changed Text' },
+      };
+      const values: Value[] = [
+        changedValue,
+        entry.values[1] as Value,
+        entry.values[2] as Value,
+      ];
+
+      entry = await core.entries.update({
+        projectId: project.id,
+        collectionId: collection.id,
+        id: entry.id,
+        values,
+      });
+
+      expect(entry.values).toEqual(values);
+    }
+  );
 
   it.sequential(
     'should be able to get an Entry of a specific commit',

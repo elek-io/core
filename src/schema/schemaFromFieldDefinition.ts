@@ -5,14 +5,9 @@
  * To validate this, we need to generate zod schemas based on Field definitions the user created.
  */
 
-import z from 'zod';
+import { z } from '@hono/zod-openapi';
 import { supportedLanguageSchema } from './baseSchema.js';
-import {
-  CreateEntryProps,
-  createEntrySchema,
-  UpdateEntryProps,
-  updateEntrySchema,
-} from './entrySchema.js';
+import { createEntrySchema, updateEntrySchema } from './entrySchema.js';
 import {
   AssetFieldDefinition,
   EntryFieldDefinition,
@@ -27,7 +22,6 @@ import {
   directNumberValueSchema,
   directStringValueSchema,
   referencedValueSchema,
-  Value,
   valueContentReferenceToAssetSchema,
   valueContentReferenceToEntrySchema,
   ValueTypeSchema,
@@ -239,60 +233,42 @@ export function getValueSchemaFromFieldDefinition(
 
 /**
  * Generates a schema for creating a new Entry based on the given Field definitions and Values
- *
- * @todo The return type of z.ZodType<CreateEntryProps> is added because otherwise TS complains with
- *       error TS2742: The inferred type of 'getCreateEntrySchemaFromFieldDefinitions' cannot be named without a reference to '.pnpm/@asteasolutions+zod-to-openapi@8.1.0_zod@4.1.11/node_modules/@asteasolutions/zod-to-openapi'. This is likely not portable. A type annotation is necessary.
- *       This should be investigated further and fixed properly.
  */
 export function getCreateEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[],
-  values: Value[]
-): z.ZodType<CreateEntryProps> {
-  const schema = {
-    ...createEntrySchema,
-    values: values.map((value) => {
-      const fieldDefinition = fieldDefinitions.find(
-        (fieldDefinition) => fieldDefinition.id === value.fieldDefinitionId
-      );
-      if (!fieldDefinition) {
-        throw new Error(
-          `Field definition with ID "${value.fieldDefinitionId}" not found`
-        );
-      }
+  fieldDefinitions: FieldDefinition[]
+) {
+  const valueSchemas = fieldDefinitions.map((fieldDefinition) => {
+    return getValueSchemaFromFieldDefinition(fieldDefinition);
+  });
 
-      return getValueSchemaFromFieldDefinition(fieldDefinition);
-    }),
-  };
-
-  return schema;
+  return z.object({
+    ...createEntrySchema.shape,
+    values: z.tuple(
+      valueSchemas as [
+        (typeof valueSchemas)[number],
+        ...(typeof valueSchemas)[number][],
+      ] // At least one element is required in a tuple
+    ),
+  });
 }
 
 /**
  * Generates a schema for updating an existing Entry based on the given Field definitions and Values
- *
- * @todo The return type of z.ZodType<UpdateEntryProps> is added because otherwise TS complains with
- *       error TS2742: The inferred type of 'getUpdateEntrySchemaFromFieldDefinitions' cannot be named without a reference to '.pnpm/@asteasolutions+zod-to-openapi@8.1.0_zod@4.1.11/node_modules/@asteasolutions/zod-to-openapi'. This is likely not portable. A type annotation is necessary.
- *       This should be investigated further and fixed properly.
  */
 export function getUpdateEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[],
-  values: Value[]
-): z.ZodType<UpdateEntryProps> {
-  const schema = {
-    ...updateEntrySchema,
-    values: values.map((value) => {
-      const fieldDefinition = fieldDefinitions.find(
-        (fieldDefinition) => fieldDefinition.id === value.fieldDefinitionId
-      );
-      if (!fieldDefinition) {
-        throw new Error(
-          `Field definition with ID "${value.fieldDefinitionId}" not found`
-        );
-      }
+  fieldDefinitions: FieldDefinition[]
+) {
+  const valueSchemas = fieldDefinitions.map((fieldDefinition) => {
+    return getValueSchemaFromFieldDefinition(fieldDefinition);
+  });
 
-      return getValueSchemaFromFieldDefinition(fieldDefinition);
-    }),
-  };
-
-  return schema;
+  return z.object({
+    ...updateEntrySchema.shape,
+    values: z.tuple(
+      valueSchemas as [
+        (typeof valueSchemas)[number],
+        ...(typeof valueSchemas)[number][],
+      ] // At least one element is required in a tuple
+    ),
+  });
 }

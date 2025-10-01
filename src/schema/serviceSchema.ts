@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 import { uuidSchema } from './baseSchema.js';
 
 export const serviceTypeSchema = z.enum([
