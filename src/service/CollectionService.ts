@@ -22,7 +22,7 @@ import {
   type ReadCollectionProps,
   type UpdateCollectionProps,
 } from '../schema/index.js';
-import { pathTo, returnResolved } from '../util/node.js';
+import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import { GitService } from './GitService.js';
@@ -339,7 +339,7 @@ export class CollectionService
       limit
     );
 
-    const collections = await returnResolved(
+    const collections = await this.returnResolved(
       partialCollectionReferences.map((reference) => {
         return this.read({
           projectId: props.projectId,
