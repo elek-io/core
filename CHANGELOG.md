@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.15.2
+
+### Patch Changes
+
+- dbdbd98: All tests are now run sequentially to ensure git working as expected. Also fixed rogue Project after test run not getting deleted.
+
 ## 0.15.1
 
 ### Patch Changes
