@@ -26,7 +26,7 @@ import {
   type ReadAssetProps,
   type UpdateAssetProps,
 } from '../schema/index.js';
-import { pathTo, returnResolved } from '../util/node.js';
+import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import type { GitService } from './GitService.js';
@@ -247,7 +247,7 @@ export class AssetService
 
     const partialAssetReferences = assetReferences.slice(offset, limit);
 
-    const assets = await returnResolved(
+    const assets = await this.returnResolved(
       partialAssetReferences.map((assetReference) => {
         return this.read({
           projectId: props.projectId,

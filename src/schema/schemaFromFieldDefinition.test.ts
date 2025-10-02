@@ -11,7 +11,7 @@ import {
 } from '../test/setup.js';
 import { getValueSchemaFromFieldDefinition } from './schemaFromFieldDefinition.js';
 
-describe('Dynamic zod schema', () => {
+describe('Dynamic zod schema from field definition', () => {
   const defaultBooleanValue: DirectBooleanValue = {
     objectType: 'value',
     fieldDefinitionId: uuid(),

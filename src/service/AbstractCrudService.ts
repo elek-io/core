@@ -7,7 +7,7 @@ import {
   type ObjectType,
   type ServiceType,
 } from '../schema/index.js';
-import { files, folders, notEmpty, pathTo } from '../util/node.js';
+import { files, folders, isNoError, notEmpty, pathTo } from '../util/node.js';
 import { LogService } from './LogService.js';
 
 /**
@@ -29,6 +29,45 @@ export abstract class AbstractCrudService {
     this.type = type;
     this.options = options;
     this.logService = logService;
+  }
+
+  /**
+   * Basically a Promise.all() without rejecting if one promise fails to resolve
+   */
+  protected async returnResolved<T>(promises: Promise<T>[]) {
+    const toCheck: Promise<T | Error>[] = [];
+    for (let index = 0; index < promises.length; index++) {
+      const promise = promises[index];
+      if (!promise) {
+        throw new Error(`No promise found at index "${index}"`);
+      }
+      // Here comes the trick:
+      // By using "then" and "catch" we are able to create an array of Project and Error types
+      // without throwing and stopping the later Promise.all() call prematurely
+      toCheck.push(
+        promise
+          .then((result) => {
+            return result;
+          })
+          .catch((error) => {
+            this.logService.warn(
+              `[returnResolved] Catched error while resolving promise: ${error}`
+            );
+            // Because the error parameter could be anything,
+            // we need to specifically call an Error
+            return new Error(error);
+          })
+      );
+    }
+    // Resolve all promises
+    // Here we do not expect any error to fail the call to Promise.all()
+    // because we caught it earlier and returning an Error type instead of throwing it
+    const checked = await Promise.all(toCheck);
+    // This way we can easily filter out any Errors by type
+    // Note that we also need to use a User-Defined Type Guard here,
+    // because otherwise TS does not recognize we are filtering the errors out
+    //                >       |        <
+    return checked.filter(isNoError);
   }
 
   /**

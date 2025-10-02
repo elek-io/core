@@ -48,7 +48,7 @@ async function betterFetch(
   return await response.json();
 }
 
-describe.sequential('Integration', function () {
+describe('API', function () {
   let project: Project & { destroy: () => Promise<void> };
   let asset: Asset;
   let collection: Collection;
@@ -65,50 +65,44 @@ describe.sequential('Integration', function () {
     await project.destroy();
   });
 
-  it.sequential(
-    'should be able to start the API and verify it is running',
-    async function () {
-      const isRunningBefore = await core.api.isRunning();
-      await core.api.start(31310);
+  it('should be able to start the API and verify it is running', async function () {
+    const isRunningBefore = await core.api.isRunning();
+    await core.api.start(31310);
 
-      await vi.waitFor(
-        async () => {
-          const isCurrentlyRunning = await core.api.isRunning();
-          if (isCurrentlyRunning === false) {
-            throw new Error('Server not started yet');
-          }
-        },
-        {
-          timeout: 500,
-          interval: 20,
+    await vi.waitFor(
+      async () => {
+        const isCurrentlyRunning = await core.api.isRunning();
+        if (isCurrentlyRunning === false) {
+          throw new Error('Server not started yet');
         }
-      );
+      },
+      {
+        timeout: 500,
+        interval: 20,
+      }
+    );
 
-      const isRunningAfter = await core.api.isRunning();
+    const isRunningAfter = await core.api.isRunning();
 
-      expect(isRunningBefore).toEqual(false);
-      expect(isRunningAfter).toEqual(true);
-    }
-  );
+    expect(isRunningBefore).toEqual(false);
+    expect(isRunningAfter).toEqual(true);
+  });
 
   // Projects
 
-  it.sequential(
-    'should be able to list all Projects via API',
-    async function () {
-      const projects = (await betterFetch(
-        'http://localhost:31310/v1/projects'
-      )) as PaginatedList<Project>;
+  it('should be able to list all Projects via API', async function () {
+    const projects = (await betterFetch(
+      'http://localhost:31310/v1/projects'
+    )) as PaginatedList<Project>;
 
-      expect(projects.list.length).toEqual(1);
-      expect(projects.total).toEqual(1);
-      expect(projects.list.find((p) => p.id === project.id)?.id).toEqual(
-        project.id
-      );
-    }
-  );
+    expect(projects.list.length).toEqual(1);
+    expect(projects.total).toEqual(1);
+    expect(projects.list.find((p) => p.id === project.id)?.id).toEqual(
+      project.id
+    );
+  });
 
-  it.sequential('should be able to read a Project via API', async function () {
+  it('should be able to read a Project via API', async function () {
     const readProject = (await betterFetch(
       `http://localhost:31310/v1/projects/${project.id}`
     )) as Project;
@@ -117,73 +111,58 @@ describe.sequential('Integration', function () {
     expect(readProject.id).toEqual(project.id);
   });
 
-  it.sequential(
-    'should be able to count all Projects via API',
-    async function () {
-      const count = (await betterFetch(
-        'http://localhost:31310/v1/projects/count'
-      )) as number;
+  it('should be able to count all Projects via API', async function () {
+    const count = (await betterFetch(
+      'http://localhost:31310/v1/projects/count'
+    )) as number;
 
-      expect(count).toEqual(1);
-    }
-  );
+    expect(count).toEqual(1);
+  });
 
   // Collections
 
-  it.sequential(
-    'should be able to list all Collections via API',
-    async function () {
-      const collections = (await betterFetch(
-        `http://localhost:31310/v1/projects/${project.id}/collections`
-      )) as PaginatedList<Collection>;
+  it('should be able to list all Collections via API', async function () {
+    const collections = (await betterFetch(
+      `http://localhost:31310/v1/projects/${project.id}/collections`
+    )) as PaginatedList<Collection>;
 
-      expect(collections.list.length).toEqual(1);
-      expect(collections.total).toEqual(1);
-      expect(collections.list.find((p) => p.id === collection.id)?.id).toEqual(
-        collection.id
-      );
-    }
-  );
+    expect(collections.list.length).toEqual(1);
+    expect(collections.total).toEqual(1);
+    expect(collections.list.find((p) => p.id === collection.id)?.id).toEqual(
+      collection.id
+    );
+  });
 
-  it.sequential(
-    'should be able to read an Collection via API',
-    async function () {
-      const readCollection = (await betterFetch(
-        `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}`
-      )) as Collection;
+  it('should be able to read an Collection via API', async function () {
+    const readCollection = (await betterFetch(
+      `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}`
+    )) as Collection;
 
-      expect(core.collections.isCollection(readCollection)).toEqual(true);
-      expect(readCollection.id).toEqual(collection.id);
-    }
-  );
+    expect(core.collections.isCollection(readCollection)).toEqual(true);
+    expect(readCollection.id).toEqual(collection.id);
+  });
 
-  it.sequential(
-    'should be able to count all Collections via API',
-    async function () {
-      const count = (await betterFetch(
-        `http://localhost:31310/v1/projects/${project.id}/collections/count`
-      )) as number;
+  it('should be able to count all Collections via API', async function () {
+    const count = (await betterFetch(
+      `http://localhost:31310/v1/projects/${project.id}/collections/count`
+    )) as number;
 
-      expect(count).toEqual(1);
-    }
-  );
+    expect(count).toEqual(1);
+  });
 
   // Entries
 
-  it.sequential(
-    'should be able to list all Entries via API',
-    async function () {
-      const entries = (await betterFetch(
-        `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}/entries`
-      )) as PaginatedList<Entry>;
+  it('should be able to list all Entries via API', async function () {
+    const entries = (await betterFetch(
+      `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}/entries`
+    )) as PaginatedList<Entry>;
 
-      expect(entries.list.length).toEqual(1);
-      expect(entries.total).toEqual(1);
-      expect(entries.list.find((p) => p.id === entry.id)?.id).toEqual(entry.id);
-    }
-  );
+    expect(entries.list.length).toEqual(1);
+    expect(entries.total).toEqual(1);
+    expect(entries.list.find((p) => p.id === entry.id)?.id).toEqual(entry.id);
+  });
 
-  it.sequential('should be able to read an Entry via API', async function () {
+  it('should be able to read an Entry via API', async function () {
     const readEntry = (await betterFetch(
       `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}/entries/${entry.id}`
     )) as Entry;
@@ -192,20 +171,17 @@ describe.sequential('Integration', function () {
     expect(readEntry.id).toEqual(entry.id);
   });
 
-  it.sequential(
-    'should be able to count all Entries via API',
-    async function () {
-      const count = (await betterFetch(
-        `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}/entries/count`
-      )) as number;
+  it('should be able to count all Entries via API', async function () {
+    const count = (await betterFetch(
+      `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}/entries/count`
+    )) as number;
 
-      expect(count).toEqual(1);
-    }
-  );
+    expect(count).toEqual(1);
+  });
 
   // Assets
 
-  it.sequential('should be able to list all Assets via API', async function () {
+  it('should be able to list all Assets via API', async function () {
     const assets = (await betterFetch(
       `http://localhost:31310/v1/projects/${project.id}/assets`
     )) as PaginatedList<Asset>;
@@ -215,7 +191,7 @@ describe.sequential('Integration', function () {
     expect(assets.list.find((p) => p.id === asset.id)?.id).toEqual(asset.id);
   });
 
-  it.sequential('should be able to read an Asset via API', async function () {
+  it('should be able to read an Asset via API', async function () {
     const readAsset = (await betterFetch(
       `http://localhost:31310/v1/projects/${project.id}/assets/${asset.id}`
     )) as Asset;
@@ -224,40 +200,34 @@ describe.sequential('Integration', function () {
     expect(readAsset.id).toEqual(asset.id);
   });
 
-  it.sequential(
-    'should be able to count all Assets via API',
-    async function () {
-      const count = (await betterFetch(
-        `http://localhost:31310/v1/projects/${project.id}/assets/count`
-      )) as number;
+  it('should be able to count all Assets via API', async function () {
+    const count = (await betterFetch(
+      `http://localhost:31310/v1/projects/${project.id}/assets/count`
+    )) as number;
 
-      expect(count).toEqual(1);
-    }
-  );
+    expect(count).toEqual(1);
+  });
 
-  it.sequential(
-    'should be able to stop the API and verify it is not running anymore',
-    async function () {
-      const isRunningBefore = await core.api.isRunning();
-      await core.api.stop();
+  it('should be able to stop the API and verify it is not running anymore', async function () {
+    const isRunningBefore = await core.api.isRunning();
+    await core.api.stop();
 
-      await vi.waitFor(
-        async () => {
-          const isCurrentlyRunning = await core.api.isRunning();
-          if (isCurrentlyRunning === true) {
-            throw new Error('Server is still running');
-          }
-        },
-        {
-          timeout: 500,
-          interval: 20,
+    await vi.waitFor(
+      async () => {
+        const isCurrentlyRunning = await core.api.isRunning();
+        if (isCurrentlyRunning === true) {
+          throw new Error('Server is still running');
         }
-      );
+      },
+      {
+        timeout: 500,
+        interval: 20,
+      }
+    );
 
-      const isRunningAfter = await core.api.isRunning();
+    const isRunningAfter = await core.api.isRunning();
 
-      expect(isRunningBefore).toEqual(true);
-      expect(isRunningAfter).toEqual(false);
-    }
-  );
+    expect(isRunningBefore).toEqual(true);
+    expect(isRunningAfter).toEqual(false);
+  });
 });

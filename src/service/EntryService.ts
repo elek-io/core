@@ -24,7 +24,7 @@ import {
   type ReadEntryProps,
   type UpdateEntryProps,
 } from '../schema/index.js';
-import { pathTo, returnResolved } from '../util/node.js';
+import { pathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import type { CollectionService } from './CollectionService.js';
@@ -242,7 +242,7 @@ export class EntryService
 
     const partialEntryReferences = entryReferences.slice(offset, limit);
 
-    const entries = await returnResolved(
+    const entries = await this.returnResolved(
       partialEntryReferences.map((reference) => {
         return this.read({
           projectId: props.projectId,

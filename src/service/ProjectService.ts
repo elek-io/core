@@ -56,7 +56,7 @@ import {
   type UpdateProjectProps,
   type UpgradeProjectProps,
 } from '../schema/index.js';
-import { notEmpty, pathTo, returnResolved } from '../util/node.js';
+import { notEmpty, pathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import { AssetService } from './AssetService.js';
@@ -571,7 +571,7 @@ export class ProjectService
 
     const partialProjectReferences = projectReferences.slice(offset, limit);
 
-    const projects = await returnResolved(
+    const projects = await this.returnResolved(
       partialProjectReferences.map((reference) => {
         return this.read({ id: reference.id });
       })
