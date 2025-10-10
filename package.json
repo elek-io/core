@@ -44,7 +44,6 @@
     "@sindresorhus/slugify": "3.0.0",
     "fs-extra": "11.3.2",
     "hono": "4.9.10",
-    "http-status-codes": "2.3.0",
     "mime": "4.1.0",
     "p-queue": "9.0.0",
     "semver": "7.7.3",

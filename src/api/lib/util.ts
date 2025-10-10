@@ -1,7 +1,6 @@
 import type { Schema } from 'hono';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { requestId } from 'hono/request-id';
-import { StatusCodes, ReasonPhrases } from 'http-status-codes';
 import { requestResponseLogger } from '../middleware/requestResponseLogger.js';
 import type { Api, ApiEnv } from './types.js';
 import { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -34,7 +33,7 @@ export function createRouter() {
               issues: result.error.issues,
             },
           },
-          StatusCodes.UNPROCESSABLE_ENTITY
+          422
         );
       }
     },
@@ -77,9 +76,9 @@ export default function createApi(
   api.notFound((c) => {
     return c.json(
       {
-        message: `${ReasonPhrases.NOT_FOUND} - ${c.req.path}`,
+        message: `Not Found - ${c.req.path}`,
       },
-      StatusCodes.NOT_FOUND
+      404
     );
   });
 
@@ -87,9 +86,7 @@ export default function createApi(
     const currentStatus =
       'status' in err ? err.status : c.newResponse(null).status;
     const statusCode =
-      currentStatus !== StatusCodes.OK
-        ? (currentStatus as ContentfulStatusCode)
-        : StatusCodes.INTERNAL_SERVER_ERROR;
+      currentStatus !== 200 ? (currentStatus as ContentfulStatusCode) : 500;
 
     return c.json(
       {
