@@ -1,16 +1,18 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { testClient } from 'hono/testing';
+import { createTestApi } from './lib/util.js';
+import router from './routes/index.js';
 import ElekIoCore, {
   Asset,
   Collection,
   Entry,
-  PaginatedList,
+  Project,
 } from '../index.node.js';
-import { type Project } from '../test/setup.js';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  createProject,
   createAsset,
   createCollection,
   createEntry,
-  createProject,
 } from '../test/util.js';
 
 const core = new ElekIoCore({
@@ -32,21 +34,17 @@ await core.user.set({
   },
 });
 
-async function betterFetch(
-  input: string | URL | globalThis.Request,
-  init?: RequestInit
-): Promise<unknown> {
-  const response = await fetch(input, init);
-  if (!response.ok) {
-    throw new Error(
-      `Request failed to request "${response.url}" with status "${
-        response.status
-      }" and body: ${await response.text()}`
-    );
-  }
-
-  return await response.json();
-}
+//
+const client = testClient(
+  createTestApi(
+    router,
+    core.logger,
+    core.projects,
+    core.collections,
+    core.entries,
+    core.assets
+  )
+);
 
 describe('API', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -91,10 +89,10 @@ describe('API', function () {
   // Projects
 
   it('should be able to list all Projects via API', async function () {
-    const projects = (await betterFetch(
-      'http://localhost:31310/v1/projects'
-    )) as PaginatedList<Project>;
+    const res = await client.content.v1.projects.$get({ query: {} });
 
+    expect(res.status).toEqual(200);
+    const projects = await res.json();
     expect(projects.list.length).toEqual(1);
     expect(projects.total).toEqual(1);
     expect(projects.list.find((p) => p.id === project.id)?.id).toEqual(
@@ -103,29 +101,36 @@ describe('API', function () {
   });
 
   it('should be able to read a Project via API', async function () {
-    const readProject = (await betterFetch(
-      `http://localhost:31310/v1/projects/${project.id}`
-    )) as Project;
+    const res = await client.content.v1.projects[':projectId'].$get({
+      param: { projectId: project.id },
+    });
 
+    expect(res.status).toEqual(200);
+    const readProject = await res.json();
     expect(core.projects.isProject(readProject)).toEqual(true);
     expect(readProject.id).toEqual(project.id);
   });
 
   it('should be able to count all Projects via API', async function () {
-    const count = (await betterFetch(
-      'http://localhost:31310/v1/projects/count'
-    )) as number;
+    const res = await client.content.v1.projects.count.$get();
 
+    expect(res.status).toEqual(200);
+    const count = await res.json();
     expect(count).toEqual(1);
   });
 
   // Collections
 
   it('should be able to list all Collections via API', async function () {
-    const collections = (await betterFetch(
-      `http://localhost:31310/v1/projects/${project.id}/collections`
-    )) as PaginatedList<Collection>;
+    const res = await client.content.v1.projects[':projectId'].collections.$get(
+      {
+        param: { projectId: project.id },
+        query: {},
+      }
+    );
 
+    expect(res.status).toEqual(200);
+    const collections = await res.json();
     expect(collections.list.length).toEqual(1);
     expect(collections.total).toEqual(1);
     expect(collections.list.find((p) => p.id === collection.id)?.id).toEqual(
@@ -134,77 +139,113 @@ describe('API', function () {
   });
 
   it('should be able to read an Collection via API', async function () {
-    const readCollection = (await betterFetch(
-      `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}`
-    )) as Collection;
+    const res = await client.content.v1.projects[':projectId'].collections[
+      ':collectionId'
+    ].$get({
+      param: { projectId: project.id, collectionId: collection.id },
+    });
 
+    expect(res.status).toEqual(200);
+    const readCollection = await res.json();
     expect(core.collections.isCollection(readCollection)).toEqual(true);
     expect(readCollection.id).toEqual(collection.id);
   });
 
   it('should be able to count all Collections via API', async function () {
-    const count = (await betterFetch(
-      `http://localhost:31310/v1/projects/${project.id}/collections/count`
-    )) as number;
+    const res = await client.content.v1.projects[
+      ':projectId'
+    ].collections.count.$get({
+      param: { projectId: project.id },
+    });
 
+    expect(res.status).toEqual(200);
+    const count = await res.json();
     expect(count).toEqual(1);
   });
 
-  // Entries
+  // // Entries
 
   it('should be able to list all Entries via API', async function () {
-    const entries = (await betterFetch(
-      `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}/entries`
-    )) as PaginatedList<Entry>;
+    const res = await client.content.v1.projects[':projectId'].collections[
+      ':collectionId'
+    ].entries.$get({
+      param: { projectId: project.id, collectionId: collection.id },
+      query: {},
+    });
 
+    expect(res.status).toEqual(200);
+    const entries = await res.json();
     expect(entries.list.length).toEqual(1);
     expect(entries.total).toEqual(1);
     expect(entries.list.find((p) => p.id === entry.id)?.id).toEqual(entry.id);
   });
 
   it('should be able to read an Entry via API', async function () {
-    const readEntry = (await betterFetch(
-      `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}/entries/${entry.id}`
-    )) as Entry;
+    const res = await client.content.v1.projects[':projectId'].collections[
+      ':collectionId'
+    ].entries[':entryId'].$get({
+      param: {
+        projectId: project.id,
+        collectionId: collection.id,
+        entryId: entry.id,
+      },
+    });
 
+    expect(res.status).toEqual(200);
+    const readEntry = await res.json();
     expect(core.entries.isEntry(readEntry)).toEqual(true);
     expect(readEntry.id).toEqual(entry.id);
   });
 
   it('should be able to count all Entries via API', async function () {
-    const count = (await betterFetch(
-      `http://localhost:31310/v1/projects/${project.id}/collections/${collection.id}/entries/count`
-    )) as number;
+    const res = await client.content.v1.projects[':projectId'].collections[
+      ':collectionId'
+    ].entries.count.$get({
+      param: { projectId: project.id, collectionId: collection.id },
+    });
 
+    expect(res.status).toEqual(200);
+    const count = await res.json();
     expect(count).toEqual(1);
   });
 
-  // Assets
+  // // Assets
 
   it('should be able to list all Assets via API', async function () {
-    const assets = (await betterFetch(
-      `http://localhost:31310/v1/projects/${project.id}/assets`
-    )) as PaginatedList<Asset>;
+    const res = await client.content.v1.projects[':projectId'].assets.$get({
+      param: { projectId: project.id },
+      query: {},
+    });
 
+    expect(res.status).toEqual(200);
+    const assets = await res.json();
     expect(assets.list.length).toEqual(1);
     expect(assets.total).toEqual(1);
     expect(assets.list.find((p) => p.id === asset.id)?.id).toEqual(asset.id);
   });
 
   it('should be able to read an Asset via API', async function () {
-    const readAsset = (await betterFetch(
-      `http://localhost:31310/v1/projects/${project.id}/assets/${asset.id}`
-    )) as Asset;
+    const res = await client.content.v1.projects[':projectId'].assets[
+      ':assetId'
+    ].$get({
+      param: { projectId: project.id, assetId: asset.id },
+    });
 
+    expect(res.status).toEqual(200);
+    const readAsset = await res.json();
     expect(core.assets.isAsset(readAsset)).toEqual(true);
     expect(readAsset.id).toEqual(asset.id);
   });
 
   it('should be able to count all Assets via API', async function () {
-    const count = (await betterFetch(
-      `http://localhost:31310/v1/projects/${project.id}/assets/count`
-    )) as number;
+    const res = await client.content.v1.projects[
+      ':projectId'
+    ].assets.count.$get({
+      param: { projectId: project.id },
+    });
 
+    expect(res.status).toEqual(200);
+    const count = await res.json();
     expect(count).toEqual(1);
   });
 

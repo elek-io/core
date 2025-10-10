@@ -1,5 +1,5 @@
 import Fs from 'fs-extra';
-import type { z } from 'zod';
+import type { z } from '@hono/zod-openapi';
 import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import type { BaseFile } from '../schema/fileSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
