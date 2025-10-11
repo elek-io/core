@@ -19,4 +19,14 @@ export default defineConfig([
     sourcemap: true,
     clean: true,
   },
+  {
+    entry: ['src/index.cli.ts'],
+    format: ['esm'],
+    platform: 'node',
+    outDir: 'dist/cli',
+    dts: true,
+    sourcemap: true,
+    clean: true,
+    external: ['@elek-io/core'],
+  },
 ]);
