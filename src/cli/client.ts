@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
-import path from 'path';
 import CodeBlockWriter from 'code-block-writer';
-import ElekIoCore, { Collection, Project } from '../index.node.js';
+import type ElekIoCore from '../index.node.js';
+import { Collection, Project } from '../index.node.js';
 import assert from 'assert';
 
 const writer = new CodeBlockWriter({
@@ -9,12 +9,6 @@ const writer = new CodeBlockWriter({
   indentNumberOfSpaces: 2,
   useTabs: false,
   useSingleQuote: true,
-});
-
-const core = new ElekIoCore({
-  log: {
-    level: 'debug',
-  },
 });
 
 /**
@@ -26,10 +20,10 @@ const core = new ElekIoCore({
  * of Collections to provide correct types for available Entries.
  *
  * @example
- * Usage: Import the generated client and use it to access the local API
+ * Usage: Import the generated client and use it to access the local content API
  *
  * ```ts
- * import { apiClient } from './.elek-io/index.js';
+ * import { apiClient } from './.elek-io/client.js';
  *
  * const client = await apiClient({
  *   baseUrl: 'http://localhost:31310',
@@ -39,18 +33,14 @@ const core = new ElekIoCore({
  * const entries = await client
  *   .projects['d9920ad7-07b8-41c4-84f7-5d6babf0f800']
  *   .collections['7fc70100-82b3-41f8-b4de-705a84b0a95d']
- *   .entries.$get({
- *     query: { limit: 10 },
+ *   .entries.list({
+ *     limit: 10,
  *   })
  *
  * console.log(entries);
  * ```
  */
-export async function generateClient(outDir: string) {
-  const resolvedOutDir = path.resolve(outDir);
-  console.log(`Generating API client in ${resolvedOutDir}`);
-  await fs.ensureDir(resolvedOutDir);
-
+export async function generateApiClient(outFile: string, core: ElekIoCore) {
   // Import statements
   writer.writeLine(
     `import { paginatedListOf, getEntrySchemaFromFieldDefinitions } from '@elek-io/core';`
@@ -94,7 +84,7 @@ export async function generateClient(outDir: string) {
   writer.indent(2).write(`content: {`).newLine();
   writer.indent(3).write(`v1: {`).newLine();
   writer.indent(4).write(`projects: {`).newLine();
-  await writeProjectsObject(writer);
+  await writeProjectsObject(writer, core);
   writer.indent(4).write(`}`).newLine();
   writer.indent(3).write(`}`).newLine();
   writer.indent(2).write(`}`).newLine();
@@ -115,10 +105,11 @@ export async function generateClient(outDir: string) {
   //     });
   //   });
 
-  await fs.writeFile(path.join(resolvedOutDir, 'client.ts'), writer.toString());
+  await fs.writeFile(outFile, writer.toString());
+  core.logger.info(`Generated API Client in "${outFile}"`);
 }
 
-async function writeProjectsObject(writer: CodeBlockWriter) {
+async function writeProjectsObject(writer: CodeBlockWriter, core: ElekIoCore) {
   const projects = await core.projects.list({ limit: 0, offset: 0 });
 
   for (let index = 0; index < projects.list.length; index++) {
@@ -127,7 +118,7 @@ async function writeProjectsObject(writer: CodeBlockWriter) {
 
     writer.indent(1).quote(project.id).write(`: {`).newLine();
     writer.indent(2).write(`collections: {`).newLine();
-    await writeCollectionsObject(writer, project);
+    await writeCollectionsObject(writer, core, project);
     writer.indent(2).write(`},`).newLine();
     writer.indent(1).write(`},`).newLine();
   }
@@ -135,6 +126,7 @@ async function writeProjectsObject(writer: CodeBlockWriter) {
 
 async function writeCollectionsObject(
   writer: CodeBlockWriter,
+  core: ElekIoCore,
   project: Project
 ) {
   const collections = await core.collections.list({

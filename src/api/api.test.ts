@@ -1,12 +1,7 @@
 import { testClient } from 'hono/testing';
 import { createTestApi } from './lib/util.js';
 import router from './routes/index.js';
-import ElekIoCore, {
-  Asset,
-  Collection,
-  Entry,
-  Project,
-} from '../index.node.js';
+import { Asset, Collection, Entry, Project } from '../index.node.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createProject,
@@ -14,27 +9,8 @@ import {
   createCollection,
   createEntry,
 } from '../test/util.js';
+import core from '../test/setup.js';
 
-const core = new ElekIoCore({
-  log: {
-    level: 'debug',
-  },
-});
-
-await core.user.set({
-  userType: 'local',
-  name: 'John Doe',
-  email: 'john.doe@test.com',
-  language: 'en',
-  // The localApi object is actually ignored by Core
-  // and used by Client to instruct Core how and when to start the API
-  localApi: {
-    isEnabled: true,
-    port: 31310,
-  },
-});
-
-//
 const client = testClient(
   createTestApi(
     router,

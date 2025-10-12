@@ -1,35 +1,102 @@
-import { expect } from 'vitest';
+import { expect, vi } from 'vitest';
 import { it } from 'vitest';
 import { describe } from 'vitest';
-import { apiClient } from '../.elek-io/client.js';
-import ElekIoCore from './index.node.js';
+
+import { Asset, Collection, Entry, Project } from './index.node.js';
 import { beforeAll } from 'vitest';
+import { spawn } from 'child_process';
+import fs from 'fs-extra';
+import {
+  createAsset,
+  createCollection,
+  createEntry,
+  createProject,
+} from './test/util.js';
+import core from './test/setup.js';
 
-const core = new ElekIoCore({
-  log: {
-    level: 'debug',
-  },
-});
+async function spawnChildProcess(command: string, args: string[]) {
+  const child = spawn(command, args);
 
-const client = apiClient({
-  baseUrl: 'http://localhost:31310',
-  apiKey: 'abc123',
-});
+  // Log output of the child process
+  child.stdout.on('data', (data) => {
+    console.log(`${data}`);
+  });
+  child.stderr.on('data', (data) => {
+    console.error(`${data}`);
+  });
 
-describe('Client', function () {
+  await vi.waitFor(
+    () => {
+      if (child.exitCode === null) {
+        throw new Error(
+          `Child process "${command} ${args.join(' ')}" not finished yet`
+        );
+      }
+    },
+    {
+      timeout: 20000,
+      interval: 20,
+    }
+  );
+
+  // expect(child.exitCode).toEqual(0);
+}
+
+describe('CLI', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let asset: Asset;
+  let collection: Collection;
+  let entry: Entry;
+
   beforeAll(async function () {
+    /**
+     * Building Core is necessary because the generated API Client imports the dist files of Core via
+     * import { ... } from '@elek-io/core';
+     */
+    await spawnChildProcess('pnpm', ['build']);
+
+    project = await createProject();
+    asset = await createAsset(project.id);
+    collection = await createCollection(project.id);
+    entry = await createEntry(project.id, collection.id, asset.id);
+
     await core.api.start(31310);
+  }, 20000);
+
+  it('should be able to generate the API Client with default options', async function () {
+    await spawnChildProcess('elek-io', ['generate:client']);
+
+    expect(await fs.exists('./.elek-io/client.ts')).toBe(true);
+  });
+
+  it('should be able to generate the API Client as JavaScript, ESM and target ES2020', async function () {
+    await spawnChildProcess('elek-io', [
+      'generate:client',
+      './.elek-io',
+      'js',
+      'esm',
+      'es2020',
+    ]);
+
+    expect(await fs.exists('./.elek-io/client.js')).toBe(true);
   });
 
   it('should be able to request a list of entries', async function () {
+    // Dynamically import the generated client because it is generated
+    // during this files execution and not available at the start
+    const { apiClient } = await import('../.elek-io/client.js');
+    const client = apiClient({
+      baseUrl: 'http://localhost:31310',
+      apiKey: 'abc123',
+    });
+
     const entries =
-      await client.content.v1.projects[
-        '32ba1a3c-c775-4ff0-b5cd-08c71edfe18b'
-      ].collections['57cde539-fe26-40e7-b117-3aae2deece1e'].entries.list();
+      // @ts-expect-error The Client is generated dynamically, so TS cannot know about the IDs
+      await client.content.v1.projects[project.id].collections[
+        collection.id
+      ].entries.list();
 
-    console.log(entries);
-
-    // expect(isRunningBefore).toEqual(false);
-    // expect(isRunningAfter).toEqual(true);
+    expect(entries.list.length).toEqual(1);
+    expect(entries.list[0].id).toEqual(entry.id);
   });
 });
