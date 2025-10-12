@@ -64,7 +64,10 @@ const generateApiClientAction = generateApiClientActionSchema.implementAsync(
       core.logger.info('Watching for changes to regenerate the API Client');
 
       chokidar
-        .watch(core.util.pathTo.projects)
+        .watch(core.util.pathTo.projects, {
+          ignoreInitial: true, // Do not regenerate Client while chokidar first discovers all directories and files
+          ignored: (path) => path.includes('/.git/'), // Exclude all files inside .git directory of Project repositories
+        })
         .on('all', async (event, path) => {
           core.logger.info(
             `Regenerating API Client due to ${event} on "${path}"`
