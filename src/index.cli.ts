@@ -6,12 +6,19 @@ import tsup from 'tsup';
 import * as packageJson from '../package.json' with { type: 'json' };
 import { generateApiClient } from './cli/client.js';
 import {
+  apiStartActionSchema,
   generateApiClientActionSchema,
   GenerateApiClientAsProps,
 } from './schema/index.js';
 import ElekIoCore from './index.node.js';
 import path from 'path';
 import fs from 'fs-extra';
+
+const core = new ElekIoCore({
+  log: {
+    level: 'info',
+  },
+});
 
 const program = new Command();
 
@@ -52,12 +59,6 @@ async function generateApiClientAs(
 
 const generateApiClientAction = generateApiClientActionSchema.implementAsync(
   async (outDir, language, format, target, options) => {
-    const core = new ElekIoCore({
-      log: {
-        level: 'info',
-      },
-    });
-
     await generateApiClientAs(core, { outDir, language, format, target });
 
     if (options.watch === true) {
@@ -107,6 +108,18 @@ program
   )
   .action((outDir, language, format, target, options) => {
     generateApiClientAction(outDir, language, format, target, options);
+  });
+
+const startApiAction = apiStartActionSchema.implementAsync(async (port) => {
+  await core.api.start(port);
+});
+
+program
+  .command('api:start')
+  .description('Starts the local API')
+  .argument('[port]', 'The port to run the local API on', 31310)
+  .action((port) => {
+    startApiAction(port);
   });
 
 program.parseAsync();

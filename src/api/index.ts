@@ -127,7 +127,7 @@ export class LocalApi {
       },
       (info) => {
         this.logService.info(
-          `Started local API on ${info.address}:${info.port} (${info.family})`
+          `Started local API on http://localhost:${info.port}`
         );
       }
     );

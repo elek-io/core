@@ -43,3 +43,10 @@ export const generateApiClientActionSchema = z.function({
   ]),
   output: z.void(),
 });
+
+const portSchema = z.number().default(31310);
+
+export const apiStartActionSchema = z.function({
+  input: z.tuple([portSchema]),
+  output: z.void(),
+});
