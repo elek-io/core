@@ -39,7 +39,9 @@ async function spawnChildProcess(command: string, args: string[]) {
     }
   );
 
-  // expect(child.exitCode).toEqual(0);
+  expect(child.exitCode).toEqual(0);
+
+  return child;
 }
 
 describe('CLI', function () {
@@ -84,6 +86,7 @@ describe('CLI', function () {
   it('should be able to request a list of entries', async function () {
     // Dynamically import the generated client because it is generated
     // during this files execution and not available at the start
+    // @ts-expect-error The API Client is generated dynamically, so TS cannot know about the module
     const { apiClient } = await import('../.elek-io/client.js');
     const client = apiClient({
       baseUrl: 'http://localhost:31310',
@@ -91,7 +94,7 @@ describe('CLI', function () {
     });
 
     const entries =
-      // @ts-expect-error The Client is generated dynamically, so TS cannot know about the IDs
+      // @ts-expect-error The API Client is generated dynamically, so TS cannot know about the IDs
       await client.content.v1.projects[project.id].collections[
         collection.id
       ].entries.list();
