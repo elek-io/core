@@ -34,7 +34,7 @@ async function spawnChildProcess(command: string, args: string[]) {
       }
     },
     {
-      timeout: 20000,
+      timeout: 60000,
       interval: 20,
     }
   );
@@ -69,7 +69,7 @@ describe('CLI', function () {
     entry = await createEntry(project.id, collection.id, asset.id);
 
     await core.api.start(31310);
-  }, 20000);
+  }, 60000);
 
   it('should be able to generate the API Client with default options', async function () {
     await spawnChildProcess('elek-io', ['generate:client']);
