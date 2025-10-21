@@ -57,9 +57,11 @@ describe('CLI', function () {
      */
     await spawnChildProcess('pnpm', ['build']);
     /**
-     * Install the CLI globally, so that the `elek-io` command is available
+     * Link the CLI binary, so that the `elek-io` command is available
+     *
+     * @see https://pnpm.io/cli/link#add-a-binary-globally
      */
-    await spawnChildProcess('pnpm', ['add', '--global', '.']);
+    await spawnChildProcess('pnpm', ['link']);
 
     project = await createProject();
     asset = await createAsset(project.id);
