@@ -34,26 +34,26 @@ async function generateApiClientAs(
   const resolvedOutDir = path.resolve(outDir);
   await fs.ensureDir(resolvedOutDir);
 
-  if (language === 'ts') {
-    const outFile = path.join(resolvedOutDir, 'client.ts');
-    await generateApiClient(outFile, core);
-  } else {
-    const tmpOutFile = path.join(core.util.pathTo.tmp, `client.ts`);
-    await generateApiClient(tmpOutFile, core);
+  const outFileTs = path.join(resolvedOutDir, 'client.ts');
+  await generateApiClient(outFileTs, core);
 
+  if (language === 'js') {
     // Use tsup to compile the generated TS Client
     // to JS in the specified module format and target environment
     await tsup.build({
       config: false, // Do not use tsup config file of Core
       external: ['@elek-io/core', 'zod'], // These are peer dependencies of the generated client
-      entry: [tmpOutFile],
+      entry: [outFileTs],
       outDir: resolvedOutDir,
       format,
       target,
       sourcemap: true,
-      clean: true,
+      clean: false,
       dts: true,
     });
+
+    // Remove the generated TS Client after compiling to JS
+    await fs.remove(outFileTs);
   }
 }
 
