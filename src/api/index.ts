@@ -113,8 +113,6 @@ export class LocalApi {
    * Starts the local API on given port
    */
   public async start(port: number) {
-    // await this.generateDynamicRoutes();
-
     this.server = serve(
       {
         fetch: this.api.fetch,
