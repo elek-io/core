@@ -56,6 +56,10 @@ describe('CLI', function () {
      * import { ... } from '@elek-io/core';
      */
     await spawnChildProcess('pnpm', ['build']);
+    /**
+     * Install the CLI globally, so that the `elek-io` command is available
+     */
+    await spawnChildProcess('pnpm', ['add', '--global', '.']);
 
     project = await createProject();
     asset = await createAsset(project.id);
