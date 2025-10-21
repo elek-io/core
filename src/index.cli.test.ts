@@ -94,7 +94,6 @@ describe('CLI', function () {
     });
 
     const entries =
-      // @ts-expect-error The API Client is generated dynamically, so TS cannot know about the IDs
       await client.content.v1.projects[project.id].collections[
         collection.id
       ].entries.list();

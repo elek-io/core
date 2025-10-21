@@ -36,6 +36,8 @@ export function createRouter() {
           422
         );
       }
+
+      return result;
     },
   });
 }
