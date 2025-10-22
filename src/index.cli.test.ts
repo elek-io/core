@@ -4,7 +4,7 @@ import { describe } from 'vitest';
 
 import { Asset, Collection, Entry, Project } from './index.node.js';
 import { beforeAll } from 'vitest';
-import { exec, spawn } from 'child_process';
+import { exec } from 'child_process';
 import fs from 'fs-extra';
 import {
   createAsset,
