@@ -4,7 +4,7 @@ import { describe } from 'vitest';
 
 import { Asset, Collection, Entry, Project } from './index.node.js';
 import { beforeAll } from 'vitest';
-import { spawn } from 'child_process';
+import { exec, spawn } from 'child_process';
 import fs from 'fs-extra';
 import {
   createAsset,
@@ -15,15 +15,15 @@ import {
 import core from './test/setup.js';
 
 async function spawnChildProcess(command: string, args: string[]) {
-  const child = spawn(command, args);
+  const child = exec(command + ' ' + args.join(' '));
 
   // Log output of the child process
-  child.stdout.on('data', (data) => {
-    console.log(`${data}`);
-  });
-  child.stderr.on('data', (data) => {
-    console.error(`${data}`);
-  });
+  // child.stdout.on('data', (data) => {
+  //   console.log(`${data}`);
+  // });
+  // child.stderr.on('data', (data) => {
+  //   console.error(`${data}`);
+  // });
 
   await vi.waitFor(
     () => {
