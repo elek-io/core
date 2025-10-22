@@ -25,6 +25,14 @@ async function spawnChildProcess(command: string, args: string[]) {
   //   console.error(`${data}`);
   // });
 
+  // Log output of the child process
+  child.on('message', (data) => {
+    console.log(`${data}`);
+  });
+  child.on('error', (data) => {
+    console.error(`${data}`);
+  });
+
   await vi.waitFor(
     () => {
       if (child.exitCode === null) {
