@@ -15,7 +15,14 @@ import {
 import core from './test/setup.js';
 
 async function spawnChildProcess(command: string, args: string[]) {
-  const child = exec(command + ' ' + args.join(' '));
+  const fullCommand = `${command} ${args.join(' ')}`;
+  const child = exec(fullCommand, (error, stdout, stderr) => {
+    if (error) {
+      core.logger.error(`Error executing command "${fullCommand}": ${error}`);
+    }
+    core.logger.debug(stdout);
+    core.logger.error(stderr);
+  });
 
   // Log output of the child process
   // child.stdout.on('data', (data) => {
@@ -26,19 +33,17 @@ async function spawnChildProcess(command: string, args: string[]) {
   // });
 
   // Log output of the child process
-  child.on('message', (data) => {
-    console.log(`${data}`);
-  });
-  child.on('error', (data) => {
-    console.error(`${data}`);
-  });
+  // child.on('message', (data) => {
+  //   console.log(`${data}`);
+  // });
+  // child.on('error', (data) => {
+  //   console.error(`${data}`);
+  // });
 
   await vi.waitFor(
     () => {
       if (child.exitCode === null) {
-        throw new Error(
-          `Child process "${command} ${args.join(' ')}" not finished yet`
-        );
+        throw new Error(`Child process "${fullCommand}" not finished yet`);
       }
     },
     {
