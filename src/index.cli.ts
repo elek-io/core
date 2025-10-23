@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import chokidar from 'chokidar';
-import tsup from 'tsup';
+import { build as compileJs } from 'tsdown';
 import * as packageJson from '../package.json' with { type: 'json' };
 import { generateApiClient } from './cli/client.js';
 import {
@@ -38,10 +38,10 @@ async function generateApiClientAs(
   await generateApiClient(outFileTs, core);
 
   if (language === 'js') {
-    // Use tsup to compile the generated TS Client
+    // Use tsdown to compile the generated TS Client
     // to JS in the specified module format and target environment
-    await tsup.build({
-      config: false, // Do not use tsup config file of Core
+    await compileJs({
+      config: false, // Do not use tsdown config file of Core
       external: ['@elek-io/core', 'zod'], // These are peer dependencies of the generated client
       entry: [outFileTs],
       outDir: resolvedOutDir,
