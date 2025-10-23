@@ -20,8 +20,8 @@ async function spawnChildProcess(command: string, args: string[]) {
     if (error) {
       core.logger.error(`Error executing command "${fullCommand}": ${error}`);
     }
-    core.logger.debug(stdout);
-    core.logger.error(stderr);
+    core.logger.debug(stdout.trim());
+    core.logger.error(stderr.trim());
   });
 
   // Log output of the child process
@@ -74,7 +74,7 @@ describe('CLI', function () {
      *
      * @see https://pnpm.io/cli/link#add-a-binary-globally
      */
-    await spawnChildProcess('pnpm', ['link']);
+    await spawnChildProcess('pnpm', ['link', '--global']);
 
     project = await createProject();
     asset = await createAsset(project.id);
