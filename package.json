@@ -40,7 +40,7 @@
     "dev": "vitest",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
-    "build": "tsup",
+    "build": "tsdown",
     "release": "changeset publish"
   },
   "dependencies": {
@@ -57,7 +57,6 @@
     "p-queue": "9.0.0",
     "semver": "7.7.3",
     "tsdown": "0.15.9",
-    "tsup": "8.5.0",
     "uuid": "13.0.0",
     "winston": "3.18.3",
     "winston-daily-rotate-file": "5.0.0",
