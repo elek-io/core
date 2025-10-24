@@ -153,7 +153,7 @@ export function execCommand(
     // };
     const start = Date.now();
 
-    execFile(command, args, (error, stdout, stderr) => {
+    execFile(command, args, { shell: true }, (error, stdout, stderr) => {
       const durationMs = Date.now() - start;
       if (error) {
         logger.error(
