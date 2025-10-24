@@ -25,6 +25,8 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 10
+      - name: Debug pnpm global bin path
+        run: pnpm bin -g
       - name: Setup Node.js ${{ matrix.node-version }} environment
         uses: actions/setup-node@v4
         with:
