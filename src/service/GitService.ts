@@ -1,4 +1,4 @@
-import { ChildProcess } from 'child_process';
+import type { ChildProcess } from 'child_process';
 import { GitProcess, IGitExecutionOptions, type IGitResult } from 'dugite';
 import PQueue from 'p-queue';
 import Path from 'path';

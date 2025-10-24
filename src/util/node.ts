@@ -1,7 +1,9 @@
 import Fs from 'fs-extra';
 import Os from 'os';
 import Path from 'path';
+import { exec } from 'child_process';
 import { projectFolderSchema } from '../schema/projectSchema.js';
+import type { LogService } from '../service/LogService.js';
 
 /**
  * The directory in which everything is stored and will be worked in
@@ -130,5 +132,34 @@ export async function files(
       return false;
     }
     return dirent.isFile();
+  });
+}
+
+/**
+ * Executes a shell command async and returns the output.
+ */
+export function execCommand(
+  command: string,
+  args: string[],
+  logger: LogService
+) {
+  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    const fullCommand = `"${command}" ${args.join(' ')}`;
+    const start = Date.now();
+
+    exec(fullCommand, (error, stdout, stderr) => {
+      const durationMs = Date.now() - start;
+      if (error) {
+        logger.error(
+          `Error executing command (${fullCommand}) after ${durationMs}ms: ${error}`
+        );
+        reject(error);
+      } else {
+        logger.info(
+          `Command (${fullCommand}) executed successfully in ${durationMs}ms.`
+        );
+        resolve({ stdout, stderr });
+      }
+    });
   });
 }

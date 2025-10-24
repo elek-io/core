@@ -1,10 +1,9 @@
-import { expect, vi } from 'vitest';
+import { expect } from 'vitest';
 import { it } from 'vitest';
 import { describe } from 'vitest';
 
 import { Asset, Collection, Entry, Project } from './index.node.js';
 import { beforeAll } from 'vitest';
-import { exec } from 'child_process';
 import fs from 'fs-extra';
 import {
   createAsset,
@@ -13,49 +12,7 @@ import {
   createProject,
 } from './test/util.js';
 import core from './test/setup.js';
-
-async function spawnChildProcess(command: string, args: string[]) {
-  const fullCommand = `${command} ${args.join(' ')}`;
-  const child = exec(fullCommand, (error, stdout, stderr) => {
-    if (error) {
-      core.logger.error(`Error executing command "${fullCommand}": ${error}`);
-    }
-    core.logger.debug(stdout.trim());
-    core.logger.error(stderr.trim());
-  });
-
-  // Log output of the child process
-  // child.stdout.on('data', (data) => {
-  //   console.log(`${data}`);
-  // });
-  // child.stderr.on('data', (data) => {
-  //   console.error(`${data}`);
-  // });
-
-  // Log output of the child process
-  // child.on('message', (data) => {
-  //   console.log(`${data}`);
-  // });
-  // child.on('error', (data) => {
-  //   console.error(`${data}`);
-  // });
-
-  await vi.waitFor(
-    () => {
-      if (child.exitCode === null) {
-        throw new Error(`Child process "${fullCommand}" not finished yet`);
-      }
-    },
-    {
-      timeout: 60000,
-      interval: 20,
-    }
-  );
-
-  expect(child.exitCode).toEqual(0);
-
-  return child;
-}
+import { execCommand } from './util/node.js';
 
 describe('CLI', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -68,13 +25,13 @@ describe('CLI', function () {
      * Building Core is necessary because the generated API Client imports the dist files of Core via
      * import { ... } from '@elek-io/core';
      */
-    await spawnChildProcess('pnpm', ['build']);
+    await execCommand('pnpm', ['build'], core.logger);
     /**
      * Link the CLI binary, so that the `elek-io` command is available
      *
      * @see https://pnpm.io/cli/link#add-a-binary-globally
      */
-    await spawnChildProcess('pnpm', ['link', '--global']);
+    await execCommand('pnpm', ['link', '--global'], core.logger);
 
     project = await createProject();
     asset = await createAsset(project.id);
@@ -85,22 +42,20 @@ describe('CLI', function () {
   }, 60000);
 
   it('should be able to generate the API Client with default options', async function () {
-    await spawnChildProcess('elek-io', ['generate:client']);
+    await execCommand('elek-io', ['generate:client'], core.logger);
 
     expect(await fs.exists('./.elek-io/client.ts')).toBe(true);
   });
 
   it('should be able to generate the API Client as JavaScript, ESM and target ES2020', async function () {
-    await spawnChildProcess('elek-io', [
-      'generate:client',
-      './.elek-io',
-      'js',
-      'esm',
-      'es2020',
-    ]);
+    await execCommand(
+      'elek-io',
+      ['generate:client', './.elek-io', 'js', 'esm', 'es2020'],
+      core.logger
+    );
 
     expect(await fs.exists('./.elek-io/client.js')).toBe(true);
-  });
+  }, 10000);
 
   it('should be able to request a list of entries', async function () {
     // Dynamically import the generated client because it is generated
