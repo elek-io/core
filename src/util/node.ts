@@ -145,13 +145,9 @@ export function execCommand(
 ) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const fullCommand = `"${command}" ${args.join(' ')}`;
-    const shell =
-      Os.platform() === 'win32'
-        ? process.env['ComSpec'] || 'cmd.exe'
-        : '/bin/sh';
     const start = Date.now();
 
-    exec(fullCommand, { shell }, (error, stdout, stderr) => {
+    exec(fullCommand, (error, stdout, stderr) => {
       const durationMs = Date.now() - start;
       if (error) {
         logger.error(

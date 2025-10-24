@@ -25,13 +25,13 @@ describe('CLI', function () {
      * Building Core is necessary because the generated API Client imports the dist files of Core via
      * import { ... } from '@elek-io/core';
      */
-    await execCommand('pnpm', ['build'], core.logger);
+    await execCommand('npx pnpm', ['build'], core.logger);
     /**
      * Link the CLI binary, so that the `elek-io` command is available
      *
      * @see https://pnpm.io/cli/link#add-a-binary-globally
      */
-    await execCommand('pnpm', ['link', '--global'], core.logger);
+    await execCommand('npx pnpm', ['link', '--global'], core.logger);
 
     project = await createProject();
     asset = await createAsset(project.id);
