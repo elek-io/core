@@ -1,7 +1,7 @@
 import Fs from 'fs-extra';
 import Os from 'os';
 import Path from 'path';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { projectFolderSchema } from '../schema/projectSchema.js';
 import type { LogService } from '../service/LogService.js';
 
@@ -145,9 +145,15 @@ export function execCommand(
 ) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const fullCommand = `"${command}" ${args.join(' ')}`;
+    // const execOptions: ExecOptions = {
+    //   cwd: path,
+    //   encoding: 'utf8',
+    //   maxBuffer: options ? options.maxBuffer : 10 * 1024 * 1024,
+    //   env,
+    // };
     const start = Date.now();
 
-    exec(fullCommand, (error, stdout, stderr) => {
+    execFile(command, args, (error, stdout, stderr) => {
       const durationMs = Date.now() - start;
       if (error) {
         logger.error(
