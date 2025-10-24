@@ -1,7 +1,6 @@
 import { expect } from 'vitest';
 import { it } from 'vitest';
 import { describe } from 'vitest';
-import Os from 'os';
 
 import { Asset, Collection, Entry, Project } from './index.node.js';
 import { beforeAll } from 'vitest';
