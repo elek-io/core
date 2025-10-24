@@ -144,7 +144,9 @@ export function execCommand(
   logger: LogService
 ) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    const fullCommand = `"${command}" ${args.join(' ')}`;
+    const suffixedCommand =
+      Os.platform() === 'win32' ? `${command}.cmd` : command;
+    const fullCommand = `${suffixedCommand} ${args.join(' ')}`;
     // const execOptions: ExecOptions = {
     //   cwd: path,
     //   encoding: 'utf8',
@@ -153,19 +155,24 @@ export function execCommand(
     // };
     const start = Date.now();
 
-    execFile(command, args, { shell: true }, (error, stdout, stderr) => {
-      const durationMs = Date.now() - start;
-      if (error) {
-        logger.error(
-          `Error executing command (${fullCommand}) after ${durationMs}ms: ${error}`
-        );
-        reject(error);
-      } else {
-        logger.info(
-          `Command (${fullCommand}) executed successfully in ${durationMs}ms.`
-        );
-        resolve({ stdout, stderr });
+    execFile(
+      suffixedCommand,
+      args,
+      { shell: true },
+      (error, stdout, stderr) => {
+        const durationMs = Date.now() - start;
+        if (error) {
+          logger.error(
+            `Error executing command "${fullCommand}" after ${durationMs}ms: ${error}`
+          );
+          reject(error);
+        } else {
+          logger.info(
+            `Command "${fullCommand}" executed successfully in ${durationMs}ms.`
+          );
+          resolve({ stdout, stderr });
+        }
       }
-    });
+    );
   });
 }
