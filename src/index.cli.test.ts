@@ -41,7 +41,7 @@ describe('CLI', function () {
 
     const dirContent = await execCommand({
       command: 'dir',
-      args: ['"C:\Users\runneradmin\setup-pnpm\node_modules\.bin"'],
+      args: ['"C:\\Users\\runneradmin\\setup-pnpm\\node_modules\\.bin"'],
       logger: core.logger,
     });
     core.logger.info(dirContent.stdout);
