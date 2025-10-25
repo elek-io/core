@@ -43,7 +43,7 @@ describe('CLI', function () {
 
   it('should be able to generate the API Client with default options', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.js',
+      command: 'node "./dist/cli/index.cli.js"',
       args: ['generate:client'],
       logger: core.logger,
     });
@@ -53,8 +53,8 @@ describe('CLI', function () {
 
   it('should be able to generate the API Client as JavaScript, ESM and target ES2020', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.js',
-      args: ['generate:client', './.elek-io', 'js', 'esm', 'es2020'],
+      command: 'node "./dist/cli/index.cli.js"',
+      args: ['generate:client', '"./.elek-io"', 'js', 'esm', 'es2020'],
       logger: core.logger,
     });
 
