@@ -28,30 +28,6 @@ describe('CLI', function () {
       args: ['build'],
       logger: core.logger,
     });
-    /**
-     * Link the CLI binary, so that the `elek-io` command is available
-     *
-     * @see https://pnpm.io/cli/link#add-a-binary-globally
-     */
-    await execCommand({
-      command: 'pnpm',
-      args: ['link', '--global'],
-      logger: core.logger,
-    });
-
-    const dirContent = await execCommand({
-      command: 'dir',
-      args: ['"C:\\Users\\runneradmin\\setup-pnpm\\node_modules\\.bin"'],
-      logger: core.logger,
-    });
-    core.logger.info(dirContent.stdout);
-
-    const rootDir = await execCommand({
-      command: 'pnpm',
-      args: ['root', '--global'],
-      logger: core.logger,
-    });
-    core.logger.info(rootDir.stdout);
 
     project = await createProject();
     asset = await createAsset(project.id);
@@ -67,7 +43,7 @@ describe('CLI', function () {
 
   it('should be able to generate the API Client with default options', async function () {
     await execCommand({
-      command: 'pnpm elek-io',
+      command: 'node ./dist/cli/index.cli.js',
       args: ['generate:client'],
       logger: core.logger,
     });
@@ -77,7 +53,7 @@ describe('CLI', function () {
 
   it('should be able to generate the API Client as JavaScript, ESM and target ES2020', async function () {
     await execCommand({
-      command: 'pnpm elek-io',
+      command: 'node ./dist/cli/index.cli.js',
       args: ['generate:client', './.elek-io', 'js', 'esm', 'es2020'],
       logger: core.logger,
     });

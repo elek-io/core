@@ -137,6 +137,8 @@ export async function files(
 
 /**
  * Executes a shell command async and returns the output.
+ *
+ * When on Windows, it will automatically append `.cmd` to the command.
  */
 export function execCommand({
   command,
