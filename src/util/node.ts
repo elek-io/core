@@ -138,7 +138,7 @@ export async function files(
 /**
  * Executes a shell command async and returns the output.
  *
- * When on Windows, it will automatically append `.cmd` to the command.
+ * When on Windows, it will automatically append `.cmd` to the command if it is in the `commandsToSuffix` list.
  */
 export function execCommand({
   command,
@@ -152,11 +152,12 @@ export function execCommand({
   logger: LogService;
 }) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    const commandsToSuffix = ['pnpm'];
     const isWindows = Os.platform() === 'win32';
     const suffixedCommand = isWindows
       ? command
           .split(' ')
-          .map((cmd, index) => (index === 0 ? `${cmd}.cmd` : cmd))
+          .map((cmd) => (commandsToSuffix.includes(cmd) ? `${cmd}.cmd` : cmd))
           .join(' ')
       : command;
     const fullCommand = `${suffixedCommand} ${args.join(' ')}`;
