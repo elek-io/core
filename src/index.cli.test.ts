@@ -39,6 +39,20 @@ describe('CLI', function () {
       logger: core.logger,
     });
 
+    const dirContent = await execCommand({
+      command: 'dir',
+      args: ['"C:\Users\runneradmin\setup-pnpm\node_modules\.bin"'],
+      logger: core.logger,
+    });
+    core.logger.info(dirContent.stdout);
+
+    const rootDir = await execCommand({
+      command: 'pnpm',
+      args: ['root', '--global'],
+      logger: core.logger,
+    });
+    core.logger.info(rootDir.stdout);
+
     project = await createProject();
     asset = await createAsset(project.id);
     collection = await createCollection(project.id);
