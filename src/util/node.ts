@@ -154,7 +154,7 @@ export function execCommand({
     const suffixedCommand = isWindows
       ? command
           .split(' ')
-          .map((cmd) => `${cmd}.cmd`)
+          .map((cmd, index) => (index === 0 ? `${cmd}.cmd` : cmd))
           .join(' ')
       : command;
     const fullCommand = `${suffixedCommand} ${args.join(' ')}`;
