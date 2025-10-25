@@ -1,7 +1,7 @@
 import Fs from 'fs-extra';
 import Os from 'os';
 import Path from 'path';
-import { execFile } from 'child_process';
+import { execFile, type ExecFileOptions } from 'child_process';
 import { projectFolderSchema } from '../schema/projectSchema.js';
 import type { LogService } from '../service/LogService.js';
 
@@ -138,41 +138,45 @@ export async function files(
 /**
  * Executes a shell command async and returns the output.
  */
-export function execCommand(
-  command: string,
-  args: string[],
-  logger: LogService
-) {
+export function execCommand({
+  command,
+  args,
+  options,
+  logger,
+}: {
+  command: string;
+  args: string[];
+  options?: ExecFileOptions;
+  logger: LogService;
+}) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    const suffixedCommand =
-      Os.platform() === 'win32' ? `${command}.cmd` : command;
+    const isWindows = Os.platform() === 'win32';
+    const suffixedCommand = isWindows
+      ? command
+          .split(' ')
+          .map((cmd) => `${cmd}.cmd`)
+          .join(' ')
+      : command;
     const fullCommand = `${suffixedCommand} ${args.join(' ')}`;
-    // const execOptions: ExecOptions = {
-    //   cwd: path,
-    //   encoding: 'utf8',
-    //   maxBuffer: options ? options.maxBuffer : 10 * 1024 * 1024,
-    //   env,
-    // };
+    const execOptions: ExecFileOptions = {
+      ...options,
+      shell: true,
+    };
     const start = Date.now();
 
-    execFile(
-      suffixedCommand,
-      args,
-      { shell: true },
-      (error, stdout, stderr) => {
-        const durationMs = Date.now() - start;
-        if (error) {
-          logger.error(
-            `Error executing command "${fullCommand}" after ${durationMs}ms: ${error}`
-          );
-          reject(error);
-        } else {
-          logger.info(
-            `Command "${fullCommand}" executed successfully in ${durationMs}ms.`
-          );
-          resolve({ stdout, stderr });
-        }
+    execFile(suffixedCommand, args, execOptions, (error, stdout, stderr) => {
+      const durationMs = Date.now() - start;
+      if (error) {
+        logger.error(
+          `Error executing command "${fullCommand}" after ${durationMs}ms: ${error}`
+        );
+        reject(error);
+      } else {
+        logger.info(
+          `Command "${fullCommand}" executed successfully in ${durationMs}ms.`
+        );
+        resolve({ stdout, stderr });
       }
-    );
+    });
   });
 }

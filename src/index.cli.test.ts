@@ -1,9 +1,7 @@
-import { expect } from 'vitest';
+import { beforeAll, afterAll, expect } from 'vitest';
 import { it } from 'vitest';
 import { describe } from 'vitest';
-
 import { Asset, Collection, Entry, Project } from './index.node.js';
-import { beforeAll } from 'vitest';
 import fs from 'fs-extra';
 import {
   createAsset,
@@ -25,13 +23,21 @@ describe('CLI', function () {
      * Building Core is necessary because the generated API Client imports the dist files of Core via
      * import { ... } from '@elek-io/core';
      */
-    await execCommand('pnpm', ['build'], core.logger);
+    await execCommand({
+      command: 'pnpm',
+      args: ['build'],
+      logger: core.logger,
+    });
     /**
      * Link the CLI binary, so that the `elek-io` command is available
      *
      * @see https://pnpm.io/cli/link#add-a-binary-globally
      */
-    await execCommand('pnpm', ['link', '--global'], core.logger);
+    await execCommand({
+      command: 'pnpm',
+      args: ['link', '--global'],
+      logger: core.logger,
+    });
 
     project = await createProject();
     asset = await createAsset(project.id);
@@ -41,18 +47,26 @@ describe('CLI', function () {
     await core.api.start(31310);
   }, 60000);
 
+  afterAll(async function () {
+    await project.destroy();
+  });
+
   it('should be able to generate the API Client with default options', async function () {
-    await execCommand('elek-io', ['generate:client'], core.logger);
+    await execCommand({
+      command: 'elek-io',
+      args: ['generate:client'],
+      logger: core.logger,
+    });
 
     expect(await fs.exists('./.elek-io/client.ts')).toBe(true);
   });
 
   it('should be able to generate the API Client as JavaScript, ESM and target ES2020', async function () {
-    await execCommand(
-      'elek-io',
-      ['generate:client', './.elek-io', 'js', 'esm', 'es2020'],
-      core.logger
-    );
+    await execCommand({
+      command: 'elek-io',
+      args: ['generate:client', './.elek-io', 'js', 'esm', 'es2020'],
+      logger: core.logger,
+    });
 
     expect(await fs.exists('./.elek-io/client.js')).toBe(true);
   }, 10000);
