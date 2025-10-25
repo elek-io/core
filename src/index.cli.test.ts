@@ -52,13 +52,11 @@ describe('CLI', function () {
   });
 
   it('should be able to generate the API Client as JavaScript, ESM and target ES2020', async function () {
-    const result = await execCommand({
+    await execCommand({
       command: 'node "./dist/cli/index.cli.js"',
       args: ['generate:client', '"./.elek-io"', 'js', 'esm', 'es2020'],
       logger: core.logger,
     });
-    core.logger.info(result.stdout);
-    core.logger.error(result.stderr);
 
     expect(await fs.exists('./.elek-io/client.js')).toBe(true);
   }, 10000);
