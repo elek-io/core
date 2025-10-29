@@ -29,7 +29,7 @@ describe('CLI', function () {
     await project.destroy();
   });
 
-  it('should be able to generate the API Client with default options', async function () {
+  it('should be able to generate the TS API Client with default options', async function () {
     await execCommand({
       command: 'node ./dist/cli/index.cli.js',
       args: ['generate:client'],
@@ -39,7 +39,7 @@ describe('CLI', function () {
     expect(await fs.exists('./.elek-io/client.ts')).toBe(true);
   });
 
-  it('should be able to generate the API Client as JavaScript, ESM and target ES2020', async function () {
+  it('should be able to generate & compile the API Client as JavaScript, ESM and target ES2020', async function () {
     await execCommand({
       command: 'node ./dist/cli/index.cli.js',
       args: ['generate:client', './.elek-io', 'js', 'esm', 'es2020'],
