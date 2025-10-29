@@ -19,22 +19,10 @@ describe('CLI', function () {
   let entry: Entry;
 
   beforeAll(async function () {
-    /**
-     * Building Core is necessary because the generated API Client imports the dist files of Core via
-     * import { ... } from '@elek-io/core';
-     */
-    await execCommand({
-      command: 'pnpm',
-      args: ['build'],
-      logger: core.logger,
-    });
-
     project = await createProject();
     asset = await createAsset(project.id);
     collection = await createCollection(project.id);
     entry = await createEntry(project.id, collection.id, asset.id);
-
-    await core.api.start(31310);
   }, 60000);
 
   afterAll(async function () {
@@ -43,7 +31,7 @@ describe('CLI', function () {
 
   it('should be able to generate the API Client with default options', async function () {
     await execCommand({
-      command: 'node "./dist/cli/index.cli.js"',
+      command: 'node ./dist/cli/index.cli.js',
       args: ['generate:client'],
       logger: core.logger,
     });
@@ -53,8 +41,8 @@ describe('CLI', function () {
 
   it('should be able to generate the API Client as JavaScript, ESM and target ES2020', async function () {
     await execCommand({
-      command: 'node "./dist/cli/index.cli.js"',
-      args: ['generate:client', '"./.elek-io"', 'js', 'esm', 'es2020'],
+      command: 'node ./dist/cli/index.cli.js',
+      args: ['generate:client', './.elek-io', 'js', 'esm', 'es2020'],
       logger: core.logger,
     });
 
@@ -62,6 +50,8 @@ describe('CLI', function () {
   }, 10000);
 
   it('should be able to request a list of entries', async function () {
+    await core.api.start(31310);
+
     // Dynamically import the generated client because it is generated
     // during this files execution and not available at the start
     // @ts-expect-error The API Client is generated dynamically, so TS cannot know about the module
@@ -78,5 +68,24 @@ describe('CLI', function () {
 
     expect(entries.list.length).toEqual(1);
     expect(entries.list[0].id).toEqual(entry.id);
+  });
+
+  it('should be able to export Projects to JSON file', async function () {
+    await execCommand({
+      command: 'node ./dist/cli/index.cli.js',
+      args: ['export'],
+      logger: core.logger,
+    });
+
+    expect(await fs.exists('./.elek-io/projects.json')).toBe(true);
+  });
+
+  it('should be able to use the exported Projects JSON file', async function () {
+    // @ts-expect-error The Projects JSON file is created dynamically, so TS cannot know about the module
+    const projects = (await import('../.elek-io/projects.json')).default;
+
+    expect(
+      projects[project.id].collections[collection.id].entries[entry.id].id
+    ).toEqual(entry.id);
   });
 });

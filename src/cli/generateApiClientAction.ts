@@ -1,15 +1,14 @@
-import fs from 'fs-extra';
+import { build as compileToJs } from 'tsdown';
+import {
+  generateApiClientActionSchema,
+  GenerateApiClientAsProps,
+} from '../schema/cliSchema.js';
+import { core, watchProjects } from './index.js';
+import Path from 'path';
+import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
-import type ElekIoCore from '../index.node.js';
-import { Collection, Project } from '../index.node.js';
 import assert from 'assert';
-
-const writer = new CodeBlockWriter({
-  newLine: '\n',
-  indentNumberOfSpaces: 2,
-  useTabs: false,
-  useSingleQuote: true,
-});
+import { Collection, Project } from '../index.node.js';
 
 /**
  * API Client generator
@@ -40,7 +39,14 @@ const writer = new CodeBlockWriter({
  * console.log(entries);
  * ```
  */
-export async function generateApiClient(outFile: string, core: ElekIoCore) {
+async function generateApiClient(outFile: string) {
+  const writer = new CodeBlockWriter({
+    newLine: '\n',
+    indentNumberOfSpaces: 2,
+    useTabs: false,
+    useSingleQuote: true,
+  });
+
   // Import statements
   writer.writeLine(
     `import { paginatedListOf, getEntrySchemaFromFieldDefinitions } from '@elek-io/core';`
@@ -78,18 +84,18 @@ export async function generateApiClient(outFile: string, core: ElekIoCore) {
   writer.indent(2).write(`content: {`).newLine();
   writer.indent(3).write(`v1: {`).newLine();
   writer.indent(4).write(`projects: {`).newLine();
-  await writeProjectsObject(writer, core);
+  await writeProjectsObject(writer);
   writer.indent(4).write(`}`).newLine();
   writer.indent(3).write(`}`).newLine();
   writer.indent(2).write(`}`).newLine();
   writer.indent(1).write(`}`).newLine();
   writer.writeLine(`}`);
 
-  await fs.writeFile(outFile, writer.toString());
+  await Fs.writeFile(outFile, writer.toString());
   core.logger.info(`Generated API Client in "${outFile}"`);
 }
 
-async function writeProjectsObject(writer: CodeBlockWriter, core: ElekIoCore) {
+async function writeProjectsObject(writer: CodeBlockWriter) {
   const projects = await core.projects.list({ limit: 0, offset: 0 });
 
   for (let index = 0; index < projects.list.length; index++) {
@@ -98,7 +104,7 @@ async function writeProjectsObject(writer: CodeBlockWriter, core: ElekIoCore) {
 
     writer.indent(1).quote(project.id).write(`: {`).newLine();
     writer.indent(2).write(`collections: {`).newLine();
-    await writeCollectionsObject(writer, core, project);
+    await writeCollectionsObject(writer, project);
     writer.indent(2).write(`},`).newLine();
     writer.indent(1).write(`},`).newLine();
   }
@@ -106,7 +112,6 @@ async function writeProjectsObject(writer: CodeBlockWriter, core: ElekIoCore) {
 
 async function writeCollectionsObject(
   writer: CodeBlockWriter,
-  core: ElekIoCore,
   project: Project
 ) {
   const collections = await core.collections.list({
@@ -181,3 +186,53 @@ function writeFetch(
     .newLine();
   writer.writeLine(`const entries = await response.json();`);
 }
+
+async function generateApiClientAs({
+  outDir,
+  language,
+  format,
+  target,
+}: GenerateApiClientAsProps) {
+  const resolvedOutDir = Path.resolve(outDir);
+  await Fs.ensureDir(resolvedOutDir);
+
+  const outFileTs = Path.join(resolvedOutDir, 'client.ts');
+  await generateApiClient(outFileTs);
+
+  if (language === 'js') {
+    // Use tsdown to compile the generated TS Client
+    // to JS in the specified module format and target environment
+    await compileToJs({
+      config: false, // Do not use tsdown config file of Core
+      external: ['@elek-io/core', 'zod'], // These are peer dependencies of the generated client
+      entry: [outFileTs],
+      outDir: resolvedOutDir,
+      format,
+      target,
+      sourcemap: true,
+      clean: false,
+      dts: true,
+    });
+
+    // Remove the generated TS Client after compiling to JS
+    await Fs.remove(outFileTs);
+  }
+}
+
+export const generateApiClientAction =
+  generateApiClientActionSchema.implementAsync(
+    async (outDir, language, format, target, options) => {
+      await generateApiClientAs({ outDir, language, format, target });
+
+      if (options.watch === true) {
+        core.logger.info('Watching for changes to regenerate the API Client');
+
+        watchProjects().on('all', async (event, path) => {
+          core.logger.info(
+            `Regenerating API Client due to ${event} on "${path}"`
+          );
+          await generateApiClientAs({ outDir, language, format, target });
+        });
+      }
+    }
+  );

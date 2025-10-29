@@ -50,3 +50,13 @@ export const apiStartActionSchema = z.function({
   input: z.tuple([portSchema]),
   output: z.void(),
 });
+
+export const exportProjectsSchema = z.object({
+  outDir: outDirSchema,
+});
+export type ExportProjectsProps = z.infer<typeof exportProjectsSchema>;
+
+export const exportActionSchema = z.function({
+  input: z.tuple([outDirSchema, optionsSchema]),
+  output: z.void(),
+});

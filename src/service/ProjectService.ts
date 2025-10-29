@@ -35,7 +35,6 @@ import {
   Version,
   type BaseFile,
   type CloneProjectProps,
-  type CollectionExport,
   type CreateProjectProps,
   type CrudServiceWithListCount,
   type CurrentBranchProjectProps,
@@ -46,7 +45,6 @@ import {
   type ListProjectsProps,
   type PaginatedList,
   type Project,
-  type ProjectExport,
   type ProjectFile,
   type ProjectSettings,
   type ReadProjectProps,
@@ -594,44 +592,6 @@ export class ProjectService
    */
   public isProject(obj: BaseFile | unknown): obj is Project {
     return projectFileSchema.safeParse(obj).success;
-  }
-
-  /**
-   * Exports given Project to JSON
-   *
-   * @todo do not read everything before writing to disk -> stream into file given via props
-   * @todo performance tests
-   * @todo add progress callback
-   */
-  public async exportToJson(projectId: string): Promise<ProjectExport> {
-    const project = await this.read({ id: projectId });
-    const assets = (await this.assetService.list({ projectId, limit: 0 })).list;
-    const collections = (
-      await this.collectionService.list({ projectId, limit: 0 })
-    ).list;
-
-    const collectionExport: CollectionExport[] = await Promise.all(
-      collections.map(async (collection) => {
-        const entries = (
-          await this.entryService.list({
-            projectId,
-            collectionId: collection.id,
-            limit: 0,
-          })
-        ).list;
-
-        return {
-          ...collection,
-          entries,
-        };
-      })
-    );
-
-    return {
-      ...project,
-      assets,
-      collections: collectionExport,
-    };
   }
 
   /**

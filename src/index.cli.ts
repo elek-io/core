@@ -1,24 +1,12 @@
 #! /usr/bin/env node
 
 import { Command } from 'commander';
-import chokidar from 'chokidar';
-import { build as compileJs } from 'tsdown';
 import * as packageJson from '../package.json' with { type: 'json' };
-import { generateApiClient } from './cli/client.js';
 import {
-  apiStartActionSchema,
-  generateApiClientActionSchema,
-  GenerateApiClientAsProps,
-} from './schema/index.js';
-import ElekIoCore from './index.node.js';
-import path from 'path';
-import fs from 'fs-extra';
-
-const core = new ElekIoCore({
-  log: {
-    level: 'info',
-  },
-});
+  exportAction,
+  generateApiClientAction,
+  startApiAction,
+} from './cli/index.js';
 
 const program = new Command();
 
@@ -26,58 +14,6 @@ program
   .name('elek-io')
   .description('CLI for elek.io')
   .version(packageJson.default.version);
-
-async function generateApiClientAs(
-  core: ElekIoCore,
-  { outDir, language, format, target }: GenerateApiClientAsProps
-) {
-  const resolvedOutDir = path.resolve(outDir);
-  await fs.ensureDir(resolvedOutDir);
-
-  const outFileTs = path.join(resolvedOutDir, 'client.ts');
-  await generateApiClient(outFileTs, core);
-
-  if (language === 'js') {
-    // Use tsdown to compile the generated TS Client
-    // to JS in the specified module format and target environment
-    await compileJs({
-      config: false, // Do not use tsdown config file of Core
-      external: ['@elek-io/core', 'zod'], // These are peer dependencies of the generated client
-      entry: [outFileTs],
-      outDir: resolvedOutDir,
-      format,
-      target,
-      sourcemap: true,
-      clean: false,
-      dts: true,
-    });
-
-    // Remove the generated TS Client after compiling to JS
-    await fs.remove(outFileTs);
-  }
-}
-
-const generateApiClientAction = generateApiClientActionSchema.implementAsync(
-  async (outDir, language, format, target, options) => {
-    await generateApiClientAs(core, { outDir, language, format, target });
-
-    if (options.watch === true) {
-      core.logger.info('Watching for changes to regenerate the API Client');
-
-      chokidar
-        .watch(core.util.pathTo.projects, {
-          ignoreInitial: true, // Do not regenerate Client while chokidar first discovers all directories and files
-          ignored: (path) => path.includes('/.git/'), // Exclude all files inside .git directory of Project repositories
-        })
-        .on('all', async (event, path) => {
-          core.logger.info(
-            `Regenerating API Client due to ${event} on "${path}"`
-          );
-          await generateApiClientAs(core, { outDir, language, format, target });
-        });
-    }
-  }
-);
 
 program
   .command('generate:client')
@@ -110,16 +46,24 @@ program
     generateApiClientAction(outDir, language, format, target, options);
   });
 
-const startApiAction = apiStartActionSchema.implementAsync(async (port) => {
-  await core.api.start(port);
-});
-
 program
   .command('api:start')
   .description('Starts the local API')
   .argument('[port]', 'The port to run the local API on', 31310)
   .action((port) => {
     startApiAction(port);
+  });
+
+program
+  .command('export')
+  .description('Exports all locally available Projects into a JSON file')
+  .argument('[outDir]', 'The directory to write the JSON file to', './.elek-io')
+  .option(
+    '-w, --watch',
+    'Watches for changes in your Projects and updates the JSON file automatically.'
+  )
+  .action((outDir, options) => {
+    exportAction(outDir, options);
   });
 
 program.parseAsync();
