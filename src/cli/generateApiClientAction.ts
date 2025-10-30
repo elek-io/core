@@ -200,12 +200,17 @@ async function generateApiClientAs({
   await generateApiClient(outFileTs);
 
   if (language === 'js') {
+    // Convert the Entry file path into POSIX-style (forward slashes - even on Windows),
+    // since tsdown treats this as a glob pattern
+    // @see https://tsdown.dev/options/entry#using-glob-patterns
+    const normalizedEntry = outFileTs.split(Path.sep).join(Path.posix.sep);
+
     // Use tsdown to compile the generated TS Client
     // to JS in the specified module format and target environment
     await compileToJs({
       config: false, // Do not use tsdown config file of Core
       external: ['@elek-io/core', 'zod'], // These are peer dependencies of the generated client
-      entry: outFileTs,
+      entry: normalizedEntry,
       outDir: resolvedOutDir,
       format,
       target,
