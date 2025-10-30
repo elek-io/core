@@ -1,9 +1,6 @@
 import { build as compileToJs } from 'tsdown';
-import type {
-  GenerateApiClientAsProps} from '../schema/cliSchema.js';
-import {
-  generateApiClientActionSchema
-} from '../schema/cliSchema.js';
+import type { GenerateApiClientAsProps } from '../schema/cliSchema.js';
+import { generateApiClientActionSchema } from '../schema/cliSchema.js';
 import { core, watchProjects } from './index.js';
 import Path from 'path';
 import Fs from 'fs-extra';
@@ -233,11 +230,11 @@ export const generateApiClientAction =
       if (options.watch === true) {
         core.logger.info('Watching for changes to regenerate the API Client');
 
-        watchProjects().on('all', async (event, path) => {
+        watchProjects().on('all', (event, path) => {
           core.logger.info(
             `Regenerating API Client due to ${event} on "${path}"`
           );
-          await generateApiClientAs({ outDir, language, format, target });
+          void generateApiClientAs({ outDir, language, format, target });
         });
       }
     }

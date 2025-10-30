@@ -1,8 +1,6 @@
 import { apiStartActionSchema } from '../schema/cliSchema.js';
 import { core } from './index.js';
 
-export const startApiAction = apiStartActionSchema.implementAsync(
-  async (port) => {
-    await core.api.start(port);
-  }
-);
+export const startApiAction = apiStartActionSchema.implement((port) => {
+  core.api.start(parseInt(port));
+});

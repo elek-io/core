@@ -1,6 +1,6 @@
 #! /usr/bin/env node
 
-import { Command } from 'commander';
+import { Command } from '@commander-js/extra-typings';
 import * as packageJson from '../package.json' with { type: 'json' };
 import {
   exportAction,
@@ -42,14 +42,14 @@ program
     '-w, --watch',
     'Watches for changes in your Projects and regenerates the API Client automatically.'
   )
-  .action((outDir, language, format, target, options) => {
-    generateApiClientAction(outDir, language, format, target, options);
+  .action(async (outDir, language, format, target, options) => {
+    await generateApiClientAction(outDir, language, format, target, options);
   });
 
 program
   .command('api:start')
   .description('Starts the local API')
-  .argument('[port]', 'The port to run the local API on', 31310)
+  .argument('[port]', 'The port to run the local API on', '31310')
   .action((port) => {
     startApiAction(port);
   });
@@ -62,8 +62,8 @@ program
     '-w, --watch',
     'Watches for changes in your Projects and updates the JSON file automatically.'
   )
-  .action((outDir, options) => {
-    exportAction(outDir, options);
+  .action(async (outDir, options) => {
+    await exportAction(outDir, options);
   });
 
-program.parseAsync();
+await program.parseAsync();

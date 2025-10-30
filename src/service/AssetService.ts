@@ -1,7 +1,6 @@
 import Fs from 'fs-extra';
 import mime from 'mime';
-import type {
-  SaveAssetProps} from '../schema/index.js';
+import type { SaveAssetProps } from '../schema/index.js';
 import {
   assetFileSchema,
   assetSchema,
@@ -16,7 +15,6 @@ import {
   updateAssetSchema,
   type Asset,
   type AssetFile,
-  type BaseFile,
   type CountAssetsProps,
   type CreateAssetProps,
   type CrudServiceWithListCount,
@@ -278,7 +276,7 @@ export class AssetService
   /**
    * Checks if given object is of type Asset
    */
-  public isAsset(obj: BaseFile | unknown): obj is Asset {
+  public isAsset(obj: unknown): obj is Asset {
     return assetSchema.safeParse(obj).success;
   }
 

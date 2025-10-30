@@ -12,7 +12,6 @@ import {
   readEntrySchema,
   serviceTypeSchema,
   updateEntrySchema,
-  type BaseFile,
   type CountEntriesProps,
   type CreateEntryProps,
   type CrudServiceWithListCount,
@@ -275,7 +274,7 @@ export class EntryService
   /**
    * Checks if given object is of type Entry
    */
-  public isEntry(obj: BaseFile | unknown): obj is Entry {
+  public isEntry(obj: unknown): obj is Entry {
     return entrySchema.safeParse(obj).success;
   }
 

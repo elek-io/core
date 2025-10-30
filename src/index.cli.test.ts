@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+
 import { beforeAll, afterAll, expect } from 'vitest';
 import { it } from 'vitest';
 import { describe } from 'vitest';
@@ -50,7 +54,7 @@ describe('CLI', function () {
   }, 10000);
 
   it('should be able to request a list of entries', async function () {
-    await core.api.start(31310);
+    core.api.start(31310);
 
     // Dynamically import the generated client because it is generated
     // during this files execution and not available at the start

@@ -1,12 +1,10 @@
 import type { ChildProcess } from 'child_process';
-import type { IGitExecutionOptions} from 'dugite';
+import type { IGitExecutionOptions } from 'dugite';
 import { GitProcess, type IGitResult } from 'dugite';
 import PQueue from 'p-queue';
 import Path from 'path';
 import { GitError, NoCurrentUserError } from '../error/index.js';
-import type {
-  GitMergeOptions,
-  GitMessage} from '../schema/index.js';
+import type { GitMergeOptions, GitMessage } from '../schema/index.js';
 import {
   gitCommitSchema,
   gitMessageSchema,
@@ -65,8 +63,8 @@ export class GitService {
     this.logService = logService;
     this.userService = userService;
 
-    this.updateVersion();
-    this.updateGitPath();
+    void this.updateVersion();
+    void this.updateGitPath();
   }
 
   /**
@@ -528,6 +526,9 @@ export class GitService {
 
         return {
           hash: lineArray[0],
+          // We don't want to parse the message because it could throw.
+          // Filtering it through isGitCommit ensures it's valid as a whole.
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           message: JSON.parse(lineArray[1] || ''),
           author: {
             name: lineArray[2],

@@ -9,7 +9,6 @@ import {
   readCollectionSchema,
   serviceTypeSchema,
   updateCollectionSchema,
-  type BaseFile,
   type Collection,
   type CollectionFile,
   type CountCollectionsProps,
@@ -372,7 +371,7 @@ export class CollectionService
   /**
    * Checks if given object is of type Collection
    */
-  public isCollection(obj: BaseFile | unknown): obj is Collection {
+  public isCollection(obj: unknown): obj is Collection {
     return collectionFileSchema.safeParse(obj).success;
   }
 

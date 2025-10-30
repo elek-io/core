@@ -235,7 +235,7 @@ describe('AssetService', function () {
     expect(counted).toEqual(1);
   });
 
-  it('should be able to identify an Asset', async function () {
+  it('should be able to identify an Asset', function () {
     expect(core.assets.isAsset(asset)).toBe(true);
     expect(core.assets.isAsset({ objectType: 'asset' })).toBe(false);
   });

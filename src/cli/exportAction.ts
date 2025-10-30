@@ -65,9 +65,9 @@ export const exportAction = exportActionSchema.implementAsync(
     if (options.watch === true) {
       core.logger.info('Watching for changes to export Projects');
 
-      watchProjects().on('all', async (event, path) => {
+      watchProjects().on('all', (event, path) => {
         core.logger.info(`Re-Exporting Projects due to ${event} on "${path}"`);
-        await exportProjects({ outDir });
+        void exportProjects({ outDir });
       });
     }
   }

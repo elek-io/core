@@ -112,7 +112,7 @@ export class LocalApi {
   /**
    * Starts the local API on given port
    */
-  public async start(port: number) {
+  public start(port: number) {
     this.server = serve(
       {
         fetch: this.api.fetch,
@@ -129,7 +129,7 @@ export class LocalApi {
   /**
    * Stops the local API
    */
-  public async stop() {
+  public stop() {
     this.server?.close(() => {
       this.logService.info('Stopped local API');
     });
@@ -138,7 +138,7 @@ export class LocalApi {
   /**
    * Returns true if the local API is running
    */
-  public async isRunning() {
+  public isRunning() {
     if (this.server?.listening) {
       return true;
     }

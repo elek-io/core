@@ -55,7 +55,9 @@ export abstract class AbstractCrudService {
             );
             // Because the error parameter could be anything,
             // we need to specifically call an Error
-            return new Error(error);
+            return new Error(
+              error instanceof Error ? error.message : String(error)
+            );
           })
       );
     }
@@ -149,25 +151,23 @@ export abstract class AbstractCrudService {
   private async getFileReferences(path: string): Promise<FileReference[]> {
     const possibleFiles = await files(path);
 
-    const results = await Promise.all(
-      possibleFiles.map(async (possibleFile) => {
-        const fileNameArray = possibleFile.name.split('.');
+    const results = possibleFiles.map((possibleFile) => {
+      const fileNameArray = possibleFile.name.split('.');
 
-        const fileReference = {
-          id: fileNameArray[0],
-          extension: fileNameArray[1],
-        };
+      const fileReference = {
+        id: fileNameArray[0],
+        extension: fileNameArray[1],
+      };
 
-        try {
-          return fileReferenceSchema.parse(fileReference);
-        } catch {
-          this.logService.warn(
-            `[getFileReferences] Ignoring file "${possibleFile.name}" in "${path}" as it does not match the expected format`
-          );
-          return null;
-        }
-      })
-    );
+      try {
+        return fileReferenceSchema.parse(fileReference);
+      } catch {
+        this.logService.warn(
+          `[getFileReferences] Ignoring file "${possibleFile.name}" in "${path}" as it does not match the expected format`
+        );
+        return null;
+      }
+    });
 
     return results.filter(notEmpty);
   }

@@ -40,12 +40,12 @@ describe('API', function () {
   });
 
   it('should be able to start the API and verify it is running', async function () {
-    const isRunningBefore = await core.api.isRunning();
-    await core.api.start(31310);
+    const isRunningBefore = core.api.isRunning();
+    core.api.start(31310);
 
     await vi.waitFor(
-      async () => {
-        const isCurrentlyRunning = await core.api.isRunning();
+      () => {
+        const isCurrentlyRunning = core.api.isRunning();
         if (isCurrentlyRunning === false) {
           throw new Error('Server not started yet');
         }
@@ -56,7 +56,7 @@ describe('API', function () {
       }
     );
 
-    const isRunningAfter = await core.api.isRunning();
+    const isRunningAfter = core.api.isRunning();
 
     expect(isRunningBefore).toEqual(false);
     expect(isRunningAfter).toEqual(true);
@@ -226,12 +226,12 @@ describe('API', function () {
   });
 
   it('should be able to stop the API and verify it is not running anymore', async function () {
-    const isRunningBefore = await core.api.isRunning();
-    await core.api.stop();
+    const isRunningBefore = core.api.isRunning();
+    core.api.stop();
 
     await vi.waitFor(
-      async () => {
-        const isCurrentlyRunning = await core.api.isRunning();
+      () => {
+        const isCurrentlyRunning = core.api.isRunning();
         if (isCurrentlyRunning === true) {
           throw new Error('Server is still running');
         }
@@ -242,7 +242,7 @@ describe('API', function () {
       }
     );
 
-    const isRunningAfter = await core.api.isRunning();
+    const isRunningAfter = core.api.isRunning();
 
     expect(isRunningBefore).toEqual(true);
     expect(isRunningAfter).toEqual(false);

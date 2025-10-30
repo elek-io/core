@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { GitTag} from '../test/setup.js';
+import type { GitTag } from '../test/setup.js';
 import core, { type Project } from '../test/setup.js';
 import { createProject } from '../test/util.js';
 
@@ -35,8 +35,8 @@ describe('GitTagService', function () {
     expect(readTag.message).toEqual('Initial tag');
   });
 
-  it('should throw when trying to update a tag', async function () {
-    await expect(core.git.tags.update()).rejects.toThrow();
+  it('should throw when trying to update a tag', function () {
+    expect(() => core.git.tags.update()).toThrow();
   });
 
   it('should be able to count all tags', async function () {
