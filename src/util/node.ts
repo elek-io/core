@@ -170,18 +170,18 @@ export function execCommand({
     execFile(suffixedCommand, args, execOptions, (error, stdout, stderr) => {
       const durationMs = Date.now() - start;
       if (error) {
-        logger.info(stdout);
-        logger.error(stderr);
+        logger.info(stdout.toString());
+        logger.error(stderr.toString());
         logger.error(
           `Error executing command "${fullCommand}" after ${durationMs}ms: ${error}`
         );
         reject(error);
       } else {
-        logger.info(stdout);
+        logger.info(stdout.toString());
         logger.info(
           `Command "${fullCommand}" executed successfully in ${durationMs}ms.`
         );
-        resolve({ stdout, stderr });
+        resolve({ stdout: stdout.toString(), stderr: stderr.toString() });
       }
     });
   });
