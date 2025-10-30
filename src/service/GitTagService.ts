@@ -19,8 +19,8 @@ import {
 } from '../schema/index.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
-import { GitService } from './GitService.js';
-import { LogService } from './LogService.js';
+import type { GitService } from './GitService.js';
+import type { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for GitTags

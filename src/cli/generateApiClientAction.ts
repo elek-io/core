@@ -1,14 +1,15 @@
 import { build as compileToJs } from 'tsdown';
+import type {
+  GenerateApiClientAsProps} from '../schema/cliSchema.js';
 import {
-  generateApiClientActionSchema,
-  GenerateApiClientAsProps,
+  generateApiClientActionSchema
 } from '../schema/cliSchema.js';
 import { core, watchProjects } from './index.js';
 import Path from 'path';
 import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
 import assert from 'assert';
-import { Collection, Project } from '../index.node.js';
+import type { Collection, Project } from '../index.node.js';
 
 /**
  * API Client generator

@@ -1,9 +1,10 @@
 import Fs from 'fs-extra';
 import * as packageJson from '../package.json' with { type: 'json' };
 import { LocalApi } from './api/index.js';
+import type {
+  Version} from './schema/index.js';
 import {
   constructorElekIoCoreSchema,
-  Version,
   type ConstructorElekIoCoreProps,
   type ElekIoCoreOptions,
 } from './schema/index.js';

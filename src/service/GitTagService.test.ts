@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import core, { GitTag, type Project } from '../test/setup.js';
+import type { GitTag} from '../test/setup.js';
+import core, { type Project } from '../test/setup.js';
 import { createProject } from '../test/util.js';
 
 describe('GitTagService', function () {

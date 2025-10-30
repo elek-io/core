@@ -1,12 +1,13 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
-import {
+import type {
   DirectBooleanValue,
   DirectNumberValue,
   DirectStringValue,
   Entry,
+  ReferencedValue} from '../test/setup.js';
+import {
   entrySchema,
-  ReferencedValue,
   uuid,
 } from '../test/setup.js';
 import { getValueSchemaFromFieldDefinition } from './schemaFromFieldDefinition.js';

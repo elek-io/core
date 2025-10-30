@@ -5,7 +5,7 @@ import type { BaseFile } from '../schema/fileSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
 import type { UserFile } from '../schema/userSchema.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
-import { LogService } from './LogService.js';
+import type { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for JSON files on disk

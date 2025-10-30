@@ -9,18 +9,20 @@ import {
 } from '../error/index.js';
 import { RemoteOriginMissingError } from '../error/RemoteOriginMissingError.js';
 import { SynchronizeLocalChangesError } from '../error/SynchronizeLocalChangesError.js';
+import type {
+  FileReference,
+  ObjectType,
+  OutdatedProject,
+  Version} from '../schema/index.js';
 import {
   cloneProjectSchema,
   createProjectSchema,
   currentBranchProjectSchema,
   deleteProjectSchema,
-  FileReference,
   getChangesProjectSchema,
   listBranchesProjectSchema,
   listProjectsSchema,
-  ObjectType,
   objectTypeSchema,
-  OutdatedProject,
   outdatedProjectSchema,
   projectBranchSchema,
   projectFileSchema,
@@ -32,7 +34,6 @@ import {
   synchronizeProjectSchema,
   updateProjectSchema,
   upgradeProjectSchema,
-  Version,
   type BaseFile,
   type CloneProjectProps,
   type CreateProjectProps,
@@ -57,13 +58,13 @@ import {
 import { notEmpty, pathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
-import { AssetService } from './AssetService.js';
-import { CollectionService } from './CollectionService.js';
+import type { AssetService } from './AssetService.js';
+import type { CollectionService } from './CollectionService.js';
 import type { EntryService } from './EntryService.js';
-import { GitService } from './GitService.js';
-import { JsonFileService } from './JsonFileService.js';
-import { LogService } from './LogService.js';
-import { UserService } from './UserService.js';
+import type { GitService } from './GitService.js';
+import type { JsonFileService } from './JsonFileService.js';
+import type { LogService } from './LogService.js';
+import type { UserService } from './UserService.js';
 
 /**
  * Service that manages CRUD functionality for Project files on disk

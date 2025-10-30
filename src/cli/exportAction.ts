@@ -1,6 +1,7 @@
 import Path from 'path';
 import Fs from 'fs-extra';
-import { exportActionSchema, ExportProjectsProps } from '../schema/index.js';
+import type { ExportProjectsProps } from '../schema/index.js';
+import { exportActionSchema } from '../schema/index.js';
 import { core, watchProjects } from './index.js';
 
 async function exportProjects({ outDir }: ExportProjectsProps) {

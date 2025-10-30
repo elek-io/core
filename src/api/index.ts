@@ -1,8 +1,8 @@
 import { serve } from '@hono/node-server';
-import { OpenAPIHono } from '@hono/zod-openapi';
+import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { Server } from 'node:http';
-import { Http2SecureServer, Http2Server } from 'node:http2';
-import {
+import type { Http2SecureServer, Http2Server } from 'node:http2';
+import type {
   AssetService,
   CollectionService,
   EntryService,

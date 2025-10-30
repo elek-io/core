@@ -12,14 +12,15 @@ import {
   entrySchema,
   updateEntrySchema,
 } from './entrySchema.js';
-import {
+import type {
   AssetFieldDefinition,
   EntryFieldDefinition,
   FieldDefinition,
-  FieldTypeSchema,
   NumberFieldDefinition,
   RangeFieldDefinition,
-  StringFieldDefinition,
+  StringFieldDefinition} from './fieldSchema.js';
+import {
+  FieldTypeSchema
 } from './fieldSchema.js';
 import {
   directBooleanValueSchema,

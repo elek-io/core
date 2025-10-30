@@ -1,7 +1,7 @@
 import { beforeAll, afterAll, expect } from 'vitest';
 import { it } from 'vitest';
 import { describe } from 'vitest';
-import { Asset, Collection, Entry, Project } from './index.node.js';
+import type { Asset, Collection, Entry, Project } from './index.node.js';
 import fs from 'fs-extra';
 import {
   createAsset,

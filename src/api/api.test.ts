@@ -1,7 +1,7 @@
 import { testClient } from 'hono/testing';
 import { createTestApi } from './lib/util.js';
 import router from './routes/index.js';
-import { Asset, Collection, Entry, Project } from '../index.node.js';
+import type { Asset, Collection, Entry, Project } from '../index.node.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createProject,

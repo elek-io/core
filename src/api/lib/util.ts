@@ -3,9 +3,9 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { requestId } from 'hono/request-id';
 import { requestResponseLogger } from '../middleware/requestResponseLogger.js';
 import type { Api, ApiEnv } from './types.js';
-import { ContentfulStatusCode } from 'hono/utils/http-status';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { cors } from 'hono/cors';
-import {
+import type {
   AssetService,
   CollectionService,
   EntryService,

@@ -1,12 +1,14 @@
 import type { ChildProcess } from 'child_process';
-import { GitProcess, IGitExecutionOptions, type IGitResult } from 'dugite';
+import type { IGitExecutionOptions} from 'dugite';
+import { GitProcess, type IGitResult } from 'dugite';
 import PQueue from 'p-queue';
 import Path from 'path';
 import { GitError, NoCurrentUserError } from '../error/index.js';
+import type {
+  GitMergeOptions,
+  GitMessage} from '../schema/index.js';
 import {
   gitCommitSchema,
-  GitMergeOptions,
-  GitMessage,
   gitMessageSchema,
   uuidSchema,
   type ElekIoCoreOptions,
@@ -18,8 +20,8 @@ import {
 } from '../schema/index.js';
 import { datetime } from '../util/shared.js';
 import { GitTagService } from './GitTagService.js';
-import { LogService } from './LogService.js';
-import { UserService } from './UserService.js';
+import type { LogService } from './LogService.js';
+import type { UserService } from './UserService.js';
 
 /**
  * Service that manages Git functionality

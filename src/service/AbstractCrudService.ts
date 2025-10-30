@@ -8,7 +8,7 @@ import {
   type ServiceType,
 } from '../schema/index.js';
 import { files, folders, isNoError, notEmpty, pathTo } from '../util/node.js';
-import { LogService } from './LogService.js';
+import type { LogService } from './LogService.js';
 
 /**
  * A base service that provides properties for most other services

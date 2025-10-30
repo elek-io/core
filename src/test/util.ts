@@ -2,9 +2,11 @@ import { faker } from '@faker-js/faker';
 import crypto from 'crypto';
 import Fs from 'fs-extra';
 import Path from 'path';
-import { expect, RunnerTestCase } from 'vitest';
+import type { RunnerTestCase } from 'vitest';
+import { expect } from 'vitest';
+import type {
+  EntryFieldDefinition} from './setup.js';
 import core, {
-  EntryFieldDefinition,
   uuid,
   type ProjectSettings,
 } from './setup.js';

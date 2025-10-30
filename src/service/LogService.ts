@@ -1,9 +1,10 @@
 import Path from 'path';
+import type {
+  Logger,
+  QueryOptions} from 'winston';
 import {
   createLogger,
   format,
-  Logger,
-  QueryOptions,
   transports,
 } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';

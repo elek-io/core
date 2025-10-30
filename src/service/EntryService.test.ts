@@ -1,7 +1,8 @@
 import Fs from 'fs-extra';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import type {
+  Value} from '../test/setup.js';
 import core, {
-  Value,
   type Asset,
   type Collection,
   type Entry,

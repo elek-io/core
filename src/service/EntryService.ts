@@ -29,8 +29,8 @@ import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import type { CollectionService } from './CollectionService.js';
 import type { GitService } from './GitService.js';
-import { JsonFileService } from './JsonFileService.js';
-import { LogService } from './LogService.js';
+import type { JsonFileService } from './JsonFileService.js';
+import type { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for Entry files on disk

@@ -25,9 +25,9 @@ import {
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
-import { GitService } from './GitService.js';
-import { JsonFileService } from './JsonFileService.js';
-import { LogService } from './LogService.js';
+import type { GitService } from './GitService.js';
+import type { JsonFileService } from './JsonFileService.js';
+import type { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for Collection files on disk

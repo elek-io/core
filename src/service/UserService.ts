@@ -7,8 +7,8 @@ import {
   type UserFile,
 } from '../schema/index.js';
 import { pathTo } from '../util/node.js';
-import { JsonFileService } from './JsonFileService.js';
-import { LogService } from './LogService.js';
+import type { JsonFileService } from './JsonFileService.js';
+import type { LogService } from './LogService.js';
 
 /**
  * Service to handle the User that is currently working with Core
