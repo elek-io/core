@@ -187,12 +187,6 @@ function writeFetch(
   writer.writeLine(`const entries = await response.json();`);
 }
 
-function delay(milliseconds: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
-}
-
 async function generateApiClientAs({
   outDir,
   language,
@@ -206,13 +200,12 @@ async function generateApiClientAs({
   await generateApiClient(outFileTs);
 
   if (language === 'js') {
-    await delay(1000);
     // Use tsdown to compile the generated TS Client
     // to JS in the specified module format and target environment
     await compileToJs({
       config: false, // Do not use tsdown config file of Core
       external: ['@elek-io/core', 'zod'], // These are peer dependencies of the generated client
-      entry: [outFileTs],
+      entry: outFileTs,
       outDir: resolvedOutDir,
       format,
       target,
