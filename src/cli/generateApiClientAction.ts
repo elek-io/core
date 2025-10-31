@@ -20,7 +20,7 @@ import type { Collection, Project } from '../index.node.js';
  * Usage: Import the generated client and use it to access the local content API
  *
  * ```ts
- * import { apiClient } from './.elek-io/client.js';
+ * import { apiClient } from './.elek.io/client.js';
  *
  * const client = await apiClient({
  *   baseUrl: 'http://localhost:31310',
@@ -215,6 +215,7 @@ async function generateApiClientAs({
       sourcemap: true,
       clean: false,
       dts: true,
+      minify: true,
     });
 
     // Remove the generated TS Client after compiling to JS

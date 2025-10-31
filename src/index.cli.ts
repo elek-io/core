@@ -11,7 +11,7 @@ import {
 const program = new Command();
 
 program
-  .name('elek-io')
+  .name('elek')
   .description('CLI for elek.io')
   .version(packageJson.default.version);
 
@@ -21,7 +21,7 @@ program
   .argument(
     '[outDir]',
     'The directory to generate the API Client in',
-    './.elek-io'
+    './.elek.io'
   )
   .argument(
     '[language]',
@@ -57,7 +57,7 @@ program
 program
   .command('export')
   .description('Exports all locally available Projects into a JSON file')
-  .argument('[outDir]', 'The directory to write the JSON file to', './.elek-io')
+  .argument('[outDir]', 'The directory to write the JSON file to', './.elek.io')
   .option(
     '-w, --watch',
     'Watches for changes in your Projects and updates the JSON file automatically.'

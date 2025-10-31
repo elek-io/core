@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint';
 export default [
   // Global ignores
   {
-    ignores: ['coverage/', 'dist/', '.elek-io/', '*.config.ts'],
+    ignores: ['coverage/', 'dist/', '.elek.io/', '*.config.ts'],
   },
 
   // JavaScript files

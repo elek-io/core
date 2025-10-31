@@ -9,7 +9,7 @@
   },
   "type": "module",
   "bin": {
-    "elek-io": "./dist/cli/index.cli.js"
+    "elek": "./dist/cli/index.cli.js"
   },
   "files": [
     "dist/node",

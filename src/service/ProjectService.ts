@@ -13,7 +13,8 @@ import type {
   FileReference,
   ObjectType,
   OutdatedProject,
-  Version} from '../schema/index.js';
+  Version,
+} from '../schema/index.js';
 import {
   cloneProjectSchema,
   createProjectSchema,
@@ -34,7 +35,6 @@ import {
   synchronizeProjectSchema,
   updateProjectSchema,
   upgradeProjectSchema,
-  type BaseFile,
   type CloneProjectProps,
   type CreateProjectProps,
   type CrudServiceWithListCount,
@@ -591,7 +591,7 @@ export class ProjectService
   /**
    * Checks if given object is of type Project
    */
-  public isProject(obj: BaseFile | unknown): obj is Project {
+  public isProject(obj: unknown): obj is Project {
     return projectFileSchema.safeParse(obj).success;
   }
 

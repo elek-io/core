@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const outDirSchema = z.string().default('./.elek-io');
+const outDirSchema = z.string().default('./.elek.io');
 const languageSchema = z.enum(['ts', 'js']).default('ts');
 const formatSchema = z.enum(['esm', 'cjs']).default('esm');
 const targetSchema = z
