@@ -1,8 +1,7 @@
 import Fs from 'fs-extra';
 import * as packageJson from '../package.json' with { type: 'json' };
 import { LocalApi } from './api/index.js';
-import type {
-  Version} from './schema/index.js';
+import type { Version } from './schema/index.js';
 import {
   constructorElekIoCoreSchema,
   type ConstructorElekIoCoreProps,
@@ -103,8 +102,10 @@ export default class ElekIoCore {
       this.assetService
     );
 
-    this.logService.info(`Initializing elek.io Core ${this.coreVersion}`, {
-      options: this.options,
+    this.logService.info({
+      source: 'core',
+      message: `Initializing elek.io Core ${this.coreVersion}`,
+      meta: { options: this.options },
     });
 
     Fs.mkdirpSync(Util.pathTo.projects);

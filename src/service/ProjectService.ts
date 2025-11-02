@@ -55,7 +55,7 @@ import {
   type UpdateProjectProps,
   type UpgradeProjectProps,
 } from '../schema/index.js';
-import { notEmpty, pathTo } from '../util/node.js';
+import { isNotEmpty, pathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import type { AssetService } from './AssetService.js';
@@ -320,9 +320,10 @@ export class ProjectService
       props.id
     );
 
-    this.logService.info(
-      `Attempting to upgrade Project "${props.id}" from Core version ${currentProjectFile.coreVersion} to ${this.coreVersion}`
-    );
+    this.logService.info({
+      source: 'core',
+      message: `Attempting to upgrade Project "${props.id}" from Core version ${currentProjectFile.coreVersion} to ${this.coreVersion}`,
+    });
 
     // Create a new branch to work on this migration
     const upgradeBranchName = `upgrade/core-${currentProjectFile.coreVersion}-to-${this.coreVersion}`;
@@ -390,13 +391,14 @@ export class ProjectService
         true
       );
 
-      this.logService.info(
-        `Upgraded Project "${projectFilePath}" to Core version "${this.coreVersion}"`,
-        {
+      this.logService.info({
+        source: 'core',
+        message: `Successfully upgraded Project "${props.id}" to Core version "${this.coreVersion}"`,
+        meta: {
           previous: currentProjectFile,
           migrated: migratedProjectFile,
-        }
-      );
+        },
+      });
     } catch (error) {
       // Revert back to the work branch and delete the upgrade branch
       await this.gitService.branches.switch(
@@ -551,7 +553,7 @@ export class ProjectService
       })
     );
 
-    return result.filter(notEmpty);
+    return result.filter(isNotEmpty);
   }
 
   public async list(
@@ -683,9 +685,13 @@ export class ProjectService
           await this.jsonFileService.unsafeRead(assetFilePath);
         const migratedAssetFile = this.assetService.migrate(prevAssetFile);
         await this.assetService.update({ projectId, ...migratedAssetFile });
-        this.logService.info(`Upgraded ${objectType} "${assetFilePath}"`, {
-          previous: prevAssetFile,
-          migrated: migratedAssetFile,
+        this.logService.info({
+          source: 'core',
+          message: `Upgraded ${objectType} "${assetFilePath}"`,
+          meta: {
+            previous: prevAssetFile,
+            migrated: migratedAssetFile,
+          },
         });
         return;
       }
@@ -702,9 +708,13 @@ export class ProjectService
           projectId,
           ...migratedCollectionFile,
         });
-        this.logService.info(`Upgraded ${objectType} "${collectionFilePath}"`, {
-          previous: prevCollectionFile,
-          migrated: migratedCollectionFile,
+        this.logService.info({
+          source: 'core',
+          message: `Upgraded ${objectType} "${collectionFilePath}"`,
+          meta: {
+            previous: prevCollectionFile,
+            migrated: migratedCollectionFile,
+          },
         });
         return;
       }
@@ -725,9 +735,13 @@ export class ProjectService
           collectionId,
           ...migratedEntryFile,
         });
-        this.logService.info(`Upgraded ${objectType} "${entryFilePath}"`, {
-          previous: prevEntryFile,
-          migrated: migratedEntryFile,
+        this.logService.info({
+          source: 'core',
+          message: `Upgraded ${objectType} "${entryFilePath}"`,
+          meta: {
+            previous: prevEntryFile,
+            migrated: migratedEntryFile,
+          },
         });
         return;
       }

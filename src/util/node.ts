@@ -89,7 +89,7 @@ export const pathTo = {
  *
  * @param value Value to check
  */
-export function notEmpty<T>(value: T | null | undefined): value is T {
+export function isNotEmpty<T>(value: T | null | undefined): value is T {
   if (value === null || value === undefined) {
     return false;
   }
@@ -101,7 +101,13 @@ export function notEmpty<T>(value: T | null | undefined): value is T {
   return true;
 }
 
-export function isNoError<T>(item: T | Error): item is T {
+/**
+ * Used as parameter for filter() methods to assure,
+ * only items that are not of type Error are returned
+ *
+ * @param item Item to check
+ */
+export function isNotAnError<T>(item: T | Error): item is T {
   return item instanceof Error !== true;
 }
 
@@ -170,17 +176,18 @@ export function execCommand({
     execFile(suffixedCommand, args, execOptions, (error, stdout, stderr) => {
       const durationMs = Date.now() - start;
       if (error) {
-        logger.info(stdout.toString());
-        logger.error(stderr.toString());
-        logger.error(
-          `Error executing command "${fullCommand}" after ${durationMs}ms: ${error}`
-        );
-        reject(error);
+        logger.error({
+          source: 'core',
+          message: `Error executing command "${fullCommand}" after ${durationMs}ms: ${error.message}`,
+          meta: { error, stdout: stdout.toString(), stderr: stderr.toString() },
+        });
+        reject(error instanceof Error ? error : new Error(error.message));
       } else {
-        logger.info(stdout.toString());
-        logger.info(
-          `Command "${fullCommand}" executed successfully in ${durationMs}ms.`
-        );
+        logger.info({
+          source: 'core',
+          message: `Command "${fullCommand}" executed successfully in ${durationMs}ms.`,
+          meta: { stdout: stdout.toString(), stderr: stderr.toString() },
+        });
         resolve({ stdout: stdout.toString(), stderr: stderr.toString() });
       }
     });

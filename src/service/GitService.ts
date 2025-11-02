@@ -20,6 +20,7 @@ import { datetime } from '../util/shared.js';
 import { GitTagService } from './GitTagService.js';
 import type { LogService } from './LogService.js';
 import type { UserService } from './UserService.js';
+import type { LogProps } from '../schema/index.js';
 
 /**
  * Service that manages Git functionality
@@ -690,7 +691,11 @@ export class GitService {
       );
     }
 
-    const gitLog = `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`;
+    const gitLog: LogProps = {
+      source: 'core',
+      message: `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`,
+      meta: { command: `git ${args.join(' ')}` },
+    };
     if (result.durationMs >= 100) {
       this.logService.warn(gitLog);
     } else {

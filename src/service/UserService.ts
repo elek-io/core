@@ -29,7 +29,7 @@ export class UserService {
     try {
       return await this.jsonFileService.read(pathTo.userFile, userFileSchema);
     } catch {
-      this.logService.info('No User found');
+      this.logService.info({ source: 'core', message: 'No User found' });
 
       return null;
     }
@@ -55,7 +55,10 @@ export class UserService {
     }
 
     await this.jsonFileService.update(userFile, userFilePath, userFileSchema);
-    this.logService.debug('Updated User');
+    this.logService.debug({
+      source: 'core',
+      message: 'Updated User',
+    });
 
     return userFile;
   }

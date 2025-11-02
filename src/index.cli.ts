@@ -7,6 +7,11 @@ import {
   generateApiClientAction,
   startApiAction,
 } from './cli/index.js';
+import {
+  apiStartSchema,
+  exportSchema,
+  generateApiClientSchema,
+} from './schema/index.js';
 
 const program = new Command();
 
@@ -43,7 +48,15 @@ program
     'Watches for changes in your Projects and regenerates the API Client automatically.'
   )
   .action(async (outDir, language, format, target, options) => {
-    await generateApiClientAction(outDir, language, format, target, options);
+    const props = generateApiClientSchema.parse({
+      outDir,
+      language,
+      format,
+      target,
+      options,
+    });
+
+    await generateApiClientAction(props);
   });
 
 program
@@ -51,7 +64,9 @@ program
   .description('Starts the local API')
   .argument('[port]', 'The port to run the local API on', '31310')
   .action((port) => {
-    startApiAction(port);
+    const props = apiStartSchema.parse({ port });
+
+    startApiAction(props);
   });
 
 program
@@ -63,7 +78,9 @@ program
     'Watches for changes in your Projects and updates the JSON file automatically.'
   )
   .action(async (outDir, options) => {
-    await exportAction(outDir, options);
+    const props = exportSchema.parse({ outDir, options });
+
+    await exportAction(props);
   });
 
 await program.parseAsync();

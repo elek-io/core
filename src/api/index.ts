@@ -119,9 +119,10 @@ export class LocalApi {
         port,
       },
       (info) => {
-        this.logService.info(
-          `Started local API on http://localhost:${info.port}`
-        );
+        this.logService.info({
+          source: 'core',
+          message: `Started local API on http://localhost:${info.port}`,
+        });
       }
     );
   }
@@ -131,7 +132,7 @@ export class LocalApi {
    */
   public stop() {
     this.server?.close(() => {
-      this.logService.info('Stopped local API');
+      this.logService.info({ source: 'core', message: 'Stopped local API' });
     });
   }
 

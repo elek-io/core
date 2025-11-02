@@ -7,7 +7,13 @@ import {
   type ObjectType,
   type ServiceType,
 } from '../schema/index.js';
-import { files, folders, isNoError, notEmpty, pathTo } from '../util/node.js';
+import {
+  files,
+  folders,
+  isNotAnError,
+  isNotEmpty,
+  pathTo,
+} from '../util/node.js';
 import type { LogService } from './LogService.js';
 
 /**
@@ -36,13 +42,15 @@ export abstract class AbstractCrudService {
    */
   protected async returnResolved<T>(promises: Promise<T>[]) {
     const toCheck: Promise<T | Error>[] = [];
+
     for (let index = 0; index < promises.length; index++) {
       const promise = promises[index];
       if (!promise) {
         throw new Error(`No promise found at index "${index}"`);
       }
+
       // Here comes the trick:
-      // By using "then" and "catch" we are able to create an array of Project and Error types
+      // By using "then" and "catch" we are able to create an array of T and Error types
       // without throwing and stopping the later Promise.all() call prematurely
       toCheck.push(
         promise
@@ -50,26 +58,30 @@ export abstract class AbstractCrudService {
             return result;
           })
           .catch((error) => {
-            this.logService.warn(
-              `[returnResolved] Catched error while resolving promise: ${error}`
-            );
-            // Because the error parameter could be anything,
-            // we need to specifically call an Error
-            return new Error(
-              error instanceof Error ? error.message : String(error)
-            );
+            const actualError =
+              error instanceof Error ? error : new Error(String(error));
+
+            this.logService.warn({
+              source: 'core',
+              message: `Function "returnResolved" catched an error while resolving a promise: ${actualError.message}`,
+              meta: { error: actualError, promise },
+            });
+
+            return actualError;
           })
       );
     }
+
     // Resolve all promises
     // Here we do not expect any error to fail the call to Promise.all()
     // because we caught it earlier and returning an Error type instead of throwing it
     const checked = await Promise.all(toCheck);
+
     // This way we can easily filter out any Errors by type
     // Note that we also need to use a User-Defined Type Guard here,
     // because otherwise TS does not recognize we are filtering the errors out
-    //                >       |        <
-    return checked.filter(isNoError);
+    //                >       |       <
+    return checked.filter(isNotAnError);
   }
 
   /**
@@ -124,6 +136,7 @@ export abstract class AbstractCrudService {
 
   private async getFolderReferences(path: string): Promise<FileReference[]> {
     const possibleFolders = await folders(path);
+
     const results = possibleFolders.map((possibleFolder) => {
       const folderReference: FileReference = {
         id: possibleFolder.name,
@@ -132,14 +145,16 @@ export abstract class AbstractCrudService {
       try {
         return fileReferenceSchema.parse(folderReference);
       } catch {
-        this.logService.warn(
-          `[getFolderReferences] Ignoring folder "${possibleFolder.name}" in "${path}" as it does not match the expected format`
-        );
+        this.logService.warn({
+          source: 'core',
+          message: `Function "getFolderReferences" is ignoring folder "${possibleFolder.name}" in "${path}" as it does not match the expected format`,
+        });
+
         return null;
       }
     });
 
-    return results.filter(notEmpty);
+    return results.filter(isNotEmpty);
   }
 
   /**
@@ -162,13 +177,15 @@ export abstract class AbstractCrudService {
       try {
         return fileReferenceSchema.parse(fileReference);
       } catch {
-        this.logService.warn(
-          `[getFileReferences] Ignoring file "${possibleFile.name}" in "${path}" as it does not match the expected format`
-        );
+        this.logService.warn({
+          source: 'core',
+          message: `Function "getFileReferences" is ignoring file "${possibleFile.name}" in "${path}" as it does not match the expected format`,
+        });
+
         return null;
       }
     });
 
-    return results.filter(notEmpty);
+    return results.filter(isNotEmpty);
   }
 }

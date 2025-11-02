@@ -39,7 +39,10 @@ export class JsonFileService extends AbstractCrudService {
     if (this.options.file.cache === true) {
       this.cache.set(path, parsedData);
     }
-    this.logService.debug(`Created file "${path}"`);
+    this.logService.debug({
+      source: 'core',
+      message: `Created file "${path}"`,
+    });
 
     return parsedData;
   }
@@ -56,13 +59,19 @@ export class JsonFileService extends AbstractCrudService {
     schema: T
   ): Promise<z.output<T>> {
     if (this.options.file.cache === true && this.cache.has(path)) {
-      this.logService.debug(`Cache hit reading file "${path}"`);
+      this.logService.debug({
+        source: 'core',
+        message: `Cache hit reading file "${path}"`,
+      });
       const json = this.cache.get(path);
       const parsedData = schema.parse(json);
       return parsedData;
     }
 
-    this.logService.debug(`Cache miss reading file "${path}"`);
+    this.logService.debug({
+      source: 'core',
+      message: `Cache miss reading file "${path}"`,
+    });
     const data = await Fs.readFile(path, {
       flag: 'r',
       encoding: 'utf8',
@@ -89,7 +98,10 @@ export class JsonFileService extends AbstractCrudService {
    * @returns Unvalidated content of the file from disk
    */
   public async unsafeRead(path: string): Promise<unknown> {
-    this.logService.warn(`Unsafe reading of file "${path}"`);
+    this.logService.warn({
+      source: 'core',
+      message: `Unsafe reading of file "${path}"`,
+    });
     const data = await Fs.readFile(path, {
       flag: 'r',
       encoding: 'utf8',
@@ -123,7 +135,10 @@ export class JsonFileService extends AbstractCrudService {
     if (this.options.file.cache === true) {
       this.cache.set(path, parsedData);
     }
-    this.logService.debug(`Updated file "${path}"`);
+    this.logService.debug({
+      source: 'core',
+      message: `Updated file "${path}"`,
+    });
 
     return parsedData;
   }

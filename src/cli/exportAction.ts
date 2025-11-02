@@ -1,7 +1,6 @@
 import Path from 'path';
 import Fs from 'fs-extra';
-import type { ExportProjectsProps } from '../schema/index.js';
-import { exportActionSchema } from '../schema/index.js';
+import type { ExportProjectsProps, ExportProps } from '../schema/index.js';
 import { core, watchProjects } from './index.js';
 
 async function exportProjects({ outDir }: ExportProjectsProps) {
@@ -58,17 +57,21 @@ async function exportProjects({ outDir }: ExportProjectsProps) {
   );
 }
 
-export const exportAction = exportActionSchema.implementAsync(
-  async (outDir, options) => {
-    await exportProjects({ outDir });
+export const exportAction = async ({ outDir, options }: ExportProps) => {
+  await exportProjects({ outDir });
 
-    if (options.watch === true) {
-      core.logger.info('Watching for changes to export Projects');
+  if (options.watch === true) {
+    core.logger.info({
+      source: 'core',
+      message: 'Watching for changes to export Projects',
+    });
 
-      watchProjects().on('all', (event, path) => {
-        core.logger.info(`Re-Exporting Projects due to ${event} on "${path}"`);
-        void exportProjects({ outDir });
+    watchProjects().on('all', (event, path) => {
+      core.logger.info({
+        source: 'core',
+        message: `Re-Exporting Projects due to ${event} on "${path}"`,
       });
-    }
+      void exportProjects({ outDir });
+    });
   }
-);
+};

@@ -1,6 +1,6 @@
-import { apiStartActionSchema } from '../schema/cliSchema.js';
+import type { ApiStartProps } from '../schema/cliSchema.js';
 import { core } from './index.js';
 
-export const startApiAction = apiStartActionSchema.implement((port) => {
-  core.api.start(parseInt(port));
-});
+export const startApiAction = ({ port }: ApiStartProps) => {
+  return core.api.start(port);
+};

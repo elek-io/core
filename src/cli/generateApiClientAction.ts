@@ -1,6 +1,8 @@
 import { build as compileToJs } from 'tsdown';
-import type { GenerateApiClientAsProps } from '../schema/cliSchema.js';
-import { generateApiClientActionSchema } from '../schema/cliSchema.js';
+import type {
+  GenerateApiClientAsProps,
+  GenerateApiClientProps,
+} from '../schema/index.js';
 import { core, watchProjects } from './index.js';
 import Path from 'path';
 import Fs from 'fs-extra';
@@ -90,7 +92,10 @@ async function generateApiClient(outFile: string) {
   writer.writeLine(`}`);
 
   await Fs.writeFile(outFile, writer.toString());
-  core.logger.info(`Generated API Client in "${outFile}"`);
+  core.logger.info({
+    source: 'core',
+    message: `Generated API Client in "${outFile}"`,
+  });
 }
 
 async function writeProjectsObject(writer: CodeBlockWriter) {
@@ -223,20 +228,27 @@ async function generateApiClientAs({
   }
 }
 
-export const generateApiClientAction =
-  generateApiClientActionSchema.implementAsync(
-    async (outDir, language, format, target, options) => {
-      await generateApiClientAs({ outDir, language, format, target });
+export const generateApiClientAction = async ({
+  outDir,
+  language,
+  format,
+  target,
+  options,
+}: GenerateApiClientProps) => {
+  await generateApiClientAs({ outDir, language, format, target });
 
-      if (options.watch === true) {
-        core.logger.info('Watching for changes to regenerate the API Client');
+  if (options.watch === true) {
+    core.logger.info({
+      source: 'core',
+      message: 'Watching for changes to regenerate the API Client',
+    });
 
-        watchProjects().on('all', (event, path) => {
-          core.logger.info(
-            `Regenerating API Client due to ${event} on "${path}"`
-          );
-          void generateApiClientAs({ outDir, language, format, target });
-        });
-      }
-    }
-  );
+    watchProjects().on('all', (event, path) => {
+      core.logger.info({
+        source: 'core',
+        message: `Regenerating API Client due to ${event} on "${path}"`,
+      });
+      void generateApiClientAs({ outDir, language, format, target });
+    });
+  }
+};
