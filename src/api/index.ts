@@ -1,23 +1,18 @@
 import { serve } from '@hono/node-server';
-import { swaggerUI } from '@hono/swagger-ui';
-import { OpenAPIHono } from '@hono/zod-openapi';
-import { cors } from 'hono/cors';
+import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { Server } from 'node:http';
-import { Http2SecureServer, Http2Server } from 'node:http2';
-import {
+import type { Http2SecureServer, Http2Server } from 'node:http2';
+import type {
   AssetService,
   CollectionService,
   EntryService,
   LogService,
   ProjectService,
 } from '../service/index.js';
-import { LoggerMiddleware } from './middleware/logger.js';
-import {
-  AssetApiV1,
-  CollectionApiV1,
-  EntryApiV1,
-  ProjectApiV1,
-} from './v1/index.js';
+import createApi from './lib/util.js';
+import routes from './routes/index.js';
+import type { ApiEnv } from './lib/types.js';
+import { Scalar } from '@scalar/hono-api-reference';
 
 export class LocalApi {
   private logService: LogService;
@@ -25,7 +20,7 @@ export class LocalApi {
   private collectionService: CollectionService;
   private entryService: EntryService;
   private assetService: AssetService;
-  private api: OpenAPIHono;
+  private api: OpenAPIHono<ApiEnv>;
   private server: Server | Http2Server | Http2SecureServer | null = null;
 
   constructor(
@@ -40,32 +35,94 @@ export class LocalApi {
     this.collectionService = collectionService;
     this.entryService = entryService;
     this.assetService = assetService;
-    this.api = new OpenAPIHono();
+    this.api = createApi(
+      this.logService,
+      this.projectService,
+      this.collectionService,
+      this.entryService,
+      this.assetService
+    )
+      .route('/', routes)
+      .doc('/openapi.json', {
+        openapi: '3.0.0',
+        externalDocs: { url: 'https://elek.io/docs' },
+        info: {
+          version: '0.1.0',
+          title: 'elek.io local API',
+          description:
+            'This API allows reading content from local elek.io Projects. You can use this API for development and building static websites and applications locally.',
+        },
+        servers: [
+          {
+            url: 'http://localhost:{port}',
+            description: 'elek.io local API',
+            variables: {
+              port: {
+                default: 31310,
+                description:
+                  'The port specified in elek.io Clients user configuration',
+              },
+            },
+          },
+        ],
+        tags: [
+          {
+            name: 'Content API v1',
+            description:
+              'Version 1 of the elek.io content API lets you read Projects, Collections, Entries and Assets. \n### Resources\n - [Projects](https://elek.io/docs/projects)\n - [Collections](https://elek.io/docs/collections)\n - [Entries](https://elek.io/docs/entries)\n - [Assets](https://elek.io/docs/assets)',
+          },
+          // {
+          //   name: 'Projects',
+          //   description: 'Retrieve information about Projects',
+          //   externalDocs: { url: 'https://elek.io/docs/projects' },
+          // },
+          // {
+          //   name: 'Collections',
+          //   description: 'Retrieve information about Collections',
+          //   externalDocs: { url: 'https://elek.io/docs/collections' },
+          // },
+          // {
+          //   name: 'Entries',
+          //   description: 'Retrieve information about Entries',
+          //   externalDocs: { url: 'https://elek.io/docs/entries' },
+          // },
+          // {
+          //   name: 'Assets',
+          //   description: 'Retrieve information about Assets',
+          //   externalDocs: { url: 'https://elek.io/docs/assets' },
+          // },
+        ],
+      });
 
-    // Register middleware
-    this.api.use(
-      cors({
-        origin: ['http://localhost'],
+    this.api.get(
+      '/',
+      Scalar({
+        pageTitle: 'elek.io local API',
+        url: '/openapi.json',
+        theme: 'kepler',
+        layout: 'modern',
+        defaultHttpClient: {
+          targetKey: 'js',
+          clientKey: 'fetch',
+        },
       })
     );
-    this.api.use(new LoggerMiddleware(logService).handler);
-
-    this.registerRoutesV1();
   }
 
   /**
    * Starts the local API on given port
    */
-  public async start(port: number) {
+  public start(port: number) {
     this.server = serve(
       {
         fetch: this.api.fetch,
         port,
       },
       (info) => {
-        this.logService.info(
-          `Started local API on ${info.address}:${info.port} (${info.family})`
-        );
+        this.logService.info({
+          source: 'core',
+          message: `Started local API on http://localhost:${info.port}`,
+        });
       }
     );
   }
@@ -73,82 +130,19 @@ export class LocalApi {
   /**
    * Stops the local API
    */
-  public async stop() {
+  public stop() {
     this.server?.close(() => {
-      this.logService.info('Stopped local API');
+      this.logService.info({ source: 'core', message: 'Stopped local API' });
     });
   }
 
   /**
    * Returns true if the local API is running
    */
-  public async isRunning() {
+  public isRunning() {
     if (this.server?.listening) {
       return true;
     }
     return false;
-  }
-
-  private registerRoutesV1(): void {
-    const apiV1 = new OpenAPIHono();
-
-    apiV1.doc('/openapi.json', {
-      openapi: '3.0.0',
-      externalDocs: { url: 'https://elek.io/docs' },
-      info: {
-        version: '0.1.0',
-        title: 'elek.io Project API',
-        description: 'This API allows reading data from elek.io Projects',
-      },
-      servers: [
-        {
-          url: 'http://localhost:{port}/v1/',
-          description: 'Local development API',
-          variables: {
-            port: {
-              default: 31310,
-              description:
-                'The port specified in elek.io Clients user configuration',
-            },
-          },
-        },
-        {
-          url: 'https://api.elek.io/v1/',
-          description: 'Public production API',
-          variables: {},
-        },
-      ],
-      tags: [
-        {
-          name: 'Projects',
-          description: 'Retrieve information about Projects',
-          externalDocs: { url: 'https://elek.io/docs/projects' },
-        },
-        {
-          name: 'Collections',
-          description: 'Retrieve information about Collections',
-          externalDocs: { url: 'https://elek.io/docs/collections' },
-        },
-        {
-          name: 'Entries',
-          description: 'Retrieve information about Entries',
-          externalDocs: { url: 'https://elek.io/docs/entries' },
-        },
-        {
-          name: 'Assets',
-          description: 'Retrieve information about Assets',
-          externalDocs: { url: 'https://elek.io/docs/assets' },
-        },
-      ],
-    });
-
-    apiV1.get('/ui', swaggerUI({ url: '/v1/openapi.json' }));
-
-    apiV1.route('/', new ProjectApiV1(this.projectService).api);
-    apiV1.route('/', new CollectionApiV1(this.collectionService).api);
-    apiV1.route('/', new EntryApiV1(this.entryService).api);
-    apiV1.route('/', new AssetApiV1(this.assetService).api);
-
-    this.api.route('/v1', apiV1);
   }
 }

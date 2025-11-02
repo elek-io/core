@@ -7,8 +7,8 @@ import {
   type UserFile,
 } from '../schema/index.js';
 import { pathTo } from '../util/node.js';
-import { JsonFileService } from './JsonFileService.js';
-import { LogService } from './LogService.js';
+import type { JsonFileService } from './JsonFileService.js';
+import type { LogService } from './LogService.js';
 
 /**
  * Service to handle the User that is currently working with Core
@@ -29,7 +29,7 @@ export class UserService {
     try {
       return await this.jsonFileService.read(pathTo.userFile, userFileSchema);
     } catch {
-      this.logService.info('No User found');
+      this.logService.info({ source: 'core', message: 'No User found' });
 
       return null;
     }
@@ -55,7 +55,10 @@ export class UserService {
     }
 
     await this.jsonFileService.update(userFile, userFilePath, userFileSchema);
-    this.logService.debug('Updated User');
+    this.logService.debug({
+      source: 'core',
+      message: 'Updated User',
+    });
 
     return userFile;
   }

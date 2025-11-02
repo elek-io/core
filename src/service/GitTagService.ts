@@ -19,8 +19,8 @@ import {
 } from '../schema/index.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
-import { GitService } from './GitService.js';
-import { LogService } from './LogService.js';
+import type { GitService } from './GitService.js';
+import type { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for GitTags
@@ -90,9 +90,10 @@ export class GitTagService
    * Updating a git tag is not supported.
    * Please delete the old and create a new one
    *
+   * @deprecated
    * @see https://git-scm.com/docs/git-tag#_on_re_tagging
    */
-  public async update(): Promise<never> {
+  public update(): never {
     throw new Error(
       'Updating a git tag is not supported. Please delete the old and create a new one'
     );

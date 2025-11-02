@@ -2,12 +2,10 @@ import { faker } from '@faker-js/faker';
 import crypto from 'crypto';
 import Fs from 'fs-extra';
 import Path from 'path';
-import { expect, RunnerTestCase } from 'vitest';
-import core, {
-  EntryFieldDefinition,
-  uuid,
-  type ProjectSettings,
-} from './setup.js';
+import type { RunnerTestCase } from 'vitest';
+import { expect } from 'vitest';
+import type { EntryFieldDefinition } from './setup.js';
+import core, { uuid, type ProjectSettings } from './setup.js';
 
 const id = {
   textFieldDefinition: uuid(),
@@ -21,11 +19,13 @@ export async function ensureCleanGitStatus(
 ) {
   const status = await core.git.status(core.util.pathTo.project(projectId));
   if (status.length > 0) {
-    core.logger.error(
-      `Task "${
+    core.logger.error({
+      source: 'core',
+      message: `Task "${
         task.name
-      }" finished with an unclean git status: ${JSON.stringify(status)}`
-    );
+      }" finished with an unclean git status: ${JSON.stringify(status)}`,
+      meta: { status },
+    });
   }
   expect(status.length).toEqual(0);
 }

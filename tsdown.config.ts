@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from 'tsdown';
 
 export default defineConfig([
   {
@@ -6,6 +6,7 @@ export default defineConfig([
     format: ['esm'],
     platform: 'node',
     outDir: 'dist/node',
+    minify: false,
     dts: true,
     sourcemap: true,
     clean: true,
@@ -15,8 +16,20 @@ export default defineConfig([
     format: ['esm'],
     platform: 'browser',
     outDir: 'dist/browser',
+    minify: true,
     dts: true,
     sourcemap: true,
     clean: true,
+  },
+  {
+    entry: ['src/index.cli.ts'],
+    format: ['esm'],
+    platform: 'node',
+    outDir: 'dist/cli',
+    minify: false,
+    dts: true,
+    sourcemap: true,
+    clean: true,
+    external: ['@elek-io/core'],
   },
 ]);

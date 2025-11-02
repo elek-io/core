@@ -9,18 +9,21 @@ import {
 } from '../error/index.js';
 import { RemoteOriginMissingError } from '../error/RemoteOriginMissingError.js';
 import { SynchronizeLocalChangesError } from '../error/SynchronizeLocalChangesError.js';
+import type {
+  FileReference,
+  ObjectType,
+  OutdatedProject,
+  Version,
+} from '../schema/index.js';
 import {
   cloneProjectSchema,
   createProjectSchema,
   currentBranchProjectSchema,
   deleteProjectSchema,
-  FileReference,
   getChangesProjectSchema,
   listBranchesProjectSchema,
   listProjectsSchema,
-  ObjectType,
   objectTypeSchema,
-  OutdatedProject,
   outdatedProjectSchema,
   projectBranchSchema,
   projectFileSchema,
@@ -32,10 +35,7 @@ import {
   synchronizeProjectSchema,
   updateProjectSchema,
   upgradeProjectSchema,
-  Version,
-  type BaseFile,
   type CloneProjectProps,
-  type CollectionExport,
   type CreateProjectProps,
   type CrudServiceWithListCount,
   type CurrentBranchProjectProps,
@@ -46,7 +46,6 @@ import {
   type ListProjectsProps,
   type PaginatedList,
   type Project,
-  type ProjectExport,
   type ProjectFile,
   type ProjectSettings,
   type ReadProjectProps,
@@ -56,16 +55,16 @@ import {
   type UpdateProjectProps,
   type UpgradeProjectProps,
 } from '../schema/index.js';
-import { notEmpty, pathTo } from '../util/node.js';
+import { isNotEmpty, pathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
-import { AssetService } from './AssetService.js';
-import { CollectionService } from './CollectionService.js';
+import type { AssetService } from './AssetService.js';
+import type { CollectionService } from './CollectionService.js';
 import type { EntryService } from './EntryService.js';
-import { GitService } from './GitService.js';
-import { JsonFileService } from './JsonFileService.js';
-import { LogService } from './LogService.js';
-import { UserService } from './UserService.js';
+import type { GitService } from './GitService.js';
+import type { JsonFileService } from './JsonFileService.js';
+import type { LogService } from './LogService.js';
+import type { UserService } from './UserService.js';
 
 /**
  * Service that manages CRUD functionality for Project files on disk
@@ -321,9 +320,10 @@ export class ProjectService
       props.id
     );
 
-    this.logService.info(
-      `Attempting to upgrade Project "${props.id}" from Core version ${currentProjectFile.coreVersion} to ${this.coreVersion}`
-    );
+    this.logService.info({
+      source: 'core',
+      message: `Attempting to upgrade Project "${props.id}" from Core version ${currentProjectFile.coreVersion} to ${this.coreVersion}`,
+    });
 
     // Create a new branch to work on this migration
     const upgradeBranchName = `upgrade/core-${currentProjectFile.coreVersion}-to-${this.coreVersion}`;
@@ -391,13 +391,14 @@ export class ProjectService
         true
       );
 
-      this.logService.info(
-        `Upgraded Project "${projectFilePath}" to Core version "${this.coreVersion}"`,
-        {
+      this.logService.info({
+        source: 'core',
+        message: `Successfully upgraded Project "${props.id}" to Core version "${this.coreVersion}"`,
+        meta: {
           previous: currentProjectFile,
           migrated: migratedProjectFile,
-        }
-      );
+        },
+      });
     } catch (error) {
       // Revert back to the work branch and delete the upgrade branch
       await this.gitService.branches.switch(
@@ -552,7 +553,7 @@ export class ProjectService
       })
     );
 
-    return result.filter(notEmpty);
+    return result.filter(isNotEmpty);
   }
 
   public async list(
@@ -592,46 +593,8 @@ export class ProjectService
   /**
    * Checks if given object is of type Project
    */
-  public isProject(obj: BaseFile | unknown): obj is Project {
+  public isProject(obj: unknown): obj is Project {
     return projectFileSchema.safeParse(obj).success;
-  }
-
-  /**
-   * Exports given Project to JSON
-   *
-   * @todo do not read everything before writing to disk -> stream into file given via props
-   * @todo performance tests
-   * @todo add progress callback
-   */
-  public async exportToJson(projectId: string): Promise<ProjectExport> {
-    const project = await this.read({ id: projectId });
-    const assets = (await this.assetService.list({ projectId, limit: 0 })).list;
-    const collections = (
-      await this.collectionService.list({ projectId, limit: 0 })
-    ).list;
-
-    const collectionExport: CollectionExport[] = await Promise.all(
-      collections.map(async (collection) => {
-        const entries = (
-          await this.entryService.list({
-            projectId,
-            collectionId: collection.id,
-            limit: 0,
-          })
-        ).list;
-
-        return {
-          ...collection,
-          entries,
-        };
-      })
-    );
-
-    return {
-      ...project,
-      assets,
-      collections: collectionExport,
-    };
   }
 
   /**
@@ -722,9 +685,13 @@ export class ProjectService
           await this.jsonFileService.unsafeRead(assetFilePath);
         const migratedAssetFile = this.assetService.migrate(prevAssetFile);
         await this.assetService.update({ projectId, ...migratedAssetFile });
-        this.logService.info(`Upgraded ${objectType} "${assetFilePath}"`, {
-          previous: prevAssetFile,
-          migrated: migratedAssetFile,
+        this.logService.info({
+          source: 'core',
+          message: `Upgraded ${objectType} "${assetFilePath}"`,
+          meta: {
+            previous: prevAssetFile,
+            migrated: migratedAssetFile,
+          },
         });
         return;
       }
@@ -741,9 +708,13 @@ export class ProjectService
           projectId,
           ...migratedCollectionFile,
         });
-        this.logService.info(`Upgraded ${objectType} "${collectionFilePath}"`, {
-          previous: prevCollectionFile,
-          migrated: migratedCollectionFile,
+        this.logService.info({
+          source: 'core',
+          message: `Upgraded ${objectType} "${collectionFilePath}"`,
+          meta: {
+            previous: prevCollectionFile,
+            migrated: migratedCollectionFile,
+          },
         });
         return;
       }
@@ -764,9 +735,13 @@ export class ProjectService
           collectionId,
           ...migratedEntryFile,
         });
-        this.logService.info(`Upgraded ${objectType} "${entryFilePath}"`, {
-          previous: prevEntryFile,
-          migrated: migratedEntryFile,
+        this.logService.info({
+          source: 'core',
+          message: `Upgraded ${objectType} "${entryFilePath}"`,
+          meta: {
+            previous: prevEntryFile,
+            migrated: migratedEntryFile,
+          },
         });
         return;
       }

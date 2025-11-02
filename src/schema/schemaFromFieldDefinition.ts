@@ -7,15 +7,20 @@
 
 import { z } from '@hono/zod-openapi';
 import { supportedLanguageSchema } from './baseSchema.js';
-import { createEntrySchema, updateEntrySchema } from './entrySchema.js';
 import {
+  createEntrySchema,
+  entrySchema,
+  updateEntrySchema,
+} from './entrySchema.js';
+import type {
   AssetFieldDefinition,
   EntryFieldDefinition,
   FieldDefinition,
-  FieldTypeSchema,
   NumberFieldDefinition,
   RangeFieldDefinition,
-  StringFieldDefinition,
+  StringFieldDefinition} from './fieldSchema.js';
+import {
+  FieldTypeSchema
 } from './fieldSchema.js';
 import {
   directBooleanValueSchema,
@@ -229,6 +234,27 @@ export function getValueSchemaFromFieldDefinition(
         `Error generating schema for unsupported ValueType "${fieldDefinition.valueType}"`
       );
   }
+}
+
+/**
+ * Generates a schema for an Entry based on the given Field definitions and Values
+ */
+export function getEntrySchemaFromFieldDefinitions(
+  fieldDefinitions: FieldDefinition[]
+) {
+  const valueSchemas = fieldDefinitions.map((fieldDefinition) => {
+    return getValueSchemaFromFieldDefinition(fieldDefinition);
+  });
+
+  return z.object({
+    ...entrySchema.shape,
+    values: z.tuple(
+      valueSchemas as [
+        (typeof valueSchemas)[number],
+        ...(typeof valueSchemas)[number][],
+      ] // At least one element is required in a tuple
+    ),
+  });
 }
 
 /**

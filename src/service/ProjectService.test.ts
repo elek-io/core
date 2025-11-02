@@ -111,7 +111,7 @@ describe('ProjectService', function () {
     expect(counted).toEqual(1);
   });
 
-  it('should be able to identify a Project', async function () {
+  it('should be able to identify a Project', function () {
     expect(core.projects.isProject(project)).toBe(true);
     expect(core.projects.isProject({ objectType: 'project' })).toBe(false);
   });

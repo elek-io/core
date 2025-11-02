@@ -1,7 +1,9 @@
 import Fs from 'fs-extra';
 import Os from 'os';
 import Path from 'path';
+import { execFile, type ExecFileOptions } from 'child_process';
 import { projectFolderSchema } from '../schema/projectSchema.js';
+import type { LogService } from '../service/LogService.js';
 
 /**
  * The directory in which everything is stored and will be worked in
@@ -87,7 +89,7 @@ export const pathTo = {
  *
  * @param value Value to check
  */
-export function notEmpty<T>(value: T | null | undefined): value is T {
+export function isNotEmpty<T>(value: T | null | undefined): value is T {
   if (value === null || value === undefined) {
     return false;
   }
@@ -99,7 +101,13 @@ export function notEmpty<T>(value: T | null | undefined): value is T {
   return true;
 }
 
-export function isNoError<T>(item: T | Error): item is T {
+/**
+ * Used as parameter for filter() methods to assure,
+ * only items that are not of type Error are returned
+ *
+ * @param item Item to check
+ */
+export function isNotAnError<T>(item: T | Error): item is T {
   return item instanceof Error !== true;
 }
 
@@ -130,5 +138,58 @@ export async function files(
       return false;
     }
     return dirent.isFile();
+  });
+}
+
+/**
+ * Executes a shell command async and returns the output.
+ *
+ * When on Windows, it will automatically append `.cmd` to the command if it is in the `commandsToSuffix` list.
+ */
+export function execCommand({
+  command,
+  args,
+  options,
+  logger,
+}: {
+  command: string;
+  args: string[];
+  options?: ExecFileOptions;
+  logger: LogService;
+}) {
+  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    const commandsToSuffix = ['pnpm'];
+    const isWindows = Os.platform() === 'win32';
+    const suffixedCommand = isWindows
+      ? command
+          .split(' ')
+          .map((cmd) => (commandsToSuffix.includes(cmd) ? `${cmd}.cmd` : cmd))
+          .join(' ')
+      : command;
+    const fullCommand = `${suffixedCommand} ${args.join(' ')}`;
+    const execOptions: ExecFileOptions = {
+      ...options,
+      shell: true,
+    };
+    const start = Date.now();
+
+    execFile(suffixedCommand, args, execOptions, (error, stdout, stderr) => {
+      const durationMs = Date.now() - start;
+      if (error) {
+        logger.error({
+          source: 'core',
+          message: `Error executing command "${fullCommand}" after ${durationMs}ms: ${error.message}`,
+          meta: { error, stdout: stdout.toString(), stderr: stderr.toString() },
+        });
+        reject(error instanceof Error ? error : new Error(error.message));
+      } else {
+        logger.info({
+          source: 'core',
+          message: `Command "${fullCommand}" executed successfully in ${durationMs}ms.`,
+          meta: { stdout: stdout.toString(), stderr: stderr.toString() },
+        });
+        resolve({ stdout: stdout.toString(), stderr: stderr.toString() });
+      }
+    });
   });
 }

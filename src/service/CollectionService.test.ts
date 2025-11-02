@@ -81,7 +81,7 @@ describe('CollectionService', function () {
     expect(counted).toEqual(1);
   });
 
-  it('should be able to identify an Collection', async function () {
+  it('should be able to identify an Collection', function () {
     expect(core.collections.isCollection(collection)).toEqual(true);
     expect(core.collections.isCollection({ objectType: 'collection' })).toEqual(
       false

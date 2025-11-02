@@ -1,12 +1,12 @@
-import { ChildProcess } from 'child_process';
-import { GitProcess, IGitExecutionOptions, type IGitResult } from 'dugite';
+import type { ChildProcess } from 'child_process';
+import type { IGitExecutionOptions } from 'dugite';
+import { GitProcess, type IGitResult } from 'dugite';
 import PQueue from 'p-queue';
 import Path from 'path';
 import { GitError, NoCurrentUserError } from '../error/index.js';
+import type { GitMergeOptions, GitMessage } from '../schema/index.js';
 import {
   gitCommitSchema,
-  GitMergeOptions,
-  GitMessage,
   gitMessageSchema,
   uuidSchema,
   type ElekIoCoreOptions,
@@ -18,8 +18,9 @@ import {
 } from '../schema/index.js';
 import { datetime } from '../util/shared.js';
 import { GitTagService } from './GitTagService.js';
-import { LogService } from './LogService.js';
-import { UserService } from './UserService.js';
+import type { LogService } from './LogService.js';
+import type { UserService } from './UserService.js';
+import type { LogProps } from '../schema/index.js';
 
 /**
  * Service that manages Git functionality
@@ -63,8 +64,8 @@ export class GitService {
     this.logService = logService;
     this.userService = userService;
 
-    this.updateVersion();
-    this.updateGitPath();
+    void this.updateVersion();
+    void this.updateGitPath();
   }
 
   /**
@@ -526,6 +527,9 @@ export class GitService {
 
         return {
           hash: lineArray[0],
+          // We don't want to parse the message because it could throw.
+          // Filtering it through isGitCommit ensures it's valid as a whole.
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           message: JSON.parse(lineArray[1] || ''),
           author: {
             name: lineArray[2],
@@ -687,7 +691,11 @@ export class GitService {
       );
     }
 
-    const gitLog = `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`;
+    const gitLog: LogProps = {
+      source: 'core',
+      message: `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`,
+      meta: { command: `git ${args.join(' ')}` },
+    };
     if (result.durationMs >= 100) {
       this.logService.warn(gitLog);
     } else {

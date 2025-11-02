@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import ElekIoCore from './index.node.js';
 
 describe('Node.js', function () {
-  it('should be able to create a new ElekIoCore instance', async function () {
+  it('should be able to create a new ElekIoCore instance', function () {
     const defaultCore = new ElekIoCore();
     const coreWithLogLevel = new ElekIoCore({
       log: {

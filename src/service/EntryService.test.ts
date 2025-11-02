@@ -1,7 +1,7 @@
 import Fs from 'fs-extra';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import type { Value } from '../test/setup.js';
 import core, {
-  Value,
   type Asset,
   type Collection,
   type Entry,
@@ -145,7 +145,7 @@ describe('EntryService', function () {
     expect(counted).toEqual(2);
   });
 
-  it('should be able to identify an Entry', async function () {
+  it('should be able to identify an Entry', function () {
     expect(core.entries.isEntry(entry)).toBe(true);
     expect(core.entries.isEntry({ objectType: 'entry' })).toBe(false);
   });

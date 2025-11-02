@@ -9,7 +9,6 @@ import {
   readCollectionSchema,
   serviceTypeSchema,
   updateCollectionSchema,
-  type BaseFile,
   type Collection,
   type CollectionFile,
   type CountCollectionsProps,
@@ -25,9 +24,9 @@ import {
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
-import { GitService } from './GitService.js';
-import { JsonFileService } from './JsonFileService.js';
-import { LogService } from './LogService.js';
+import type { GitService } from './GitService.js';
+import type { JsonFileService } from './JsonFileService.js';
+import type { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for Collection files on disk
@@ -372,7 +371,7 @@ export class CollectionService
   /**
    * Checks if given object is of type Collection
    */
-  public isCollection(obj: BaseFile | unknown): obj is Collection {
+  public isCollection(obj: unknown): obj is Collection {
     return collectionFileSchema.safeParse(obj).success;
   }
 
