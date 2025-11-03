@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { uuidSchema } from './baseSchema.js';
 
 const outDirSchema = z.string().default('./.elek.io');
 const languageSchema = z.enum(['ts', 'js']).default('ts');
@@ -21,24 +22,29 @@ const targetSchema = z
     'esnext',
   ])
   .default('es2020');
-const optionsSchema = z.object({ watch: z.boolean().default(false) });
+const projectsSchema = z
+  .string()
+  .default('all')
+  .transform((value) => {
+    if (value === 'all') {
+      return 'all';
+    }
 
-export const generateApiClientAsSchema = z.object({
-  outDir: outDirSchema,
-  language: languageSchema,
-  format: formatSchema,
-  target: targetSchema,
+    return value.split(',').map((v) => uuidSchema.parse(v.trim()));
+  });
+const generateApiClientOptionsSchema = z.object({
+  watch: z.boolean().default(false),
 });
-export type GenerateApiClientAsProps = z.infer<
-  typeof generateApiClientAsSchema
->;
+const exportProjectsOptionsSchema = generateApiClientOptionsSchema.extend({
+  separate: z.boolean().default(false),
+});
 
 export const generateApiClientSchema = z.object({
   outDir: outDirSchema,
   language: languageSchema,
   format: formatSchema,
   target: targetSchema,
-  options: optionsSchema,
+  options: generateApiClientOptionsSchema,
 });
 export type GenerateApiClientProps = z.infer<typeof generateApiClientSchema>;
 
@@ -68,13 +74,9 @@ export const apiStartSchema = z.object({
 });
 export type ApiStartProps = z.infer<typeof apiStartSchema>;
 
-export const exportProjectsSchema = z.object({
-  outDir: outDirSchema,
-});
-export type ExportProjectsProps = z.infer<typeof exportProjectsSchema>;
-
 export const exportSchema = z.object({
   outDir: outDirSchema,
-  options: optionsSchema,
+  projects: projectsSchema,
+  options: exportProjectsOptionsSchema,
 });
 export type ExportProps = z.infer<typeof exportSchema>;

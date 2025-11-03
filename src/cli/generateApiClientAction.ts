@@ -1,8 +1,5 @@
 import { build as compileToJs } from 'tsdown';
-import type {
-  GenerateApiClientAsProps,
-  GenerateApiClientProps,
-} from '../schema/index.js';
+import type { GenerateApiClientProps } from '../schema/index.js';
 import { core, watchProjects } from './index.js';
 import Path from 'path';
 import Fs from 'fs-extra';
@@ -195,7 +192,7 @@ async function generateApiClientAs({
   language,
   format,
   target,
-}: GenerateApiClientAsProps) {
+}: GenerateApiClientProps) {
   const resolvedOutDir = Path.resolve(outDir);
   await Fs.ensureDir(resolvedOutDir);
 
@@ -235,7 +232,7 @@ export const generateApiClientAction = async ({
   target,
   options,
 }: GenerateApiClientProps) => {
-  await generateApiClientAs({ outDir, language, format, target });
+  await generateApiClientAs({ outDir, language, format, target, options });
 
   if (options.watch === true) {
     core.logger.info({
@@ -248,7 +245,7 @@ export const generateApiClientAction = async ({
         source: 'core',
         message: `Regenerating API Client due to ${event} on "${path}"`,
       });
-      void generateApiClientAs({ outDir, language, format, target });
+      void generateApiClientAs({ outDir, language, format, target, options });
     });
   }
 };

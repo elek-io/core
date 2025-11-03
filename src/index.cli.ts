@@ -73,12 +73,21 @@ program
   .command('export')
   .description('Exports all locally available Projects into a JSON file')
   .argument('[outDir]', 'The directory to write the JSON file to', './.elek.io')
+  .argument(
+    '[projects]',
+    'One or more Project IDs, separated by commas to export. If not provided, all Projects will be exported.',
+    'all'
+  )
+  .option(
+    '-s, --separate',
+    'Separates the exported Projects into individual files.'
+  )
   .option(
     '-w, --watch',
     'Watches for changes in your Projects and updates the JSON file automatically.'
   )
-  .action(async (outDir, options) => {
-    const props = exportSchema.parse({ outDir, options });
+  .action(async (outDir, projects, options) => {
+    const props = exportSchema.parse({ outDir, projects, options });
 
     await exportAction(props);
   });

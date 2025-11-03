@@ -17,20 +17,27 @@ import core from './test/setup.js';
 import { execCommand } from './util/node.js';
 
 describe('CLI', function () {
-  let project: Project & { destroy: () => Promise<void> };
+  let project1: Project & { destroy: () => Promise<void> };
+  let project2: Project & { destroy: () => Promise<void> };
   let asset: Asset;
   let collection: Collection;
   let entry: Entry;
 
   beforeAll(async function () {
-    project = await createProject();
-    asset = await createAsset(project.id);
-    collection = await createCollection(project.id);
-    entry = await createEntry(project.id, collection.id, asset.id);
+    project1 = await createProject();
+    project2 = await createProject();
+    asset = await createAsset(project1.id);
+    collection = await createCollection(project1.id);
+    entry = await createEntry(project1.id, collection.id, asset.id);
   }, 60000);
 
   afterAll(async function () {
-    await project.destroy();
+    await project1.destroy();
+    await project2.destroy();
+
+    await fs.remove(`./.elek.io/projects.json`);
+    await fs.remove(`./.elek.io/project-${project1.id}.json`);
+    await fs.remove(`./.elek.io/project-${project2.id}.json`);
   });
 
   it('should be able to generate the TS API Client with default options', async function () {
@@ -65,16 +72,16 @@ describe('CLI', function () {
       apiKey: 'abc123',
     });
 
-    const entries =
-      await client.content.v1.projects[project.id].collections[
+    const entriesOfProject1 =
+      await client.content.v1.projects[project1.id].collections[
         collection.id
       ].entries.list();
 
-    expect(entries.list.length).toEqual(1);
-    expect(entries.list[0].id).toEqual(entry.id);
+    expect(entriesOfProject1.list.length).toEqual(1);
+    expect(entriesOfProject1.list[0].id).toEqual(entry.id);
   });
 
-  it('should be able to export Projects to JSON file', async function () {
+  it('should be able to export all Projects to projects.json file', async function () {
     await execCommand({
       command: 'node ./dist/cli/index.cli.js',
       args: ['export'],
@@ -84,12 +91,78 @@ describe('CLI', function () {
     expect(await fs.exists('./.elek.io/projects.json')).toBe(true);
   });
 
-  it('should be able to use the exported Projects JSON file', async function () {
-    // @ts-expect-error The Projects JSON file is created dynamically, so TS cannot know about the module
-    const projects = (await import('../.elek.io/projects.json')).default;
+  it('should be able to use the exported projects.json file', async function () {
+    const projectsContent = await fs.readFile(
+      './.elek.io/projects.json',
+      'utf-8'
+    );
+    const projects = JSON.parse(projectsContent);
 
     expect(
-      projects[project.id].collections[collection.id].entries[entry.id].id
+      projects[project1.id].collections[collection.id].entries[entry.id].id
     ).toEqual(entry.id);
+    expect(projects[project2.id].id).toEqual(project2.id);
+  });
+
+  it('should be able to export one Project to projects.json file', async function () {
+    await execCommand({
+      command: 'node ./dist/cli/index.cli.js',
+      args: ['export', './.elek.io', project1.id],
+      logger: core.logger,
+    });
+
+    expect(await fs.exists('./.elek.io/projects.json')).toBe(true);
+  });
+
+  it('should be able to use the exported projects.json file with one Project', async function () {
+    const projectsContent = await fs.readFile(
+      './.elek.io/projects.json',
+      'utf-8'
+    );
+    const projects = JSON.parse(projectsContent);
+
+    expect(
+      projects[project1.id].collections[collection.id].entries[entry.id].id
+    ).toEqual(entry.id);
+    expect(projects[project2.id]).toEqual(undefined);
+  });
+
+  it('should be able to export multiple Projects to separate project-${id}.json files', async function () {
+    await execCommand({
+      command: 'node ./dist/cli/index.cli.js',
+      args: [
+        'export',
+        './.elek.io',
+        `${project1.id},${project2.id}`,
+        '--separate',
+      ],
+      logger: core.logger,
+    });
+
+    expect(await fs.exists(`./.elek.io/project-${project1.id}.json`)).toBe(
+      true
+    );
+    expect(await fs.exists(`./.elek.io/project-${project2.id}.json`)).toBe(
+      true
+    );
+  });
+
+  it('should be able to use the exported project-${id}.json files', async function () {
+    const project1Content = await fs.readFile(
+      `./.elek.io/project-${project1.id}.json`,
+      'utf-8'
+    );
+    const project1Json = JSON.parse(project1Content);
+
+    const project2Content = await fs.readFile(
+      `./.elek.io/project-${project2.id}.json`,
+      'utf-8'
+    );
+    const project2Json = JSON.parse(project2Content);
+
+    expect(
+      project1Json.collections[collection.id].entries[entry.id].id
+    ).toEqual(entry.id);
+    expect(project2Json.id).toEqual(project2.id);
   });
 });

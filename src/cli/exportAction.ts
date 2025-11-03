@@ -1,16 +1,40 @@
 import Path from 'path';
 import Fs from 'fs-extra';
-import type { ExportProjectsProps, ExportProps } from '../schema/index.js';
+import type {
+  Asset,
+  Collection,
+  Entry,
+  ExportProps,
+  Project,
+} from '../schema/index.js';
 import { core, watchProjects } from './index.js';
 
-async function exportProjects({ outDir }: ExportProjectsProps) {
+async function exportProjects({ outDir, projects, options }: ExportProps) {
+  const projectsToExport: Project[] = [];
   const resolvedOutDir = Path.resolve(outDir);
   await Fs.ensureDir(resolvedOutDir);
-  let content = {};
+  let content: Record<
+    string,
+    Project & {
+      assets: Record<string, Asset>;
+      collections: Record<
+        string,
+        Collection & {
+          entries: Record<string, Entry>;
+        }
+      >;
+    }
+  > = {};
 
-  const projects = await core.projects.list({ limit: 0 });
+  if (projects === 'all') {
+    projectsToExport.push(...(await core.projects.list({ limit: 0 })).list);
+  } else {
+    for (const projectId of projects) {
+      projectsToExport.push(await core.projects.read({ id: projectId }));
+    }
+  }
 
-  for (const project of projects.list) {
+  for (const project of projectsToExport) {
     const assets = (await core.assets.list({ projectId: project.id, limit: 0 }))
       .list;
     let assetContent = {};
@@ -18,12 +42,17 @@ async function exportProjects({ outDir }: ExportProjectsProps) {
       assetContent = { ...assetContent, [asset.id]: { ...asset } };
     }
 
-    let collectionContent = {};
+    let collectionContent: Record<
+      string,
+      Collection & {
+        entries: Record<string, Entry>;
+      }
+    > = {};
     const collections = (
       await core.collections.list({ projectId: project.id, limit: 0 })
     ).list;
     for (const collection of collections) {
-      let entryContent = {};
+      let entryContent: Record<string, Entry> = {};
       const entries = (
         await core.entries.list({
           projectId: project.id,
@@ -51,14 +80,27 @@ async function exportProjects({ outDir }: ExportProjectsProps) {
     };
   }
 
-  await Fs.writeFile(
-    Path.join(resolvedOutDir, 'projects.json'),
-    JSON.stringify(content, null, 2)
-  );
+  if (options.separate === true) {
+    for (const project of projectsToExport) {
+      await Fs.writeFile(
+        Path.join(resolvedOutDir, `project-${project.id}.json`),
+        JSON.stringify(content[project.id], null, 2)
+      );
+    }
+  } else {
+    await Fs.writeFile(
+      Path.join(resolvedOutDir, 'projects.json'),
+      JSON.stringify(content, null, 2)
+    );
+  }
 }
 
-export const exportAction = async ({ outDir, options }: ExportProps) => {
-  await exportProjects({ outDir });
+export const exportAction = async ({
+  outDir,
+  projects,
+  options,
+}: ExportProps) => {
+  await exportProjects({ outDir, projects, options });
 
   if (options.watch === true) {
     core.logger.info({
@@ -71,7 +113,7 @@ export const exportAction = async ({ outDir, options }: ExportProps) => {
         source: 'core',
         message: `Re-Exporting Projects due to ${event} on "${path}"`,
       });
-      void exportProjects({ outDir });
+      void exportProjects({ outDir, projects, options });
     });
   }
 };
