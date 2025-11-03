@@ -45,7 +45,7 @@
   },
   "dependencies": {
     "@commander-js/extra-typings": "14.0.0",
-    "@hono/node-server": "1.19.5",
+    "@hono/node-server": "1.19.6",
     "@hono/zod-openapi": "1.1.4",
     "@scalar/hono-api-reference": "0.9.22",
     "@sindresorhus/slugify": "3.0.0",
