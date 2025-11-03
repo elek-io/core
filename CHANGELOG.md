@@ -1,5 +1,13 @@
 # @elek-io/core
 
+## 0.15.2
+
+### Patch Changes
+
+- dbdbd98: All tests are now run sequentially to ensure git working as expected. Also fixed rogue Project after test run not getting deleted.
+- 2539cf9: Core can now export one or multiple projects in one or multiple JSON files
+- 3bb661a: Refactored local API using Scalar and added CLI commands for generating an TS/JS API Client and exporting Projects to a JSON file. Switched from tsup to tsdown.
+
 ## 0.15.1
 
 ### Patch Changes
