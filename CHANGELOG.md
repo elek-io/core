@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.15.3
+
+### Patch Changes
+
+- 9046c56: fix: no partial project updates and creates
+
 ## 0.15.2
 
 ### Patch Changes
