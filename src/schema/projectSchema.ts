@@ -62,12 +62,13 @@ export const projectSchema = projectFileSchema
   .openapi('Project');
 export type Project = z.infer<typeof projectSchema>;
 
-export const outdatedProjectSchema = projectFileSchema.pick({
-  id: true,
-  name: true,
-  coreVersion: true,
-});
-export type OutdatedProject = z.infer<typeof outdatedProjectSchema>;
+export const migrateProjectSchema = projectFileSchema
+  .pick({
+    id: true,
+    coreVersion: true,
+  })
+  .loose();
+export type MigrateProjectProps = z.infer<typeof migrateProjectSchema>;
 
 export const projectExportSchema = projectSchema.extend({
   assets: z.array(assetExportSchema),

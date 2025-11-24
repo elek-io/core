@@ -88,7 +88,6 @@ export default class ElekIoCore {
       this.options,
       this.logService,
       this.jsonFileService,
-      this.userService,
       this.gitService,
       this.assetService,
       this.collectionService,

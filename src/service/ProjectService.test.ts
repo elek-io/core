@@ -32,7 +32,7 @@ describe('ProjectService', function () {
     expect(project.name).toEqual('project #1');
     expect(project.settings, 'settings to default to').to.deep.equal({
       language: {
-        supported: ['en'],
+        supported: ['en', 'de'],
         default: 'en',
       },
     });

@@ -3,7 +3,6 @@ import Os from 'os';
 import Path from 'path';
 import Semver from 'semver';
 import {
-  NoCurrentUserError,
   ProjectUpgradeError,
   RequiredParameterMissingError,
 } from '../error/index.js';
@@ -12,7 +11,7 @@ import { SynchronizeLocalChangesError } from '../error/SynchronizeLocalChangesEr
 import type {
   FileReference,
   ObjectType,
-  OutdatedProject,
+  MigrateProjectProps,
   Version,
 } from '../schema/index.js';
 import {
@@ -24,7 +23,7 @@ import {
   listBranchesProjectSchema,
   listProjectsSchema,
   objectTypeSchema,
-  outdatedProjectSchema,
+  migrateProjectSchema,
   projectBranchSchema,
   projectFileSchema,
   projectFolderSchema,
@@ -47,7 +46,6 @@ import {
   type PaginatedList,
   type Project,
   type ProjectFile,
-  type ProjectSettings,
   type ReadProjectProps,
   type SetRemoteOriginUrlProjectProps,
   type SwitchBranchProjectProps,
@@ -64,7 +62,6 @@ import type { EntryService } from './EntryService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
-import type { UserService } from './UserService.js';
 
 /**
  * Service that manages CRUD functionality for Project files on disk
@@ -75,7 +72,6 @@ export class ProjectService
 {
   private coreVersion: Version;
   private jsonFileService: JsonFileService;
-  private userService: UserService;
   private gitService: GitService;
   private assetService: AssetService;
   private collectionService: CollectionService;
@@ -86,7 +82,6 @@ export class ProjectService
     options: ElekIoCoreOptions,
     logService: LogService,
     jsonFileService: JsonFileService,
-    userService: UserService,
     gitService: GitService,
     assetService: AssetService,
     collectionService: CollectionService,
@@ -96,7 +91,6 @@ export class ProjectService
 
     this.coreVersion = coreVersion;
     this.jsonFileService = jsonFileService;
-    this.userService = userService;
     this.gitService = gitService;
     this.assetService = assetService;
     this.collectionService = collectionService;
@@ -109,25 +103,12 @@ export class ProjectService
   public async create(props: CreateProjectProps): Promise<Project> {
     createProjectSchema.parse(props);
 
-    const user = await this.userService.get();
-    if (!user) {
-      throw new NoCurrentUserError();
-    }
-
     const id = uuid();
-    const defaultSettings: ProjectSettings = {
-      language: {
-        default: user.language,
-        supported: [user.language],
-      },
-    };
 
     const projectFile: ProjectFile = {
       ...props,
       objectType: 'project',
       id,
-      description: props.description || '',
-      settings: Object.assign({}, defaultSettings, props.settings),
       created: datetime(),
       updated: null,
       coreVersion: this.coreVersion,
@@ -222,11 +203,13 @@ export class ProjectService
       return await this.toProject(projectFile);
     } else {
       const projectFile = this.migrate(
-        JSON.parse(
-          await this.gitService.getFileContentAtCommit(
-            pathTo.project(props.id),
-            pathTo.projectFile(props.id),
-            props.commitHash
+        migrateProjectSchema.parse(
+          JSON.parse(
+            await this.gitService.getFileContentAtCommit(
+              pathTo.project(props.id),
+              pathTo.projectFile(props.id),
+              props.commitHash
+            )
           )
         )
       );
@@ -281,9 +264,9 @@ export class ProjectService
     }
 
     // Get the current Project file
-    const currentProjectFile = outdatedProjectSchema
-      .passthrough() // Allow unknown properties
-      .parse(await this.jsonFileService.unsafeRead(projectFilePath));
+    const currentProjectFile = migrateProjectSchema.parse(
+      await this.jsonFileService.unsafeRead(projectFilePath)
+    );
 
     if (Semver.gt(currentProjectFile.coreVersion, this.coreVersion)) {
       // Upgrade of the client needed before the project can be upgraded
@@ -521,7 +504,7 @@ export class ProjectService
   /**
    * Lists outdated Projects that need to be upgraded
    */
-  public async listOutdated(): Promise<OutdatedProject[]> {
+  public async listOutdated(): Promise<MigrateProjectProps[]> {
     const projectReferences = await this.listReferences(
       objectTypeSchema.enum.project
     );
@@ -531,7 +514,7 @@ export class ProjectService
         const json = await this.jsonFileService.unsafeRead(
           pathTo.projectFile(reference.id)
         );
-        const projectFile = outdatedProjectSchema.parse(json);
+        const projectFile = migrateProjectSchema.parse(json);
 
         if (projectFile.coreVersion !== this.coreVersion) {
           return projectFile;
@@ -588,10 +571,12 @@ export class ProjectService
   /**
    * Migrates an potentially outdated Project file to the current schema
    */
-  public migrate(potentiallyOutdatedProjectFile: unknown) {
+  public migrate(props: MigrateProjectProps) {
     // @todo
 
-    return projectFileSchema.parse(potentiallyOutdatedProjectFile);
+    props.coreVersion = this.coreVersion;
+
+    return projectFileSchema.parse(props);
   }
 
   /**
