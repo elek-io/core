@@ -70,7 +70,12 @@ export async function createProject(name?: string, settings?: ProjectSettings) {
   const project = await core.projects.create({
     name: name || faker.company.name(),
     description: faker.company.catchPhrase(),
-    settings: settings,
+    settings: settings || {
+      language: {
+        default: 'en',
+        supported: ['en', 'de'],
+      },
+    },
   });
 
   const destroy = async () => {
