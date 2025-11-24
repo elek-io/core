@@ -62,12 +62,13 @@ export const projectSchema = projectFileSchema
   .openapi('Project');
 export type Project = z.infer<typeof projectSchema>;
 
-export const outdatedProjectSchema = projectFileSchema.pick({
-  id: true,
-  name: true,
-  coreVersion: true,
-});
-export type OutdatedProject = z.infer<typeof outdatedProjectSchema>;
+export const migrateProjectSchema = projectFileSchema
+  .pick({
+    id: true,
+    coreVersion: true,
+  })
+  .loose();
+export type MigrateProjectProps = z.infer<typeof migrateProjectSchema>;
 
 export const projectExportSchema = projectSchema.extend({
   assets: z.array(assetExportSchema),
@@ -75,16 +76,11 @@ export const projectExportSchema = projectSchema.extend({
 });
 export type ProjectExport = z.infer<typeof projectExportSchema>;
 
-export const createProjectSchema = projectSchema
-  .pick({
-    name: true,
-    description: true,
-    settings: true,
-  })
-  .partial({
-    description: true,
-    settings: true,
-  });
+export const createProjectSchema = projectSchema.pick({
+  name: true,
+  description: true,
+  settings: true,
+});
 export type CreateProjectProps = z.infer<typeof createProjectSchema>;
 
 export const readProjectSchema = z.object({
@@ -93,18 +89,12 @@ export const readProjectSchema = z.object({
 });
 export type ReadProjectProps = z.infer<typeof readProjectSchema>;
 
-export const updateProjectSchema = projectSchema
-  .pick({
-    id: true,
-    name: true,
-    description: true,
-    settings: true,
-  })
-  .partial({
-    name: true,
-    description: true,
-    settings: true,
-  });
+export const updateProjectSchema = projectSchema.pick({
+  id: true,
+  name: true,
+  description: true,
+  settings: true,
+});
 export type UpdateProjectProps = z.infer<typeof updateProjectSchema>;
 
 export const upgradeProjectSchema = z.object({
