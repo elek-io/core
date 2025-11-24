@@ -247,19 +247,7 @@ export class ProjectService
 
     const projectFile: ProjectFile = {
       ...prevProjectFile,
-      name: props.name || prevProjectFile.name,
-      description: props.description || prevProjectFile.description,
-      coreVersion: this.coreVersion,
-      settings: {
-        language: {
-          supported:
-            props.settings?.language.supported ||
-            prevProjectFile.settings.language.supported,
-          default:
-            props.settings?.language.default ||
-            prevProjectFile.settings.language.default,
-        },
-      },
+      ...props,
       updated: datetime(),
     };
 

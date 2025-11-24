@@ -75,16 +75,11 @@ export const projectExportSchema = projectSchema.extend({
 });
 export type ProjectExport = z.infer<typeof projectExportSchema>;
 
-export const createProjectSchema = projectSchema
-  .pick({
-    name: true,
-    description: true,
-    settings: true,
-  })
-  .partial({
-    description: true,
-    settings: true,
-  });
+export const createProjectSchema = projectSchema.pick({
+  name: true,
+  description: true,
+  settings: true,
+});
 export type CreateProjectProps = z.infer<typeof createProjectSchema>;
 
 export const readProjectSchema = z.object({
@@ -93,18 +88,12 @@ export const readProjectSchema = z.object({
 });
 export type ReadProjectProps = z.infer<typeof readProjectSchema>;
 
-export const updateProjectSchema = projectSchema
-  .pick({
-    id: true,
-    name: true,
-    description: true,
-    settings: true,
-  })
-  .partial({
-    name: true,
-    description: true,
-    settings: true,
-  });
+export const updateProjectSchema = projectSchema.pick({
+  id: true,
+  name: true,
+  description: true,
+  settings: true,
+});
 export type UpdateProjectProps = z.infer<typeof updateProjectSchema>;
 
 export const upgradeProjectSchema = z.object({
