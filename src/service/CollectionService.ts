@@ -306,11 +306,12 @@ export class CollectionService
    *
    * The Fields that Collection used are not deleted.
    */
-  public async delete(props: DeleteCollectionProps): Promise<void> {
+  public async delete(props: DeleteCollectionProps): Promise<Collection> {
     deleteCollectionSchema.parse(props);
 
     const projectPath = pathTo.project(props.projectId);
     const collectionPath = pathTo.collection(props.projectId, props.id);
+    const collectionFile = await this.read(props);
 
     await Fs.remove(collectionPath);
     await this.gitService.add(projectPath, [collectionPath]);
@@ -318,6 +319,8 @@ export class CollectionService
       method: 'delete',
       reference: { objectType: 'collection', id: props.id },
     });
+
+    return await this.toCollection(props.projectId, collectionFile);
   }
 
   public async list(

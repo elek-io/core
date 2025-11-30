@@ -218,12 +218,13 @@ export class AssetService
   /**
    * Deletes given Asset
    */
-  public async delete(props: DeleteAssetProps): Promise<void> {
+  public async delete(props: DeleteAssetProps): Promise<Asset> {
     deleteAssetSchema.parse(props);
 
     const projectPath = pathTo.project(props.projectId);
     const assetFilePath = pathTo.assetFile(props.projectId, props.id);
     const assetPath = pathTo.asset(props.projectId, props.id, props.extension);
+    const assetFile = await this.read(props);
     await Fs.remove(assetPath);
     await Fs.remove(assetFilePath);
     await this.gitService.add(projectPath, [assetFilePath, assetPath]);
@@ -231,6 +232,8 @@ export class AssetService
       method: 'delete',
       reference: { objectType: 'asset', id: props.id },
     });
+
+    return await this.toAsset(props.projectId, assetFile);
   }
 
   public async list(props: ListAssetsProps): Promise<PaginatedList<Asset>> {
