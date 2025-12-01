@@ -106,9 +106,13 @@ export const upgradeProjectSchema = z.object({
 });
 export type UpgradeProjectProps = z.infer<typeof upgradeProjectSchema>;
 
-export const deleteProjectSchema = readProjectSchema.extend({
-  force: z.boolean().optional(),
-});
+export const deleteProjectSchema = readProjectSchema
+  .pick({
+    id: true,
+  })
+  .extend({
+    force: z.boolean().optional(),
+  });
 export type DeleteProjectProps = z.infer<typeof deleteProjectSchema>;
 
 export const projectUpgradeSchema = z.object({

@@ -107,11 +107,15 @@ export class GitTagService
    * @param path  Path to the repository
    * @param id    UUID of the tag to delete
    */
-  public async delete(props: DeleteGitTagProps): Promise<void> {
+  public async delete(props: DeleteGitTagProps): Promise<GitTag> {
     deleteGitTagSchema.parse(props);
+
+    const tag = await this.read(props);
 
     const args = ['tag', '--delete', props.id];
     await this.git(props.path, args);
+
+    return tag;
   }
 
   /**

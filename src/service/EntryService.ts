@@ -205,7 +205,7 @@ export class EntryService
   /**
    * Deletes given Entry from it's Collection
    */
-  public async delete(props: DeleteEntryProps): Promise<void> {
+  public async delete(props: DeleteEntryProps): Promise<Entry> {
     deleteEntrySchema.parse(props);
 
     const projectPath = pathTo.project(props.projectId);
@@ -214,6 +214,7 @@ export class EntryService
       props.collectionId,
       props.id
     );
+    const entryFile = await this.read(props);
 
     await Fs.remove(entryFilePath);
     await this.gitService.add(projectPath, [entryFilePath]);
@@ -225,6 +226,8 @@ export class EntryService
         collectionId: props.collectionId,
       },
     });
+
+    return await this.toEntry(props.projectId, props.collectionId, entryFile);
   }
 
   public async list(props: ListEntriesProps) {

@@ -43,7 +43,7 @@ export interface CrudService<T> {
   create: (props: never) => Promise<T>;
   read: (props: never) => Promise<T>;
   update: (props: never) => Promise<T>;
-  delete: (props: never) => Promise<void>;
+  delete: (props: never) => Promise<T>;
 }
 
 /**

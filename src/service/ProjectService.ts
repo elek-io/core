@@ -480,7 +480,7 @@ export class ProjectService
    * Throws in case a Project is only available locally and could be lost forever,
    * or changes are not pushed to a remote yet.
    */
-  public async delete(props: DeleteProjectProps): Promise<void> {
+  public async delete(props: DeleteProjectProps): Promise<Project> {
     deleteProjectSchema.parse(props);
 
     const hasRemoteOrigin = await this.gitService.remotes.hasOrigin(
@@ -498,7 +498,10 @@ export class ProjectService
       }
     }
 
+    const projectFile = await this.read(props);
     await Fs.remove(pathTo.project(props.id));
+
+    return await this.toProject(projectFile);
   }
 
   /**
