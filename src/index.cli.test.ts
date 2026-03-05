@@ -38,6 +38,8 @@ describe('CLI', function () {
     await fs.remove(`./.elek.io/projects.json`);
     await fs.remove(`./.elek.io/project-${project1.id}.json`);
     await fs.remove(`./.elek.io/project-${project2.id}.json`);
+    await fs.remove(`./.elek.io/project-${project1.id}`);
+    await fs.remove(`./.elek.io/project-${project2.id}`);
   });
 
   it('should be able to generate the TS API Client with default options', async function () {
@@ -81,7 +83,7 @@ describe('CLI', function () {
     expect(entriesOfProject1.list[0].id).toEqual(entry.id);
   });
 
-  it('should be able to export all Projects to projects.json file', async function () {
+  it('should be able to export all Projects nested into projects.json', async function () {
     await execCommand({
       command: 'node ./dist/cli/index.cli.js',
       args: ['export'],
@@ -91,7 +93,7 @@ describe('CLI', function () {
     expect(await fs.exists('./.elek.io/projects.json')).toBe(true);
   });
 
-  it('should be able to use the exported projects.json file', async function () {
+  it('should be able to use the exported nested projects.json file', async function () {
     const projectsContent = await fs.readFile(
       './.elek.io/projects.json',
       'utf-8'
@@ -104,65 +106,152 @@ describe('CLI', function () {
     expect(projects[project2.id].id).toEqual(project2.id);
   });
 
-  it('should be able to export one Project to projects.json file', async function () {
-    await execCommand({
-      command: 'node ./dist/cli/index.cli.js',
-      args: ['export', './.elek.io', project1.id],
-      logger: core.logger,
-    });
-
-    expect(await fs.exists('./.elek.io/projects.json')).toBe(true);
-  });
-
-  it('should be able to use the exported projects.json file with one Project', async function () {
+  it('should include assets in the nested all-projects export', async function () {
     const projectsContent = await fs.readFile(
       './.elek.io/projects.json',
       'utf-8'
     );
     const projects = JSON.parse(projectsContent);
 
-    expect(
-      projects[project1.id].collections[collection.id].entries[entry.id].id
-    ).toEqual(entry.id);
-    expect(projects[project2.id]).toEqual(undefined);
+    expect(projects[project1.id].assets[asset.id].id).toEqual(asset.id);
+    expect(Object.keys(projects[project2.id].assets).length).toEqual(0);
+    expect(Object.keys(projects[project2.id].collections).length).toEqual(0);
   });
 
-  it('should be able to export multiple Projects to separate project-${id}.json files', async function () {
+  it('should be able to export one Project to project-${id}.json', async function () {
     await execCommand({
       command: 'node ./dist/cli/index.cli.js',
-      args: [
-        'export',
-        './.elek.io',
-        `${project1.id},${project2.id}`,
-        '--separate',
-      ],
+      args: ['export', './.elek.io', project1.id],
       logger: core.logger,
     });
 
     expect(await fs.exists(`./.elek.io/project-${project1.id}.json`)).toBe(
       true
     );
-    expect(await fs.exists(`./.elek.io/project-${project2.id}.json`)).toBe(
-      true
-    );
   });
 
-  it('should be able to use the exported project-${id}.json files', async function () {
-    const project1Content = await fs.readFile(
+  it('should be able to use the exported nested project-${id}.json file', async function () {
+    const projectsContent = await fs.readFile(
       `./.elek.io/project-${project1.id}.json`,
+      'utf-8'
+    );
+    const projects = JSON.parse(projectsContent);
+
+    expect(projects.collections[collection.id].entries[entry.id].id).toEqual(
+      entry.id
+    );
+    expect(projects[project2.id]).toEqual(undefined);
+  });
+
+  it('should include assets in the nested single-project export', async function () {
+    const projectContent = await fs.readFile(
+      `./.elek.io/project-${project1.id}.json`,
+      'utf-8'
+    );
+    const project = JSON.parse(projectContent);
+
+    expect(project.assets[asset.id].id).toEqual(asset.id);
+  });
+
+  it('should be able to export multiple Projects to separate project-${id}/project.json files', async function () {
+    await execCommand({
+      command: 'node ./dist/cli/index.cli.js',
+      args: [
+        'export',
+        './.elek.io',
+        `${project1.id},${project2.id}`,
+        'separate',
+      ],
+      logger: core.logger,
+    });
+
+    expect(
+      await fs.exists(`./.elek.io/project-${project1.id}/project.json`)
+    ).toBe(true);
+    expect(
+      await fs.exists(`./.elek.io/project-${project1.id}/assets/assets.json`)
+    ).toBe(true);
+    expect(
+      await fs.exists(
+        `./.elek.io/project-${project1.id}/collections/collections.json`
+      )
+    ).toBe(true);
+    expect(
+      await fs.exists(`./.elek.io/project-${project2.id}/project.json`)
+    ).toBe(true);
+  });
+
+  it('should be able to use the exported separate project-${id}/project.json files', async function () {
+    const project1Content = await fs.readFile(
+      `./.elek.io/project-${project1.id}/project.json`,
       'utf-8'
     );
     const project1Json = JSON.parse(project1Content);
 
     const project2Content = await fs.readFile(
-      `./.elek.io/project-${project2.id}.json`,
+      `./.elek.io/project-${project2.id}/project.json`,
       'utf-8'
     );
     const project2Json = JSON.parse(project2Content);
 
-    expect(
-      project1Json.collections[collection.id].entries[entry.id].id
-    ).toEqual(entry.id);
+    expect(project1Json.id).toEqual(project1.id);
     expect(project2Json.id).toEqual(project2.id);
+  });
+
+  it('should include collection subdirectory files in the separate export', async function () {
+    expect(
+      await fs.exists(
+        `./.elek.io/project-${project1.id}/collections/products/collection.json`
+      )
+    ).toBe(true);
+    expect(
+      await fs.exists(
+        `./.elek.io/project-${project1.id}/collections/products/entries.json`
+      )
+    ).toBe(true);
+  });
+
+  it('should copy asset binary files in the separate export', async function () {
+    expect(
+      await fs.exists(
+        `./.elek.io/project-${project1.id}/assets/${asset.id}.png`
+      )
+    ).toBe(true);
+  });
+
+  it('should be able to use the exported separate assets.json file', async function () {
+    const assetsContent = await fs.readFile(
+      `./.elek.io/project-${project1.id}/assets/assets.json`,
+      'utf-8'
+    );
+    const assets = JSON.parse(assetsContent);
+
+    expect(Array.isArray(assets)).toBe(true);
+    expect(assets.length).toEqual(1);
+    expect(assets[0].id).toEqual(asset.id);
+  });
+
+  it('should be able to use the exported separate collections.json file', async function () {
+    const collectionsContent = await fs.readFile(
+      `./.elek.io/project-${project1.id}/collections/collections.json`,
+      'utf-8'
+    );
+    const collections = JSON.parse(collectionsContent);
+
+    expect(Array.isArray(collections)).toBe(true);
+    expect(collections.length).toEqual(1);
+    expect(collections[0].id).toEqual(collection.id);
+  });
+
+  it('should be able to use the exported separate entries.json file', async function () {
+    const entriesContent = await fs.readFile(
+      `./.elek.io/project-${project1.id}/collections/products/entries.json`,
+      'utf-8'
+    );
+    const entries = JSON.parse(entriesContent);
+
+    expect(Array.isArray(entries)).toBe(true);
+    expect(entries.length).toEqual(1);
+    expect(entries[0].id).toEqual(entry.id);
   });
 });
