@@ -38,7 +38,9 @@ describe('Astro Loaders', function () {
       Path.join(tmpDir, 'node_modules')
     );
 
-    const loaderPath = Path.resolve('src/index.astro.ts');
+    // On Windows CI/CD Path.resolve would be "D:\a\core\core\src\index.astro.ts",
+    // but when interpolated into the template string, the backslashes act as escape characters.
+    const loaderPath = Path.resolve('src/index.astro.ts').replaceAll('\\', '/');
     const assetOutDir = Path.join(srcDir, 'content', 'assets');
 
     // Write the Astro content config that uses our real loaders
