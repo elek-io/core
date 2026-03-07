@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.16.0
+
+### Minor Changes
+
+- 06fc63a: Added Astro loader & changed export CLI command
+
 ## 0.15.3
 
 ### Patch Changes
