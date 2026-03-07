@@ -1,12 +1,8 @@
 {
-  // Support for >= Node 20, since it is the current LTS
-  // and Electron 29.0.0 (the oldest still supported version) uses Node 20 too
-  // @see https://www.electronjs.org/docs/latest/tutorial/electron-timelines
-  // ESM support was added to Electron in version 28.0.0
-  // Using TypeScript Node.js with native ESM
-  // @see https://gist.github.com/slavafomin/cd7a54035eff5dc1c7c2eff096b23b6b
+  // Support for >= Node 24, since it is the current LTS
+  // @see https://nodejs.org/en/about/previous-releases
   "extends": [
-    "@tsconfig/node22/tsconfig.json",
+    "@tsconfig/node24/tsconfig.json",
     "@tsconfig/strictest/tsconfig.json"
   ],
   "compilerOptions": {

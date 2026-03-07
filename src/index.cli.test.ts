@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
@@ -44,7 +45,7 @@ describe('CLI', function () {
 
   it('should be able to generate the TS API Client with default options', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.js',
+      command: 'node ./dist/cli/index.cli.mjs',
       args: ['generate:client'],
       logger: core.logger,
     });
@@ -54,7 +55,7 @@ describe('CLI', function () {
 
   it('should be able to generate & compile the API Client as JavaScript, ESM and target ES2020', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.js',
+      command: 'node ./dist/cli/index.cli.mjs',
       args: ['generate:client', './.elek.io', 'js', 'esm', 'es2020'],
       logger: core.logger,
     });
@@ -85,7 +86,7 @@ describe('CLI', function () {
 
   it('should be able to export all Projects nested into projects.json', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.js',
+      command: 'node ./dist/cli/index.cli.mjs',
       args: ['export'],
       logger: core.logger,
     });
@@ -120,7 +121,7 @@ describe('CLI', function () {
 
   it('should be able to export one Project to project-${id}.json', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.js',
+      command: 'node ./dist/cli/index.cli.mjs',
       args: ['export', './.elek.io', project1.id],
       logger: core.logger,
     });
@@ -155,7 +156,7 @@ describe('CLI', function () {
 
   it('should be able to export multiple Projects to separate project-${id}/project.json files', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.js',
+      command: 'node ./dist/cli/index.cli.mjs',
       args: [
         'export',
         './.elek.io',

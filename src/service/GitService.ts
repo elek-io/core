@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
-import type { IGitExecutionOptions } from 'dugite';
-import { GitProcess, type IGitResult } from 'dugite';
+import type { IGitExecutionOptions, IGitStringResult } from 'dugite';
+import { exec as gitExec } from 'dugite';
 import PQueue from 'p-queue';
 import Path from 'node:path';
 import { GitError, NoCurrentUserError } from '../error/index.js';
@@ -672,10 +672,10 @@ export class GitService {
     path: string,
     args: string[],
     options?: IGitExecutionOptions
-  ): Promise<IGitResult> {
+  ): Promise<IGitStringResult> {
     const result = await this.queue.add(async () => {
       const start = Date.now();
-      const gitResult = await GitProcess.exec(args, path, options);
+      const gitResult = await gitExec(args, path, options);
       const durationMs = Date.now() - start;
       return {
         gitResult,
@@ -709,11 +709,16 @@ export class GitService {
         )}" executed for "${path}" failed with exit code "${
           result.gitResult.exitCode
         }" and message "${
-          result.gitResult.stderr.trim() || result.gitResult.stdout.trim()
+          result.gitResult.stderr.toString().trim() ||
+          result.gitResult.stdout.toString().trim()
         }"`
       );
     }
 
-    return result.gitResult;
+    return {
+      ...result.gitResult,
+      stdout: result.gitResult.stdout.toString(),
+      stderr: result.gitResult.stderr.toString(),
+    };
   }
 }

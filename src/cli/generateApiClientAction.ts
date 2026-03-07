@@ -214,6 +214,7 @@ async function generateApiClientAs({
       outDir: resolvedOutDir,
       format,
       target,
+      platform: 'neutral',
       sourcemap: true,
       clean: false,
       dts: true,
