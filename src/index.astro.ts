@@ -1,4 +1,5 @@
 import type { Loader } from 'astro/loaders';
+import type { ZodSchema as AstroZodSchema } from 'astro/zod';
 import Path from 'node:path';
 import Fs from 'fs-extra';
 import ElekIoCore, { assetSchema } from './index.node.js';
@@ -44,7 +45,7 @@ const core = new ElekIoCore({
 export function elekAssets(props: ElekAssetsProps): Loader {
   return {
     name: 'elek-assets',
-    schema: () => assetSchema,
+    schema: () => assetSchema as unknown as AstroZodSchema,
     load: async (context) => {
       context.logger.info(
         `Loading elek.io Assets for Project "${props.projectId}", saving to "${props.outDir}"`
@@ -118,7 +119,9 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
         id: props.collectionId,
       });
 
-      return buildEntryValuesSchema(collection.fieldDefinitions);
+      return buildEntryValuesSchema(
+        collection.fieldDefinitions
+      ) as unknown as AstroZodSchema;
     },
     load: async (context) => {
       context.logger.info(
