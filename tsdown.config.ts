@@ -10,7 +10,7 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: true,
-    deps: { neverBundle: [/^node:/] },
+    deps: { neverBundle: ['dugite', /^node:/] },
   },
   {
     entry: ['src/index.browser.ts'],
@@ -43,6 +43,6 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: true,
-    deps: { neverBundle: ['astro/loaders', /^node:/] },
+    deps: { neverBundle: ['astro/loaders', 'dugite', /^node:/] },
   },
 ]);
