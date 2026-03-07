@@ -1,7 +1,7 @@
 import Fs from 'fs-extra';
-import Os from 'os';
-import Path from 'path';
-import { execFile, type ExecFileOptions } from 'child_process';
+import Os from 'node:os';
+import Path from 'node:path';
+import { execFile, type ExecFileOptions } from 'node:child_process';
 import { projectFolderSchema } from '../schema/projectSchema.js';
 import type { LogService } from '../service/LogService.js';
 

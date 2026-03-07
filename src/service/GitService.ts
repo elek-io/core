@@ -1,8 +1,8 @@
-import type { ChildProcess } from 'child_process';
+import type { ChildProcess } from 'node:child_process';
 import type { IGitExecutionOptions } from 'dugite';
 import { GitProcess, type IGitResult } from 'dugite';
 import PQueue from 'p-queue';
-import Path from 'path';
+import Path from 'node:path';
 import { GitError, NoCurrentUserError } from '../error/index.js';
 import type { GitMergeOptions, GitMessage } from '../schema/index.js';
 import {

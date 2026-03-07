@@ -9,7 +9,7 @@
   },
   "type": "module",
   "bin": {
-    "elek": "./dist/cli/index.cli.js"
+    "elek": "./dist/cli/index.cli.mjs"
   },
   "files": [
     "dist/node",
@@ -20,8 +20,8 @@
     ".": {
       "node": {
         "import": {
-          "types": "./dist/node/index.node.d.ts",
-          "default": "./dist/node/index.node.js"
+          "types": "./dist/node/index.node.d.mts",
+          "default": "./dist/node/index.node.mjs"
         }
       },
       "import": {
@@ -31,8 +31,8 @@
     },
     "./astro": {
       "import": {
-        "types": "./dist/astro/index.astro.d.ts",
-        "default": "./dist/astro/index.astro.js"
+        "types": "./dist/astro/index.astro.d.mts",
+        "default": "./dist/astro/index.astro.mjs"
       }
     }
   },
@@ -64,7 +64,7 @@
     "mime": "4.1.0",
     "p-queue": "9.0.0",
     "semver": "7.7.3",
-    "tsdown": "0.15.12",
+    "tsdown": "0.21.0",
     "uuid": "13.0.0",
     "winston": "3.18.3",
     "winston-daily-rotate-file": "5.0.0",

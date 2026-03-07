@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sync } from 'astro';
-import Path from 'path';
-import Os from 'os';
+import Path from 'node:path';
+import Os from 'node:os';
 import Fs from 'fs-extra';
 import {
   createProject,

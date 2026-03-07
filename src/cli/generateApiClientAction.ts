@@ -1,10 +1,10 @@
 import { build as compileToJs } from 'tsdown';
 import type { GenerateApiClientProps } from '../schema/index.js';
 import { core, watchProjects } from './index.js';
-import Path from 'path';
+import Path from 'node:path';
 import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
-import assert from 'assert';
+import assert from 'node:assert';
 import type { Collection, Project } from '../index.node.js';
 
 /**

@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import Fs from 'fs-extra';
-import Path from 'path';
+import Path from 'node:path';
 import type { RunnerTestCase } from 'vitest';
 import { expect } from 'vitest';
 import type { EntryFieldDefinition } from './setup.js';

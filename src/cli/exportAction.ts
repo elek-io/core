@@ -1,4 +1,4 @@
-import Path from 'path';
+import Path from 'node:path';
 import Fs from 'fs-extra';
 import type {
   Asset,

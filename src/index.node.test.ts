@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import ElekIoCore from './index.node.js';
-import Path from 'path';
+import Path from 'node:path';
 
 describe('Node.js', function () {
   it('should be able to create a new ElekIoCore instance', function () {

@@ -1,5 +1,5 @@
 import type { Loader } from 'astro/loaders';
-import Path from 'path';
+import Path from 'node:path';
 import Fs from 'fs-extra';
 import ElekIoCore, { assetSchema } from './index.node.js';
 import { buildEntryValuesSchema } from './astro/schema.js';

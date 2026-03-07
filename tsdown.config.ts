@@ -10,6 +10,7 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: true,
+    deps: { neverBundle: [/^node:/] },
   },
   {
     entry: ['src/index.browser.ts'],
@@ -20,6 +21,7 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: true,
+    deps: { neverBundle: [/^node:/] },
   },
   {
     entry: ['src/index.cli.ts'],
@@ -30,7 +32,7 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: true,
-    external: ['@elek-io/core'],
+    deps: { neverBundle: ['@elek-io/core', /^node:/] },
   },
   {
     entry: ['src/index.astro.ts'],
@@ -41,6 +43,6 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     clean: true,
-    external: ['astro/loaders'],
+    deps: { neverBundle: ['astro/loaders', /^node:/] },
   },
 ]);
