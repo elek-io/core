@@ -1,7 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { GitTag } from '../test/setup.js';
 import core, { type Project } from '../test/setup.js';
-import { createProject } from '../test/util.js';
+import { createProject, ensureCleanGitStatus } from '../test/util.js';
 
 describe('GitTagService', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -15,6 +15,10 @@ describe('GitTagService', function () {
 
   afterAll(async function () {
     await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
   });
 
   it('should be able to create a new tag', async function () {

@@ -187,17 +187,6 @@ export async function createCollection(projectId: string) {
   return updatedCollection;
 }
 
-// export async function createSharedValue(projectId: string) {
-//   const value = await core.sharedValues.create({
-//     projectId: projectId,
-//     valueType: 'string',
-//     language: 'en',
-//     content: 'Hello World',
-//   });
-
-//   return value;
-// }
-
 export async function createEntry(
   projectId: string,
   collectionId: string,

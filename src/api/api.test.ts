@@ -114,7 +114,7 @@ describe('API', function () {
     );
   });
 
-  it('should be able to read an Collection via API', async function () {
+  it('should be able to read a Collection via API', async function () {
     const res = await client.content.v1.projects[':projectId'].collections[
       ':collectionId'
     ].$get({

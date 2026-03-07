@@ -29,7 +29,7 @@ describe('CollectionService', function () {
     expect(collection.id).toBeDefined();
   });
 
-  it('should be able to read an Collection', async function () {
+  it('should be able to read a Collection', async function () {
     const readCollection = await core.collections.read({
       projectId: project.id,
       id: collection.id,
@@ -40,7 +40,7 @@ describe('CollectionService', function () {
     );
   });
 
-  it('should be able to update an Collection', async function () {
+  it('should be able to update a Collection', async function () {
     collection.description.en =
       'The title should be short and catchy, to grab the users attention.';
     collection = await core.collections.update({
@@ -57,7 +57,7 @@ describe('CollectionService', function () {
     const collectionFromHistory = await core.collections.read({
       projectId: project.id,
       id: collection.id,
-      commitHash: collection.history.pop()?.hash,
+      commitHash: collection.history.at(-1)?.hash,
     });
 
     expect(collectionFromHistory.description.en).toEqual(
@@ -81,14 +81,14 @@ describe('CollectionService', function () {
     expect(counted).toEqual(1);
   });
 
-  it('should be able to identify an Collection', function () {
+  it('should be able to identify a Collection', function () {
     expect(core.collections.isCollection(collection)).toEqual(true);
     expect(core.collections.isCollection({ objectType: 'collection' })).toEqual(
       false
     );
   });
 
-  it('should be able to delete an Collection', async function () {
+  it('should be able to delete a Collection', async function () {
     await core.collections.delete({ projectId: project.id, id: collection.id });
 
     expect(

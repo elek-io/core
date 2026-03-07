@@ -18,10 +18,9 @@ import type {
   FieldDefinition,
   NumberFieldDefinition,
   RangeFieldDefinition,
-  StringFieldDefinition} from './fieldSchema.js';
-import {
-  FieldTypeSchema
+  StringFieldDefinition,
 } from './fieldSchema.js';
+import { FieldTypeSchema } from './fieldSchema.js';
 import {
   directBooleanValueSchema,
   directNumberValueSchema,
@@ -109,7 +108,7 @@ function getStringValueContentSchemaFromFieldDefinition(
     return schema.nullable();
   }
 
-  return schema.min(1, 'shared.stringValueRequired'); // @see https://github.com/colinhacks/zod/issues/2466
+  return schema.min(1); // @see https://github.com/colinhacks/zod/issues/2466
 }
 
 /**
@@ -148,7 +147,7 @@ function getReferenceValueContentSchemaFromFieldDefinition(
   }
 
   if (fieldDefinition.isRequired) {
-    schema = schema.min(1, 'shared.referenceRequired');
+    schema = schema.min(1);
   }
 
   if (fieldDefinition.min) {
