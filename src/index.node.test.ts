@@ -1928,5 +1928,7 @@ describe('Node.js', function () {
         },
       ],
     });
+
+    await core.projects.delete({ id: project.id, force: true });
   });
 });

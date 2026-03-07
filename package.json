@@ -13,7 +13,8 @@
   },
   "files": [
     "dist/node",
-    "dist/browser"
+    "dist/browser",
+    "dist/astro"
   ],
   "exports": {
     ".": {
@@ -26,6 +27,12 @@
       "import": {
         "types": "./dist/browser/index.browser.d.ts",
         "default": "./dist/browser/index.browser.js"
+      }
+    },
+    "./astro": {
+      "import": {
+        "types": "./dist/astro/index.astro.d.ts",
+        "default": "./dist/astro/index.astro.js"
       }
     }
   },
@@ -73,6 +80,7 @@
     "@types/node": "22.18.13",
     "@types/semver": "7.7.1",
     "@vitest/coverage-v8": "4.0.5",
+    "astro": "^5.18.0",
     "eslint": "9.38.0",
     "eslint-config-prettier": "10.1.8",
     "globals": "16.4.0",
@@ -83,6 +91,12 @@
     "vitest": "4.0.5"
   },
   "peerDependencies": {
+    "astro": ">=5.0.0",
     "dugite": "2.7.1"
+  },
+  "peerDependenciesMeta": {
+    "astro": {
+      "optional": true
+    }
   }
 }

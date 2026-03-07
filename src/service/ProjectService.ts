@@ -535,13 +535,16 @@ export class ProjectService
     }
 
     const offset = props?.offset || 0;
-    const limit = props?.limit || 15;
+    const limit = props?.limit ?? 15;
 
     const projectReferences = await this.listReferences(
       objectTypeSchema.enum.project
     );
 
-    const partialProjectReferences = projectReferences.slice(offset, limit);
+    const partialProjectReferences =
+      limit === 0
+        ? projectReferences.slice(offset)
+        : projectReferences.slice(offset, offset + limit);
 
     const projects = await this.returnResolved(
       partialProjectReferences.map((reference) => {

@@ -326,17 +326,17 @@ export class CollectionService
     listCollectionsSchema.parse(props);
 
     const offset = props.offset || 0;
-    const limit = props.limit || 15;
+    const limit = props.limit ?? 15;
 
     const collectionReferences = await this.listReferences(
       objectTypeSchema.enum.collection,
       props.projectId
     );
 
-    const partialCollectionReferences = collectionReferences.slice(
-      offset,
-      limit
-    );
+    const partialCollectionReferences =
+      limit === 0
+        ? collectionReferences.slice(offset)
+        : collectionReferences.slice(offset, offset + limit);
 
     const collections = await this.returnResolved(
       partialCollectionReferences.map((reference) => {

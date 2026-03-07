@@ -237,14 +237,17 @@ export class AssetService
     listAssetsSchema.parse(props);
 
     const offset = props.offset || 0;
-    const limit = props.limit || 15;
+    const limit = props.limit ?? 15;
 
     const assetReferences = await this.listReferences(
       objectTypeSchema.enum.asset,
       props.projectId
     );
 
-    const partialAssetReferences = assetReferences.slice(offset, limit);
+    const partialAssetReferences =
+      limit === 0
+        ? assetReferences.slice(offset)
+        : assetReferences.slice(offset, offset + limit);
 
     const assets = await this.returnResolved(
       partialAssetReferences.map((assetReference) => {

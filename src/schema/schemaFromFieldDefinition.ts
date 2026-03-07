@@ -162,7 +162,7 @@ function getReferenceValueContentSchemaFromFieldDefinition(
   return schema;
 }
 
-function getTranslatableStringValueContentSchemaFromFieldDefinition(
+export function getTranslatableStringValueContentSchemaFromFieldDefinition(
   fieldDefinition: StringFieldDefinition
 ) {
   return z.partialRecord(
@@ -171,7 +171,7 @@ function getTranslatableStringValueContentSchemaFromFieldDefinition(
   );
 }
 
-function getTranslatableNumberValueContentSchemaFromFieldDefinition(
+export function getTranslatableNumberValueContentSchemaFromFieldDefinition(
   fieldDefinition: NumberFieldDefinition | RangeFieldDefinition
 ) {
   return z.partialRecord(
@@ -180,14 +180,14 @@ function getTranslatableNumberValueContentSchemaFromFieldDefinition(
   );
 }
 
-function getTranslatableBooleanValueContentSchemaFromFieldDefinition() {
+export function getTranslatableBooleanValueContentSchemaFromFieldDefinition() {
   return z.partialRecord(
     supportedLanguageSchema,
     getBooleanValueContentSchemaFromFieldDefinition()
   );
 }
 
-function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
+export function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
   fieldDefinition: AssetFieldDefinition | EntryFieldDefinition
 ) {
   return z.partialRecord(

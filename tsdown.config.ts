@@ -32,4 +32,15 @@ export default defineConfig([
     clean: true,
     external: ['@elek-io/core'],
   },
+  {
+    entry: ['src/index.astro.ts'],
+    format: ['esm'],
+    platform: 'node',
+    outDir: 'dist/astro',
+    minify: false,
+    dts: true,
+    sourcemap: true,
+    clean: true,
+    external: ['astro/loaders'],
+  },
 ]);
