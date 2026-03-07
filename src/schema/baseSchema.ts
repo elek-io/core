@@ -66,7 +66,7 @@ export const versionSchema = z.string();
 // }, 'String must follow the Semantic Versioning format (https://semver.org/)');
 export type Version = z.infer<typeof versionSchema>;
 
-export const uuidSchema = z.uuid('shared.invalidUuid');
+export const uuidSchema = z.uuid();
 export type Uuid = z.infer<typeof uuidSchema>;
 
 /**
@@ -74,7 +74,7 @@ export type Uuid = z.infer<typeof uuidSchema>;
  */
 export const translatableStringSchema = z.partialRecord(
   supportedLanguageSchema,
-  z.string().trim().min(1, 'shared.translatableStringRequired')
+  z.string().trim().min(1)
 );
 export type TranslatableString = z.infer<typeof translatableStringSchema>;
 
@@ -83,12 +83,7 @@ export type TranslatableString = z.infer<typeof translatableStringSchema>;
  */
 export const translatableNumberSchema = z.partialRecord(
   supportedLanguageSchema,
-  z.number({
-    error: (error) =>
-      error.input === undefined
-        ? 'shared.translatableNumberRequired'
-        : 'shared.translatableNumberNotANumber',
-  })
+  z.number()
 );
 export type TranslatableNumber = z.infer<typeof translatableNumberSchema>;
 
@@ -97,12 +92,7 @@ export type TranslatableNumber = z.infer<typeof translatableNumberSchema>;
  */
 export const translatableBooleanSchema = z.partialRecord(
   supportedLanguageSchema,
-  z.boolean({
-    error: (error) =>
-      error.input === undefined
-        ? 'shared.translatableBooleanRequired'
-        : 'shared.translatableBooleanNotABoolean',
-  })
+  z.boolean()
 );
 export type TranslatableBoolean = z.infer<typeof translatableBooleanSchema>;
 

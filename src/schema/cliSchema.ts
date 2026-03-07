@@ -36,7 +36,7 @@ const generateApiClientOptionsSchema = z.object({
   watch: z.boolean().default(false),
 });
 const exportProjectsOptionsSchema = generateApiClientOptionsSchema.extend({
-  separate: z.boolean().default(false),
+  watch: z.boolean().default(false),
 });
 
 export const generateApiClientSchema = z.object({
@@ -77,6 +77,7 @@ export type ApiStartProps = z.infer<typeof apiStartSchema>;
 export const exportSchema = z.object({
   outDir: outDirSchema,
   projects: projectsSchema,
+  template: z.enum(['nested', 'separate']).default('nested'),
   options: exportProjectsOptionsSchema,
 });
 export type ExportProps = z.infer<typeof exportSchema>;

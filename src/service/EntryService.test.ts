@@ -119,7 +119,7 @@ describe('EntryService', function () {
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
-      commitHash: entry.history.pop()?.hash,
+      commitHash: entry.history.at(-1)?.hash,
     });
 
     expect(entryFromHistory.values.length).toEqual(3);

@@ -231,7 +231,7 @@ export class EntryService
     listEntriesSchema.parse(props);
 
     const offset = props.offset || 0;
-    const limit = props.limit || 15;
+    const limit = props.limit ?? 15;
 
     const entryReferences = await this.listReferences(
       objectTypeSchema.enum.entry,
@@ -239,7 +239,10 @@ export class EntryService
       props.collectionId
     );
 
-    const partialEntryReferences = entryReferences.slice(offset, limit);
+    const partialEntryReferences =
+      limit === 0
+        ? entryReferences.slice(offset)
+        : entryReferences.slice(offset, offset + limit);
 
     const entries = await this.returnResolved(
       partialEntryReferences.map((reference) => {

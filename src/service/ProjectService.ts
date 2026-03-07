@@ -1,6 +1,6 @@
 import Fs from 'fs-extra';
-import Os from 'os';
-import Path from 'path';
+import Os from 'node:os';
+import Path from 'node:path';
 import Semver from 'semver';
 import {
   ProjectUpgradeError,
@@ -535,13 +535,16 @@ export class ProjectService
     }
 
     const offset = props?.offset || 0;
-    const limit = props?.limit || 15;
+    const limit = props?.limit ?? 15;
 
     const projectReferences = await this.listReferences(
       objectTypeSchema.enum.project
     );
 
-    const partialProjectReferences = projectReferences.slice(offset, limit);
+    const partialProjectReferences =
+      limit === 0
+        ? projectReferences.slice(offset)
+        : projectReferences.slice(offset, offset + limit);
 
     const projects = await this.returnResolved(
       partialProjectReferences.map((reference) => {

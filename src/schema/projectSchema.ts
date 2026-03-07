@@ -38,8 +38,8 @@ export type ProjectBranch = z.infer<typeof projectBranchSchema>;
 export const projectFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.project).readonly(),
   coreVersion: versionSchema,
-  name: z.string().trim().min(1, 'shared.projectNameRequired'),
-  description: z.string().trim().min(1, 'shared.projectDescriptionRequired'),
+  name: z.string().trim().min(1),
+  description: z.string().trim().min(1),
   version: versionSchema,
   status: projectStatusSchema,
   settings: projectSettingsSchema,

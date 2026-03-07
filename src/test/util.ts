@@ -1,7 +1,7 @@
 import { faker } from '@faker-js/faker';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import Fs from 'fs-extra';
-import Path from 'path';
+import Path from 'node:path';
 import type { RunnerTestCase } from 'vitest';
 import { expect } from 'vitest';
 import type { EntryFieldDefinition } from './setup.js';
@@ -186,17 +186,6 @@ export async function createCollection(projectId: string) {
 
   return updatedCollection;
 }
-
-// export async function createSharedValue(projectId: string) {
-//   const value = await core.sharedValues.create({
-//     projectId: projectId,
-//     valueType: 'string',
-//     language: 'en',
-//     content: 'Hello World',
-//   });
-
-//   return value;
-// }
 
 export async function createEntry(
   projectId: string,

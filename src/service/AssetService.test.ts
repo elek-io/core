@@ -1,6 +1,6 @@
 import Fs from 'fs-extra';
-import Os from 'os';
-import Path from 'path';
+import Os from 'node:os';
+import Path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import core, { type Asset, type Project } from '../test/setup.js';
 import {

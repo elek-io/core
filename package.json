@@ -9,23 +9,30 @@
   },
   "type": "module",
   "bin": {
-    "elek": "./dist/cli/index.cli.js"
+    "elek": "./dist/cli/index.cli.mjs"
   },
   "files": [
     "dist/node",
-    "dist/browser"
+    "dist/browser",
+    "dist/astro"
   ],
   "exports": {
     ".": {
       "node": {
         "import": {
-          "types": "./dist/node/index.node.d.ts",
-          "default": "./dist/node/index.node.js"
+          "types": "./dist/node/index.node.d.mts",
+          "default": "./dist/node/index.node.mjs"
         }
       },
       "import": {
         "types": "./dist/browser/index.browser.d.ts",
         "default": "./dist/browser/index.browser.js"
+      }
+    },
+    "./astro": {
+      "import": {
+        "types": "./dist/astro/index.astro.d.mts",
+        "default": "./dist/astro/index.astro.mjs"
       }
     }
   },
@@ -45,44 +52,51 @@
   },
   "dependencies": {
     "@commander-js/extra-typings": "14.0.0",
-    "@hono/node-server": "1.19.5",
-    "@hono/zod-openapi": "1.1.4",
-    "@scalar/hono-api-reference": "0.9.22",
+    "@hono/node-server": "1.19.11",
+    "@hono/zod-openapi": "1.2.2",
+    "@scalar/hono-api-reference": "0.10.0",
     "@sindresorhus/slugify": "3.0.0",
-    "chokidar": "4.0.3",
+    "chokidar": "5.0.0",
     "code-block-writer": "13.0.3",
-    "commander": "14.0.2",
-    "fs-extra": "11.3.2",
-    "hono": "4.10.4",
+    "commander": "14.0.3",
+    "fs-extra": "11.3.4",
+    "hono": "4.12.5",
     "mime": "4.1.0",
-    "p-queue": "9.0.0",
-    "semver": "7.7.3",
-    "tsdown": "0.15.12",
+    "p-queue": "9.1.0",
+    "semver": "7.7.4",
+    "tsdown": "0.21.0",
     "uuid": "13.0.0",
-    "winston": "3.18.3",
+    "winston": "3.19.0",
     "winston-daily-rotate-file": "5.0.0",
-    "zod": "4.1.12"
+    "zod": "4.3.6"
   },
   "devDependencies": {
-    "@changesets/cli": "2.29.7",
-    "@eslint/js": "9.38.0",
-    "@faker-js/faker": "10.1.0",
-    "@tsconfig/node22": "22.0.2",
-    "@tsconfig/strictest": "2.0.7",
+    "@changesets/cli": "2.30.0",
+    "@eslint/js": "10.0.1",
+    "@faker-js/faker": "10.3.0",
+    "@tsconfig/node24": "24.0.4",
+    "@tsconfig/strictest": "2.0.8",
     "@types/fs-extra": "11.0.4",
-    "@types/node": "22.18.13",
+    "@types/node": "24.12.0",
     "@types/semver": "7.7.1",
-    "@vitest/coverage-v8": "4.0.5",
-    "eslint": "9.38.0",
+    "@vitest/coverage-v8": "4.0.18",
+    "astro": "5.18.0",
+    "eslint": "10.0.3",
     "eslint-config-prettier": "10.1.8",
-    "globals": "16.4.0",
+    "globals": "17.4.0",
     "jiti": "2.6.1",
-    "prettier": "3.6.2",
+    "prettier": "3.8.1",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.46.2",
-    "vitest": "4.0.5"
+    "typescript-eslint": "8.56.1",
+    "vitest": "4.0.18"
   },
   "peerDependencies": {
-    "dugite": "2.7.1"
+    "astro": ">=5.0.0",
+    "dugite": "3.2.0"
+  },
+  "peerDependenciesMeta": {
+    "astro": {
+      "optional": true
+    }
   }
 }

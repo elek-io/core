@@ -1,5 +1,5 @@
 import Fs from 'fs-extra';
-import Path from 'path';
+import Path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { ProjectUpgradeError } from '../error/ProjectUpgradeError.js';
 import { RemoteOriginMissingError } from '../error/RemoteOriginMissingError.js';
