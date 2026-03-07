@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import ElekIoCore from './index.node.js';
+import core from './test/setup.js';
 import Path from 'node:path';
 
 describe('Node.js', function () {
@@ -48,8 +49,6 @@ describe('Node.js', function () {
   });
 
   it('should be able to create a complete Project with Assets, Collections and Entries', async function () {
-    const core = new ElekIoCore();
-
     /**
      * @todo:
      * - Should the description be optional? -> Yes
