@@ -9,19 +9,18 @@ import {
   createCollection,
   createEntry,
 } from './test/util.js';
-import type { Asset, Collection, Entry, Project } from './index.node.js';
+import type { Asset, Collection, Project } from './index.node.js';
 
 describe('Astro Loaders', function () {
   let project: Project & { destroy: () => Promise<void> };
   let asset: Asset;
   let collection: Collection;
-  let _entry: Entry;
 
   beforeAll(async function () {
     project = await createProject('Astro Loader Test');
     asset = await createAsset(project.id);
     collection = await createCollection(project.id);
-    _entry = await createEntry(project.id, collection.id, asset.id);
+    await createEntry(project.id, collection.id, asset.id);
   });
 
   afterAll(async function () {
