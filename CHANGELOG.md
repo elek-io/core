@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.16.2
+
+### Patch Changes
+
+- 7d76c26: Support Astro v6, dropped support for astro v5 since astro v5 zod v3 is not compatible with our zod v4 codebase
+
 ## 0.16.1
 
 ### Patch Changes
