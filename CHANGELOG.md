@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.16.1
+
+### Patch Changes
+
+- 514a682: fix: do not bundle dugite CJS into Core
+
 ## 0.16.0
 
 ### Minor Changes
