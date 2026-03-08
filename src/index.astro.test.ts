@@ -91,5 +91,25 @@ export const collections = {
     // Verify the Astro types were generated
     const typesPath = Path.join(tmpDir, '.astro', 'content.d.ts');
     expect(await Fs.pathExists(typesPath)).toBe(true);
+
+    // Verify schemas produced real types, not 'any'
+    const typesContent = await Fs.readFile(typesPath, 'utf-8');
+    expect(typesContent).toContain('assets');
+    expect(typesContent).toContain('entries');
+
+    // Verify the assets JSON Schema was generated with actual properties
+    const assetsSchemaPath = Path.join(
+      tmpDir,
+      '.astro',
+      'collections',
+      'assets.schema.json'
+    );
+    if (await Fs.pathExists(assetsSchemaPath)) {
+      const assetsJsonSchema = (await Fs.readJson(assetsSchemaPath)) as {
+        properties: Record<string, unknown>;
+      };
+      expect(assetsJsonSchema.properties).toHaveProperty('id');
+      expect(assetsJsonSchema.properties).toHaveProperty('extension');
+    }
   });
 });
