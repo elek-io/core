@@ -61,7 +61,9 @@ describe('transformEntryValues', () => {
         valueType: 'reference',
         fieldDefinitionId: '33333333-4444-5555-6666-777777777777',
         content: {
-          en: [{ id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', objectType: 'asset' }],
+          en: [
+            { id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', objectType: 'asset' },
+          ],
         },
       },
     ];
@@ -70,7 +72,9 @@ describe('transformEntryValues', () => {
 
     expect(result).toEqual({
       '33333333-4444-5555-6666-777777777777': {
-        en: [{ id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', objectType: 'asset' }],
+        en: [
+          { id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', objectType: 'asset' },
+        ],
       },
     });
   });

@@ -117,7 +117,9 @@ describe('buildEntryValuesSchema', () => {
 
     const schema = buildEntryValuesSchema(fieldDefs);
     expect(() =>
-      schema.parse({ '22222222-3333-4444-5555-666666666666': { en: 'not-boolean' } })
+      schema.parse({
+        '22222222-3333-4444-5555-666666666666': { en: 'not-boolean' },
+      })
     ).toThrow();
   });
 
