@@ -1,9 +1,11 @@
 import type { Loader } from 'astro/loaders';
-import type { ZodSchema as AstroZodSchema } from 'astro/zod';
 import Path from 'node:path';
 import Fs from 'fs-extra';
 import ElekIoCore, { assetSchema } from './index.node.js';
-import { buildEntryValuesSchema } from './astro/schema.js';
+import {
+  buildEntryValuesSchema,
+  buildEntryValuesTypeString,
+} from './astro/schema.js';
 import { transformEntryValues } from './astro/transform.js';
 
 interface ElekAssetsProps {
@@ -45,7 +47,7 @@ const core = new ElekIoCore({
 export function elekAssets(props: ElekAssetsProps): Loader {
   return {
     name: 'elek-assets',
-    schema: () => assetSchema as unknown as AstroZodSchema,
+    schema: assetSchema,
     load: async (context) => {
       context.logger.info(
         `Loading elek.io Assets for Project "${props.projectId}", saving to "${props.outDir}"`
@@ -113,15 +115,16 @@ export function elekAssets(props: ElekAssetsProps): Loader {
 export function elekEntries(props: ElekEntriesOptions): Loader {
   return {
     name: 'elek-entries',
-    schema: async () => {
+    createSchema: async () => {
       const collection = await core.collections.read({
         projectId: props.projectId,
         id: props.collectionId,
       });
 
-      return buildEntryValuesSchema(
-        collection.fieldDefinitions
-      ) as unknown as AstroZodSchema;
+      return {
+        schema: buildEntryValuesSchema(collection.fieldDefinitions),
+        types: buildEntryValuesTypeString(collection.fieldDefinitions),
+      };
     },
     load: async (context) => {
       context.logger.info(

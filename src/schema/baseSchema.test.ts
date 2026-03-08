@@ -7,7 +7,10 @@ import {
 
 describe('translatableStringSchema', () => {
   it('accepts valid string values', () => {
-    const result = translatableStringSchema.safeParse({ en: 'hello', de: 'hallo' });
+    const result = translatableStringSchema.safeParse({
+      en: 'hello',
+      de: 'hallo',
+    });
 
     expect(result.success).toBe(true);
   });

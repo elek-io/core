@@ -41,7 +41,10 @@ describe('Astro Loaders', function () {
     // On Windows CI/CD Path.resolve would be "D:\a\core\core\src\index.astro.ts",
     // but when interpolated into the template string, the backslashes act as escape characters.
     const loaderPath = Path.resolve('src/index.astro.ts').replaceAll('\\', '/');
-    const assetOutDir = Path.join(srcDir, 'content', 'assets').replaceAll('\\', '/');
+    const assetOutDir = Path.join(srcDir, 'content', 'assets').replaceAll(
+      '\\',
+      '/'
+    );
 
     // Write the Astro content config that uses our real loaders
     await Fs.writeFile(
@@ -91,5 +94,25 @@ export const collections = {
     // Verify the Astro types were generated
     const typesPath = Path.join(tmpDir, '.astro', 'content.d.ts');
     expect(await Fs.pathExists(typesPath)).toBe(true);
+
+    // Verify schemas produced real types, not 'any'
+    const typesContent = await Fs.readFile(typesPath, 'utf-8');
+    expect(typesContent).toContain('assets');
+    expect(typesContent).toContain('entries');
+
+    // Verify the assets JSON Schema was generated with actual properties
+    const assetsSchemaPath = Path.join(
+      tmpDir,
+      '.astro',
+      'collections',
+      'assets.schema.json'
+    );
+    if (await Fs.pathExists(assetsSchemaPath)) {
+      const assetsJsonSchema = (await Fs.readJson(assetsSchemaPath)) as {
+        properties: Record<string, unknown>;
+      };
+      expect(assetsJsonSchema.properties).toHaveProperty('id');
+      expect(assetsJsonSchema.properties).toHaveProperty('extension');
+    }
   });
 });

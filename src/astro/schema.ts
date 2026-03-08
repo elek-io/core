@@ -43,3 +43,45 @@ export function buildEntryValuesSchema(fieldDefinitions: FieldDefinition[]) {
 
   return z.object(shape);
 }
+
+/**
+ * Generates a TypeScript type string from collection field definitions
+ * for use with Astro's `createSchema` API.
+ *
+ * The generated string is written by Astro to a `.ts` file and imported
+ * as the `Entry` type for the collection.
+ */
+export function buildEntryValuesTypeString(
+  fieldDefinitions: FieldDefinition[]
+): string {
+  if (fieldDefinitions.length === 0) {
+    return 'export type Entry = Record<string, never>;';
+  }
+
+  const fields = fieldDefinitions.map((fieldDef) => {
+    const tsType = valueTypeToTsType(fieldDef.valueType);
+    return `  "${fieldDef.id}": Partial<Record<SupportedLanguage, ${tsType}>>`;
+  });
+
+  return [
+    `type SupportedLanguage = "bg" | "cs" | "da" | "de" | "el" | "en" | "es" | "et" | "fi" | "fr" | "hu" | "it" | "ja" | "ko" | "lt" | "lv" | "nb" | "nl" | "pl" | "pt" | "ro" | "ru" | "sk" | "sl" | "sv" | "tr" | "uk" | "zh";`,
+    `export type Entry = {`,
+    fields.join(';\n') + ';',
+    `};`,
+  ].join('\n');
+}
+
+function valueTypeToTsType(valueType: string): string {
+  switch (valueType) {
+    case 'string':
+      return 'string';
+    case 'number':
+      return 'number';
+    case 'boolean':
+      return 'boolean';
+    case 'reference':
+      return 'Array<{ id: string; objectType: string }>';
+    default:
+      return 'unknown';
+  }
+}

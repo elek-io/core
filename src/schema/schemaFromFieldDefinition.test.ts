@@ -5,11 +5,9 @@ import type {
   DirectNumberValue,
   DirectStringValue,
   Entry,
-  ReferencedValue} from '../test/setup.js';
-import {
-  entrySchema,
-  uuid,
+  ReferencedValue,
 } from '../test/setup.js';
+import { entrySchema, uuid } from '../test/setup.js';
 import { getValueSchemaFromFieldDefinition } from './schemaFromFieldDefinition.js';
 
 describe('Dynamic zod schema from field definition', () => {
