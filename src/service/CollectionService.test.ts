@@ -62,10 +62,14 @@ describe('CollectionService', function () {
   });
 
   it('should be able to get a Collection of a specific commit', async function () {
+    const history = await core.collections.history({
+      projectId: project.id,
+      id: collection.id,
+    });
     const collectionFromHistory = await core.collections.read({
       projectId: project.id,
       id: collection.id,
-      commitHash: collection.history.at(-1)?.hash,
+      commitHash: history.at(-1)?.hash,
     });
 
     expect(collectionFromHistory.description.en).toEqual(

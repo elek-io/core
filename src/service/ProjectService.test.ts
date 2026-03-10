@@ -43,8 +43,9 @@ describe('ProjectService', function () {
     expect(await Fs.pathExists(core.util.pathTo.project(project.id))).toBe(
       true
     );
-    expect(project.history.length).toEqual(1);
-    expect(project.fullHistory.length).toEqual(1);
+    const { history, fullHistory } = await core.projects.history({ id: project.id });
+    expect(history.length).toEqual(1);
+    expect(fullHistory.length).toEqual(1);
     await ensureCleanGitStatus(task, project.id);
   });
 
@@ -64,8 +65,9 @@ describe('ProjectService', function () {
       // @ts-expect-error updated is not allowed to be null
       Math.floor(new Date(updatedProject.updated).getTime() / 1000)
     ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
-    expect(updatedProject.history.length).toEqual(2);
-    expect(updatedProject.fullHistory.length).toEqual(2);
+    const { history, fullHistory } = await core.projects.history({ id: project.id });
+    expect(history.length).toEqual(2);
+    expect(fullHistory.length).toEqual(2);
     await ensureCleanGitStatus(task, project.id);
   });
 
@@ -75,21 +77,21 @@ describe('ProjectService', function () {
     const asset = await createAsset(project.id);
     const collection = await createCollection(project.id);
     await createEntry(project.id, collection.id, asset.id);
-    const readProject = await core.projects.read({ id: project.id });
+    const { history, fullHistory } = await core.projects.history({ id: project.id });
 
-    expect(readProject.history.length).toEqual(2);
-    expect(readProject.fullHistory.length).toEqual(6); // Now with new Asset, Collection and Entry
+    expect(history.length).toEqual(2);
+    expect(fullHistory.length).toEqual(6); // Now with new Asset, Collection and Entry
     await ensureCleanGitStatus(task, project.id);
   });
 
   it('should be able to get the content of a Project at a specific commit', async function () {
-    const readProject = await core.projects.read({ id: project.id });
+    const { history } = await core.projects.history({ id: project.id });
 
-    expect(readProject.history.length).toEqual(2);
+    expect(history.length).toEqual(2);
 
     const projectFromHistory = await core.projects.read({
       id: project.id,
-      commitHash: readProject.history.pop()?.hash,
+      commitHash: history.at(-1)?.hash,
     });
 
     expect(projectFromHistory.name).toEqual('project #1');

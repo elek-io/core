@@ -255,7 +255,6 @@ describe('z.toJSONSchema() compatibility', () => {
     expect(properties).toHaveProperty('id');
     expect(properties).toHaveProperty('extension');
     expect(properties).toHaveProperty('absolutePath');
-    expect(properties).toHaveProperty('history');
   });
 
   it('produces valid JSON Schema for empty entry values schema', () => {

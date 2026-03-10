@@ -27,6 +27,7 @@ import {
   projectBranchSchema,
   projectFileSchema,
   projectFolderSchema,
+  projectHistorySchema,
   readProjectSchema,
   serviceTypeSchema,
   setRemoteOriginUrlProjectSchema,
@@ -46,6 +47,8 @@ import {
   type PaginatedList,
   type Project,
   type ProjectFile,
+  type ProjectHistoryProps,
+  type ProjectHistoryResult,
   type ReadProjectProps,
   type SetRemoteOriginUrlProjectProps,
   type SwitchBranchProjectProps,
@@ -216,6 +219,21 @@ export class ProjectService
 
       return await this.toProject(projectFile);
     }
+  }
+
+  /**
+   * Returns the commit history of a Project
+   */
+  public async history(props: ProjectHistoryProps): Promise<ProjectHistoryResult> {
+    projectHistorySchema.parse(props);
+    const projectPath = pathTo.project(props.id);
+
+    const fullHistory = await this.gitService.log(projectPath);
+    const history = await this.gitService.log(projectPath, {
+      filePath: pathTo.projectFile(props.id),
+    });
+
+    return { history, fullHistory };
   }
 
   /**
@@ -594,18 +612,9 @@ export class ProjectService
       remoteOriginUrl = await this.gitService.remotes.getOriginUrl(projectPath);
     }
 
-    const fullHistory = await this.gitService.log(
-      pathTo.project(projectFile.id)
-    );
-    const history = await this.gitService.log(pathTo.project(projectFile.id), {
-      filePath: pathTo.projectFile(projectFile.id),
-    });
-
     return {
       ...projectFile,
       remoteOriginUrl,
-      history,
-      fullHistory,
     };
   }
 

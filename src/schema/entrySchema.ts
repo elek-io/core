@@ -1,7 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { objectTypeSchema, slugSchema, uuidSchema } from './baseSchema.js';
 import { baseFileSchema } from './fileSchema.js';
-import { gitCommitSchema } from './gitSchema.js';
 import { valueSchema } from './valueSchema.js';
 
 export const entryFileSchema = baseFileSchema.extend({
@@ -10,15 +9,15 @@ export const entryFileSchema = baseFileSchema.extend({
 });
 export type EntryFile = z.infer<typeof entryFileSchema>;
 
-export const entrySchema = entryFileSchema
-  .extend({
-    /**
-     * Commit history of this Entry
-     */
-    history: z.array(gitCommitSchema),
-  })
-  .openapi('Entry');
+export const entrySchema = entryFileSchema.openapi('Entry');
 export type Entry = z.infer<typeof entrySchema>;
+
+export const entryHistorySchema = z.object({
+  id: uuidSchema.readonly(),
+  projectId: uuidSchema.readonly(),
+  collectionId: uuidSchema.readonly(),
+});
+export type EntryHistoryProps = z.infer<typeof entryHistorySchema>;
 
 export const entryExportSchema = entrySchema.extend({});
 export type EntryExport = z.infer<typeof entryExportSchema>;

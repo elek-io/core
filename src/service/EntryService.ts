@@ -22,6 +22,9 @@ import {
   type ListEntriesProps,
   type ReadEntryProps,
   type UpdateEntryProps,
+  type EntryHistoryProps,
+  type GitCommit,
+  entryHistorySchema,
 } from '../schema/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
@@ -85,11 +88,7 @@ export class EntryService
       updated: null,
     };
 
-    const entry = await this.toEntry(
-      props.projectId,
-      props.collectionId,
-      entryFile
-    );
+    const entry = this.toEntry(entryFile);
 
     // Validate all Values against their Field Definitions
     const createEntrySchemaFromFieldDefinitions =
@@ -128,7 +127,7 @@ export class EntryService
         entryFileSchema
       );
 
-      return this.toEntry(props.projectId, props.collectionId, entryFile);
+      return this.toEntry(entryFile);
     } else {
       const entryFile = this.migrate(
         JSON.parse(
@@ -140,8 +139,19 @@ export class EntryService
         )
       );
 
-      return this.toEntry(props.projectId, props.collectionId, entryFile);
+      return this.toEntry(entryFile);
     }
+  }
+
+  /**
+   * Returns the commit history of an Entry
+   */
+  public async history(props: EntryHistoryProps): Promise<GitCommit[]> {
+    entryHistorySchema.parse(props);
+
+    return this.gitService.log(pathTo.project(props.projectId), {
+      filePath: pathTo.entryFile(props.projectId, props.collectionId, props.id),
+    });
   }
 
   /**
@@ -173,11 +183,7 @@ export class EntryService
       updated: datetime(),
     };
 
-    const entry = await this.toEntry(
-      props.projectId,
-      props.collectionId,
-      entryFile
-    );
+    const entry = this.toEntry(entryFile);
 
     // Validate all Values against their Field Definitions
     const updateEntrySchemaFromFieldDefinitions =
@@ -293,18 +299,9 @@ export class EntryService
   /**
    * Creates an Entry from given EntryFile by resolving it's Values
    */
-  private async toEntry(
-    projectId: string,
-    collectionId: string,
-    entryFile: EntryFile
-  ): Promise<Entry> {
-    const history = await this.gitService.log(pathTo.project(projectId), {
-      filePath: pathTo.entryFile(projectId, collectionId, entryFile.id),
-    });
-
+  private toEntry(entryFile: EntryFile): Entry {
     return {
       ...entryFile,
-      history,
     };
   }
 }

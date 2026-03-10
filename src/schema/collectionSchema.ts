@@ -9,7 +9,6 @@ import {
 import { entryExportSchema } from './entrySchema.js';
 import { fieldDefinitionSchema } from './fieldSchema.js';
 import { baseFileSchema } from './fileSchema.js';
-import { gitCommitSchema } from './gitSchema.js';
 
 export const collectionFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.collection).readonly(),
@@ -27,15 +26,14 @@ export const collectionFileSchema = baseFileSchema.extend({
 });
 export type CollectionFile = z.infer<typeof collectionFileSchema>;
 
-export const collectionSchema = collectionFileSchema
-  .extend({
-    /**
-     * Commit history of this Collection
-     */
-    history: z.array(gitCommitSchema),
-  })
-  .openapi('Collection');
+export const collectionSchema = collectionFileSchema.openapi('Collection');
 export type Collection = z.infer<typeof collectionSchema>;
+
+export const collectionHistorySchema = z.object({
+  id: uuidSchema.readonly(),
+  projectId: uuidSchema.readonly(),
+});
+export type CollectionHistoryProps = z.infer<typeof collectionHistorySchema>;
 
 export const collectionExportSchema = collectionSchema.extend({
   entries: z.array(entryExportSchema),

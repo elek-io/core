@@ -51,16 +51,25 @@ export const projectSchema = projectFileSchema
     remoteOriginUrl: z.string().nullable().openapi({
       description: 'URL of the remote Git repository',
     }),
-    history: z.array(gitCommitSchema).openapi({
-      description: 'Commit history of this Project',
-    }),
-    fullHistory: z.array(gitCommitSchema).openapi({
-      description:
-        'Full commit history of this Project including all Assets, Collections, Entries and other files',
-    }),
   })
   .openapi('Project');
 export type Project = z.infer<typeof projectSchema>;
+
+export const projectHistorySchema = z.object({
+  id: uuidSchema.readonly(),
+});
+export type ProjectHistoryProps = z.infer<typeof projectHistorySchema>;
+
+export const projectHistoryResultSchema = z.object({
+  history: z.array(gitCommitSchema).openapi({
+    description: 'Commit history of this Project',
+  }),
+  fullHistory: z.array(gitCommitSchema).openapi({
+    description:
+      'Full commit history of this Project including all Assets, Collections, Entries and other files',
+  }),
+});
+export type ProjectHistoryResult = z.infer<typeof projectHistoryResultSchema>;
 
 export const migrateProjectSchema = projectFileSchema
   .pick({

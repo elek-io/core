@@ -25,6 +25,9 @@ import {
   type ReadCollectionProps,
   type UpdateCollectionProps,
   type ResolveCollectionIdProps,
+  type CollectionHistoryProps,
+  type GitCommit,
+  collectionHistorySchema,
 } from '../schema/index.js';
 import { folders, pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
@@ -153,7 +156,7 @@ export class CollectionService
     index[id] = slugPlural;
     await this.writeIndex(props.projectId, index);
 
-    return this.toCollection(props.projectId, collectionFile);
+    return this.toCollection(collectionFile);
   }
 
   /**
@@ -170,7 +173,7 @@ export class CollectionService
         collectionFileSchema
       );
 
-      return this.toCollection(props.projectId, collectionFile);
+      return this.toCollection(collectionFile);
     } else {
       const collectionFile = this.migrate(
         JSON.parse(
@@ -182,7 +185,7 @@ export class CollectionService
         )
       );
 
-      return this.toCollection(props.projectId, collectionFile);
+      return this.toCollection(collectionFile);
     }
   }
 
@@ -200,6 +203,17 @@ export class CollectionService
       projectId: props.projectId,
       id,
       commitHash: props.commitHash,
+    });
+  }
+
+  /**
+   * Returns the commit history of a Collection
+   */
+  public async history(props: CollectionHistoryProps): Promise<GitCommit[]> {
+    collectionHistorySchema.parse(props);
+
+    return this.gitService.log(pathTo.project(props.projectId), {
+      filePath: pathTo.collectionFile(props.projectId, props.id),
     });
   }
 
@@ -317,7 +331,7 @@ export class CollectionService
       reference: { objectType: 'collection', id: collectionFile.id },
     });
 
-    return this.toCollection(props.projectId, collectionFile);
+    return this.toCollection(collectionFile);
   }
 
   /**
@@ -414,20 +428,12 @@ export class CollectionService
    * @param projectId   The project's ID
    * @param collectionFile   The CollectionFile to convert
    */
-  private async toCollection(
-    projectId: string,
+  private toCollection(
     collectionFile: CollectionFile
-  ): Promise<Collection> {
-    const history = await this.gitService.log(pathTo.project(projectId), {
-      filePath: pathTo.collectionFile(projectId, collectionFile.id),
-    });
-
-    const collection: Collection = {
+  ): Collection {
+    return {
       ...collectionFile,
-      history,
     };
-
-    return collection;
   }
 
   /**

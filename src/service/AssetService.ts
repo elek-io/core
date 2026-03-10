@@ -24,6 +24,9 @@ import {
   type PaginatedList,
   type ReadAssetProps,
   type UpdateAssetProps,
+  type AssetHistoryProps,
+  type GitCommit,
+  assetHistorySchema,
 } from '../schema/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
@@ -141,6 +144,17 @@ export class AssetService
 
       return this.toAsset(props.projectId, assetFile, props.commitHash);
     }
+  }
+
+  /**
+   * Returns the commit history of an Asset
+   */
+  public async history(props: AssetHistoryProps): Promise<GitCommit[]> {
+    assetHistorySchema.parse(props);
+
+    return this.gitService.log(pathTo.project(props.projectId), {
+      filePath: pathTo.assetFile(props.projectId, props.id),
+    });
   }
 
   /**
@@ -298,26 +312,19 @@ export class AssetService
    * @param projectId   The project's ID
    * @param assetFile   The AssetFile to convert
    */
-  private async toAsset(
+  private toAsset(
     projectId: string,
     assetFile: AssetFile,
     commitHash?: string
-  ): Promise<Asset> {
+  ): Asset {
     const assetPath = commitHash
       ? pathTo.tmpAsset(assetFile.id, commitHash, assetFile.extension)
       : pathTo.asset(projectId, assetFile.id, assetFile.extension);
 
-    const history = await this.gitService.log(pathTo.project(projectId), {
-      filePath: pathTo.assetFile(projectId, assetFile.id),
-    });
-
-    const asset: Asset = {
+    return {
       ...assetFile,
       absolutePath: assetPath,
-      history,
     };
-
-    return asset;
   }
 
   /**

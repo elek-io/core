@@ -115,11 +115,16 @@ describe('EntryService', function () {
   });
 
   it('should be able to get an Entry of a specific commit', async function () {
+    const history = await core.entries.history({
+      projectId: project.id,
+      collectionId: collection.id,
+      id: entry.id,
+    });
     const entryFromHistory = await core.entries.read({
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
-      commitHash: entry.history.at(-1)?.hash,
+      commitHash: history.at(-1)?.hash,
     });
 
     expect(Object.keys(entryFromHistory.values).length).toEqual(3);
