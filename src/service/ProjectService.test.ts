@@ -43,7 +43,9 @@ describe('ProjectService', function () {
     expect(await Fs.pathExists(core.util.pathTo.project(project.id))).toBe(
       true
     );
-    const { history, fullHistory } = await core.projects.history({ id: project.id });
+    const { history, fullHistory } = await core.projects.history({
+      id: project.id,
+    });
     expect(history.length).toEqual(1);
     expect(fullHistory.length).toEqual(1);
     await ensureCleanGitStatus(task, project.id);
@@ -65,7 +67,9 @@ describe('ProjectService', function () {
       // @ts-expect-error updated is not allowed to be null
       Math.floor(new Date(updatedProject.updated).getTime() / 1000)
     ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
-    const { history, fullHistory } = await core.projects.history({ id: project.id });
+    const { history, fullHistory } = await core.projects.history({
+      id: project.id,
+    });
     expect(history.length).toEqual(2);
     expect(fullHistory.length).toEqual(2);
     await ensureCleanGitStatus(task, project.id);
@@ -77,7 +81,9 @@ describe('ProjectService', function () {
     const asset = await createAsset(project.id);
     const collection = await createCollection(project.id);
     await createEntry(project.id, collection.id, asset.id);
-    const { history, fullHistory } = await core.projects.history({ id: project.id });
+    const { history, fullHistory } = await core.projects.history({
+      id: project.id,
+    });
 
     expect(history.length).toEqual(2);
     expect(fullHistory.length).toEqual(6); // Now with new Asset, Collection and Entry

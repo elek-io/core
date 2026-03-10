@@ -35,7 +35,10 @@ describe('AssetService', function () {
     ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
     expect(asset.extension).toEqual('png');
     expect(asset.mimeType).toEqual('image/png');
-    const createHistory = await core.assets.history({ projectId: project.id, id: asset.id });
+    const createHistory = await core.assets.history({
+      projectId: project.id,
+      id: asset.id,
+    });
     expect(createHistory.length).toEqual(1);
     expect(
       await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id)),
@@ -70,7 +73,10 @@ describe('AssetService', function () {
     });
 
     expect(asset.description).toEqual('A 150x150 image of the text "elek.io"');
-    const updateHistory = await core.assets.history({ projectId: project.id, id: asset.id });
+    const updateHistory = await core.assets.history({
+      projectId: project.id,
+      id: asset.id,
+    });
     expect(updateHistory.length).toEqual(2);
   });
 
@@ -84,12 +90,18 @@ describe('AssetService', function () {
 
     expect(asset.extension).toEqual('jpg');
     expect(asset.size).toEqual(1342);
-    const newFileHistory = await core.assets.history({ projectId: project.id, id: asset.id });
+    const newFileHistory = await core.assets.history({
+      projectId: project.id,
+      id: asset.id,
+    });
     expect(newFileHistory.length).toEqual(3);
   });
 
   it('should be able to get an Asset of a specific commit', async function () {
-    const assetHistory = await core.assets.history({ projectId: project.id, id: asset.id });
+    const assetHistory = await core.assets.history({
+      projectId: project.id,
+      id: asset.id,
+    });
     const commitHash = assetHistory.at(-1)?.hash;
 
     if (!commitHash) {
@@ -124,7 +136,10 @@ describe('AssetService', function () {
   });
 
   it('should be able to get the same Asset from multiple commits', async function () {
-    const multiHistory = await core.assets.history({ projectId: project.id, id: asset.id });
+    const multiHistory = await core.assets.history({
+      projectId: project.id,
+      id: asset.id,
+    });
     const previousCommitHash = multiHistory.at(-1)?.hash;
     const currentCommitHash = multiHistory[0]?.hash;
 
@@ -213,7 +228,9 @@ describe('AssetService', function () {
     await core.assets.save({
       projectId: project.id,
       id: asset.id,
-      commitHash: (await core.assets.history({ projectId: project.id, id: asset.id })).at(-1)?.hash,
+      commitHash: (
+        await core.assets.history({ projectId: project.id, id: asset.id })
+      ).at(-1)?.hash,
       filePath: filePathToSaveToFromHistory,
     });
 

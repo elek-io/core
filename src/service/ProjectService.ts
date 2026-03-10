@@ -224,7 +224,9 @@ export class ProjectService
   /**
    * Returns the commit history of a Project
    */
-  public async history(props: ProjectHistoryProps): Promise<ProjectHistoryResult> {
+  public async history(
+    props: ProjectHistoryProps
+  ): Promise<ProjectHistoryResult> {
     projectHistorySchema.parse(props);
     const projectPath = pathTo.project(props.id);
 

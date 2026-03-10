@@ -428,9 +428,7 @@ export class CollectionService
    * @param projectId   The project's ID
    * @param collectionFile   The CollectionFile to convert
    */
-  private toCollection(
-    collectionFile: CollectionFile
-  ): Collection {
+  private toCollection(collectionFile: CollectionFile): Collection {
     return {
       ...collectionFile,
     };
