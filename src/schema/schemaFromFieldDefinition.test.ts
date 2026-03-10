@@ -13,25 +13,21 @@ import { getValueSchemaFromFieldDefinition } from './schemaFromFieldDefinition.j
 describe('Dynamic zod schema from field definition', () => {
   const defaultBooleanValue: DirectBooleanValue = {
     objectType: 'value',
-    fieldDefinitionId: uuid(),
     valueType: 'boolean',
     content: {},
   };
   const defaultNumberValue: DirectNumberValue = {
     objectType: 'value',
-    fieldDefinitionId: uuid(),
     valueType: 'number',
     content: {},
   };
   const defaultStringValue: DirectStringValue = {
     objectType: 'value',
-    fieldDefinitionId: uuid(),
     valueType: 'string',
     content: {},
   };
   const defaultReferenceValue: ReferencedValue = {
     objectType: 'value',
-    fieldDefinitionId: uuid(),
     valueType: 'reference',
     content: {},
   };
@@ -39,6 +35,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from toggle Field definition can be generated and parsed with', () => {
     const booleanValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'boolean',
       fieldType: 'toggle',
       label: {
@@ -104,6 +101,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required number Field type definition can be generated and parsed with', () => {
     const requiredNumberValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'number',
       fieldType: 'number',
       label: {
@@ -187,6 +185,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from optional number Field type definition can be generated and parsed with', () => {
     const optionalNumberValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'number',
       fieldType: 'number',
       label: {
@@ -268,6 +267,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required range Field type definition can be generated and parsed with', () => {
     const requiredRangeValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'number',
       fieldType: 'range',
       label: {
@@ -351,6 +351,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required text Field type definition can be generated and parsed with', () => {
     const requiredTextValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'string',
       fieldType: 'text',
       label: {
@@ -444,6 +445,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from optional text Field type definition can be generated and parsed with', () => {
     const optionalTextValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'string',
       fieldType: 'text',
       label: {
@@ -523,6 +525,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required email Field type definition can be generated and parsed with', () => {
     const requiredEmailValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'string',
       fieldType: 'email',
       label: {
@@ -614,6 +617,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from optional email Field type definition can be generated and parsed with', () => {
     const optionalEmailValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'string',
       fieldType: 'email',
       label: {
@@ -703,6 +707,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required url Field type definition can be generated and parsed with', () => {
     const requiredUrlValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'string',
       fieldType: 'url',
       label: {
@@ -810,6 +815,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from optional url Field type definition can be generated and parsed with', () => {
     const optionalUrlValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'string',
       fieldType: 'url',
       label: { en: 'Test' },
@@ -867,6 +873,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required ipv4 Field type definition can be generated and parsed with', () => {
     const requiredIpValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'string',
       fieldType: 'ipv4',
       label: { en: 'Test' },
@@ -925,6 +932,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required date Field type definition can be generated and parsed with', () => {
     const requiredDateValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'string',
       fieldType: 'date',
       label: { en: 'Test' },
@@ -981,6 +989,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required time Field type definition can be generated and parsed with', () => {
     const requiredTimeValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'string',
       fieldType: 'time',
       label: { en: 'Test' },
@@ -1044,6 +1053,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required datetime Field type definition can be generated and parsed with', () => {
     const requiredDatetimeValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'string',
       fieldType: 'datetime',
       label: { en: 'Test' },
@@ -1100,6 +1110,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required telephone Field type definition can be generated and parsed with', () => {
     const requiredTelephoneValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'string',
       fieldType: 'telephone',
       label: { en: 'Test' },
@@ -1155,6 +1166,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required Asset Field type definition can be generated and parsed with', () => {
     const requiredAssetValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'reference',
       fieldType: 'asset',
       label: { en: 'Test' },
@@ -1225,6 +1237,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from optional Asset Field type definition can be generated and parsed with', () => {
     const optionalAssetValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'reference',
       fieldType: 'asset',
       label: { en: 'Test' },
@@ -1279,6 +1292,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required Asset Field type definition with a min and max can be generated and parsed with', () => {
     const requiredAssetValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'reference',
       fieldType: 'asset',
       label: { en: 'Test' },
@@ -1369,6 +1383,7 @@ describe('Dynamic zod schema from field definition', () => {
   it('from required Entry Field type definition can be generated and parsed with', () => {
     const requiredEntryValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
+      slug: 'test-field',
       valueType: 'reference',
       fieldType: 'entry',
       label: { en: 'Test' },
@@ -1433,19 +1448,17 @@ describe('Dynamic zod schema from field definition', () => {
     const entry: Entry = {
       objectType: 'entry',
       id: 'f405301c-3c31-4edd-ab6b-1735d2757044',
-      values: [
-        {
+      values: {
+        title: {
           objectType: 'value',
           valueType: 'string',
-          fieldDefinitionId: 'e9da15ab-28e2-40fe-be78-de09bf1790b3',
           content: {
             en: 'Bacon',
           },
         },
-        {
+        image: {
           objectType: 'value',
           valueType: 'reference',
-          fieldDefinitionId: '9a317f2c-db60-4929-8110-79905490aef3',
           content: {
             en: [
               {
@@ -1455,10 +1468,9 @@ describe('Dynamic zod schema from field definition', () => {
             ],
           },
         },
-        {
+        'related-entries': {
           objectType: 'value',
           valueType: 'reference',
-          fieldDefinitionId: 'a7e3d49c-8565-4e79-9428-233968b73b27',
           content: {
             en: [
               {
@@ -1468,7 +1480,7 @@ describe('Dynamic zod schema from field definition', () => {
             ],
           },
         },
-      ],
+      },
       history: [],
       created: '2024-07-16T12:42:27.897Z',
       updated: null,

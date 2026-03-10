@@ -65,22 +65,22 @@ describe('EntryService', function () {
         projectId: project.id,
         collectionId: collection.id,
         id: entry.id,
-        values: [],
+        values: {},
       })
     ).rejects.toThrow();
   });
 
   it('should fail to update an Entry with values not matching their fieldDefinitions', async function () {
-    const changedValue: Value = {
-      ...(entry.values[0] as Value),
-      valueType: 'number',
-      content: { en: 123 },
+    const slugs = Object.keys(entry.values);
+    const firstSlug = slugs[0]!;
+    const values: Record<string, Value> = {
+      ...entry.values,
+      [firstSlug]: {
+        ...entry.values[firstSlug]!,
+        valueType: 'number',
+        content: { en: 123 },
+      },
     };
-    const values: Value[] = [
-      changedValue,
-      entry.values[1] as Value,
-      entry.values[2] as Value,
-    ];
 
     await expect(() =>
       core.entries.update({
@@ -93,16 +93,16 @@ describe('EntryService', function () {
   });
 
   it('should be able to update an Entry with values that match the Collections fieldDefinitions', async function () {
-    const changedValue: Value = {
-      ...(entry.values[0] as Value),
-      valueType: 'string',
-      content: { en: 'Changed Text' },
+    const slugs = Object.keys(entry.values);
+    const firstSlug = slugs[0]!;
+    const values: Record<string, Value> = {
+      ...entry.values,
+      [firstSlug]: {
+        ...entry.values[firstSlug]!,
+        valueType: 'string',
+        content: { en: 'Changed Text' },
+      },
     };
-    const values: Value[] = [
-      changedValue,
-      entry.values[1] as Value,
-      entry.values[2] as Value,
-    ];
 
     entry = await core.entries.update({
       projectId: project.id,
@@ -122,7 +122,7 @@ describe('EntryService', function () {
       commitHash: entry.history.at(-1)?.hash,
     });
 
-    expect(entryFromHistory.values.length).toEqual(3);
+    expect(Object.keys(entryFromHistory.values).length).toEqual(3);
   });
 
   it('should be able to list all Entries', async function () {

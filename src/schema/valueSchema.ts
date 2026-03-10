@@ -100,7 +100,6 @@ export type ValueContentReference = z.infer<typeof valueContentReferenceSchema>;
 
 export const directValueBaseSchema = z.object({
   objectType: z.literal(objectTypeSchema.enum.value).readonly(),
-  fieldDefinitionId: uuidSchema.readonly(),
 });
 
 export const directStringValueSchema = directValueBaseSchema.extend({
@@ -130,7 +129,6 @@ export type DirectValue = z.infer<typeof directValueSchema>;
 
 export const referencedValueSchema = z.object({
   objectType: z.literal(objectTypeSchema.enum.value).readonly(),
-  fieldDefinitionId: uuidSchema.readonly(),
   valueType: z.literal(ValueTypeSchema.enum.reference).readonly(),
   content: translatableArrayOf(valueContentReferenceSchema),
 });

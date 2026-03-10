@@ -1,12 +1,12 @@
 import { z } from '@hono/zod-openapi';
-import { objectTypeSchema, uuidSchema } from './baseSchema.js';
+import { objectTypeSchema, slugSchema, uuidSchema } from './baseSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 import { gitCommitSchema } from './gitSchema.js';
 import { valueSchema } from './valueSchema.js';
 
 export const entryFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.entry).readonly(),
-  values: z.array(valueSchema),
+  values: z.record(slugSchema, valueSchema),
 });
 export type EntryFile = z.infer<typeof entryFileSchema>;
 
@@ -33,7 +33,7 @@ export const createEntrySchema = entryFileSchema
   .extend({
     projectId: uuidSchema.readonly(),
     collectionId: uuidSchema.readonly(),
-    values: z.array(valueSchema),
+    values: z.record(slugSchema, valueSchema),
   });
 export type CreateEntryProps = z.infer<typeof createEntrySchema>;
 

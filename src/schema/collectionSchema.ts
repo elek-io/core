@@ -1,6 +1,7 @@
 import { z } from '@hono/zod-openapi';
 import {
   objectTypeSchema,
+  slugSchema,
   supportedIconSchema,
   translatableStringSchema,
   uuidSchema,
@@ -60,6 +61,15 @@ export const readCollectionSchema = z.object({
 });
 export type ReadCollectionProps = z.infer<typeof readCollectionSchema>;
 
+export const readBySlugCollectionSchema = z.object({
+  slug: slugSchema,
+  projectId: uuidSchema.readonly(),
+  commitHash: z.string().optional().readonly(),
+});
+export type ReadBySlugCollectionProps = z.infer<
+  typeof readBySlugCollectionSchema
+>;
+
 export const updateCollectionSchema = collectionFileSchema
   .pick({
     id: true,
@@ -81,3 +91,11 @@ export const countCollectionsSchema = z.object({
   projectId: uuidSchema.readonly(),
 });
 export type CountCollectionsProps = z.infer<typeof countCollectionsSchema>;
+
+export const resolveCollectionIdSchema = z.object({
+  projectId: uuidSchema.readonly(),
+  idOrSlug: z.string(),
+});
+export type ResolveCollectionIdProps = z.infer<
+  typeof resolveCollectionIdSchema
+>;

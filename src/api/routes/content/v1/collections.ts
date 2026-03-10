@@ -100,9 +100,9 @@ const router = createRouter()
   .openapi(
     createRoute({
       summary: 'Get one Collection',
-      description: 'Retrieve a Collection by ID',
+      description: 'Retrieve a Collection by UUID or slug',
       method: 'get',
-      path: '/{projectId}/collections/{collectionId}',
+      path: '/{projectId}/collections/{collectionIdOrSlug}',
       tags,
       request: {
         params: z.object({
@@ -112,11 +112,12 @@ const router = createRouter()
               in: 'path',
             },
           }),
-          collectionId: uuidSchema.openapi({
+          collectionIdOrSlug: z.string().openapi({
             param: {
-              name: 'collectionId',
+              name: 'collectionIdOrSlug',
               in: 'path',
             },
+            description: 'Collection UUID or slug',
           }),
         }),
       },
@@ -132,10 +133,14 @@ const router = createRouter()
       },
     }),
     async (c) => {
-      const { projectId, collectionId } = c.req.valid('param');
+      const { projectId, collectionIdOrSlug } = c.req.valid('param');
+      const resolvedId = await c.var.collectionService.resolveCollectionId({
+        projectId,
+        idOrSlug: collectionIdOrSlug,
+      });
       const collection = await c.var.collectionService.read({
         projectId,
-        id: collectionId,
+        id: resolvedId,
       });
 
       return c.json(collection, 200);

@@ -641,6 +641,7 @@ export class ProjectService
       '!/**/.gitkeep',
       '',
       '# elek.io related ignores',
+      'collections/index.json',
       // projectFolderSchema.enum.theme + '/',
       // projectFolderSchema.enum.public + '/',
       // projectFolderSchema.enum.logs + '/',

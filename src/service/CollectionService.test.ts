@@ -1,8 +1,16 @@
 import Fs from 'fs-extra';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import core, { type Collection, type Project } from '../test/setup.js';
+import core, {
+  type Asset,
+  type Collection,
+  type Entry,
+  type Project,
+  uuid,
+} from '../test/setup.js';
 import {
+  createAsset,
   createCollection,
+  createEntry,
   createProject,
   ensureCleanGitStatus,
 } from '../test/util.js';
@@ -101,5 +109,505 @@ describe('CollectionService', function () {
         core.util.pathTo.collectionFile(project.id, collection.id)
       )
     ).toBe(false);
+  });
+});
+
+describe('CollectionService - resolveCollectionId', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let collection: Collection;
+
+  beforeAll(async function () {
+    project = await createProject();
+    collection = await createCollection(project.id);
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('should resolve a collection by UUID', async function () {
+    const resolvedId = await core.collections.resolveCollectionId({
+      projectId: project.id,
+      idOrSlug: collection.id,
+    });
+
+    expect(resolvedId).toEqual(collection.id);
+  });
+
+  it('should resolve a collection by slug', async function () {
+    const resolvedId = await core.collections.resolveCollectionId({
+      projectId: project.id,
+      idOrSlug: collection.slug.plural,
+    });
+
+    expect(resolvedId).toEqual(collection.id);
+  });
+
+  it('should throw when resolving a non-existent identifier', async function () {
+    await expect(() =>
+      core.collections.resolveCollectionId({
+        projectId: project.id,
+        idOrSlug: 'non-existent-slug',
+      })
+    ).rejects.toThrow('Collection not found');
+  });
+
+  it('should throw when resolving a non-existent UUID', async function () {
+    const fakeUuid = uuid();
+    await expect(() =>
+      core.collections.resolveCollectionId({
+        projectId: project.id,
+        idOrSlug: fakeUuid,
+      })
+    ).rejects.toThrow('Collection not found');
+  });
+});
+
+describe('CollectionService - readBySlug', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let collection: Collection;
+
+  beforeAll(async function () {
+    project = await createProject();
+    collection = await createCollection(project.id);
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('should read a collection by its slug', async function () {
+    const readCollection = await core.collections.readBySlug({
+      projectId: project.id,
+      slug: collection.slug.plural,
+    });
+
+    expect(readCollection.id).toEqual(collection.id);
+    expect(readCollection.slug.plural).toEqual(collection.slug.plural);
+  });
+
+  it('should throw when reading by a non-existent slug', async function () {
+    await expect(() =>
+      core.collections.readBySlug({
+        projectId: project.id,
+        slug: 'non-existent-slug',
+      })
+    ).rejects.toThrow('Collection not found');
+  });
+});
+
+describe('CollectionService - slug uniqueness', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let collection: Collection;
+
+  beforeAll(async function () {
+    project = await createProject();
+    collection = await createCollection(project.id);
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('should reject creating a second collection with the same slug', async function () {
+    await expect(() =>
+      core.collections.create({
+        projectId: project.id,
+        icon: 'home',
+        name: {
+          singular: { en: 'Duplicate' },
+          plural: { en: 'Duplicates' },
+        },
+        slug: {
+          singular: 'duplicate',
+          plural: collection.slug.plural, // same as existing
+        },
+        description: { en: 'A duplicate slug collection' },
+        fieldDefinitions: [
+          {
+            id: uuid(),
+            slug: 'some-field',
+            valueType: 'string',
+            label: { en: 'Field' },
+            description: { en: 'Field' },
+            fieldType: 'text',
+            inputWidth: '12',
+            isDisabled: false,
+            isRequired: false,
+            isUnique: false,
+            min: null,
+            max: null,
+            defaultValue: null,
+          },
+        ],
+      })
+    ).rejects.toThrow('already in use');
+  });
+
+  it('should reject updating a collection slug to conflict with an existing one', async function () {
+    // Create a second collection with a different slug
+    const secondCollection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Other' },
+        plural: { en: 'Others' },
+      },
+      slug: {
+        singular: 'other',
+        plural: 'others',
+      },
+      description: { en: 'Another collection' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'other-field',
+          valueType: 'string',
+          label: { en: 'Field' },
+          description: { en: 'Field' },
+          fieldType: 'text',
+          inputWidth: '12',
+          isDisabled: false,
+          isRequired: false,
+          isUnique: false,
+          min: null,
+          max: null,
+          defaultValue: null,
+        },
+      ],
+    });
+
+    // Try to update it to use the first collection's slug
+    await expect(() =>
+      core.collections.update({
+        projectId: project.id,
+        ...secondCollection,
+        slug: {
+          singular: secondCollection.slug.singular,
+          plural: collection.slug.plural, // conflict
+        },
+      })
+    ).rejects.toThrow('already in use');
+
+    // Clean up
+    await core.collections.delete({
+      projectId: project.id,
+      id: secondCollection.id,
+    });
+  });
+});
+
+describe('CollectionService - fieldDefinition slug uniqueness', function () {
+  let project: Project & { destroy: () => Promise<void> };
+
+  beforeAll(async function () {
+    project = await createProject();
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('should reject creating a collection with duplicate fieldDefinition slugs', async function () {
+    await expect(() =>
+      core.collections.create({
+        projectId: project.id,
+        icon: 'home',
+        name: {
+          singular: { en: 'Item' },
+          plural: { en: 'Items' },
+        },
+        slug: {
+          singular: 'item',
+          plural: 'items',
+        },
+        description: { en: 'Test' },
+        fieldDefinitions: [
+          {
+            id: uuid(),
+            slug: 'duplicate-slug',
+            valueType: 'string',
+            label: { en: 'Field 1' },
+            description: { en: 'Field 1' },
+            fieldType: 'text',
+            inputWidth: '12',
+            isDisabled: false,
+            isRequired: false,
+            isUnique: false,
+            min: null,
+            max: null,
+            defaultValue: null,
+          },
+          {
+            id: uuid(),
+            slug: 'duplicate-slug',
+            valueType: 'string',
+            label: { en: 'Field 2' },
+            description: { en: 'Field 2' },
+            fieldType: 'text',
+            inputWidth: '12',
+            isDisabled: false,
+            isRequired: false,
+            isUnique: false,
+            min: null,
+            max: null,
+            defaultValue: null,
+          },
+        ],
+      })
+    ).rejects.toThrow('Duplicate fieldDefinition slug');
+  });
+
+  it('should reject updating a collection with duplicate fieldDefinition slugs', async function () {
+    const collection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Widget' },
+        plural: { en: 'Widgets' },
+      },
+      slug: {
+        singular: 'widget',
+        plural: 'widgets',
+      },
+      description: { en: 'Test' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'field-a',
+          valueType: 'string',
+          label: { en: 'Field A' },
+          description: { en: 'Field A' },
+          fieldType: 'text',
+          inputWidth: '12',
+          isDisabled: false,
+          isRequired: false,
+          isUnique: false,
+          min: null,
+          max: null,
+          defaultValue: null,
+        },
+        {
+          id: uuid(),
+          slug: 'field-b',
+          valueType: 'string',
+          label: { en: 'Field B' },
+          description: { en: 'Field B' },
+          fieldType: 'text',
+          inputWidth: '12',
+          isDisabled: false,
+          isRequired: false,
+          isUnique: false,
+          min: null,
+          max: null,
+          defaultValue: null,
+        },
+      ],
+    });
+
+    // Rename field-b to field-a (duplicate)
+    const updatedFieldDefs = collection.fieldDefinitions.map((fd) => ({
+      ...fd,
+      slug: 'field-a',
+    }));
+
+    await expect(() =>
+      core.collections.update({
+        projectId: project.id,
+        ...collection,
+        fieldDefinitions: updatedFieldDefs,
+      })
+    ).rejects.toThrow('Duplicate fieldDefinition slug');
+
+    // Clean up
+    await core.collections.delete({
+      projectId: project.id,
+      id: collection.id,
+    });
+  });
+});
+
+describe('CollectionService - fieldDefinition slug rename cascade', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let asset: Asset;
+  let collection: Collection;
+  let entry: Entry;
+
+  beforeAll(async function () {
+    project = await createProject();
+    asset = await createAsset(project.id);
+    collection = await createCollection(project.id);
+    entry = await createEntry(project.id, collection.id, asset.id);
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('should rename entry value keys when a fieldDefinition slug is renamed', async function () {
+    const oldSlugs = Object.keys(entry.values);
+    const targetFieldDef = collection.fieldDefinitions[0]!;
+    const oldSlug = targetFieldDef.slug;
+    const newSlug = 'renamed-field';
+
+    // Update the collection with a renamed field definition slug
+    const updatedFieldDefs = collection.fieldDefinitions.map((fd) => {
+      if (fd.id === targetFieldDef.id) {
+        return { ...fd, slug: newSlug };
+      }
+      return fd;
+    });
+
+    collection = await core.collections.update({
+      projectId: project.id,
+      ...collection,
+      fieldDefinitions: updatedFieldDefs,
+    });
+
+    // Read the entry and verify the value key was renamed
+    const updatedEntry = await core.entries.read({
+      projectId: project.id,
+      collectionId: collection.id,
+      id: entry.id,
+    });
+
+    expect(updatedEntry.values[newSlug]).toBeDefined();
+    expect(updatedEntry.values[oldSlug]).toBeUndefined();
+
+    // All other keys should still be present
+    const newSlugs = Object.keys(updatedEntry.values);
+    expect(newSlugs.length).toEqual(oldSlugs.length);
+
+    entry = updatedEntry;
+  });
+
+  it('should rename multiple field definition slugs simultaneously', async function () {
+    // Rename two field definitions at once
+    const firstFd = collection.fieldDefinitions[0]!;
+    const secondFd = collection.fieldDefinitions[1]!;
+    const newSlug1 = 'multi-rename-a';
+    const newSlug2 = 'multi-rename-b';
+
+    const updatedFieldDefs = collection.fieldDefinitions.map((fd) => {
+      if (fd.id === firstFd.id) return { ...fd, slug: newSlug1 };
+      if (fd.id === secondFd.id) return { ...fd, slug: newSlug2 };
+      return fd;
+    });
+
+    collection = await core.collections.update({
+      projectId: project.id,
+      ...collection,
+      fieldDefinitions: updatedFieldDefs,
+    });
+
+    const updatedEntry = await core.entries.read({
+      projectId: project.id,
+      collectionId: collection.id,
+      id: entry.id,
+    });
+
+    expect(updatedEntry.values[newSlug1]).toBeDefined();
+    expect(updatedEntry.values[newSlug2]).toBeDefined();
+    expect(updatedEntry.values[firstFd.slug]).toBeUndefined();
+    expect(updatedEntry.values[secondFd.slug]).toBeUndefined();
+
+    entry = updatedEntry;
+  });
+});
+
+describe('CollectionService - collection index', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let collection: Collection;
+
+  beforeAll(async function () {
+    project = await createProject();
+    collection = await createCollection(project.id);
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('should create an index file on disk after collection creation', async function () {
+    const indexPath = core.util.pathTo.collectionIndex(project.id);
+    expect(await Fs.pathExists(indexPath)).toBe(true);
+
+    const indexContent = JSON.parse(
+      await Fs.readFile(indexPath, { encoding: 'utf8' })
+    ) as Record<string, string>;
+    expect(indexContent[collection.id]).toEqual(collection.slug.plural);
+  });
+
+  it('should remove collection from index after deletion', async function () {
+    const tempCollection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Temp' },
+        plural: { en: 'Temps' },
+      },
+      slug: {
+        singular: 'temp',
+        plural: 'temps',
+      },
+      description: { en: 'Temporary' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'temp-field',
+          valueType: 'string',
+          label: { en: 'Field' },
+          description: { en: 'Field' },
+          fieldType: 'text',
+          inputWidth: '12',
+          isDisabled: false,
+          isRequired: false,
+          isUnique: false,
+          min: null,
+          max: null,
+          defaultValue: null,
+        },
+      ],
+    });
+
+    const indexPath = core.util.pathTo.collectionIndex(project.id);
+    let indexContent = JSON.parse(
+      await Fs.readFile(indexPath, { encoding: 'utf8' })
+    ) as Record<string, string>;
+    expect(indexContent[tempCollection.id]).toEqual('temps');
+
+    await core.collections.delete({
+      projectId: project.id,
+      id: tempCollection.id,
+    });
+
+    indexContent = JSON.parse(
+      await Fs.readFile(indexPath, { encoding: 'utf8' })
+    ) as Record<string, string>;
+    expect(indexContent[tempCollection.id]).toBeUndefined();
   });
 });

@@ -63,7 +63,7 @@ export const collections = {
   entries: defineCollection({
     loader: elekEntries({
       projectId: '${project.id}',
-      collectionId: '${collection.id}',
+      collectionIdOrSlug: '${collection.id}',
     }),
   }),
 };

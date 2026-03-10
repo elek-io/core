@@ -1,5 +1,9 @@
 import { z } from '@hono/zod-openapi';
-import { translatableStringSchema, uuidSchema } from './baseSchema.js';
+import {
+  slugSchema,
+  translatableStringSchema,
+  uuidSchema,
+} from './baseSchema.js';
 import { ValueTypeSchema } from './valueSchema.js';
 
 export const FieldTypeSchema = z.enum([
@@ -30,6 +34,7 @@ export const FieldWidthSchema = z.enum(['12', '6', '4', '3']);
 
 export const FieldDefinitionBaseSchema = z.object({
   id: uuidSchema.readonly(),
+  slug: slugSchema,
   label: translatableStringSchema,
   description: translatableStringSchema.nullable(),
   isRequired: z.boolean(),

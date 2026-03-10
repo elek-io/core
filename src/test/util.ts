@@ -7,10 +7,16 @@ import { expect } from 'vitest';
 import type { EntryFieldDefinition } from './setup.js';
 import core, { uuid, type ProjectSettings } from './setup.js';
 
-const id = {
+const ids = {
   textFieldDefinition: uuid(),
   assetReferenceFieldDefinition: uuid(),
   entryReferenceFieldDefinition: uuid(),
+};
+
+const slugs = {
+  textFieldDefinition: 'product-name',
+  assetReferenceFieldDefinition: 'header-image',
+  entryReferenceFieldDefinition: 'related-products',
 };
 
 export async function ensureCleanGitStatus(
@@ -117,7 +123,8 @@ export async function createCollection(projectId: string) {
     },
     fieldDefinitions: [
       {
-        id: id.textFieldDefinition,
+        id: ids.textFieldDefinition,
+        slug: slugs.textFieldDefinition,
         valueType: 'string',
         label: {
           en: 'Name',
@@ -135,7 +142,8 @@ export async function createCollection(projectId: string) {
         max: 70,
       },
       {
-        id: id.assetReferenceFieldDefinition,
+        id: ids.assetReferenceFieldDefinition,
+        slug: slugs.assetReferenceFieldDefinition,
         valueType: 'reference',
         label: {
           en: 'Header image',
@@ -152,7 +160,8 @@ export async function createCollection(projectId: string) {
         max: null,
       },
       {
-        id: id.entryReferenceFieldDefinition,
+        id: ids.entryReferenceFieldDefinition,
+        slug: slugs.entryReferenceFieldDefinition,
         valueType: 'reference',
         label: {
           en: 'Related products',
@@ -175,9 +184,9 @@ export async function createCollection(projectId: string) {
   // Add circular reference to products
   (
     collection.fieldDefinitions.find((definition) => {
-      return definition.id === id.entryReferenceFieldDefinition;
+      return definition.slug === slugs.entryReferenceFieldDefinition;
     }) as EntryFieldDefinition
-  ).ofCollections = [id.entryReferenceFieldDefinition];
+  ).ofCollections = [collection.id];
 
   const updatedCollection = await core.collections.update({
     ...collection,
@@ -196,19 +205,17 @@ export async function createEntry(
   const entry = await core.entries.create({
     projectId: projectId,
     collectionId: collectionId,
-    values: [
-      {
+    values: {
+      [slugs.textFieldDefinition]: {
         objectType: 'value',
         valueType: 'string',
-        fieldDefinitionId: id.textFieldDefinition,
         content: {
           en: faker.commerce.product(),
         },
       },
-      {
+      [slugs.assetReferenceFieldDefinition]: {
         objectType: 'value',
         valueType: 'reference',
-        fieldDefinitionId: id.assetReferenceFieldDefinition,
         content: {
           en: [
             {
@@ -218,10 +225,9 @@ export async function createEntry(
           ],
         },
       },
-      {
+      [slugs.entryReferenceFieldDefinition]: {
         objectType: 'value',
         valueType: 'reference',
-        fieldDefinitionId: id.entryReferenceFieldDefinition,
         content: {
           en:
             (entryValueId && [
@@ -233,7 +239,7 @@ export async function createEntry(
             [],
         },
       },
-    ],
+    },
   });
 
   return entry;

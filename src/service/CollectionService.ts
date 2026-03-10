@@ -4,13 +4,17 @@ import {
   countCollectionsSchema,
   createCollectionSchema,
   deleteCollectionSchema,
+  entryFileSchema,
   listCollectionsSchema,
   objectTypeSchema,
+  type ReadBySlugCollectionProps,
   readCollectionSchema,
   serviceTypeSchema,
   updateCollectionSchema,
+  uuidSchema,
   type Collection,
   type CollectionFile,
+  type CollectionIndex,
   type CountCollectionsProps,
   type CreateCollectionProps,
   type CrudServiceWithListCount,
@@ -20,8 +24,9 @@ import {
   type PaginatedList,
   type ReadCollectionProps,
   type UpdateCollectionProps,
+  type ResolveCollectionIdProps,
 } from '../schema/index.js';
-import { pathTo } from '../util/node.js';
+import { folders, pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
 import type { GitService } from './GitService.js';
@@ -38,6 +43,11 @@ export class CollectionService
   private jsonFileService: JsonFileService;
   private gitService: GitService;
 
+  /** In-memory cache for collection indices, keyed by projectId */
+  private cachedIndex: Map<string, CollectionIndex> = new Map();
+  /** Promise deduplication for concurrent rebuilds, keyed by projectId */
+  private rebuildPromise: Map<string, Promise<CollectionIndex>> = new Map();
+
   constructor(
     options: ElekIoCoreOptions,
     logService: LogService,
@@ -51,15 +61,69 @@ export class CollectionService
   }
 
   /**
+   * Resolves a UUID-or-slug string to a collection UUID.
+   *
+   * If the input matches UUID format, verifies the folder exists on disk first.
+   * If the folder doesn't exist, falls back to slug lookup.
+   * Otherwise, looks up via the index.
+   */
+  public async resolveCollectionId(
+    props: ResolveCollectionIdProps
+  ): Promise<string> {
+    // Check if it looks like a UUID
+    if (uuidSchema.safeParse(props.idOrSlug).success) {
+      // Verify the UUID folder exists on disk
+      const collectionPath = pathTo.collection(props.projectId, props.idOrSlug);
+      if (await Fs.pathExists(collectionPath)) {
+        return props.idOrSlug;
+      }
+      // Fall through to slug lookup
+    }
+
+    // Look up by slug
+    const index = await this.getIndex(props.projectId);
+    for (const [uuid, slugValue] of Object.entries(index)) {
+      if (slugValue === props.idOrSlug) {
+        return uuid;
+      }
+    }
+
+    // Rebuild and retry once (handles stale cache)
+    this.cachedIndex.delete(props.projectId);
+    const freshIndex = await this.getIndex(props.projectId);
+    for (const [uuid, slugValue] of Object.entries(freshIndex)) {
+      if (slugValue === props.idOrSlug) {
+        return uuid;
+      }
+    }
+
+    throw new Error(
+      `Collection not found: "${props.idOrSlug}" does not match any collection UUID or slug`
+    );
+  }
+
+  /**
    * Creates a new Collection
    */
   public async create(props: CreateCollectionProps): Promise<Collection> {
     createCollectionSchema.parse(props);
 
+    this.validateFieldDefinitionSlugUniqueness(props.fieldDefinitions);
+
     const id = uuid();
     const projectPath = pathTo.project(props.projectId);
     const collectionPath = pathTo.collection(props.projectId, id);
     const collectionFilePath = pathTo.collectionFile(props.projectId, id);
+
+    const slugPlural = slug(props.slug.plural);
+
+    // Enforce collection slug uniqueness via index
+    const index = await this.getIndex(props.projectId);
+    if (Object.values(index).includes(slugPlural)) {
+      throw new Error(
+        `Collection slug "${slugPlural}" is already in use by another collection`
+      );
+    }
 
     const collectionFile: CollectionFile = {
       ...props,
@@ -67,7 +131,7 @@ export class CollectionService
       id,
       slug: {
         singular: slug(props.slug.singular),
-        plural: slug(props.slug.plural),
+        plural: slugPlural,
       },
       created: datetime(),
       updated: null,
@@ -84,6 +148,10 @@ export class CollectionService
       method: 'create',
       reference: { objectType: 'collection', id },
     });
+
+    // Update the index (not git-tracked)
+    index[id] = slugPlural;
+    await this.writeIndex(props.projectId, index);
 
     return this.toCollection(props.projectId, collectionFile);
   }
@@ -119,17 +187,31 @@ export class CollectionService
   }
 
   /**
+   * Reads a Collection by its slug
+   */
+  public async readBySlug(
+    props: ReadBySlugCollectionProps
+  ): Promise<Collection> {
+    const id = await this.resolveCollectionId({
+      projectId: props.projectId,
+      idOrSlug: props.slug,
+    });
+    return this.read({
+      projectId: props.projectId,
+      id,
+      commitHash: props.commitHash,
+    });
+  }
+
+  /**
    * Updates given Collection
    *
-   * @todo finish implementing checks for FieldDefinitions and extract methods
-   *
-   * @param projectId   Project ID of the collection to update
-   * @param collection  Collection to write to disk
-   * @returns           An object containing information about the actions needed to be taken,
-   *                    before given update can be executed or void if the update was executed successfully
+   * Handles fieldDefinition slug rename cascade and collection slug uniqueness.
    */
   public async update(props: UpdateCollectionProps): Promise<Collection> {
     updateCollectionSchema.parse(props);
+
+    this.validateFieldDefinitionSlugUniqueness(props.fieldDefinitions);
 
     const projectPath = pathTo.project(props.projectId);
     const collectionFilePath = pathTo.collectionFile(props.projectId, props.id);
@@ -141,158 +223,95 @@ export class CollectionService
       updated: datetime(),
     };
 
-    // @todo Collection Service has to check if any of the updated fieldDefinitions do not validate against the used Fields in each CollectionItem of the Collection
-    // and return a list of mismatches, so the user can choose what to do in the UI / a wizard
-    // For that:
-    // - Iterate over all CollectionItems inside Collection
-    // - Create an array with all FieldReferences of those CollectionItems
-    // - Load all Fields by those references and check if the Field still complies with the new definition
+    // FieldDefinition slug rename cascade:
+    // Match old and new fieldDefinitions by UUID to detect slug renames
+    const oldFieldDefs = prevCollectionFile.fieldDefinitions;
+    const newFieldDefs = props.fieldDefinitions;
+    const slugRenames: Array<{ oldSlug: string; newSlug: string }> = [];
 
-    // const result: CollectionUpdateResult = {
-    //   create: [],
-    //   update: [],
-    //   delete: [],
-    // };
+    const oldByUuid = new Map(oldFieldDefs.map((fd) => [fd.id, fd]));
+    for (const newFd of newFieldDefs) {
+      const oldFd = oldByUuid.get(newFd.id);
+      if (oldFd && oldFd.slug !== newFd.slug) {
+        slugRenames.push({ oldSlug: oldFd.slug, newSlug: newFd.slug });
+      }
+    }
 
-    // const currentCollection = await this.read(props);
-    // Iterate over all FieldDefinitions and check each for changes
-    // for (let index = 0; index < collection.fieldDefinitions.length; index++) {
-    //   const nextFieldDefinition = collection.fieldDefinitions[index];
-    //   if (!nextFieldDefinition) {
-    //     throw new Error('Could not find any field definition');
-    //   }
-    //   // Get the correct FieldDefinition by ID
-    //   const currentFieldDefinition = currentCollection.fieldDefinitions.find(
-    //     (current) => {
-    //       return current.id === nextFieldDefinition.id;
-    //     }
-    //   );
-    //   if (currentFieldDefinition) {
-    //     if (
-    //       currentFieldDefinition.isRequired === false &&
-    //       nextFieldDefinition.isRequired === true
-    //     ) {
-    //       // Case 1.
-    //       // A FieldDefinition was not required to be filled, but is now
-    //       // -> Check if all CollectionItems have a FieldReference to this definition (if not create)
-    //       // -> Check all values of referenced fields of this definition for null (if not update)
-    //       // -> If the value is null, this is a violation
-    //       const collectionItems = (
-    //         await this.collectionItemService.list(
-    //           projectId,
-    //           collection.id,
-    //           undefined,
-    //           undefined,
-    //           0,
-    //           0
-    //         )
-    //       ).list;
-    //       for (let index = 0; index < collectionItems.length; index++) {
-    //         const collectionItem = collectionItems[index];
-    //         if (!collectionItem) {
-    //           throw new Error('Blaa');
-    //         }
-    //         const fieldReference = collectionItem.fieldReferences.find(
-    //           (fieldReference) => {
-    //             return (
-    //               fieldReference.fieldDefinitionId === nextFieldDefinition.id
-    //             );
-    //           }
-    //         );
-    //         if (!fieldReference) {
-    //           result.create.push({
-    //             violation: Violation.FIELD_REQUIRED_BUT_UNDEFINED,
-    //             collectionItem,
-    //             fieldDefinition: nextFieldDefinition,
-    //           });
-    //         } else {
-    //           const field = await this.fieldService.read(
-    //             projectId,
-    //             fieldReference.field.id,
-    //             fieldReference.field.language
-    //           );
-    //           if (field.value === null) {
-    //             result.update.push({
-    //               violation: Violation.FIELD_VALUE_REQUIRED_BUT_NULL,
-    //               collectionItem,
-    //               fieldReference,
-    //             });
-    //           }
-    //         }
-    //       }
-    //     }
-    //     if (
-    //       currentFieldDefinition.isUnique !== nextFieldDefinition.isUnique &&
-    //       nextFieldDefinition.isUnique === true
-    //     ) {
-    //       // Case 2.
-    //       // A FieldDefinition was not required to be unique, but is now
-    //       // -> Check all current values of referenced fields
-    //       // -> If a value is not unique, this is a violation
-    //       // const fieldReferences = await this.collectionItemService.getAllFieldReferences(project, currentCollection, currentFieldDefinition.id);
-    //       // const fields = await this.fieldService.readAll(project, fieldReferences);
-    //       // const duplicates = getDuplicates(fields, 'value');
-    //       // for (let index = 0; index < duplicates.length; index++) {
-    //       //   const duplicate = duplicates[index];
-    //       //   result.update.push({
-    //       //     violation: Violation.FIELD_VALUE_NOT_UNIQUE,
-    //       //     collectionItem: ,
-    //       //     fieldReference
-    //       //   });
-    //       // }
-    //     }
-    //     if (
-    //       isEqual(currentFieldDefinition.input, nextFieldDefinition.input) ===
-    //       false
-    //     ) {
-    //       // Case 3.
-    //       // A FieldDefinition has a new input specification
-    //       // -> Check if this input is valid for given FieldType
-    //       // -> If not, this is a violation
-    //     }
-    //   } else {
-    //     // It's a new FieldDefinition that was not existing before
-    //     if (nextFieldDefinition.isRequired) {
-    //       // Case 4.
-    //       // A FieldDefinition is new and a field (with value) required
-    //       // -> The user needs to add a field reference (either through a new or existing field)
-    //       // for every CollectionItem of this Collection
-    //       const collectionItems = (
-    //         await this.collectionItemService.list(
-    //           projectId,
-    //           collection.id,
-    //           undefined,
-    //           undefined,
-    //           0,
-    //           0
-    //         )
-    //       ).list;
-    //       collectionItems.forEach((collectionItem) => {
-    //         result.create.push({
-    //           violation: Violation.FIELD_REQUIRED_BUT_UNDEFINED,
-    //           collectionItem,
-    //           fieldDefinition: nextFieldDefinition,
-    //         });
-    //       });
-    //     }
-    //   }
-    // }
+    const filesToGitAdd: string[] = [collectionFilePath];
 
-    // // Return early to notify the user of changes he has to do before this update is working
-    // if (
-    //   result.create.length !== 0 ||
-    //   result.update.length !== 0 ||
-    //   result.delete.length !== 0
-    // ) {
-    //   return result;
-    // }
+    if (slugRenames.length > 0) {
+      // Read all entries and rewrite their values record keys
+      const entriesPath = pathTo.entries(props.projectId, props.id);
+      if (await Fs.pathExists(entriesPath)) {
+        const entryFiles = (await Fs.readdir(entriesPath)).filter(
+          (f) => f.endsWith('.json') && f !== 'collection.json'
+        );
+
+        for (const entryFileName of entryFiles) {
+          const entryFilePath = pathTo.entryFile(
+            props.projectId,
+            props.id,
+            entryFileName.replace('.json', '')
+          );
+
+          try {
+            const entryFile = await this.jsonFileService.read(
+              entryFilePath,
+              entryFileSchema
+            );
+
+            let changed = false;
+            const newValues: Record<string, unknown> = { ...entryFile.values };
+
+            for (const { oldSlug, newSlug } of slugRenames) {
+              if (oldSlug in newValues) {
+                newValues[newSlug] = newValues[oldSlug];
+                delete newValues[oldSlug];
+                changed = true;
+              }
+            }
+
+            if (changed) {
+              const updatedEntryFile = { ...entryFile, values: newValues };
+              await this.jsonFileService.update(
+                updatedEntryFile,
+                entryFilePath,
+                entryFileSchema
+              );
+              filesToGitAdd.push(entryFilePath);
+            }
+          } catch (error) {
+            this.logService.warn({
+              source: 'core',
+              message: `Failed to update entry "${entryFileName}" during slug rename cascade: ${error instanceof Error ? error.message : String(error)}`,
+            });
+          }
+        }
+      }
+    }
+
+    // If collection slug.plural changed, enforce uniqueness
+    const newSlugPlural = slug(props.slug.plural);
+    if (prevCollectionFile.slug.plural !== newSlugPlural) {
+      const index = await this.getIndex(props.projectId);
+      const existingUuid = Object.entries(index).find(
+        ([, s]) => s === newSlugPlural
+      );
+      if (existingUuid && existingUuid[0] !== props.id) {
+        throw new Error(
+          `Collection slug "${newSlugPlural}" is already in use by another collection`
+        );
+      }
+      index[props.id] = newSlugPlural;
+      await this.writeIndex(props.projectId, index);
+    }
 
     await this.jsonFileService.update(
       collectionFile,
       collectionFilePath,
       collectionFileSchema
     );
-    await this.gitService.add(projectPath, [collectionFilePath]);
+    await this.gitService.add(projectPath, filesToGitAdd);
     await this.gitService.commit(projectPath, {
       method: 'update',
       reference: { objectType: 'collection', id: collectionFile.id },
@@ -302,7 +321,7 @@ export class CollectionService
   }
 
   /**
-   * Deletes given Collection (folder), including it's items
+   * Deletes given Collection (folder), including it's Entries
    *
    * The Fields that Collection used are not deleted.
    */
@@ -318,6 +337,11 @@ export class CollectionService
       method: 'delete',
       reference: { objectType: 'collection', id: props.id },
     });
+
+    // Remove from index
+    const index = await this.getIndex(props.projectId);
+    delete index[props.id];
+    await this.writeIndex(props.projectId, index);
   }
 
   public async list(
@@ -404,5 +428,91 @@ export class CollectionService
     };
 
     return collection;
+  }
+
+  /**
+   * Gets the collection index, rebuilding from disk if not cached
+   */
+  private async getIndex(projectId: string): Promise<CollectionIndex> {
+    const cached = this.cachedIndex.get(projectId);
+    if (cached) return cached;
+    const pending = this.rebuildPromise.get(projectId);
+    if (pending) return pending;
+    const promise = this.rebuildIndex(projectId);
+    this.rebuildPromise.set(projectId, promise);
+    const result = await promise;
+    this.cachedIndex.set(projectId, result);
+    this.rebuildPromise.delete(projectId);
+    return result;
+  }
+
+  /**
+   * Writes the index file atomically and updates cache
+   */
+  private async writeIndex(
+    projectId: string,
+    index: CollectionIndex
+  ): Promise<void> {
+    const indexPath = pathTo.collectionIndex(projectId);
+    await Fs.writeFile(indexPath, JSON.stringify(index, null, 2), {
+      encoding: 'utf8',
+    });
+    this.cachedIndex.set(projectId, index);
+  }
+
+  /**
+   * Rebuilds the index by scanning all collection folders
+   */
+  private async rebuildIndex(projectId: string): Promise<CollectionIndex> {
+    this.logService.info({
+      source: 'core',
+      message: `Rebuilding Collection index for Project "${projectId}"`,
+    });
+
+    const index: CollectionIndex = {};
+    const collectionsPath = pathTo.collections(projectId);
+    const collectionFolders = await folders(collectionsPath);
+
+    for (const folder of collectionFolders) {
+      // Skip the index.json file entry if it shows up
+      if (!uuidSchema.safeParse(folder.name).success) continue;
+
+      try {
+        const collectionFilePath = pathTo.collectionFile(
+          projectId,
+          folder.name
+        );
+        const collectionFile = await this.jsonFileService.read(
+          collectionFilePath,
+          collectionFileSchema
+        );
+        index[collectionFile.id] = collectionFile.slug.plural;
+      } catch (error) {
+        this.logService.warn({
+          source: 'core',
+          message: `Skipping collection folder "${folder.name}" during index rebuild: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+    }
+
+    await this.writeIndex(projectId, index);
+    return index;
+  }
+
+  /**
+   * Validates that no two fieldDefinitions share the same slug
+   */
+  private validateFieldDefinitionSlugUniqueness(
+    fieldDefinitions: { slug: string }[]
+  ): void {
+    const seen = new Set<string>();
+    for (const fd of fieldDefinitions) {
+      if (seen.has(fd.slug)) {
+        throw new Error(
+          `Duplicate fieldDefinition slug "${fd.slug}": each fieldDefinition within a collection must have a unique slug`
+        );
+      }
+      seen.add(fd.slug);
+    }
   }
 }

@@ -31,3 +31,11 @@ export const fileReferenceSchema = z.object({
   extension: z.string().optional(),
 });
 export type FileReference = z.infer<typeof fileReferenceSchema>;
+
+/**
+ * Schema for the collection index file (collections/index.json).
+ * Maps collection UUIDs to their slug.plural values.
+ * This is a local performance cache, not git-tracked.
+ */
+export const collectionIndexSchema = z.record(uuidSchema, z.string());
+export type CollectionIndex = z.infer<typeof collectionIndexSchema>;

@@ -12,7 +12,7 @@ import { ValueTypeSchema } from '../schema/valueSchema.js';
  * Generates a flat Zod object schema from collection field definitions
  * for use with Astro's `parseData` validation.
  *
- * Each key is the field definition ID (UUID) and each value schema
+ * Each key is the field definition slug and each value schema
  * is the translatable content schema for that field type.
  */
 export function buildEntryValuesSchema(fieldDefinitions: FieldDefinition[]) {
@@ -21,19 +21,19 @@ export function buildEntryValuesSchema(fieldDefinitions: FieldDefinition[]) {
   for (const fieldDef of fieldDefinitions) {
     switch (fieldDef.valueType) {
       case ValueTypeSchema.enum.string:
-        shape[fieldDef.id] =
+        shape[fieldDef.slug] =
           getTranslatableStringValueContentSchemaFromFieldDefinition(fieldDef);
         break;
       case ValueTypeSchema.enum.number:
-        shape[fieldDef.id] =
+        shape[fieldDef.slug] =
           getTranslatableNumberValueContentSchemaFromFieldDefinition(fieldDef);
         break;
       case ValueTypeSchema.enum.boolean:
-        shape[fieldDef.id] =
+        shape[fieldDef.slug] =
           getTranslatableBooleanValueContentSchemaFromFieldDefinition();
         break;
       case ValueTypeSchema.enum.reference:
-        shape[fieldDef.id] =
+        shape[fieldDef.slug] =
           getTranslatableReferenceValueContentSchemaFromFieldDefinition(
             fieldDef
           );
@@ -60,7 +60,7 @@ export function buildEntryValuesTypeString(
 
   const fields = fieldDefinitions.map((fieldDef) => {
     const tsType = valueTypeToTsType(fieldDef.valueType);
-    return `  "${fieldDef.id}": Partial<Record<SupportedLanguage, ${tsType}>>`;
+    return `  "${fieldDef.slug}": Partial<Record<SupportedLanguage, ${tsType}>>`;
   });
 
   return [

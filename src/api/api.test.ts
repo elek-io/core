@@ -116,9 +116,25 @@ describe('API', function () {
 
   it('should be able to read a Collection via API', async function () {
     const res = await client.content.v1.projects[':projectId'].collections[
-      ':collectionId'
+      ':collectionIdOrSlug'
     ].$get({
-      param: { projectId: project.id, collectionId: collection.id },
+      param: { projectId: project.id, collectionIdOrSlug: collection.id },
+    });
+
+    expect(res.status).toEqual(200);
+    const readCollection = await res.json();
+    expect(core.collections.isCollection(readCollection)).toEqual(true);
+    expect(readCollection.id).toEqual(collection.id);
+  });
+
+  it('should be able to read a Collection by slug via API', async function () {
+    const res = await client.content.v1.projects[':projectId'].collections[
+      ':collectionIdOrSlug'
+    ].$get({
+      param: {
+        projectId: project.id,
+        collectionIdOrSlug: collection.slug.plural,
+      },
     });
 
     expect(res.status).toEqual(200);
@@ -143,9 +159,9 @@ describe('API', function () {
 
   it('should be able to list all Entries via API', async function () {
     const res = await client.content.v1.projects[':projectId'].collections[
-      ':collectionId'
+      ':collectionIdOrSlug'
     ].entries.$get({
-      param: { projectId: project.id, collectionId: collection.id },
+      param: { projectId: project.id, collectionIdOrSlug: collection.id },
       query: {},
     });
 
@@ -156,13 +172,30 @@ describe('API', function () {
     expect(entries.list.find((p) => p.id === entry.id)?.id).toEqual(entry.id);
   });
 
+  it('should be able to list all Entries by collection slug via API', async function () {
+    const res = await client.content.v1.projects[':projectId'].collections[
+      ':collectionIdOrSlug'
+    ].entries.$get({
+      param: {
+        projectId: project.id,
+        collectionIdOrSlug: collection.slug.plural,
+      },
+      query: {},
+    });
+
+    expect(res.status).toEqual(200);
+    const entries = await res.json();
+    expect(entries.list.length).toEqual(1);
+    expect(entries.list.find((p) => p.id === entry.id)?.id).toEqual(entry.id);
+  });
+
   it('should be able to read an Entry via API', async function () {
     const res = await client.content.v1.projects[':projectId'].collections[
-      ':collectionId'
+      ':collectionIdOrSlug'
     ].entries[':entryId'].$get({
       param: {
         projectId: project.id,
-        collectionId: collection.id,
+        collectionIdOrSlug: collection.id,
         entryId: entry.id,
       },
     });
@@ -175,9 +208,9 @@ describe('API', function () {
 
   it('should be able to count all Entries via API', async function () {
     const res = await client.content.v1.projects[':projectId'].collections[
-      ':collectionId'
+      ':collectionIdOrSlug'
     ].entries.count.$get({
-      param: { projectId: project.id, collectionId: collection.id },
+      param: { projectId: project.id, collectionIdOrSlug: collection.id },
     });
 
     expect(res.status).toEqual(200);

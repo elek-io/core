@@ -236,23 +236,30 @@ export function getValueSchemaFromFieldDefinition(
 }
 
 /**
+ * Builds a z.object shape from field definitions, keyed by slug
+ */
+function getValuesShapeFromFieldDefinitions(
+  fieldDefinitions: FieldDefinition[]
+) {
+  const shape: Record<
+    string,
+    ReturnType<typeof getValueSchemaFromFieldDefinition>
+  > = {};
+  for (const fieldDef of fieldDefinitions) {
+    shape[fieldDef.slug] = getValueSchemaFromFieldDefinition(fieldDef);
+  }
+  return shape;
+}
+
+/**
  * Generates a schema for an Entry based on the given Field definitions and Values
  */
 export function getEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[]
 ) {
-  const valueSchemas = fieldDefinitions.map((fieldDefinition) => {
-    return getValueSchemaFromFieldDefinition(fieldDefinition);
-  });
-
   return z.object({
     ...entrySchema.shape,
-    values: z.tuple(
-      valueSchemas as [
-        (typeof valueSchemas)[number],
-        ...(typeof valueSchemas)[number][],
-      ] // At least one element is required in a tuple
-    ),
+    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
   });
 }
 
@@ -262,18 +269,9 @@ export function getEntrySchemaFromFieldDefinitions(
 export function getCreateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[]
 ) {
-  const valueSchemas = fieldDefinitions.map((fieldDefinition) => {
-    return getValueSchemaFromFieldDefinition(fieldDefinition);
-  });
-
   return z.object({
     ...createEntrySchema.shape,
-    values: z.tuple(
-      valueSchemas as [
-        (typeof valueSchemas)[number],
-        ...(typeof valueSchemas)[number][],
-      ] // At least one element is required in a tuple
-    ),
+    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
   });
 }
 
@@ -283,17 +281,8 @@ export function getCreateEntrySchemaFromFieldDefinitions(
 export function getUpdateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[]
 ) {
-  const valueSchemas = fieldDefinitions.map((fieldDefinition) => {
-    return getValueSchemaFromFieldDefinition(fieldDefinition);
-  });
-
   return z.object({
     ...updateEntrySchema.shape,
-    values: z.tuple(
-      valueSchemas as [
-        (typeof valueSchemas)[number],
-        ...(typeof valueSchemas)[number][],
-      ] // At least one element is required in a tuple
-    ),
+    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
   });
 }

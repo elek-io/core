@@ -102,7 +102,9 @@ describe('CLI', function () {
     const projects = JSON.parse(projectsContent);
 
     expect(
-      projects[project1.id].collections[collection.id].entries[entry.id].id
+      projects[project1.id].collections[collection.slug.plural].entries[
+        entry.id
+      ].id
     ).toEqual(entry.id);
     expect(projects[project2.id].id).toEqual(project2.id);
   });
@@ -138,9 +140,9 @@ describe('CLI', function () {
     );
     const projects = JSON.parse(projectsContent);
 
-    expect(projects.collections[collection.id].entries[entry.id].id).toEqual(
-      entry.id
-    );
+    expect(
+      projects.collections[collection.slug.plural].entries[entry.id].id
+    ).toEqual(entry.id);
     expect(projects[project2.id]).toEqual(undefined);
   });
 
