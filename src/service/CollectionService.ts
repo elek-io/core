@@ -423,8 +423,14 @@ export class CollectionService
    * Migrates an potentially outdated Collection file to the current schema
    */
   public migrate(potentiallyOutdatedCollectionFile: unknown) {
-    const loose = migrateCollectionSchema.parse(potentiallyOutdatedCollectionFile);
-    const migrated = applyMigrations(loose, collectionMigrations, this.coreVersion);
+    const loose = migrateCollectionSchema.parse(
+      potentiallyOutdatedCollectionFile
+    );
+    const migrated = applyMigrations(
+      loose,
+      collectionMigrations,
+      this.coreVersion
+    );
     return collectionFileSchema.parse(migrated);
   }
 

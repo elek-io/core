@@ -38,12 +38,12 @@ Find migration where migration.from === data.coreVersion
 
 Each service has its own migration array under `src/service/migrations/`:
 
-| File | Service |
-|------|---------|
-| `assetMigrations.ts` | AssetService |
+| File                      | Service           |
+| ------------------------- | ----------------- |
+| `assetMigrations.ts`      | AssetService      |
 | `collectionMigrations.ts` | CollectionService |
-| `entryMigrations.ts` | EntryService |
-| `projectMigrations.ts` | ProjectService |
+| `entryMigrations.ts`      | EntryService      |
+| `projectMigrations.ts`    | ProjectService    |
 
 To add a migration, append a `Migration` object to the relevant array:
 

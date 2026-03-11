@@ -57,10 +57,12 @@ export type ObjectType = z.infer<typeof objectTypeSchema>;
 
 export const logLevelSchema = z.enum(['error', 'warn', 'info', 'debug']);
 
-export const versionSchema = z.string().refine(
-  (version) => /^\d+\.\d+\.\d+(?:-[\w.]+)?(?:\+[\w.]+)?$/.test(version),
-  'String must follow the Semantic Versioning format (https://semver.org/)'
-);
+export const versionSchema = z
+  .string()
+  .refine(
+    (version) => /^\d+\.\d+\.\d+(?:-[\w.]+)?(?:\+[\w.]+)?$/.test(version),
+    'String must follow the Semantic Versioning format (https://semver.org/)'
+  );
 export type Version = z.infer<typeof versionSchema>;
 
 export const uuidSchema = z.uuid();

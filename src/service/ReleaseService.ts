@@ -672,7 +672,11 @@ export class ReleaseService extends AbstractCrudService {
     // Deleted assets (in production but not in current) — MAJOR
     for (const [id] of productionById) {
       if (!currentById.has(id)) {
-        assetChanges.push({ assetId: id, changeType: 'deleted', bump: 'major' });
+        assetChanges.push({
+          assetId: id,
+          changeType: 'deleted',
+          bump: 'major',
+        });
         highestBump = 'major';
       }
     }

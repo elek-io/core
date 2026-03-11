@@ -8,11 +8,7 @@ import {
 } from '../error/index.js';
 import { RemoteOriginMissingError } from '../error/RemoteOriginMissingError.js';
 import { SynchronizeLocalChangesError } from '../error/SynchronizeLocalChangesError.js';
-import type {
-  FileReference,
-  ObjectType,
-  Version,
-} from '../schema/index.js';
+import type { FileReference, ObjectType, Version } from '../schema/index.js';
 import {
   cloneProjectSchema,
   createProjectSchema,
@@ -281,7 +277,9 @@ export class ProjectService
     }
 
     // Get the current Project file (loose-parsed for version checks; full migration happens in upgradeObjectFile)
-    const currentProjectFile = await this.jsonFileService.unsafeRead(projectFilePath) as Record<string, unknown> & { coreVersion: string };
+    const currentProjectFile = (await this.jsonFileService.unsafeRead(
+      projectFilePath
+    )) as Record<string, unknown> & { coreVersion: string };
 
     if (Semver.gt(currentProjectFile.coreVersion, this.coreVersion)) {
       // Upgrade of the client needed before the project can be upgraded
@@ -594,7 +592,11 @@ export class ProjectService
    */
   public migrate(potentiallyOutdatedFile: unknown): ProjectFile {
     const loose = migrateProjectSchema.parse(potentiallyOutdatedFile);
-    const migrated = applyMigrations(loose, projectMigrations, this.coreVersion);
+    const migrated = applyMigrations(
+      loose,
+      projectMigrations,
+      this.coreVersion
+    );
     return projectFileSchema.parse(migrated);
   }
 
