@@ -16,7 +16,10 @@ export type ProjectStatus = z.infer<typeof projectStatusSchema>;
 export const projectSettingsSchema = z.object({
   language: z.object({
     default: supportedLanguageSchema,
-    supported: z.array(supportedLanguageSchema),
+    supported: z.array(supportedLanguageSchema).refine(
+      (langs) => new Set(langs).size === langs.length,
+      { message: 'Supported languages must not contain duplicates' }
+    ),
   }),
 });
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
