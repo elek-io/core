@@ -2,6 +2,7 @@ import Fs from 'fs-extra';
 import {
   countEntriesSchema,
   createEntrySchema,
+  migrateEntrySchema,
   deleteEntrySchema,
   entryFileSchema,
   entrySchema,
@@ -41,12 +42,14 @@ export class EntryService
   extends AbstractCrudService
   implements CrudServiceWithListCount<Entry>
 {
+  private coreVersion: string;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
   private collectionService: CollectionService;
   // private sharedValueService: SharedValueService;
 
   constructor(
+    coreVersion: string,
     options: ElekIoCoreOptions,
     logService: LogService,
     jsonFileService: JsonFileService,
@@ -56,6 +59,7 @@ export class EntryService
   ) {
     super(serviceTypeSchema.enum.Entry, options, logService);
 
+    this.coreVersion = coreVersion;
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
     this.collectionService = collectionService;
@@ -83,6 +87,7 @@ export class EntryService
     const entryFile: EntryFile = {
       objectType: 'entry',
       id,
+      coreVersion: this.coreVersion,
       values: props.values,
       created: datetime(),
       updated: null,
@@ -291,9 +296,11 @@ export class EntryService
    * Migrates an potentially outdated Entry file to the current schema
    */
   public migrate(potentiallyOutdatedEntryFile: unknown) {
-    // @todo
+    const loose = migrateEntrySchema.parse(potentiallyOutdatedEntryFile);
 
-    return entryFileSchema.parse(potentiallyOutdatedEntryFile);
+    loose.coreVersion = this.coreVersion;
+
+    return entryFileSchema.parse(loose);
   }
 
   /**

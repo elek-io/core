@@ -636,7 +636,7 @@ export class ReleaseService extends AbstractCrudService {
       }
     }
 
-    // PATCH: name, description, status
+    // PATCH: name, description
     if (current.name !== production.name) {
       projectChanges.push({ changeType: 'nameChanged', bump: 'patch' });
       highestBump = this.higherBump(highestBump, 'patch');
@@ -647,11 +647,6 @@ export class ReleaseService extends AbstractCrudService {
         changeType: 'descriptionChanged',
         bump: 'patch',
       });
-      highestBump = this.higherBump(highestBump, 'patch');
-    }
-
-    if (current.status !== production.status) {
-      projectChanges.push({ changeType: 'statusChanged', bump: 'patch' });
       highestBump = this.higherBump(highestBump, 'patch');
     }
 

@@ -4,8 +4,8 @@ import { baseFileSchema } from './fileSchema.js';
 
 export const assetFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.asset).readonly(),
-  name: z.string(),
-  description: z.string(),
+  name: z.string().trim().min(1),
+  description: z.string().trim().min(1),
   extension: z.string().readonly(),
   mimeType: z.string().readonly(),
   /**
@@ -93,6 +93,11 @@ export const deleteAssetSchema = assetFileSchema
     projectId: uuidSchema.readonly(),
   });
 export type DeleteAssetProps = z.infer<typeof deleteAssetSchema>;
+
+export const migrateAssetSchema = z.looseObject(
+  assetFileSchema.pick({ id: true, coreVersion: true }).shape
+);
+export type MigrateAssetProps = z.infer<typeof migrateAssetSchema>;
 
 export const countAssetsSchema = z.object({ projectId: uuidSchema.readonly() });
 export type CountAssetsProps = z.infer<typeof countAssetsSchema>;

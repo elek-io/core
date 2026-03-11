@@ -42,7 +42,7 @@ export const supportedLanguageSchema = z.enum([
 ]);
 export type SupportedLanguage = z.infer<typeof supportedLanguageSchema>;
 
-export const supportedIconSchema = z.enum(['home', 'plus', 'foobar']);
+export const supportedIconSchema = z.enum(['home', 'plus']);
 export type SupportedIcon = z.infer<typeof supportedIconSchema>;
 
 export const objectTypeSchema = z.enum([
@@ -57,13 +57,10 @@ export type ObjectType = z.infer<typeof objectTypeSchema>;
 
 export const logLevelSchema = z.enum(['error', 'warn', 'info', 'debug']);
 
-export const versionSchema = z.string();
-// .refine((version) => {
-//   if (Semver.valid(version) !== null) {
-//     return true;
-//   }
-//   return false;
-// }, 'String must follow the Semantic Versioning format (https://semver.org/)');
+export const versionSchema = z.string().refine(
+  (version) => /^\d+\.\d+\.\d+(?:-[\w.]+)?(?:\+[\w.]+)?$/.test(version),
+  'String must follow the Semantic Versioning format (https://semver.org/)'
+);
 export type Version = z.infer<typeof versionSchema>;
 
 export const uuidSchema = z.uuid();

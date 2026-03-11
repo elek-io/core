@@ -1,5 +1,5 @@
 import { z } from '@hono/zod-openapi';
-import { objectTypeSchema, uuidSchema } from './baseSchema.js';
+import { objectTypeSchema, uuidSchema, versionSchema } from './baseSchema.js';
 
 /**
  * A basic file structure every elek.io file on disk has to follow
@@ -16,13 +16,17 @@ export const baseFileSchema = z.object({
    */
   id: uuidSchema.readonly(),
   /**
+   * The version of elek.io Core used to create or last update this file
+   */
+  coreVersion: versionSchema.readonly(),
+  /**
    * The datetime of the file being created is set by the service of "objectType" while creating it
    */
   created: z.string().datetime().readonly(),
   /**
    * The datetime of the file being updated is set by the service of "objectType" while updating it
    */
-  updated: z.string().datetime().nullable(),
+  updated: z.string().datetime().nullable().readonly(),
 });
 export type BaseFile = z.infer<typeof baseFileSchema>;
 

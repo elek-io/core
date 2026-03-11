@@ -1448,6 +1448,7 @@ describe('Dynamic zod schema from field definition', () => {
     const entry: Entry = {
       objectType: 'entry',
       id: 'f405301c-3c31-4edd-ab6b-1735d2757044',
+      coreVersion: '0.16.2',
       values: {
         title: {
           objectType: 'value',

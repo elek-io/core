@@ -4,9 +4,9 @@ import {
   translatableStringSchema,
   uuidSchema,
 } from './baseSchema.js';
-import { ValueTypeSchema } from './valueSchema.js';
+import { valueTypeSchema } from './valueSchema.js';
 
-export const FieldTypeSchema = z.enum([
+export const fieldTypeSchema = z.enum([
   // String Values
   'text',
   'textarea',
@@ -28,11 +28,11 @@ export const FieldTypeSchema = z.enum([
   'entry',
   // 'sharedValue', // @todo
 ]);
-export type FieldType = z.infer<typeof FieldTypeSchema>;
+export type FieldType = z.infer<typeof fieldTypeSchema>;
 
-export const FieldWidthSchema = z.enum(['12', '6', '4', '3']);
+export const fieldWidthSchema = z.enum(['12', '6', '4', '3']);
 
-export const FieldDefinitionBaseSchema = z.object({
+export const fieldDefinitionBaseSchema = z.object({
   id: uuidSchema.readonly(),
   slug: slugSchema,
   label: translatableStringSchema,
@@ -40,24 +40,24 @@ export const FieldDefinitionBaseSchema = z.object({
   isRequired: z.boolean(),
   isDisabled: z.boolean(),
   isUnique: z.boolean(),
-  inputWidth: FieldWidthSchema,
+  inputWidth: fieldWidthSchema,
 });
-export type FieldDefinitionBase = z.infer<typeof FieldDefinitionBaseSchema>;
+export type FieldDefinitionBase = z.infer<typeof fieldDefinitionBaseSchema>;
 
 /**
  * String based Field definitions
  */
 
-export const StringFieldDefinitionBaseSchema = FieldDefinitionBaseSchema.extend(
+export const stringFieldDefinitionBaseSchema = fieldDefinitionBaseSchema.extend(
   {
-    valueType: z.literal(ValueTypeSchema.enum.string),
+    valueType: z.literal(valueTypeSchema.enum.string),
     defaultValue: z.string().nullable(),
   }
 );
 
-export const textFieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend(
+export const textFieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend(
   {
-    fieldType: z.literal(FieldTypeSchema.enum.text),
+    fieldType: z.literal(fieldTypeSchema.enum.text),
     min: z.number().nullable(),
     max: z.number().nullable(),
   }
@@ -65,8 +65,8 @@ export const textFieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend(
 export type TextFieldDefinition = z.infer<typeof textFieldDefinitionSchema>;
 
 export const textareaFieldDefinitionSchema =
-  StringFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.enum.textarea),
+  stringFieldDefinitionBaseSchema.extend({
+    fieldType: z.literal(fieldTypeSchema.enum.textarea),
     min: z.number().nullable(),
     max: z.number().nullable(),
   });
@@ -75,51 +75,51 @@ export type TextareaFieldDefinition = z.infer<
 >;
 
 export const emailFieldDefinitionSchema =
-  StringFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.enum.email),
+  stringFieldDefinitionBaseSchema.extend({
+    fieldType: z.literal(fieldTypeSchema.enum.email),
     defaultValue: z.email().nullable(),
   });
 export type EmailFieldDefinition = z.infer<typeof emailFieldDefinitionSchema>;
 
 // @todo why should we support password Values? Client saves it in clear text anyways
 // export const passwordFieldDefinitionSchema =
-//   StringFieldDefinitionBaseSchema.extend({
+//   stringFieldDefinitionBaseSchema.extend({
 //     fieldType: z.literal(FieldfieldTypeSchema.enum.password),
 //   });
 
-export const urlFieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend({
-  fieldType: z.literal(FieldTypeSchema.enum.url),
+export const urlFieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend({
+  fieldType: z.literal(fieldTypeSchema.enum.url),
   defaultValue: z.url().nullable(),
 });
 export type UrlFieldDefinition = z.infer<typeof urlFieldDefinitionSchema>;
 
-export const ipv4FieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend(
+export const ipv4FieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend(
   {
-    fieldType: z.literal(FieldTypeSchema.enum.ipv4),
+    fieldType: z.literal(fieldTypeSchema.enum.ipv4),
     defaultValue: z.ipv4().nullable(),
   }
 );
 export type Ipv4FieldDefinition = z.infer<typeof ipv4FieldDefinitionSchema>;
 
-export const dateFieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend(
+export const dateFieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend(
   {
-    fieldType: z.literal(FieldTypeSchema.enum.date),
+    fieldType: z.literal(fieldTypeSchema.enum.date),
     defaultValue: z.iso.date().nullable(),
   }
 );
 export type DateFieldDefinition = z.infer<typeof dateFieldDefinitionSchema>;
 
-export const timeFieldDefinitionSchema = StringFieldDefinitionBaseSchema.extend(
+export const timeFieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend(
   {
-    fieldType: z.literal(FieldTypeSchema.enum.time),
+    fieldType: z.literal(fieldTypeSchema.enum.time),
     defaultValue: z.iso.time().nullable(),
   }
 );
 export type TimeFieldDefinition = z.infer<typeof timeFieldDefinitionSchema>;
 
 export const datetimeFieldDefinitionSchema =
-  StringFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.enum.datetime),
+  stringFieldDefinitionBaseSchema.extend({
+    fieldType: z.literal(fieldTypeSchema.enum.datetime),
     defaultValue: z.iso.datetime().nullable(),
   });
 export type DatetimeFieldDefinition = z.infer<
@@ -127,8 +127,8 @@ export type DatetimeFieldDefinition = z.infer<
 >;
 
 export const telephoneFieldDefinitionSchema =
-  StringFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.enum.telephone),
+  stringFieldDefinitionBaseSchema.extend({
+    fieldType: z.literal(fieldTypeSchema.enum.telephone),
     defaultValue: z.e164().nullable(),
   });
 export type TelephoneFieldDefinition = z.infer<
@@ -152,9 +152,9 @@ export type StringFieldDefinition = z.infer<typeof stringFieldDefinitionSchema>;
  * Number based Field definitions
  */
 
-export const NumberFieldDefinitionBaseSchema = FieldDefinitionBaseSchema.extend(
+export const numberFieldDefinitionBaseSchema = fieldDefinitionBaseSchema.extend(
   {
-    valueType: z.literal(ValueTypeSchema.enum.number),
+    valueType: z.literal(valueTypeSchema.enum.number),
     min: z.number().nullable(),
     max: z.number().nullable(),
     isUnique: z.literal(false),
@@ -163,14 +163,14 @@ export const NumberFieldDefinitionBaseSchema = FieldDefinitionBaseSchema.extend(
 );
 
 export const numberFieldDefinitionSchema =
-  NumberFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.enum.number),
+  numberFieldDefinitionBaseSchema.extend({
+    fieldType: z.literal(fieldTypeSchema.enum.number),
   });
 export type NumberFieldDefinition = z.infer<typeof numberFieldDefinitionSchema>;
 
 export const rangeFieldDefinitionSchema =
-  NumberFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.enum.range),
+  numberFieldDefinitionBaseSchema.extend({
+    fieldType: z.literal(fieldTypeSchema.enum.range),
     // Overwrite from nullable to required because a range needs min, max and default to work and is required, since it always returns a number
     isRequired: z.literal(true),
     min: z.number(),
@@ -183,9 +183,9 @@ export type RangeFieldDefinition = z.infer<typeof rangeFieldDefinitionSchema>;
  * Boolean based Field definitions
  */
 
-export const BooleanFieldDefinitionBaseSchema =
-  FieldDefinitionBaseSchema.extend({
-    valueType: z.literal(ValueTypeSchema.enum.boolean),
+export const booleanFieldDefinitionBaseSchema =
+  fieldDefinitionBaseSchema.extend({
+    valueType: z.literal(valueTypeSchema.enum.boolean),
     // Overwrite from nullable to required because a boolean needs a default to work and is required, since it always is either true or false
     isRequired: z.literal(true),
     defaultValue: z.boolean(),
@@ -193,8 +193,8 @@ export const BooleanFieldDefinitionBaseSchema =
   });
 
 export const toggleFieldDefinitionSchema =
-  BooleanFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.enum.toggle),
+  booleanFieldDefinitionBaseSchema.extend({
+    fieldType: z.literal(fieldTypeSchema.enum.toggle),
   });
 export type ToggleFieldDefinition = z.infer<typeof toggleFieldDefinitionSchema>;
 
@@ -202,22 +202,23 @@ export type ToggleFieldDefinition = z.infer<typeof toggleFieldDefinitionSchema>;
  * Reference based Field definitions
  */
 
-export const ReferenceFieldDefinitionBaseSchema =
-  FieldDefinitionBaseSchema.extend({
-    valueType: z.literal(ValueTypeSchema.enum.reference),
+export const referenceFieldDefinitionBaseSchema =
+  fieldDefinitionBaseSchema.extend({
+    valueType: z.literal(valueTypeSchema.enum.reference),
+    isUnique: z.literal(false),
   });
 
 export const assetFieldDefinitionSchema =
-  ReferenceFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.enum.asset),
+  referenceFieldDefinitionBaseSchema.extend({
+    fieldType: z.literal(fieldTypeSchema.enum.asset),
     min: z.number().nullable(),
     max: z.number().nullable(),
   });
 export type AssetFieldDefinition = z.infer<typeof assetFieldDefinitionSchema>;
 
 export const entryFieldDefinitionSchema =
-  ReferenceFieldDefinitionBaseSchema.extend({
-    fieldType: z.literal(FieldTypeSchema.enum.entry),
+  referenceFieldDefinitionBaseSchema.extend({
+    fieldType: z.literal(fieldTypeSchema.enum.entry),
     ofCollections: z.array(uuidSchema),
     min: z.number().nullable(),
     max: z.number().nullable(),
@@ -230,9 +231,9 @@ export type EntryFieldDefinition = z.infer<typeof entryFieldDefinitionSchema>;
 //     // The shared Value can have any of the direct types
 //     // but not any reference itself (a shared Value cannot have a reference to another shared Value / Asset or any other future reference)
 //     sharedValueType: z.union([
-//       z.literal(ValueTypeSchema.enum.boolean),
-//       z.literal(ValueTypeSchema.enum.number),
-//       z.literal(ValueTypeSchema.enum.string),
+//       z.literal(valueTypeSchema.enum.boolean),
+//       z.literal(valueTypeSchema.enum.number),
+//       z.literal(valueTypeSchema.enum.string),
 //     ]),
 //   });
 // export type SharedValueValueDefinition = z.infer<

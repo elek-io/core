@@ -115,7 +115,6 @@ export class ProjectService
       created: datetime(),
       updated: null,
       coreVersion: this.coreVersion,
-      status: 'todo',
       version: '0.0.1',
     };
 
@@ -598,8 +597,6 @@ export class ProjectService
    * Migrates an potentially outdated Project file to the current schema
    */
   public migrate(props: MigrateProjectProps) {
-    // @todo
-
     props.coreVersion = this.coreVersion;
 
     return projectFileSchema.parse(props);

@@ -4,6 +4,7 @@ import type { SaveAssetProps } from '../schema/index.js';
 import {
   assetFileSchema,
   assetSchema,
+  migrateAssetSchema,
   countAssetsSchema,
   createAssetSchema,
   deleteAssetSchema,
@@ -42,10 +43,12 @@ export class AssetService
   extends AbstractCrudService
   implements CrudServiceWithListCount<Asset>
 {
+  private readonly coreVersion: string;
   private readonly jsonFileService: JsonFileService;
   private readonly gitService: GitService;
 
   constructor(
+    coreVersion: string,
     options: ElekIoCoreOptions,
     logService: LogService,
     jsonFileService: JsonFileService,
@@ -53,6 +56,7 @@ export class AssetService
   ) {
     super(serviceTypeSchema.enum.Asset, options, logService);
 
+    this.coreVersion = coreVersion;
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
   }
@@ -75,6 +79,7 @@ export class AssetService
       name: slug(props.name),
       objectType: 'asset',
       id,
+      coreVersion: this.coreVersion,
       created: datetime(),
       updated: null,
       extension: fileType.extension,
@@ -358,8 +363,10 @@ export class AssetService
    * Migrates an potentially outdated Asset file to the current schema
    */
   public migrate(potentiallyOutdatedAssetFile: unknown) {
-    // @todo
+    const loose = migrateAssetSchema.parse(potentiallyOutdatedAssetFile);
 
-    return assetFileSchema.parse(potentiallyOutdatedAssetFile);
+    loose.coreVersion = this.coreVersion;
+
+    return assetFileSchema.parse(loose);
   }
 }

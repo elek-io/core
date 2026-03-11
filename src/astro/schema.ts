@@ -6,7 +6,7 @@ import {
   getTranslatableReferenceValueContentSchemaFromFieldDefinition,
   getTranslatableStringValueContentSchemaFromFieldDefinition,
 } from '../schema/schemaFromFieldDefinition.js';
-import { ValueTypeSchema } from '../schema/valueSchema.js';
+import { valueTypeSchema } from '../schema/valueSchema.js';
 
 /**
  * Generates a flat Zod object schema from collection field definitions
@@ -20,19 +20,19 @@ export function buildEntryValuesSchema(fieldDefinitions: FieldDefinition[]) {
 
   for (const fieldDef of fieldDefinitions) {
     switch (fieldDef.valueType) {
-      case ValueTypeSchema.enum.string:
+      case valueTypeSchema.enum.string:
         shape[fieldDef.slug] =
           getTranslatableStringValueContentSchemaFromFieldDefinition(fieldDef);
         break;
-      case ValueTypeSchema.enum.number:
+      case valueTypeSchema.enum.number:
         shape[fieldDef.slug] =
           getTranslatableNumberValueContentSchemaFromFieldDefinition(fieldDef);
         break;
-      case ValueTypeSchema.enum.boolean:
+      case valueTypeSchema.enum.boolean:
         shape[fieldDef.slug] =
           getTranslatableBooleanValueContentSchemaFromFieldDefinition();
         break;
-      case ValueTypeSchema.enum.reference:
+      case valueTypeSchema.enum.reference:
         shape[fieldDef.slug] =
           getTranslatableReferenceValueContentSchemaFromFieldDefinition(
             fieldDef

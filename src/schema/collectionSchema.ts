@@ -17,8 +17,8 @@ export const collectionFileSchema = baseFileSchema.extend({
     plural: translatableStringSchema,
   }),
   slug: z.object({
-    singular: z.string(),
-    plural: z.string(),
+    singular: slugSchema,
+    plural: slugSchema,
   }),
   description: translatableStringSchema,
   icon: supportedIconSchema,
@@ -44,6 +44,7 @@ export const createCollectionSchema = collectionFileSchema
   .omit({
     id: true,
     objectType: true,
+    coreVersion: true,
     created: true,
     updated: true,
   })
@@ -89,6 +90,11 @@ export const countCollectionsSchema = z.object({
   projectId: uuidSchema.readonly(),
 });
 export type CountCollectionsProps = z.infer<typeof countCollectionsSchema>;
+
+export const migrateCollectionSchema = z.looseObject(
+  collectionFileSchema.pick({ id: true, coreVersion: true }).shape
+);
+export type MigrateCollectionProps = z.infer<typeof migrateCollectionSchema>;
 
 export const resolveCollectionIdSchema = z.object({
   projectId: uuidSchema.readonly(),

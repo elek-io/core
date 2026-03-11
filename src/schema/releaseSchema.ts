@@ -48,7 +48,6 @@ export type CollectionChange = z.infer<typeof collectionChangeSchema>;
 export const projectChangeTypeSchema = z.enum([
   'nameChanged',
   'descriptionChanged',
-  'statusChanged',
   'defaultLanguageChanged',
   'supportedLanguageAdded',
   'supportedLanguageRemoved',

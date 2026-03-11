@@ -10,9 +10,6 @@ import { collectionExportSchema } from './collectionSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 import { gitCommitSchema, gitSwitchOptionsSchema } from './gitSchema.js';
 
-export const projectStatusSchema = z.enum(['foo', 'bar', 'todo']);
-export type ProjectStatus = z.infer<typeof projectStatusSchema>;
-
 export const projectSettingsSchema = z.object({
   language: z.object({
     default: supportedLanguageSchema,
@@ -40,11 +37,9 @@ export type ProjectBranch = z.infer<typeof projectBranchSchema>;
 
 export const projectFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.project).readonly(),
-  coreVersion: versionSchema,
   name: z.string().trim().min(1),
   description: z.string().trim().min(1),
   version: versionSchema,
-  status: projectStatusSchema,
   settings: projectSettingsSchema,
 });
 export type ProjectFile = z.infer<typeof projectFileSchema>;

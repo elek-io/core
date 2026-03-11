@@ -2,6 +2,7 @@ import Fs from 'fs-extra';
 import {
   collectionFileSchema,
   countCollectionsSchema,
+  migrateCollectionSchema,
   createCollectionSchema,
   deleteCollectionSchema,
   entryFileSchema,
@@ -43,6 +44,7 @@ export class CollectionService
   extends AbstractCrudService
   implements CrudServiceWithListCount<Collection>
 {
+  private coreVersion: string;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
 
@@ -52,6 +54,7 @@ export class CollectionService
   private rebuildPromise: Map<string, Promise<CollectionIndex>> = new Map();
 
   constructor(
+    coreVersion: string,
     options: ElekIoCoreOptions,
     logService: LogService,
     jsonFileService: JsonFileService,
@@ -59,6 +62,7 @@ export class CollectionService
   ) {
     super(serviceTypeSchema.enum.Collection, options, logService);
 
+    this.coreVersion = coreVersion;
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
   }
@@ -132,6 +136,7 @@ export class CollectionService
       ...props,
       objectType: 'collection',
       id,
+      coreVersion: this.coreVersion,
       slug: {
         singular: slug(props.slug.singular),
         plural: slugPlural,
@@ -417,9 +422,11 @@ export class CollectionService
    * Migrates an potentially outdated Collection file to the current schema
    */
   public migrate(potentiallyOutdatedCollectionFile: unknown) {
-    // @todo
+    const loose = migrateCollectionSchema.parse(potentiallyOutdatedCollectionFile);
 
-    return collectionFileSchema.parse(potentiallyOutdatedCollectionFile);
+    loose.coreVersion = this.coreVersion;
+
+    return collectionFileSchema.parse(loose);
   }
 
   /**

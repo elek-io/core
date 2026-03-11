@@ -67,18 +67,21 @@ export default class ElekIoCore {
       this.userService
     );
     this.assetService = new AssetService(
+      this.coreVersion,
       this.options,
       this.logService,
       this.jsonFileService,
       this.gitService
     );
     this.collectionService = new CollectionService(
+      this.coreVersion,
       this.options,
       this.logService,
       this.jsonFileService,
       this.gitService
     );
     this.entryService = new EntryService(
+      this.coreVersion,
       this.options,
       this.logService,
       this.jsonFileService,

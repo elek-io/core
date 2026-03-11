@@ -26,6 +26,7 @@ export const createEntrySchema = entryFileSchema
   .omit({
     id: true,
     objectType: true,
+    coreVersion: true,
     created: true,
     updated: true,
   })
@@ -47,6 +48,7 @@ export type ReadEntryProps = z.infer<typeof readEntrySchema>;
 export const updateEntrySchema = entryFileSchema
   .omit({
     objectType: true,
+    coreVersion: true,
     created: true,
     updated: true,
   })
@@ -58,6 +60,11 @@ export type UpdateEntryProps = z.infer<typeof updateEntrySchema>;
 
 export const deleteEntrySchema = readEntrySchema.extend({});
 export type DeleteEntryProps = z.infer<typeof deleteEntrySchema>;
+
+export const migrateEntrySchema = z.looseObject(
+  entryFileSchema.pick({ id: true, coreVersion: true }).shape
+);
+export type MigrateEntryProps = z.infer<typeof migrateEntrySchema>;
 
 export const countEntriesSchema = z.object({
   projectId: uuidSchema.readonly(),
