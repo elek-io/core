@@ -471,9 +471,20 @@ export class GitService {
       throw new NoCurrentUserError();
     }
 
+    const subject = `${message.method.charAt(0).toUpperCase() + message.method.slice(1)} ${message.reference.objectType} ${message.reference.id}`;
+    const trailers = [
+      `Method: ${message.method}`,
+      `Object-Type: ${message.reference.objectType}`,
+      `Object-Id: ${message.reference.id}`,
+    ];
+    if (message.reference.collectionId) {
+      trailers.push(`Collection-Id: ${message.reference.collectionId}`);
+    }
+    const fullMessage = `${subject}\n\n${trailers.join('\n')}`;
+
     const args = [
       'commit',
-      `--message=${JSON.stringify(message)}`,
+      `--message=${fullMessage}`,
       `--author=${user.name} <${user.email}>`,
     ];
     await this.git(path, args);
@@ -507,7 +518,18 @@ export class GitService {
       args = [...args, `--max-count=${options.limit}`];
     }
 
-    args = [...args, '--format=%H|%s|%an|%ae|%aI|%D'];
+    const format = [
+      '%H',
+      '%(trailers:key=Method,valueonly)',
+      '%(trailers:key=Object-Type,valueonly)',
+      '%(trailers:key=Object-Id,valueonly)',
+      '%(trailers:key=Collection-Id,valueonly)',
+      '%an',
+      '%ae',
+      '%aI',
+      '%D',
+    ].join('|');
+    args = [...args, `--format=${format}`];
 
     if (options?.filePath) {
       args = [...args, '--', options.filePath];
@@ -515,33 +537,42 @@ export class GitService {
 
     const result = await this.git(path, args);
 
-    const noEmptyLinesArr = result.stdout.split('\n').filter((line) => {
+    // Trailer values from %(trailers:key=...,valueonly) include trailing newlines.
+    // Collapsing "\n|" into "|" rejoins the pipe-delimited fields into single lines.
+    const cleaned = result.stdout.replace(/\n\|/g, '|');
+
+    const noEmptyLinesArr = cleaned.split('\n').filter((line) => {
       return line.trim() !== '';
     });
 
     const lineObjArr = await Promise.all(
       noEmptyLinesArr.map(async (line) => {
         const lineArray = line.split('|');
-        const tagId = this.refNameToTagName(lineArray[5] || '');
+        const tagId = this.refNameToTagName(lineArray[8]?.trim() || '');
         const tag = tagId ? await this.tags.read({ path, id: tagId }) : null;
+        const collectionId = lineArray[4]?.trim();
 
         return {
           hash: lineArray[0],
-          // We don't want to parse the message because it could throw.
-          // Filtering it through isGitCommit ensures it's valid as a whole.
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          message: JSON.parse(lineArray[1] || ''),
-          author: {
-            name: lineArray[2],
-            email: lineArray[3],
+          message: {
+            method: lineArray[1]?.trim(),
+            reference: {
+              objectType: lineArray[2]?.trim(),
+              id: lineArray[3]?.trim(),
+              ...(collectionId ? { collectionId } : {}),
+            },
           },
-          datetime: datetime(lineArray[4]),
+          author: {
+            name: lineArray[5],
+            email: lineArray[6],
+          },
+          datetime: datetime(lineArray[7]),
           tag,
         };
       })
     );
 
-    return lineObjArr.filter(this.isGitCommit.bind(this));
+    return lineObjArr.filter((obj) => this.isGitCommit(obj));
   }
 
   /**
@@ -593,12 +624,7 @@ export class GitService {
   ): Promise<string[]> {
     const relativeTreePath = treePath.replace(`${path}${Path.sep}`, '');
     const normalizedPath = relativeTreePath.split('\\').join('/');
-    const args = [
-      'ls-tree',
-      '--name-only',
-      commitRef,
-      `${normalizedPath}/`,
-    ];
+    const args = ['ls-tree', '--name-only', commitRef, `${normalizedPath}/`];
 
     try {
       const result = await this.git(path, args);

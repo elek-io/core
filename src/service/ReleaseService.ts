@@ -10,7 +10,6 @@ import {
   prepareReleaseSchema,
   createReleaseSchema,
   createPreviewReleaseSchema,
-  releaseTagMessageSchema,
   type AssetChange,
   type AssetFile,
   type CollectionFile,
@@ -230,12 +229,7 @@ export class ReleaseService extends AbstractCrudService {
       // Tag on production
       await this.gitService.tags.create({
         path: projectPath,
-        message: JSON.stringify(
-          releaseTagMessageSchema.parse({
-            type: 'release',
-            version: nextVersion,
-          })
-        ),
+        message: { type: 'release', version: nextVersion },
       });
 
       // Switch back to work and sync the version commit
@@ -324,12 +318,7 @@ export class ReleaseService extends AbstractCrudService {
       // Tag on work (not production)
       await this.gitService.tags.create({
         path: projectPath,
-        message: JSON.stringify(
-          releaseTagMessageSchema.parse({
-            type: 'preview',
-            version: previewVersion,
-          })
-        ),
+        message: { type: 'preview', version: previewVersion },
       });
     } catch (error) {
       // Ensure we stay on work branch on failure
@@ -1108,9 +1097,6 @@ export class ReleaseService extends AbstractCrudService {
 
   /**
    * Counts existing preview tags for a given base version since the last full release.
-   *
-   * Parses all tag messages looking for `{ type: 'preview', version: 'X.Y.Z-preview.N' }`
-   * where the base version matches.
    */
   private async countPreviewsSinceLastRelease(
     projectPath: string,
@@ -1120,24 +1106,16 @@ export class ReleaseService extends AbstractCrudService {
     let count = 0;
 
     for (const tag of tags.list) {
-      let rawMessage: unknown = null;
-      try {
-        rawMessage = JSON.parse(tag.message);
-      } catch {
-        // Not JSON, skip
-      }
-      const parsed = releaseTagMessageSchema.safeParse(rawMessage);
+      if (tag.message.type === 'upgrade') continue;
 
-      if (!parsed.success) continue;
-
-      if (parsed.data.type === 'release') {
+      if (tag.message.type === 'release') {
         // Hit the last full release — stop counting
         break;
       }
 
-      if (parsed.data.type === 'preview') {
+      if (tag.message.type === 'preview') {
         // Check if this preview is for the same base version
-        const previewBase = parsed.data.version.split('-')[0];
+        const previewBase = tag.message.version.split('-')[0];
         if (previewBase === baseVersion) {
           count++;
         }

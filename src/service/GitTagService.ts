@@ -3,6 +3,7 @@ import {
   countGitTagsSchema,
   createGitTagSchema,
   deleteGitTagSchema,
+  gitTagMessageSchema,
   gitTagSchema,
   listGitTagsSchema,
   readGitTagSchema,
@@ -13,6 +14,7 @@ import {
   type DeleteGitTagProps,
   type ElekIoCoreOptions,
   type GitTag,
+  type GitTagMessage,
   type ListGitTagsProps,
   type PaginatedList,
   type ReadGitTagProps,
@@ -56,7 +58,11 @@ export class GitTagService
       args = [...args, props.hash];
     }
 
-    args = [...args, '-m', props.message];
+    const subject = this.serializeTagMessage(props.message);
+    const trailers = this.tagMessageToTrailers(props.message);
+    const fullMessage = `${subject}\n\n${trailers.join('\n')}`;
+
+    args = [...args, '-m', fullMessage];
 
     await this.git(props.path, args);
     const tag = await this.read({ path: props.path, id });
@@ -127,14 +133,23 @@ export class GitTagService
 
     let args = ['tag', '--list'];
 
-    args = [
-      ...args,
-      '--sort=-*authordate',
-      '--format=%(refname:short)|%(subject)|%(*authorname)|%(*authoremail)|%(*authordate:iso-strict)',
-    ];
+    const format = [
+      '%(refname:short)',
+      '%(trailers:key=Type,valueonly)',
+      '%(trailers:key=Version,valueonly)',
+      '%(trailers:key=Core-Version,valueonly)',
+      '%(*authorname)',
+      '%(*authoremail)',
+      '%(*authordate:iso-strict)',
+    ].join('|');
+    args = [...args, '--sort=-*authordate', `--format=${format}`];
     const result = await this.git(props.path, args);
 
-    const noEmptyLinesArr = result.stdout.split('\n').filter((line) => {
+    // Trailer values from %(trailers:key=...,valueonly) include trailing newlines.
+    // Collapsing "\n|" into "|" rejoins the pipe-delimited fields into single lines.
+    const cleaned = result.stdout.replace(/\n\|/g, '|');
+
+    const noEmptyLinesArr = cleaned.split('\n').filter((line) => {
       return line.trim() !== '';
     });
 
@@ -143,19 +158,22 @@ export class GitTagService
 
       // Remove the '<' and '>' enclosing the email
       // @todo is there another format like authoremail that returns the original email?
-      if (lineArray[3]?.startsWith('<') && lineArray[3]?.endsWith('>')) {
-        lineArray[3] = lineArray[3].slice(1, -1);
-        lineArray[3] = lineArray[3].slice(0, -1);
+      if (lineArray[5]?.startsWith('<') && lineArray[5]?.endsWith('>')) {
+        lineArray[5] = lineArray[5].slice(1, -1);
       }
 
       return {
         id: lineArray[0],
-        message: lineArray[1],
+        message: this.parseTagTrailers(
+          lineArray[1]?.trim(),
+          lineArray[2]?.trim(),
+          lineArray[3]?.trim()
+        ),
         author: {
-          name: lineArray[2],
-          email: lineArray[3],
+          name: lineArray[4],
+          email: lineArray[5],
         },
-        datetime: datetime(lineArray[4]),
+        datetime: datetime(lineArray[6]),
       };
     });
 
@@ -182,6 +200,52 @@ export class GitTagService
 
     const gitTags = await this.list({ path: props.path });
     return gitTags.total;
+  }
+
+  /**
+   * Serializes a GitTagMessage into a human-readable subject line
+   */
+  private serializeTagMessage(message: GitTagMessage): string {
+    const type = message.type.charAt(0).toUpperCase() + message.type.slice(1);
+    const version =
+      message.type === 'upgrade' ? message.coreVersion : message.version;
+    return `${type} ${version}`;
+  }
+
+  /**
+   * Converts a GitTagMessage into git trailer lines
+   */
+  private tagMessageToTrailers(message: GitTagMessage): string[] {
+    const trailers = [`Type: ${message.type}`];
+    if (message.type === 'upgrade') {
+      trailers.push(`Core-Version: ${message.coreVersion}`);
+    } else {
+      trailers.push(`Version: ${message.version}`);
+    }
+    return trailers;
+  }
+
+  /**
+   * Parses git trailer values back into a GitTagMessage
+   */
+  private parseTagTrailers(
+    type: string | undefined,
+    version: string | undefined,
+    coreVersion: string | undefined
+  ): GitTagMessage | null {
+    switch (type) {
+      case 'upgrade':
+        return gitTagMessageSchema.parse({ type, coreVersion });
+      case 'release':
+      case 'preview':
+        return gitTagMessageSchema.parse({ type, version });
+      default:
+        this.logService.warn({
+          source: 'core',
+          message: `Tag with ID "${type}" has an invalid or missing Type trailer and will be ignored`,
+        });
+        return null;
+    }
   }
 
   /**

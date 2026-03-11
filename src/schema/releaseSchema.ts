@@ -110,15 +110,6 @@ export const createReleaseSchema = z.object({
 });
 export type CreateReleaseProps = z.infer<typeof createReleaseSchema>;
 
-export const releaseTypeSchema = z.enum(['release', 'preview']);
-export type ReleaseType = z.infer<typeof releaseTypeSchema>;
-
-export const releaseTagMessageSchema = z.object({
-  type: releaseTypeSchema,
-  version: versionSchema,
-});
-export type ReleaseTagMessage = z.infer<typeof releaseTagMessageSchema>;
-
 export const createPreviewReleaseSchema = z.object({
   projectId: uuidSchema.readonly(),
 });

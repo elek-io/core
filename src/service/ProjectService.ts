@@ -374,7 +374,10 @@ export class ProjectService
       });
       await this.gitService.tags.create({
         path: projectPath,
-        message: `Upgraded Project to Core version ${migratedProjectFile.coreVersion}`,
+        message: {
+          type: 'upgrade',
+          coreVersion: migratedProjectFile.coreVersion,
+        },
       });
       await this.gitService.branches.delete(
         projectPath,

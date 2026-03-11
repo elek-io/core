@@ -24,10 +24,10 @@ describe('GitTagService', function () {
   it('should be able to create a new tag', async function () {
     tag = await core.git.tags.create({
       path: projectPath,
-      message: 'Initial tag',
+      message: { type: 'release', version: '1.0.0' },
     });
 
-    expect(tag.message).toEqual('Initial tag');
+    expect(tag.message).toEqual({ type: 'release', version: '1.0.0' });
   });
 
   it('should be able to read a tag', async function () {
@@ -36,7 +36,7 @@ describe('GitTagService', function () {
       id: tag.id,
     });
 
-    expect(readTag.message).toEqual('Initial tag');
+    expect(readTag.message).toEqual({ type: 'release', version: '1.0.0' });
   });
 
   it('should throw when trying to update a tag', function () {
@@ -59,6 +59,17 @@ describe('GitTagService', function () {
     expect(tags.list.length).toEqual(1);
   });
 
+  it('should preserve the full author email when listing tags', async function () {
+    const tags = await core.git.tags.list({
+      path: projectPath,
+    });
+
+    const listedTag = tags.list[0];
+    expect(listedTag).toBeDefined();
+    // The email should not have its last character truncated (double-slice bug)
+    expect(listedTag!.author.email).toEqual('john.doe@test.com');
+  });
+
   it('should be able to delete the tag', async function () {
     await core.git.tags.delete({
       path: projectPath,
@@ -73,10 +84,10 @@ describe('GitTagService', function () {
   it('should be able to create a new tag at specific commit hash', async function () {
     tag = await core.git.tags.create({
       path: projectPath,
-      message: 'Tagged HEAD',
+      message: { type: 'upgrade', coreVersion: '0.16.0' },
       hash: 'HEAD',
     });
 
-    expect(tag.message).toEqual('Tagged HEAD');
+    expect(tag.message).toEqual({ type: 'upgrade', coreVersion: '0.16.0' });
   });
 });

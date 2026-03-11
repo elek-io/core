@@ -74,12 +74,9 @@ export const projectHistoryResultSchema = z.object({
 });
 export type ProjectHistoryResult = z.infer<typeof projectHistoryResultSchema>;
 
-export const migrateProjectSchema = projectFileSchema
-  .pick({
-    id: true,
-    coreVersion: true,
-  })
-  .loose();
+export const migrateProjectSchema = z.looseObject(
+  projectFileSchema.pick({ id: true, coreVersion: true }).shape
+);
 export type MigrateProjectProps = z.infer<typeof migrateProjectSchema>;
 
 export const projectExportSchema = projectSchema.extend({

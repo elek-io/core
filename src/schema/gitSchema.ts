@@ -1,11 +1,11 @@
 import { z } from '@hono/zod-openapi';
-import { objectTypeSchema, uuidSchema } from './baseSchema.js';
+import { objectTypeSchema, uuidSchema, versionSchema } from './baseSchema.js';
 
 /**
  * Signature git uses to identify users
  */
 export const gitSignatureSchema = z.object({
-  name: z.string(),
+  name: z.string().regex(/^[^|]+$/, 'Name must not contain pipe characters'),
   email: z.string().email(),
 });
 export type GitSignature = z.infer<typeof gitSignatureSchema>;
@@ -26,11 +26,27 @@ export const gitMessageSchema = z.object({
 });
 export type GitMessage = z.infer<typeof gitMessageSchema>;
 
+export const gitTagMessageSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('release'),
+    version: versionSchema,
+  }),
+  z.object({
+    type: z.literal('preview'),
+    version: versionSchema,
+  }),
+  z.object({
+    type: z.literal('upgrade'),
+    coreVersion: versionSchema,
+  }),
+]);
+export type GitTagMessage = z.infer<typeof gitTagMessageSchema>;
+
 export const gitTagSchema = z.object({
   id: uuidSchema,
-  message: z.string(),
+  message: gitTagMessageSchema,
   author: gitSignatureSchema,
-  datetime: z.string().datetime(),
+  datetime: z.iso.datetime(),
 });
 export type GitTag = z.infer<typeof gitTagSchema>;
 
@@ -38,10 +54,10 @@ export const gitCommitSchema = z.object({
   /**
    * SHA-1 hash of the commit
    */
-  hash: z.string(),
+  hash: z.hash('sha1'),
   message: gitMessageSchema,
   author: gitSignatureSchema,
-  datetime: z.string().datetime(),
+  datetime: z.iso.datetime(),
   tag: gitTagSchema.nullable(),
 });
 export type GitCommit = z.infer<typeof gitCommitSchema>;
