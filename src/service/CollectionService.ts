@@ -30,6 +30,7 @@ import {
   type GitCommit,
   collectionHistorySchema,
 } from '../schema/index.js';
+import { applyMigrations, collectionMigrations } from './migrations/index.js';
 import { folders, pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
@@ -423,10 +424,8 @@ export class CollectionService
    */
   public migrate(potentiallyOutdatedCollectionFile: unknown) {
     const loose = migrateCollectionSchema.parse(potentiallyOutdatedCollectionFile);
-
-    loose.coreVersion = this.coreVersion;
-
-    return collectionFileSchema.parse(loose);
+    const migrated = applyMigrations(loose, collectionMigrations, this.coreVersion);
+    return collectionFileSchema.parse(migrated);
   }
 
   /**

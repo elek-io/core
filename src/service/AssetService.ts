@@ -29,6 +29,7 @@ import {
   type GitCommit,
   assetHistorySchema,
 } from '../schema/index.js';
+import { applyMigrations, assetMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
@@ -364,9 +365,7 @@ export class AssetService
    */
   public migrate(potentiallyOutdatedAssetFile: unknown) {
     const loose = migrateAssetSchema.parse(potentiallyOutdatedAssetFile);
-
-    loose.coreVersion = this.coreVersion;
-
-    return assetFileSchema.parse(loose);
+    const migrated = applyMigrations(loose, assetMigrations, this.coreVersion);
+    return assetFileSchema.parse(migrated);
   }
 }

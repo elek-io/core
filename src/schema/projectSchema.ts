@@ -115,21 +115,6 @@ export const deleteProjectSchema = readProjectSchema.extend({
 });
 export type DeleteProjectProps = z.infer<typeof deleteProjectSchema>;
 
-export const projectUpgradeSchema = z.object({
-  /**
-   * The Core version the Project will be upgraded to
-   */
-  to: versionSchema.readonly(),
-  /**
-   * Function that will be executed in the process of upgrading a Project
-   */
-  run: z.function({
-    input: [projectFileSchema],
-    output: z.promise(z.void()),
-  }),
-});
-export type ProjectUpgrade = z.infer<typeof projectUpgradeSchema>;
-
 export const cloneProjectSchema = z.object({
   url: z.string(),
 });

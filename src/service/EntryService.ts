@@ -27,6 +27,7 @@ import {
   type GitCommit,
   entryHistorySchema,
 } from '../schema/index.js';
+import { applyMigrations, entryMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
@@ -297,10 +298,8 @@ export class EntryService
    */
   public migrate(potentiallyOutdatedEntryFile: unknown) {
     const loose = migrateEntrySchema.parse(potentiallyOutdatedEntryFile);
-
-    loose.coreVersion = this.coreVersion;
-
-    return entryFileSchema.parse(loose);
+    const migrated = applyMigrations(loose, entryMigrations, this.coreVersion);
+    return entryFileSchema.parse(migrated);
   }
 
   /**
