@@ -1,7 +1,14 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import core, { type Collection, type Project } from '../test/setup.js';
+import core, {
+  type Asset,
+  type Collection,
+  type Entry,
+  type Project,
+} from '../test/setup.js';
 import {
+  createAsset,
   createCollection,
+  createEntry,
   createProject,
   ensureCleanGitStatus,
 } from '../test/util.js';
@@ -9,6 +16,8 @@ import {
 describe('ReleaseService', function () {
   let project: Project & { destroy: () => Promise<void> };
   let collection: Collection;
+  let asset: Asset;
+  let entry: Entry;
 
   beforeAll(async function () {
     project = await createProject();
@@ -141,9 +150,9 @@ describe('ReleaseService', function () {
     const diff = await core.releases.prepare({ projectId: project.id });
 
     expect(diff.bump).toEqual('patch');
-    expect(
-      diff.fieldChanges.some((c) => c.changeType === 'labelChanged')
-    ).toBe(true);
+    expect(diff.fieldChanges.some((c) => c.changeType === 'labelChanged')).toBe(
+      true
+    );
   });
 
   it('should create another patch release for field label change', async function () {
@@ -168,9 +177,7 @@ describe('ReleaseService', function () {
 
     expect(diff.bump).toEqual('minor');
     expect(
-      diff.fieldChanges.some(
-        (c) => c.changeType === 'isNotRequiredToRequired'
-      )
+      diff.fieldChanges.some((c) => c.changeType === 'isNotRequiredToRequired')
     ).toBe(true);
   });
 
@@ -194,9 +201,9 @@ describe('ReleaseService', function () {
     const diff = await core.releases.prepare({ projectId: project.id });
 
     expect(diff.bump).toEqual('major');
-    expect(
-      diff.fieldChanges.some((c) => c.changeType === 'deleted')
-    ).toBe(true);
+    expect(diff.fieldChanges.some((c) => c.changeType === 'deleted')).toBe(
+      true
+    );
   });
 
   it('should create a major release', async function () {
@@ -236,14 +243,276 @@ describe('ReleaseService', function () {
     const diff = await core.releases.prepare({ projectId: project.id });
 
     expect(diff.bump).toEqual('major');
-    expect(
-      diff.collectionChanges.some((c) => c.changeType === 'deleted')
-    ).toBe(true);
+    expect(diff.collectionChanges.some((c) => c.changeType === 'deleted')).toBe(
+      true
+    );
   });
 
   it('should create a major release for deleted collection', async function () {
     const result = await core.releases.create({ projectId: project.id });
 
     expect(result.version).toEqual('2.0.0');
+  });
+
+  it('should detect MINOR bump when an asset is added', async function () {
+    // Create a new collection and asset for subsequent tests
+    collection = await createCollection(project.id);
+    asset = await createAsset(project.id);
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('minor');
+    expect(
+      diff.assetChanges.some(
+        (c) => c.changeType === 'added' && c.assetId === asset.id
+      )
+    ).toBe(true);
+  });
+
+  it('should create a minor release for added asset and collection', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('2.1.0');
+  });
+
+  it('should detect PATCH bump when asset metadata changes', async function () {
+    await core.assets.update({
+      projectId: project.id,
+      id: asset.id,
+      name: 'Updated Asset Name',
+      description: 'Updated description',
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('patch');
+    expect(
+      diff.assetChanges.some(
+        (c) => c.changeType === 'metadataChanged' && c.assetId === asset.id
+      )
+    ).toBe(true);
+  });
+
+  it('should create a patch release for asset metadata change', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('2.1.1');
+  });
+
+  it('should detect MAJOR bump when an asset is deleted', async function () {
+    await core.assets.delete({
+      projectId: project.id,
+      id: asset.id,
+      extension: asset.extension,
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('major');
+    expect(
+      diff.assetChanges.some(
+        (c) => c.changeType === 'deleted' && c.assetId === asset.id
+      )
+    ).toBe(true);
+  });
+
+  it('should create a major release for deleted asset', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('3.0.0');
+  });
+
+  it('should detect MINOR bump when an entry is added', async function () {
+    // Need an asset for the entry's asset reference field
+    asset = await createAsset(project.id);
+    entry = await createEntry(project.id, collection.id, asset.id);
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('minor');
+    expect(
+      diff.entryChanges.some(
+        (c) => c.changeType === 'added' && c.entryId === entry.id
+      )
+    ).toBe(true);
+  });
+
+  it('should create a minor release for added entry', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('3.1.0');
+  });
+
+  it('should detect PATCH bump when entry values change', async function () {
+    await core.entries.update({
+      projectId: project.id,
+      collectionId: collection.id,
+      id: entry.id,
+      values: {
+        ...entry.values,
+        'product-name': {
+          objectType: 'value',
+          valueType: 'string',
+          content: {
+            en: 'Modified Product Name',
+          },
+        },
+      },
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('patch');
+    expect(
+      diff.entryChanges.some(
+        (c) => c.changeType === 'modified' && c.entryId === entry.id
+      )
+    ).toBe(true);
+  });
+
+  it('should create a patch release for modified entry', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('3.1.1');
+  });
+
+  it('should detect MAJOR bump when an entry is deleted', async function () {
+    await core.entries.delete({
+      projectId: project.id,
+      collectionId: collection.id,
+      id: entry.id,
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('major');
+    expect(
+      diff.entryChanges.some(
+        (c) => c.changeType === 'deleted' && c.entryId === entry.id
+      )
+    ).toBe(true);
+  });
+
+  it('should create a major release for deleted entry', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('4.0.0');
+  });
+
+  it('should detect PATCH bump when project name changes', async function () {
+    await core.projects.update({
+      id: project.id,
+      name: 'Renamed Project',
+      description: project.description,
+      settings: project.settings,
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('patch');
+    expect(
+      diff.projectChanges.some((c) => c.changeType === 'nameChanged')
+    ).toBe(true);
+  });
+
+  it('should create a patch release for project name change', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('4.0.1');
+    // Update local reference
+    // Project state is re-read in subsequent tests to avoid stale references
+  });
+
+  it('should detect MINOR bump when a supported language is added', async function () {
+    const currentProject = await core.projects.read({ id: project.id });
+
+    await core.projects.update({
+      id: project.id,
+      name: currentProject.name,
+      description: currentProject.description,
+      settings: {
+        language: {
+          default: currentProject.settings.language.default,
+          supported: [...currentProject.settings.language.supported, 'fr'],
+        },
+      },
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('minor');
+    expect(
+      diff.projectChanges.some((c) => c.changeType === 'supportedLanguageAdded')
+    ).toBe(true);
+  });
+
+  it('should create a minor release for added language', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('4.1.0');
+    // Project state is re-read in subsequent tests to avoid stale references
+  });
+
+  it('should detect MAJOR bump when the default language changes', async function () {
+    const currentProject = await core.projects.read({ id: project.id });
+
+    await core.projects.update({
+      id: project.id,
+      name: currentProject.name,
+      description: currentProject.description,
+      settings: {
+        language: {
+          default: 'de',
+          supported: currentProject.settings.language.supported,
+        },
+      },
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('major');
+    expect(
+      diff.projectChanges.some((c) => c.changeType === 'defaultLanguageChanged')
+    ).toBe(true);
+  });
+
+  it('should create a major release for default language change', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('5.0.0');
+    // Project state is re-read in subsequent tests to avoid stale references
+  });
+
+  it('should detect MAJOR bump when a supported language is removed', async function () {
+    const currentProject = await core.projects.read({ id: project.id });
+
+    await core.projects.update({
+      id: project.id,
+      name: currentProject.name,
+      description: currentProject.description,
+      settings: {
+        language: {
+          default: currentProject.settings.language.default,
+          supported: currentProject.settings.language.supported.filter(
+            (l) => l !== 'en'
+          ),
+        },
+      },
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('major');
+    expect(
+      diff.projectChanges.some(
+        (c) => c.changeType === 'supportedLanguageRemoved'
+      )
+    ).toBe(true);
+  });
+
+  it('should create a major release for removed language', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('6.0.0');
   });
 });

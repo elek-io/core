@@ -1,7 +1,9 @@
 import { isDeepStrictEqual } from 'node:util';
 import Semver from 'semver';
 import {
+  assetFileSchema,
   collectionFileSchema,
+  entryFileSchema,
   projectBranchSchema,
   projectFileSchema,
   serviceTypeSchema,
@@ -9,12 +11,18 @@ import {
   createReleaseSchema,
   createPreviewReleaseSchema,
   releaseTagMessageSchema,
+  type AssetChange,
+  type AssetFile,
   type CollectionFile,
   type ElekIoCoreOptions,
+  type EntryChange,
+  type EntryFile,
   type FieldDefinition,
   type PrepareReleaseProps,
   type CreateReleaseProps,
   type CreatePreviewReleaseProps,
+  type ProjectChange,
+  type ProjectFile,
   type ReleaseDiff,
   type ReleaseResult,
   type SemverBump,
@@ -24,7 +32,6 @@ import {
 import { pathTo } from '../util/node.js';
 import { datetime } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
-import type { CollectionService } from './CollectionService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -39,7 +46,6 @@ import type { ProjectService } from './ProjectService.js';
 export class ReleaseService extends AbstractCrudService {
   private gitService: GitService;
   private jsonFileService: JsonFileService;
-  private collectionService: CollectionService;
   private projectService: ProjectService;
 
   constructor(
@@ -47,14 +53,12 @@ export class ReleaseService extends AbstractCrudService {
     logService: LogService,
     gitService: GitService,
     jsonFileService: JsonFileService,
-    collectionService: CollectionService,
     projectService: ProjectService
   ) {
     super(serviceTypeSchema.enum.Release, options, logService);
 
     this.gitService = gitService;
     this.jsonFileService = jsonFileService;
-    this.collectionService = collectionService;
     this.projectService = projectService;
   }
 
@@ -78,31 +82,75 @@ export class ReleaseService extends AbstractCrudService {
     const project = await this.projectService.read({ id: props.projectId });
     const currentVersion = project.version;
 
-    // Get current collections from work branch (disk)
-    const currentCollections = await this.collectionService.list({
-      projectId: props.projectId,
-      limit: 0,
-    });
+    const productionRef = projectBranchSchema.enum.production;
 
-    // Get collections from production branch
+    // Diff project settings
+    const productionProject = await this.getProjectAtRef(
+      props.projectId,
+      projectPath,
+      productionRef
+    );
+    const projectDiff = this.diffProject(project, productionProject);
+
+    // Diff collections
+    const currentCollections = await this.getCollectionsAtRef(
+      props.projectId,
+      projectPath,
+      projectBranchSchema.enum.work
+    );
     const productionCollections = await this.getCollectionsAtRef(
       props.projectId,
       projectPath,
-      projectBranchSchema.enum.production
+      productionRef
     );
-
-    // Diff collections
-    const { bump, collectionChanges, fieldChanges } = this.diffCollections(
-      currentCollections.list,
+    const collectionDiff = this.diffCollections(
+      currentCollections,
       productionCollections
     );
 
-    // If no schema changes, check if there are any commits between production and work
-    let finalBump = bump;
+    // Diff assets
+    const currentAssets = await this.getAssetsAtRef(
+      props.projectId,
+      projectPath,
+      projectBranchSchema.enum.work
+    );
+    const productionAssets = await this.getAssetsAtRef(
+      props.projectId,
+      projectPath,
+      productionRef
+    );
+    const assetDiff = this.diffAssets(currentAssets, productionAssets);
+
+    // Diff entries across all collections (union of current and production IDs)
+    const allCollectionIds = new Set([
+      ...currentCollections.map((c) => c.id),
+      ...productionCollections.map((c) => c.id),
+    ]);
+    const entryDiff = await this.diffEntries(
+      props.projectId,
+      projectPath,
+      allCollectionIds,
+      productionRef
+    );
+
+    // Combine bumps from all diffs
+    let finalBump: SemverBump | null = null;
+    for (const bump of [
+      projectDiff.bump,
+      collectionDiff.bump,
+      assetDiff.bump,
+      entryDiff.bump,
+    ]) {
+      if (bump) {
+        finalBump = finalBump ? this.higherBump(finalBump, bump) : bump;
+      }
+    }
+
+    // Fallback: check if there are any commits between production and work
     if (!finalBump) {
       const hasContentChanges = await this.hasCommitsBetween(
         projectPath,
-        projectBranchSchema.enum.production,
+        productionRef,
         projectBranchSchema.enum.work
       );
       if (hasContentChanges) {
@@ -119,8 +167,11 @@ export class ReleaseService extends AbstractCrudService {
       bump: finalBump,
       currentVersion,
       nextVersion,
-      collectionChanges,
-      fieldChanges,
+      projectChanges: projectDiff.projectChanges,
+      collectionChanges: collectionDiff.collectionChanges,
+      fieldChanges: collectionDiff.fieldChanges,
+      assetChanges: assetDiff.assetChanges,
+      entryChanges: entryDiff.entryChanges,
     };
   }
 
@@ -302,6 +353,115 @@ export class ReleaseService extends AbstractCrudService {
   }
 
   /**
+   * Reads the project file as it exists at a given git ref
+   */
+  private async getProjectAtRef(
+    projectId: string,
+    projectPath: string,
+    ref: string
+  ): Promise<ProjectFile | null> {
+    try {
+      const content = await this.gitService.getFileContentAtCommit(
+        projectPath,
+        pathTo.projectFile(projectId),
+        ref
+      );
+      return projectFileSchema.parse(JSON.parse(content));
+    } catch {
+      // Project may not exist at this ref (first release scenario)
+      return null;
+    }
+  }
+
+  /**
+   * Reads asset metadata files as they exist at a given git ref
+   */
+  private async getAssetsAtRef(
+    projectId: string,
+    projectPath: string,
+    ref: string
+  ): Promise<AssetFile[]> {
+    const assetsPath = pathTo.assets(projectId);
+
+    const fileNames = await this.gitService.listTreeAtCommit(
+      projectPath,
+      assetsPath,
+      ref
+    );
+
+    const assets: AssetFile[] = [];
+
+    for (const fileName of fileNames) {
+      if (!fileName.endsWith('.json')) continue;
+
+      const assetId = fileName.replace('.json', '');
+      const assetFilePath = pathTo.assetFile(projectId, assetId);
+
+      try {
+        const content = await this.gitService.getFileContentAtCommit(
+          projectPath,
+          assetFilePath,
+          ref
+        );
+        const assetFile = assetFileSchema.parse(JSON.parse(content));
+        assets.push(assetFile);
+      } catch {
+        this.logService.debug({
+          source: 'core',
+          message: `Skipping asset "${fileName}" at ref "${ref}" during release diff`,
+        });
+      }
+    }
+
+    return assets;
+  }
+
+  /**
+   * Reads entry files for a single collection as they exist at a given git ref
+   */
+  private async getEntriesAtRef(
+    projectId: string,
+    projectPath: string,
+    collectionId: string,
+    ref: string
+  ): Promise<EntryFile[]> {
+    const entriesPath = pathTo.entries(projectId, collectionId);
+
+    const fileNames = await this.gitService.listTreeAtCommit(
+      projectPath,
+      entriesPath,
+      ref
+    );
+
+    const entries: EntryFile[] = [];
+
+    for (const fileName of fileNames) {
+      if (!fileName.endsWith('.json') || fileName === 'collection.json')
+        continue;
+
+      const entryId = fileName.replace('.json', '');
+      const entryFilePath = pathTo.entryFile(projectId, collectionId, entryId);
+
+      try {
+        const content = await this.gitService.getFileContentAtCommit(
+          projectPath,
+          entryFilePath,
+          ref
+        );
+        const entryFile = entryFileSchema.parse(JSON.parse(content));
+        entries.push(entryFile);
+      } catch {
+        this.logService.debug({
+          source: 'core',
+          message: `Skipping entry "${fileName}" in collection "${collectionId}" at ref "${ref}" during release diff`,
+        });
+      }
+    }
+
+    return entries;
+  }
+
+  /**
    * Reads collections as they exist at a given git ref (branch or commit)
    */
   private async getCollectionsAtRef(
@@ -426,6 +586,233 @@ export class ReleaseService extends AbstractCrudService {
     }
 
     return { bump: highestBump, collectionChanges, fieldChanges };
+  }
+
+  /**
+   * Diffs the project file between current and production.
+   *
+   * Skips immutable/system-managed fields (id, objectType, created, updated, version, coreVersion).
+   */
+  private diffProject(
+    current: ProjectFile,
+    production: ProjectFile | null
+  ): {
+    bump: SemverBump | null;
+    projectChanges: ProjectChange[];
+  } {
+    const projectChanges: ProjectChange[] = [];
+
+    // No production project means first release — no changes to report
+    if (!production) {
+      return { bump: null, projectChanges };
+    }
+
+    let highestBump: SemverBump | null = null;
+
+    // MAJOR: default language changed
+    if (
+      current.settings.language.default !== production.settings.language.default
+    ) {
+      projectChanges.push({
+        changeType: 'defaultLanguageChanged',
+        bump: 'major',
+      });
+      highestBump = 'major';
+    }
+
+    // MAJOR: supported language removed
+    const currentSupported = new Set(current.settings.language.supported);
+    const productionSupported = new Set(production.settings.language.supported);
+
+    for (const lang of productionSupported) {
+      if (!currentSupported.has(lang)) {
+        projectChanges.push({
+          changeType: 'supportedLanguageRemoved',
+          bump: 'major',
+        });
+        highestBump = 'major';
+        break;
+      }
+    }
+
+    // MINOR: supported language added
+    for (const lang of currentSupported) {
+      if (!productionSupported.has(lang)) {
+        projectChanges.push({
+          changeType: 'supportedLanguageAdded',
+          bump: 'minor',
+        });
+        highestBump = this.higherBump(highestBump, 'minor');
+        break;
+      }
+    }
+
+    // PATCH: name, description, status
+    if (current.name !== production.name) {
+      projectChanges.push({ changeType: 'nameChanged', bump: 'patch' });
+      highestBump = this.higherBump(highestBump, 'patch');
+    }
+
+    if (current.description !== production.description) {
+      projectChanges.push({
+        changeType: 'descriptionChanged',
+        bump: 'patch',
+      });
+      highestBump = this.higherBump(highestBump, 'patch');
+    }
+
+    if (current.status !== production.status) {
+      projectChanges.push({ changeType: 'statusChanged', bump: 'patch' });
+      highestBump = this.higherBump(highestBump, 'patch');
+    }
+
+    return { bump: highestBump, projectChanges };
+  }
+
+  /**
+   * Diffs two sets of assets and returns all changes with the computed bump level.
+   */
+  private diffAssets(
+    currentAssets: AssetFile[],
+    productionAssets: AssetFile[]
+  ): {
+    bump: SemverBump | null;
+    assetChanges: AssetChange[];
+  } {
+    const assetChanges: AssetChange[] = [];
+    let highestBump: SemverBump | null = null;
+
+    const currentById = new Map(currentAssets.map((a) => [a.id, a]));
+    const productionById = new Map(productionAssets.map((a) => [a.id, a]));
+
+    // Deleted assets (in production but not in current) — MAJOR
+    for (const [id] of productionById) {
+      if (!currentById.has(id)) {
+        assetChanges.push({ assetId: id, changeType: 'deleted', bump: 'major' });
+        highestBump = 'major';
+      }
+    }
+
+    // New assets (in current but not in production) — MINOR
+    for (const [id] of currentById) {
+      if (!productionById.has(id)) {
+        assetChanges.push({ assetId: id, changeType: 'added', bump: 'minor' });
+        highestBump = this.higherBump(highestBump, 'minor');
+      }
+    }
+
+    // Modified assets — compare properties
+    for (const [id, current] of currentById) {
+      const production = productionById.get(id);
+      if (!production) continue;
+
+      // Binary changed (extension, mimeType, or size differ) — PATCH
+      if (
+        current.extension !== production.extension ||
+        current.mimeType !== production.mimeType ||
+        current.size !== production.size
+      ) {
+        assetChanges.push({
+          assetId: id,
+          changeType: 'binaryChanged',
+          bump: 'patch',
+        });
+        highestBump = this.higherBump(highestBump, 'patch');
+      }
+
+      // Metadata changed (name or description differ) — PATCH
+      if (
+        current.name !== production.name ||
+        current.description !== production.description
+      ) {
+        assetChanges.push({
+          assetId: id,
+          changeType: 'metadataChanged',
+          bump: 'patch',
+        });
+        highestBump = this.higherBump(highestBump, 'patch');
+      }
+    }
+
+    return { bump: highestBump, assetChanges };
+  }
+
+  /**
+   * Diffs entries across all collections between current and production.
+   */
+  private async diffEntries(
+    projectId: string,
+    projectPath: string,
+    allCollectionIds: Set<string>,
+    productionRef: string
+  ): Promise<{
+    bump: SemverBump | null;
+    entryChanges: EntryChange[];
+  }> {
+    const entryChanges: EntryChange[] = [];
+    let highestBump: SemverBump | null = null;
+
+    for (const collectionId of allCollectionIds) {
+      const currentEntries = await this.getEntriesAtRef(
+        projectId,
+        projectPath,
+        collectionId,
+        projectBranchSchema.enum.work
+      );
+      const productionEntries = await this.getEntriesAtRef(
+        projectId,
+        projectPath,
+        collectionId,
+        productionRef
+      );
+
+      const currentById = new Map(currentEntries.map((e) => [e.id, e]));
+      const productionById = new Map(productionEntries.map((e) => [e.id, e]));
+
+      // Deleted entries — MAJOR
+      for (const [id] of productionById) {
+        if (!currentById.has(id)) {
+          entryChanges.push({
+            collectionId,
+            entryId: id,
+            changeType: 'deleted',
+            bump: 'major',
+          });
+          highestBump = 'major';
+        }
+      }
+
+      // New entries — MINOR
+      for (const [id] of currentById) {
+        if (!productionById.has(id)) {
+          entryChanges.push({
+            collectionId,
+            entryId: id,
+            changeType: 'added',
+            bump: 'minor',
+          });
+          highestBump = this.higherBump(highestBump, 'minor');
+        }
+      }
+
+      // Modified entries — PATCH
+      for (const [id, current] of currentById) {
+        const production = productionById.get(id);
+        if (!production) continue;
+
+        if (!isDeepStrictEqual(current.values, production.values)) {
+          entryChanges.push({
+            collectionId,
+            entryId: id,
+            changeType: 'modified',
+            bump: 'patch',
+          });
+          highestBump = this.higherBump(highestBump, 'patch');
+        }
+      }
+    }
+
+    return { bump: highestBump, entryChanges };
   }
 
   /**

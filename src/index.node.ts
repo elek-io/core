@@ -100,7 +100,6 @@ export default class ElekIoCore {
       this.logService,
       this.gitService,
       this.jsonFileService,
-      this.collectionService,
       this.projectService
     );
     this.localApi = new LocalApi(
