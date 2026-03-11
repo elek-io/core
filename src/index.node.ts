@@ -14,6 +14,7 @@ import {
   GitService,
   JsonFileService,
   ProjectService,
+  ReleaseService,
   UserService,
 } from './service/index.js';
 import { LogService } from './service/LogService.js';
@@ -40,6 +41,7 @@ export default class ElekIoCore {
   private readonly projectService: ProjectService;
   private readonly collectionService: CollectionService;
   private readonly entryService: EntryService;
+  private readonly releaseService: ReleaseService;
   private readonly localApi: LocalApi;
 
   constructor(props?: ConstructorElekIoCoreProps) {
@@ -92,6 +94,14 @@ export default class ElekIoCore {
       this.assetService,
       this.collectionService,
       this.entryService
+    );
+    this.releaseService = new ReleaseService(
+      this.options,
+      this.logService,
+      this.gitService,
+      this.jsonFileService,
+      this.collectionService,
+      this.projectService
     );
     this.localApi = new LocalApi(
       this.logService,
@@ -166,6 +176,13 @@ export default class ElekIoCore {
    */
   public get entries(): EntryService {
     return this.entryService;
+  }
+
+  /**
+   * Prepare and create releases
+   */
+  public get releases(): ReleaseService {
+    return this.releaseService;
   }
 
   /**

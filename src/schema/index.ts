@@ -13,3 +13,4 @@ export * from './userSchema.js';
 export * from './valueSchema.js';
 export * from './cliSchema.js';
 export * from './logSchema.js';
+export * from './releaseSchema.js';

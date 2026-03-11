@@ -11,7 +11,7 @@ export const gitSignatureSchema = z.object({
 export type GitSignature = z.infer<typeof gitSignatureSchema>;
 
 export const gitMessageSchema = z.object({
-  method: z.enum(['create', 'update', 'delete', 'upgrade']),
+  method: z.enum(['create', 'update', 'delete', 'upgrade', 'release']),
   reference: z.object({
     objectType: objectTypeSchema,
     /**

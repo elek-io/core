@@ -574,6 +574,54 @@ export class GitService {
     ).stdout;
   }
 
+  /**
+   * Lists directory entries at a specific commit
+   *
+   * Useful for discovering what files/folders existed at a past commit,
+   * e.g. to detect deleted collections when comparing branches.
+   *
+   * @see https://git-scm.com/docs/git-ls-tree
+   *
+   * @param path      Path to the repository
+   * @param treePath  Relative path within the repository to list
+   * @param commitRef Commit hash, branch name, or other git ref
+   */
+  public async listTreeAtCommit(
+    path: string,
+    treePath: string,
+    commitRef: string
+  ): Promise<string[]> {
+    const relativeTreePath = treePath.replace(`${path}${Path.sep}`, '');
+    const normalizedPath = relativeTreePath.split('\\').join('/');
+    const args = [
+      'ls-tree',
+      '--name-only',
+      commitRef,
+      `${normalizedPath}/`,
+    ];
+
+    try {
+      const result = await this.git(path, args);
+      return result.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line !== '')
+        .map((entry) => {
+          // ls-tree returns paths relative to repo root like "collections/uuid"
+          // Extract just the last segment (the folder/file name)
+          const parts = entry.split('/');
+          return parts[parts.length - 1] || entry;
+        });
+    } catch (error) {
+      // If the path or ref doesn't exist (e.g. first release), return empty.
+      // GitError is thrown for non-zero exit codes from git commands.
+      if (error instanceof GitError) {
+        return [];
+      }
+      throw error;
+    }
+  }
+
   public refNameToTagName(refName: string) {
     const tagName = refName.replace('tag: ', '').trim();
 
