@@ -35,7 +35,11 @@ describe('AssetService', function () {
     ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
     expect(asset.extension).toEqual('png');
     expect(asset.mimeType).toEqual('image/png');
-    expect(asset.history.length).toEqual(1);
+    const createHistory = await core.assets.history({
+      projectId: project.id,
+      id: asset.id,
+    });
+    expect(createHistory.length).toEqual(1);
     expect(
       await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id)),
       'the AssetFile to be created for saving additional meta data of the Asset'
@@ -69,7 +73,11 @@ describe('AssetService', function () {
     });
 
     expect(asset.description).toEqual('A 150x150 image of the text "elek.io"');
-    expect(asset.history.length).toEqual(2);
+    const updateHistory = await core.assets.history({
+      projectId: project.id,
+      id: asset.id,
+    });
+    expect(updateHistory.length).toEqual(2);
   });
 
   it('should be able to update an Asset with a new file', async function () {
@@ -82,11 +90,19 @@ describe('AssetService', function () {
 
     expect(asset.extension).toEqual('jpg');
     expect(asset.size).toEqual(1342);
-    expect(asset.history.length).toEqual(3);
+    const newFileHistory = await core.assets.history({
+      projectId: project.id,
+      id: asset.id,
+    });
+    expect(newFileHistory.length).toEqual(3);
   });
 
   it('should be able to get an Asset of a specific commit', async function () {
-    const commitHash = asset.history.at(-1)?.hash;
+    const assetHistory = await core.assets.history({
+      projectId: project.id,
+      id: asset.id,
+    });
+    const commitHash = assetHistory.at(-1)?.hash;
 
     if (!commitHash) {
       throw new Error('No commit hash found');
@@ -120,8 +136,12 @@ describe('AssetService', function () {
   });
 
   it('should be able to get the same Asset from multiple commits', async function () {
-    const previousCommitHash = asset.history.at(-1)?.hash;
-    const currentCommitHash = asset.history.shift()?.hash;
+    const multiHistory = await core.assets.history({
+      projectId: project.id,
+      id: asset.id,
+    });
+    const previousCommitHash = multiHistory.at(-1)?.hash;
+    const currentCommitHash = multiHistory[0]?.hash;
 
     if (!previousCommitHash || !currentCommitHash) {
       throw new Error('No commit hash found');
@@ -208,7 +228,9 @@ describe('AssetService', function () {
     await core.assets.save({
       projectId: project.id,
       id: asset.id,
-      commitHash: asset.history.at(-1)?.hash,
+      commitHash: (
+        await core.assets.history({ projectId: project.id, id: asset.id })
+      ).at(-1)?.hash,
       filePath: filePathToSaveToFromHistory,
     });
 

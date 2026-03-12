@@ -1,6 +1,7 @@
 import { z } from '@hono/zod-openapi';
 import {
   objectTypeSchema,
+  slugSchema,
   supportedIconSchema,
   translatableStringSchema,
   uuidSchema,
@@ -8,7 +9,6 @@ import {
 import { entryExportSchema } from './entrySchema.js';
 import { fieldDefinitionSchema } from './fieldSchema.js';
 import { baseFileSchema } from './fileSchema.js';
-import { gitCommitSchema } from './gitSchema.js';
 
 export const collectionFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.collection).readonly(),
@@ -17,8 +17,8 @@ export const collectionFileSchema = baseFileSchema.extend({
     plural: translatableStringSchema,
   }),
   slug: z.object({
-    singular: z.string(),
-    plural: z.string(),
+    singular: slugSchema,
+    plural: slugSchema,
   }),
   description: translatableStringSchema,
   icon: supportedIconSchema,
@@ -26,15 +26,14 @@ export const collectionFileSchema = baseFileSchema.extend({
 });
 export type CollectionFile = z.infer<typeof collectionFileSchema>;
 
-export const collectionSchema = collectionFileSchema
-  .extend({
-    /**
-     * Commit history of this Collection
-     */
-    history: z.array(gitCommitSchema),
-  })
-  .openapi('Collection');
+export const collectionSchema = collectionFileSchema.openapi('Collection');
 export type Collection = z.infer<typeof collectionSchema>;
+
+export const collectionHistorySchema = z.object({
+  id: uuidSchema.readonly(),
+  projectId: uuidSchema.readonly(),
+});
+export type CollectionHistoryProps = z.infer<typeof collectionHistorySchema>;
 
 export const collectionExportSchema = collectionSchema.extend({
   entries: z.array(entryExportSchema),
@@ -45,6 +44,7 @@ export const createCollectionSchema = collectionFileSchema
   .omit({
     id: true,
     objectType: true,
+    coreVersion: true,
     created: true,
     updated: true,
   })
@@ -59,6 +59,15 @@ export const readCollectionSchema = z.object({
   commitHash: z.string().optional().readonly(),
 });
 export type ReadCollectionProps = z.infer<typeof readCollectionSchema>;
+
+export const readBySlugCollectionSchema = z.object({
+  slug: slugSchema,
+  projectId: uuidSchema.readonly(),
+  commitHash: z.string().optional().readonly(),
+});
+export type ReadBySlugCollectionProps = z.infer<
+  typeof readBySlugCollectionSchema
+>;
 
 export const updateCollectionSchema = collectionFileSchema
   .pick({
@@ -81,3 +90,16 @@ export const countCollectionsSchema = z.object({
   projectId: uuidSchema.readonly(),
 });
 export type CountCollectionsProps = z.infer<typeof countCollectionsSchema>;
+
+export const migrateCollectionSchema = z.looseObject(
+  collectionFileSchema.pick({ id: true, coreVersion: true }).shape
+);
+export type MigrateCollectionProps = z.infer<typeof migrateCollectionSchema>;
+
+export const resolveCollectionIdSchema = z.object({
+  projectId: uuidSchema.readonly(),
+  idOrSlug: z.string(),
+});
+export type ResolveCollectionIdProps = z.infer<
+  typeof resolveCollectionIdSchema
+>;

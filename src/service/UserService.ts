@@ -1,5 +1,5 @@
 import {
-  UserTypeSchema,
+  userTypeSchema,
   setUserSchema,
   userFileSchema,
   type SetUserProps,
@@ -49,7 +49,7 @@ export class UserService {
       ...props,
     };
 
-    if (userFile.userType === UserTypeSchema.enum.cloud) {
+    if (userFile.userType === userTypeSchema.enum.cloud) {
       // Try logging in the user
       // Throw on Error
     }

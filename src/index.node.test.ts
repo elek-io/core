@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { v4 as uuid } from 'uuid';
 import ElekIoCore from './index.node.js';
 import core from './test/setup.js';
 import Path from 'node:path';
@@ -98,7 +99,8 @@ describe('Node.js', function () {
         },
         fieldDefinitions: [
           {
-            id: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
+            id: uuid(),
+            slug: 'image',
             valueType: 'reference',
             fieldType: 'asset',
             label: {
@@ -117,7 +119,8 @@ describe('Node.js', function () {
             max: 1,
           },
           {
-            id: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
+            id: uuid(),
+            slug: 'keyword',
             valueType: 'string',
             fieldType: 'text',
             label: {
@@ -137,7 +140,8 @@ describe('Node.js', function () {
             defaultValue: null,
           },
           {
-            id: '10f10290-9043-4bab-bf6f-014ee81d41a4',
+            id: uuid(),
+            slug: 'name',
             valueType: 'string',
             fieldType: 'text',
             label: {
@@ -157,7 +161,8 @@ describe('Node.js', function () {
             defaultValue: null,
           },
           {
-            id: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
+            id: uuid(),
+            slug: 'description',
             valueType: 'string',
             fieldType: 'textarea',
             label: {
@@ -177,7 +182,8 @@ describe('Node.js', function () {
             max: 250,
           },
           {
-            id: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
+            id: uuid(),
+            slug: 'read-more-link',
             valueType: 'reference',
             fieldType: 'entry',
             ofCollections: [],
@@ -202,11 +208,10 @@ describe('Node.js', function () {
       const featureEntryProjects = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -222,53 +227,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'Projects',
               de: 'Projekte',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Organise Content in Projects',
               de: 'Organisiere Inhalte in Projekten',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'Create Projects to organise your content. Each Project contains its own Collections, Assets, and settings.',
               de: 'Erstelle Projekte, um deine Inhalte zu organisieren. Jedes Projekt enthält eigene Sammlungen, Assets und Einstellungen.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryAssets = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -284,53 +284,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'Assets',
               de: 'Assets',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Add Images, Documents & More as Assets',
               de: 'Füge Bilder, Dokumente und mehr als Assets hinzu',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'Add various types of assets such as images, documents, and more to your Projects. Manage all your media and files in one place.',
               de: 'Füge verschiedene Arten von Assets wie Bilder, Dokumente und mehr zu deinen Projekten hinzu. Verwalte alle deine Medien und Dateien an einem Ort.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryCollections = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -346,53 +341,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'Collections',
               de: 'Sammlungen',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Create Collections of Content',
               de: 'Erstelle Sammlungen von Inhalten',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'Create Collections to organise content that has the same structure. Use field definitions to define the structure, helpful hints and validation rules for your content.',
               de: 'Erstelle Sammlungen, um Inhalte mit derselben Struktur zu organisieren. Verwende Felddefinitionen, um die Struktur, hilfreiche Hinweise und Validierungsregeln für deine Inhalte festzulegen.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryEntries = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -408,53 +398,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'Entries',
               de: 'Einträge',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Managing Entries',
               de: 'Verwalten von Einträgen',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'Add Entries to your Collections to populate them with content. Each Entry represents a piece of content that can be created, updated and deleted.',
               de: 'Füge Einträge zu deinen Sammlungen hinzu, um sie mit Inhalten zu füllen. Jeder Eintrag stellt ein Stück Inhalt dar, das erstellt, aktualisiert und gelöscht werden kann.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryHistory = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -470,53 +455,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'History',
               de: 'Versionshistorie',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Go Back in Time to Previous Versions',
               de: 'Reise zurück in der Zeit zu vorherigen Versionen',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'Keep track of all changes made to your content with version history. Easily revert to previous versions whenever needed.',
               de: 'Behalte alle Änderungen an deinen Inhalten mit der Versionshistorie im Blick. Stelle bei Bedarf problemlos frühere Versionen wieder her.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryTeamwork = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -532,53 +512,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'Teamwork',
               de: 'Teamarbeit',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Collaborate with your team seamlessly',
               de: 'Nahtlose Zusammenarbeit mit deinem Team',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
-              en: 'Work together by syncing content changes using any Git provider like GitHub, GitLab, Bitbucket and more. Get things done even when offline and synchronize changes when you’re back online.',
+              en: "Work together by syncing content changes using any Git provider like GitHub, GitLab, Bitbucket and more. Get things done even when offline and synchronize changes when you're back online.",
               de: 'Arbeite zusammen, indem du Inhaltsänderungen mit jedem Git-Anbieter wie GitHub, GitLab, Bitbucket und mehr synchronisierst. Erledige Aufgaben auch offline und synchronisiere Änderungen, wenn du wieder online bist.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryIntegrate = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -594,53 +569,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'Integrate',
               de: 'Integrieren',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Use your Content wherever you want',
               de: 'Verwende deine Inhalte, wo immer du möchtest',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'Use elek.io Desktop or Core with any framework of your choice. Integrate it into the build process of your website, app and deploy your content anywhere.',
               de: 'Verwende elek.io Desktop oder Core mit einem Framework deiner Wahl. Integriere es in den Build-Prozess deiner Website, App und deploye deine Inhalte überall.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryInstant = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -656,53 +626,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'Instant',
               de: 'Sofort',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Instant content updates without redeployment',
               de: 'Sofortige Inhaltsaktualisierungen ohne Redeployment',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'Synchronize content updates to elek.io Cloud and have them instantly available worldwide without the need for redeployment of your website or app.',
               de: 'Synchronisiere Inhaltsaktualisierungen mit elek.io Cloud und habe sie sofort weltweit verfügbar, ohne dass deine Website oder App erneut deployed werden muss.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryReplication = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -718,53 +683,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'Replication',
               de: 'Replikation',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Data replication in up to 14 geo-regions',
               de: 'Datenreplikation in bis zu 14 Geo-Regionen',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'We ensure low-latency access to your content by replicating data across multiple geo-regions. elek.io Cloud automatically routes requests to the nearest region for optimal performance.',
               de: 'Wir sorgen für einen latenzarmen Zugriff auf deine Inhalte, indem wir Daten über mehrere Geo-Regionen replizieren. elek.io Cloud leitet Anfragen automatisch an die nächstgelegene Region für optimale Leistung weiter.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryAutomation = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -780,53 +740,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'Automation',
               de: 'Automatisierung',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Automate workflows with webhooks and integrations',
               de: 'Automatisiere Workflows mit Webhooks und Integrationen',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'Set up webhooks to trigger automated workflows whenever your content changes. Integrate with third-party services or your own backend to keep everything in sync.',
               de: 'Richte Webhooks ein, um automatisierte Workflows auszulösen, sobald sich deine Inhalte ändern. Integriere Drittanbieterdienste oder dein eigenes Backend, um alles synchron zu halten.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryCode = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -842,53 +797,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'Code',
               de: 'Code',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Manage your content with code',
               de: 'Verwalte deine Inhalte mit Code',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'Manage content programmatically by using elek.io Core directly within your JavaScript / TypeScript codebase. Create Projects, add Collections and Entries and more.',
               de: 'Verwalte Inhalte programmatisch, indem du elek.io Core direkt in deinem JavaScript- / TypeScript-Code verwendest. Erstelle Projekte, füge Sammlungen und Einträge hinzu und mehr.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryApiClients = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -904,53 +854,48 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'API Clients',
               de: 'API Clients',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Generate API Clients',
               de: 'Generiere API-Clients',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'Create typesafe API Clients for your Projects in JavaScript or TypeScript to dynamically read your content locally and remotely via Cloud.',
               de: 'Erstelle typsichere API-Clients für deine Projekte in JavaScript oder TypeScript, um deine Inhalte lokal und remote über die Cloud dynamisch zu lesen.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       const featureEntryExport = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
-        values: [
-          {
+        values: {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '737651a5-ad70-4bbf-b6ad-cb9b8af88bc5',
             content: {
               en: [
                 {
@@ -966,43 +911,39 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          keyword: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '52daf10c-9ea8-4b84-98f9-d84b4ba4c134',
             content: {
               en: 'Export',
               de: 'Exportieren',
             },
           },
-          {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '10f10290-9043-4bab-bf6f-014ee81d41a4',
             content: {
               en: 'Export your content into JSON files',
               de: 'Exportiere deine Inhalte in JSON-Dateien',
             },
           },
-          {
+          description: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '405e2cb0-23c0-4bce-89cd-334acd95dbd0',
             content: {
               en: 'Export your content into JSON files to use them statically or easily integrate with other tools and workflows. Watch mode allows for automatic exports whenever content changes.',
               de: 'Exportiere deine Inhalte in JSON-Dateien, um sie statisch zu verwenden oder einfach mit anderen Tools und Workflows zu integrieren. Der Watch-Modus ermöglicht automatische Exporte, sobald sich Inhalte ändern.',
             },
           },
-          {
+          'read-more-link': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '7cfbd197-f949-4f5a-b71c-5f5c77653df8',
             content: {
               en: [],
               de: [],
             },
           },
-        ],
+        },
       });
 
       /**
@@ -1032,7 +973,8 @@ describe('Node.js', function () {
         },
         fieldDefinitions: [
           {
-            id: '559cda05-91a5-40d2-8113-fb0267e320f4',
+            id: uuid(),
+            slug: 'name',
             valueType: 'string',
             fieldType: 'text',
             label: {
@@ -1052,7 +994,8 @@ describe('Node.js', function () {
             defaultValue: null,
           },
           {
-            id: 'bec97b46-710e-4d9c-bc73-51af731e727f',
+            id: uuid(),
+            slug: 'slug',
             valueType: 'string',
             fieldType: 'text',
             label: {
@@ -1072,7 +1015,8 @@ describe('Node.js', function () {
             max: null,
           },
           {
-            id: '8b8bca59-8cc7-4357-8984-b5a2caf21020',
+            id: uuid(),
+            slug: 'tagline',
             valueType: 'string',
             fieldType: 'text',
             label: {
@@ -1092,7 +1036,8 @@ describe('Node.js', function () {
             defaultValue: null,
           },
           {
-            id: 'b025e42e-ff64-40dd-8fbf-d41f7c9ae5fa',
+            id: uuid(),
+            slug: 'short-description',
             valueType: 'string',
             fieldType: 'textarea',
             label: {
@@ -1112,7 +1057,8 @@ describe('Node.js', function () {
             max: 165,
           },
           {
-            id: '8bc0a027-5448-4a9c-8b04-4c6141bc29f5',
+            id: uuid(),
+            slug: 'image',
             valueType: 'reference',
             fieldType: 'asset',
             label: {
@@ -1131,7 +1077,8 @@ describe('Node.js', function () {
             max: 1,
           },
           {
-            id: '83830be8-c372-44bf-a1b4-83d83e0babe9',
+            id: uuid(),
+            slug: 'feature-description',
             valueType: 'string',
             fieldType: 'textarea',
             label: {
@@ -1151,7 +1098,8 @@ describe('Node.js', function () {
             defaultValue: null,
           },
           {
-            id: 'd106e37c-e6e3-4039-92f5-365163ecdd3c',
+            id: uuid(),
+            slug: 'features',
             valueType: 'reference',
             fieldType: 'entry',
             ofCollections: [featuresCollection.id],
@@ -1176,47 +1124,42 @@ describe('Node.js', function () {
       const productEntryDesktop = await core.entries.create({
         projectId: project.id,
         collectionId: productsCollection.id,
-        values: [
-          {
+        values: {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '559cda05-91a5-40d2-8113-fb0267e320f4',
             content: {
               en: 'elek.io Desktop',
               de: 'elek.io Desktop',
             },
           },
-          {
+          slug: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'bec97b46-710e-4d9c-bc73-51af731e727f',
             content: {
               en: 'desktop',
               de: 'desktop',
             },
           },
-          {
+          tagline: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '8b8bca59-8cc7-4357-8984-b5a2caf21020',
             content: {
               en: 'The offline-first CMS',
               de: 'Das Offline-First-CMS',
             },
           },
-          {
+          'short-description': {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'b025e42e-ff64-40dd-8fbf-d41f7c9ae5fa',
             content: {
               en: "Manage your content locally, even when you're offline - no server needed. Sync changes when you're back online.",
               de: 'Verwalte deine Inhalte lokal, auch wenn du offline bist - kein Server erforderlich. Synchronisiere Änderungen, wenn du wieder online bist.',
             },
           },
-          {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '8bc0a027-5448-4a9c-8b04-4c6141bc29f5',
             content: {
               en: [
                 {
@@ -1232,19 +1175,17 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          'feature-description': {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '83830be8-c372-44bf-a1b4-83d83e0babe9',
             content: {
               en: 'Too long',
               de: 'Zu lang',
             },
           },
-          {
+          features: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: 'd106e37c-e6e3-4039-92f5-365163ecdd3c',
             content: {
               en: [
                 {
@@ -1308,53 +1249,48 @@ describe('Node.js', function () {
               ],
             },
           },
-        ],
+        },
       });
 
       const productEntryCloud = await core.entries.create({
         projectId: project.id,
         collectionId: productsCollection.id,
-        values: [
-          {
+        values: {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '559cda05-91a5-40d2-8113-fb0267e320f4',
             content: {
               en: 'elek.io Cloud',
               de: 'elek.io Cloud',
             },
           },
-          {
+          slug: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'bec97b46-710e-4d9c-bc73-51af731e727f',
             content: {
               en: 'cloud',
               de: 'cloud',
             },
           },
-          {
+          tagline: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '8b8bca59-8cc7-4357-8984-b5a2caf21020',
             content: {
               en: 'The Content Delivery API',
               de: 'Die Content Delivery API',
             },
           },
-          {
+          'short-description': {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'b025e42e-ff64-40dd-8fbf-d41f7c9ae5fa',
             content: {
               en: 'Host your content globally available with minimum latency. Connect APIs and webhooks easily with elek.io Cloud.',
               de: 'Mache deine Inhalte weltweit mit minimaler Latenz verfügbar. Verbinde APIs und Webhooks einfach mit elek.io Cloud.',
             },
           },
-          {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '8bc0a027-5448-4a9c-8b04-4c6141bc29f5',
             content: {
               en: [
                 {
@@ -1370,19 +1306,17 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          'feature-description': {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '83830be8-c372-44bf-a1b4-83d83e0babe9',
             content: {
               en: 'elek.io Cloud is a globally distributed content delivery API that ensures your content is always available with minimal latency, no matter where your users are located.',
               de: 'elek.io Cloud ist eine global verteilte Content Delivery API, die sicherstellt, dass deine Inhalte immer mit minimaler Latenz verfügbar sind, egal wo sich deine Nutzer befinden.',
             },
           },
-          {
+          features: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: 'd106e37c-e6e3-4039-92f5-365163ecdd3c',
             content: {
               en: [
                 {
@@ -1414,53 +1348,48 @@ describe('Node.js', function () {
               ],
             },
           },
-        ],
+        },
       });
 
       const productEntryCore = await core.entries.create({
         projectId: project.id,
         collectionId: productsCollection.id,
-        values: [
-          {
+        values: {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '559cda05-91a5-40d2-8113-fb0267e320f4',
             content: {
               en: 'elek.io Core',
               de: 'elek.io Core',
             },
           },
-          {
+          slug: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'bec97b46-710e-4d9c-bc73-51af731e727f',
             content: {
               en: 'core',
               de: 'core',
             },
           },
-          {
+          tagline: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '8b8bca59-8cc7-4357-8984-b5a2caf21020',
             content: {
               en: 'Generate API Clients and export content',
               de: 'Generiere API-Clients und exportiere Inhalte',
             },
           },
-          {
+          'short-description': {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'b025e42e-ff64-40dd-8fbf-d41f7c9ae5fa',
             content: {
               en: 'Programmatically manage your content, generate JavaScript / TypeScript API Clients and use our CLI tool to export content.',
               de: 'Verwalte deine Inhalte programmgesteuert, generiere JavaScript / TypeScript API-Clients und verwende unser CLI-Tool, um Inhalte zu exportieren.',
             },
           },
-          {
+          image: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '8bc0a027-5448-4a9c-8b04-4c6141bc29f5',
             content: {
               en: [
                 {
@@ -1476,19 +1405,17 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          'feature-description': {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '83830be8-c372-44bf-a1b4-83d83e0babe9',
             content: {
               en: 'elek.io Core additionally to using the build in API of elek.io Desktop, gives you multiple other ways to interact with your content.',
               de: 'elek.io Core zusätzlich zur Verwendung der integrierten API von elek.io Desktop bietet dir mehrere andere Möglichkeiten, mit deinen Inhalten zu interagieren.',
             },
           },
-          {
+          features: {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: 'd106e37c-e6e3-4039-92f5-365163ecdd3c',
             content: {
               en: [
                 {
@@ -1520,7 +1447,7 @@ describe('Node.js', function () {
               ],
             },
           },
-        ],
+        },
       });
 
       /**
@@ -1550,7 +1477,8 @@ describe('Node.js', function () {
         },
         fieldDefinitions: [
           {
-            id: 'd1686a8e-5761-42e0-9801-47d3bcd9e682',
+            id: uuid(),
+            slug: 'name',
             valueType: 'string',
             fieldType: 'text',
             label: {
@@ -1570,7 +1498,8 @@ describe('Node.js', function () {
             defaultValue: null,
           },
           {
-            id: '8336f242-2136-47a6-9e40-05d08283c026',
+            id: uuid(),
+            slug: 'external-link',
             valueType: 'boolean',
             fieldType: 'toggle',
             label: {
@@ -1588,7 +1517,8 @@ describe('Node.js', function () {
             defaultValue: false,
           },
           {
-            id: '378b11d0-4e05-4612-99ba-7660a29fa417',
+            id: uuid(),
+            slug: 'target-page',
             valueType: 'reference',
             fieldType: 'entry',
             ofCollections: [productsCollection.id],
@@ -1608,7 +1538,8 @@ describe('Node.js', function () {
             max: 1,
           },
           {
-            id: 'd58284e5-8a75-4bea-9f54-51eda6600794',
+            id: uuid(),
+            slug: 'url',
             valueType: 'string',
             fieldType: 'text',
             label: {
@@ -1633,29 +1564,26 @@ describe('Node.js', function () {
       const navigationItemEntryDesktop = await core.entries.create({
         projectId: project.id,
         collectionId: navigationItemCollection.id,
-        values: [
-          {
+        values: {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'd1686a8e-5761-42e0-9801-47d3bcd9e682',
             content: {
               en: 'elek.io Desktop',
               de: 'elek.io Desktop',
             },
           },
-          {
+          'external-link': {
             objectType: 'value',
             valueType: 'boolean',
-            fieldDefinitionId: '8336f242-2136-47a6-9e40-05d08283c026',
             content: {
               en: false,
               de: false,
             },
           },
-          {
+          'target-page': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '378b11d0-4e05-4612-99ba-7660a29fa417',
             content: {
               en: [
                 {
@@ -1671,41 +1599,37 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          url: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'd58284e5-8a75-4bea-9f54-51eda6600794',
             content: {},
           },
-        ],
+        },
       });
 
       const navigationItemEntryCloud = await core.entries.create({
         projectId: project.id,
         collectionId: navigationItemCollection.id,
-        values: [
-          {
+        values: {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'd1686a8e-5761-42e0-9801-47d3bcd9e682',
             content: {
               en: 'elek.io Cloud',
               de: 'elek.io Cloud',
             },
           },
-          {
+          'external-link': {
             objectType: 'value',
             valueType: 'boolean',
-            fieldDefinitionId: '8336f242-2136-47a6-9e40-05d08283c026',
             content: {
               en: false,
               de: false,
             },
           },
-          {
+          'target-page': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '378b11d0-4e05-4612-99ba-7660a29fa417',
             content: {
               en: [
                 {
@@ -1721,41 +1645,37 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          url: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'd58284e5-8a75-4bea-9f54-51eda6600794',
             content: {},
           },
-        ],
+        },
       });
 
       const navigationItemEntryCore = await core.entries.create({
         projectId: project.id,
         collectionId: navigationItemCollection.id,
-        values: [
-          {
+        values: {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'd1686a8e-5761-42e0-9801-47d3bcd9e682',
             content: {
               en: 'elek.io Core',
               de: 'elek.io Core',
             },
           },
-          {
+          'external-link': {
             objectType: 'value',
             valueType: 'boolean',
-            fieldDefinitionId: '8336f242-2136-47a6-9e40-05d08283c026',
             content: {
               en: false,
               de: false,
             },
           },
-          {
+          'target-page': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '378b11d0-4e05-4612-99ba-7660a29fa417',
             content: {
               en: [
                 {
@@ -1771,13 +1691,12 @@ describe('Node.js', function () {
               ],
             },
           },
-          {
+          url: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: 'd58284e5-8a75-4bea-9f54-51eda6600794',
             content: {},
           },
-        ],
+        },
       });
 
       /**
@@ -1809,7 +1728,8 @@ describe('Node.js', function () {
         },
         fieldDefinitions: [
           {
-            id: '8f3fa878-d137-42da-b353-714d3d01b83a',
+            id: uuid(),
+            slug: 'name',
             valueType: 'string',
             fieldType: 'text',
             label: {
@@ -1829,7 +1749,8 @@ describe('Node.js', function () {
             defaultValue: null,
           },
           {
-            id: '64948570-104f-441b-9e25-f006e1eae9d1',
+            id: uuid(),
+            slug: 'slug',
             valueType: 'string',
             fieldType: 'text',
             label: {
@@ -1849,7 +1770,8 @@ describe('Node.js', function () {
             max: null,
           },
           {
-            id: '9d0f1c02-5855-4a5e-8190-58000d2bdee6',
+            id: uuid(),
+            slug: 'navigation-items',
             valueType: 'reference',
             fieldType: 'entry',
             ofCollections: [navigationItemCollection.id],
@@ -1874,29 +1796,26 @@ describe('Node.js', function () {
       await core.entries.create({
         projectId: project.id,
         collectionId: navigationCollection.id,
-        values: [
-          {
+        values: {
+          name: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '8f3fa878-d137-42da-b353-714d3d01b83a',
             content: {
               en: 'Product Navigation',
               de: 'Produkt-Navigation',
             },
           },
-          {
+          slug: {
             objectType: 'value',
             valueType: 'string',
-            fieldDefinitionId: '64948570-104f-441b-9e25-f006e1eae9d1',
             content: {
               en: 'products',
               de: 'produkte',
             },
           },
-          {
+          'navigation-items': {
             objectType: 'value',
             valueType: 'reference',
-            fieldDefinitionId: '9d0f1c02-5855-4a5e-8190-58000d2bdee6',
             content: {
               en: [
                 {
@@ -1928,7 +1847,7 @@ describe('Node.js', function () {
               ],
             },
           },
-        ],
+        },
       });
 
       await core.projects.delete({ id: project.id, force: true });

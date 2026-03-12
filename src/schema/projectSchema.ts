@@ -10,13 +10,14 @@ import { collectionExportSchema } from './collectionSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 import { gitCommitSchema, gitSwitchOptionsSchema } from './gitSchema.js';
 
-export const projectStatusSchema = z.enum(['foo', 'bar', 'todo']);
-export type ProjectStatus = z.infer<typeof projectStatusSchema>;
-
 export const projectSettingsSchema = z.object({
   language: z.object({
     default: supportedLanguageSchema,
-    supported: z.array(supportedLanguageSchema),
+    supported: z
+      .array(supportedLanguageSchema)
+      .refine((langs) => new Set(langs).size === langs.length, {
+        message: 'Supported languages must not contain duplicates',
+      }),
   }),
 });
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
@@ -37,11 +38,9 @@ export type ProjectBranch = z.infer<typeof projectBranchSchema>;
 
 export const projectFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.project).readonly(),
-  coreVersion: versionSchema,
   name: z.string().trim().min(1),
   description: z.string().trim().min(1),
   version: versionSchema,
-  status: projectStatusSchema,
   settings: projectSettingsSchema,
 });
 export type ProjectFile = z.infer<typeof projectFileSchema>;
@@ -51,23 +50,29 @@ export const projectSchema = projectFileSchema
     remoteOriginUrl: z.string().nullable().openapi({
       description: 'URL of the remote Git repository',
     }),
-    history: z.array(gitCommitSchema).openapi({
-      description: 'Commit history of this Project',
-    }),
-    fullHistory: z.array(gitCommitSchema).openapi({
-      description:
-        'Full commit history of this Project including all Assets, Collections, Entries and other files',
-    }),
   })
   .openapi('Project');
 export type Project = z.infer<typeof projectSchema>;
 
-export const migrateProjectSchema = projectFileSchema
-  .pick({
-    id: true,
-    coreVersion: true,
-  })
-  .loose();
+export const projectHistorySchema = z.object({
+  id: uuidSchema.readonly(),
+});
+export type ProjectHistoryProps = z.infer<typeof projectHistorySchema>;
+
+export const projectHistoryResultSchema = z.object({
+  history: z.array(gitCommitSchema).openapi({
+    description: 'Commit history of this Project',
+  }),
+  fullHistory: z.array(gitCommitSchema).openapi({
+    description:
+      'Full commit history of this Project including all Assets, Collections, Entries and other files',
+  }),
+});
+export type ProjectHistoryResult = z.infer<typeof projectHistoryResultSchema>;
+
+export const migrateProjectSchema = z.looseObject(
+  projectFileSchema.pick({ id: true, coreVersion: true }).shape
+);
 export type MigrateProjectProps = z.infer<typeof migrateProjectSchema>;
 
 export const projectExportSchema = projectSchema.extend({
@@ -110,21 +115,6 @@ export const deleteProjectSchema = readProjectSchema.extend({
   force: z.boolean().optional(),
 });
 export type DeleteProjectProps = z.infer<typeof deleteProjectSchema>;
-
-export const projectUpgradeSchema = z.object({
-  /**
-   * The Core version the Project will be upgraded to
-   */
-  to: versionSchema.readonly(),
-  /**
-   * Function that will be executed in the process of upgrading a Project
-   */
-  run: z.function({
-    input: [projectFileSchema],
-    output: z.promise(z.void()),
-  }),
-});
-export type ProjectUpgrade = z.infer<typeof projectUpgradeSchema>;
 
 export const cloneProjectSchema = z.object({
   url: z.string(),

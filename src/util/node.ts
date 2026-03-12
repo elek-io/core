@@ -51,6 +51,9 @@ export const pathTo = {
   collectionFile: (projectId: string, id: string) => {
     return Path.join(pathTo.collection(projectId, id), 'collection.json');
   },
+  collectionIndex: (projectId: string) => {
+    return Path.join(pathTo.collections(projectId), 'index.json');
+  },
 
   entries: (projectId: string, collectionId: string): string => {
     return Path.join(pathTo.collection(projectId, collectionId));

@@ -4,6 +4,7 @@ import type { SaveAssetProps } from '../schema/index.js';
 import {
   assetFileSchema,
   assetSchema,
+  migrateAssetSchema,
   countAssetsSchema,
   createAssetSchema,
   deleteAssetSchema,
@@ -24,7 +25,11 @@ import {
   type PaginatedList,
   type ReadAssetProps,
   type UpdateAssetProps,
+  type AssetHistoryProps,
+  type GitCommit,
+  assetHistorySchema,
 } from '../schema/index.js';
+import { applyMigrations, assetMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
@@ -39,10 +44,12 @@ export class AssetService
   extends AbstractCrudService
   implements CrudServiceWithListCount<Asset>
 {
+  private readonly coreVersion: string;
   private readonly jsonFileService: JsonFileService;
   private readonly gitService: GitService;
 
   constructor(
+    coreVersion: string,
     options: ElekIoCoreOptions,
     logService: LogService,
     jsonFileService: JsonFileService,
@@ -50,6 +57,7 @@ export class AssetService
   ) {
     super(serviceTypeSchema.enum.Asset, options, logService);
 
+    this.coreVersion = coreVersion;
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
   }
@@ -72,6 +80,7 @@ export class AssetService
       name: slug(props.name),
       objectType: 'asset',
       id,
+      coreVersion: this.coreVersion,
       created: datetime(),
       updated: null,
       extension: fileType.extension,
@@ -141,6 +150,17 @@ export class AssetService
 
       return this.toAsset(props.projectId, assetFile, props.commitHash);
     }
+  }
+
+  /**
+   * Returns the commit history of an Asset
+   */
+  public async history(props: AssetHistoryProps): Promise<GitCommit[]> {
+    assetHistorySchema.parse(props);
+
+    return this.gitService.log(pathTo.project(props.projectId), {
+      filePath: pathTo.assetFile(props.projectId, props.id),
+    });
   }
 
   /**
@@ -298,26 +318,19 @@ export class AssetService
    * @param projectId   The project's ID
    * @param assetFile   The AssetFile to convert
    */
-  private async toAsset(
+  private toAsset(
     projectId: string,
     assetFile: AssetFile,
     commitHash?: string
-  ): Promise<Asset> {
+  ): Asset {
     const assetPath = commitHash
       ? pathTo.tmpAsset(assetFile.id, commitHash, assetFile.extension)
       : pathTo.asset(projectId, assetFile.id, assetFile.extension);
 
-    const history = await this.gitService.log(pathTo.project(projectId), {
-      filePath: pathTo.assetFile(projectId, assetFile.id),
-    });
-
-    const asset: Asset = {
+    return {
       ...assetFile,
       absolutePath: assetPath,
-      history,
     };
-
-    return asset;
   }
 
   /**
@@ -351,8 +364,8 @@ export class AssetService
    * Migrates an potentially outdated Asset file to the current schema
    */
   public migrate(potentiallyOutdatedAssetFile: unknown) {
-    // @todo
-
-    return assetFileSchema.parse(potentiallyOutdatedAssetFile);
+    const loose = migrateAssetSchema.parse(potentiallyOutdatedAssetFile);
+    const migrated = applyMigrations(loose, assetMigrations, this.coreVersion);
+    return assetFileSchema.parse(migrated);
   }
 }

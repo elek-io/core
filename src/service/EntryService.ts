@@ -2,6 +2,7 @@ import Fs from 'fs-extra';
 import {
   countEntriesSchema,
   createEntrySchema,
+  migrateEntrySchema,
   deleteEntrySchema,
   entryFileSchema,
   entrySchema,
@@ -22,7 +23,11 @@ import {
   type ListEntriesProps,
   type ReadEntryProps,
   type UpdateEntryProps,
+  type EntryHistoryProps,
+  type GitCommit,
+  entryHistorySchema,
 } from '../schema/index.js';
+import { applyMigrations, entryMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
@@ -38,12 +43,14 @@ export class EntryService
   extends AbstractCrudService
   implements CrudServiceWithListCount<Entry>
 {
+  private coreVersion: string;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
   private collectionService: CollectionService;
   // private sharedValueService: SharedValueService;
 
   constructor(
+    coreVersion: string,
     options: ElekIoCoreOptions,
     logService: LogService,
     jsonFileService: JsonFileService,
@@ -53,6 +60,7 @@ export class EntryService
   ) {
     super(serviceTypeSchema.enum.Entry, options, logService);
 
+    this.coreVersion = coreVersion;
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
     this.collectionService = collectionService;
@@ -80,16 +88,13 @@ export class EntryService
     const entryFile: EntryFile = {
       objectType: 'entry',
       id,
+      coreVersion: this.coreVersion,
       values: props.values,
       created: datetime(),
       updated: null,
     };
 
-    const entry = await this.toEntry(
-      props.projectId,
-      props.collectionId,
-      entryFile
-    );
+    const entry = this.toEntry(entryFile);
 
     // Validate all Values against their Field Definitions
     const createEntrySchemaFromFieldDefinitions =
@@ -128,7 +133,7 @@ export class EntryService
         entryFileSchema
       );
 
-      return this.toEntry(props.projectId, props.collectionId, entryFile);
+      return this.toEntry(entryFile);
     } else {
       const entryFile = this.migrate(
         JSON.parse(
@@ -140,8 +145,19 @@ export class EntryService
         )
       );
 
-      return this.toEntry(props.projectId, props.collectionId, entryFile);
+      return this.toEntry(entryFile);
     }
+  }
+
+  /**
+   * Returns the commit history of an Entry
+   */
+  public async history(props: EntryHistoryProps): Promise<GitCommit[]> {
+    entryHistorySchema.parse(props);
+
+    return this.gitService.log(pathTo.project(props.projectId), {
+      filePath: pathTo.entryFile(props.projectId, props.collectionId, props.id),
+    });
   }
 
   /**
@@ -173,11 +189,7 @@ export class EntryService
       updated: datetime(),
     };
 
-    const entry = await this.toEntry(
-      props.projectId,
-      props.collectionId,
-      entryFile
-    );
+    const entry = this.toEntry(entryFile);
 
     // Validate all Values against their Field Definitions
     const updateEntrySchemaFromFieldDefinitions =
@@ -285,26 +297,17 @@ export class EntryService
    * Migrates an potentially outdated Entry file to the current schema
    */
   public migrate(potentiallyOutdatedEntryFile: unknown) {
-    // @todo
-
-    return entryFileSchema.parse(potentiallyOutdatedEntryFile);
+    const loose = migrateEntrySchema.parse(potentiallyOutdatedEntryFile);
+    const migrated = applyMigrations(loose, entryMigrations, this.coreVersion);
+    return entryFileSchema.parse(migrated);
   }
 
   /**
    * Creates an Entry from given EntryFile by resolving it's Values
    */
-  private async toEntry(
-    projectId: string,
-    collectionId: string,
-    entryFile: EntryFile
-  ): Promise<Entry> {
-    const history = await this.gitService.log(pathTo.project(projectId), {
-      filePath: pathTo.entryFile(projectId, collectionId, entryFile.id),
-    });
-
+  private toEntry(entryFile: EntryFile): Entry {
     return {
       ...entryFile,
-      history,
     };
   }
 }

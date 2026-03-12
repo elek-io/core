@@ -1,14 +1,14 @@
 import type { Value } from '../schema/valueSchema.js';
 
 /**
- * Transforms an elek.io Entry's values array into a flat object
- * keyed by field definition ID. Each value's translatable content
+ * Transforms an elek.io Entry's values record into a flat object
+ * keyed by field definition slug. Each value's translatable content
  * is preserved as-is.
  */
-export function transformEntryValues(values: Value[]): Record<string, unknown> {
+export function transformEntryValues(values: Record<string, Value>) {
   const result: Record<string, unknown> = {};
-  for (const value of values) {
-    result[value.fieldDefinitionId] = value.content;
+  for (const [slug, value] of Object.entries(values)) {
+    result[slug] = value.content;
   }
   return result;
 }

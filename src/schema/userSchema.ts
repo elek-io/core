@@ -2,10 +2,10 @@ import { z } from '@hono/zod-openapi';
 import { supportedLanguageSchema, uuidSchema } from './baseSchema.js';
 import { gitSignatureSchema } from './gitSchema.js';
 
-export const UserTypeSchema = z.enum(['local', 'cloud']);
+export const userTypeSchema = z.enum(['local', 'cloud']);
 
 export const baseUserSchema = gitSignatureSchema.extend({
-  userType: UserTypeSchema,
+  userType: userTypeSchema,
   language: supportedLanguageSchema,
   localApi: z.object({
     /**
@@ -21,12 +21,12 @@ export const baseUserSchema = gitSignatureSchema.extend({
 export type BaseUser = z.infer<typeof baseUserSchema>;
 
 export const localUserSchema = baseUserSchema.extend({
-  userType: z.literal(UserTypeSchema.enum.local),
+  userType: z.literal(userTypeSchema.enum.local),
 });
 export type LocalUser = z.infer<typeof localUserSchema>;
 
 export const cloudUserSchema = baseUserSchema.extend({
-  userType: z.literal(UserTypeSchema.enum.cloud),
+  userType: z.literal(userTypeSchema.enum.cloud),
   id: uuidSchema,
 });
 export type CloudUser = z.infer<typeof cloudUserSchema>;

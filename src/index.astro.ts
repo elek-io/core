@@ -15,7 +15,8 @@ interface ElekAssetsProps {
 
 interface ElekEntriesOptions {
   projectId: string;
-  collectionId: string;
+  /** Collection UUID or slug */
+  collectionIdOrSlug: string;
 }
 
 const core = new ElekIoCore({
@@ -116,9 +117,13 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
   return {
     name: 'elek-entries',
     createSchema: async () => {
+      const resolvedId = await core.collections.resolveCollectionId({
+        projectId: props.projectId,
+        idOrSlug: props.collectionIdOrSlug,
+      });
       const collection = await core.collections.read({
         projectId: props.projectId,
-        id: props.collectionId,
+        id: resolvedId,
       });
 
       return {
@@ -127,14 +132,18 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
       };
     },
     load: async (context) => {
+      const resolvedCollectionId = await core.collections.resolveCollectionId({
+        projectId: props.projectId,
+        idOrSlug: props.collectionIdOrSlug,
+      });
       context.logger.info(
-        `Loading elek.io Entries of Collection "${props.collectionId}" and Project "${props.projectId}"`
+        `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" and Project "${props.projectId}"`
       );
       context.store.clear();
 
       const { list: entries, total } = await core.entries.list({
         projectId: props.projectId,
-        collectionId: props.collectionId,
+        collectionId: resolvedCollectionId,
         limit: 0,
       });
       if (total === 0) {

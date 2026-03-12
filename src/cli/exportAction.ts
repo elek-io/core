@@ -74,7 +74,7 @@ async function exportProjectNested({
 
     collectionContent = {
       ...collectionContent,
-      [collection.id]: { ...collection, entries: entryContent },
+      [collection.slug.plural]: { ...collection, entries: entryContent },
     };
   }
 

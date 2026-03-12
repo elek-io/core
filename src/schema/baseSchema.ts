@@ -42,7 +42,7 @@ export const supportedLanguageSchema = z.enum([
 ]);
 export type SupportedLanguage = z.infer<typeof supportedLanguageSchema>;
 
-export const supportedIconSchema = z.enum(['home', 'plus', 'foobar']);
+export const supportedIconSchema = z.enum(['home', 'plus']);
 export type SupportedIcon = z.infer<typeof supportedIconSchema>;
 
 export const objectTypeSchema = z.enum([
@@ -57,13 +57,12 @@ export type ObjectType = z.infer<typeof objectTypeSchema>;
 
 export const logLevelSchema = z.enum(['error', 'warn', 'info', 'debug']);
 
-export const versionSchema = z.string();
-// .refine((version) => {
-//   if (Semver.valid(version) !== null) {
-//     return true;
-//   }
-//   return false;
-// }, 'String must follow the Semantic Versioning format (https://semver.org/)');
+export const versionSchema = z
+  .string()
+  .refine(
+    (version) => /^\d+\.\d+\.\d+(?:-[\w.]+)?(?:\+[\w.]+)?$/.test(version),
+    'String must follow the Semantic Versioning format (https://semver.org/)'
+  );
 export type Version = z.infer<typeof versionSchema>;
 
 export const uuidSchema = z.uuid();
@@ -99,3 +98,47 @@ export type TranslatableBoolean = z.infer<typeof translatableBooleanSchema>;
 export function translatableArrayOf<T extends z.ZodTypeAny>(schema: T) {
   return z.partialRecord(supportedLanguageSchema, z.array(schema));
 }
+
+export const reservedSlugs = new Set([
+  'index',
+  'new',
+  'create',
+  'update',
+  'delete',
+  'edit',
+  'list',
+  'count',
+  'api',
+  'admin',
+  'collection',
+  'collections',
+  'entry',
+  'entries',
+  'asset',
+  'assets',
+  'project',
+  'projects',
+  'null',
+  'undefined',
+  'true',
+  'false',
+  'constructor',
+  '__proto__',
+  'prototype',
+  'toString',
+  'valueOf',
+  'login',
+  'logout',
+  'auth',
+  'settings',
+  'config',
+]);
+
+export const slugSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  .refine((slug) => !reservedSlugs.has(slug), {
+    message: 'This slug is reserved and cannot be used',
+  });

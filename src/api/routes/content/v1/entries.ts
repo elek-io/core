@@ -14,7 +14,7 @@ const router = createRouter()
       summary: 'List Entries',
       description: 'Lists all Entries of the given Projects Collection',
       method: 'get',
-      path: '/{projectId}/collections/{collectionId}/entries',
+      path: '/{projectId}/collections/{collectionIdOrSlug}/entries',
       tags,
       request: {
         params: z.object({
@@ -24,11 +24,12 @@ const router = createRouter()
               in: 'path',
             },
           }),
-          collectionId: uuidSchema.openapi({
+          collectionIdOrSlug: z.string().openapi({
             param: {
-              name: 'collectionId',
+              name: 'collectionIdOrSlug',
               in: 'path',
             },
+            description: 'Collection UUID or slug',
           }),
         }),
         query: z.object({
@@ -55,8 +56,12 @@ const router = createRouter()
       },
     }),
     async (c) => {
-      const { projectId, collectionId } = c.req.valid('param');
+      const { projectId, collectionIdOrSlug } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
+      const collectionId = await c.var.collectionService.resolveCollectionId({
+        projectId,
+        idOrSlug: collectionIdOrSlug,
+      });
       const entries = await c.var.entryService.list({
         projectId,
         collectionId,
@@ -73,7 +78,7 @@ const router = createRouter()
       summary: 'Count Entries',
       description: 'Counts all Entries of the given Projects Collection',
       method: 'get',
-      path: '/{projectId}/collections/{collectionId}/entries/count',
+      path: '/{projectId}/collections/{collectionIdOrSlug}/entries/count',
       tags,
       request: {
         params: z.object({
@@ -83,11 +88,12 @@ const router = createRouter()
               in: 'path',
             },
           }),
-          collectionId: uuidSchema.openapi({
+          collectionIdOrSlug: z.string().openapi({
             param: {
-              name: 'collectionId',
+              name: 'collectionIdOrSlug',
               in: 'path',
             },
+            description: 'Collection UUID or slug',
           }),
         }),
       },
@@ -103,8 +109,15 @@ const router = createRouter()
       },
     }),
     async (c) => {
-      const { projectId, collectionId } = c.req.valid('param');
-      const count = await c.var.entryService.count({ projectId, collectionId });
+      const { projectId, collectionIdOrSlug } = c.req.valid('param');
+      const collectionId = await c.var.collectionService.resolveCollectionId({
+        projectId,
+        idOrSlug: collectionIdOrSlug,
+      });
+      const count = await c.var.entryService.count({
+        projectId,
+        collectionId,
+      });
 
       return c.json(count, 200);
     }
@@ -115,7 +128,7 @@ const router = createRouter()
       summary: 'Get one Entry',
       description: 'Retrieve an Entry by ID',
       method: 'get',
-      path: '/{projectId}/collections/{collectionId}/entries/{entryId}',
+      path: '/{projectId}/collections/{collectionIdOrSlug}/entries/{entryId}',
       tags,
       request: {
         params: z.object({
@@ -125,11 +138,12 @@ const router = createRouter()
               in: 'path',
             },
           }),
-          collectionId: uuidSchema.openapi({
+          collectionIdOrSlug: z.string().openapi({
             param: {
-              name: 'collectionId',
+              name: 'collectionIdOrSlug',
               in: 'path',
             },
+            description: 'Collection UUID or slug',
           }),
           entryId: uuidSchema.openapi({
             param: {
@@ -151,7 +165,11 @@ const router = createRouter()
       },
     }),
     async (c) => {
-      const { projectId, collectionId, entryId } = c.req.valid('param');
+      const { projectId, collectionIdOrSlug, entryId } = c.req.valid('param');
+      const collectionId = await c.var.collectionService.resolveCollectionId({
+        projectId,
+        idOrSlug: collectionIdOrSlug,
+      });
       const entry = await c.var.entryService.read({
         projectId,
         collectionId,

@@ -8,12 +8,7 @@ import {
 } from '../error/index.js';
 import { RemoteOriginMissingError } from '../error/RemoteOriginMissingError.js';
 import { SynchronizeLocalChangesError } from '../error/SynchronizeLocalChangesError.js';
-import type {
-  FileReference,
-  ObjectType,
-  MigrateProjectProps,
-  Version,
-} from '../schema/index.js';
+import type { FileReference, ObjectType, Version } from '../schema/index.js';
 import {
   cloneProjectSchema,
   createProjectSchema,
@@ -27,6 +22,7 @@ import {
   projectBranchSchema,
   projectFileSchema,
   projectFolderSchema,
+  projectHistorySchema,
   readProjectSchema,
   serviceTypeSchema,
   setRemoteOriginUrlProjectSchema,
@@ -46,6 +42,8 @@ import {
   type PaginatedList,
   type Project,
   type ProjectFile,
+  type ProjectHistoryProps,
+  type ProjectHistoryResult,
   type ReadProjectProps,
   type SetRemoteOriginUrlProjectProps,
   type SwitchBranchProjectProps,
@@ -53,6 +51,7 @@ import {
   type UpdateProjectProps,
   type UpgradeProjectProps,
 } from '../schema/index.js';
+import { applyMigrations, projectMigrations } from './migrations/index.js';
 import { isNotEmpty, pathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractCrudService } from './AbstractCrudService.js';
@@ -112,7 +111,6 @@ export class ProjectService
       created: datetime(),
       updated: null,
       coreVersion: this.coreVersion,
-      status: 'todo',
       version: '0.0.1',
     };
 
@@ -203,19 +201,34 @@ export class ProjectService
       return await this.toProject(projectFile);
     } else {
       const projectFile = this.migrate(
-        migrateProjectSchema.parse(
-          JSON.parse(
-            await this.gitService.getFileContentAtCommit(
-              pathTo.project(props.id),
-              pathTo.projectFile(props.id),
-              props.commitHash
-            )
+        JSON.parse(
+          await this.gitService.getFileContentAtCommit(
+            pathTo.project(props.id),
+            pathTo.projectFile(props.id),
+            props.commitHash
           )
         )
       );
 
       return await this.toProject(projectFile);
     }
+  }
+
+  /**
+   * Returns the commit history of a Project
+   */
+  public async history(
+    props: ProjectHistoryProps
+  ): Promise<ProjectHistoryResult> {
+    projectHistorySchema.parse(props);
+    const projectPath = pathTo.project(props.id);
+
+    const fullHistory = await this.gitService.log(projectPath);
+    const history = await this.gitService.log(projectPath, {
+      filePath: pathTo.projectFile(props.id),
+    });
+
+    return { history, fullHistory };
   }
 
   /**
@@ -263,10 +276,10 @@ export class ProjectService
       );
     }
 
-    // Get the current Project file
-    const currentProjectFile = migrateProjectSchema.parse(
-      await this.jsonFileService.unsafeRead(projectFilePath)
-    );
+    // Get the current Project file (loose-parsed for version checks; full migration happens in upgradeObjectFile)
+    const currentProjectFile = (await this.jsonFileService.unsafeRead(
+      projectFilePath
+    )) as Record<string, unknown> & { coreVersion: string };
 
     if (Semver.gt(currentProjectFile.coreVersion, this.coreVersion)) {
       // Upgrade of the client needed before the project can be upgraded
@@ -354,7 +367,10 @@ export class ProjectService
       });
       await this.gitService.tags.create({
         path: projectPath,
-        message: `Upgraded Project to Core version ${migratedProjectFile.coreVersion}`,
+        message: {
+          type: 'upgrade',
+          coreVersion: migratedProjectFile.coreVersion,
+        },
       });
       await this.gitService.branches.delete(
         projectPath,
@@ -504,7 +520,7 @@ export class ProjectService
   /**
    * Lists outdated Projects that need to be upgraded
    */
-  public async listOutdated(): Promise<MigrateProjectProps[]> {
+  public async listOutdated(): Promise<ProjectFile[]> {
     const projectReferences = await this.listReferences(
       objectTypeSchema.enum.project
     );
@@ -517,7 +533,7 @@ export class ProjectService
         const projectFile = migrateProjectSchema.parse(json);
 
         if (projectFile.coreVersion !== this.coreVersion) {
-          return projectFile;
+          return this.migrate(projectFile);
         }
 
         return null;
@@ -574,12 +590,14 @@ export class ProjectService
   /**
    * Migrates an potentially outdated Project file to the current schema
    */
-  public migrate(props: MigrateProjectProps) {
-    // @todo
-
-    props.coreVersion = this.coreVersion;
-
-    return projectFileSchema.parse(props);
+  public migrate(potentiallyOutdatedFile: unknown): ProjectFile {
+    const loose = migrateProjectSchema.parse(potentiallyOutdatedFile);
+    const migrated = applyMigrations(
+      loose,
+      projectMigrations,
+      this.coreVersion
+    );
+    return projectFileSchema.parse(migrated);
   }
 
   /**
@@ -594,18 +612,9 @@ export class ProjectService
       remoteOriginUrl = await this.gitService.remotes.getOriginUrl(projectPath);
     }
 
-    const fullHistory = await this.gitService.log(
-      pathTo.project(projectFile.id)
-    );
-    const history = await this.gitService.log(pathTo.project(projectFile.id), {
-      filePath: pathTo.projectFile(projectFile.id),
-    });
-
     return {
       ...projectFile,
       remoteOriginUrl,
-      history,
-      fullHistory,
     };
   }
 
@@ -641,6 +650,7 @@ export class ProjectService
       '!/**/.gitkeep',
       '',
       '# elek.io related ignores',
+      'collections/index.json',
       // projectFolderSchema.enum.theme + '/',
       // projectFolderSchema.enum.public + '/',
       // projectFolderSchema.enum.logs + '/',

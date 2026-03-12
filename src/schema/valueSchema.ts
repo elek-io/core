@@ -8,13 +8,13 @@ import {
   uuidSchema,
 } from './baseSchema.js';
 
-export const ValueTypeSchema = z.enum([
+export const valueTypeSchema = z.enum([
   'string',
   'number',
   'boolean',
   'reference',
 ]);
-export type ValueType = z.infer<typeof ValueTypeSchema>;
+export type ValueType = z.infer<typeof valueTypeSchema>;
 
 export const valueContentReferenceBase = z.object({
   id: uuidSchema,
@@ -57,8 +57,8 @@ export type ValueContentReferenceToEntry = z.infer<
 
 // export const sharedValueFileSchema = baseFileWithLanguageSchema.extend({
 //   objectType: z.literal(objectTypeSchema.enum.sharedValue).readonly(),
-//   valueType: ValueTypeSchema.exclude(['reference']).readonly(),
-//   // valueType: ValueTypeSchema.readonly(), @todo do we allow shared Values to reference assets or others?
+//   valueType: valueTypeSchema.exclude(['reference']).readonly(),
+//   // valueType: valueTypeSchema.readonly(), @todo do we allow shared Values to reference assets or others?
 //   content: z.union([
 //     z.string(),
 //     z.number(),
@@ -100,23 +100,22 @@ export type ValueContentReference = z.infer<typeof valueContentReferenceSchema>;
 
 export const directValueBaseSchema = z.object({
   objectType: z.literal(objectTypeSchema.enum.value).readonly(),
-  fieldDefinitionId: uuidSchema.readonly(),
 });
 
 export const directStringValueSchema = directValueBaseSchema.extend({
-  valueType: z.literal(ValueTypeSchema.enum.string).readonly(),
+  valueType: z.literal(valueTypeSchema.enum.string).readonly(),
   content: translatableStringSchema,
 });
 export type DirectStringValue = z.infer<typeof directStringValueSchema>;
 
 export const directNumberValueSchema = directValueBaseSchema.extend({
-  valueType: z.literal(ValueTypeSchema.enum.number).readonly(),
+  valueType: z.literal(valueTypeSchema.enum.number).readonly(),
   content: translatableNumberSchema,
 });
 export type DirectNumberValue = z.infer<typeof directNumberValueSchema>;
 
 export const directBooleanValueSchema = directValueBaseSchema.extend({
-  valueType: z.literal(ValueTypeSchema.enum.boolean).readonly(),
+  valueType: z.literal(valueTypeSchema.enum.boolean).readonly(),
   content: translatableBooleanSchema,
 });
 export type DirectBooleanValue = z.infer<typeof directBooleanValueSchema>;
@@ -130,8 +129,7 @@ export type DirectValue = z.infer<typeof directValueSchema>;
 
 export const referencedValueSchema = z.object({
   objectType: z.literal(objectTypeSchema.enum.value).readonly(),
-  fieldDefinitionId: uuidSchema.readonly(),
-  valueType: z.literal(ValueTypeSchema.enum.reference).readonly(),
+  valueType: z.literal(valueTypeSchema.enum.reference).readonly(),
   content: translatableArrayOf(valueContentReferenceSchema),
 });
 export type ReferencedValue = z.infer<typeof referencedValueSchema>;

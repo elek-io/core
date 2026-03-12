@@ -20,7 +20,7 @@ import type {
   RangeFieldDefinition,
   StringFieldDefinition,
 } from './fieldSchema.js';
-import { FieldTypeSchema } from './fieldSchema.js';
+import { fieldTypeSchema } from './fieldSchema.js';
 import {
   directBooleanValueSchema,
   directNumberValueSchema,
@@ -28,7 +28,7 @@ import {
   referencedValueSchema,
   valueContentReferenceToAssetSchema,
   valueContentReferenceToEntrySchema,
-  ValueTypeSchema,
+  valueTypeSchema,
 } from './valueSchema.js';
 
 /**
@@ -70,29 +70,29 @@ function getStringValueContentSchemaFromFieldDefinition(
   let schema = null;
 
   switch (fieldDefinition.fieldType) {
-    case FieldTypeSchema.enum.email:
+    case fieldTypeSchema.enum.email:
       schema = z.email();
       break;
-    case FieldTypeSchema.enum.url:
+    case fieldTypeSchema.enum.url:
       schema = z.url();
       break;
-    case FieldTypeSchema.enum.ipv4:
+    case fieldTypeSchema.enum.ipv4:
       schema = z.ipv4();
       break;
-    case FieldTypeSchema.enum.date:
+    case fieldTypeSchema.enum.date:
       schema = z.iso.date();
       break;
-    case FieldTypeSchema.enum.time:
+    case fieldTypeSchema.enum.time:
       schema = z.iso.time();
       break;
-    case FieldTypeSchema.enum.datetime:
+    case fieldTypeSchema.enum.datetime:
       schema = z.iso.datetime();
       break;
-    case FieldTypeSchema.enum.telephone:
+    case fieldTypeSchema.enum.telephone:
       schema = z.e164();
       break;
-    case FieldTypeSchema.enum.text:
-    case FieldTypeSchema.enum.textarea:
+    case fieldTypeSchema.enum.text:
+    case fieldTypeSchema.enum.textarea:
       schema = z.string().trim();
       break;
   }
@@ -121,12 +121,12 @@ function getReferenceValueContentSchemaFromFieldDefinition(
   let schema;
 
   switch (fieldDefinition.fieldType) {
-    case FieldTypeSchema.enum.asset:
+    case fieldTypeSchema.enum.asset:
       {
         schema = z.array(valueContentReferenceToAssetSchema);
       }
       break;
-    case FieldTypeSchema.enum.entry:
+    case fieldTypeSchema.enum.entry:
       {
         schema = z.array(valueContentReferenceToEntrySchema);
       }
@@ -202,25 +202,25 @@ export function getValueSchemaFromFieldDefinition(
   fieldDefinition: FieldDefinition
 ) {
   switch (fieldDefinition.valueType) {
-    case ValueTypeSchema.enum.boolean:
+    case valueTypeSchema.enum.boolean:
       return directBooleanValueSchema.extend({
         content: getTranslatableBooleanValueContentSchemaFromFieldDefinition(),
       });
-    case ValueTypeSchema.enum.number:
+    case valueTypeSchema.enum.number:
       return directNumberValueSchema.extend({
         content:
           getTranslatableNumberValueContentSchemaFromFieldDefinition(
             fieldDefinition
           ),
       });
-    case ValueTypeSchema.enum.string:
+    case valueTypeSchema.enum.string:
       return directStringValueSchema.extend({
         content:
           getTranslatableStringValueContentSchemaFromFieldDefinition(
             fieldDefinition
           ),
       });
-    case ValueTypeSchema.enum.reference:
+    case valueTypeSchema.enum.reference:
       return referencedValueSchema.extend({
         content:
           getTranslatableReferenceValueContentSchemaFromFieldDefinition(
@@ -236,23 +236,30 @@ export function getValueSchemaFromFieldDefinition(
 }
 
 /**
+ * Builds a z.object shape from field definitions, keyed by slug
+ */
+function getValuesShapeFromFieldDefinitions(
+  fieldDefinitions: FieldDefinition[]
+) {
+  const shape: Record<
+    string,
+    ReturnType<typeof getValueSchemaFromFieldDefinition>
+  > = {};
+  for (const fieldDef of fieldDefinitions) {
+    shape[fieldDef.slug] = getValueSchemaFromFieldDefinition(fieldDef);
+  }
+  return shape;
+}
+
+/**
  * Generates a schema for an Entry based on the given Field definitions and Values
  */
 export function getEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[]
 ) {
-  const valueSchemas = fieldDefinitions.map((fieldDefinition) => {
-    return getValueSchemaFromFieldDefinition(fieldDefinition);
-  });
-
   return z.object({
     ...entrySchema.shape,
-    values: z.tuple(
-      valueSchemas as [
-        (typeof valueSchemas)[number],
-        ...(typeof valueSchemas)[number][],
-      ] // At least one element is required in a tuple
-    ),
+    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
   });
 }
 
@@ -262,18 +269,9 @@ export function getEntrySchemaFromFieldDefinitions(
 export function getCreateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[]
 ) {
-  const valueSchemas = fieldDefinitions.map((fieldDefinition) => {
-    return getValueSchemaFromFieldDefinition(fieldDefinition);
-  });
-
   return z.object({
     ...createEntrySchema.shape,
-    values: z.tuple(
-      valueSchemas as [
-        (typeof valueSchemas)[number],
-        ...(typeof valueSchemas)[number][],
-      ] // At least one element is required in a tuple
-    ),
+    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
   });
 }
 
@@ -283,17 +281,8 @@ export function getCreateEntrySchemaFromFieldDefinitions(
 export function getUpdateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[]
 ) {
-  const valueSchemas = fieldDefinitions.map((fieldDefinition) => {
-    return getValueSchemaFromFieldDefinition(fieldDefinition);
-  });
-
   return z.object({
     ...updateEntrySchema.shape,
-    values: z.tuple(
-      valueSchemas as [
-        (typeof valueSchemas)[number],
-        ...(typeof valueSchemas)[number][],
-      ] // At least one element is required in a tuple
-    ),
+    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
   });
 }
