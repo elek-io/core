@@ -17,6 +17,7 @@ import type {
   EntryFieldDefinition,
   FieldDefinition,
   NumberFieldDefinition,
+  NumberSelectFieldDefinition,
   RangeFieldDefinition,
   StringFieldDefinition,
 } from './fieldSchema.js';
@@ -42,7 +43,10 @@ function getBooleanValueContentSchemaFromFieldDefinition() {
  * Number Values can have min and max values and can be required or not
  */
 function getNumberValueContentSchemaFromFieldDefinition(
-  fieldDefinition: NumberFieldDefinition | RangeFieldDefinition
+  fieldDefinition:
+    | NumberFieldDefinition
+    | RangeFieldDefinition
+    | NumberSelectFieldDefinition
 ) {
   let schema = z.number();
 
@@ -93,6 +97,7 @@ function getStringValueContentSchemaFromFieldDefinition(
       break;
     case fieldTypeSchema.enum.text:
     case fieldTypeSchema.enum.textarea:
+    case fieldTypeSchema.enum.select:
       schema = z.string().trim();
       break;
   }
@@ -171,7 +176,10 @@ export function getTranslatableStringValueContentSchemaFromFieldDefinition(
 }
 
 export function getTranslatableNumberValueContentSchemaFromFieldDefinition(
-  fieldDefinition: NumberFieldDefinition | RangeFieldDefinition
+  fieldDefinition:
+    | NumberFieldDefinition
+    | RangeFieldDefinition
+    | NumberSelectFieldDefinition
 ) {
   return z.partialRecord(
     supportedLanguageSchema,

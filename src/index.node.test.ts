@@ -100,6 +100,33 @@ describe('Node.js', function () {
         fieldDefinitions: [
           {
             id: uuid(),
+            slug: 'size',
+            valueType: 'number',
+            fieldType: 'select',
+            label: {
+              en: 'Size',
+              de: 'Größe',
+            },
+            description: {
+              en: 'Size of the feature.',
+              de: 'Größe der Funktion.',
+            },
+            options: [
+              { value: 2, label: { en: '1/6', de: '1/6' } },
+              { value: 3, label: { en: '1/4', de: '1/4' } },
+              { value: 6, label: { en: '1/2', de: '1/2' } },
+              { value: 12, label: { en: 'Full', de: 'Voll' } },
+            ],
+            inputWidth: '12',
+            isRequired: true,
+            isDisabled: false,
+            isUnique: false,
+            min: null,
+            max: null,
+            defaultValue: null,
+          },
+          {
+            id: uuid(),
             slug: 'image',
             valueType: 'reference',
             fieldType: 'asset',
@@ -112,7 +139,7 @@ describe('Node.js', function () {
               de: 'Ein optionales Bild von dieser Funktion.',
             },
             inputWidth: '12',
-            isRequired: true,
+            isRequired: false,
             isDisabled: false,
             isUnique: false,
             min: null,
@@ -209,6 +236,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 6,
+              de: 6,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -266,6 +301,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 6,
+              de: 6,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -323,6 +366,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 3,
+              de: 3,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -380,6 +431,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 3,
+              de: 3,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -437,6 +496,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 3,
+              de: 3,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -494,6 +561,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 6,
+              de: 6,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -551,6 +626,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 6,
+              de: 6,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -604,10 +687,183 @@ describe('Node.js', function () {
         },
       });
 
+      const featureEntryOfflineFirst = await core.entries.create({
+        projectId: project.id,
+        collectionId: featuresCollection.id,
+        values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 3,
+              de: 3,
+            },
+          },
+          image: {
+            objectType: 'value',
+            valueType: 'reference',
+            content: {
+              en: [],
+              de: [],
+            },
+          },
+          keyword: {
+            objectType: 'value',
+            valueType: 'string',
+            content: {
+              en: 'Offline-first',
+              de: 'Offline-first',
+            },
+          },
+          name: {
+            objectType: 'value',
+            valueType: 'string',
+            content: {
+              en: 'Work on your content even when you are offline',
+              de: 'Arbeite an deinen Inhalten, auch wenn du offline bist',
+            },
+          },
+          description: {
+            objectType: 'value',
+            valueType: 'string',
+            content: {
+              en: 'Running on your local device (Windows, macOS, Linux) so you can work completely offline. Sync with others when and if you want.',
+              de: 'Läuft auf deinem lokalen Gerät (Windows, macOS, Linux), sodass du vollständig offline arbeiten kannst. Synchronisiere mit anderen, wann und wenn du willst.',
+            },
+          },
+          'read-more-link': {
+            objectType: 'value',
+            valueType: 'reference',
+            content: {
+              en: [],
+              de: [],
+            },
+          },
+        },
+      });
+
+      const featureEntryPerformanceAndSecurity = await core.entries.create({
+        projectId: project.id,
+        collectionId: featuresCollection.id,
+        values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 3,
+              de: 3,
+            },
+          },
+          image: {
+            objectType: 'value',
+            valueType: 'reference',
+            content: {
+              en: [],
+              de: [],
+            },
+          },
+          keyword: {
+            objectType: 'value',
+            valueType: 'string',
+            content: {
+              en: 'Fast & Secure',
+              de: 'Schnell & Sicher',
+            },
+          },
+          name: {
+            objectType: 'value',
+            valueType: 'string',
+            content: {
+              en: 'Great Performance & Security',
+              de: 'Großartige Leistung & Sicherheit',
+            },
+          },
+          description: {
+            objectType: 'value',
+            valueType: 'string',
+            content: {
+              en: 'No public server means less vulnerabilities. It also means your content is stored locally and therefore accessible almost instantaneously.',
+              de: 'Kein öffentlicher Server bedeutet weniger Sicherheitslücken. Es bedeutet auch, dass deine Inhalte lokal gespeichert werden und daher nahezu sofort zugänglich sind.',
+            },
+          },
+          'read-more-link': {
+            objectType: 'value',
+            valueType: 'reference',
+            content: {
+              en: [],
+              de: [],
+            },
+          },
+        },
+      });
+
+      const featureEntryFreeAndSourceAvailable = await core.entries.create({
+        projectId: project.id,
+        collectionId: featuresCollection.id,
+        values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 3,
+              de: 3,
+            },
+          },
+          image: {
+            objectType: 'value',
+            valueType: 'reference',
+            content: {
+              en: [],
+              de: [],
+            },
+          },
+          keyword: {
+            objectType: 'value',
+            valueType: 'string',
+            content: {
+              en: 'Free & Source-Available',
+              de: 'Kostenlos & Quelloffen',
+            },
+          },
+          name: {
+            objectType: 'value',
+            valueType: 'string',
+            content: {
+              en: 'Use it without charge. Source code is available on GitHub',
+              de: 'Kostenlos nutzbar. Der Quellcode ist auf GitHub verfügbar',
+            },
+          },
+          description: {
+            objectType: 'value',
+            valueType: 'string',
+            content: {
+              en: 'Use it without charge. The source code is available on GitHub. Feel free to contribute or suggest features and improvements.',
+              de: 'Kostenlos nutzbar. Der Quellcode ist auf GitHub verfügbar. Du kannst gerne beitragen oder Funktionen und Verbesserungen vorschlagen.',
+            },
+          },
+          'read-more-link': {
+            objectType: 'value',
+            valueType: 'reference',
+            content: {
+              en: [],
+              de: [],
+            },
+          },
+        },
+      });
+
       const featureEntryInstant = await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 3,
+              de: 3,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -665,6 +921,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 3,
+              de: 3,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -722,6 +986,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 3,
+              de: 3,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -779,6 +1051,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 12,
+              de: 12,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -836,6 +1116,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 6,
+              de: 6,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -893,6 +1181,14 @@ describe('Node.js', function () {
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
+          size: {
+            objectType: 'value',
+            valueType: 'number',
+            content: {
+              en: 6,
+              de: 6,
+            },
+          },
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -1216,6 +1512,18 @@ describe('Node.js', function () {
                   objectType: 'entry',
                   id: featureEntryIntegrate.id,
                 },
+                {
+                  objectType: 'entry',
+                  id: featureEntryOfflineFirst.id,
+                },
+                {
+                  objectType: 'entry',
+                  id: featureEntryPerformanceAndSecurity.id,
+                },
+                {
+                  objectType: 'entry',
+                  id: featureEntryFreeAndSourceAvailable.id,
+                },
               ],
               de: [
                 {
@@ -1245,6 +1553,18 @@ describe('Node.js', function () {
                 {
                   objectType: 'entry',
                   id: featureEntryIntegrate.id,
+                },
+                {
+                  objectType: 'entry',
+                  id: featureEntryOfflineFirst.id,
+                },
+                {
+                  objectType: 'entry',
+                  id: featureEntryPerformanceAndSecurity.id,
+                },
+                {
+                  objectType: 'entry',
+                  id: featureEntryFreeAndSourceAvailable.id,
                 },
               ],
             },
@@ -1850,7 +2170,7 @@ describe('Node.js', function () {
         },
       });
 
-      await core.projects.delete({ id: project.id, force: true });
+      // await core.projects.delete({ id: project.id, force: true });
     }
   );
 });

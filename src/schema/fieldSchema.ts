@@ -23,6 +23,8 @@ export const fieldTypeSchema = z.enum([
   'range',
   // Boolean Values
   'toggle',
+  // Select Values (string or number)
+  'select',
   // Reference Values
   'asset',
   'entry',
@@ -32,6 +34,32 @@ export type FieldType = z.infer<typeof fieldTypeSchema>;
 
 export const fieldWidthSchema = z.enum(['12', '6', '4', '3']);
 
+/**
+ * Shared select helpers reused by both string and number select schemas
+ */
+const selectOptionSchema = <T extends z.ZodTypeAny>(valueSchema: T) =>
+  z.object({ value: valueSchema, label: translatableStringSchema });
+
+const selectDefaultValueRefinement: [
+  (data: {
+    defaultValue: string | number | null;
+    options: { value: string | number }[];
+  }) => boolean,
+  { message: string; path: string[] },
+] = [
+  (data) =>
+    data.defaultValue === null ||
+    data.options.some((o) => o.value === data.defaultValue),
+  {
+    message: 'defaultValue must be one of the defined options',
+    path: ['defaultValue'],
+  },
+];
+
+/**
+ * Base Field definition
+ * Contains all common properties across all Field definitions
+ */
 export const fieldDefinitionBaseSchema = z.object({
   id: uuidSchema.readonly(),
   slug: slugSchema,
@@ -135,6 +163,16 @@ export type TelephoneFieldDefinition = z.infer<
   typeof telephoneFieldDefinitionSchema
 >;
 
+export const stringSelectFieldDefinitionSchema = stringFieldDefinitionBaseSchema
+  .extend({
+    fieldType: z.literal(fieldTypeSchema.enum.select),
+    options: z.array(selectOptionSchema(z.string())).min(1),
+  })
+  .refine(...selectDefaultValueRefinement);
+export type StringSelectFieldDefinition = z.infer<
+  typeof stringSelectFieldDefinitionSchema
+>;
+
 export const stringFieldDefinitionSchema = z.union([
   textFieldDefinitionSchema,
   textareaFieldDefinitionSchema,
@@ -145,6 +183,7 @@ export const stringFieldDefinitionSchema = z.union([
   timeFieldDefinitionSchema,
   datetimeFieldDefinitionSchema,
   telephoneFieldDefinitionSchema,
+  stringSelectFieldDefinitionSchema,
 ]);
 export type StringFieldDefinition = z.infer<typeof stringFieldDefinitionSchema>;
 
@@ -178,6 +217,19 @@ export const rangeFieldDefinitionSchema =
     defaultValue: z.number(),
   });
 export type RangeFieldDefinition = z.infer<typeof rangeFieldDefinitionSchema>;
+
+export const numberSelectFieldDefinitionSchema = numberFieldDefinitionBaseSchema
+  .extend({
+    fieldType: z.literal(fieldTypeSchema.enum.select),
+    options: z.array(selectOptionSchema(z.number())).min(1),
+    // min/max don't apply to a fixed option list
+    min: z.literal(null),
+    max: z.literal(null),
+  })
+  .refine(...selectDefaultValueRefinement);
+export type NumberSelectFieldDefinition = z.infer<
+  typeof numberSelectFieldDefinitionSchema
+>;
 
 /**
  * Boolean based Field definitions
@@ -244,6 +296,7 @@ export const fieldDefinitionSchema = z.union([
   stringFieldDefinitionSchema,
   numberFieldDefinitionSchema,
   rangeFieldDefinitionSchema,
+  numberSelectFieldDefinitionSchema,
   toggleFieldDefinitionSchema,
   assetFieldDefinitionSchema,
   entryFieldDefinitionSchema,
