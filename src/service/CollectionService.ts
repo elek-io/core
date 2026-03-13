@@ -29,6 +29,7 @@ import {
   type CollectionHistoryProps,
   type GitCommit,
   collectionHistorySchema,
+  flattenFieldDefinitions,
 } from '../schema/index.js';
 import { applyMigrations, collectionMigrations } from './migrations/index.js';
 import { folders, pathTo } from '../util/node.js';
@@ -116,7 +117,9 @@ export class CollectionService
   public async create(props: CreateCollectionProps): Promise<Collection> {
     createCollectionSchema.parse(props);
 
-    this.validateFieldDefinitionSlugUniqueness(props.fieldDefinitions);
+    this.validateFieldDefinitionSlugUniqueness(
+      flattenFieldDefinitions(props.fieldDefinitions)
+    );
 
     const id = uuid();
     const projectPath = pathTo.project(props.projectId);
@@ -231,7 +234,9 @@ export class CollectionService
   public async update(props: UpdateCollectionProps): Promise<Collection> {
     updateCollectionSchema.parse(props);
 
-    this.validateFieldDefinitionSlugUniqueness(props.fieldDefinitions);
+    this.validateFieldDefinitionSlugUniqueness(
+      flattenFieldDefinitions(props.fieldDefinitions)
+    );
 
     const projectPath = pathTo.project(props.projectId);
     const collectionFilePath = pathTo.collectionFile(props.projectId, props.id);
@@ -245,8 +250,10 @@ export class CollectionService
 
     // FieldDefinition slug rename cascade:
     // Match old and new fieldDefinitions by UUID to detect slug renames
-    const oldFieldDefs = prevCollectionFile.fieldDefinitions;
-    const newFieldDefs = props.fieldDefinitions;
+    const oldFieldDefs = flattenFieldDefinitions(
+      prevCollectionFile.fieldDefinitions
+    );
+    const newFieldDefs = flattenFieldDefinitions(props.fieldDefinitions);
     const slugRenames: Array<{ oldSlug: string; newSlug: string }> = [];
 
     const oldByUuid = new Map(oldFieldDefs.map((fd) => [fd.id, fd]));

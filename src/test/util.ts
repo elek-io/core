@@ -5,7 +5,7 @@ import Path from 'node:path';
 import type { RunnerTestCase } from 'vitest';
 import { expect } from 'vitest';
 import type { EntryFieldDefinition } from './setup.js';
-import core, { uuid, type ProjectSettings } from './setup.js';
+import core, { flattenFieldDefinitions, uuid, type ProjectSettings } from './setup.js';
 
 const ids = {
   textFieldDefinition: uuid(),
@@ -183,7 +183,7 @@ export async function createCollection(projectId: string) {
 
   // Add circular reference to products
   (
-    collection.fieldDefinitions.find((definition) => {
+    flattenFieldDefinitions(collection.fieldDefinitions).find((definition) => {
       return definition.slug === slugs.entryReferenceFieldDefinition;
     }) as EntryFieldDefinition
   ).ofCollections = [collection.id];

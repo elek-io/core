@@ -1,7 +1,7 @@
 import type { Loader } from 'astro/loaders';
 import Path from 'node:path';
 import Fs from 'fs-extra';
-import ElekIoCore, { assetSchema } from './index.node.js';
+import ElekIoCore, { assetSchema, flattenFieldDefinitions } from './index.node.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
@@ -127,8 +127,12 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
       });
 
       return {
-        schema: buildEntryValuesSchema(collection.fieldDefinitions),
-        types: buildEntryValuesTypeString(collection.fieldDefinitions),
+        schema: buildEntryValuesSchema(
+          flattenFieldDefinitions(collection.fieldDefinitions)
+        ),
+        types: buildEntryValuesTypeString(
+          flattenFieldDefinitions(collection.fieldDefinitions)
+        ),
       };
     },
     load: async (context) => {

@@ -1,6 +1,7 @@
 import Fs from 'fs-extra';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import core, {
+  flattenFieldDefinitions,
   type Asset,
   type Collection,
   type Entry,
@@ -470,7 +471,7 @@ describe('CollectionService - fieldDefinition slug rename cascade', function () 
 
   it('should rename entry value keys when a fieldDefinition slug is renamed', async function () {
     const oldSlugs = Object.keys(entry.values);
-    const targetFieldDef = collection.fieldDefinitions[0]!;
+    const targetFieldDef = flattenFieldDefinitions(collection.fieldDefinitions)[0]!;
     const oldSlug = targetFieldDef.slug;
     const newSlug = 'renamed-field';
 
@@ -507,8 +508,8 @@ describe('CollectionService - fieldDefinition slug rename cascade', function () 
 
   it('should rename multiple field definition slugs simultaneously', async function () {
     // Rename two field definitions at once
-    const firstFd = collection.fieldDefinitions[0]!;
-    const secondFd = collection.fieldDefinitions[1]!;
+    const firstFd = flattenFieldDefinitions(collection.fieldDefinitions)[0]!;
+    const secondFd = flattenFieldDefinitions(collection.fieldDefinitions)[1]!;
     const newSlug1 = 'multi-rename-a';
     const newSlug2 = 'multi-rename-b';
 
@@ -613,5 +614,272 @@ describe('CollectionService - collection index', function () {
       await Fs.readFile(indexPath, { encoding: 'utf8' })
     ) as Record<string, string>;
     expect(indexContent[tempCollection.id]).toBeUndefined();
+  });
+});
+
+describe('CollectionService - fieldDefinition groups', function () {
+  let project: Project & { destroy: () => Promise<void> };
+
+  beforeAll(async function () {
+    project = await createProject();
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('should create a collection with grouped and ungrouped fieldDefinitions', async function () {
+    const groupId = uuid();
+    const collection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: { singular: { en: 'Product' }, plural: { en: 'Products' } },
+      slug: { singular: 'product', plural: 'products' },
+      description: { en: 'Products' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'ungrouped-field',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Ungrouped' },
+          description: null,
+          inputWidth: '12',
+          isDisabled: false,
+          isRequired: false,
+          isUnique: false,
+          min: null,
+          max: null,
+          defaultValue: null,
+        },
+        {
+          isGroup: true,
+          id: groupId,
+          label: { en: 'Details' },
+          description: { en: 'Additional product details' },
+          fieldDefinitions: [
+            {
+              id: uuid(),
+              slug: 'grouped-field',
+              valueType: 'string',
+              fieldType: 'text',
+              label: { en: 'Grouped' },
+              description: null,
+              inputWidth: '12',
+              isDisabled: false,
+              isRequired: false,
+              isUnique: false,
+              min: null,
+              max: null,
+              defaultValue: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(collection.fieldDefinitions).toHaveLength(2);
+    const group = collection.fieldDefinitions.find((fd) => 'isGroup' in fd);
+    expect(group).toBeDefined();
+    expect((group as { id: string }).id).toEqual(groupId);
+    expect(flattenFieldDefinitions(collection.fieldDefinitions)).toHaveLength(2);
+  });
+
+  it('should create entries using fieldDefinitions inside a group', async function () {
+    const collection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: { singular: { en: 'Article' }, plural: { en: 'Articles' } },
+      slug: { singular: 'article', plural: 'articles' },
+      description: { en: 'Articles' },
+      fieldDefinitions: [
+        {
+          isGroup: true,
+          id: uuid(),
+          label: { en: 'Content' },
+          description: null,
+          fieldDefinitions: [
+            {
+              id: uuid(),
+              slug: 'title',
+              valueType: 'string',
+              fieldType: 'text',
+              label: { en: 'Title' },
+              description: null,
+              inputWidth: '12',
+              isDisabled: false,
+              isRequired: true,
+              isUnique: false,
+              min: null,
+              max: null,
+              defaultValue: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: collection.id,
+      values: {
+        title: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'Hello World' },
+        },
+      },
+    });
+
+    expect(entry.values['title']).toBeDefined();
+  });
+
+  it('should reject duplicate slugs across grouped and ungrouped fieldDefinitions', async function () {
+    await expect(
+      core.collections.create({
+        projectId: project.id,
+        icon: 'home',
+        name: { singular: { en: 'Dupe' }, plural: { en: 'Dupes' } },
+        slug: { singular: 'dupe', plural: 'dupes' },
+        description: { en: 'Dupes' },
+        fieldDefinitions: [
+          {
+            id: uuid(),
+            slug: 'same-slug',
+            valueType: 'string',
+            fieldType: 'text',
+            label: { en: 'Ungrouped' },
+            description: null,
+            inputWidth: '12',
+            isDisabled: false,
+            isRequired: false,
+            isUnique: false,
+            min: null,
+            max: null,
+            defaultValue: null,
+          },
+          {
+            isGroup: true,
+            id: uuid(),
+            label: { en: 'Group' },
+            description: null,
+            fieldDefinitions: [
+              {
+                id: uuid(),
+                slug: 'same-slug',
+                valueType: 'string',
+                fieldType: 'text',
+                label: { en: 'Grouped duplicate' },
+                description: null,
+                inputWidth: '12',
+                isDisabled: false,
+                isRequired: false,
+                isUnique: false,
+                min: null,
+                max: null,
+                defaultValue: null,
+              },
+            ],
+          },
+        ],
+      })
+    ).rejects.toThrow('same-slug');
+  });
+
+  it('should rename entry value keys for a fieldDefinition inside a group', async function () {
+    const fieldId = uuid();
+    const collection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: { singular: { en: 'Post' }, plural: { en: 'Posts' } },
+      slug: { singular: 'post', plural: 'posts' },
+      description: { en: 'Posts' },
+      fieldDefinitions: [
+        {
+          isGroup: true,
+          id: uuid(),
+          label: { en: 'Meta' },
+          description: null,
+          fieldDefinitions: [
+            {
+              id: fieldId,
+              slug: 'old-slug',
+              valueType: 'string',
+              fieldType: 'text',
+              label: { en: 'Field' },
+              description: null,
+              inputWidth: '12',
+              isDisabled: false,
+              isRequired: true,
+              isUnique: false,
+              min: null,
+              max: null,
+              defaultValue: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: collection.id,
+      values: {
+        'old-slug': {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'test' },
+        },
+      },
+    });
+
+    // Rename the field inside the group
+    const updatedCollection = await core.collections.update({
+      projectId: project.id,
+      ...collection,
+      fieldDefinitions: [
+        {
+          ...(collection.fieldDefinitions[0] as {
+            isGroup: true;
+            id: string;
+            label: Record<string, string>;
+            description: null;
+            fieldDefinitions: object[];
+          }),
+          fieldDefinitions: [
+            {
+              id: fieldId,
+              slug: 'new-slug',
+              valueType: 'string',
+              fieldType: 'text',
+              label: { en: 'Field' },
+              description: null,
+              inputWidth: '12',
+              isDisabled: false,
+              isRequired: true,
+              isUnique: false,
+              min: null,
+              max: null,
+              defaultValue: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(updatedCollection).toBeDefined();
+
+    const updatedEntry = await core.entries.read({
+      projectId: project.id,
+      collectionId: collection.id,
+      id: entry.id,
+    });
+
+    expect(updatedEntry.values['new-slug']).toBeDefined();
+    expect(updatedEntry.values['old-slug']).toBeUndefined();
   });
 });

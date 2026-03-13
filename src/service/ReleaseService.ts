@@ -16,6 +16,7 @@ import {
   type ElekIoCoreOptions,
   type EntryChange,
   type EntryFile,
+  flattenFieldDefinitions,
   type FieldDefinition,
   type PrepareReleaseProps,
   type CreateReleaseProps,
@@ -556,15 +557,15 @@ export class ReleaseService extends AbstractCrudService {
       }
     }
 
-    // Matched collections — diff their field definitions
+    // Matched collections - diff their field definitions
     for (const [id, currentCollection] of currentById) {
       const productionCollection = productionById.get(id);
       if (!productionCollection) continue;
 
       const changes = this.diffFieldDefinitions(
         id,
-        currentCollection.fieldDefinitions,
-        productionCollection.fieldDefinitions
+        flattenFieldDefinitions(currentCollection.fieldDefinitions),
+        flattenFieldDefinitions(productionCollection.fieldDefinitions)
       );
 
       fieldChanges.push(...changes);

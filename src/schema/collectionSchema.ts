@@ -7,7 +7,7 @@ import {
   uuidSchema,
 } from './baseSchema.js';
 import { entryExportSchema } from './entrySchema.js';
-import { fieldDefinitionSchema } from './fieldSchema.js';
+import { fieldDefinitionsWithGroupsSchema } from './fieldSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 
 export const collectionFileSchema = baseFileSchema.extend({
@@ -22,7 +22,7 @@ export const collectionFileSchema = baseFileSchema.extend({
   }),
   description: translatableStringSchema,
   icon: supportedIconSchema,
-  fieldDefinitions: z.array(fieldDefinitionSchema),
+  fieldDefinitions: z.array(fieldDefinitionsWithGroupsSchema),
 });
 export type CollectionFile = z.infer<typeof collectionFileSchema>;
 

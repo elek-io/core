@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import core, {
+  flattenFieldDefinitions,
   type Asset,
   type Collection,
   type Entry,
@@ -163,7 +164,7 @@ describe('ReleaseService', function () {
 
   it('should detect MINOR bump when a field becomes required', async function () {
     // The entry reference field is currently not required
-    const entryRefField = collection.fieldDefinitions.find(
+    const entryRefField = flattenFieldDefinitions(collection.fieldDefinitions).find(
       (fd) => fd.fieldType === 'entry'
     )!;
     (entryRefField as { isRequired: boolean }).isRequired = true;
@@ -190,7 +191,7 @@ describe('ReleaseService', function () {
   it('should detect MAJOR bump when a field is deleted', async function () {
     // Remove the entry reference field
     collection.fieldDefinitions = collection.fieldDefinitions.filter(
-      (fd) => fd.fieldType !== 'entry'
+      (fd) => !('fieldType' in fd) || fd.fieldType !== 'entry'
     );
 
     await core.collections.update({

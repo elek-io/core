@@ -6,6 +6,7 @@ import {
   deleteEntrySchema,
   entryFileSchema,
   entrySchema,
+  flattenFieldDefinitions,
   getCreateEntrySchemaFromFieldDefinitions,
   getUpdateEntrySchemaFromFieldDefinitions,
   listEntriesSchema,
@@ -98,7 +99,9 @@ export class EntryService
 
     // Validate all Values against their Field Definitions
     const createEntrySchemaFromFieldDefinitions =
-      getCreateEntrySchemaFromFieldDefinitions(collection.fieldDefinitions);
+      getCreateEntrySchemaFromFieldDefinitions(
+        flattenFieldDefinitions(collection.fieldDefinitions)
+      );
     createEntrySchemaFromFieldDefinitions.parse(props);
 
     await this.jsonFileService.create(
@@ -193,7 +196,9 @@ export class EntryService
 
     // Validate all Values against their Field Definitions
     const updateEntrySchemaFromFieldDefinitions =
-      getUpdateEntrySchemaFromFieldDefinitions(collection.fieldDefinitions);
+      getUpdateEntrySchemaFromFieldDefinitions(
+        flattenFieldDefinitions(collection.fieldDefinitions)
+      );
     updateEntrySchemaFromFieldDefinitions.parse(props);
 
     await this.jsonFileService.update(

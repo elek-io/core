@@ -303,3 +303,41 @@ export const fieldDefinitionSchema = z.union([
   // sharedValueDefinitionSchema,
 ]);
 export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
+
+/**
+ * A group of Field definitions, displayed as a named fieldset in the UI.
+ * Groups are purely presentational and do not affect entry data or validation.
+ * Ordering is determined by position in the parent array (supports drag-and-drop).
+ */
+export const fieldDefinitionGroupSchema = z.object({
+  isGroup: z.literal(true),
+  id: uuidSchema.readonly(),
+  label: translatableStringSchema,
+  description: translatableStringSchema.nullable(),
+  fieldDefinitions: z.array(fieldDefinitionSchema),
+});
+export type FieldDefinitionGroup = z.infer<typeof fieldDefinitionGroupSchema>;
+
+/**
+ * Union of a FieldDefinition or a FieldDefinitionGroup,
+ * used as the element type of Collection.fieldDefinitions.
+ */
+export const fieldDefinitionsWithGroupsSchema = z.union([
+  fieldDefinitionGroupSchema,
+  fieldDefinitionSchema,
+]);
+export type FieldDefinitionsWithGroups = z.infer<
+  typeof fieldDefinitionsWithGroupsSchema
+>;
+
+/**
+ * Flattens a mixed array of FieldDefinitions and FieldDefinitionGroups
+ * into a flat array of FieldDefinitions.
+ */
+export function flattenFieldDefinitions(
+  items: FieldDefinitionsWithGroups[]
+): FieldDefinition[] {
+  return items.flatMap((item) =>
+    'isGroup' in item ? item.fieldDefinitions : [item]
+  );
+}

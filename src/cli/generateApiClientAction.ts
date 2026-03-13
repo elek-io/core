@@ -5,7 +5,7 @@ import Path from 'node:path';
 import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
 import assert from 'node:assert';
-import type { Collection, Project } from '../index.node.js';
+import { flattenFieldDefinitions, type Collection, type Project } from '../index.node.js';
 
 /**
  * API Client generator
@@ -148,7 +148,7 @@ function writeEntriesObject(
   writer.setIndentationLevel(6);
   writer.indent(() => {
     writer
-      .write(JSON.stringify(collection.fieldDefinitions, null, 2))
+      .write(JSON.stringify(flattenFieldDefinitions(collection.fieldDefinitions), null, 2))
       .newLine();
   });
   writer.setIndentationLevel(0);
