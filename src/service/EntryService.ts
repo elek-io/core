@@ -22,6 +22,7 @@ import {
   type Entry,
   type EntryFile,
   type ListEntriesProps,
+  type PaginatedList,
   type ReadEntryProps,
   type UpdateEntryProps,
   type EntryHistoryProps,
@@ -74,7 +75,7 @@ export class EntryService
   /**
    * Creates a new Entry for given Collection
    */
-  public async create(props: CreateEntryProps): Promise<Entry> {
+  public async create<T extends Entry = Entry>(props: CreateEntryProps): Promise<T> {
     createEntrySchema.parse(props);
 
     const id = uuid();
@@ -111,8 +112,6 @@ export class EntryService
       updated: null,
     };
 
-    const entry = this.toEntry(entryFile);
-
     await this.jsonFileService.create(
       entryFile,
       entryFilePath,
@@ -128,7 +127,7 @@ export class EntryService
       },
     });
 
-    return entry;
+    return this.toEntry(entryFile) as T;
   }
 
   /**
@@ -136,7 +135,7 @@ export class EntryService
    *
    * If a commit hash is provided, the Entry is read from history
    */
-  public async read(props: ReadEntryProps): Promise<Entry> {
+  public async read<T extends Entry = Entry>(props: ReadEntryProps): Promise<T> {
     readEntrySchema.parse(props);
 
     if (!props.commitHash) {
@@ -145,7 +144,7 @@ export class EntryService
         entryFileSchema
       );
 
-      return this.toEntry(entryFile);
+      return this.toEntry(entryFile) as T;
     } else {
       const entryFile = this.migrate(
         JSON.parse(
@@ -157,7 +156,7 @@ export class EntryService
         )
       );
 
-      return this.toEntry(entryFile);
+      return this.toEntry(entryFile) as T;
     }
   }
 
@@ -175,7 +174,7 @@ export class EntryService
   /**
    * Updates an Entry of given Collection with new Values
    */
-  public async update(props: UpdateEntryProps): Promise<Entry> {
+  public async update<T extends Entry = Entry>(props: UpdateEntryProps): Promise<T> {
     updateEntrySchema.parse(props);
 
     const projectPath = pathTo.project(props.projectId);
@@ -214,8 +213,6 @@ export class EntryService
       updated: datetime(),
     };
 
-    const entry = this.toEntry(entryFile);
-
     await this.jsonFileService.update(
       entryFile,
       entryFilePath,
@@ -231,7 +228,7 @@ export class EntryService
       },
     });
 
-    return entry;
+    return this.toEntry(entryFile) as T;
   }
 
   /**
@@ -259,7 +256,7 @@ export class EntryService
     });
   }
 
-  public async list(props: ListEntriesProps) {
+  public async list<T extends Entry = Entry>(props: ListEntriesProps): Promise<PaginatedList<T>> {
     listEntriesSchema.parse(props);
 
     const offset = props.offset || 0;
@@ -278,7 +275,7 @@ export class EntryService
 
     const entries = await this.settleAndWarn(
       partialEntryReferences.map((reference) => {
-        return this.read({
+        return this.read<T>({
           projectId: props.projectId,
           collectionId: props.collectionId,
           id: reference.id,

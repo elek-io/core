@@ -87,7 +87,7 @@ export class CollectionService
   /**
    * Creates a new Collection
    */
-  public async create(props: CreateCollectionProps): Promise<Collection> {
+  public async create<T extends Collection = Collection>(props: CreateCollectionProps): Promise<T> {
     const validatedProps = createCollectionSchema.parse(props);
 
     const id = uuid();
@@ -138,7 +138,7 @@ export class CollectionService
     index[id] = slugPlural;
     await this.writeIndex(validatedProps.projectId, index);
 
-    return this.toCollection(collectionFile);
+    return this.toCollection(collectionFile) as T;
   }
 
   /**
@@ -146,7 +146,7 @@ export class CollectionService
    *
    * If a commit hash is provided, the Collection is read from history
    */
-  public async read(props: ReadCollectionProps): Promise<Collection> {
+  public async read<T extends Collection = Collection>(props: ReadCollectionProps): Promise<T> {
     readCollectionSchema.parse(props);
 
     if (!props.commitHash) {
@@ -155,7 +155,7 @@ export class CollectionService
         collectionFileSchema
       );
 
-      return this.toCollection(collectionFile);
+      return this.toCollection(collectionFile) as T;
     } else {
       const collectionFile = this.migrate(
         JSON.parse(
@@ -167,21 +167,21 @@ export class CollectionService
         )
       );
 
-      return this.toCollection(collectionFile);
+      return this.toCollection(collectionFile) as T;
     }
   }
 
   /**
    * Reads a Collection by its slug
    */
-  public async readBySlug(
+  public async readBySlug<T extends Collection = Collection>(
     props: ReadBySlugCollectionProps
-  ): Promise<Collection> {
+  ): Promise<T> {
     const id = await this.resolveCollectionId({
       projectId: props.projectId,
       idOrSlug: props.slug,
     });
-    return this.read({
+    return this.read<T>({
       projectId: props.projectId,
       id,
       commitHash: props.commitHash,
@@ -204,7 +204,7 @@ export class CollectionService
    *
    * Handles fieldDefinition slug rename cascade and collection slug uniqueness.
    */
-  public async update(props: UpdateCollectionProps): Promise<Collection> {
+  public async update<T extends Collection = Collection>(props: UpdateCollectionProps): Promise<T> {
     const validatedProps = updateCollectionSchema.parse(props);
 
     const projectPath = pathTo.project(validatedProps.projectId);
@@ -319,7 +319,7 @@ export class CollectionService
       reference: { objectType: 'collection', id: collectionFile.id },
     });
 
-    return this.toCollection(collectionFile);
+    return this.toCollection(collectionFile) as T;
   }
 
   /**
@@ -346,9 +346,9 @@ export class CollectionService
     await this.writeIndex(props.projectId, index);
   }
 
-  public async list(
+  public async list<T extends Collection = Collection>(
     props: ListCollectionsProps
-  ): Promise<PaginatedList<Collection>> {
+  ): Promise<PaginatedList<T>> {
     listCollectionsSchema.parse(props);
 
     const offset = props.offset || 0;
@@ -366,7 +366,7 @@ export class CollectionService
 
     const collections = await this.settleAndWarn(
       partialCollectionReferences.map((reference) => {
-        return this.read({
+        return this.read<T>({
           projectId: props.projectId,
           id: reference.id,
         });

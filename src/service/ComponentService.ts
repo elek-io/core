@@ -91,7 +91,7 @@ export class ComponentService
   /**
    * Creates a new Component
    */
-  public async create(props: CreateComponentProps): Promise<Component> {
+  public async create<T extends Component = Component>(props: CreateComponentProps): Promise<T> {
     const validatedProps = createComponentSchema.parse(props);
 
     await this.validateNoCircularReferences(
@@ -141,13 +141,13 @@ export class ComponentService
     index[id] = componentSlug;
     await this.writeIndex(validatedProps.projectId, index);
 
-    return this.toComponent(componentFile);
+    return this.toComponent(componentFile) as T;
   }
 
   /**
    * Returns a Component by ID
    */
-  public async read(props: ReadComponentProps): Promise<Component> {
+  public async read<T extends Component = Component>(props: ReadComponentProps): Promise<T> {
     readComponentSchema.parse(props);
 
     if (!props.commitHash) {
@@ -156,7 +156,7 @@ export class ComponentService
         componentFileSchema
       );
 
-      return this.toComponent(componentFile);
+      return this.toComponent(componentFile) as T;
     } else {
       const componentFile = this.migrate(
         JSON.parse(
@@ -168,19 +168,19 @@ export class ComponentService
         )
       );
 
-      return this.toComponent(componentFile);
+      return this.toComponent(componentFile) as T;
     }
   }
 
   /**
    * Reads a Component by its slug
    */
-  public async readBySlug(props: ReadBySlugComponentProps): Promise<Component> {
+  public async readBySlug<T extends Component = Component>(props: ReadBySlugComponentProps): Promise<T> {
     const id = await this.resolveComponentId({
       projectId: props.projectId,
       idOrSlug: props.slug,
     });
-    return this.read({
+    return this.read<T>({
       projectId: props.projectId,
       id,
       commitHash: props.commitHash,
@@ -204,7 +204,7 @@ export class ComponentService
    * Handles fieldDefinition slug rename cascade: when a sub-field slug changes
    * (matched by UUID), all Entry data referencing this Component is updated.
    */
-  public async update(props: UpdateComponentProps): Promise<Component> {
+  public async update<T extends Component = Component>(props: UpdateComponentProps): Promise<T> {
     const validatedProps = updateComponentSchema.parse(props);
 
     await this.validateNoCircularReferences(
@@ -277,7 +277,7 @@ export class ComponentService
       reference: { objectType: 'component', id: componentFile.id },
     });
 
-    return this.toComponent(componentFile);
+    return this.toComponent(componentFile) as T;
   }
 
   /**
@@ -318,9 +318,9 @@ export class ComponentService
     await this.writeIndex(props.projectId, index);
   }
 
-  public async list(
+  public async list<T extends Component = Component>(
     props: ListComponentsProps
-  ): Promise<PaginatedList<Component>> {
+  ): Promise<PaginatedList<T>> {
     listComponentsSchema.parse(props);
 
     const offset = props.offset || 0;
@@ -338,7 +338,7 @@ export class ComponentService
 
     const components = await this.settleAndWarn(
       partialComponentReferences.map((reference) => {
-        return this.read({
+        return this.read<T>({
           projectId: props.projectId,
           id: reference.id,
         });
