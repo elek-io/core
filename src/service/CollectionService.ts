@@ -88,30 +88,34 @@ export class CollectionService
    * Creates a new Collection
    */
   public async create(props: CreateCollectionProps): Promise<Collection> {
-    createCollectionSchema.parse(props);
+    const validatedProps = createCollectionSchema.parse(props);
 
     const id = uuid();
-    const projectPath = pathTo.project(props.projectId);
-    const collectionPath = pathTo.collection(props.projectId, id);
-    const collectionFilePath = pathTo.collectionFile(props.projectId, id);
+    const projectPath = pathTo.project(validatedProps.projectId);
+    const collectionPath = pathTo.collection(validatedProps.projectId, id);
+    const collectionFilePath = pathTo.collectionFile(
+      validatedProps.projectId,
+      id
+    );
 
-    const slugPlural = slug(props.slug.plural);
+    const slugPlural = slug(validatedProps.slug.plural);
 
     // Enforce collection slug uniqueness via index
-    const index = await this.getIndex(props.projectId);
+    const index = await this.getIndex(validatedProps.projectId);
     if (Object.values(index).includes(slugPlural)) {
       throw new Error(
         `Collection slug "${slugPlural}" is already in use by another collection`
       );
     }
 
+    const { projectId: _, ...validatedCollectionProps } = validatedProps;
     const collectionFile: CollectionFile = {
-      ...props,
+      ...validatedCollectionProps,
       objectType: 'collection',
       id,
       coreVersion: this.coreVersion,
       slug: {
-        singular: slug(props.slug.singular),
+        singular: slug(validatedProps.slug.singular),
         plural: slugPlural,
       },
       created: datetime(),
@@ -132,7 +136,7 @@ export class CollectionService
 
     // Update the index (not git-tracked)
     index[id] = slugPlural;
-    await this.writeIndex(props.projectId, index);
+    await this.writeIndex(validatedProps.projectId, index);
 
     return this.toCollection(collectionFile);
   }
@@ -201,15 +205,19 @@ export class CollectionService
    * Handles fieldDefinition slug rename cascade and collection slug uniqueness.
    */
   public async update(props: UpdateCollectionProps): Promise<Collection> {
-    updateCollectionSchema.parse(props);
+    const validatedProps = updateCollectionSchema.parse(props);
 
-    const projectPath = pathTo.project(props.projectId);
-    const collectionFilePath = pathTo.collectionFile(props.projectId, props.id);
-    const prevCollectionFile = await this.read(props);
+    const projectPath = pathTo.project(validatedProps.projectId);
+    const collectionFilePath = pathTo.collectionFile(
+      validatedProps.projectId,
+      validatedProps.id
+    );
+    const prevCollectionFile = await this.read(validatedProps);
 
+    const { projectId: _, ...validatedUpdateProps } = validatedProps;
     const collectionFile: CollectionFile = {
       ...prevCollectionFile,
-      ...props,
+      ...validatedUpdateProps,
       updated: datetime(),
     };
 
@@ -218,7 +226,9 @@ export class CollectionService
     const oldFieldDefs = flattenFieldDefinitions(
       prevCollectionFile.fieldDefinitions
     );
-    const newFieldDefs = flattenFieldDefinitions(props.fieldDefinitions);
+    const newFieldDefs = flattenFieldDefinitions(
+      validatedProps.fieldDefinitions
+    );
     const slugRenames: Array<{ oldSlug: string; newSlug: string }> = [];
 
     const oldByUuid = new Map(oldFieldDefs.map((fd) => [fd.id, fd]));
@@ -233,7 +243,7 @@ export class CollectionService
 
     if (slugRenames.length > 0) {
       // Read all entries and rewrite their values record keys
-      const entriesPath = pathTo.entries(props.projectId, props.id);
+      const entriesPath = pathTo.entries(validatedProps.projectId, validatedProps.id);
       if (await Fs.pathExists(entriesPath)) {
         const entryFiles = (await Fs.readdir(entriesPath)).filter(
           (f) => f.endsWith('.json') && f !== 'collection.json'
@@ -241,8 +251,8 @@ export class CollectionService
 
         for (const entryFileName of entryFiles) {
           const entryFilePath = pathTo.entryFile(
-            props.projectId,
-            props.id,
+            validatedProps.projectId,
+            validatedProps.id,
             entryFileName.replace('.json', '')
           );
 
@@ -283,19 +293,19 @@ export class CollectionService
     }
 
     // If collection slug.plural changed, enforce uniqueness
-    const newSlugPlural = slug(props.slug.plural);
+    const newSlugPlural = slug(validatedProps.slug.plural);
     if (prevCollectionFile.slug.plural !== newSlugPlural) {
-      const index = await this.getIndex(props.projectId);
+      const index = await this.getIndex(validatedProps.projectId);
       const existingUuid = Object.entries(index).find(
         ([, s]) => s === newSlugPlural
       );
-      if (existingUuid && existingUuid[0] !== props.id) {
+      if (existingUuid && existingUuid[0] !== validatedProps.id) {
         throw new Error(
           `Collection slug "${newSlugPlural}" is already in use by another collection`
         );
       }
-      index[props.id] = newSlugPlural;
-      await this.writeIndex(props.projectId, index);
+      index[validatedProps.id] = newSlugPlural;
+      await this.writeIndex(validatedProps.projectId, index);
     }
 
     await this.jsonFileService.update(

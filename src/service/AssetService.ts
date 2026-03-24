@@ -66,18 +66,23 @@ export class AssetService
    * Creates a new Asset
    */
   public async create(props: CreateAssetProps): Promise<Asset> {
-    createAssetSchema.parse(props);
+    const validatedProps = createAssetSchema.parse(props);
 
     const id = uuid();
-    const projectPath = pathTo.project(props.projectId);
-    const fileType = this.getFileType(props.filePath);
-    const size = await this.getFileSize(props.filePath);
-    const assetPath = pathTo.asset(props.projectId, id, fileType.extension);
-    const assetFilePath = pathTo.assetFile(props.projectId, id);
+    const projectPath = pathTo.project(validatedProps.projectId);
+    const fileType = this.getFileType(validatedProps.filePath);
+    const size = await this.getFileSize(validatedProps.filePath);
+    const assetPath = pathTo.asset(
+      validatedProps.projectId,
+      id,
+      fileType.extension
+    );
+    const assetFilePath = pathTo.assetFile(validatedProps.projectId, id);
 
+    const { projectId: _, filePath: __, ...validatedAssetProps } = validatedProps;
     const assetFile: AssetFile = {
-      ...props,
-      name: slug(props.name),
+      ...validatedAssetProps,
+      name: slug(validatedProps.name),
       objectType: 'asset',
       id,
       coreVersion: this.coreVersion,
@@ -89,7 +94,7 @@ export class AssetService
     };
 
     try {
-      await Fs.copyFile(props.filePath, assetPath);
+      await Fs.copyFile(validatedProps.filePath, assetPath);
       await this.jsonFileService.create(
         assetFile,
         assetFilePath,
@@ -97,7 +102,7 @@ export class AssetService
       );
     } catch (error) {
       // To avoid partial data being added to the repository / git status reporting uncommitted files
-      await this.delete({ ...assetFile, projectId: props.projectId });
+      await this.delete({ ...assetFile, projectId: validatedProps.projectId });
       throw error;
     }
 
@@ -107,7 +112,7 @@ export class AssetService
       reference: { objectType: 'asset', id },
     });
 
-    return this.toAsset(props.projectId, assetFile);
+    return this.toAsset(validatedProps.projectId, assetFile);
   }
 
   /**
@@ -179,40 +184,46 @@ export class AssetService
    * Use the optional "newFilePath" prop to update the Asset itself
    */
   public async update(props: UpdateAssetProps): Promise<Asset> {
-    updateAssetSchema.parse(props);
+    const validatedProps = updateAssetSchema.parse(props);
 
-    const projectPath = pathTo.project(props.projectId);
-    const assetFilePath = pathTo.assetFile(props.projectId, props.id);
-    const prevAssetFile = await this.read(props);
+    const projectPath = pathTo.project(validatedProps.projectId);
+    const assetFilePath = pathTo.assetFile(
+      validatedProps.projectId,
+      validatedProps.id
+    );
+    const prevAssetFile = await this.read(validatedProps);
 
-    // Overwrite old data with new
-    // It's ok to have projectId inside props, since the prevAssetFile is read with the same data
+    const {
+      projectId: _,
+      newFilePath: __,
+      ...validatedUpdateProps
+    } = validatedProps;
     const assetFile: AssetFile = {
       ...prevAssetFile,
-      ...props,
-      name: slug(props.name),
+      ...validatedUpdateProps,
+      name: slug(validatedProps.name),
       updated: datetime(),
     };
 
-    if (props.newFilePath) {
+    if (validatedProps.newFilePath) {
       // Overwrite the file itself (in LFS folder)...
 
-      const fileType = this.getFileType(props.newFilePath);
-      const size = await this.getFileSize(props.newFilePath);
+      const fileType = this.getFileType(validatedProps.newFilePath);
+      const size = await this.getFileSize(validatedProps.newFilePath);
       const prevAssetPath = pathTo.asset(
-        props.projectId,
-        props.id,
+        validatedProps.projectId,
+        validatedProps.id,
         prevAssetFile.extension
       );
       const assetPath = pathTo.asset(
-        props.projectId,
-        props.id,
+        validatedProps.projectId,
+        validatedProps.id,
         fileType.extension
       );
 
       // @todo use try catch to handle FS error and restore previous state
       await Fs.remove(prevAssetPath); // Need to explicitly remove old Asset, because it could have a different extension
-      await Fs.copyFile(props.newFilePath, assetPath);
+      await Fs.copyFile(validatedProps.newFilePath, assetPath);
       await this.gitService.add(projectPath, [prevAssetPath, assetPath]);
 
       // ...and update meta information
@@ -232,7 +243,7 @@ export class AssetService
       reference: { objectType: 'asset', id: assetFile.id },
     });
 
-    return this.toAsset(props.projectId, assetFile);
+    return this.toAsset(validatedProps.projectId, assetFile);
   }
 
   /**

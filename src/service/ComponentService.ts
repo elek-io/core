@@ -92,30 +92,31 @@ export class ComponentService
    * Creates a new Component
    */
   public async create(props: CreateComponentProps): Promise<Component> {
-    createComponentSchema.parse(props);
+    const validatedProps = createComponentSchema.parse(props);
 
     await this.validateNoCircularReferences(
       null,
-      props.fieldDefinitions,
-      props.projectId
+      validatedProps.fieldDefinitions,
+      validatedProps.projectId
     );
 
     const id = uuid();
-    const projectPath = pathTo.project(props.projectId);
-    const componentPath = pathTo.component(props.projectId, id);
-    const componentFilePath = pathTo.componentFile(props.projectId, id);
-    const componentSlug = slug(props.slug);
+    const projectPath = pathTo.project(validatedProps.projectId);
+    const componentPath = pathTo.component(validatedProps.projectId, id);
+    const componentFilePath = pathTo.componentFile(validatedProps.projectId, id);
+    const componentSlug = slug(validatedProps.slug);
 
     // Enforce component slug uniqueness via index
-    const index = await this.getIndex(props.projectId);
+    const index = await this.getIndex(validatedProps.projectId);
     if (Object.values(index).includes(componentSlug)) {
       throw new Error(
         `Component slug "${componentSlug}" is already in use by another component`
       );
     }
 
+    const { projectId: _, ...validatedComponentProps } = validatedProps;
     const componentFile: ComponentFile = {
-      ...props,
+      ...validatedComponentProps,
       objectType: 'component',
       id,
       coreVersion: this.coreVersion,
@@ -138,7 +139,7 @@ export class ComponentService
 
     // Update the index (not git-tracked)
     index[id] = componentSlug;
-    await this.writeIndex(props.projectId, index);
+    await this.writeIndex(validatedProps.projectId, index);
 
     return this.toComponent(componentFile);
   }
@@ -204,44 +205,48 @@ export class ComponentService
    * (matched by UUID), all Entry data referencing this Component is updated.
    */
   public async update(props: UpdateComponentProps): Promise<Component> {
-    updateComponentSchema.parse(props);
+    const validatedProps = updateComponentSchema.parse(props);
 
     await this.validateNoCircularReferences(
-      props.id,
-      props.fieldDefinitions,
-      props.projectId
+      validatedProps.id,
+      validatedProps.fieldDefinitions,
+      validatedProps.projectId
     );
 
-    const projectPath = pathTo.project(props.projectId);
-    const componentFilePath = pathTo.componentFile(props.projectId, props.id);
-    const prevComponentFile = await this.read(props);
+    const projectPath = pathTo.project(validatedProps.projectId);
+    const componentFilePath = pathTo.componentFile(
+      validatedProps.projectId,
+      validatedProps.id
+    );
+    const prevComponentFile = await this.read(validatedProps);
 
+    const { projectId: _, ...validatedUpdateProps } = validatedProps;
     const componentFile: ComponentFile = {
       ...prevComponentFile,
-      ...props,
+      ...validatedUpdateProps,
       updated: datetime(),
     };
 
     const filesToGitAdd: string[] = [componentFilePath];
 
     // If component slug changed, enforce uniqueness
-    const newSlug = slug(props.slug);
+    const newSlug = slug(validatedProps.slug);
     if (prevComponentFile.slug !== newSlug) {
-      const index = await this.getIndex(props.projectId);
+      const index = await this.getIndex(validatedProps.projectId);
       const existingUuid = Object.entries(index).find(([, s]) => s === newSlug);
-      if (existingUuid && existingUuid[0] !== props.id) {
+      if (existingUuid && existingUuid[0] !== validatedProps.id) {
         throw new Error(
           `Component slug "${newSlug}" is already in use by another component`
         );
       }
-      index[props.id] = newSlug;
-      await this.writeIndex(props.projectId, index);
+      index[validatedProps.id] = newSlug;
+      await this.writeIndex(validatedProps.projectId, index);
     }
 
     // FieldDefinition slug rename cascade:
     // Match old and new fieldDefinitions by UUID to detect slug renames
     const oldFieldDefs = prevComponentFile.fieldDefinitions;
-    const newFieldDefs = props.fieldDefinitions;
+    const newFieldDefs = validatedProps.fieldDefinitions;
     const slugRenames: Array<{ oldSlug: string; newSlug: string }> = [];
 
     const oldByUuid = new Map(oldFieldDefs.map((fd) => [fd.id, fd]));
@@ -254,8 +259,8 @@ export class ComponentService
 
     if (slugRenames.length > 0) {
       const cascadedFiles = await this.cascadeComponentSlugRenames(
-        props.projectId,
-        props.id,
+        validatedProps.projectId,
+        validatedProps.id,
         slugRenames
       );
       filesToGitAdd.push(...cascadedFiles);

@@ -89,17 +89,6 @@ export class EntryService
       id: props.collectionId,
     });
 
-    const entryFile: EntryFile = {
-      objectType: 'entry',
-      id,
-      coreVersion: this.coreVersion,
-      values: props.values,
-      created: datetime(),
-      updated: null,
-    };
-
-    const entry = this.toEntry(entryFile);
-
     // Validate all Values against their Field Definitions
     const { resolver: componentResolver, fieldDefinitions } =
       await this.buildComponentResolver(
@@ -111,7 +100,18 @@ export class EntryService
         fieldDefinitions,
         componentResolver
       );
-    createEntrySchemaFromFieldDefinitions.parse(props);
+    const validatedProps = createEntrySchemaFromFieldDefinitions.parse(props);
+
+    const entryFile: EntryFile = {
+      objectType: 'entry',
+      id,
+      coreVersion: this.coreVersion,
+      values: validatedProps.values,
+      created: datetime(),
+      updated: null,
+    };
+
+    const entry = this.toEntry(entryFile);
 
     await this.jsonFileService.create(
       entryFile,
@@ -195,14 +195,6 @@ export class EntryService
       id: props.id,
     });
 
-    const entryFile: EntryFile = {
-      ...prevEntryFile,
-      values: props.values,
-      updated: datetime(),
-    };
-
-    const entry = this.toEntry(entryFile);
-
     // Validate all Values against their Field Definitions
     const { resolver: componentResolver, fieldDefinitions } =
       await this.buildComponentResolver(
@@ -214,7 +206,15 @@ export class EntryService
         fieldDefinitions,
         componentResolver
       );
-    updateEntrySchemaFromFieldDefinitions.parse(props);
+    const validatedProps = updateEntrySchemaFromFieldDefinitions.parse(props);
+
+    const entryFile: EntryFile = {
+      ...prevEntryFile,
+      values: validatedProps.values,
+      updated: datetime(),
+    };
+
+    const entry = this.toEntry(entryFile);
 
     await this.jsonFileService.update(
       entryFile,

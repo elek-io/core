@@ -104,12 +104,12 @@ export class ProjectService
    * Creates a new Project
    */
   public async create(props: CreateProjectProps): Promise<Project> {
-    createProjectSchema.parse(props);
+    const validatedProps = createProjectSchema.parse(props);
 
     const id = uuid();
 
     const projectFile: ProjectFile = {
-      ...props,
+      ...validatedProps,
       objectType: 'project',
       id,
       created: datetime(),
@@ -239,15 +239,15 @@ export class ProjectService
    * Updates given Project
    */
   public async update(props: UpdateProjectProps): Promise<Project> {
-    updateProjectSchema.parse(props);
+    const validatedProps = updateProjectSchema.parse(props);
 
-    const projectPath = pathTo.project(props.id);
-    const filePath = pathTo.projectFile(props.id);
-    const prevProjectFile = await this.read(props);
+    const projectPath = pathTo.project(validatedProps.id);
+    const filePath = pathTo.projectFile(validatedProps.id);
+    const prevProjectFile = await this.read(validatedProps);
 
     const projectFile: ProjectFile = {
       ...prevProjectFile,
-      ...props,
+      ...validatedProps,
       updated: datetime(),
     };
 
