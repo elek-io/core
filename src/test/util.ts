@@ -91,6 +91,34 @@ export async function createProject(name?: string, settings?: ProjectSettings) {
   return { ...project, destroy };
 }
 
+export async function createComponent(projectId: string) {
+  const component = await core.components.create({
+    projectId,
+    name: { en: 'Hero' },
+    slug: 'hero',
+    description: { en: 'A hero section' },
+    fieldDefinitions: [
+      {
+        id: uuid(),
+        slug: 'title',
+        valueType: 'string',
+        fieldType: 'text',
+        label: { en: 'Title' },
+        description: null,
+        defaultValue: null,
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        min: null,
+        max: null,
+      },
+    ],
+  });
+
+  return component;
+}
+
 export async function createAsset(projectId: string) {
   const asset = await core.assets.create({
     projectId,
@@ -234,6 +262,7 @@ export async function createEntry(
               {
                 objectType: 'entry',
                 id: entryValueId,
+                collectionId: collectionId,
               },
             ]) ||
             [],

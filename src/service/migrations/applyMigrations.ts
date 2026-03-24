@@ -11,7 +11,7 @@ export function applyMigrations(
   while (current['coreVersion'] !== targetVersion) {
     const migration = migrations.find((m) => m.from === current['coreVersion']);
     if (!migration) {
-      // No migration registered for this version gap — assume backward-compatible
+      // No migration registered for this version gap = assume backward-compatible
       current['coreVersion'] = targetVersion;
       break;
     }

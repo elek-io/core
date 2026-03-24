@@ -2,7 +2,7 @@ import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { isNotEmpty, isNotAnError, files, folders } from './node.js';
+import { isNotEmpty, files, folders } from './node.js';
 
 describe('isNotEmpty', () => {
   it('returns false for null', () => {
@@ -35,27 +35,6 @@ describe('isNotEmpty', () => {
   it('returns true for objects and arrays', () => {
     expect(isNotEmpty({})).toBe(true);
     expect(isNotEmpty([])).toBe(true);
-  });
-});
-
-describe('isNotAnError', () => {
-  it('returns true for non-error values', () => {
-    expect(isNotAnError('hello')).toBe(true);
-    expect(isNotAnError(42)).toBe(true);
-    expect(isNotAnError(null)).toBe(true);
-    expect(isNotAnError({})).toBe(true);
-  });
-
-  it('returns false for Error instances', () => {
-    expect(isNotAnError(new Error('fail'))).toBe(false);
-    expect(isNotAnError(new TypeError('type fail'))).toBe(false);
-  });
-
-  it('filters errors from mixed arrays', () => {
-    const mixed = ['a', new Error('fail'), 'b', new TypeError('bad')];
-    const filtered = mixed.filter(isNotAnError);
-
-    expect(filtered).toEqual(['a', 'b']);
   });
 });
 

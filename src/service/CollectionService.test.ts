@@ -376,7 +376,7 @@ describe('CollectionService - fieldDefinition slug uniqueness', function () {
           },
         ],
       })
-    ).rejects.toThrow('Duplicate fieldDefinition slug');
+    ).rejects.toThrow('Slug already in use');
   });
 
   it('should reject updating a collection with duplicate fieldDefinition slugs', async function () {
@@ -438,7 +438,7 @@ describe('CollectionService - fieldDefinition slug uniqueness', function () {
         ...collection,
         fieldDefinitions: updatedFieldDefs,
       })
-    ).rejects.toThrow('Duplicate fieldDefinition slug');
+    ).rejects.toThrow('Slug already in use');
 
     // Clean up
     await core.collections.delete({
@@ -787,7 +787,7 @@ describe('CollectionService - fieldDefinition groups', function () {
           },
         ],
       })
-    ).rejects.toThrow('same-slug');
+    ).rejects.toThrow('Slug already in use');
   });
 
   it('should rename entry value keys for a fieldDefinition inside a group', async function () {
@@ -881,5 +881,39 @@ describe('CollectionService - fieldDefinition groups', function () {
 
     expect(updatedEntry.values['new-slug']).toBeDefined();
     expect(updatedEntry.values['old-slug']).toBeUndefined();
+  });
+
+  it('should create a collection with an empty group', async function () {
+    const emptyGroupCollection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Empty Group Test' },
+        plural: { en: 'Empty Group Tests' },
+      },
+      slug: { singular: 'empty-group-test', plural: 'empty-group-tests' },
+      description: { en: 'A collection with an empty group' },
+      fieldDefinitions: [
+        {
+          isGroup: true,
+          id: uuid(),
+          label: { en: 'Empty Group' },
+          description: null,
+          fieldDefinitions: [],
+        },
+      ],
+    });
+
+    expect(emptyGroupCollection).toBeDefined();
+    expect(emptyGroupCollection.fieldDefinitions).toHaveLength(1);
+
+    // Should be able to create an entry with no values (empty group means no fields)
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: emptyGroupCollection.id,
+      values: {},
+    });
+
+    expect(entry.id).toBeDefined();
   });
 });

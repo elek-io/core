@@ -1,16 +1,14 @@
 import Fs from 'fs-extra';
 import type { z } from '@hono/zod-openapi';
 import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
-import type { BaseFile } from '../schema/fileSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
-import type { UserFile } from '../schema/userSchema.js';
-import { AbstractCrudService } from './AbstractCrudService.js';
+import { AbstractService } from './AbstractService.js';
 import type { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for JSON files on disk
  */
-export class JsonFileService extends AbstractCrudService {
+export class JsonFileService extends AbstractService {
   private cache: Map<string, unknown> = new Map();
 
   constructor(options: ElekIoCoreOptions, logService: LogService) {
@@ -25,7 +23,7 @@ export class JsonFileService extends AbstractCrudService {
    * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
-  public async create<T extends z.ZodType<BaseFile>>(
+  public async create<T extends z.ZodTypeAny>(
     data: unknown,
     path: string,
     schema: T
@@ -54,7 +52,7 @@ export class JsonFileService extends AbstractCrudService {
    * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
-  public async read<T extends z.ZodType<BaseFile | UserFile>>(
+  public async read<T extends z.ZodTypeAny>(
     path: string,
     schema: T
   ): Promise<z.output<T>> {
@@ -121,7 +119,7 @@ export class JsonFileService extends AbstractCrudService {
    * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
-  public async update<T extends z.ZodType<BaseFile | UserFile>>(
+  public async update<T extends z.ZodTypeAny>(
     data: unknown,
     path: string,
     schema: T

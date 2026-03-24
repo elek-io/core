@@ -14,10 +14,10 @@ npm install @elek-io/core
 
 The package provides multiple entry points for different environments:
 
-- **Node** (`@elek-io/core`) — The `ElekIoCore` main class with full access to services, API, schemas and utilities.
-- **Browser** (`@elek-io/core`) — All schemas and types but without the `ElekIoCore` class, since it is not usable in a browser environment.
-- **Astro** (`@elek-io/core/astro`) — Astro content loaders `elekAssets()` and `elekEntries()` for loading Project data into Astro.
-- **CLI** (`elek`) — A command-line interface with commands for generating API clients, starting a local API and exporting Projects.
+- **Node** (`@elek-io/core`) - The `ElekIoCore` main class with full access to services, API, schemas and utilities.
+- **Browser** (`@elek-io/core`) - All schemas and types but without the `ElekIoCore` class, since it is not usable in a browser environment.
+- **Astro** (`@elek-io/core/astro`) - Astro content loaders `elekAssets()` and `elekEntries()` for loading Project data into Astro.
+- **CLI** (`elek`) - A command-line interface with commands for generating API clients, starting a local API and exporting Projects.
 
 ## Source structure
 
@@ -25,7 +25,7 @@ The package provides multiple entry points for different environments:
 |-- src
 |   |-- api
 |   |   Local REST API built on Hono with OpenAPI documentation.
-|   |   Provides routes for Projects, Collections, Entries and Assets.
+|   |   Provides routes for Projects, Collections, Components, Entries and Assets.
 |   |-- astro
 |   |   Astro integration with content loaders and dynamic schema building
 |   |   based on Collection Field definitions.
@@ -42,7 +42,7 @@ The package provides multiple entry points for different environments:
 |   |   so their input is validated against our zod schemas.
 |   |   |-- migrations
 |   |   |   Version-aware schema migrations for Projects, Assets,
-|   |   |   Collections and Entries.
+|   |   |   Collections, Components and Entries.
 |   |-- test
 |   |   Additional files and utility functions only used for testing.
 |   |-- util
@@ -60,12 +60,15 @@ The package provides multiple entry points for different environments:
 |   |   Entry point for the CLI binary.
 ```
 
-## The concept behind Projects, Collections, Entries, Values, Assets and Releases
+## The concept behind Projects, Collections, Components, Entries, Values, Assets and Releases
 
 ```
 |-- Project - e.g. "Website"
+|   |-- Component - e.g. "Author"
+|   |   Reusable, named groups of Field definitions that can be referenced by Collections.
 |   |-- Collection - e.g. "Blog"
 |   |   Contains Field definitions all Entries and Values of the Collection must follow.
+|   |   Can reference Components to reuse shared Field definitions.
 |   |   |-- Entry - e.g "Post"
 |   |   |   |-- Value - e.g for a post's title: "Quarterly results 7% higher than expected"
 |   |   |   |-- Asset - a reference to a previously added Asset like image, PDF or ZIP
@@ -90,6 +93,10 @@ e.g. for a Blog, it could have the following Field definition for each post / En
 Each definition like the title, contains additional information for the input Field, that is used to modify it's Value.
 e.g. the title would be a simple one line input Field, that has a maximum length of 150 characters and is required for each post. But the content is a markdown editor to easily add formatting. The image let's the user select a jpeg or png from disk. And the author is a reference to another Collection's Entry, so the user is able to choose one of them.
 
+### Components
+
+Are reusable, named groups of Field definitions that can be referenced by one or more Collections. Instead of duplicating the same Field definitions across Collections, you define them once as a Component and reference it. When you update a Component's Field definitions, the change propagates to all Collections that use it.
+
 ### Entries
 
 Contains Values and references that follow the Collection's Field definitions. Why references and not the Assets or Entries themself? To make Values reusable for different Entries and even Collections - so when you update an Asset or Entry, it updates everywhere you've referenced it.
@@ -111,9 +118,9 @@ Are tagged snapshots of a Project at a specific point in time, managed through g
 
 The package includes a CLI accessible via the `elek` command:
 
-- `elek generate:client` — Generate a JavaScript/TypeScript API client (ESM or CJS)
-- `elek api:start` — Start a local REST API server (default port 31310)
-- `elek export` — Export Projects to JSON (nested or as separate files)
+- `elek generate:client` - Generate a JavaScript/TypeScript API client (ESM or CJS)
+- `elek api:start` - Start a local REST API server (default port 31310)
+- `elek export` - Export Projects to JSON (nested or as separate files)
 
 ## Documentation
 

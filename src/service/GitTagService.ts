@@ -20,7 +20,7 @@ import {
   type ReadGitTagProps,
 } from '../schema/index.js';
 import { datetime, uuid } from '../util/shared.js';
-import { AbstractCrudService } from './AbstractCrudService.js';
+import { AbstractService } from './AbstractService.js';
 import type { GitService } from './GitService.js';
 import type { LogService } from './LogService.js';
 
@@ -28,7 +28,7 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for GitTags
  */
 export class GitTagService
-  extends AbstractCrudService
+  extends AbstractService
   implements CrudServiceWithListCount<GitTag>
 {
   private git: GitService['git'];

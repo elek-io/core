@@ -8,6 +8,7 @@ import { cors } from 'hono/cors';
 import type {
   AssetService,
   CollectionService,
+  ComponentService,
   EntryService,
   LogService,
   ProjectService,
@@ -49,6 +50,7 @@ export default function createApi(
   logService: LogService,
   projectService: ProjectService,
   collectionService: CollectionService,
+  componentService: ComponentService,
   entryService: EntryService,
   assetService: AssetService
 ) {
@@ -68,6 +70,7 @@ export default function createApi(
         c.set('logService', logService);
         c.set('projectService', projectService);
         c.set('collectionService', collectionService);
+        c.set('componentService', componentService);
         c.set('entryService', entryService);
         c.set('assetService', assetService);
         return next();
@@ -107,6 +110,7 @@ export function createTestApi<S extends Schema>(
   logService: LogService,
   projectService: ProjectService,
   collectionService: CollectionService,
+  componentService: ComponentService,
   entryService: EntryService,
   assetService: AssetService
 ) {
@@ -114,6 +118,7 @@ export function createTestApi<S extends Schema>(
     logService,
     projectService,
     collectionService,
+    componentService,
     entryService,
     assetService
   ).route('/', router);

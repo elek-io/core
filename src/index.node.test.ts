@@ -1374,45 +1374,59 @@ describe('Node.js', function () {
           },
           {
             id: uuid(),
-            slug: 'feature-description',
-            valueType: 'string',
-            fieldType: 'textarea',
-            label: {
-              en: 'Feature description',
-              de: 'Feature-Beschreibung',
-            },
-            description: {
-              en: 'A brief description of the features.',
-              de: 'Eine kurze Beschreibung der Funktionen.',
-            },
-            inputWidth: '12',
-            isRequired: true,
-            isDisabled: false,
-            isUnique: false,
-            min: null,
-            max: null,
-            defaultValue: null,
-          },
-          {
-            id: uuid(),
-            slug: 'features',
-            valueType: 'reference',
-            fieldType: 'entry',
-            ofCollections: [featuresCollection.id],
+            isGroup: true,
             label: {
               en: 'Features',
               de: 'Funktionen',
             },
             description: {
-              en: 'A list of features of this product.',
-              de: 'Eine Liste der Funktionen dieses Produkts.',
+              en: 'A group of features for this product.',
+              de: 'Eine Gruppe von Funktionen für dieses Produkt.',
             },
-            inputWidth: '12',
-            isRequired: false,
-            isDisabled: false,
-            isUnique: false,
-            min: null,
-            max: null,
+            fieldDefinitions: [
+              {
+                id: uuid(),
+                slug: 'feature-description',
+                valueType: 'string',
+                fieldType: 'textarea',
+                label: {
+                  en: 'Feature description',
+                  de: 'Feature-Beschreibung',
+                },
+                description: {
+                  en: 'A brief description of the features.',
+                  de: 'Eine kurze Beschreibung der Funktionen.',
+                },
+                inputWidth: '12',
+                isRequired: true,
+                isDisabled: false,
+                isUnique: false,
+                min: null,
+                max: null,
+                defaultValue: null,
+              },
+              {
+                id: uuid(),
+                slug: 'features',
+                valueType: 'reference',
+                fieldType: 'entry',
+                ofCollections: [featuresCollection.id],
+                label: {
+                  en: 'Features',
+                  de: 'Funktionen',
+                },
+                description: {
+                  en: 'A list of features of this product.',
+                  de: 'Eine Liste der Funktionen dieses Produkts.',
+                },
+                inputWidth: '12',
+                isRequired: false,
+                isDisabled: false,
+                isUnique: false,
+                min: null,
+                max: null,
+              },
+            ],
           },
         ],
       });
@@ -1487,84 +1501,104 @@ describe('Node.js', function () {
                 {
                   objectType: 'entry',
                   id: featureEntryProjects.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryAssets.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryCollections.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryEntries.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryHistory.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryTeamwork.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryIntegrate.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryOfflineFirst.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryPerformanceAndSecurity.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryFreeAndSourceAvailable.id,
+                  collectionId: featuresCollection.id,
                 },
               ],
               de: [
                 {
                   objectType: 'entry',
                   id: featureEntryProjects.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryAssets.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryCollections.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryEntries.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryHistory.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryTeamwork.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryIntegrate.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryOfflineFirst.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryPerformanceAndSecurity.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryFreeAndSourceAvailable.id,
+                  collectionId: featuresCollection.id,
                 },
               ],
             },
@@ -1642,28 +1676,34 @@ describe('Node.js', function () {
                 {
                   objectType: 'entry',
                   id: featureEntryInstant.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryReplication.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryAutomation.id,
+                  collectionId: featuresCollection.id,
                 },
               ],
               de: [
                 {
                   objectType: 'entry',
                   id: featureEntryInstant.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryReplication.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryAutomation.id,
+                  collectionId: featuresCollection.id,
                 },
               ],
             },
@@ -1741,28 +1781,34 @@ describe('Node.js', function () {
                 {
                   objectType: 'entry',
                   id: featureEntryCode.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryApiClients.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryExport.id,
+                  collectionId: featuresCollection.id,
                 },
               ],
               de: [
                 {
                   objectType: 'entry',
                   id: featureEntryCode.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryApiClients.id,
+                  collectionId: featuresCollection.id,
                 },
                 {
                   objectType: 'entry',
                   id: featureEntryExport.id,
+                  collectionId: featuresCollection.id,
                 },
               ],
             },
@@ -1774,26 +1820,16 @@ describe('Node.js', function () {
        * @todo:
        * - Conditional fields based on other field values e.g. if "External Link" is true, the "Target page" field is not visible and the "URL" field is shown.
        */
-      const navigationItemCollection = await core.collections.create({
+      const navigationItemComponent = await core.components.create({
         projectId: project.id,
-        icon: 'home',
         name: {
-          singular: {
-            en: 'Navigation Item',
-            de: 'Navigationselement',
-          },
-          plural: {
-            en: 'Navigation Items',
-            de: 'Navigationselemente',
-          },
+          en: 'Navigation Item',
+          de: 'Navigationselement',
         },
+        slug: 'navigation-item',
         description: {
-          en: 'Navigation Items reference other Entries that are part of a Navigation.',
-          de: 'Navigationselemente verweisen auf andere Einträge, die Teil einer Navigation sind.',
-        },
-        slug: {
-          singular: 'navigation-item',
-          plural: 'navigation-items',
+          en: 'A navigation item that references a product page or an external URL.',
+          de: 'Ein Navigationselement, das auf eine Produktseite oder eine externe URL verweist.',
         },
         fieldDefinitions: [
           {
@@ -1881,144 +1917,6 @@ describe('Node.js', function () {
         ],
       });
 
-      const navigationItemEntryDesktop = await core.entries.create({
-        projectId: project.id,
-        collectionId: navigationItemCollection.id,
-        values: {
-          name: {
-            objectType: 'value',
-            valueType: 'string',
-            content: {
-              en: 'elek.io Desktop',
-              de: 'elek.io Desktop',
-            },
-          },
-          'external-link': {
-            objectType: 'value',
-            valueType: 'boolean',
-            content: {
-              en: false,
-              de: false,
-            },
-          },
-          'target-page': {
-            objectType: 'value',
-            valueType: 'reference',
-            content: {
-              en: [
-                {
-                  objectType: 'entry',
-                  id: productEntryDesktop.id,
-                },
-              ],
-              de: [
-                {
-                  objectType: 'entry',
-                  id: productEntryDesktop.id,
-                },
-              ],
-            },
-          },
-          url: {
-            objectType: 'value',
-            valueType: 'string',
-            content: {},
-          },
-        },
-      });
-
-      const navigationItemEntryCloud = await core.entries.create({
-        projectId: project.id,
-        collectionId: navigationItemCollection.id,
-        values: {
-          name: {
-            objectType: 'value',
-            valueType: 'string',
-            content: {
-              en: 'elek.io Cloud',
-              de: 'elek.io Cloud',
-            },
-          },
-          'external-link': {
-            objectType: 'value',
-            valueType: 'boolean',
-            content: {
-              en: false,
-              de: false,
-            },
-          },
-          'target-page': {
-            objectType: 'value',
-            valueType: 'reference',
-            content: {
-              en: [
-                {
-                  objectType: 'entry',
-                  id: productEntryCloud.id,
-                },
-              ],
-              de: [
-                {
-                  objectType: 'entry',
-                  id: productEntryCloud.id,
-                },
-              ],
-            },
-          },
-          url: {
-            objectType: 'value',
-            valueType: 'string',
-            content: {},
-          },
-        },
-      });
-
-      const navigationItemEntryCore = await core.entries.create({
-        projectId: project.id,
-        collectionId: navigationItemCollection.id,
-        values: {
-          name: {
-            objectType: 'value',
-            valueType: 'string',
-            content: {
-              en: 'elek.io Core',
-              de: 'elek.io Core',
-            },
-          },
-          'external-link': {
-            objectType: 'value',
-            valueType: 'boolean',
-            content: {
-              en: false,
-              de: false,
-            },
-          },
-          'target-page': {
-            objectType: 'value',
-            valueType: 'reference',
-            content: {
-              en: [
-                {
-                  objectType: 'entry',
-                  id: productEntryCore.id,
-                },
-              ],
-              de: [
-                {
-                  objectType: 'entry',
-                  id: productEntryCore.id,
-                },
-              ],
-            },
-          },
-          url: {
-            objectType: 'value',
-            valueType: 'string',
-            content: {},
-          },
-        },
-      });
-
       /**
        * @todo:
        * - Should the user define field definition IDs or should they be generated?
@@ -2078,7 +1976,7 @@ describe('Node.js', function () {
               de: 'Slug',
             },
             description: {
-              en: 'The slug is unique and unsed to identfiy this navigation.',
+              en: 'The slug is unique and used to identify this navigation.',
               de: 'Der Slug ist einzigartig und wird verwendet, um diese Navigation zu identifizieren.',
             },
             inputWidth: '6',
@@ -2092,9 +1990,9 @@ describe('Node.js', function () {
           {
             id: uuid(),
             slug: 'navigation-items',
-            valueType: 'reference',
-            fieldType: 'entry',
-            ofCollections: [navigationItemCollection.id],
+            valueType: 'component',
+            fieldType: 'dynamic',
+            ofComponents: [navigationItemComponent.id],
             label: {
               en: 'Navigation Items',
               de: 'Navigationselemente',
@@ -2107,7 +2005,7 @@ describe('Node.js', function () {
             isRequired: true,
             isDisabled: false,
             isUnique: false,
-            min: null,
+            min: 1,
             max: null,
           },
         ],
@@ -2135,37 +2033,147 @@ describe('Node.js', function () {
           },
           'navigation-items': {
             objectType: 'value',
-            valueType: 'reference',
-            content: {
-              en: [
-                {
-                  objectType: 'entry',
-                  id: navigationItemEntryDesktop.id,
+            valueType: 'component',
+            content: [
+              {
+                componentId: navigationItemComponent.id,
+                values: {
+                  name: {
+                    objectType: 'value',
+                    valueType: 'string',
+                    content: {
+                      en: 'elek.io Desktop',
+                      de: 'elek.io Desktop',
+                    },
+                  },
+                  'external-link': {
+                    objectType: 'value',
+                    valueType: 'boolean',
+                    content: {
+                      en: false,
+                      de: false,
+                    },
+                  },
+                  'target-page': {
+                    objectType: 'value',
+                    valueType: 'reference',
+                    content: {
+                      en: [
+                        {
+                          objectType: 'entry',
+                          id: productEntryDesktop.id,
+                          collectionId: productsCollection.id,
+                        },
+                      ],
+                      de: [
+                        {
+                          objectType: 'entry',
+                          id: productEntryDesktop.id,
+                          collectionId: productsCollection.id,
+                        },
+                      ],
+                    },
+                  },
+                  url: {
+                    objectType: 'value',
+                    valueType: 'string',
+                    content: {},
+                  },
                 },
-                {
-                  objectType: 'entry',
-                  id: navigationItemEntryCloud.id,
+              },
+              {
+                componentId: navigationItemComponent.id,
+                values: {
+                  name: {
+                    objectType: 'value',
+                    valueType: 'string',
+                    content: {
+                      en: 'elek.io Cloud',
+                      de: 'elek.io Cloud',
+                    },
+                  },
+                  'external-link': {
+                    objectType: 'value',
+                    valueType: 'boolean',
+                    content: {
+                      en: false,
+                      de: false,
+                    },
+                  },
+                  'target-page': {
+                    objectType: 'value',
+                    valueType: 'reference',
+                    content: {
+                      en: [
+                        {
+                          objectType: 'entry',
+                          id: productEntryCloud.id,
+                          collectionId: productsCollection.id,
+                        },
+                      ],
+                      de: [
+                        {
+                          objectType: 'entry',
+                          id: productEntryCloud.id,
+                          collectionId: productsCollection.id,
+                        },
+                      ],
+                    },
+                  },
+                  url: {
+                    objectType: 'value',
+                    valueType: 'string',
+                    content: {},
+                  },
                 },
-                {
-                  objectType: 'entry',
-                  id: navigationItemEntryCore.id,
+              },
+              {
+                componentId: navigationItemComponent.id,
+                values: {
+                  name: {
+                    objectType: 'value',
+                    valueType: 'string',
+                    content: {
+                      en: 'elek.io Core',
+                      de: 'elek.io Core',
+                    },
+                  },
+                  'external-link': {
+                    objectType: 'value',
+                    valueType: 'boolean',
+                    content: {
+                      en: false,
+                      de: false,
+                    },
+                  },
+                  'target-page': {
+                    objectType: 'value',
+                    valueType: 'reference',
+                    content: {
+                      en: [
+                        {
+                          objectType: 'entry',
+                          id: productEntryCore.id,
+                          collectionId: productsCollection.id,
+                        },
+                      ],
+                      de: [
+                        {
+                          objectType: 'entry',
+                          id: productEntryCore.id,
+                          collectionId: productsCollection.id,
+                        },
+                      ],
+                    },
+                  },
+                  url: {
+                    objectType: 'value',
+                    valueType: 'string',
+                    content: {},
+                  },
                 },
-              ],
-              de: [
-                {
-                  objectType: 'entry',
-                  id: navigationItemEntryDesktop.id,
-                },
-                {
-                  objectType: 'entry',
-                  id: navigationItemEntryCloud.id,
-                },
-                {
-                  objectType: 'entry',
-                  id: navigationItemEntryCore.id,
-                },
-              ],
-            },
+              },
+            ],
           },
         },
       });

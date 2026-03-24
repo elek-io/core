@@ -11,7 +11,6 @@ export const fieldTypeSchema = z.enum([
   'text',
   'textarea',
   'email',
-  // 'password', @todo maybe if there is a usecase
   'url',
   'ipv4',
   'date',
@@ -28,19 +27,21 @@ export const fieldTypeSchema = z.enum([
   // Reference Values
   'asset',
   'entry',
-  // 'sharedValue', // @todo
+  // Dynamic Values (polymorphic blocks referencing Components)
+  'dynamic',
 ]);
 export type FieldType = z.infer<typeof fieldTypeSchema>;
 
 export const fieldWidthSchema = z.enum(['12', '6', '4', '3']);
 
-/**
- * Shared select helpers reused by both string and number select schemas
- */
+//
+// Shared helpers reused by multiple schemas
+//
+
 const selectOptionSchema = <T extends z.ZodTypeAny>(valueSchema: T) =>
   z.object({ value: valueSchema, label: translatableStringSchema });
 
-const selectDefaultValueRefinement: [
+const selectDefaultValueMustBeInOptionsRefinement: [
   (data: {
     defaultValue: string | number | null;
     options: { value: string | number }[];
@@ -51,10 +52,60 @@ const selectDefaultValueRefinement: [
     data.defaultValue === null ||
     data.options.some((o) => o.value === data.defaultValue),
   {
-    message: 'defaultValue must be one of the defined options',
+    message: 'The default value must be one of the defined options',
     path: ['defaultValue'],
   },
 ];
+
+const minMustBeLessOrEqualMaxRefinement: [
+  (data: { min: number | null; max: number | null }) => boolean,
+  { message: string; path: string[] },
+] = [
+  (data) => data.max === null || data.min === null || data.min <= data.max,
+  { message: 'min must be less than or equal to max', path: ['min'] },
+];
+
+/**
+ * Validates that fieldDefinition slugs are unique within their parent fieldDefinitions array.
+ * Handles both FieldDefinitions and FieldDefinitionGroups.
+ *
+ * Use this refinement via the superRefine method, not the standard refine.
+ */
+export const fieldDefinitionSlugUniquenessSuperRefinement = (
+  fieldDefinitionsOrGroups: FieldDefinitionOrGroup[],
+  ctx: z.RefinementCtx
+) => {
+  const seen = new Set<string>();
+  for (const [
+    parentIndex,
+    fieldDefinitionOrGroup,
+  ] of fieldDefinitionsOrGroups.entries()) {
+    if ('isGroup' in fieldDefinitionOrGroup) {
+      for (const [
+        childIndex,
+        fieldDefinition,
+      ] of fieldDefinitionOrGroup.fieldDefinitions.entries()) {
+        if (seen.has(fieldDefinition.slug)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Slug already in use',
+            path: [parentIndex, 'fieldDefinitions', childIndex, 'slug'],
+          });
+        }
+        seen.add(fieldDefinition.slug);
+      }
+    } else {
+      if (seen.has(fieldDefinitionOrGroup.slug)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Slug already in use',
+          path: [parentIndex, 'slug'],
+        });
+      }
+      seen.add(fieldDefinitionOrGroup.slug);
+    }
+  }
+};
 
 /**
  * Base Field definition
@@ -72,9 +123,13 @@ export const fieldDefinitionBaseSchema = z.object({
 });
 export type FieldDefinitionBase = z.infer<typeof fieldDefinitionBaseSchema>;
 
-/**
- * String based Field definitions
- */
+//
+// Direct Field definitions (basic fields of type string, number, boolean)
+//
+
+//
+// String based Field definitions
+//
 
 export const stringFieldDefinitionBaseSchema = fieldDefinitionBaseSchema.extend(
   {
@@ -83,21 +138,22 @@ export const stringFieldDefinitionBaseSchema = fieldDefinitionBaseSchema.extend(
   }
 );
 
-export const textFieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend(
-  {
+export const textFieldDefinitionSchema = stringFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.text),
-    min: z.number().nullable(),
-    max: z.number().nullable(),
-  }
-);
+    min: z.int().min(1).nullable(),
+    max: z.int().min(1).nullable(),
+  })
+  .refine(...minMustBeLessOrEqualMaxRefinement);
 export type TextFieldDefinition = z.infer<typeof textFieldDefinitionSchema>;
 
-export const textareaFieldDefinitionSchema =
-  stringFieldDefinitionBaseSchema.extend({
+export const textareaFieldDefinitionSchema = stringFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.textarea),
-    min: z.number().nullable(),
-    max: z.number().nullable(),
-  });
+    min: z.int().min(1).nullable(),
+    max: z.int().min(1).nullable(),
+  })
+  .refine(...minMustBeLessOrEqualMaxRefinement);
 export type TextareaFieldDefinition = z.infer<
   typeof textareaFieldDefinitionSchema
 >;
@@ -108,12 +164,6 @@ export const emailFieldDefinitionSchema =
     defaultValue: z.email().nullable(),
   });
 export type EmailFieldDefinition = z.infer<typeof emailFieldDefinitionSchema>;
-
-// @todo why should we support password Values? Client saves it in clear text anyways
-// export const passwordFieldDefinitionSchema =
-//   stringFieldDefinitionBaseSchema.extend({
-//     fieldType: z.literal(FieldfieldTypeSchema.enum.password),
-//   });
 
 export const urlFieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend({
   fieldType: z.literal(fieldTypeSchema.enum.url),
@@ -168,7 +218,7 @@ export const stringSelectFieldDefinitionSchema = stringFieldDefinitionBaseSchema
     fieldType: z.literal(fieldTypeSchema.enum.select),
     options: z.array(selectOptionSchema(z.string())).min(1),
   })
-  .refine(...selectDefaultValueRefinement);
+  .refine(...selectDefaultValueMustBeInOptionsRefinement);
 export type StringSelectFieldDefinition = z.infer<
   typeof stringSelectFieldDefinitionSchema
 >;
@@ -187,9 +237,9 @@ export const stringFieldDefinitionSchema = z.union([
 ]);
 export type StringFieldDefinition = z.infer<typeof stringFieldDefinitionSchema>;
 
-/**
- * Number based Field definitions
- */
+//
+// Number based Field definitions
+//
 
 export const numberFieldDefinitionBaseSchema = fieldDefinitionBaseSchema.extend(
   {
@@ -201,21 +251,23 @@ export const numberFieldDefinitionBaseSchema = fieldDefinitionBaseSchema.extend(
   }
 );
 
-export const numberFieldDefinitionSchema =
-  numberFieldDefinitionBaseSchema.extend({
+export const numberFieldDefinitionSchema = numberFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.number),
-  });
+  })
+  .refine(...minMustBeLessOrEqualMaxRefinement);
 export type NumberFieldDefinition = z.infer<typeof numberFieldDefinitionSchema>;
 
-export const rangeFieldDefinitionSchema =
-  numberFieldDefinitionBaseSchema.extend({
+export const rangeFieldDefinitionSchema = numberFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.range),
     // Overwrite from nullable to required because a range needs min, max and default to work and is required, since it always returns a number
     isRequired: z.literal(true),
     min: z.number(),
     max: z.number(),
     defaultValue: z.number(),
-  });
+  })
+  .refine(...minMustBeLessOrEqualMaxRefinement);
 export type RangeFieldDefinition = z.infer<typeof rangeFieldDefinitionSchema>;
 
 export const numberSelectFieldDefinitionSchema = numberFieldDefinitionBaseSchema
@@ -226,14 +278,14 @@ export const numberSelectFieldDefinitionSchema = numberFieldDefinitionBaseSchema
     min: z.literal(null),
     max: z.literal(null),
   })
-  .refine(...selectDefaultValueRefinement);
+  .refine(...selectDefaultValueMustBeInOptionsRefinement);
 export type NumberSelectFieldDefinition = z.infer<
   typeof numberSelectFieldDefinitionSchema
 >;
 
-/**
- * Boolean based Field definitions
- */
+//
+// Boolean based Field definitions
+//
 
 export const booleanFieldDefinitionBaseSchema =
   fieldDefinitionBaseSchema.extend({
@@ -251,8 +303,20 @@ export const toggleFieldDefinitionSchema =
 export type ToggleFieldDefinition = z.infer<typeof toggleFieldDefinitionSchema>;
 
 /**
- * Reference based Field definitions
+ * Union of all direct Field definitions
  */
+export const directFieldDefinitionSchema = z.union([
+  stringFieldDefinitionSchema,
+  numberFieldDefinitionSchema,
+  rangeFieldDefinitionSchema,
+  numberSelectFieldDefinitionSchema,
+  toggleFieldDefinitionSchema,
+]);
+export type DirectFieldDefinition = z.infer<typeof directFieldDefinitionSchema>;
+
+//
+// Reference based Field definitions
+//
 
 export const referenceFieldDefinitionBaseSchema =
   fieldDefinitionBaseSchema.extend({
@@ -260,47 +324,58 @@ export const referenceFieldDefinitionBaseSchema =
     isUnique: z.literal(false),
   });
 
-export const assetFieldDefinitionSchema =
-  referenceFieldDefinitionBaseSchema.extend({
+export const assetFieldDefinitionSchema = referenceFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.asset),
-    min: z.number().nullable(),
-    max: z.number().nullable(),
-  });
+    min: z.int().min(1).nullable(),
+    max: z.int().min(1).nullable(),
+  })
+  .refine(...minMustBeLessOrEqualMaxRefinement);
 export type AssetFieldDefinition = z.infer<typeof assetFieldDefinitionSchema>;
 
-export const entryFieldDefinitionSchema =
-  referenceFieldDefinitionBaseSchema.extend({
+export const entryFieldDefinitionSchema = referenceFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.entry),
     ofCollections: z.array(uuidSchema),
-    min: z.number().nullable(),
-    max: z.number().nullable(),
-  });
+    min: z.int().min(1).nullable(),
+    max: z.int().min(1).nullable(),
+  })
+  .refine(...minMustBeLessOrEqualMaxRefinement);
 export type EntryFieldDefinition = z.infer<typeof entryFieldDefinitionSchema>;
 
-// export const sharedValueDefinitionSchema =
-//   ReferenceValueDefinitionBaseSchema.extend({
-//     fieldType: z.literal(ValueInputTypeSchema.enum.sharedValue),
-//     // The shared Value can have any of the direct types
-//     // but not any reference itself (a shared Value cannot have a reference to another shared Value / Asset or any other future reference)
-//     sharedValueType: z.union([
-//       z.literal(valueTypeSchema.enum.boolean),
-//       z.literal(valueTypeSchema.enum.number),
-//       z.literal(valueTypeSchema.enum.string),
-//     ]),
-//   });
-// export type SharedValueValueDefinition = z.infer<
-//   typeof sharedValueDefinitionSchema
-// >;
-
-export const fieldDefinitionSchema = z.union([
-  stringFieldDefinitionSchema,
-  numberFieldDefinitionSchema,
-  rangeFieldDefinitionSchema,
-  numberSelectFieldDefinitionSchema,
-  toggleFieldDefinitionSchema,
+/**
+ * Union of all reference Field definitions
+ */
+export const referenceFieldDefinitionSchema = z.union([
   assetFieldDefinitionSchema,
   entryFieldDefinitionSchema,
-  // sharedValueDefinitionSchema,
+]);
+export type ReferenceFieldDefinition = z.infer<
+  typeof referenceFieldDefinitionSchema
+>;
+
+/**
+ * A dynamic field definition references one or more Components.
+ * Entry data contains an ordered array of polymorphic component items.
+ */
+export const dynamicFieldDefinitionSchema = fieldDefinitionBaseSchema
+  .extend({
+    valueType: z.literal(valueTypeSchema.enum.component),
+    fieldType: z.literal(fieldTypeSchema.enum.dynamic),
+    isUnique: z.literal(false),
+    ofComponents: z.array(uuidSchema),
+    min: z.int().min(1).nullable(),
+    max: z.int().min(1).nullable(),
+  })
+  .refine(...minMustBeLessOrEqualMaxRefinement);
+export type DynamicFieldDefinition = z.infer<
+  typeof dynamicFieldDefinitionSchema
+>;
+
+export const fieldDefinitionSchema = z.union([
+  directFieldDefinitionSchema,
+  referenceFieldDefinitionSchema,
+  dynamicFieldDefinitionSchema,
 ]);
 export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
 
@@ -308,26 +383,26 @@ export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
  * A group of Field definitions, displayed as a named fieldset in the UI.
  * Groups are purely presentational and do not affect entry data or validation.
  * Ordering is determined by position in the parent array (supports drag-and-drop).
+ * Groups can contain direct, reference and dynamic field definitions but not nested groups.
  */
 export const fieldDefinitionGroupSchema = z.object({
   isGroup: z.literal(true),
   id: uuidSchema.readonly(),
   label: translatableStringSchema,
   description: translatableStringSchema.nullable(),
-  fieldDefinitions: z.array(fieldDefinitionSchema),
+  fieldDefinitions: z.array(fieldDefinitionSchema), // No refinement for unique slugs here, since this takes place at the parent level in the collectionSchema (all definitions need to be compared together)
 });
 export type FieldDefinitionGroup = z.infer<typeof fieldDefinitionGroupSchema>;
 
 /**
  * Union of a FieldDefinition or a FieldDefinitionGroup,
- * used as the element type of Collection.fieldDefinitions.
  */
-export const fieldDefinitionsWithGroupsSchema = z.union([
+export const fieldDefinitionOrGroupSchema = z.union([
   fieldDefinitionGroupSchema,
   fieldDefinitionSchema,
 ]);
-export type FieldDefinitionsWithGroups = z.infer<
-  typeof fieldDefinitionsWithGroupsSchema
+export type FieldDefinitionOrGroup = z.infer<
+  typeof fieldDefinitionOrGroupSchema
 >;
 
 /**
@@ -335,9 +410,11 @@ export type FieldDefinitionsWithGroups = z.infer<
  * into a flat array of FieldDefinitions.
  */
 export function flattenFieldDefinitions(
-  items: FieldDefinitionsWithGroups[]
+  fieldDefinitionsOrGroups: FieldDefinitionOrGroup[]
 ): FieldDefinition[] {
-  return items.flatMap((item) =>
-    'isGroup' in item ? item.fieldDefinitions : [item]
+  return fieldDefinitionsOrGroups.flatMap((fieldDefinitionOrGroup) =>
+    'isGroup' in fieldDefinitionOrGroup
+      ? fieldDefinitionOrGroup.fieldDefinitions
+      : [fieldDefinitionOrGroup]
   );
 }

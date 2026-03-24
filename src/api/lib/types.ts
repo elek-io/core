@@ -3,6 +3,7 @@ import type { Env, Schema } from 'hono';
 import type {
   AssetService,
   CollectionService,
+  ComponentService,
   EntryService,
   LogService,
   ProjectService,
@@ -16,6 +17,7 @@ export type Variables = {
   logService: LogService;
   projectService: ProjectService;
   collectionService: CollectionService;
+  componentService: ComponentService;
   entryService: EntryService;
   assetService: AssetService;
 };

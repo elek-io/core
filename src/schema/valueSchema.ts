@@ -1,6 +1,7 @@
 import { z } from '@hono/zod-openapi';
 import {
   objectTypeSchema,
+  slugSchema,
   translatableArrayOf,
   translatableBooleanSchema,
   translatableNumberSchema,
@@ -13,6 +14,7 @@ export const valueTypeSchema = z.enum([
   'number',
   'boolean',
   'reference',
+  'component',
 ]);
 export type ValueType = z.infer<typeof valueTypeSchema>;
 
@@ -39,62 +41,16 @@ export type ValueContentReferenceToCollection = z.infer<
 export const valueContentReferenceToEntrySchema =
   valueContentReferenceBase.extend({
     objectType: z.literal(objectTypeSchema.enum.entry),
+    collectionId: uuidSchema,
   });
 export type ValueContentReferenceToEntry = z.infer<
   typeof valueContentReferenceToEntrySchema
 >;
 
-// export const valueContentReferenceToSharedValueSchema = z.object({
-//   referenceObjectType: z.literal(objectTypeSchema.enum.sharedValue),
-//   references: z.object({
-//     id: uuidSchema,
-//     language: supportedLanguageSchema,
-//   }),
-// });
-// export type ValueContentReferenceToSharedValue = z.infer<
-//   typeof valueContentReferenceToSharedValueSchema
-// >;
-
-// export const sharedValueFileSchema = baseFileWithLanguageSchema.extend({
-//   objectType: z.literal(objectTypeSchema.enum.sharedValue).readonly(),
-//   valueType: valueTypeSchema.exclude(['reference']).readonly(),
-//   // valueType: valueTypeSchema.readonly(), @todo do we allow shared Values to reference assets or others?
-//   content: z.union([
-//     z.string(),
-//     z.number(),
-//     z.boolean(),
-//     z.string().optional(),
-//     z.number().optional(),
-//     z.boolean().optional(),
-//     // valueContentReferenceToAssetSchema, @todo do we allow shared Values to reference assets or others?
-//     // valueContentReferenceToSharedValueSchema,
-//   ]),
-// });
-// export type SharedValueFile = z.infer<typeof sharedValueFileSchema>;
-
-// export const sharedValueSchema = sharedValueFileSchema.extend({});
-// export type SharedValue = z.infer<typeof sharedValueSchema>;
-
-// export const sharedValueExportSchema = sharedValueSchema.extend({});
-// export type SharedValueExport = z.infer<typeof sharedValueExportSchema>;
-
-// export const resolvedValueContentReferenceToSharedValueSchema =
-//   valueContentReferenceToSharedValueSchema.extend({
-//     references: z.object({
-//       id: uuidSchema,
-//       language: supportedLanguageSchema,
-//       resolved: sharedValueSchema,
-//     }),
-//   });
-// export type ResolvedValueContentReferenceToSharedValue = z.infer<
-//   typeof resolvedValueContentReferenceToSharedValueSchema
-// >;
-
 export const valueContentReferenceSchema = z.union([
   valueContentReferenceToAssetSchema,
   valueContentReferenceToCollectionSchema,
   valueContentReferenceToEntrySchema,
-  // valueContentReferenceToSharedValueSchema,
 ]);
 export type ValueContentReference = z.infer<typeof valueContentReferenceSchema>;
 
@@ -134,68 +90,23 @@ export const referencedValueSchema = z.object({
 });
 export type ReferencedValue = z.infer<typeof referencedValueSchema>;
 
-export const valueSchema = z.union([directValueSchema, referencedValueSchema]);
+export const componentValueSchema = z.object({
+  objectType: z.literal(objectTypeSchema.enum.value).readonly(),
+  valueType: z.literal(valueTypeSchema.enum.component).readonly(),
+  content: z.array(
+    z.object({
+      componentId: uuidSchema,
+      get values() {
+        return z.record(slugSchema, valueSchema);
+      },
+    })
+  ),
+});
+export type ComponentValue = z.infer<typeof componentValueSchema>;
+
+export const valueSchema = z.union([
+  directValueSchema,
+  referencedValueSchema,
+  componentValueSchema,
+]);
 export type Value = z.infer<typeof valueSchema>;
-
-/**
- * ---
- */
-
-// export const createSharedValueSchema = sharedValueFileSchema
-//   .pick({
-//     valueType: true,
-//     content: true,
-//     language: true,
-//   })
-//   .extend({
-//     projectId: uuidSchema.readonly(),
-//   });
-// export type CreateSharedValueProps = z.infer<typeof createSharedValueSchema>;
-
-// export const readSharedValueSchema = sharedValueFileSchema
-//   .pick({
-//     id: true,
-//     language: true,
-//   })
-//   .extend({
-//     projectId: uuidSchema.readonly(),
-//   });
-// export type ReadSharedValueProps = z.infer<typeof readSharedValueSchema>;
-
-// export const updateSharedValueSchema = sharedValueFileSchema
-//   .pick({
-//     id: true,
-//     language: true,
-//     content: true,
-//   })
-//   .extend({
-//     projectId: uuidSchema.readonly(),
-//   });
-// export type UpdateSharedValueProps = z.infer<typeof updateSharedValueSchema>;
-
-// export const deleteSharedValueSchema = sharedValueFileSchema
-//   .pick({
-//     id: true,
-//     language: true,
-//   })
-//   .extend({
-//     projectId: uuidSchema.readonly(),
-//   });
-// export type DeleteSharedValueProps = z.infer<typeof deleteSharedValueSchema>;
-
-/**
- * @todo maybe we need to validate Values and shared Values
- */
-// export const validateValueSchema = sharedValueFileSchema
-//   .pick({
-//     id: true,
-//     language: true,
-//   })
-//   .extend({
-//     projectId: uuidSchema.readonly(),
-//     definition: FieldDefinitionSchema.readonly(),
-//   });
-// export type ValidateValueProps = z.infer<typeof validateValueSchema>;
-
-// export const countValuesSchema = z.object({ projectId: uuidSchema.readonly() });
-// export type CountValuesProps = z.infer<typeof countValuesSchema>;

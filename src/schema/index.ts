@@ -1,6 +1,7 @@
 export * from './assetSchema.js';
 export * from './baseSchema.js';
 export * from './collectionSchema.js';
+export * from './componentSchema.js';
 export * from './coreSchema.js';
 export * from './entrySchema.js';
 export * from './fieldSchema.js';

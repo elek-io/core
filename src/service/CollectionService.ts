@@ -12,10 +12,8 @@ import {
   readCollectionSchema,
   serviceTypeSchema,
   updateCollectionSchema,
-  uuidSchema,
   type Collection,
   type CollectionFile,
-  type CollectionIndex,
   type CountCollectionsProps,
   type CreateCollectionProps,
   type CrudServiceWithListCount,
@@ -32,9 +30,9 @@ import {
   flattenFieldDefinitions,
 } from '../schema/index.js';
 import { applyMigrations, collectionMigrations } from './migrations/index.js';
-import { folders, pathTo } from '../util/node.js';
+import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
-import { AbstractCrudService } from './AbstractCrudService.js';
+import { AbstractIndexedEntityService } from './AbstractIndexedEntityService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -43,17 +41,26 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for Collection files on disk
  */
 export class CollectionService
-  extends AbstractCrudService
+  extends AbstractIndexedEntityService
   implements CrudServiceWithListCount<Collection>
 {
   private coreVersion: string;
-  private jsonFileService: JsonFileService;
   private gitService: GitService;
 
-  /** In-memory cache for collection indices, keyed by projectId */
-  private cachedIndex: Map<string, CollectionIndex> = new Map();
-  /** Promise deduplication for concurrent rebuilds, keyed by projectId */
-  private rebuildPromise: Map<string, Promise<CollectionIndex>> = new Map();
+  protected entityFileSchema = collectionFileSchema;
+
+  protected entitiesPath(projectId: string): string {
+    return pathTo.collections(projectId);
+  }
+  protected entityPath(projectId: string, id: string): string {
+    return pathTo.collection(projectId, id);
+  }
+  protected entityFilePath(projectId: string, id: string): string {
+    return pathTo.collectionFile(projectId, id);
+  }
+  protected extractSlug(file: unknown): string {
+    return (file as CollectionFile).slug.plural;
+  }
 
   constructor(
     coreVersion: string,
@@ -62,53 +69,19 @@ export class CollectionService
     jsonFileService: JsonFileService,
     gitService: GitService
   ) {
-    super(serviceTypeSchema.enum.Collection, options, logService);
+    super(serviceTypeSchema.enum.Collection, options, logService, jsonFileService);
 
     this.coreVersion = coreVersion;
-    this.jsonFileService = jsonFileService;
     this.gitService = gitService;
   }
 
   /**
    * Resolves a UUID-or-slug string to a collection UUID.
-   *
-   * If the input matches UUID format, verifies the folder exists on disk first.
-   * If the folder doesn't exist, falls back to slug lookup.
-   * Otherwise, looks up via the index.
    */
   public async resolveCollectionId(
     props: ResolveCollectionIdProps
   ): Promise<string> {
-    // Check if it looks like a UUID
-    if (uuidSchema.safeParse(props.idOrSlug).success) {
-      // Verify the UUID folder exists on disk
-      const collectionPath = pathTo.collection(props.projectId, props.idOrSlug);
-      if (await Fs.pathExists(collectionPath)) {
-        return props.idOrSlug;
-      }
-      // Fall through to slug lookup
-    }
-
-    // Look up by slug
-    const index = await this.getIndex(props.projectId);
-    for (const [uuid, slugValue] of Object.entries(index)) {
-      if (slugValue === props.idOrSlug) {
-        return uuid;
-      }
-    }
-
-    // Rebuild and retry once (handles stale cache)
-    this.cachedIndex.delete(props.projectId);
-    const freshIndex = await this.getIndex(props.projectId);
-    for (const [uuid, slugValue] of Object.entries(freshIndex)) {
-      if (slugValue === props.idOrSlug) {
-        return uuid;
-      }
-    }
-
-    throw new Error(
-      `Collection not found: "${props.idOrSlug}" does not match any collection UUID or slug`
-    );
+    return this.resolveId(props.projectId, props.idOrSlug);
   }
 
   /**
@@ -116,10 +89,6 @@ export class CollectionService
    */
   public async create(props: CreateCollectionProps): Promise<Collection> {
     createCollectionSchema.parse(props);
-
-    this.validateFieldDefinitionSlugUniqueness(
-      flattenFieldDefinitions(props.fieldDefinitions)
-    );
 
     const id = uuid();
     const projectPath = pathTo.project(props.projectId);
@@ -233,10 +202,6 @@ export class CollectionService
    */
   public async update(props: UpdateCollectionProps): Promise<Collection> {
     updateCollectionSchema.parse(props);
-
-    this.validateFieldDefinitionSlugUniqueness(
-      flattenFieldDefinitions(props.fieldDefinitions)
-    );
 
     const projectPath = pathTo.project(props.projectId);
     const collectionFilePath = pathTo.collectionFile(props.projectId, props.id);
@@ -389,7 +354,7 @@ export class CollectionService
         ? collectionReferences.slice(offset)
         : collectionReferences.slice(offset, offset + limit);
 
-    const collections = await this.returnResolved(
+    const collections = await this.settleAndWarn(
       partialCollectionReferences.map((reference) => {
         return this.read({
           projectId: props.projectId,
@@ -451,91 +416,5 @@ export class CollectionService
     return {
       ...collectionFile,
     };
-  }
-
-  /**
-   * Gets the collection index, rebuilding from disk if not cached
-   */
-  private async getIndex(projectId: string): Promise<CollectionIndex> {
-    const cached = this.cachedIndex.get(projectId);
-    if (cached) return cached;
-    const pending = this.rebuildPromise.get(projectId);
-    if (pending) return pending;
-    const promise = this.rebuildIndex(projectId);
-    this.rebuildPromise.set(projectId, promise);
-    const result = await promise;
-    this.cachedIndex.set(projectId, result);
-    this.rebuildPromise.delete(projectId);
-    return result;
-  }
-
-  /**
-   * Writes the index file atomically and updates cache
-   */
-  private async writeIndex(
-    projectId: string,
-    index: CollectionIndex
-  ): Promise<void> {
-    const indexPath = pathTo.collectionIndex(projectId);
-    await Fs.writeFile(indexPath, JSON.stringify(index, null, 2), {
-      encoding: 'utf8',
-    });
-    this.cachedIndex.set(projectId, index);
-  }
-
-  /**
-   * Rebuilds the index by scanning all collection folders
-   */
-  private async rebuildIndex(projectId: string): Promise<CollectionIndex> {
-    this.logService.info({
-      source: 'core',
-      message: `Rebuilding Collection index for Project "${projectId}"`,
-    });
-
-    const index: CollectionIndex = {};
-    const collectionsPath = pathTo.collections(projectId);
-    const collectionFolders = await folders(collectionsPath);
-
-    for (const folder of collectionFolders) {
-      // Skip the index.json file entry if it shows up
-      if (!uuidSchema.safeParse(folder.name).success) continue;
-
-      try {
-        const collectionFilePath = pathTo.collectionFile(
-          projectId,
-          folder.name
-        );
-        const collectionFile = await this.jsonFileService.read(
-          collectionFilePath,
-          collectionFileSchema
-        );
-        index[collectionFile.id] = collectionFile.slug.plural;
-      } catch (error) {
-        this.logService.warn({
-          source: 'core',
-          message: `Skipping collection folder "${folder.name}" during index rebuild: ${error instanceof Error ? error.message : String(error)}`,
-        });
-      }
-    }
-
-    await this.writeIndex(projectId, index);
-    return index;
-  }
-
-  /**
-   * Validates that no two fieldDefinitions share the same slug
-   */
-  private validateFieldDefinitionSlugUniqueness(
-    fieldDefinitions: { slug: string }[]
-  ): void {
-    const seen = new Set<string>();
-    for (const fd of fieldDefinitions) {
-      if (seen.has(fd.slug)) {
-        throw new Error(
-          `Duplicate fieldDefinition slug "${fd.slug}": each fieldDefinition within a collection must have a unique slug`
-        );
-      }
-      seen.add(fd.slug);
-    }
   }
 }

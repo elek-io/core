@@ -54,9 +54,10 @@ import {
 import { applyMigrations, projectMigrations } from './migrations/index.js';
 import { isNotEmpty, pathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
-import { AbstractCrudService } from './AbstractCrudService.js';
+import { AbstractEntityService } from './AbstractEntityService.js';
 import type { AssetService } from './AssetService.js';
 import type { CollectionService } from './CollectionService.js';
+import type { ComponentService } from './ComponentService.js';
 import type { EntryService } from './EntryService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
@@ -66,7 +67,7 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for Project files on disk
  */
 export class ProjectService
-  extends AbstractCrudService
+  extends AbstractEntityService
   implements CrudServiceWithListCount<Project>
 {
   private coreVersion: Version;
@@ -74,6 +75,7 @@ export class ProjectService
   private gitService: GitService;
   private assetService: AssetService;
   private collectionService: CollectionService;
+  private componentService: ComponentService;
   private entryService: EntryService;
 
   constructor(
@@ -84,6 +86,7 @@ export class ProjectService
     gitService: GitService,
     assetService: AssetService,
     collectionService: CollectionService,
+    componentService: ComponentService,
     entryService: EntryService
   ) {
     super(serviceTypeSchema.enum.Project, options, logService);
@@ -93,6 +96,7 @@ export class ProjectService
     this.gitService = gitService;
     this.assetService = assetService;
     this.collectionService = collectionService;
+    this.componentService = componentService;
     this.entryService = entryService;
   }
 
@@ -299,6 +303,10 @@ export class ProjectService
     }
 
     const assetReferences = await this.listReferences('asset', props.id);
+    const componentReferences = await this.listReferences(
+      'component',
+      props.id
+    );
     const collectionReferences = await this.listReferences(
       'collection',
       props.id
@@ -319,6 +327,13 @@ export class ProjectService
       await Promise.all(
         assetReferences.map(async (reference) => {
           await this.upgradeObjectFile(props.id, 'asset', reference);
+        })
+      );
+
+      // Upgrade components before collections/entries since they depend on components
+      await Promise.all(
+        componentReferences.map(async (reference) => {
+          await this.upgradeObjectFile(props.id, 'component', reference);
         })
       );
 
@@ -562,7 +577,7 @@ export class ProjectService
         ? projectReferences.slice(offset)
         : projectReferences.slice(offset, offset + limit);
 
-    const projects = await this.returnResolved(
+    const projects = await this.settleAndWarn(
       partialProjectReferences.map((reference) => {
         return this.read({ id: reference.id });
       })
@@ -651,6 +666,7 @@ export class ProjectService
       '',
       '# elek.io related ignores',
       'collections/index.json',
+      'components/index.json',
       // projectFolderSchema.enum.theme + '/',
       // projectFolderSchema.enum.public + '/',
       // projectFolderSchema.enum.logs + '/',
@@ -677,6 +693,29 @@ export class ProjectService
           meta: {
             previous: prevAssetFile,
             migrated: migratedAssetFile,
+          },
+        });
+        return;
+      }
+      case 'component': {
+        const componentFilePath = pathTo.componentFile(
+          projectId,
+          reference.id
+        );
+        const prevComponentFile =
+          await this.jsonFileService.unsafeRead(componentFilePath);
+        const migratedComponentFile =
+          this.componentService.migrate(prevComponentFile);
+        await this.componentService.update({
+          projectId,
+          ...migratedComponentFile,
+        });
+        this.logService.info({
+          source: 'core',
+          message: `Upgraded ${objectType} "${componentFilePath}"`,
+          meta: {
+            previous: prevComponentFile,
+            migrated: migratedComponentFile,
           },
         });
         return;

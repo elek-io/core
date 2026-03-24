@@ -1,13 +1,18 @@
 import { faker } from '@faker-js/faker';
 import { describe, expect, it } from 'vitest';
 import type {
+  ComponentValue,
   DirectBooleanValue,
   DirectNumberValue,
   DirectStringValue,
   Entry,
   ReferencedValue,
 } from '../test/setup.js';
-import { entrySchema, uuid } from '../test/setup.js';
+import {
+  dynamicFieldDefinitionSchema,
+  entrySchema,
+  uuid,
+} from '../test/setup.js';
 import { getValueSchemaFromFieldDefinition } from './schemaFromFieldDefinition.js';
 
 describe('Dynamic zod schema from field definition', () => {
@@ -1381,6 +1386,7 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required Entry Field type definition can be generated and parsed with', () => {
+    const allowedCollectionId = uuid();
     const requiredEntryValueschema = getValueSchemaFromFieldDefinition({
       id: uuid(),
       slug: 'test-field',
@@ -1391,14 +1397,22 @@ describe('Dynamic zod schema from field definition', () => {
       inputWidth: '12',
       min: null,
       max: null,
-      ofCollections: [uuid()],
+      ofCollections: [allowedCollectionId],
       isDisabled: false,
       isRequired: true,
       isUnique: false,
     });
     requiredEntryValueschema.parse({
       ...defaultReferenceValue,
-      content: { en: [{ objectType: 'entry', id: uuid() }] },
+      content: {
+        en: [
+          {
+            objectType: 'entry',
+            id: uuid(),
+            collectionId: allowedCollectionId,
+          },
+        ],
+      },
     });
     expect(() =>
       requiredEntryValueschema.parse({
@@ -1477,6 +1491,7 @@ describe('Dynamic zod schema from field definition', () => {
               {
                 id: 'ea6a7da3-9cb4-4dd5-aa81-83b6f657106f',
                 objectType: 'entry',
+                collectionId: 'a1b2c3d4-5678-4abc-8ef0-123456789abc',
               },
             ],
           },
@@ -1487,5 +1502,381 @@ describe('Dynamic zod schema from field definition', () => {
     };
 
     entrySchema.parse(entry);
+  });
+
+  describe('from dynamic (component) Field definition', () => {
+    const componentId1 = uuid();
+    const componentId2 = uuid();
+
+    const componentResolver = (id: string) => {
+      if (id === componentId1) {
+        return [
+          {
+            id: uuid(),
+            slug: 'title',
+            fieldType: 'text' as const,
+            valueType: 'string' as const,
+            label: { en: 'Title' },
+            description: null,
+            defaultValue: null,
+            isRequired: true,
+            isDisabled: false,
+            isUnique: false,
+            inputWidth: '12' as const,
+            min: null,
+            max: null,
+          },
+          {
+            id: uuid(),
+            slug: 'image',
+            fieldType: 'asset' as const,
+            valueType: 'reference' as const,
+            label: { en: 'Image' },
+            description: null,
+            isRequired: false,
+            isDisabled: false,
+            isUnique: false as const,
+            inputWidth: '12' as const,
+            min: null,
+            max: null,
+          },
+        ];
+      }
+      if (id === componentId2) {
+        return [
+          {
+            id: uuid(),
+            slug: 'count',
+            fieldType: 'number' as const,
+            valueType: 'number' as const,
+            label: { en: 'Count' },
+            description: null,
+            defaultValue: null,
+            isRequired: false,
+            isDisabled: false,
+            isUnique: false as const,
+            inputWidth: '12' as const,
+            min: null,
+            max: null,
+          },
+        ];
+      }
+      throw new Error(`Unknown component: ${id}`);
+    };
+
+    const dynamicFieldDef = {
+      id: uuid(),
+      slug: 'blocks',
+      fieldType: 'dynamic' as const,
+      valueType: 'component' as const,
+      label: { en: 'Blocks' },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: false as const,
+      inputWidth: '12' as const,
+      ofComponents: [componentId1],
+      min: null,
+      max: null,
+    };
+
+    const validComponentValue: ComponentValue = {
+      objectType: 'value',
+      valueType: 'component',
+      content: [
+        {
+          componentId: componentId1,
+          values: {
+            title: {
+              objectType: 'value',
+              valueType: 'string',
+              content: { en: 'Block 1' },
+            },
+            image: {
+              objectType: 'value',
+              valueType: 'reference',
+              content: { en: [{ id: uuid(), objectType: 'asset' }] },
+            },
+          },
+        },
+      ],
+    };
+
+    it('can be generated and parsed with a valid component value', () => {
+      const schema = getValueSchemaFromFieldDefinition(
+        dynamicFieldDef,
+        componentResolver
+      );
+      schema.parse(validComponentValue);
+    });
+
+    it('accepts an empty content array when not required', () => {
+      const schema = getValueSchemaFromFieldDefinition(
+        dynamicFieldDef,
+        componentResolver
+      );
+      schema.parse({ ...validComponentValue, content: [] });
+    });
+
+    it('rejects an empty array when isRequired is true', () => {
+      const requiredDef = { ...dynamicFieldDef, isRequired: true };
+      const schema = getValueSchemaFromFieldDefinition(
+        requiredDef,
+        componentResolver
+      );
+      expect(() =>
+        schema.parse({ ...validComponentValue, content: [] })
+      ).toThrow();
+    });
+
+    it('rejects fewer items than min', () => {
+      const minDef = { ...dynamicFieldDef, min: 2 };
+      const schema = getValueSchemaFromFieldDefinition(
+        minDef,
+        componentResolver
+      );
+      expect(() => schema.parse(validComponentValue)).toThrow();
+    });
+
+    it('rejects more items than max', () => {
+      const maxDef = { ...dynamicFieldDef, max: 1 };
+      const schema = getValueSchemaFromFieldDefinition(
+        maxDef,
+        componentResolver
+      );
+      const twoItemValue: ComponentValue = {
+        ...validComponentValue,
+        content: [
+          validComponentValue.content[0]!,
+          validComponentValue.content[0]!,
+        ],
+      };
+      expect(() => schema.parse(twoItemValue)).toThrow();
+    });
+
+    it('rejects an item where a required sub-field has an empty string content', () => {
+      const schema = getValueSchemaFromFieldDefinition(
+        dynamicFieldDef,
+        componentResolver
+      );
+      const invalidValue: ComponentValue = {
+        ...validComponentValue,
+        content: [
+          {
+            componentId: componentId1,
+            values: {
+              title: {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: '' },
+              },
+              image: validComponentValue.content[0]!.values['image']!,
+            },
+          },
+        ],
+      };
+      expect(() => schema.parse(invalidValue)).toThrow();
+    });
+
+    it('works with multiple components (discriminated union)', () => {
+      const multiDef = {
+        ...dynamicFieldDef,
+        ofComponents: [componentId1, componentId2],
+      };
+      const schema = getValueSchemaFromFieldDefinition(
+        multiDef,
+        componentResolver
+      );
+      const mixedValue: ComponentValue = {
+        objectType: 'value',
+        valueType: 'component',
+        content: [
+          {
+            componentId: componentId1,
+            values: {
+              title: {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Hello' },
+              },
+              image: {
+                objectType: 'value',
+                valueType: 'reference',
+                content: { en: [{ id: uuid(), objectType: 'asset' }] },
+              },
+            },
+          },
+          {
+            componentId: componentId2,
+            values: {
+              count: {
+                objectType: 'value',
+                valueType: 'number',
+                content: { en: 42 },
+              },
+            },
+          },
+        ],
+      };
+      schema.parse(mixedValue);
+    });
+
+    it('detects circular component references during schema generation', () => {
+      const circularId = uuid();
+      const circularResolver = (id: string) => {
+        if (id === circularId) {
+          return [
+            {
+              id: uuid(),
+              slug: 'nested',
+              fieldType: 'dynamic' as const,
+              valueType: 'component' as const,
+              label: { en: 'Nested' },
+              description: null,
+              isRequired: false,
+              isDisabled: false,
+              isUnique: false as const,
+              inputWidth: '12' as const,
+              ofComponents: [circularId],
+              min: null,
+              max: null,
+            },
+          ];
+        }
+        throw new Error(`Unknown component: ${id}`);
+      };
+      const circularDef = {
+        ...dynamicFieldDef,
+        ofComponents: [circularId],
+      };
+      expect(() =>
+        getValueSchemaFromFieldDefinition(circularDef, circularResolver)
+      ).toThrow(/[Cc]ircular/);
+    });
+  });
+});
+
+describe('dynamicFieldDefinitionSchema validation', () => {
+  const baseDynamicDef = {
+    id: uuid(),
+    slug: 'blocks',
+    fieldType: 'dynamic' as const,
+    valueType: 'component' as const,
+    label: { en: 'Blocks' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false as const,
+    inputWidth: '12' as const,
+    ofComponents: [uuid()],
+    min: null,
+    max: null,
+  };
+
+  it('accepts a valid dynamic field definition', () => {
+    dynamicFieldDefinitionSchema.parse(baseDynamicDef);
+  });
+
+  it('rejects isUnique: true', () => {
+    expect(() =>
+      dynamicFieldDefinitionSchema.parse({ ...baseDynamicDef, isUnique: true })
+    ).toThrow();
+  });
+
+  it('accepts empty ofComponents array (means all components allowed)', () => {
+    dynamicFieldDefinitionSchema.parse({
+      ...baseDynamicDef,
+      ofComponents: [],
+    });
+  });
+
+  it('rejects min > max', () => {
+    expect(() =>
+      dynamicFieldDefinitionSchema.parse({ ...baseDynamicDef, min: 5, max: 3 })
+    ).toThrow();
+  });
+
+  it('accepts min === max', () => {
+    dynamicFieldDefinitionSchema.parse({ ...baseDynamicDef, min: 2, max: 2 });
+  });
+
+  it('accepts min < max', () => {
+    dynamicFieldDefinitionSchema.parse({ ...baseDynamicDef, min: 1, max: 5 });
+  });
+});
+
+describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
+  // A no-op resolver - with empty ofComponents the resolver is never called,
+  // but the function signature still requires one.
+  const noopResolver = () => {
+    throw new Error('Should not be called');
+  };
+
+  it('generates a permissive schema when ofComponents is empty', () => {
+    const dynamicFieldDef = {
+      id: uuid(),
+      slug: 'blocks',
+      fieldType: 'dynamic' as const,
+      valueType: 'component' as const,
+      label: { en: 'Blocks' },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: false as const,
+      inputWidth: '12' as const,
+      ofComponents: [] as string[],
+      min: null,
+      max: null,
+    };
+
+    // Should not throw - empty ofComponents means "all allowed"
+    const schema = getValueSchemaFromFieldDefinition(
+      dynamicFieldDef,
+      noopResolver
+    );
+    schema.parse({
+      objectType: 'value',
+      valueType: 'component',
+      content: [
+        {
+          componentId: uuid(),
+          values: {
+            title: {
+              objectType: 'value',
+              valueType: 'string',
+              content: { en: 'Hello' },
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  it('accepts empty content array with empty ofComponents', () => {
+    const dynamicFieldDef = {
+      id: uuid(),
+      slug: 'blocks',
+      fieldType: 'dynamic' as const,
+      valueType: 'component' as const,
+      label: { en: 'Blocks' },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: false as const,
+      inputWidth: '12' as const,
+      ofComponents: [] as string[],
+      min: null,
+      max: null,
+    };
+
+    const schema = getValueSchemaFromFieldDefinition(
+      dynamicFieldDef,
+      noopResolver
+    );
+    schema.parse({
+      objectType: 'value',
+      valueType: 'component',
+      content: [],
+    });
   });
 });

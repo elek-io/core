@@ -10,6 +10,7 @@ export const serviceTypeSchema = z.enum([
   'JsonFile',
   'Search',
   'Collection',
+  'Component',
   'Entry',
   'Value',
   'Release',
@@ -74,6 +75,9 @@ const listSchema = z.object({
 export const listCollectionsSchema = listSchema;
 export type ListCollectionsProps = z.infer<typeof listCollectionsSchema>;
 
+export const listComponentsSchema = listSchema;
+export type ListComponentsProps = z.infer<typeof listComponentsSchema>;
+
 export const listEntriesSchema = listSchema.extend({
   collectionId: uuidSchema,
 });
@@ -81,9 +85,6 @@ export type ListEntriesProps = z.infer<typeof listEntriesSchema>;
 
 export const listAssetsSchema = listSchema;
 export type ListAssetsProps = z.infer<typeof listAssetsSchema>;
-
-// export const listSharedValuesSchema = listSchema(sharedValueSchema);
-// export type ListSharedValuesProps = z.infer<typeof listSharedValuesSchema>;
 
 export const listProjectsSchema = listSchema.omit({
   projectId: true,

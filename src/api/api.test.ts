@@ -1,12 +1,13 @@
 import { testClient } from 'hono/testing';
 import { createTestApi } from './lib/util.js';
 import router from './routes/index.js';
-import type { Asset, Collection, Entry, Project } from '../index.node.js';
+import type { Asset, Collection, Component, Entry, Project } from '../index.node.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createProject,
   createAsset,
   createCollection,
+  createComponent,
   createEntry,
 } from '../test/util.js';
 import core from '../test/setup.js';
@@ -17,6 +18,7 @@ const client = testClient(
     core.logger,
     core.projects,
     core.collections,
+    core.components,
     core.entries,
     core.assets
   )
@@ -26,12 +28,14 @@ describe('API', function () {
   let project: Project & { destroy: () => Promise<void> };
   let asset: Asset;
   let collection: Collection;
+  let component: Component;
   let entry: Entry;
 
   beforeAll(async function () {
     project = await createProject();
     asset = await createAsset(project.id);
     collection = await createCollection(project.id);
+    component = await createComponent(project.id);
     entry = await createEntry(project.id, collection.id, asset.id);
   });
 
@@ -147,6 +151,66 @@ describe('API', function () {
     const res = await client.content.v1.projects[
       ':projectId'
     ].collections.count.$get({
+      param: { projectId: project.id },
+    });
+
+    expect(res.status).toEqual(200);
+    const count = await res.json();
+    expect(count).toEqual(1);
+  });
+
+  // Components
+
+  it('should be able to list all Components via API', async function () {
+    const res = await client.content.v1.projects[':projectId'].components.$get(
+      {
+        param: { projectId: project.id },
+        query: {},
+      }
+    );
+
+    expect(res.status).toEqual(200);
+    const components = await res.json();
+    expect(components.list.length).toEqual(1);
+    expect(components.total).toEqual(1);
+    expect(components.list.find((p) => p.id === component.id)?.id).toEqual(
+      component.id
+    );
+  });
+
+  it('should be able to read a Component via API', async function () {
+    const res = await client.content.v1.projects[':projectId'].components[
+      ':componentIdOrSlug'
+    ].$get({
+      param: { projectId: project.id, componentIdOrSlug: component.id },
+    });
+
+    expect(res.status).toEqual(200);
+    const readComponent = await res.json();
+    expect(core.components.isComponent(readComponent)).toEqual(true);
+    expect(readComponent.id).toEqual(component.id);
+  });
+
+  it('should be able to read a Component by slug via API', async function () {
+    const res = await client.content.v1.projects[':projectId'].components[
+      ':componentIdOrSlug'
+    ].$get({
+      param: {
+        projectId: project.id,
+        componentIdOrSlug: component.slug,
+      },
+    });
+
+    expect(res.status).toEqual(200);
+    const readComponent = await res.json();
+    expect(core.components.isComponent(readComponent)).toEqual(true);
+    expect(readComponent.id).toEqual(component.id);
+  });
+
+  it('should be able to count all Components via API', async function () {
+    const res = await client.content.v1.projects[
+      ':projectId'
+    ].components.count.$get({
       param: { projectId: project.id },
     });
 

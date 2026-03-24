@@ -2,86 +2,44 @@ import { RequiredParameterMissingError } from '../error/index.js';
 import {
   fileReferenceSchema,
   objectTypeSchema,
-  type ElekIoCoreOptions,
   type FileReference,
   type ObjectType,
-  type ServiceType,
 } from '../schema/index.js';
-import {
-  files,
-  folders,
-  isNotAnError,
-  isNotEmpty,
-  pathTo,
-} from '../util/node.js';
-import type { LogService } from './LogService.js';
+import { files, folders, isNotEmpty, pathTo } from '../util/node.js';
+import { AbstractService } from './AbstractService.js';
 
 /**
- * A base service that provides properties for most other services
+ * A service for entities that are stored as files or folders on disk.
+ * Provides listing of file and folder references.
  */
-export abstract class AbstractCrudService {
-  public readonly type: ServiceType;
-  public readonly options: ElekIoCoreOptions;
-  protected readonly logService: LogService;
-
+export abstract class AbstractEntityService extends AbstractService {
   /**
-   * Do not instantiate directly as this is an abstract class
+   * Settles all promises and returns only the fulfilled values.
+   * Logs a warning for each rejected promise.
    */
-  protected constructor(
-    type: ServiceType,
-    options: ElekIoCoreOptions,
-    logService: LogService
-  ) {
-    this.type = type;
-    this.options = options;
-    this.logService = logService;
-  }
-
-  /**
-   * Basically a Promise.all() without rejecting if one promise fails to resolve
-   */
-  protected async returnResolved<T>(promises: Promise<T>[]) {
-    const toCheck: Promise<T | Error>[] = [];
-
-    for (let index = 0; index < promises.length; index++) {
-      const promise = promises[index];
-      if (!promise) {
-        throw new Error(`No promise found at index "${index}"`);
+  protected async settleAndWarn<T>(
+    promises: Promise<T>[]
+  ): Promise<Awaited<T>[]> {
+    const results = await Promise.allSettled(promises);
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        const error =
+          result.reason instanceof Error
+            ? result.reason
+            : new Error(String(result.reason));
+        this.logService.warn({
+          source: 'core',
+          message: `settleAndWarn: ${error.message}`,
+          meta: { error },
+        });
       }
-
-      // Here comes the trick:
-      // By using "then" and "catch" we are able to create an array of T and Error types
-      // without throwing and stopping the later Promise.all() call prematurely
-      toCheck.push(
-        promise
-          .then((result) => {
-            return result;
-          })
-          .catch((error) => {
-            const actualError =
-              error instanceof Error ? error : new Error(String(error));
-
-            this.logService.warn({
-              source: 'core',
-              message: `Function "returnResolved" catched an error while resolving a promise: ${actualError.message}`,
-              meta: { error: actualError, promise },
-            });
-
-            return actualError;
-          })
-      );
     }
-
-    // Resolve all promises
-    // Here we do not expect any error to fail the call to Promise.all()
-    // because we caught it earlier and returning an Error type instead of throwing it
-    const checked = await Promise.all(toCheck);
-
-    // This way we can easily filter out any Errors by type
-    // Note that we also need to use a User-Defined Type Guard here,
-    // because otherwise TS does not recognize we are filtering the errors out
-    //                >       |       <
-    return checked.filter(isNotAnError);
+    return results
+      .filter(
+        (result): result is PromiseFulfilledResult<Awaited<T>> =>
+          result.status === 'fulfilled'
+      )
+      .map((result) => result.value);
   }
 
   /**
@@ -112,6 +70,12 @@ export abstract class AbstractCrudService {
         }
         return this.getFolderReferences(pathTo.collections(projectId));
 
+      case objectTypeSchema.enum.component:
+        if (!projectId) {
+          throw new RequiredParameterMissingError('projectId');
+        }
+        return this.getFolderReferences(pathTo.components(projectId));
+
       case objectTypeSchema.enum.entry:
         if (!projectId) {
           throw new RequiredParameterMissingError('projectId');
@@ -122,12 +86,6 @@ export abstract class AbstractCrudService {
         return this.getFileReferences(
           pathTo.collection(projectId, collectionId)
         );
-
-      case objectTypeSchema.enum.sharedValue:
-        if (!projectId) {
-          throw new RequiredParameterMissingError('projectId');
-        }
-        return this.getFileReferences(pathTo.sharedValues(projectId));
 
       default:
         throw new Error(`Trying to list files of unsupported type "${type}"`);

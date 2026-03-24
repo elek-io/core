@@ -7,7 +7,7 @@ export interface Migration {
   to: Version;
   /**
    * Pure function: receives loose-parsed data, returns a new transformed object.
-   * Must NOT mutate the input. Must NOT set `coreVersion` — that is handled by `applyMigrations`.
+   * Must NOT mutate the input. Must NOT set `coreVersion`, which is handled by `applyMigrations`.
    */
   run: (data: Record<string, unknown>) => Record<string, unknown>;
 }

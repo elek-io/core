@@ -7,6 +7,7 @@ import {
   versionSchema,
 } from './baseSchema.js';
 import { collectionExportSchema } from './collectionSchema.js';
+import { componentExportSchema } from './componentSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 import { gitCommitSchema, gitSwitchOptionsSchema } from './gitSchema.js';
 
@@ -25,7 +26,7 @@ export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 export const projectFolderSchema = z.enum([
   'assets',
   'collections',
-  'shared-values',
+  'components',
   'lfs',
   // 'logs',
   // 'public',
@@ -78,6 +79,7 @@ export type MigrateProjectProps = z.infer<typeof migrateProjectSchema>;
 export const projectExportSchema = projectSchema.extend({
   assets: z.array(assetExportSchema),
   collections: z.array(collectionExportSchema),
+  components: z.array(componentExportSchema),
 });
 export type ProjectExport = z.infer<typeof projectExportSchema>;
 

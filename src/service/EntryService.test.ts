@@ -2,8 +2,10 @@ import Fs from 'fs-extra';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Value } from '../test/setup.js';
 import core, {
+  uuid,
   type Asset,
   type Collection,
+  type Component,
   type Entry,
   type Project,
 } from '../test/setup.js';
@@ -21,7 +23,6 @@ describe('EntryService', function () {
   let entry: Entry;
   let referencedEntry: Entry;
   let asset: Asset;
-  // let sharedValue: SharedValue;
 
   beforeAll(async function () {
     project = await createProject();
@@ -167,5 +168,130 @@ describe('EntryService', function () {
         core.util.pathTo.entryFile(project.id, collection.id, entry.id)
       )
     ).toBe(false);
+  });
+});
+
+describe('EntryService - component values', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let component: Component;
+  let dynamicCollection: Collection;
+
+  beforeAll(async function () {
+    project = await createProject('EntryService Component Test');
+
+    // Create a component with a text field
+    const titleFieldId = uuid();
+    component = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Hero' },
+      slug: 'hero',
+      description: null,
+      fieldDefinitions: [
+        {
+          id: titleFieldId,
+          slug: 'title',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Title' },
+          description: null,
+          defaultValue: null,
+          isRequired: true,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+        },
+      ],
+    });
+
+    // Create a collection with a dynamic field referencing the component
+    dynamicCollection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: { singular: { en: 'Page' }, plural: { en: 'Pages' } },
+      slug: { singular: 'page', plural: 'pages' },
+      description: { en: 'Pages with dynamic content blocks' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'blocks',
+          valueType: 'component',
+          fieldType: 'dynamic',
+          label: { en: 'Content Blocks' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          ofComponents: [component.id],
+          min: null,
+          max: null,
+        },
+      ],
+    });
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('should be able to create an Entry with component values', async function () {
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: dynamicCollection.id,
+      values: {
+        blocks: {
+          objectType: 'value',
+          valueType: 'component',
+          content: [
+            {
+              componentId: component.id,
+              values: {
+                title: {
+                  objectType: 'value',
+                  valueType: 'string',
+                  content: { en: 'Welcome to our site' },
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(entry.id).toBeDefined();
+    expect(entry.values['blocks']!.valueType).toEqual('component');
+  });
+
+  it('should reject an Entry with invalid component values', async function () {
+    await expect(
+      core.entries.create({
+        projectId: project.id,
+        collectionId: dynamicCollection.id,
+        values: {
+          blocks: {
+            objectType: 'value',
+            valueType: 'component',
+            content: [
+              {
+                componentId: component.id,
+                values: {
+                  title: {
+                    objectType: 'value',
+                    valueType: 'number',
+                    content: { en: 123 },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      })
+    ).rejects.toThrow();
   });
 });

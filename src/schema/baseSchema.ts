@@ -49,9 +49,9 @@ export const objectTypeSchema = z.enum([
   'project',
   'asset',
   'collection',
+  'component',
   'entry',
   'value',
-  'sharedValue',
 ]);
 export type ObjectType = z.infer<typeof objectTypeSchema>;
 

@@ -86,6 +86,25 @@ export const entryChangeSchema = z.object({
 });
 export type EntryChange = z.infer<typeof entryChangeSchema>;
 
+export const componentChangeTypeSchema = z.enum(['added', 'deleted']);
+export type ComponentChangeType = z.infer<typeof componentChangeTypeSchema>;
+
+export const componentChangeSchema = z.object({
+  componentId: uuidSchema,
+  changeType: componentChangeTypeSchema,
+  bump: semverBumpSchema,
+});
+export type ComponentChange = z.infer<typeof componentChangeSchema>;
+
+export const componentFieldChangeSchema = z.object({
+  componentId: uuidSchema,
+  fieldId: uuidSchema,
+  fieldSlug: z.string(),
+  changeType: fieldChangeTypeSchema,
+  bump: semverBumpSchema,
+});
+export type ComponentFieldChange = z.infer<typeof componentFieldChangeSchema>;
+
 export const releaseDiffSchema = z.object({
   project: projectSchema,
   bump: semverBumpSchema.nullable(),
@@ -96,6 +115,8 @@ export const releaseDiffSchema = z.object({
   fieldChanges: z.array(fieldChangeSchema),
   assetChanges: z.array(assetChangeSchema),
   entryChanges: z.array(entryChangeSchema),
+  componentChanges: z.array(componentChangeSchema),
+  componentFieldChanges: z.array(componentFieldChangeSchema),
 });
 export type ReleaseDiff = z.infer<typeof releaseDiffSchema>;
 

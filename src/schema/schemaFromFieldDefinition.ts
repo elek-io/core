@@ -6,7 +6,12 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { supportedLanguageSchema } from './baseSchema.js';
+import {
+  slugSchema,
+  supportedLanguageSchema,
+  uuidSchema,
+  type Uuid,
+} from './baseSchema.js';
 import {
   createEntrySchema,
   entrySchema,
@@ -14,6 +19,7 @@ import {
 } from './entrySchema.js';
 import type {
   AssetFieldDefinition,
+  DynamicFieldDefinition,
   EntryFieldDefinition,
   FieldDefinition,
   NumberFieldDefinition,
@@ -23,14 +29,23 @@ import type {
 } from './fieldSchema.js';
 import { fieldTypeSchema } from './fieldSchema.js';
 import {
+  componentValueSchema,
   directBooleanValueSchema,
   directNumberValueSchema,
   directStringValueSchema,
   referencedValueSchema,
   valueContentReferenceToAssetSchema,
   valueContentReferenceToEntrySchema,
+  valueSchema,
   valueTypeSchema,
 } from './valueSchema.js';
+
+/**
+ * Resolves a Component UUID to its flat array of FieldDefinitions.
+ * Callers pre-load all referenced Components into a Map before calling schema generation,
+ * keeping schema generation synchronous.
+ */
+export type ComponentResolver = (componentId: Uuid) => FieldDefinition[];
 
 /**
  * Boolean Values are always either true or false, so we don't need the Field definition here
@@ -117,11 +132,11 @@ function getStringValueContentSchemaFromFieldDefinition(
 }
 
 /**
- * Reference Values can reference either Assets or Entries (or Shared Values in the future)
- * and can have min and max number of references and can be required or not
+ * Reference Values can reference either Assets or Entries,
+ * can have min / max number of references and can be required or not
  */
 function getReferenceValueContentSchemaFromFieldDefinition(
-  fieldDefinition: AssetFieldDefinition | EntryFieldDefinition // | SharedValueFieldDefinition
+  fieldDefinition: AssetFieldDefinition | EntryFieldDefinition
 ) {
   let schema;
 
@@ -133,22 +148,20 @@ function getReferenceValueContentSchemaFromFieldDefinition(
       break;
     case fieldTypeSchema.enum.entry:
       {
-        schema = z.array(valueContentReferenceToEntrySchema);
+        const entryRefSchema =
+          fieldDefinition.ofCollections.length > 0
+            ? valueContentReferenceToEntrySchema.refine(
+                (ref) =>
+                  fieldDefinition.ofCollections.includes(ref.collectionId),
+                {
+                  message:
+                    'Referenced Entry must belong to one of the allowed Collections',
+                }
+              )
+            : valueContentReferenceToEntrySchema;
+        schema = z.array(entryRefSchema);
       }
       break;
-    // case ValueInputTypeSchema.enum.sharedValue: {
-    //   let schema = valueContentReferenceToSharedValueSchema.extend({}); // Deep copy to not overwrite the base schema
-    //   if (definition.isRequired) {
-    //     const requiredReferences = schema.shape.references.min(
-    //       1,
-    //       'shared.assetValueRequired'
-    //     );
-    //     schema = schema.extend({
-    //       references: requiredReferences,
-    //     });
-    //   }
-    //   return valueContentReferenceToSharedValueSchema;
-    // }
   }
 
   if (fieldDefinition.isRequired) {
@@ -204,10 +217,69 @@ export function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
 }
 
 /**
- * Generates a zod schema to check a Value based on given Field definition
+ * Generates the content schema for a dynamic (component) field.
+ * For each referenced Component, builds a per-component item schema with a
+ * z.literal componentId discriminator and a strict values object.
+ * Returns a z.array of the union (or single schema if only one component).
+ */
+function getComponentValueContentSchemaFromFieldDefinition(
+  fieldDefinition: DynamicFieldDefinition,
+  componentResolver: ComponentResolver,
+  visited: Set<string>
+) {
+  const componentSchemas = fieldDefinition.ofComponents.map((componentId) => {
+    const fieldDefinitions = componentResolver(componentId);
+    const shape: Record<string, z.ZodTypeAny> = {};
+    for (const fieldDefinition of fieldDefinitions) {
+      shape[fieldDefinition.slug] = getValueSchemaFromFieldDefinition(
+        fieldDefinition,
+        componentResolver,
+        visited
+      );
+    }
+    return z.object({
+      componentId: z.literal(componentId),
+      values: z.object(shape),
+    });
+  });
+
+  let itemSchema: z.ZodTypeAny;
+  const [first, second, ...rest] = componentSchemas;
+  if (!first) {
+    // Empty ofComponents means "all components allowed" - use a permissive schema
+    itemSchema = z.object({
+      componentId: uuidSchema,
+      values: z.record(slugSchema, valueSchema),
+    });
+  } else if (!second) {
+    itemSchema = first;
+  } else {
+    itemSchema = z.discriminatedUnion('componentId', [first, second, ...rest]);
+  }
+
+  let schema = z.array(itemSchema);
+
+  if (fieldDefinition.min !== null) {
+    schema = schema.min(fieldDefinition.min);
+  } else if (fieldDefinition.isRequired) {
+    schema = schema.min(1);
+  }
+  if (fieldDefinition.max !== null) {
+    schema = schema.max(fieldDefinition.max);
+  }
+
+  return schema;
+}
+
+/**
+ * Generates a zod schema to check a Value based on given Field definition.
+ * For component (dynamic) fields, requires a componentResolver to look up
+ * sub-field definitions and a visited set for circular reference protection.
  */
 export function getValueSchemaFromFieldDefinition(
-  fieldDefinition: FieldDefinition
+  fieldDefinition: FieldDefinition,
+  componentResolver?: ComponentResolver,
+  visited: Set<string> = new Set()
 ) {
   switch (fieldDefinition.valueType) {
     case valueTypeSchema.enum.boolean:
@@ -235,6 +307,29 @@ export function getValueSchemaFromFieldDefinition(
             fieldDefinition
           ),
       });
+    case valueTypeSchema.enum.component: {
+      if (!componentResolver) {
+        throw new Error(
+          'componentResolver is required for dynamic (component) field definitions'
+        );
+      }
+      // Circular reference protection during schema generation
+      for (const cid of fieldDefinition.ofComponents) {
+        if (visited.has(cid)) {
+          throw new Error(
+            `Circular component reference detected: Component "${cid}" is already in the schema generation chain`
+          );
+        }
+        visited.add(cid);
+      }
+      return componentValueSchema.extend({
+        content: getComponentValueContentSchemaFromFieldDefinition(
+          fieldDefinition,
+          componentResolver,
+          visited
+        ),
+      });
+    }
     default:
       throw new Error(
         // @ts-expect-error Code cannot be reached, but if we add a new ValueType and forget to update this function, we want to be notified about it
@@ -247,14 +342,17 @@ export function getValueSchemaFromFieldDefinition(
  * Builds a z.object shape from field definitions, keyed by slug
  */
 function getValuesShapeFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[]
+  fieldDefinitions: FieldDefinition[],
+  componentResolver?: ComponentResolver,
+  visited?: Set<string>
 ) {
-  const shape: Record<
-    string,
-    ReturnType<typeof getValueSchemaFromFieldDefinition>
-  > = {};
+  const shape: Record<string, z.ZodTypeAny> = {};
   for (const fieldDef of fieldDefinitions) {
-    shape[fieldDef.slug] = getValueSchemaFromFieldDefinition(fieldDef);
+    shape[fieldDef.slug] = getValueSchemaFromFieldDefinition(
+      fieldDef,
+      componentResolver,
+      visited
+    );
   }
   return shape;
 }
@@ -263,11 +361,14 @@ function getValuesShapeFromFieldDefinitions(
  * Generates a schema for an Entry based on the given Field definitions and Values
  */
 export function getEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[]
+  fieldDefinitions: FieldDefinition[],
+  componentResolver?: ComponentResolver
 ) {
   return z.object({
     ...entrySchema.shape,
-    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
+    values: z.object(
+      getValuesShapeFromFieldDefinitions(fieldDefinitions, componentResolver)
+    ),
   });
 }
 
@@ -275,11 +376,14 @@ export function getEntrySchemaFromFieldDefinitions(
  * Generates a schema for creating a new Entry based on the given Field definitions and Values
  */
 export function getCreateEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[]
+  fieldDefinitions: FieldDefinition[],
+  componentResolver?: ComponentResolver
 ) {
   return z.object({
     ...createEntrySchema.shape,
-    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
+    values: z.object(
+      getValuesShapeFromFieldDefinitions(fieldDefinitions, componentResolver)
+    ),
   });
 }
 
@@ -287,10 +391,13 @@ export function getCreateEntrySchemaFromFieldDefinitions(
  * Generates a schema for updating an existing Entry based on the given Field definitions and Values
  */
 export function getUpdateEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[]
+  fieldDefinitions: FieldDefinition[],
+  componentResolver?: ComponentResolver
 ) {
   return z.object({
     ...updateEntrySchema.shape,
-    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
+    values: z.object(
+      getValuesShapeFromFieldDefinitions(fieldDefinitions, componentResolver)
+    ),
   });
 }

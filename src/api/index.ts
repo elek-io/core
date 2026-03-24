@@ -5,6 +5,7 @@ import type { Http2SecureServer, Http2Server } from 'node:http2';
 import type {
   AssetService,
   CollectionService,
+  ComponentService,
   EntryService,
   LogService,
   ProjectService,
@@ -18,6 +19,7 @@ export class LocalApi {
   private logService: LogService;
   private projectService: ProjectService;
   private collectionService: CollectionService;
+  private componentService: ComponentService;
   private entryService: EntryService;
   private assetService: AssetService;
   private api: OpenAPIHono<ApiEnv>;
@@ -27,18 +29,21 @@ export class LocalApi {
     logService: LogService,
     projectService: ProjectService,
     collectionService: CollectionService,
+    componentService: ComponentService,
     entryService: EntryService,
     assetService: AssetService
   ) {
     this.logService = logService;
     this.projectService = projectService;
     this.collectionService = collectionService;
+    this.componentService = componentService;
     this.entryService = entryService;
     this.assetService = assetService;
     this.api = createApi(
       this.logService,
       this.projectService,
       this.collectionService,
+      this.componentService,
       this.entryService,
       this.assetService
     )
@@ -69,7 +74,7 @@ export class LocalApi {
           {
             name: 'Content API v1',
             description:
-              'Version 1 of the elek.io content API lets you read Projects, Collections, Entries and Assets. \n### Resources\n - [Projects](https://elek.io/docs/projects)\n - [Collections](https://elek.io/docs/collections)\n - [Entries](https://elek.io/docs/entries)\n - [Assets](https://elek.io/docs/assets)',
+              'Version 1 of the elek.io content API lets you read Projects, Collections, Components, Entries and Assets. \n### Resources\n - [Projects](https://elek.io/docs/projects)\n - [Collections](https://elek.io/docs/collections)\n - [Components](https://elek.io/docs/components)\n - [Entries](https://elek.io/docs/entries)\n - [Assets](https://elek.io/docs/assets)',
           },
           // {
           //   name: 'Projects',

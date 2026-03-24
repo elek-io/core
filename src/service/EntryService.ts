@@ -27,12 +27,15 @@ import {
   type EntryHistoryProps,
   type GitCommit,
   entryHistorySchema,
+  type FieldDefinition,
+  type ComponentResolver,
 } from '../schema/index.js';
 import { applyMigrations, entryMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
-import { AbstractCrudService } from './AbstractCrudService.js';
+import { AbstractEntityService } from './AbstractEntityService.js';
 import type { CollectionService } from './CollectionService.js';
+import type { ComponentService } from './ComponentService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -41,14 +44,14 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for Entry files on disk
  */
 export class EntryService
-  extends AbstractCrudService
+  extends AbstractEntityService
   implements CrudServiceWithListCount<Entry>
 {
   private coreVersion: string;
   private jsonFileService: JsonFileService;
   private gitService: GitService;
   private collectionService: CollectionService;
-  // private sharedValueService: SharedValueService;
+  private componentService: ComponentService;
 
   constructor(
     coreVersion: string,
@@ -56,8 +59,8 @@ export class EntryService
     logService: LogService,
     jsonFileService: JsonFileService,
     gitService: GitService,
-    collectionService: CollectionService
-    // sharedValueService: SharedValueService
+    collectionService: CollectionService,
+    componentService: ComponentService
   ) {
     super(serviceTypeSchema.enum.Entry, options, logService);
 
@@ -65,7 +68,7 @@ export class EntryService
     this.jsonFileService = jsonFileService;
     this.gitService = gitService;
     this.collectionService = collectionService;
-    // this.sharedValueService = sharedValueService;
+    this.componentService = componentService;
   }
 
   /**
@@ -98,9 +101,15 @@ export class EntryService
     const entry = this.toEntry(entryFile);
 
     // Validate all Values against their Field Definitions
+    const { resolver: componentResolver, fieldDefinitions } =
+      await this.buildComponentResolver(
+        flattenFieldDefinitions(collection.fieldDefinitions),
+        props.projectId
+      );
     const createEntrySchemaFromFieldDefinitions =
       getCreateEntrySchemaFromFieldDefinitions(
-        flattenFieldDefinitions(collection.fieldDefinitions)
+        fieldDefinitions,
+        componentResolver
       );
     createEntrySchemaFromFieldDefinitions.parse(props);
 
@@ -164,7 +173,7 @@ export class EntryService
   }
 
   /**
-   * Updates an Entry of given Collection with new Values and shared Values
+   * Updates an Entry of given Collection with new Values
    */
   public async update(props: UpdateEntryProps): Promise<Entry> {
     updateEntrySchema.parse(props);
@@ -195,9 +204,15 @@ export class EntryService
     const entry = this.toEntry(entryFile);
 
     // Validate all Values against their Field Definitions
+    const { resolver: componentResolver, fieldDefinitions } =
+      await this.buildComponentResolver(
+        flattenFieldDefinitions(collection.fieldDefinitions),
+        props.projectId
+      );
     const updateEntrySchemaFromFieldDefinitions =
       getUpdateEntrySchemaFromFieldDefinitions(
-        flattenFieldDefinitions(collection.fieldDefinitions)
+        fieldDefinitions,
+        componentResolver
       );
     updateEntrySchemaFromFieldDefinitions.parse(props);
 
@@ -261,7 +276,7 @@ export class EntryService
         ? entryReferences.slice(offset)
         : entryReferences.slice(offset, offset + limit);
 
-    const entries = await this.returnResolved(
+    const entries = await this.settleAndWarn(
       partialEntryReferences.map((reference) => {
         return this.read({
           projectId: props.projectId,
@@ -313,6 +328,83 @@ export class EntryService
   private toEntry(entryFile: EntryFile): Entry {
     return {
       ...entryFile,
+    };
+  }
+
+  /**
+   * Pre-loads all Components referenced (transitively) by the given field definitions
+   * and returns a synchronous ComponentResolver for use during schema generation.
+   *
+   * When a dynamic field has an empty ofComponents array (meaning "all allowed"),
+   * all project components are loaded and the returned field definitions have
+   * ofComponents populated with the full list of component IDs.
+   */
+  private async buildComponentResolver(
+    fieldDefinitions: FieldDefinition[],
+    projectId: string
+  ): Promise<{
+    resolver: ComponentResolver;
+    fieldDefinitions: FieldDefinition[];
+  }> {
+    const componentMap = new Map<string, FieldDefinition[]>();
+    const resolvedFieldDefinitions = [...fieldDefinitions];
+
+    // Collect all component IDs referenced by top-level dynamic fields
+    const queue: string[] = [];
+
+    for (const [index, fieldDefinition] of resolvedFieldDefinitions.entries()) {
+      if (fieldDefinition.valueType === 'component') {
+        const componentIds =
+          fieldDefinition.ofComponents.length > 0
+            ? fieldDefinition.ofComponents
+            : await this.componentService.listAllIds(projectId);
+
+        // Replace empty ofComponents with the resolved full list
+        if (fieldDefinition.ofComponents.length === 0) {
+          resolvedFieldDefinitions[index] = {
+            ...fieldDefinition,
+            ofComponents: componentIds,
+          };
+        }
+
+        queue.push(...componentIds);
+      }
+    }
+
+    // BFS: load all referenced components (and their nested references) into componentMap
+    while (queue.length > 0) {
+      const componentId = queue.shift()!;
+      if (componentMap.has(componentId)) continue;
+
+      const component = await this.componentService.read({
+        projectId,
+        id: componentId,
+      });
+      componentMap.set(componentId, component.fieldDefinitions);
+
+      // Enqueue any nested component references
+      for (const nestedFieldDef of component.fieldDefinitions) {
+        if (nestedFieldDef.valueType === 'component') {
+          for (const nestedComponentId of nestedFieldDef.ofComponents) {
+            if (!componentMap.has(nestedComponentId)) {
+              queue.push(nestedComponentId);
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      resolver: (id: string) => {
+        const fieldDefinitions = componentMap.get(id);
+        if (!fieldDefinitions) {
+          throw new Error(
+            `Component "${id}" was not pre-loaded. This is an internal error.`
+          );
+        }
+        return fieldDefinitions;
+      },
+      fieldDefinitions: resolvedFieldDefinitions,
     };
   }
 }

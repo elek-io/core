@@ -3,6 +3,7 @@ import Fs from 'fs-extra';
 import type {
   Asset,
   Collection,
+  Component,
   Entry,
   ExportProps,
   Project,
@@ -34,6 +35,7 @@ async function exportProjectNested({
 }): Promise<
   Project & {
     assets: Record<string, Asset>;
+    components: Record<string, Component>;
     collections: Record<
       string,
       Collection & {
@@ -48,6 +50,17 @@ async function exportProjectNested({
   let assetContent = {};
   for (const asset of assets) {
     assetContent = { ...assetContent, [asset.id]: { ...asset } };
+  }
+
+  let componentContent: Record<string, Component> = {};
+  const components = (
+    await core.components.list({ projectId: projectToExport.id, limit: 0 })
+  ).list;
+  for (const component of components) {
+    componentContent = {
+      ...componentContent,
+      [component.slug]: { ...component },
+    };
   }
 
   let collectionContent: Record<
@@ -81,6 +94,7 @@ async function exportProjectNested({
   return {
     ...projectToExport,
     assets: assetContent,
+    components: componentContent,
     collections: collectionContent,
   };
 }
@@ -173,6 +187,26 @@ async function exportProjectsSeparate({
       options,
       name: `assets`,
       content: assets,
+    });
+
+    const components = (
+      await core.components.list({ projectId: project.id, limit: 0 })
+    ).list;
+    const componentsOutDir = Path.join(projectOutDir, 'components');
+    await Fs.ensureDir(componentsOutDir);
+    for (const component of components) {
+      await exportFile({
+        resolvedOutDir: componentsOutDir,
+        options,
+        name: component.slug,
+        content: component,
+      });
+    }
+    await exportFile({
+      resolvedOutDir: componentsOutDir,
+      options,
+      name: 'components',
+      content: components,
     });
 
     const collections = (

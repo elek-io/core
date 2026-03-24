@@ -3,6 +3,7 @@ import Semver from 'semver';
 import {
   assetFileSchema,
   collectionFileSchema,
+  componentFileSchema,
   entryFileSchema,
   projectBranchSchema,
   projectFileSchema,
@@ -13,6 +14,9 @@ import {
   type AssetChange,
   type AssetFile,
   type CollectionFile,
+  type ComponentChange,
+  type ComponentFieldChange,
+  type ComponentFile,
   type ElekIoCoreOptions,
   type EntryChange,
   type EntryFile,
@@ -31,7 +35,7 @@ import {
 } from '../schema/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime } from '../util/shared.js';
-import { AbstractCrudService } from './AbstractCrudService.js';
+import { AbstractService } from './AbstractService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -43,7 +47,7 @@ import type { ProjectService } from './ProjectService.js';
  * A release diffs the current `work` branch against the `production` branch
  * to determine what changed, computes a semver bump, and merges work into production.
  */
-export class ReleaseService extends AbstractCrudService {
+export class ReleaseService extends AbstractService {
   private gitService: GitService;
   private jsonFileService: JsonFileService;
   private projectService: ProjectService;
@@ -121,6 +125,22 @@ export class ReleaseService extends AbstractCrudService {
     );
     const assetDiff = this.diffAssets(currentAssets, productionAssets);
 
+    // Diff components
+    const currentComponents = await this.getComponentsAtRef(
+      props.projectId,
+      projectPath,
+      projectBranchSchema.enum.work
+    );
+    const productionComponents = await this.getComponentsAtRef(
+      props.projectId,
+      projectPath,
+      productionRef
+    );
+    const componentDiff = this.diffComponents(
+      currentComponents,
+      productionComponents
+    );
+
     // Diff entries across all collections (union of current and production IDs)
     const allCollectionIds = new Set([
       ...currentCollections.map((c) => c.id),
@@ -138,6 +158,7 @@ export class ReleaseService extends AbstractCrudService {
     for (const bump of [
       projectDiff.bump,
       collectionDiff.bump,
+      componentDiff.bump,
       assetDiff.bump,
       entryDiff.bump,
     ]) {
@@ -170,6 +191,8 @@ export class ReleaseService extends AbstractCrudService {
       projectChanges: projectDiff.projectChanges,
       collectionChanges: collectionDiff.collectionChanges,
       fieldChanges: collectionDiff.fieldChanges,
+      componentChanges: componentDiff.componentChanges,
+      componentFieldChanges: componentDiff.componentFieldChanges,
       assetChanges: assetDiff.assetChanges,
       entryChanges: entryDiff.entryChanges,
     };
@@ -247,7 +270,7 @@ export class ReleaseService extends AbstractCrudService {
       await this.gitService.branches
         .switch(projectPath, projectBranchSchema.enum.work)
         .catch(() => {
-          // Best-effort recovery — log but don't mask the original error
+          // Best-effort recovery - log but don't mask the original error
         });
       throw error;
     }
@@ -271,7 +294,7 @@ export class ReleaseService extends AbstractCrudService {
    * 4. Tagging on `work` (no merge into production)
    *
    * Preview releases are snapshots of the current work state.
-   * They don't promote to production — only full releases do.
+   * They don't promote to production - only full releases do.
    */
   public async createPreview(
     props: CreatePreviewReleaseProps
@@ -326,7 +349,7 @@ export class ReleaseService extends AbstractCrudService {
       await this.gitService.branches
         .switch(projectPath, projectBranchSchema.enum.work)
         .catch(() => {
-          // Best-effort recovery — log but don't mask the original error
+          // Best-effort recovery - log but don't mask the original error
         });
       throw error;
     }
@@ -494,6 +517,180 @@ export class ReleaseService extends AbstractCrudService {
   }
 
   /**
+   * Reads component files as they exist at a given git ref
+   */
+  private async getComponentsAtRef(
+    projectId: string,
+    projectPath: string,
+    ref: string
+  ): Promise<ComponentFile[]> {
+    const componentsPath = pathTo.components(projectId);
+
+    const folderNames = await this.gitService.listTreeAtCommit(
+      projectPath,
+      componentsPath,
+      ref
+    );
+
+    const components: ComponentFile[] = [];
+
+    for (const folderName of folderNames) {
+      const componentFilePath = pathTo.componentFile(projectId, folderName);
+
+      try {
+        const content = await this.gitService.getFileContentAtCommit(
+          projectPath,
+          componentFilePath,
+          ref
+        );
+        const componentFile = componentFileSchema.parse(JSON.parse(content));
+        components.push(componentFile);
+      } catch {
+        this.logService.debug({
+          source: 'core',
+          message: `Skipping component folder "${folderName}" at ref "${ref}" during release diff`,
+        });
+      }
+    }
+
+    return components;
+  }
+
+  /**
+   * Diffs two sets of components and returns all changes with the computed bump level.
+   *
+   * Component-level changes: added (MINOR), deleted (MAJOR).
+   * Field-level changes within matched components reuse the same rules as collection fields.
+   */
+  private diffComponents(
+    currentComponents: ComponentFile[],
+    productionComponents: ComponentFile[]
+  ): {
+    bump: SemverBump | null;
+    componentChanges: ComponentChange[];
+    componentFieldChanges: ComponentFieldChange[];
+  } {
+    const componentChanges: ComponentChange[] = [];
+    const componentFieldChanges: ComponentFieldChange[] = [];
+    let highestBump: SemverBump | null = null;
+
+    const currentById = new Map(currentComponents.map((c) => [c.id, c]));
+    const productionById = new Map(
+      productionComponents.map((c) => [c.id, c])
+    );
+
+    // Deleted components (in production but not in current) - MAJOR
+    for (const [id] of productionById) {
+      if (!currentById.has(id)) {
+        componentChanges.push({
+          componentId: id,
+          changeType: 'deleted',
+          bump: 'major',
+        });
+        highestBump = 'major';
+      }
+    }
+
+    // New components (in current but not in production) - MINOR
+    for (const [id] of currentById) {
+      if (!productionById.has(id)) {
+        componentChanges.push({
+          componentId: id,
+          changeType: 'added',
+          bump: 'minor',
+        });
+        highestBump = this.higherBump(highestBump, 'minor');
+      }
+    }
+
+    // Matched components - diff their field definitions
+    for (const [id, currentComponent] of currentById) {
+      const productionComponent = productionById.get(id);
+      if (!productionComponent) continue;
+
+      const changes = this.diffComponentFieldDefinitions(
+        id,
+        currentComponent.fieldDefinitions,
+        productionComponent.fieldDefinitions
+      );
+
+      componentFieldChanges.push(...changes);
+
+      for (const change of changes) {
+        highestBump = this.higherBump(highestBump, change.bump);
+      }
+    }
+
+    return { bump: highestBump, componentChanges, componentFieldChanges };
+  }
+
+  /**
+   * Diffs field definitions of a single component.
+   * Reuses the same classification rules as collection field diffs.
+   */
+  private diffComponentFieldDefinitions(
+    componentId: string,
+    currentFields: FieldDefinition[],
+    productionFields: FieldDefinition[]
+  ): ComponentFieldChange[] {
+    const changes: ComponentFieldChange[] = [];
+
+    const currentById = new Map(currentFields.map((f) => [f.id, f]));
+    const productionById = new Map(productionFields.map((f) => [f.id, f]));
+
+    // Deleted fields - MAJOR
+    for (const [id, field] of productionById) {
+      if (!currentById.has(id)) {
+        changes.push({
+          componentId,
+          fieldId: id,
+          fieldSlug: field.slug,
+          changeType: 'deleted',
+          bump: 'major',
+        });
+      }
+    }
+
+    // New fields - MINOR
+    for (const [id, field] of currentById) {
+      if (!productionById.has(id)) {
+        changes.push({
+          componentId,
+          fieldId: id,
+          fieldSlug: field.slug,
+          changeType: 'added',
+          bump: 'minor',
+        });
+      }
+    }
+
+    // Matched fields - compare property by property
+    for (const [id, currentField] of currentById) {
+      const productionField = productionById.get(id);
+      if (!productionField) continue;
+
+      const fieldChanges = this.diffSingleField(
+        componentId,
+        currentField,
+        productionField
+      );
+
+      // Map FieldChange to ComponentFieldChange
+      for (const fc of fieldChanges) {
+        changes.push({
+          componentId,
+          fieldId: fc.fieldId,
+          fieldSlug: fc.fieldSlug,
+          changeType: fc.changeType,
+          bump: fc.bump,
+        });
+      }
+    }
+
+    return changes;
+  }
+
+  /**
    * Checks if there are any commits between two refs
    */
   private async hasCommitsBetween(
@@ -592,7 +789,7 @@ export class ReleaseService extends AbstractCrudService {
   } {
     const projectChanges: ProjectChange[] = [];
 
-    // No production project means first release — no changes to report
+    // No production project means first release - no changes to report
     if (!production) {
       return { bump: null, projectChanges };
     }
@@ -670,7 +867,7 @@ export class ReleaseService extends AbstractCrudService {
     const currentById = new Map(currentAssets.map((a) => [a.id, a]));
     const productionById = new Map(productionAssets.map((a) => [a.id, a]));
 
-    // Deleted assets (in production but not in current) — MAJOR
+    // Deleted assets (in production but not in current) - MAJOR
     for (const [id] of productionById) {
       if (!currentById.has(id)) {
         assetChanges.push({
@@ -682,7 +879,7 @@ export class ReleaseService extends AbstractCrudService {
       }
     }
 
-    // New assets (in current but not in production) — MINOR
+    // New assets (in current but not in production) - MINOR
     for (const [id] of currentById) {
       if (!productionById.has(id)) {
         assetChanges.push({ assetId: id, changeType: 'added', bump: 'minor' });
@@ -690,12 +887,12 @@ export class ReleaseService extends AbstractCrudService {
       }
     }
 
-    // Modified assets — compare properties
+    // Modified assets - compare properties
     for (const [id, current] of currentById) {
       const production = productionById.get(id);
       if (!production) continue;
 
-      // Binary changed (extension, mimeType, or size differ) — PATCH
+      // Binary changed (extension, mimeType, or size differ) - PATCH
       if (
         current.extension !== production.extension ||
         current.mimeType !== production.mimeType ||
@@ -709,7 +906,7 @@ export class ReleaseService extends AbstractCrudService {
         highestBump = this.higherBump(highestBump, 'patch');
       }
 
-      // Metadata changed (name or description differ) — PATCH
+      // Metadata changed (name or description differ) - PATCH
       if (
         current.name !== production.name ||
         current.description !== production.description
@@ -758,7 +955,7 @@ export class ReleaseService extends AbstractCrudService {
       const currentById = new Map(currentEntries.map((e) => [e.id, e]));
       const productionById = new Map(productionEntries.map((e) => [e.id, e]));
 
-      // Deleted entries — MAJOR
+      // Deleted entries - MAJOR
       for (const [id] of productionById) {
         if (!currentById.has(id)) {
           entryChanges.push({
@@ -771,7 +968,7 @@ export class ReleaseService extends AbstractCrudService {
         }
       }
 
-      // New entries — MINOR
+      // New entries - MINOR
       for (const [id] of currentById) {
         if (!productionById.has(id)) {
           entryChanges.push({
@@ -784,7 +981,7 @@ export class ReleaseService extends AbstractCrudService {
         }
       }
 
-      // Modified entries — PATCH
+      // Modified entries - PATCH
       for (const [id, current] of currentById) {
         const production = productionById.get(id);
         if (!production) continue;
@@ -846,7 +1043,7 @@ export class ReleaseService extends AbstractCrudService {
       }
     }
 
-    // Matched fields — compare property by property
+    // Matched fields - compare property by property
     for (const [id, currentField] of currentById) {
       const productionField = productionById.get(id);
       if (!productionField) continue;
@@ -1109,7 +1306,7 @@ export class ReleaseService extends AbstractCrudService {
       if (tag.message.type === 'upgrade') continue;
 
       if (tag.message.type === 'release') {
-        // Hit the last full release — stop counting
+        // Hit the last full release - stop counting
         break;
       }
 

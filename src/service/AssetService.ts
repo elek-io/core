@@ -32,7 +32,7 @@ import {
 import { applyMigrations, assetMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
-import { AbstractCrudService } from './AbstractCrudService.js';
+import { AbstractEntityService } from './AbstractEntityService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -41,7 +41,7 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for Asset files on disk
  */
 export class AssetService
-  extends AbstractCrudService
+  extends AbstractEntityService
   implements CrudServiceWithListCount<Asset>
 {
   private readonly coreVersion: string;
@@ -269,7 +269,7 @@ export class AssetService
         ? assetReferences.slice(offset)
         : assetReferences.slice(offset, offset + limit);
 
-    const assets = await this.returnResolved(
+    const assets = await this.settleAndWarn(
       partialAssetReferences.map((assetReference) => {
         return this.read({
           projectId: props.projectId,
