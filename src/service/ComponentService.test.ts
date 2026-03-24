@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import core, { type Component, type Project, uuid } from '../test/setup.js';
+import core, {
+  type ComponentValue,
+  type DirectStringValue,
+  type Project,
+  uuid,
+} from '../test/setup.js';
 import { createProject } from '../test/util.js';
 
 describe('ComponentService', function () {
@@ -520,15 +525,18 @@ describe('ComponentService', function () {
         id: entry.id,
       });
 
-      const sections = updatedEntry.values['sections'];
+      const sections = updatedEntry.values['sections'] as ComponentValue;
       expect(sections).toBeDefined();
-      const outerContent = (sections as any).content[0];
-      const innerContent = outerContent.values['nested'].content[0];
+      const outerContent = sections.content[0]!;
+      const innerContent = (outerContent.values['nested'] as ComponentValue)
+        .content[0]!;
 
       // The old key should be gone, the new key should exist
       expect(innerContent.values['old-name']).toBeUndefined();
       expect(innerContent.values['new-name']).toBeDefined();
-      expect(innerContent.values['new-name'].content.en).to.equal('Hello');
+      expect(
+        (innerContent.values['new-name'] as DirectStringValue).content.en
+      ).to.equal('Hello');
 
       // Clean up
       await core.entries.delete({
