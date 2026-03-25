@@ -1,11 +1,21 @@
 import { build as compileToJs } from 'tsdown';
 import type { GenerateApiClientProps } from '../schema/index.js';
-import { core, watchProjects } from './index.js';
+import {
+  core,
+  watchProjects,
+  AUTO_GENERATED_HEADER,
+  toPascalCase,
+} from './index.js';
+import { generateTypes } from './generateTypesAction.js';
 import Path from 'node:path';
 import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
 import assert from 'node:assert';
-import { flattenFieldDefinitions, type Collection, type Project } from '../index.node.js';
+import {
+  flattenFieldDefinitions,
+  type Collection,
+  type Project,
+} from '../index.node.js';
 
 /**
  * API Client generator
@@ -28,7 +38,7 @@ import { flattenFieldDefinitions, type Collection, type Project } from '../index
  *
  * const entries = await client
  *   .projects['d9920ad7-07b8-41c4-84f7-5d6babf0f800']
- *   .collections['7fc70100-82b3-41f8-b4de-705a84b0a95d']
+ *   .collections['blog-posts']
  *   .entries.list({
  *     limit: 10,
  *   })
@@ -36,7 +46,11 @@ import { flattenFieldDefinitions, type Collection, type Project } from '../index
  * console.log(entries);
  * ```
  */
-async function generateApiClient(outFile: string) {
+async function generateApiClient(
+  outFile: string,
+  typesMap: Map<string, string>
+) {
+  const startedAt = Date.now();
   const writer = new CodeBlockWriter({
     newLine: '\n',
     indentNumberOfSpaces: 2,
@@ -44,23 +58,64 @@ async function generateApiClient(outFile: string) {
     useSingleQuote: true,
   });
 
-  // Import statements
-  writer.writeLine(
-    `import { paginatedListOf, getEntrySchemaFromFieldDefinitions } from '@elek-io/core';`
-  );
-  writer.writeLine(`import { z } from 'zod';`);
+  // Pre-compute which entry types each types file provides,
+  // so we can write the correct imports up front
+  const projects = await core.projects.list({ limit: 0 });
+  const entryTypeImports = new Map<string, string[]>(); // typesFile -> entryTypeNames[]
+  for (const project of projects.list) {
+    const typesFile = typesMap.get(project.id);
+    if (!typesFile) continue;
+
+    const collections = await core.collections.list({
+      projectId: project.id,
+      limit: 0,
+      offset: 0,
+    });
+    const entryTypeNames = collections.list.map(
+      (c) => `${toPascalCase(c.slug.plural)}Entry`
+    );
+    if (entryTypeNames.length > 0) {
+      const existing = entryTypeImports.get(typesFile) ?? [];
+      existing.push(...entryTypeNames);
+      entryTypeImports.set(typesFile, existing);
+    }
+  }
+
+  // Header
+  writer.writeLine(AUTO_GENERATED_HEADER);
   writer.blankLine();
 
-  // Schema definitions
+  // Import statements — use schemas and types from Core instead of inlining them
   writer.writeLine(
-    `const listSchema = z.object({ limit: z.number().optional(), offset: z.number().optional() }).optional();`
+    `import { paginatedListOf, getEntrySchemaFromFieldDefinitions, paginationSchema, apiClientSchema, type PaginatedList, type PaginationProps, type ApiClientProps } from '@elek-io/core';`
   );
-  writer.writeLine(`type ListProps = z.infer<typeof listSchema>;`);
-  writer.blankLine();
-  writer.writeLine(
-    `const apiClientSchema = z.object({ baseUrl: z.url(), apiKey: z.string() });`
-  );
-  writer.writeLine(`type ApiClientProps = z.infer<typeof apiClientSchema>;`);
+
+  // Import entry types for use in return type assertions,
+  // and re-export all types for developer convenience
+  const typesFileNames = [...typesMap.values()];
+  if (typesFileNames.length === 1 && typesFileNames[0]) {
+    const typesImport = typesFileNames[0].replace(/\.ts$/, '.js');
+    // Import the entry types we reference in the function body
+    const allEntryTypes = [...entryTypeImports.values()].flat();
+    if (allEntryTypes.length > 0) {
+      writer.writeLine(
+        `import type { ${allEntryTypes.join(', ')} } from './${typesImport}';`
+      );
+    }
+    // Re-export everything from the types file
+    writer.writeLine(`export * from './${typesImport}';`);
+  } else {
+    // Multiple projects: import and re-export entry types from each file
+    for (const [typesFile, entryTypes] of entryTypeImports) {
+      const typesImport = typesFile.replace(/\.ts$/, '.js');
+      writer.writeLine(
+        `import type { ${entryTypes.join(', ')} } from './${typesImport}';`
+      );
+      writer.writeLine(
+        `export type { ${entryTypes.join(', ')} } from './${typesImport}';`
+      );
+    }
+  }
   writer.blankLine();
 
   // API client function
@@ -89,14 +144,15 @@ async function generateApiClient(outFile: string) {
   writer.writeLine(`}`);
 
   await Fs.writeFile(outFile, writer.toString());
+  const duration = Date.now() - startedAt;
   core.logger.info({
     source: 'core',
-    message: `Generated API Client in "${outFile}"`,
+    message: `Generated API Client in "${outFile}" in ${duration}ms`,
   });
 }
 
 async function writeProjectsObject(writer: CodeBlockWriter) {
-  const projects = await core.projects.list({ limit: 0, offset: 0 });
+  const projects = await core.projects.list({ limit: 0 });
 
   for (let index = 0; index < projects.list.length; index++) {
     const project = projects.list[index];
@@ -117,14 +173,13 @@ async function writeCollectionsObject(
   const collections = await core.collections.list({
     projectId: project.id,
     limit: 0,
-    offset: 0,
   });
 
   for (let index = 0; index < collections.list.length; index++) {
     const collection = collections.list[index];
     assert(collection, 'Collection not found by index');
 
-    writer.indent(3).quote(collection.id).write(`: {`).newLine();
+    writer.indent(3).quote(collection.slug.plural).write(`: {`).newLine();
     writer.indent(4).write(`entries: {`).newLine();
     writeEntriesObject(writer, project, collection);
     writer.indent(4).write(`},`).newLine();
@@ -137,8 +192,11 @@ function writeEntriesObject(
   project: Project,
   collection: Collection
 ) {
-  writer.indent(5).write(`list: async (props?: ListProps) => {`).newLine();
-  writer.indent(6).write(`listSchema.parse(props);`).newLine();
+  writer
+    .indent(5)
+    .write(`list: async (props?: PaginationProps) => {`)
+    .newLine();
+  writer.indent(6).write(`paginationSchema.parse(props);`).newLine();
   writer
     .indent(6)
     .write(
@@ -148,7 +206,13 @@ function writeEntriesObject(
   writer.setIndentationLevel(6);
   writer.indent(() => {
     writer
-      .write(JSON.stringify(flattenFieldDefinitions(collection.fieldDefinitions), null, 2))
+      .write(
+        JSON.stringify(
+          flattenFieldDefinitions(collection.fieldDefinitions),
+          null,
+          2
+        )
+      )
       .newLine();
   });
   writer.setIndentationLevel(0);
@@ -156,10 +220,19 @@ function writeEntriesObject(
   writer.blankLine();
   writeFetch(
     writer,
-    `/content/v1/projects/${project.id}/collections/${collection.id}/entries`
+    `/content/v1/projects/${project.id}/collections/${collection.slug.plural}/entries`
   );
   writer.blankLine();
-  writer.indent(6).write(`return entrySchema.parse(entries);`).newLine();
+  // The Zod schema validates the shape at runtime, but its inferred type is wider
+  // than the generated entry type — the double cast is safe because Zod guarantees
+  // the data matches the schema, and the generated type is a strict narrowing of it.
+  const entryTypeName = `${toPascalCase(collection.slug.plural)}Entry`;
+  writer
+    .indent(6)
+    .write(
+      `return entrySchema.parse(entries) as unknown as PaginatedList<${entryTypeName}>;`
+    )
+    .newLine();
   writer.indent(5).write(`},`).newLine();
 }
 
@@ -196,21 +269,32 @@ async function generateApiClientAs({
   const resolvedOutDir = Path.resolve(outDir);
   await Fs.ensureDir(resolvedOutDir);
 
+  // Generate types first, then import them in the client
+  const typesMap = await generateTypes({ outDir, projects: 'all' });
+
   const outFileTs = Path.join(resolvedOutDir, 'client.ts');
-  await generateApiClient(outFileTs);
+  await generateApiClient(outFileTs, typesMap);
 
   if (language === 'js') {
-    // Convert the Entry file path into POSIX-style (forward slashes - even on Windows),
-    // since tsdown treats this as a glob pattern
+    const startedAt = Date.now();
+    // Convert file paths into POSIX-style (forward slashes - even on Windows),
+    // since tsdown treats these as glob patterns
     // @see https://tsdown.dev/options/entry#using-glob-patterns
-    const normalizedEntry = outFileTs.split(Path.sep).join(Path.posix.sep);
+    const toPosix = (p: string) => p.split(Path.sep).join(Path.posix.sep);
 
-    // Use tsdown to compile the generated TS Client
+    // Collect all generated TS files (client + types) as entry points
+    const tsFiles = [outFileTs];
+    for (const typesFileName of typesMap.values()) {
+      tsFiles.push(Path.join(resolvedOutDir, typesFileName));
+    }
+    const normalizedEntries = tsFiles.map(toPosix);
+
+    // Use tsdown to compile the generated TS files
     // to JS in the specified module format and target environment
     await compileToJs({
       config: false, // Do not use tsdown config file of Core
       external: ['@elek-io/core', 'zod'], // These are peer dependencies of the generated client
-      entry: normalizedEntry,
+      entry: normalizedEntries,
       outDir: resolvedOutDir,
       format,
       target,
@@ -221,8 +305,15 @@ async function generateApiClientAs({
       minify: true,
     });
 
-    // Remove the generated TS Client after compiling to JS
-    await Fs.remove(outFileTs);
+    // Remove the generated TS sources after compiling to JS
+    for (const tsFile of tsFiles) {
+      await Fs.remove(tsFile);
+    }
+    const duration = Date.now() - startedAt;
+    core.logger.info({
+      source: 'core',
+      message: `Compiled API Client and types to JavaScript in ${duration}ms`,
+    });
   }
 }
 

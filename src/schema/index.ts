@@ -1,3 +1,4 @@
+export * from './apiClientSchema.js';
 export * from './assetSchema.js';
 export * from './baseSchema.js';
 export * from './collectionSchema.js';

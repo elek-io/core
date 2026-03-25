@@ -74,6 +74,18 @@ export const apiStartSchema = z.object({
 });
 export type ApiStartProps = z.infer<typeof apiStartSchema>;
 
+const generateTypesOptionsSchema = z.object({
+  watch: z.boolean().default(false),
+});
+
+export const generateTypesSchema = z.object({
+  outDir: outDirSchema,
+  language: languageSchema,
+  projects: projectsSchema,
+  options: generateTypesOptionsSchema,
+});
+export type GenerateTypesProps = z.infer<typeof generateTypesSchema>;
+
 export const exportSchema = z.object({
   outDir: outDirSchema,
   projects: projectsSchema,

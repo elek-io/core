@@ -77,7 +77,7 @@ describe('CLI', function () {
 
     const entriesOfProject1 =
       await client.content.v1.projects[project1.id].collections[
-        collection.id
+        collection.slug.plural
       ].entries.list();
 
     expect(entriesOfProject1.list.length).toEqual(1);
