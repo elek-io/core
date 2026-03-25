@@ -366,9 +366,7 @@ export function getEntrySchemaFromFieldDefinitions(
 ) {
   return z.object({
     ...entrySchema.shape,
-    values: z.object(
-      getValuesShapeFromFieldDefinitions(fieldDefinitions, componentResolver)
-    ),
+    values: getValuesSchema(fieldDefinitions, componentResolver),
   });
 }
 
@@ -381,9 +379,7 @@ export function getCreateEntrySchemaFromFieldDefinitions(
 ) {
   return z.object({
     ...createEntrySchema.shape,
-    values: z.object(
-      getValuesShapeFromFieldDefinitions(fieldDefinitions, componentResolver)
-    ),
+    values: getValuesSchema(fieldDefinitions, componentResolver),
   });
 }
 
@@ -396,8 +392,20 @@ export function getUpdateEntrySchemaFromFieldDefinitions(
 ) {
   return z.object({
     ...updateEntrySchema.shape,
-    values: z.object(
-      getValuesShapeFromFieldDefinitions(fieldDefinitions, componentResolver)
-    ),
+    values: getValuesSchema(fieldDefinitions, componentResolver),
   });
+}
+
+/**
+ * Builds a values schema that validates each field individually
+ * and pipes through `z.record(slugSchema, valueSchema)` so
+ * the output type is correctly inferred as `Record<string, Value>`.
+ */
+function getValuesSchema(
+  fieldDefinitions: FieldDefinition[],
+  componentResolver?: ComponentResolver
+) {
+  return z
+    .object(getValuesShapeFromFieldDefinitions(fieldDefinitions, componentResolver))
+    .pipe(z.record(slugSchema, valueSchema));
 }
