@@ -13,7 +13,12 @@ import {
   entrySchema,
   uuid,
 } from '../test/setup.js';
-import { getValueSchemaFromFieldDefinition } from './schemaFromFieldDefinition.js';
+import {
+  getValueSchemaFromFieldDefinition,
+  getEntrySchemaFromFieldDefinitions,
+  getCreateEntrySchemaFromFieldDefinitions,
+  getUpdateEntrySchemaFromFieldDefinitions,
+} from './schemaFromFieldDefinition.js';
 
 describe('Dynamic zod schema from field definition', () => {
   const defaultBooleanValue: DirectBooleanValue = {
@@ -1852,6 +1857,28 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
     });
   });
 
+  it('throws when componentResolver is missing for component valueType', () => {
+    const dynamicFieldDef = {
+      id: uuid(),
+      slug: 'blocks',
+      fieldType: 'dynamic' as const,
+      valueType: 'component' as const,
+      label: { en: 'Blocks' },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: false as const,
+      inputWidth: '12' as const,
+      ofComponents: [uuid()],
+      min: null,
+      max: null,
+    };
+
+    expect(() => getValueSchemaFromFieldDefinition(dynamicFieldDef)).toThrow(
+      'componentResolver is required for dynamic (component) field definitions'
+    );
+  });
+
   it('accepts empty content array with empty ofComponents', () => {
     const dynamicFieldDef = {
       id: uuid(),
@@ -1878,5 +1905,111 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
       valueType: 'component',
       content: [],
     });
+  });
+});
+
+describe('getEntrySchemaFromFieldDefinitions', () => {
+  const stringFieldDef = {
+    id: uuid(),
+    slug: 'title',
+    valueType: 'string' as const,
+    fieldType: 'text' as const,
+    label: { en: 'Title' },
+    description: null,
+    isRequired: true,
+    isDisabled: false,
+    isUnique: false as const,
+    inputWidth: '12' as const,
+    min: null,
+    max: null,
+    defaultValue: null,
+  };
+
+  it('generates a valid entry schema with dynamic values', () => {
+    const schema = getEntrySchemaFromFieldDefinitions([stringFieldDef]);
+    const valid = {
+      objectType: 'entry',
+      id: uuid(),
+      coreVersion: '0.16.0',
+      created: new Date().toISOString(),
+      updated: null,
+      values: {
+        title: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'Hello' },
+        },
+      },
+    };
+    expect(() => schema.parse(valid)).not.toThrow();
+  });
+});
+
+describe('getCreateEntrySchemaFromFieldDefinitions', () => {
+  const stringFieldDef = {
+    id: uuid(),
+    slug: 'title',
+    valueType: 'string' as const,
+    fieldType: 'text' as const,
+    label: { en: 'Title' },
+    description: null,
+    isRequired: true,
+    isDisabled: false,
+    isUnique: false as const,
+    inputWidth: '12' as const,
+    min: null,
+    max: null,
+    defaultValue: null,
+  };
+
+  it('generates a valid create entry schema with dynamic values', () => {
+    const schema = getCreateEntrySchemaFromFieldDefinitions([stringFieldDef]);
+    const valid = {
+      projectId: uuid(),
+      collectionId: uuid(),
+      values: {
+        title: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'Hello' },
+        },
+      },
+    };
+    expect(() => schema.parse(valid)).not.toThrow();
+  });
+});
+
+describe('getUpdateEntrySchemaFromFieldDefinitions', () => {
+  const stringFieldDef = {
+    id: uuid(),
+    slug: 'title',
+    valueType: 'string' as const,
+    fieldType: 'text' as const,
+    label: { en: 'Title' },
+    description: null,
+    isRequired: true,
+    isDisabled: false,
+    isUnique: false as const,
+    inputWidth: '12' as const,
+    min: null,
+    max: null,
+    defaultValue: null,
+  };
+
+  it('generates a valid update entry schema with dynamic values', () => {
+    const schema = getUpdateEntrySchemaFromFieldDefinitions([stringFieldDef]);
+    const valid = {
+      id: uuid(),
+      projectId: uuid(),
+      collectionId: uuid(),
+      values: {
+        title: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'Hello' },
+        },
+      },
+    };
+    expect(() => schema.parse(valid)).not.toThrow();
   });
 });

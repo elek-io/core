@@ -429,4 +429,27 @@ describe('buildEntryValuesTypeString', () => {
     const types = buildEntryValuesTypeString([]);
     expect(types).toBe('export type Entry = Record<string, never>;');
   });
+
+  it('returns unknown for unsupported valueType', () => {
+    const fieldDefs: FieldDefinition[] = [
+      {
+        id: uuid(),
+        slug: 'weird',
+        valueType: 'nonexistent' as never,
+        fieldType: 'text' as never,
+        label: { en: 'Weird' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        min: null,
+        max: null,
+        defaultValue: null,
+      },
+    ];
+
+    const types = buildEntryValuesTypeString(fieldDefs);
+    expect(types).toContain('unknown');
+  });
 });

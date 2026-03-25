@@ -12,17 +12,16 @@ import {
 } from '../test/util.js';
 import core from '../test/setup.js';
 
-const client = testClient(
-  createTestApi(
-    router,
-    core.logger,
-    core.projects,
-    core.collections,
-    core.components,
-    core.entries,
-    core.assets
-  )
+const app = createTestApi(
+  router,
+  core.logger,
+  core.projects,
+  core.collections,
+  core.components,
+  core.entries,
+  core.assets
 );
+const client = testClient(app);
 
 describe('API', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -320,6 +319,37 @@ describe('API', function () {
     expect(res.status).toEqual(200);
     const count = await res.json();
     expect(count).toEqual(1);
+  });
+
+  // Error handling
+
+  it('should return 422 for invalid request parameters', async function () {
+    const res = await app.request('/content/v1/projects/not-a-uuid');
+
+    expect(res.status).toEqual(422);
+    const body = await res.json();
+    expect(body.success).toEqual(false);
+    expect(body.error.name).toEqual('ZodError');
+    expect(body.error.issues).toBeDefined();
+  });
+
+  it('should return 404 for unknown routes', async function () {
+    const res = await app.request('/this-does-not-exist');
+
+    expect(res.status).toEqual(404);
+    const body = await res.json();
+    expect(body.message).toEqual('Not Found - /this-does-not-exist');
+  });
+
+  it('should return 500 for internal errors', async function () {
+    const res = await app.request(
+      `/content/v1/projects/${crypto.randomUUID()}`
+    );
+
+    expect(res.status).toEqual(500);
+    const body = await res.json();
+    expect(body.message).toBeDefined();
+    expect(body.stack).toBeDefined();
   });
 
   it('should be able to stop the API and verify it is not running anymore', async function () {
