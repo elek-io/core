@@ -1,7 +1,13 @@
 import { testClient } from 'hono/testing';
 import { createTestApi } from './lib/util.js';
 import router from './routes/index.js';
-import type { Asset, Collection, Component, Entry, Project } from '../index.node.js';
+import type {
+  Asset,
+  Collection,
+  Component,
+  Entry,
+  Project,
+} from '../index.node.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createProject,
@@ -161,12 +167,10 @@ describe('API', function () {
   // Components
 
   it('should be able to list all Components via API', async function () {
-    const res = await client.content.v1.projects[':projectId'].components.$get(
-      {
-        param: { projectId: project.id },
-        query: {},
-      }
-    );
+    const res = await client.content.v1.projects[':projectId'].components.$get({
+      param: { projectId: project.id },
+      query: {},
+    });
 
     expect(res.status).toEqual(200);
     const components = await res.json();

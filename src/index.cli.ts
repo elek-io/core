@@ -63,12 +63,10 @@ program
 
 program
   .command('generate:types')
-  .description('Generates TypeScript type definitions from Project content models')
-  .argument(
-    '[outDir]',
-    'The directory to generate the types in',
-    './.elek.io'
+  .description(
+    'Generates TypeScript type definitions from Project content models'
   )
+  .argument('[outDir]', 'The directory to generate the types in', './.elek.io')
   .argument(
     '[language]',
     'The output language. Choose "ts" for TypeScript source, or "js" to compile to JavaScript with .d.ts declarations.',

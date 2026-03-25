@@ -1,7 +1,4 @@
-import type {
-  ElekIoCoreOptions,
-  ServiceType,
-} from '../schema/index.js';
+import type { ElekIoCoreOptions, ServiceType } from '../schema/index.js';
 import type { LogService } from './LogService.js';
 
 /**

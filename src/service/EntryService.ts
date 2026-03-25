@@ -75,7 +75,9 @@ export class EntryService
   /**
    * Creates a new Entry for given Collection
    */
-  public async create<T extends Entry = Entry>(props: CreateEntryProps): Promise<T> {
+  public async create<T extends Entry = Entry>(
+    props: CreateEntryProps
+  ): Promise<T> {
     createEntrySchema.parse(props);
 
     const id = uuid();
@@ -135,7 +137,9 @@ export class EntryService
    *
    * If a commit hash is provided, the Entry is read from history
    */
-  public async read<T extends Entry = Entry>(props: ReadEntryProps): Promise<T> {
+  public async read<T extends Entry = Entry>(
+    props: ReadEntryProps
+  ): Promise<T> {
     readEntrySchema.parse(props);
 
     if (!props.commitHash) {
@@ -174,7 +178,9 @@ export class EntryService
   /**
    * Updates an Entry of given Collection with new Values
    */
-  public async update<T extends Entry = Entry>(props: UpdateEntryProps): Promise<T> {
+  public async update<T extends Entry = Entry>(
+    props: UpdateEntryProps
+  ): Promise<T> {
     updateEntrySchema.parse(props);
 
     const projectPath = pathTo.project(props.projectId);
@@ -256,7 +262,9 @@ export class EntryService
     });
   }
 
-  public async list<T extends Entry = Entry>(props: ListEntriesProps): Promise<PaginatedList<T>> {
+  public async list<T extends Entry = Entry>(
+    props: ListEntriesProps
+  ): Promise<PaginatedList<T>> {
     listEntriesSchema.parse(props);
 
     const offset = props.offset || 0;

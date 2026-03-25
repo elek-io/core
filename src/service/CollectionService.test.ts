@@ -471,7 +471,9 @@ describe('CollectionService - fieldDefinition slug rename cascade', function () 
 
   it('should rename entry value keys when a fieldDefinition slug is renamed', async function () {
     const oldSlugs = Object.keys(entry.values);
-    const targetFieldDef = flattenFieldDefinitions(collection.fieldDefinitions)[0]!;
+    const targetFieldDef = flattenFieldDefinitions(
+      collection.fieldDefinitions
+    )[0]!;
     const oldSlug = targetFieldDef.slug;
     const newSlug = 'renamed-field';
 
@@ -686,7 +688,9 @@ describe('CollectionService - fieldDefinition groups', function () {
     const group = collection.fieldDefinitions.find((fd) => 'isGroup' in fd);
     expect(group).toBeDefined();
     expect((group as { id: string }).id).toEqual(groupId);
-    expect(flattenFieldDefinitions(collection.fieldDefinitions)).toHaveLength(2);
+    expect(flattenFieldDefinitions(collection.fieldDefinitions)).toHaveLength(
+      2
+    );
   });
 
   it('should create entries using fieldDefinitions inside a group', async function () {

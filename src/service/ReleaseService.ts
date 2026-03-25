@@ -575,9 +575,7 @@ export class ReleaseService extends AbstractService {
     let highestBump: SemverBump | null = null;
 
     const currentById = new Map(currentComponents.map((c) => [c.id, c]));
-    const productionById = new Map(
-      productionComponents.map((c) => [c.id, c])
-    );
+    const productionById = new Map(productionComponents.map((c) => [c.id, c]));
 
     // Deleted components (in production but not in current) - MAJOR
     for (const [id] of productionById) {

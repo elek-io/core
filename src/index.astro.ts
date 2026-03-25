@@ -1,7 +1,10 @@
 import type { Loader } from 'astro/loaders';
 import Path from 'node:path';
 import Fs from 'fs-extra';
-import ElekIoCore, { assetSchema, flattenFieldDefinitions } from './index.node.js';
+import ElekIoCore, {
+  assetSchema,
+  flattenFieldDefinitions,
+} from './index.node.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,

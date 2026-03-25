@@ -73,7 +73,12 @@ export class ComponentService
     jsonFileService: JsonFileService,
     gitService: GitService
   ) {
-    super(serviceTypeSchema.enum.Component, options, logService, jsonFileService);
+    super(
+      serviceTypeSchema.enum.Component,
+      options,
+      logService,
+      jsonFileService
+    );
 
     this.coreVersion = coreVersion;
     this.gitService = gitService;
@@ -91,7 +96,9 @@ export class ComponentService
   /**
    * Creates a new Component
    */
-  public async create<T extends Component = Component>(props: CreateComponentProps): Promise<T> {
+  public async create<T extends Component = Component>(
+    props: CreateComponentProps
+  ): Promise<T> {
     const validatedProps = createComponentSchema.parse(props);
 
     await this.validateNoCircularReferences(
@@ -103,7 +110,10 @@ export class ComponentService
     const id = uuid();
     const projectPath = pathTo.project(validatedProps.projectId);
     const componentPath = pathTo.component(validatedProps.projectId, id);
-    const componentFilePath = pathTo.componentFile(validatedProps.projectId, id);
+    const componentFilePath = pathTo.componentFile(
+      validatedProps.projectId,
+      id
+    );
     const componentSlug = slug(validatedProps.slug);
 
     // Enforce component slug uniqueness via index
@@ -147,7 +157,9 @@ export class ComponentService
   /**
    * Returns a Component by ID
    */
-  public async read<T extends Component = Component>(props: ReadComponentProps): Promise<T> {
+  public async read<T extends Component = Component>(
+    props: ReadComponentProps
+  ): Promise<T> {
     readComponentSchema.parse(props);
 
     if (!props.commitHash) {
@@ -175,7 +187,9 @@ export class ComponentService
   /**
    * Reads a Component by its slug
    */
-  public async readBySlug<T extends Component = Component>(props: ReadBySlugComponentProps): Promise<T> {
+  public async readBySlug<T extends Component = Component>(
+    props: ReadBySlugComponentProps
+  ): Promise<T> {
     const id = await this.resolveComponentId({
       projectId: props.projectId,
       idOrSlug: props.slug,
@@ -204,7 +218,9 @@ export class ComponentService
    * Handles fieldDefinition slug rename cascade: when a sub-field slug changes
    * (matched by UUID), all Entry data referencing this Component is updated.
    */
-  public async update<T extends Component = Component>(props: UpdateComponentProps): Promise<T> {
+  public async update<T extends Component = Component>(
+    props: UpdateComponentProps
+  ): Promise<T> {
     const validatedProps = updateComponentSchema.parse(props);
 
     await this.validateNoCircularReferences(

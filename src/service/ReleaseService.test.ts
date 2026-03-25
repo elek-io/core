@@ -167,9 +167,9 @@ describe('ReleaseService', function () {
 
   it('should detect MINOR bump when a field becomes required', async function () {
     // The entry reference field is currently not required
-    const entryRefField = flattenFieldDefinitions(collection.fieldDefinitions).find(
-      (fd) => fd.fieldType === 'entry'
-    )!;
+    const entryRefField = flattenFieldDefinitions(
+      collection.fieldDefinitions
+    ).find((fd) => fd.fieldType === 'entry')!;
     (entryRefField as { isRequired: boolean }).isRequired = true;
 
     await core.collections.update({

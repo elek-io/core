@@ -79,7 +79,11 @@ export class AssetService
     );
     const assetFilePath = pathTo.assetFile(validatedProps.projectId, id);
 
-    const { projectId: _, filePath: __, ...validatedAssetProps } = validatedProps;
+    const {
+      projectId: _,
+      filePath: __,
+      ...validatedAssetProps
+    } = validatedProps;
     const assetFile: AssetFile = {
       ...validatedAssetProps,
       name: slug(validatedProps.name),

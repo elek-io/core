@@ -5,7 +5,11 @@ import Path from 'node:path';
 import type { RunnerTestCase } from 'vitest';
 import { expect } from 'vitest';
 import type { EntryFieldDefinition } from './setup.js';
-import core, { flattenFieldDefinitions, uuid, type ProjectSettings } from './setup.js';
+import core, {
+  flattenFieldDefinitions,
+  uuid,
+  type ProjectSettings,
+} from './setup.js';
 
 const ids = {
   textFieldDefinition: uuid(),

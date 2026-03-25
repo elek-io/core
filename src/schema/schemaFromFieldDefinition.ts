@@ -406,6 +406,8 @@ function getValuesSchema(
   componentResolver?: ComponentResolver
 ) {
   return z
-    .object(getValuesShapeFromFieldDefinitions(fieldDefinitions, componentResolver))
+    .object(
+      getValuesShapeFromFieldDefinitions(fieldDefinitions, componentResolver)
+    )
     .pipe(z.record(slugSchema, valueSchema));
 }

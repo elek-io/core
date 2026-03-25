@@ -698,10 +698,7 @@ export class ProjectService
         return;
       }
       case 'component': {
-        const componentFilePath = pathTo.componentFile(
-          projectId,
-          reference.id
-        );
+        const componentFilePath = pathTo.componentFile(projectId, reference.id);
         const prevComponentFile =
           await this.jsonFileService.unsafeRead(componentFilePath);
         const migratedComponentFile =

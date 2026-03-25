@@ -69,7 +69,12 @@ export class CollectionService
     jsonFileService: JsonFileService,
     gitService: GitService
   ) {
-    super(serviceTypeSchema.enum.Collection, options, logService, jsonFileService);
+    super(
+      serviceTypeSchema.enum.Collection,
+      options,
+      logService,
+      jsonFileService
+    );
 
     this.coreVersion = coreVersion;
     this.gitService = gitService;
@@ -87,7 +92,9 @@ export class CollectionService
   /**
    * Creates a new Collection
    */
-  public async create<T extends Collection = Collection>(props: CreateCollectionProps): Promise<T> {
+  public async create<T extends Collection = Collection>(
+    props: CreateCollectionProps
+  ): Promise<T> {
     const validatedProps = createCollectionSchema.parse(props);
 
     const id = uuid();
@@ -146,7 +153,9 @@ export class CollectionService
    *
    * If a commit hash is provided, the Collection is read from history
    */
-  public async read<T extends Collection = Collection>(props: ReadCollectionProps): Promise<T> {
+  public async read<T extends Collection = Collection>(
+    props: ReadCollectionProps
+  ): Promise<T> {
     readCollectionSchema.parse(props);
 
     if (!props.commitHash) {
@@ -204,7 +213,9 @@ export class CollectionService
    *
    * Handles fieldDefinition slug rename cascade and collection slug uniqueness.
    */
-  public async update<T extends Collection = Collection>(props: UpdateCollectionProps): Promise<T> {
+  public async update<T extends Collection = Collection>(
+    props: UpdateCollectionProps
+  ): Promise<T> {
     const validatedProps = updateCollectionSchema.parse(props);
 
     const projectPath = pathTo.project(validatedProps.projectId);
@@ -243,7 +254,10 @@ export class CollectionService
 
     if (slugRenames.length > 0) {
       // Read all entries and rewrite their values record keys
-      const entriesPath = pathTo.entries(validatedProps.projectId, validatedProps.id);
+      const entriesPath = pathTo.entries(
+        validatedProps.projectId,
+        validatedProps.id
+      );
       if (await Fs.pathExists(entriesPath)) {
         const entryFiles = (await Fs.readdir(entriesPath)).filter(
           (f) => f.endsWith('.json') && f !== 'collection.json'
