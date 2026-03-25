@@ -140,7 +140,7 @@ function writeFieldDefinitionNarrowing(
     .write(`inputWidth: '${fd.inputWidth}';`)
     .newLine();
 
-  // defaultValue — present on direct fields
+  // defaultValue - present on direct fields
   if ('defaultValue' in fd) {
     const dv = fd.defaultValue;
     if (dv === null) {
@@ -161,7 +161,7 @@ function writeFieldDefinitionNarrowing(
     }
   }
 
-  // min / max — present on text, number, range, asset, entry, dynamic
+  // min / max - present on text, number, range, asset, entry, dynamic
   if ('min' in fd) {
     writer
       .indent(baseIndent + 1)
@@ -175,14 +175,17 @@ function writeFieldDefinitionNarrowing(
       .newLine();
   }
 
-  // Select options — narrow values to literals
+  // Select options - narrow values to literals
   if ('options' in fd && Array.isArray(fd.options)) {
     writer
       .indent(baseIndent + 1)
       .write(`options: [`)
       .newLine();
     for (const opt of fd.options) {
-      const val = typeof opt.value === 'string' ? `'${escapeForSingleQuotedString(opt.value)}'` : opt.value;
+      const val =
+        typeof opt.value === 'string'
+          ? `'${escapeForSingleQuotedString(opt.value)}'`
+          : opt.value;
       writer
         .indent(baseIndent + 2)
         .write(`{ value: ${val}; label: TranslatableString },`)
@@ -194,7 +197,7 @@ function writeFieldDefinitionNarrowing(
       .newLine();
   }
 
-  // ofCollections — for entry fields
+  // ofCollections - for entry fields
   if ('ofCollections' in fd && Array.isArray(fd.ofCollections)) {
     writer
       .indent(baseIndent + 1)
@@ -204,7 +207,7 @@ function writeFieldDefinitionNarrowing(
       .newLine();
   }
 
-  // ofComponents — for dynamic fields
+  // ofComponents - for dynamic fields
   if ('ofComponents' in fd && Array.isArray(fd.ofComponents)) {
     writer
       .indent(baseIndent + 1)
@@ -338,7 +341,7 @@ async function generateTypesForProject(project: Project): Promise<string> {
         const propName = fd.slug.includes('-') ? `'${fd.slug}'` : fd.slug;
 
         if (fd.valueType === 'component') {
-          // Dynamic field within component — type as ComponentValue for simplicity
+          // Dynamic field within component - type as ComponentValue for simplicity
           // (deeply nested component typing would require recursive generation)
           writer.indent(1).write(`${propName}: ComponentValue;`).newLine();
         } else {
@@ -498,7 +501,9 @@ async function generateTypesForProject(project: Project): Promise<string> {
 export async function generateTypes({
   outDir,
   projects,
-}: Omit<GenerateTypesProps, 'options' | 'language'>): Promise<Map<string, string>> {
+}: Omit<GenerateTypesProps, 'options' | 'language'>): Promise<
+  Map<string, string>
+> {
   const resolvedOutDir = Path.resolve(outDir);
   await Fs.ensureDir(resolvedOutDir);
 

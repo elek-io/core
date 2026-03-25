@@ -85,7 +85,7 @@ async function generateApiClient(
   writer.writeLine(AUTO_GENERATED_HEADER);
   writer.blankLine();
 
-  // Import statements — use schemas and types from Core instead of inlining them
+  // Import statements using schemas and types from Core
   writer.writeLine(
     `import { paginatedListOf, getEntrySchemaFromFieldDefinitions, paginationSchema, apiClientSchema, type PaginatedList, type PaginationProps, type ApiClientProps } from '@elek-io/core';`
   );
@@ -224,7 +224,7 @@ function writeEntriesObject(
   );
   writer.blankLine();
   // The Zod schema validates the shape at runtime, but its inferred type is wider
-  // than the generated entry type — the double cast is safe because Zod guarantees
+  // than the generated entry type - the double cast is safe because Zod guarantees
   // the data matches the schema, and the generated type is a strict narrowing of it.
   const entryTypeName = `${toPascalCase(collection.slug.plural)}Entry`;
   writer

@@ -7,6 +7,7 @@ import {
   getTranslatableStringValueContentSchemaFromFieldDefinition,
 } from '../schema/schemaFromFieldDefinition.js';
 import { valueTypeSchema } from '../schema/valueSchema.js';
+import { supportedLanguageSchema } from '../schema/baseSchema.js';
 
 /**
  * Generates a flat Zod object schema from collection field definitions
@@ -38,6 +39,14 @@ export function buildEntryValuesSchema(fieldDefinitions: FieldDefinition[]) {
             fieldDef
           );
         break;
+      case valueTypeSchema.enum.component:
+        shape[fieldDef.slug] = z.array(
+          z.object({
+            componentId: z.string(),
+            values: z.record(z.string(), z.unknown()),
+          })
+        );
+        break;
     }
   }
 
@@ -64,7 +73,7 @@ export function buildEntryValuesTypeString(
   });
 
   return [
-    `type SupportedLanguage = "bg" | "cs" | "da" | "de" | "el" | "en" | "es" | "et" | "fi" | "fr" | "hu" | "it" | "ja" | "ko" | "lt" | "lv" | "nb" | "nl" | "pl" | "pt" | "ro" | "ru" | "sk" | "sl" | "sv" | "tr" | "uk" | "zh";`,
+    `type SupportedLanguage = ${supportedLanguageSchema.options.map((language) => `"${language}"`).join(' | ')};`,
     `export type Entry = {`,
     fields.join(';\n') + ';',
     `};`,
@@ -81,6 +90,8 @@ function valueTypeToTsType(valueType: string): string {
       return 'boolean';
     case 'reference':
       return 'Array<{ id: string; objectType: string }>';
+    case 'component':
+      return 'Array<{ componentId: string; values: Record<string, Partial<Record<SupportedLanguage, unknown>>> }>';
     default:
       return 'unknown';
   }

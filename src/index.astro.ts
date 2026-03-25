@@ -107,7 +107,7 @@ export function elekAssets(props: ElekAssetsProps): Loader {
  *   entries: defineCollection({
  *     loader: elekEntries({
  *       projectId: 'abc-123-...',
- *       collectionId: 'def-456-...',
+ *       collectionIdOrSlug: 'blog-posts',
  *     }),
  *   });
  * };

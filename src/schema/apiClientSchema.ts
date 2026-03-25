@@ -2,7 +2,7 @@ import { z } from '@hono/zod-openapi';
 
 /**
  * Pagination schema used by the generated API client.
- * Both limit and offset are optional — the entire object is optional too,
+ * Both limit and offset are optional - the entire object is optional too,
  * allowing `entries.list()` to be called without arguments.
  */
 export const paginationSchema = z

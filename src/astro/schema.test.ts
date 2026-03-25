@@ -3,6 +3,7 @@ import { z } from '@hono/zod-openapi';
 import { v4 as uuid } from 'uuid';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
 import { assetSchema } from '../schema/assetSchema.js';
+import { supportedLanguageSchema } from '../schema/baseSchema.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
@@ -196,6 +197,37 @@ describe('buildEntryValuesSchema', () => {
     expect(schema.parse(valid)).toEqual(valid);
   });
 
+  it('generates schema for a component (dynamic) field definition', () => {
+    const fieldDefs: FieldDefinition[] = [
+      {
+        id: uuid(),
+        slug: 'sections',
+        valueType: 'component',
+        fieldType: 'dynamic',
+        label: { en: 'Sections' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        ofComponents: [uuid()],
+        min: null,
+        max: null,
+      },
+    ];
+
+    const schema = buildEntryValuesSchema(fieldDefs);
+    const valid = {
+      sections: [
+        {
+          componentId: uuid(),
+          values: { heading: { en: 'Hello' } },
+        },
+      ],
+    };
+    expect(schema.parse(valid)).toEqual(valid);
+  });
+
   it('returns empty object schema for empty field definitions', () => {
     const schema = buildEntryValuesSchema([]);
     expect(schema.parse({})).toEqual({});
@@ -340,6 +372,57 @@ describe('buildEntryValuesTypeString', () => {
     expect(types).toContain('boolean');
     expect(types).toContain('Array<{ id: string; objectType: string }>');
     expect(types).toContain('SupportedLanguage');
+  });
+
+  it('generates TypeScript type string for component field definitions', () => {
+    const fieldDefs: FieldDefinition[] = [
+      {
+        id: uuid(),
+        slug: 'sections',
+        valueType: 'component',
+        fieldType: 'dynamic',
+        label: { en: 'Sections' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        ofComponents: [uuid()],
+        min: null,
+        max: null,
+      },
+    ];
+
+    const types = buildEntryValuesTypeString(fieldDefs);
+
+    expect(types).toContain('"sections"');
+    expect(types).toContain('componentId');
+  });
+
+  it('uses SupportedLanguage values matching supportedLanguageSchema', () => {
+    const fieldDefs: FieldDefinition[] = [
+      {
+        id: uuid(),
+        slug: 'title',
+        valueType: 'string',
+        fieldType: 'text',
+        label: { en: 'Title' },
+        description: null,
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        min: null,
+        max: null,
+        defaultValue: null,
+      },
+    ];
+
+    const types = buildEntryValuesTypeString(fieldDefs);
+
+    for (const lang of supportedLanguageSchema.options) {
+      expect(types).toContain(`"${lang}"`);
+    }
   });
 
   it('returns empty Record type for empty field definitions', () => {
