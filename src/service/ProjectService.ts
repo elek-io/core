@@ -71,8 +71,6 @@ export class ProjectService
   implements CrudServiceWithListCount<Project>
 {
   private coreVersion: Version;
-  private jsonFileService: JsonFileService;
-  private gitService: GitService;
   private assetService: AssetService;
   private collectionService: CollectionService;
   private componentService: ComponentService;
@@ -89,11 +87,9 @@ export class ProjectService
     componentService: ComponentService,
     entryService: EntryService
   ) {
-    super(serviceTypeSchema.enum.Project, options, logService);
+    super(serviceTypeSchema.enum.Project, options, logService, gitService, jsonFileService);
 
     this.coreVersion = coreVersion;
-    this.jsonFileService = jsonFileService;
-    this.gitService = gitService;
     this.assetService = assetService;
     this.collectionService = collectionService;
     this.componentService = componentService;

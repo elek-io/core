@@ -1,18 +1,79 @@
+import Fs from 'fs-extra';
 import { RequiredParameterMissingError } from '../error/index.js';
 import {
   fileReferenceSchema,
   objectTypeSchema,
+  type ElekIoCoreOptions,
   type FileReference,
   type ObjectType,
+  type ServiceType,
 } from '../schema/index.js';
 import { files, folders, isNotEmpty, pathTo } from '../util/node.js';
 import { AbstractService } from './AbstractService.js';
+import type { GitService } from './GitService.js';
+import type { JsonFileService } from './JsonFileService.js';
+import type { LogService } from './LogService.js';
 
 /**
  * A service for entities that are stored as files or folders on disk.
  * Provides listing of file and folder references.
  */
 export abstract class AbstractEntityService extends AbstractService {
+  protected readonly gitService: GitService;
+  protected readonly jsonFileService: JsonFileService;
+
+  protected constructor(
+    type: ServiceType,
+    options: ElekIoCoreOptions,
+    logService: LogService,
+    gitService: GitService,
+    jsonFileService: JsonFileService
+  ) {
+    super(type, options, logService);
+    this.gitService = gitService;
+    this.jsonFileService = jsonFileService;
+  }
+
+  /**
+   * Wraps an operation with automatic git rollback on failure.
+   *
+   * On error:
+   * 1. Removes any files/dirs specified in `cleanupPaths` (for newly created files)
+   * 2. Runs `git reset --hard HEAD` to restore the working tree
+   * 3. Re-throws the original error
+   *
+   * @param projectPath  Path to the project's git repository
+   * @param operation    The async operation to execute
+   * @param cleanupPaths Optional paths to remove before git reset (for create operations)
+   */
+  protected async withGitRollback<T>(
+    projectPath: string,
+    operation: () => Promise<T>,
+    cleanupPaths?: string[]
+  ): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      for (const cleanupPath of cleanupPaths ?? []) {
+        await Fs.remove(cleanupPath).catch((e) =>
+          this.logService.error({
+            source: 'core',
+            message: `Failed to remove "${cleanupPath}" during rollback: ${e instanceof Error ? e.message : String(e)}`,
+          })
+        );
+      }
+      await this.gitService.reset(projectPath, 'hard', 'HEAD').catch((e) =>
+        this.logService.error({
+          source: 'core',
+          message: `Failed to reset working tree during rollback, manual git reset may be needed: ${e instanceof Error ? e.message : String(e)}`,
+        })
+      );
+      // Clear the JSON file cache since git reset restored files on disk
+      // that may differ from what the cache holds
+      this.jsonFileService.clearCache();
+      throw error;
+    }
+  }
   /**
    * Settles all promises and returns only the fulfilled values.
    * Logs a warning for each rejected promise.

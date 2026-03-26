@@ -45,7 +45,6 @@ export class CollectionService
   implements CrudServiceWithListCount<Collection>
 {
   private coreVersion: string;
-  private gitService: GitService;
 
   protected entityFileSchema = collectionFileSchema;
 
@@ -73,11 +72,11 @@ export class CollectionService
       serviceTypeSchema.enum.Collection,
       options,
       logService,
-      jsonFileService
+      jsonFileService,
+      gitService
     );
 
     this.coreVersion = coreVersion;
-    this.gitService = gitService;
   }
 
   /**
@@ -129,21 +128,27 @@ export class CollectionService
       updated: null,
     };
 
-    await Fs.ensureDir(collectionPath);
-    await this.jsonFileService.create(
-      collectionFile,
-      collectionFilePath,
-      collectionFileSchema
+    await this.withGitRollback(
+      projectPath,
+      async () => {
+        await Fs.ensureDir(collectionPath);
+        await this.jsonFileService.create(
+          collectionFile,
+          collectionFilePath,
+          collectionFileSchema
+        );
+        await this.gitService.add(projectPath, [collectionFilePath]);
+        await this.gitService.commit(projectPath, {
+          method: 'create',
+          reference: { objectType: 'collection', id },
+        });
+      },
+      [collectionPath]
     );
-    await this.gitService.add(projectPath, [collectionFilePath]);
-    await this.gitService.commit(projectPath, {
-      method: 'create',
-      reference: { objectType: 'collection', id },
-    });
 
-    // Update the index (not git-tracked)
+    // Update the index (not git-tracked, self-heals on failure)
     index[id] = slugPlural;
-    await this.writeIndex(validatedProps.projectId, index);
+    await this.safeWriteIndex(validatedProps.projectId, index);
 
     return this.toCollection(collectionFile) as T;
   }
@@ -250,27 +255,41 @@ export class CollectionService
       }
     }
 
-    const filesToGitAdd: string[] = [collectionFilePath];
-
-    if (slugRenames.length > 0) {
-      // Read all entries and rewrite their values record keys
-      const entriesPath = pathTo.entries(
-        validatedProps.projectId,
-        validatedProps.id
+    // If collection slug.plural changed, enforce uniqueness before mutating
+    const newSlugPlural = slug(validatedProps.slug.plural);
+    if (prevCollectionFile.slug.plural !== newSlugPlural) {
+      const index = await this.getIndex(validatedProps.projectId);
+      const existingUuid = Object.entries(index).find(
+        ([, s]) => s === newSlugPlural
       );
-      if (await Fs.pathExists(entriesPath)) {
-        const entryFiles = (await Fs.readdir(entriesPath)).filter(
-          (f) => f.endsWith('.json') && f !== 'collection.json'
+      if (existingUuid && existingUuid[0] !== validatedProps.id) {
+        throw new Error(
+          `Collection slug "${newSlugPlural}" is already in use by another collection`
         );
+      }
+    }
 
-        for (const entryFileName of entryFiles) {
-          const entryFilePath = pathTo.entryFile(
-            validatedProps.projectId,
-            validatedProps.id,
-            entryFileName.replace('.json', '')
+    await this.withGitRollback(projectPath, async () => {
+      const filesToGitAdd: string[] = [collectionFilePath];
+
+      if (slugRenames.length > 0) {
+        // Read all entries and rewrite their values record keys
+        const entriesPath = pathTo.entries(
+          validatedProps.projectId,
+          validatedProps.id
+        );
+        if (await Fs.pathExists(entriesPath)) {
+          const entryFiles = (await Fs.readdir(entriesPath)).filter(
+            (f) => f.endsWith('.json') && f !== 'collection.json'
           );
 
-          try {
+          for (const entryFileName of entryFiles) {
+            const entryFilePath = pathTo.entryFile(
+              validatedProps.projectId,
+              validatedProps.id,
+              entryFileName.replace('.json', '')
+            );
+
             const entryFile = await this.jsonFileService.read(
               entryFilePath,
               entryFileSchema
@@ -296,42 +315,28 @@ export class CollectionService
               );
               filesToGitAdd.push(entryFilePath);
             }
-          } catch (error) {
-            this.logService.warn({
-              source: 'core',
-              message: `Failed to update entry "${entryFileName}" during slug rename cascade: ${error instanceof Error ? error.message : String(error)}`,
-            });
           }
         }
       }
-    }
 
-    // If collection slug.plural changed, enforce uniqueness
-    const newSlugPlural = slug(validatedProps.slug.plural);
+      await this.jsonFileService.update(
+        collectionFile,
+        collectionFilePath,
+        collectionFileSchema
+      );
+      await this.gitService.add(projectPath, filesToGitAdd);
+      await this.gitService.commit(projectPath, {
+        method: 'update',
+        reference: { objectType: 'collection', id: collectionFile.id },
+      });
+    });
+
+    // Update index after successful commit (not git-tracked, self-heals on failure)
     if (prevCollectionFile.slug.plural !== newSlugPlural) {
       const index = await this.getIndex(validatedProps.projectId);
-      const existingUuid = Object.entries(index).find(
-        ([, s]) => s === newSlugPlural
-      );
-      if (existingUuid && existingUuid[0] !== validatedProps.id) {
-        throw new Error(
-          `Collection slug "${newSlugPlural}" is already in use by another collection`
-        );
-      }
       index[validatedProps.id] = newSlugPlural;
-      await this.writeIndex(validatedProps.projectId, index);
+      await this.safeWriteIndex(validatedProps.projectId, index);
     }
-
-    await this.jsonFileService.update(
-      collectionFile,
-      collectionFilePath,
-      collectionFileSchema
-    );
-    await this.gitService.add(projectPath, filesToGitAdd);
-    await this.gitService.commit(projectPath, {
-      method: 'update',
-      reference: { objectType: 'collection', id: collectionFile.id },
-    });
 
     return this.toCollection(collectionFile) as T;
   }
@@ -347,17 +352,19 @@ export class CollectionService
     const projectPath = pathTo.project(props.projectId);
     const collectionPath = pathTo.collection(props.projectId, props.id);
 
-    await Fs.remove(collectionPath);
-    await this.gitService.add(projectPath, [collectionPath]);
-    await this.gitService.commit(projectPath, {
-      method: 'delete',
-      reference: { objectType: 'collection', id: props.id },
+    await this.withGitRollback(projectPath, async () => {
+      await Fs.remove(collectionPath);
+      await this.gitService.add(projectPath, [collectionPath]);
+      await this.gitService.commit(projectPath, {
+        method: 'delete',
+        reference: { objectType: 'collection', id: props.id },
+      });
     });
 
-    // Remove from index
+    // Remove from index (not git-tracked, self-heals on failure)
     const index = await this.getIndex(props.projectId);
     delete index[props.id];
-    await this.writeIndex(props.projectId, index);
+    await this.safeWriteIndex(props.projectId, index);
   }
 
   public async list<T extends Collection = Collection>(

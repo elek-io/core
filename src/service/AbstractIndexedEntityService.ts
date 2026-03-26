@@ -9,6 +9,7 @@ import {
 } from '../schema/index.js';
 import { folders } from '../util/node.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
+import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
@@ -17,8 +18,6 @@ import type { LogService } from './LogService.js';
  * Subclasses must implement abstract methods to define entity paths and slug extraction.
  */
 export abstract class AbstractIndexedEntityService extends AbstractEntityService {
-  protected readonly jsonFileService: JsonFileService;
-
   private cachedIndex: Map<string, Record<string, string>> = new Map();
   private rebuildPromise: Map<string, Promise<Record<string, string>>> =
     new Map();
@@ -27,10 +26,10 @@ export abstract class AbstractIndexedEntityService extends AbstractEntityService
     type: ServiceType,
     options: ElekIoCoreOptions,
     logService: LogService,
-    jsonFileService: JsonFileService
+    jsonFileService: JsonFileService,
+    gitService: GitService
   ) {
-    super(type, options, logService);
-    this.jsonFileService = jsonFileService;
+    super(type, options, logService, gitService, jsonFileService);
   }
 
   /** Path to the folder containing all entities of this type */
@@ -81,6 +80,28 @@ export abstract class AbstractIndexedEntityService extends AbstractEntityService
    */
   protected invalidateIndex(projectId: string): void {
     this.cachedIndex.delete(projectId);
+  }
+
+  /**
+   * Writes the index file with automatic cache invalidation on failure.
+   *
+   * If the write fails, the in-memory cache is invalidated so the index
+   * rebuilds from disk on next access. The error is logged but not re-thrown,
+   * since the entity data was already successfully committed to git.
+   */
+  protected async safeWriteIndex(
+    projectId: string,
+    index: Record<string, string>
+  ): Promise<void> {
+    try {
+      await this.writeIndex(projectId, index);
+    } catch (error) {
+      this.invalidateIndex(projectId);
+      this.logService.warn({
+        source: 'core',
+        message: `Failed to write ${this.type} index for project "${projectId}", cache invalidated: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
   }
 
   /**

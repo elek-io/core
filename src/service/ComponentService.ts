@@ -49,7 +49,6 @@ export class ComponentService
   implements CrudServiceWithListCount<Component>
 {
   private coreVersion: string;
-  private gitService: GitService;
 
   protected entityFileSchema = componentFileSchema;
 
@@ -77,11 +76,11 @@ export class ComponentService
       serviceTypeSchema.enum.Component,
       options,
       logService,
-      jsonFileService
+      jsonFileService,
+      gitService
     );
 
     this.coreVersion = coreVersion;
-    this.gitService = gitService;
   }
 
   /**
@@ -135,21 +134,27 @@ export class ComponentService
       updated: null,
     };
 
-    await Fs.ensureDir(componentPath);
-    await this.jsonFileService.create(
-      componentFile,
-      componentFilePath,
-      componentFileSchema
+    await this.withGitRollback(
+      projectPath,
+      async () => {
+        await Fs.ensureDir(componentPath);
+        await this.jsonFileService.create(
+          componentFile,
+          componentFilePath,
+          componentFileSchema
+        );
+        await this.gitService.add(projectPath, [componentFilePath]);
+        await this.gitService.commit(projectPath, {
+          method: 'create',
+          reference: { objectType: 'component', id },
+        });
+      },
+      [componentPath]
     );
-    await this.gitService.add(projectPath, [componentFilePath]);
-    await this.gitService.commit(projectPath, {
-      method: 'create',
-      reference: { objectType: 'component', id },
-    });
 
-    // Update the index (not git-tracked)
+    // Update the index (not git-tracked, self-heals on failure)
     index[id] = componentSlug;
-    await this.writeIndex(validatedProps.projectId, index);
+    await this.safeWriteIndex(validatedProps.projectId, index);
 
     return this.toComponent(componentFile) as T;
   }
@@ -243,9 +248,7 @@ export class ComponentService
       updated: datetime(),
     };
 
-    const filesToGitAdd: string[] = [componentFilePath];
-
-    // If component slug changed, enforce uniqueness
+    // If component slug changed, enforce uniqueness before mutating
     const newSlug = slug(validatedProps.slug);
     if (prevComponentFile.slug !== newSlug) {
       const index = await this.getIndex(validatedProps.projectId);
@@ -255,8 +258,6 @@ export class ComponentService
           `Component slug "${newSlug}" is already in use by another component`
         );
       }
-      index[validatedProps.id] = newSlug;
-      await this.writeIndex(validatedProps.projectId, index);
     }
 
     // FieldDefinition slug rename cascade:
@@ -273,25 +274,36 @@ export class ComponentService
       }
     }
 
-    if (slugRenames.length > 0) {
-      const cascadedFiles = await this.cascadeComponentSlugRenames(
-        validatedProps.projectId,
-        validatedProps.id,
-        slugRenames
-      );
-      filesToGitAdd.push(...cascadedFiles);
-    }
+    await this.withGitRollback(projectPath, async () => {
+      const filesToGitAdd: string[] = [componentFilePath];
 
-    await this.jsonFileService.update(
-      componentFile,
-      componentFilePath,
-      componentFileSchema
-    );
-    await this.gitService.add(projectPath, filesToGitAdd);
-    await this.gitService.commit(projectPath, {
-      method: 'update',
-      reference: { objectType: 'component', id: componentFile.id },
+      if (slugRenames.length > 0) {
+        const cascadedFiles = await this.cascadeComponentSlugRenames(
+          validatedProps.projectId,
+          validatedProps.id,
+          slugRenames
+        );
+        filesToGitAdd.push(...cascadedFiles);
+      }
+
+      await this.jsonFileService.update(
+        componentFile,
+        componentFilePath,
+        componentFileSchema
+      );
+      await this.gitService.add(projectPath, filesToGitAdd);
+      await this.gitService.commit(projectPath, {
+        method: 'update',
+        reference: { objectType: 'component', id: componentFile.id },
+      });
     });
+
+    // Update index after successful commit (not git-tracked, self-heals on failure)
+    if (prevComponentFile.slug !== newSlug) {
+      const index = await this.getIndex(validatedProps.projectId);
+      index[validatedProps.id] = newSlug;
+      await this.safeWriteIndex(validatedProps.projectId, index);
+    }
 
     return this.toComponent(componentFile) as T;
   }
@@ -321,17 +333,19 @@ export class ComponentService
     const projectPath = pathTo.project(props.projectId);
     const componentPath = pathTo.component(props.projectId, props.id);
 
-    await Fs.remove(componentPath);
-    await this.gitService.add(projectPath, [componentPath]);
-    await this.gitService.commit(projectPath, {
-      method: 'delete',
-      reference: { objectType: 'component', id: props.id },
+    await this.withGitRollback(projectPath, async () => {
+      await Fs.remove(componentPath);
+      await this.gitService.add(projectPath, [componentPath]);
+      await this.gitService.commit(projectPath, {
+        method: 'delete',
+        reference: { objectType: 'component', id: props.id },
+      });
     });
 
-    // Remove from index
+    // Remove from index (not git-tracked, self-heals on failure)
     const index = await this.getIndex(props.projectId);
     delete index[props.id];
-    await this.writeIndex(props.projectId, index);
+    await this.safeWriteIndex(props.projectId, index);
   }
 
   public async list<T extends Component = Component>(

@@ -49,8 +49,6 @@ export class EntryService
   implements CrudServiceWithListCount<Entry>
 {
   private coreVersion: string;
-  private jsonFileService: JsonFileService;
-  private gitService: GitService;
   private collectionService: CollectionService;
   private componentService: ComponentService;
 
@@ -63,11 +61,9 @@ export class EntryService
     collectionService: CollectionService,
     componentService: ComponentService
   ) {
-    super(serviceTypeSchema.enum.Entry, options, logService);
+    super(serviceTypeSchema.enum.Entry, options, logService, gitService, jsonFileService);
 
     this.coreVersion = coreVersion;
-    this.jsonFileService = jsonFileService;
-    this.gitService = gitService;
     this.collectionService = collectionService;
     this.componentService = componentService;
   }
@@ -114,20 +110,26 @@ export class EntryService
       updated: null,
     };
 
-    await this.jsonFileService.create(
-      entryFile,
-      entryFilePath,
-      entryFileSchema
-    );
-    await this.gitService.add(projectPath, [entryFilePath]);
-    await this.gitService.commit(projectPath, {
-      method: 'create',
-      reference: {
-        objectType: 'entry',
-        id: entryFile.id,
-        collectionId: props.collectionId,
+    await this.withGitRollback(
+      projectPath,
+      async () => {
+        await this.jsonFileService.create(
+          entryFile,
+          entryFilePath,
+          entryFileSchema
+        );
+        await this.gitService.add(projectPath, [entryFilePath]);
+        await this.gitService.commit(projectPath, {
+          method: 'create',
+          reference: {
+            objectType: 'entry',
+            id: entryFile.id,
+            collectionId: props.collectionId,
+          },
+        });
       },
-    });
+      [entryFilePath]
+    );
 
     return this.toEntry(entryFile) as T;
   }
@@ -219,19 +221,21 @@ export class EntryService
       updated: datetime(),
     };
 
-    await this.jsonFileService.update(
-      entryFile,
-      entryFilePath,
-      entryFileSchema
-    );
-    await this.gitService.add(projectPath, [entryFilePath]);
-    await this.gitService.commit(projectPath, {
-      method: 'update',
-      reference: {
-        objectType: 'entry',
-        id: entryFile.id,
-        collectionId: props.collectionId,
-      },
+    await this.withGitRollback(projectPath, async () => {
+      await this.jsonFileService.update(
+        entryFile,
+        entryFilePath,
+        entryFileSchema
+      );
+      await this.gitService.add(projectPath, [entryFilePath]);
+      await this.gitService.commit(projectPath, {
+        method: 'update',
+        reference: {
+          objectType: 'entry',
+          id: entryFile.id,
+          collectionId: props.collectionId,
+        },
+      });
     });
 
     return this.toEntry(entryFile) as T;
@@ -250,15 +254,17 @@ export class EntryService
       props.id
     );
 
-    await Fs.remove(entryFilePath);
-    await this.gitService.add(projectPath, [entryFilePath]);
-    await this.gitService.commit(projectPath, {
-      method: 'delete',
-      reference: {
-        objectType: 'entry',
-        id: props.id,
-        collectionId: props.collectionId,
-      },
+    await this.withGitRollback(projectPath, async () => {
+      await Fs.remove(entryFilePath);
+      await this.gitService.add(projectPath, [entryFilePath]);
+      await this.gitService.commit(projectPath, {
+        method: 'delete',
+        reference: {
+          objectType: 'entry',
+          id: props.id,
+          collectionId: props.collectionId,
+        },
+      });
     });
   }
 

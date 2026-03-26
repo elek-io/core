@@ -45,8 +45,6 @@ export class AssetService
   implements CrudServiceWithListCount<Asset>
 {
   private readonly coreVersion: string;
-  private readonly jsonFileService: JsonFileService;
-  private readonly gitService: GitService;
 
   constructor(
     coreVersion: string,
@@ -55,11 +53,9 @@ export class AssetService
     jsonFileService: JsonFileService,
     gitService: GitService
   ) {
-    super(serviceTypeSchema.enum.Asset, options, logService);
+    super(serviceTypeSchema.enum.Asset, options, logService, gitService, jsonFileService);
 
     this.coreVersion = coreVersion;
-    this.jsonFileService = jsonFileService;
-    this.gitService = gitService;
   }
 
   /**
@@ -97,24 +93,23 @@ export class AssetService
       size,
     };
 
-    try {
-      await Fs.copyFile(validatedProps.filePath, assetPath);
-      await this.jsonFileService.create(
-        assetFile,
-        assetFilePath,
-        assetFileSchema
-      );
-    } catch (error) {
-      // To avoid partial data being added to the repository / git status reporting uncommitted files
-      await this.delete({ ...assetFile, projectId: validatedProps.projectId });
-      throw error;
-    }
-
-    await this.gitService.add(projectPath, [assetFilePath, assetPath]);
-    await this.gitService.commit(projectPath, {
-      method: 'create',
-      reference: { objectType: 'asset', id },
-    });
+    await this.withGitRollback(
+      projectPath,
+      async () => {
+        await Fs.copyFile(validatedProps.filePath, assetPath);
+        await this.jsonFileService.create(
+          assetFile,
+          assetFilePath,
+          assetFileSchema
+        );
+        await this.gitService.add(projectPath, [assetFilePath, assetPath]);
+        await this.gitService.commit(projectPath, {
+          method: 'create',
+          reference: { objectType: 'asset', id },
+        });
+      },
+      [assetPath, assetFilePath]
+    );
 
     return this.toAsset(validatedProps.projectId, assetFile);
   }
@@ -209,42 +204,43 @@ export class AssetService
       updated: datetime(),
     };
 
-    if (validatedProps.newFilePath) {
-      // Overwrite the file itself (in LFS folder)...
+    await this.withGitRollback(projectPath, async () => {
+      if (validatedProps.newFilePath) {
+        // Overwrite the file itself (in LFS folder)...
 
-      const fileType = this.getFileType(validatedProps.newFilePath);
-      const size = await this.getFileSize(validatedProps.newFilePath);
-      const prevAssetPath = pathTo.asset(
-        validatedProps.projectId,
-        validatedProps.id,
-        prevAssetFile.extension
+        const fileType = this.getFileType(validatedProps.newFilePath);
+        const size = await this.getFileSize(validatedProps.newFilePath);
+        const prevAssetPath = pathTo.asset(
+          validatedProps.projectId,
+          validatedProps.id,
+          prevAssetFile.extension
+        );
+        const assetPath = pathTo.asset(
+          validatedProps.projectId,
+          validatedProps.id,
+          fileType.extension
+        );
+
+        await Fs.copyFile(validatedProps.newFilePath, assetPath);
+        await Fs.remove(prevAssetPath); // Need to explicitly remove old Asset, because it could have a different extension
+        await this.gitService.add(projectPath, [prevAssetPath, assetPath]);
+
+        // ...and update meta information
+        assetFile.extension = fileType.extension;
+        assetFile.mimeType = fileType.mimeType;
+        assetFile.size = size;
+      }
+
+      await this.jsonFileService.update(
+        assetFile,
+        assetFilePath,
+        assetFileSchema
       );
-      const assetPath = pathTo.asset(
-        validatedProps.projectId,
-        validatedProps.id,
-        fileType.extension
-      );
-
-      // @todo use try catch to handle FS error and restore previous state
-      await Fs.remove(prevAssetPath); // Need to explicitly remove old Asset, because it could have a different extension
-      await Fs.copyFile(validatedProps.newFilePath, assetPath);
-      await this.gitService.add(projectPath, [prevAssetPath, assetPath]);
-
-      // ...and update meta information
-      assetFile.extension = fileType.extension;
-      assetFile.mimeType = fileType.mimeType;
-      assetFile.size = size;
-    }
-
-    await this.jsonFileService.update(
-      assetFile,
-      assetFilePath,
-      assetFileSchema
-    );
-    await this.gitService.add(projectPath, [assetFilePath]);
-    await this.gitService.commit(projectPath, {
-      method: 'update',
-      reference: { objectType: 'asset', id: assetFile.id },
+      await this.gitService.add(projectPath, [assetFilePath]);
+      await this.gitService.commit(projectPath, {
+        method: 'update',
+        reference: { objectType: 'asset', id: assetFile.id },
+      });
     });
 
     return this.toAsset(validatedProps.projectId, assetFile);
@@ -259,12 +255,15 @@ export class AssetService
     const projectPath = pathTo.project(props.projectId);
     const assetFilePath = pathTo.assetFile(props.projectId, props.id);
     const assetPath = pathTo.asset(props.projectId, props.id, props.extension);
-    await Fs.remove(assetPath);
-    await Fs.remove(assetFilePath);
-    await this.gitService.add(projectPath, [assetFilePath, assetPath]);
-    await this.gitService.commit(projectPath, {
-      method: 'delete',
-      reference: { objectType: 'asset', id: props.id },
+
+    await this.withGitRollback(projectPath, async () => {
+      await Fs.remove(assetPath);
+      await Fs.remove(assetFilePath);
+      await this.gitService.add(projectPath, [assetFilePath, assetPath]);
+      await this.gitService.commit(projectPath, {
+        method: 'delete',
+        reference: { objectType: 'asset', id: props.id },
+      });
     });
   }
 
