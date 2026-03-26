@@ -1,4 +1,4 @@
-import type { Schema } from 'hono';
+import type { Context, Schema, TypedResponse } from 'hono';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { requestId } from 'hono/request-id';
 import { requestResponseLogger } from '../middleware/requestResponseLogger.js';
@@ -15,6 +15,33 @@ import type {
 } from '../../service/index.js';
 import { createMiddleware } from 'hono/factory';
 import { trimTrailingSlash } from 'hono/trailing-slash';
+import type { Result } from 'neverthrow';
+import type { CoreError } from '../../util/shared.js';
+
+/**
+ * Handles a neverthrow Result by returning the appropriate JSON response
+ */
+export function handleResult<T, S extends ContentfulStatusCode = 200>(
+  c: Context,
+  result: Result<T, CoreError>,
+  status: S = 200 as S
+): TypedResponse<T, S, 'json'> {
+  return result.match(
+    (data) => c.json(data, status),
+    (error) =>
+      c.json(
+        {
+          error: {
+            type: error.type,
+            message: error.message,
+            statusCode: error.statusCode,
+            stack: error.cause instanceof Error ? error.cause.stack : undefined,
+          },
+        },
+        error.statusCode
+      )
+  ) as TypedResponse<T, S, 'json'>;
+}
 
 /**
  * Creates a new OpenAPIHono router with default settings

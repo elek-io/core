@@ -331,7 +331,10 @@ describe('API', function () {
     const res = await app.request('/content/v1/projects/not-a-uuid');
 
     expect(res.status).toEqual(422);
-    const body = await res.json();
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { name: string; issues: unknown[] };
+    };
     expect(body.success).toEqual(false);
     expect(body.error.name).toEqual('ZodError');
     expect(body.error.issues).toBeDefined();
@@ -341,7 +344,7 @@ describe('API', function () {
     const res = await app.request('/this-does-not-exist');
 
     expect(res.status).toEqual(404);
-    const body = await res.json();
+    const body = (await res.json()) as { message: string };
     expect(body.message).toEqual('Not Found - /this-does-not-exist');
   });
 
@@ -351,9 +354,12 @@ describe('API', function () {
     );
 
     expect(res.status).toEqual(500);
-    const body = await res.json();
-    expect(body.message).toBeDefined();
-    expect(body.stack).toBeDefined();
+    const body = (await res.json()) as {
+      error: { type: string; message: string };
+    };
+    expect(body.error).toBeDefined();
+    expect(body.error.type).toBe('Internal');
+    expect(body.error.message).toBeDefined();
   });
 
   it('should be able to stop the API and verify it is not running anymore', async function () {

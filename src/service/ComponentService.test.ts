@@ -23,7 +23,7 @@ describe('ComponentService', function () {
     { timeout: 30000 },
     async function () {
       // Create a Component
-      const heroComponent = await core.components.create({
+      const heroComponent = (await core.components.create({
         projectId: project.id,
         name: { en: 'Hero' },
         slug: 'hero',
@@ -60,39 +60,39 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       expect(heroComponent.id).to.be.a('string');
       expect(heroComponent.slug).to.equal('hero');
       expect(heroComponent.objectType).to.equal('component');
 
       // Read the Component
-      const readComponent = await core.components.read({
+      const readComponent = (await core.components.read({
         projectId: project.id,
         id: heroComponent.id,
-      });
+      }))._unsafeUnwrap();
       expect(readComponent.slug).to.equal('hero');
 
       // Read by slug
-      const readBySlug = await core.components.readBySlug({
+      const readBySlug = (await core.components.readBySlug({
         projectId: project.id,
         slug: 'hero',
-      });
+      }))._unsafeUnwrap();
       expect(readBySlug.id).to.equal(heroComponent.id);
 
       // Count
-      const count = await core.components.count({ projectId: project.id });
+      const count = (await core.components.count({ projectId: project.id }))._unsafeUnwrap();
       expect(count).to.equal(1);
 
       // List
-      const listed = await core.components.list({ projectId: project.id });
+      const listed = (await core.components.list({ projectId: project.id }))._unsafeUnwrap();
       expect(listed.total).to.equal(1);
       expect(listed.list[0]!.id).to.equal(heroComponent.id);
 
       // Update the Component (rename a field slug)
       const titleFieldId = heroComponent.fieldDefinitions[0]!.id;
       const subtitleFieldId = heroComponent.fieldDefinitions[1]!.id;
-      const updatedComponent = await core.components.update({
+      const updatedComponent = (await core.components.update({
         projectId: project.id,
         id: heroComponent.id,
         name: { en: 'Hero Section' },
@@ -130,12 +130,12 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
       expect(updatedComponent.name.en).to.equal('Hero Section');
       expect(updatedComponent.fieldDefinitions[0]!.slug).to.equal('heading');
 
       // Create a second Component to test delete protection
-      const cardComponent = await core.components.create({
+      const cardComponent = (await core.components.create({
         projectId: project.id,
         name: { en: 'Card' },
         slug: 'card',
@@ -157,10 +157,10 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       // Create a Collection with a dynamic field referencing the hero component
-      const pagesCollection = await core.collections.create({
+      const pagesCollection = (await core.collections.create({
         projectId: project.id,
         icon: 'home',
         name: {
@@ -186,10 +186,10 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       // Create an Entry with component data
-      const entry = await core.entries.create({
+      const entry = (await core.entries.create({
         projectId: project.id,
         collectionId: pagesCollection.id,
         values: {
@@ -215,48 +215,47 @@ describe('ComponentService', function () {
             ],
           },
         },
-      });
+      }))._unsafeUnwrap();
       expect(entry.id).to.be.a('string');
 
       // Delete protection: hero component is referenced by the collection
-      await expect(
-        core.components.delete({
-          projectId: project.id,
-          id: heroComponent.id,
-        })
-      ).rejects.toThrow(/still referenced/);
+      const deleteResult = await core.components.delete({
+        projectId: project.id,
+        id: heroComponent.id,
+      });
+      expect(deleteResult.isErr()).toBe(true);
 
       // Card component is not referenced, should delete fine
-      await core.components.delete({
+      (await core.components.delete({
         projectId: project.id,
         id: cardComponent.id,
-      });
-      const countAfterDelete = await core.components.count({
+      }))._unsafeUnwrap();
+      const countAfterDelete = (await core.components.count({
         projectId: project.id,
-      });
+      }))._unsafeUnwrap();
       expect(countAfterDelete).to.equal(1);
 
       // History
-      const history = await core.components.history({
+      const history = (await core.components.history({
         projectId: project.id,
         id: heroComponent.id,
-      });
+      }))._unsafeUnwrap();
       expect(history.length).to.be.greaterThan(0);
 
       // Clean up
-      await core.entries.delete({
+      (await core.entries.delete({
         projectId: project.id,
         collectionId: pagesCollection.id,
         id: entry.id,
-      });
-      await core.collections.delete({
+      }))._unsafeUnwrap();
+      (await core.collections.delete({
         projectId: project.id,
         id: pagesCollection.id,
-      });
-      await core.components.delete({
+      }))._unsafeUnwrap();
+      (await core.components.delete({
         projectId: project.id,
         id: heroComponent.id,
-      });
+      }))._unsafeUnwrap();
     }
   );
 
@@ -264,7 +263,7 @@ describe('ComponentService', function () {
     'should detect circular component references',
     { timeout: 15000 },
     async function () {
-      const compA = await core.components.create({
+      const compA = (await core.components.create({
         projectId: project.id,
         name: { en: 'Component A' },
         slug: 'comp-a',
@@ -286,10 +285,10 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       // Create Component B that references A - this is fine
-      const compB = await core.components.create({
+      const compB = (await core.components.create({
         projectId: project.id,
         name: { en: 'Component B' },
         slug: 'comp-b',
@@ -311,39 +310,38 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       // Now try to update A to reference B - creating a cycle A→B→A
-      await expect(
-        core.components.update({
-          projectId: project.id,
-          id: compA.id,
-          name: { en: 'Component A' },
-          slug: 'comp-a',
-          description: null,
-          fieldDefinitions: [
-            {
-              id: uuid(),
-              slug: 'nested-b',
-              valueType: 'component',
-              fieldType: 'dynamic',
-              label: { en: 'Nested B' },
-              description: null,
-              isRequired: false,
-              isDisabled: false,
-              isUnique: false,
-              inputWidth: '12',
-              ofComponents: [compB.id],
-              min: null,
-              max: null,
-            },
-          ],
-        })
-      ).rejects.toThrow(/[Cc]ircular/);
+      const circularResult = await core.components.update({
+        projectId: project.id,
+        id: compA.id,
+        name: { en: 'Component A' },
+        slug: 'comp-a',
+        description: null,
+        fieldDefinitions: [
+          {
+            id: uuid(),
+            slug: 'nested-b',
+            valueType: 'component',
+            fieldType: 'dynamic',
+            label: { en: 'Nested B' },
+            description: null,
+            isRequired: false,
+            isDisabled: false,
+            isUnique: false,
+            inputWidth: '12',
+            ofComponents: [compB.id],
+            min: null,
+            max: null,
+          },
+        ],
+      });
+      expect(circularResult.isErr()).toBe(true);
 
       // Clean up
-      await core.components.delete({ projectId: project.id, id: compB.id });
-      await core.components.delete({ projectId: project.id, id: compA.id });
+      (await core.components.delete({ projectId: project.id, id: compB.id }))._unsafeUnwrap();
+      (await core.components.delete({ projectId: project.id, id: compA.id }))._unsafeUnwrap();
     }
   );
 
@@ -351,25 +349,24 @@ describe('ComponentService', function () {
     'should reject duplicate component slugs',
     { timeout: 15000 },
     async function () {
-      const comp = await core.components.create({
+      const comp = (await core.components.create({
         projectId: project.id,
         name: { en: 'Unique' },
         slug: 'unique-slug',
         description: null,
         fieldDefinitions: [],
+      }))._unsafeUnwrap();
+
+      const dupResult = await core.components.create({
+        projectId: project.id,
+        name: { en: 'Duplicate' },
+        slug: 'unique-slug',
+        description: null,
+        fieldDefinitions: [],
       });
+      expect(dupResult.isErr()).toBe(true);
 
-      await expect(
-        core.components.create({
-          projectId: project.id,
-          name: { en: 'Duplicate' },
-          slug: 'unique-slug',
-          description: null,
-          fieldDefinitions: [],
-        })
-      ).rejects.toThrow(/already in use/);
-
-      await core.components.delete({ projectId: project.id, id: comp.id });
+      (await core.components.delete({ projectId: project.id, id: comp.id }))._unsafeUnwrap();
     }
   );
 
@@ -379,7 +376,7 @@ describe('ComponentService', function () {
     async function () {
       // Create inner component with a field we'll rename
       const innerFieldId = uuid();
-      const innerComponent = await core.components.create({
+      const innerComponent = (await core.components.create({
         projectId: project.id,
         name: { en: 'Inner' },
         slug: 'inner',
@@ -401,10 +398,10 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       // Create outer component that references inner
-      const outerComponent = await core.components.create({
+      const outerComponent = (await core.components.create({
         projectId: project.id,
         name: { en: 'Outer' },
         slug: 'outer',
@@ -426,10 +423,10 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       // Create collection with dynamic field → outer component
-      const collection = await core.collections.create({
+      const collection = (await core.collections.create({
         projectId: project.id,
         icon: 'home',
         name: {
@@ -455,10 +452,10 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       // Create entry with nested component data
-      const entry = await core.entries.create({
+      const entry = (await core.entries.create({
         projectId: project.id,
         collectionId: collection.id,
         values: {
@@ -490,10 +487,10 @@ describe('ComponentService', function () {
             ],
           },
         },
-      });
+      }))._unsafeUnwrap();
 
       // Rename inner component's field slug from 'old-name' to 'new-name'
-      await core.components.update({
+      (await core.components.update({
         projectId: project.id,
         id: innerComponent.id,
         name: { en: 'Inner' },
@@ -516,14 +513,14 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       // Read the entry back and verify the slug was cascaded
-      const updatedEntry = await core.entries.read({
+      const updatedEntry = (await core.entries.read({
         projectId: project.id,
         collectionId: collection.id,
         id: entry.id,
-      });
+      }))._unsafeUnwrap();
 
       const sections = updatedEntry.values['sections'] as ComponentValue;
       expect(sections).toBeDefined();
@@ -539,23 +536,23 @@ describe('ComponentService', function () {
       ).to.equal('Hello');
 
       // Clean up
-      await core.entries.delete({
+      (await core.entries.delete({
         projectId: project.id,
         collectionId: collection.id,
         id: entry.id,
-      });
-      await core.collections.delete({
+      }))._unsafeUnwrap();
+      (await core.collections.delete({
         projectId: project.id,
         id: collection.id,
-      });
-      await core.components.delete({
+      }))._unsafeUnwrap();
+      (await core.components.delete({
         projectId: project.id,
         id: outerComponent.id,
-      });
-      await core.components.delete({
+      }))._unsafeUnwrap();
+      (await core.components.delete({
         projectId: project.id,
         id: innerComponent.id,
-      });
+      }))._unsafeUnwrap();
     }
   );
 
@@ -564,7 +561,7 @@ describe('ComponentService', function () {
     { timeout: 30000 },
     async function () {
       // Create Component B (simple)
-      const compB = await core.components.create({
+      const compB = (await core.components.create({
         projectId: project.id,
         name: { en: 'Comp B' },
         slug: 'comp-b-nested',
@@ -586,10 +583,10 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       // Create Component A with dynamic field → B
-      const compA = await core.components.create({
+      const compA = (await core.components.create({
         projectId: project.id,
         name: { en: 'Comp A' },
         slug: 'comp-a-nested',
@@ -626,10 +623,10 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       // Collection with dynamic field → A
-      const collection = await core.collections.create({
+      const collection = (await core.collections.create({
         projectId: project.id,
         icon: 'home',
         name: {
@@ -655,10 +652,10 @@ describe('ComponentService', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       // Create entry with nested component data (A containing B)
-      const entry = await core.entries.create({
+      const entry = (await core.entries.create({
         projectId: project.id,
         collectionId: collection.id,
         values: {
@@ -695,29 +692,29 @@ describe('ComponentService', function () {
             ],
           },
         },
-      });
+      }))._unsafeUnwrap();
       expect(entry.id).to.be.a('string');
 
       // Read back to verify
-      const readEntry = await core.entries.read({
+      const readEntry = (await core.entries.read({
         projectId: project.id,
         collectionId: collection.id,
         id: entry.id,
-      });
+      }))._unsafeUnwrap();
       expect(readEntry.id).to.equal(entry.id);
 
       // Clean up
-      await core.entries.delete({
+      (await core.entries.delete({
         projectId: project.id,
         collectionId: collection.id,
         id: entry.id,
-      });
-      await core.collections.delete({
+      }))._unsafeUnwrap();
+      (await core.collections.delete({
         projectId: project.id,
         id: collection.id,
-      });
-      await core.components.delete({ projectId: project.id, id: compA.id });
-      await core.components.delete({ projectId: project.id, id: compB.id });
+      }))._unsafeUnwrap();
+      (await core.components.delete({ projectId: project.id, id: compA.id }))._unsafeUnwrap();
+      (await core.components.delete({ projectId: project.id, id: compB.id }))._unsafeUnwrap();
     }
   );
 });

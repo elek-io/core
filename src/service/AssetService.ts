@@ -18,7 +18,6 @@ import {
   type AssetFile,
   type CountAssetsProps,
   type CreateAssetProps,
-  type CrudServiceWithListCount,
   type DeleteAssetProps,
   type ElekIoCoreOptions,
   type ListAssetsProps,
@@ -31,7 +30,20 @@ import {
 } from '../schema/index.js';
 import { applyMigrations, assetMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
-import { datetime, slug, uuid } from '../util/shared.js';
+import {
+  datetime,
+  slug,
+  uuid,
+  CoreErrors,
+  parseSchema,
+  ResultAsync,
+  errAsync,
+  ok,
+  err,
+  type CoreError,
+  type CoreResult,
+  type Result,
+} from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
@@ -40,10 +52,7 @@ import type { LogService } from './LogService.js';
 /**
  * Service that manages CRUD functionality for Asset files on disk
  */
-export class AssetService
-  extends AbstractEntityService
-  implements CrudServiceWithListCount<Asset>
-{
+export class AssetService extends AbstractEntityService {
   private readonly coreVersion: string;
 
   constructor(
@@ -61,13 +70,21 @@ export class AssetService
   /**
    * Creates a new Asset
    */
-  public async create(props: CreateAssetProps): Promise<Asset> {
-    const validatedProps = createAssetSchema.parse(props);
+  public create(props: CreateAssetProps): CoreResult<Asset> {
+    const validated = parseSchema(createAssetSchema, props);
+    if (validated.isErr()) {
+      return errAsync(validated.error);
+    }
+    const validatedProps = validated.value;
 
     const id = uuid();
     const projectPath = pathTo.project(validatedProps.projectId);
-    const fileType = this.getFileType(validatedProps.filePath);
-    const size = await this.getFileSize(validatedProps.filePath);
+    const fileTypeResult = this.getFileType(validatedProps.filePath);
+    if (fileTypeResult.isErr()) {
+      return errAsync(fileTypeResult.error);
+    }
+    const fileType = fileTypeResult.value;
+
     const assetPath = pathTo.asset(
       validatedProps.projectId,
       id,
@@ -80,38 +97,39 @@ export class AssetService
       filePath: __,
       ...validatedAssetProps
     } = validatedProps;
-    const assetFile: AssetFile = {
-      ...validatedAssetProps,
-      name: slug(validatedProps.name),
-      objectType: 'asset',
-      id,
-      coreVersion: this.coreVersion,
-      created: datetime(),
-      updated: null,
-      extension: fileType.extension,
-      mimeType: fileType.mimeType,
-      size,
-    };
 
-    await this.withGitRollback(
-      projectPath,
-      async () => {
-        await Fs.copyFile(validatedProps.filePath, assetPath);
-        await this.jsonFileService.create(
-          assetFile,
-          assetFilePath,
-          assetFileSchema
-        );
-        await this.gitService.add(projectPath, [assetFilePath, assetPath]);
-        await this.gitService.commit(projectPath, {
-          method: 'create',
-          reference: { objectType: 'asset', id },
-        });
-      },
-      [assetPath, assetFilePath]
-    );
+    const result = this.getFileSize(validatedProps.filePath).andThen((size) => {
+      const assetFile: AssetFile = {
+        ...validatedAssetProps,
+        name: slug(validatedProps.name),
+        objectType: 'asset',
+        id,
+        coreVersion: this.coreVersion,
+        created: datetime(),
+        updated: null,
+        extension: fileType.extension,
+        mimeType: fileType.mimeType,
+        size,
+      };
 
-    return this.toAsset(validatedProps.projectId, assetFile);
+      return this.withGitRollback(
+        projectPath,
+        () =>
+          ResultAsync.fromPromise(Fs.copyFile(validatedProps.filePath, assetPath), CoreErrors.fromUnknown)
+            .andThen(() => this.jsonFileService.create(assetFile, assetFilePath, assetFileSchema))
+            .andThen(() => this.gitService.add(projectPath, [assetFilePath, assetPath]))
+            .andThen(() =>
+              this.gitService.commit(projectPath, {
+                method: 'create',
+                reference: { objectType: 'asset', id },
+              })
+            )
+            .map(() => this.toAsset(validatedProps.projectId, assetFile)),
+        [assetPath, assetFilePath]
+      );
+    });
+
+    return this.logged('create', result);
   }
 
   /**
@@ -119,62 +137,83 @@ export class AssetService
    *
    * If a commit hash is provided, the Asset is read from history
    */
-  public async read(props: ReadAssetProps): Promise<Asset> {
-    readAssetSchema.parse(props);
+  public read(props: ReadAssetProps): CoreResult<Asset> {
+    const validated = parseSchema(readAssetSchema, props);
+    if (validated.isErr()) {
+      return errAsync(validated.error);
+    }
 
     if (!props.commitHash) {
-      const assetFile = await this.jsonFileService.read(
-        pathTo.assetFile(props.projectId, props.id),
-        assetFileSchema
-      );
+      const result = this.jsonFileService
+        .read(pathTo.assetFile(props.projectId, props.id), assetFileSchema)
+        .map((assetFile) => this.toAsset(props.projectId, assetFile));
 
-      return this.toAsset(props.projectId, assetFile);
+      return this.logged('read', result);
     } else {
-      const assetFile = this.migrate(
-        JSON.parse(
-          await this.gitService.getFileContentAtCommit(
-            pathTo.project(props.projectId),
-            pathTo.assetFile(props.projectId, props.id),
-            props.commitHash
-          )
+      const result = this.gitService
+        .getFileContentAtCommit(
+          pathTo.project(props.projectId),
+          pathTo.assetFile(props.projectId, props.id),
+          props.commitHash
         )
-      );
+        .andThen((content) => {
+          const assetFile = this.migrate(JSON.parse(content));
+          return this.gitService
+            .getFileContentAtCommit(
+              pathTo.project(props.projectId),
+              pathTo.asset(props.projectId, props.id, assetFile.extension),
+              props.commitHash!,
+              'binary'
+            )
+            .andThen((blob) =>
+              ResultAsync.fromPromise(
+                Fs.writeFile(
+                  pathTo.tmpAsset(assetFile.id, props.commitHash!, assetFile.extension),
+                  blob,
+                  'binary'
+                ),
+                CoreErrors.fromUnknown
+              ).map(() => this.toAsset(props.projectId, assetFile, props.commitHash))
+            );
+        });
 
-      const assetBlob = await this.gitService.getFileContentAtCommit(
-        pathTo.project(props.projectId),
-        pathTo.asset(props.projectId, props.id, assetFile.extension),
-        props.commitHash,
-        'binary'
-      );
-      await Fs.writeFile(
-        pathTo.tmpAsset(assetFile.id, props.commitHash, assetFile.extension),
-        assetBlob,
-        'binary'
-      );
-
-      return this.toAsset(props.projectId, assetFile, props.commitHash);
+      return this.logged('read', result);
     }
   }
 
   /**
    * Returns the commit history of an Asset
    */
-  public async history(props: AssetHistoryProps): Promise<GitCommit[]> {
-    assetHistorySchema.parse(props);
+  public history(props: AssetHistoryProps): CoreResult<GitCommit[]> {
+    const validated = parseSchema(assetHistorySchema, props);
+    if (validated.isErr()) {
+      return errAsync(validated.error);
+    }
 
-    return this.gitService.log(pathTo.project(props.projectId), {
+    const result = this.gitService.log(pathTo.project(props.projectId), {
       filePath: pathTo.assetFile(props.projectId, props.id),
     });
+
+    return this.logged('history', result);
   }
 
   /**
    * Copies an Asset to given file path on disk
    */
-  public async save(props: SaveAssetProps) {
-    saveAssetSchema.parse(props);
+  public save(props: SaveAssetProps): CoreResult<void> {
+    const validated = parseSchema(saveAssetSchema, props);
+    if (validated.isErr()) {
+      return errAsync(validated.error);
+    }
 
-    const asset = await this.read(props);
-    await Fs.copyFile(asset.absolutePath, props.filePath);
+    const result = this.read(props).andThen((asset) =>
+      ResultAsync.fromPromise(
+        Fs.copyFile(asset.absolutePath, props.filePath),
+        CoreErrors.fromUnknown
+      )
+    );
+
+    return this.logged('save', result);
   }
 
   /**
@@ -182,132 +221,172 @@ export class AssetService
    *
    * Use the optional "newFilePath" prop to update the Asset itself
    */
-  public async update(props: UpdateAssetProps): Promise<Asset> {
-    const validatedProps = updateAssetSchema.parse(props);
+  public update(props: UpdateAssetProps): CoreResult<Asset> {
+    const validated = parseSchema(updateAssetSchema, props);
+    if (validated.isErr()) {
+      return errAsync(validated.error);
+    }
+    const validatedProps = validated.value;
 
     const projectPath = pathTo.project(validatedProps.projectId);
     const assetFilePath = pathTo.assetFile(
       validatedProps.projectId,
       validatedProps.id
     );
-    const prevAssetFile = await this.read(validatedProps);
 
-    const {
-      projectId: _,
-      newFilePath: __,
-      ...validatedUpdateProps
-    } = validatedProps;
-    const assetFile: AssetFile = {
-      ...prevAssetFile,
-      ...validatedUpdateProps,
-      name: slug(validatedProps.name),
-      updated: datetime(),
-    };
+    const result = this.read(validatedProps).andThen((prevAsset) => {
+      const {
+        projectId: _,
+        newFilePath: __,
+        ...validatedUpdateProps
+      } = validatedProps;
+      const assetFile: AssetFile = {
+        ...prevAsset,
+        ...validatedUpdateProps,
+        name: slug(validatedProps.name),
+        updated: datetime(),
+      };
 
-    await this.withGitRollback(projectPath, async () => {
-      if (validatedProps.newFilePath) {
-        // Overwrite the file itself (in LFS folder)...
+      return this.withGitRollback(projectPath, () => {
+        if (validatedProps.newFilePath) {
+          const fileTypeResult = this.getFileType(validatedProps.newFilePath);
+          if (fileTypeResult.isErr()) {
+            return errAsync<Asset, CoreError>(fileTypeResult.error);
+          }
+          const fileType = fileTypeResult.value;
 
-        const fileType = this.getFileType(validatedProps.newFilePath);
-        const size = await this.getFileSize(validatedProps.newFilePath);
-        const prevAssetPath = pathTo.asset(
-          validatedProps.projectId,
-          validatedProps.id,
-          prevAssetFile.extension
-        );
-        const assetPath = pathTo.asset(
-          validatedProps.projectId,
-          validatedProps.id,
-          fileType.extension
-        );
+          const prevAssetPath = pathTo.asset(
+            validatedProps.projectId,
+            validatedProps.id,
+            prevAsset.extension
+          );
+          const assetPath = pathTo.asset(
+            validatedProps.projectId,
+            validatedProps.id,
+            fileType.extension
+          );
 
-        await Fs.copyFile(validatedProps.newFilePath, assetPath);
-        await Fs.remove(prevAssetPath); // Need to explicitly remove old Asset, because it could have a different extension
-        await this.gitService.add(projectPath, [prevAssetPath, assetPath]);
+          return this.getFileSize(validatedProps.newFilePath).andThen((size) => {
+            assetFile.extension = fileType.extension;
+            assetFile.mimeType = fileType.mimeType;
+            assetFile.size = size;
 
-        // ...and update meta information
-        assetFile.extension = fileType.extension;
-        assetFile.mimeType = fileType.mimeType;
-        assetFile.size = size;
-      }
+            return ResultAsync.fromPromise(Fs.copyFile(validatedProps.newFilePath!, assetPath), CoreErrors.fromUnknown)
+              .andThen(() =>
+                ResultAsync.fromPromise(Fs.remove(prevAssetPath), CoreErrors.fromUnknown)
+              )
+              .andThen(() => this.gitService.add(projectPath, [prevAssetPath, assetPath]))
+              .andThen(() =>
+                this.jsonFileService.update(assetFile, assetFilePath, assetFileSchema)
+              )
+              .andThen(() => this.gitService.add(projectPath, [assetFilePath]))
+              .andThen(() =>
+                this.gitService.commit(projectPath, {
+                  method: 'update',
+                  reference: { objectType: 'asset', id: assetFile.id },
+                })
+              )
+              .map(() => this.toAsset(validatedProps.projectId, assetFile));
+          });
+        }
 
-      await this.jsonFileService.update(
-        assetFile,
-        assetFilePath,
-        assetFileSchema
-      );
-      await this.gitService.add(projectPath, [assetFilePath]);
-      await this.gitService.commit(projectPath, {
-        method: 'update',
-        reference: { objectType: 'asset', id: assetFile.id },
+        return this.jsonFileService
+          .update(assetFile, assetFilePath, assetFileSchema)
+          .andThen(() => this.gitService.add(projectPath, [assetFilePath]))
+          .andThen(() =>
+            this.gitService.commit(projectPath, {
+              method: 'update',
+              reference: { objectType: 'asset', id: assetFile.id },
+            })
+          )
+          .map(() => this.toAsset(validatedProps.projectId, assetFile));
       });
     });
 
-    return this.toAsset(validatedProps.projectId, assetFile);
+    return this.logged('update', result);
   }
 
   /**
    * Deletes given Asset
    */
-  public async delete(props: DeleteAssetProps): Promise<void> {
-    deleteAssetSchema.parse(props);
+  public delete(props: DeleteAssetProps): CoreResult<void> {
+    const validated = parseSchema(deleteAssetSchema, props);
+    if (validated.isErr()) {
+      return errAsync(validated.error);
+    }
 
     const projectPath = pathTo.project(props.projectId);
     const assetFilePath = pathTo.assetFile(props.projectId, props.id);
     const assetPath = pathTo.asset(props.projectId, props.id, props.extension);
 
-    await this.withGitRollback(projectPath, async () => {
-      await Fs.remove(assetPath);
-      await Fs.remove(assetFilePath);
-      await this.gitService.add(projectPath, [assetFilePath, assetPath]);
-      await this.gitService.commit(projectPath, {
-        method: 'delete',
-        reference: { objectType: 'asset', id: props.id },
-      });
-    });
+    const result = this.withGitRollback(projectPath, () =>
+      ResultAsync.fromPromise(Fs.remove(assetPath), CoreErrors.fromUnknown)
+        .andThen(() =>
+          ResultAsync.fromPromise(Fs.remove(assetFilePath), CoreErrors.fromUnknown)
+        )
+        .andThen(() => this.gitService.add(projectPath, [assetFilePath, assetPath]))
+        .andThen(() =>
+          this.gitService.commit(projectPath, {
+            method: 'delete',
+            reference: { objectType: 'asset', id: props.id },
+          })
+        )
+        .map(() => undefined)
+    );
+
+    return this.logged('delete', result);
   }
 
-  public async list(props: ListAssetsProps): Promise<PaginatedList<Asset>> {
-    listAssetsSchema.parse(props);
+  public list(props: ListAssetsProps): CoreResult<PaginatedList<Asset>> {
+    const validated = parseSchema(listAssetsSchema, props);
+    if (validated.isErr()) {
+      return errAsync(validated.error);
+    }
 
     const offset = props.offset || 0;
     const limit = props.limit ?? 15;
 
-    const assetReferences = await this.listReferences(
+    const result = this.listReferences(
       objectTypeSchema.enum.asset,
       props.projectId
-    );
+    ).andThen((assetReferences) => {
+      const partialAssetReferences =
+        limit === 0
+          ? assetReferences.slice(offset)
+          : assetReferences.slice(offset, offset + limit);
 
-    const partialAssetReferences =
-      limit === 0
-        ? assetReferences.slice(offset)
-        : assetReferences.slice(offset, offset + limit);
+      return ResultAsync.fromSafePromise(
+        this.collectResults(
+          partialAssetReferences.map((assetReference) =>
+            this.read({
+              projectId: props.projectId,
+              id: assetReference.id,
+            })
+          )
+        )
+      ).map((assets) => ({
+        total: assetReferences.length,
+        limit,
+        offset,
+        list: assets,
+      }));
+    });
 
-    const assets = await this.settleAndWarn(
-      partialAssetReferences.map((assetReference) => {
-        return this.read({
-          projectId: props.projectId,
-          id: assetReference.id,
-        });
-      })
-    );
-
-    return {
-      total: assetReferences.length,
-      limit,
-      offset,
-      list: assets,
-    };
+    return this.logged('list', result);
   }
 
-  public async count(props: CountAssetsProps): Promise<number> {
-    countAssetsSchema.parse(props);
+  public count(props: CountAssetsProps): CoreResult<number> {
+    const validated = parseSchema(countAssetsSchema, props);
+    if (validated.isErr()) {
+      return errAsync(validated.error);
+    }
 
-    const count = (
-      await this.listReferences(objectTypeSchema.enum.asset, props.projectId)
-    ).length;
+    const result = this.listReferences(
+      objectTypeSchema.enum.asset,
+      props.projectId
+    ).map((refs) => refs.length);
 
-    return count;
+    return this.logged('count', result);
   }
 
   /**
@@ -318,12 +397,14 @@ export class AssetService
   }
 
   /**
-   * Returns the size of an file in bytes
+   * Returns the size of a file in bytes
    *
    * @param path Path of the file to get the size from
    */
-  private async getFileSize(path: string) {
-    return (await Fs.stat(path)).size;
+  private getFileSize(path: string): CoreResult<number> {
+    return ResultAsync.fromPromise(Fs.stat(path), CoreErrors.fromUnknown).map(
+      (stats) => stats.size
+    );
   }
 
   /**
@@ -349,33 +430,39 @@ export class AssetService
 
   /**
    * Returns the found and supported extension as well as mime type,
-   * otherwise throws an error
+   * otherwise returns an error
    *
    * @param filePath Path to the file to check
    */
-  private getFileType(filePath: string) {
+  private getFileType(
+    filePath: string
+  ): Result<{ extension: string; mimeType: string }, CoreError> {
     const mimeType = mime.getType(filePath);
 
     if (mimeType === null) {
-      throw new Error(`Unsupported MIME type of file "${filePath}"`);
+      return err(
+        CoreErrors.badRequest(`Unsupported MIME type of file "${filePath}"`)
+      );
     }
 
     const extension = mime.getExtension(mimeType);
 
     if (extension === null) {
-      throw new Error(
-        `Unsupported extension for MIME type "${mimeType}" of file "${filePath}"`
+      return err(
+        CoreErrors.badRequest(
+          `Unsupported extension for MIME type "${mimeType}" of file "${filePath}"`
+        )
       );
     }
 
-    return {
+    return ok({
       extension,
       mimeType,
-    };
+    });
   }
 
   /**
-   * Migrates an potentially outdated Asset file to the current schema
+   * Migrates a potentially outdated Asset file to the current schema
    */
   public migrate(potentiallyOutdatedAssetFile: unknown) {
     const loose = migrateAssetSchema.parse(potentiallyOutdatedAssetFile);

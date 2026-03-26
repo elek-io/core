@@ -1,5 +1,6 @@
 import Fs from 'fs-extra';
-import { RequiredParameterMissingError } from '../error/index.js';
+import { ResultAsync, errAsync } from 'neverthrow';
+import { CoreErrors, type CoreError, type CoreResult } from '../util/shared.js';
 import {
   fileReferenceSchema,
   objectTypeSchema,
@@ -40,67 +41,67 @@ export abstract class AbstractEntityService extends AbstractService {
    * On error:
    * 1. Removes any files/dirs specified in `cleanupPaths` (for newly created files)
    * 2. Runs `git reset --hard HEAD` to restore the working tree
-   * 3. Re-throws the original error
+   * 3. Returns the original error
    *
    * @param projectPath  Path to the project's git repository
-   * @param operation    The async operation to execute
+   * @param operation    The operation to execute (returns CoreResult)
    * @param cleanupPaths Optional paths to remove before git reset (for create operations)
    */
-  protected async withGitRollback<T>(
+  protected withGitRollback<T>(
     projectPath: string,
-    operation: () => Promise<T>,
+    operation: () => CoreResult<T>,
     cleanupPaths?: string[]
-  ): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      for (const cleanupPath of cleanupPaths ?? []) {
-        await Fs.remove(cleanupPath).catch((e) =>
-          this.logService.error({
-            source: 'core',
-            message: `Failed to remove "${cleanupPath}" during rollback: ${e instanceof Error ? e.message : String(e)}`,
-          })
-        );
-      }
-      await this.gitService.reset(projectPath, 'hard', 'HEAD').catch((e) =>
-        this.logService.error({
-          source: 'core',
-          message: `Failed to reset working tree during rollback, manual git reset may be needed: ${e instanceof Error ? e.message : String(e)}`,
-        })
-      );
-      // Clear the JSON file cache since git reset restored files on disk
-      // that may differ from what the cache holds
-      this.jsonFileService.clearCache();
-      throw error;
-    }
+  ): CoreResult<T> {
+    return operation().orElse((originalError) =>
+      ResultAsync.fromSafePromise(
+        (async () => {
+          for (const cleanupPath of cleanupPaths ?? []) {
+            await Fs.remove(cleanupPath).catch((e: unknown) =>
+              this.logService.error({
+                source: 'core',
+                message: `Failed to remove "${cleanupPath}" during rollback: ${e instanceof Error ? e.message : String(e)}`,
+              })
+            );
+          }
+          const resetResult = await this.gitService.reset(
+            projectPath,
+            'hard',
+            'HEAD'
+          );
+          if (resetResult.isErr()) {
+            this.logService.error({
+              source: 'core',
+              message: `Failed to reset working tree during rollback, manual git reset may be needed: ${resetResult.error.message}`,
+            });
+          }
+          // Clear the JSON file cache since git reset restored files on disk
+          // that may differ from what the cache holds
+          this.jsonFileService.clearCache();
+        })()
+      ).andThen(() => errAsync<T, CoreError>(originalError))
+    );
   }
+
   /**
-   * Settles all promises and returns only the fulfilled values.
-   * Logs a warning for each rejected promise.
+   * Runs multiple CoreResult values, logs Err results, returns Ok values.
    */
-  protected async settleAndWarn<T>(
-    promises: Promise<T>[]
-  ): Promise<Awaited<T>[]> {
-    const results = await Promise.allSettled(promises);
-    for (const result of results) {
-      if (result.status === 'rejected') {
-        const error =
-          result.reason instanceof Error
-            ? result.reason
-            : new Error(String(result.reason));
+  protected async collectResults<T>(
+    results: CoreResult<T>[]
+  ): Promise<T[]> {
+    const settled = await Promise.all(results);
+    const values: T[] = [];
+    for (const r of settled) {
+      if (r.isOk()) {
+        values.push(r.value);
+      } else {
         this.logService.warn({
           source: 'core',
-          message: `settleAndWarn: ${error.message}`,
-          meta: { error },
+          message: `collectResults: ${r.error.message}`,
+          meta: { error: r.error },
         });
       }
     }
-    return results
-      .filter(
-        (result): result is PromiseFulfilledResult<Awaited<T>> =>
-          result.status === 'fulfilled'
-      )
-      .map((result) => result.value);
+    return values;
   }
 
   /**
@@ -110,70 +111,87 @@ export abstract class AbstractEntityService extends AbstractService {
    * @param projectId Project to get all asset references from
    * @param collectionId Only needed when requesting files of type "Entry"
    */
-  protected async listReferences(
+  protected listReferences(
     type: ObjectType,
     projectId?: string,
     collectionId?: string
-  ): Promise<FileReference[]> {
+  ): CoreResult<FileReference[]> {
     switch (type) {
       case objectTypeSchema.enum.asset:
         if (!projectId) {
-          throw new RequiredParameterMissingError('projectId');
+          return errAsync(
+            CoreErrors.badRequest('Missing required parameter "projectId"')
+          );
         }
-        return this.getFileReferences(pathTo.lfs(projectId)); // LFS folder is correct, since we want the extension of the file itself, not the AssetFile (.json)
+        return this.getFileReferences(pathTo.lfs(projectId));
 
       case objectTypeSchema.enum.project:
         return this.getFolderReferences(pathTo.projects);
 
       case objectTypeSchema.enum.collection:
         if (!projectId) {
-          throw new RequiredParameterMissingError('projectId');
+          return errAsync(
+            CoreErrors.badRequest('Missing required parameter "projectId"')
+          );
         }
         return this.getFolderReferences(pathTo.collections(projectId));
 
       case objectTypeSchema.enum.component:
         if (!projectId) {
-          throw new RequiredParameterMissingError('projectId');
+          return errAsync(
+            CoreErrors.badRequest('Missing required parameter "projectId"')
+          );
         }
         return this.getFolderReferences(pathTo.components(projectId));
 
       case objectTypeSchema.enum.entry:
         if (!projectId) {
-          throw new RequiredParameterMissingError('projectId');
+          return errAsync(
+            CoreErrors.badRequest('Missing required parameter "projectId"')
+          );
         }
         if (!collectionId) {
-          throw new RequiredParameterMissingError('collectionId');
+          return errAsync(
+            CoreErrors.badRequest('Missing required parameter "collectionId"')
+          );
         }
         return this.getFileReferences(
           pathTo.collection(projectId, collectionId)
         );
 
       default:
-        throw new Error(`Trying to list files of unsupported type "${type}"`);
+        return errAsync(
+          CoreErrors.internal(
+            `Trying to list files of unsupported type "${type}"`
+          )
+        );
     }
   }
 
-  private async getFolderReferences(path: string): Promise<FileReference[]> {
-    const possibleFolders = await folders(path);
+  private getFolderReferences(path: string): CoreResult<FileReference[]> {
+    return ResultAsync.fromPromise(
+      folders(path),
+      CoreErrors.fromUnknown
+    ).map((possibleFolders) => {
+      const results = possibleFolders.map((possibleFolder) => {
+        const parsed = fileReferenceSchema.safeParse({
+          id: possibleFolder.name,
+        });
 
-    const results = possibleFolders.map((possibleFolder) => {
-      const folderReference: FileReference = {
-        id: possibleFolder.name,
-      };
+        if (parsed.success) {
+          return parsed.data;
+        }
 
-      try {
-        return fileReferenceSchema.parse(folderReference);
-      } catch {
         this.logService.warn({
           source: 'core',
           message: `Function "getFolderReferences" is ignoring folder "${possibleFolder.name}" in "${path}" as it does not match the expected format`,
         });
 
         return null;
-      }
-    });
+      });
 
-    return results.filter(isNotEmpty);
+      return results.filter(isNotEmpty);
+    });
   }
 
   /**
@@ -182,29 +200,32 @@ export abstract class AbstractEntityService extends AbstractService {
    *
    * Ignores files if the extension is not supported.
    */
-  private async getFileReferences(path: string): Promise<FileReference[]> {
-    const possibleFiles = await files(path);
+  private getFileReferences(path: string): CoreResult<FileReference[]> {
+    return ResultAsync.fromPromise(
+      files(path),
+      CoreErrors.fromUnknown
+    ).map((possibleFiles) => {
+      const results = possibleFiles.map((possibleFile) => {
+        const fileNameArray = possibleFile.name.split('.');
 
-    const results = possibleFiles.map((possibleFile) => {
-      const fileNameArray = possibleFile.name.split('.');
+        const parsed = fileReferenceSchema.safeParse({
+          id: fileNameArray[0],
+          extension: fileNameArray[1],
+        });
 
-      const fileReference = {
-        id: fileNameArray[0],
-        extension: fileNameArray[1],
-      };
+        if (parsed.success) {
+          return parsed.data;
+        }
 
-      try {
-        return fileReferenceSchema.parse(fileReference);
-      } catch {
         this.logService.warn({
           source: 'core',
           message: `Function "getFileReferences" is ignoring file "${possibleFile.name}" in "${path}" as it does not match the expected format`,
         });
 
         return null;
-      }
-    });
+      });
 
-    return results.filter(isNotEmpty);
+      return results.filter(isNotEmpty);
+    });
   }
 }

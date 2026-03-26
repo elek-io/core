@@ -1,4 +1,4 @@
-import { createRouter } from '../../../lib/util.js';
+import { createRouter, handleResult } from '../../../lib/util.js';
 import { createRoute, z } from '@hono/zod-openapi';
 import {
   componentSchema,
@@ -51,13 +51,13 @@ const router = createRouter()
     async (c) => {
       const { projectId } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
-      const components = await c.var.componentService.list({
+      const result = await c.var.componentService.list({
         projectId,
         limit,
         offset,
       });
 
-      return c.json(components, 200);
+      return handleResult(c, result);
     }
   )
 
@@ -91,9 +91,9 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId } = c.req.valid('param');
-      const count = await c.var.componentService.count({ projectId });
+      const result = await c.var.componentService.count({ projectId });
 
-      return c.json(count, 200);
+      return handleResult(c, result);
     }
   )
 
@@ -134,16 +134,11 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId, componentIdOrSlug } = c.req.valid('param');
-      const resolvedId = await c.var.componentService.resolveComponentId({
-        projectId,
-        idOrSlug: componentIdOrSlug,
-      });
-      const component = await c.var.componentService.read({
-        projectId,
-        id: resolvedId,
-      });
+      const result = await c.var.componentService
+        .resolveComponentId({ projectId, idOrSlug: componentIdOrSlug })
+        .andThen((id) => c.var.componentService.read({ projectId, id }));
 
-      return c.json(component, 200);
+      return handleResult(c, result);
     }
   );
 

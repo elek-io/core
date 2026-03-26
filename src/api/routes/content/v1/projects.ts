@@ -1,4 +1,4 @@
-import { createRouter } from '../../../lib/util.js';
+import { createRouter, handleResult } from '../../../lib/util.js';
 import { createRoute, z } from '@hono/zod-openapi';
 import {
   paginatedListOf,
@@ -42,9 +42,9 @@ const router = createRouter()
     }),
     async (c) => {
       const { limit, offset } = c.req.valid('query');
-      const projects = await c.var.projectService.list({ limit, offset });
+      const result = await c.var.projectService.list({ limit, offset });
 
-      return c.json(projects, 200);
+      return handleResult(c, result);
     }
   )
 
@@ -67,9 +67,9 @@ const router = createRouter()
       },
     }),
     async (c) => {
-      const count = await c.var.projectService.count();
+      const result = await c.var.projectService.count();
 
-      return c.json(count, 200);
+      return handleResult(c, result);
     }
   )
 
@@ -103,9 +103,9 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId } = c.req.valid('param');
-      const project = await c.var.projectService.read({ id: projectId });
+      const result = await c.var.projectService.read({ id: projectId });
 
-      return c.json(project, 200);
+      return handleResult(c, result);
     }
   );
 

@@ -58,10 +58,10 @@ export function elekAssets(props: ElekAssetsProps): Loader {
       );
       context.store.clear();
 
-      const { list: assets, total } = await core.assets.list({
+      const { list: assets, total } = (await core.assets.list({
         projectId: props.projectId,
         limit: 0,
-      });
+      }))._unsafeUnwrap();
       if (total === 0) {
         context.logger.warn('No Assets found');
       } else {
@@ -73,11 +73,11 @@ export function elekAssets(props: ElekAssetsProps): Loader {
           Path.join(props.outDir, `${asset.id}.${asset.extension}`)
         );
         await Fs.ensureDir(Path.dirname(absoluteAssetFilePath));
-        await core.assets.save({
+        (await core.assets.save({
           projectId: props.projectId,
           id: asset.id,
           filePath: absoluteAssetFilePath,
-        });
+        }))._unsafeUnwrap();
 
         const parsed = await context.parseData({
           id: asset.id,
@@ -120,14 +120,14 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
   return {
     name: 'elek-entries',
     createSchema: async () => {
-      const resolvedId = await core.collections.resolveCollectionId({
+      const resolvedId = (await core.collections.resolveCollectionId({
         projectId: props.projectId,
         idOrSlug: props.collectionIdOrSlug,
-      });
-      const collection = await core.collections.read({
+      }))._unsafeUnwrap();
+      const collection = (await core.collections.read({
         projectId: props.projectId,
         id: resolvedId,
-      });
+      }))._unsafeUnwrap();
 
       return {
         schema: buildEntryValuesSchema(
@@ -139,20 +139,20 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
       };
     },
     load: async (context) => {
-      const resolvedCollectionId = await core.collections.resolveCollectionId({
+      const resolvedCollectionId = (await core.collections.resolveCollectionId({
         projectId: props.projectId,
         idOrSlug: props.collectionIdOrSlug,
-      });
+      }))._unsafeUnwrap();
       context.logger.info(
         `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" and Project "${props.projectId}"`
       );
       context.store.clear();
 
-      const { list: entries, total } = await core.entries.list({
+      const { list: entries, total } = (await core.entries.list({
         projectId: props.projectId,
         collectionId: resolvedCollectionId,
         limit: 0,
-      });
+      }))._unsafeUnwrap();
       if (total === 0) {
         context.logger.warn('No Entries found');
       } else {

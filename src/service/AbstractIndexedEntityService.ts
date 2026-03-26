@@ -1,6 +1,8 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
 import type { z } from '@hono/zod-openapi';
+import { ResultAsync, errAsync, okAsync } from 'neverthrow';
+import { CoreErrors, type CoreResult } from '../util/shared.js';
 import {
   indexFileSchema,
   uuidSchema,
@@ -47,32 +49,41 @@ export abstract class AbstractIndexedEntityService extends AbstractEntityService
    * Returns the cached index or rebuilds it from disk.
    * Deduplicates concurrent rebuild calls for the same project.
    */
-  protected async getIndex(projectId: string): Promise<Record<string, string>> {
+  protected getIndex(projectId: string): CoreResult<Record<string, string>> {
     const cached = this.cachedIndex.get(projectId);
-    if (cached) return cached;
+    if (cached) return okAsync(cached);
 
     const pending = this.rebuildPromise.get(projectId);
-    if (pending) return pending;
+    if (pending) return ResultAsync.fromPromise(pending, CoreErrors.fromUnknown);
 
-    const promise = this.rebuildIndex(projectId);
+    const promise = this.rebuildIndexInternal(projectId);
     this.rebuildPromise.set(projectId, promise);
-    const result = await promise;
-    this.cachedIndex.set(projectId, result);
-    this.rebuildPromise.delete(projectId);
 
-    return result;
+    return ResultAsync.fromPromise(promise, CoreErrors.fromUnknown)
+      .map((result) => {
+        this.cachedIndex.set(projectId, result);
+        this.rebuildPromise.delete(projectId);
+        return result;
+      })
+      .mapErr((e) => {
+        this.rebuildPromise.delete(projectId);
+        return e;
+      });
   }
 
   /**
    * Writes the index file to disk and updates the in-memory cache.
    */
-  protected async writeIndex(
+  protected writeIndex(
     projectId: string,
     index: Record<string, string>
-  ): Promise<void> {
+  ): CoreResult<void> {
     const indexPath = Path.join(this.entitiesPath(projectId), 'index.json');
-    await this.jsonFileService.update(index, indexPath, indexFileSchema);
-    this.cachedIndex.set(projectId, index);
+    return this.jsonFileService
+      .update(index, indexPath, indexFileSchema)
+      .map(() => {
+        this.cachedIndex.set(projectId, index);
+      });
   }
 
   /**
@@ -93,13 +104,12 @@ export abstract class AbstractIndexedEntityService extends AbstractEntityService
     projectId: string,
     index: Record<string, string>
   ): Promise<void> {
-    try {
-      await this.writeIndex(projectId, index);
-    } catch (error) {
+    const result = await this.writeIndex(projectId, index);
+    if (result.isErr()) {
       this.invalidateIndex(projectId);
       this.logService.warn({
         source: 'core',
-        message: `Failed to write ${this.type} index for project "${projectId}", cache invalidated: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to write ${this.type} index for project "${projectId}", cache invalidated: ${result.error.message}`,
       });
     }
   }
@@ -109,42 +119,58 @@ export abstract class AbstractIndexedEntityService extends AbstractEntityService
    * If the input matches UUID format, verifies the folder exists on disk first.
    * Otherwise, looks up via the index. Rebuilds cache once on miss.
    */
-  protected async resolveId(
+  protected resolveId(
     projectId: string,
     idOrSlug: string
-  ): Promise<string> {
+  ): CoreResult<string> {
     if (uuidSchema.safeParse(idOrSlug).success) {
       const entityPath = this.entityPath(projectId, idOrSlug);
-      if (await Fs.pathExists(entityPath)) {
-        return idOrSlug;
-      }
+      return ResultAsync.fromPromise(
+        Fs.pathExists(entityPath),
+        CoreErrors.fromUnknown
+      ).andThen((exists) => {
+        if (exists) {
+          return okAsync(idOrSlug);
+        }
+        return this.lookupBySlug(projectId, idOrSlug);
+      });
     }
+    return this.lookupBySlug(projectId, idOrSlug);
+  }
 
-    const index = await this.getIndex(projectId);
-    for (const [uuid, slugValue] of Object.entries(index)) {
-      if (slugValue === idOrSlug) {
-        return uuid;
+  private lookupBySlug(
+    projectId: string,
+    slug: string
+  ): CoreResult<string> {
+    return this.getIndex(projectId).andThen((index) => {
+      for (const [uuid, slugValue] of Object.entries(index)) {
+        if (slugValue === slug) {
+          return okAsync(uuid);
+        }
       }
-    }
 
-    // Rebuild and retry once (handles stale cache)
-    this.cachedIndex.delete(projectId);
-    const freshIndex = await this.getIndex(projectId);
-    for (const [uuid, slugValue] of Object.entries(freshIndex)) {
-      if (slugValue === idOrSlug) {
-        return uuid;
-      }
-    }
+      // Rebuild and retry once (handles stale cache)
+      this.cachedIndex.delete(projectId);
+      return this.getIndex(projectId).andThen((freshIndex) => {
+        for (const [uuid, slugValue] of Object.entries(freshIndex)) {
+          if (slugValue === slug) {
+            return okAsync(uuid);
+          }
+        }
 
-    throw new Error(
-      `${this.type} not found: "${idOrSlug}" does not match any ${this.type} UUID or slug`
-    );
+        return errAsync(
+          CoreErrors.notFound(
+            `${this.type} not found: "${slug}" does not match any ${this.type} UUID or slug`
+          )
+        );
+      });
+    });
   }
 
   /**
    * Rebuilds the index by scanning all entity folders on disk.
    */
-  private async rebuildIndex(
+  private async rebuildIndexInternal(
     projectId: string
   ): Promise<Record<string, string>> {
     this.logService.info({
@@ -158,21 +184,27 @@ export abstract class AbstractIndexedEntityService extends AbstractEntityService
     for (const folder of entityFolders) {
       if (!uuidSchema.safeParse(folder.name).success) continue;
 
-      try {
-        const file = await this.jsonFileService.read(
-          this.entityFilePath(projectId, folder.name),
-          this.entityFileSchema
-        );
-        index[folder.name] = this.extractSlug(file);
-      } catch (error) {
+      const fileResult = await this.jsonFileService.read(
+        this.entityFilePath(projectId, folder.name),
+        this.entityFileSchema
+      );
+      if (fileResult.isOk()) {
+        index[folder.name] = this.extractSlug(fileResult.value);
+      } else {
         this.logService.warn({
           source: 'core',
-          message: `Skipping ${this.type} folder "${folder.name}" during index rebuild: ${error instanceof Error ? error.message : String(error)}`,
+          message: `Skipping ${this.type} folder "${folder.name}" during index rebuild: ${fileResult.error.message}`,
         });
       }
     }
 
-    await this.writeIndex(projectId, index);
+    const writeResult = await this.writeIndex(projectId, index);
+    if (writeResult.isErr()) {
+      this.logService.warn({
+        source: 'core',
+        message: `Failed to write index during rebuild: ${writeResult.error.message}`,
+      });
+    }
     return index;
   }
 }

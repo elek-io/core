@@ -60,17 +60,27 @@ async function generateApiClient(
 
   // Pre-compute which entry types each types file provides,
   // so we can write the correct imports up front
-  const projects = await core.projects.list({ limit: 0 });
+  const projectsResult = await core.projects.list({ limit: 0 });
+  if (projectsResult.isErr()) {
+    console.error(projectsResult.error.message);
+    process.exit(1);
+  }
+  const projects = projectsResult.value;
   const entryTypeImports = new Map<string, string[]>(); // typesFile -> entryTypeNames[]
   for (const project of projects.list) {
     const typesFile = typesMap.get(project.id);
     if (!typesFile) continue;
 
-    const collections = await core.collections.list({
+    const collectionsResult = await core.collections.list({
       projectId: project.id,
       limit: 0,
       offset: 0,
     });
+    if (collectionsResult.isErr()) {
+      console.error(collectionsResult.error.message);
+      process.exit(1);
+    }
+    const collections = collectionsResult.value;
     const entryTypeNames = collections.list.map(
       (c) => `${toPascalCase(c.slug.plural)}Entry`
     );
@@ -152,7 +162,12 @@ async function generateApiClient(
 }
 
 async function writeProjectsObject(writer: CodeBlockWriter) {
-  const projects = await core.projects.list({ limit: 0 });
+  const projectsResult = await core.projects.list({ limit: 0 });
+  if (projectsResult.isErr()) {
+    console.error(projectsResult.error.message);
+    process.exit(1);
+  }
+  const projects = projectsResult.value;
 
   for (let index = 0; index < projects.list.length; index++) {
     const project = projects.list[index];
@@ -170,10 +185,15 @@ async function writeCollectionsObject(
   writer: CodeBlockWriter,
   project: Project
 ) {
-  const collections = await core.collections.list({
+  const collectionsResult = await core.collections.list({
     projectId: project.id,
     limit: 0,
   });
+  if (collectionsResult.isErr()) {
+    console.error(collectionsResult.error.message);
+    process.exit(1);
+  }
+  const collections = collectionsResult.value;
 
   for (let index = 0; index < collections.list.length; index++) {
     const collection = collections.list[index];

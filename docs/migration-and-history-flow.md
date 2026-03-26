@@ -6,9 +6,9 @@ This document describes how Projects are upgraded to a new Core version and how 
 
 Every service (Asset, Collection, Entry, Project) has a `migrate()` method that transforms a potentially outdated JSON file into the current schema. The migration follows three stages:
 
-1. **Loose parse** — validate with `migrateXSchema` (relaxed schema that accepts any `coreVersion`)
-2. **Apply migration chain** — walk through registered `Migration` steps from the file's `coreVersion` to the target version
-3. **Strict parse** — validate the result with the current `xFileSchema`
+1. **Loose parse** - validate with `migrateXSchema` (relaxed schema that accepts any `coreVersion`)
+2. **Apply migration chain** - walk through registered `Migration` steps from the file's `coreVersion` to the target version
+3. **Strict parse** - validate the result with the current `xFileSchema`
 
 ### `applyMigrations(data, migrations, targetVersion)`
 
@@ -30,7 +30,7 @@ Find migration where migration.from === data.coreVersion
 ```
 
 - Migrations are exact version matches (`from: '1.0.0'`), not semver ranges
-- Each `Migration.run()` is a pure function — it must not mutate input or set `coreVersion`
+- Each `Migration.run()` is a pure function - it must not mutate input or set `coreVersion`
 - `applyMigrations` stamps `coreVersion` after each step
 - If no migration exists for a version gap, the data is assumed backward-compatible
 

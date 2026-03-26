@@ -1,4 +1,5 @@
-import { GitError } from '../error/index.js';
+import { errAsync, okAsync } from 'neverthrow';
+import { CoreErrors, parseSchema, type CoreResult } from '../util/shared.js';
 import {
   countGitTagsSchema,
   createGitTagSchema,
@@ -48,26 +49,31 @@ export class GitTagService
    *
    * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---annotate
    */
-  public async create(props: CreateGitTagProps): Promise<GitTag> {
-    createGitTagSchema.parse(props);
+  public create(props: CreateGitTagProps): CoreResult<GitTag> {
+    return this.logged(
+      'create',
+      (() => {
+        const validated = parseSchema(createGitTagSchema, props);
+        if (validated.isErr()) return errAsync(validated.error);
 
-    const id = uuid();
-    let args = ['tag', '--annotate', id];
+        const id = uuid();
+        let args = ['tag', '--annotate', id];
 
-    if (props.hash) {
-      args = [...args, props.hash];
-    }
+        if (props.hash) {
+          args = [...args, props.hash];
+        }
 
-    const subject = this.serializeTagMessage(props.message);
-    const trailers = this.tagMessageToTrailers(props.message);
-    const fullMessage = `${subject}\n\n${trailers.join('\n')}`;
+        const subject = this.serializeTagMessage(props.message);
+        const trailers = this.tagMessageToTrailers(props.message);
+        const fullMessage = `${subject}\n\n${trailers.join('\n')}`;
 
-    args = [...args, '-m', fullMessage];
+        args = [...args, '-m', fullMessage];
 
-    await this.git(props.path, args);
-    const tag = await this.read({ path: props.path, id });
-
-    return tag;
+        return this.git(props.path, args).andThen(() =>
+          this.read({ path: props.path, id })
+        );
+      })()
+    );
   }
 
   /**
@@ -75,21 +81,28 @@ export class GitTagService
    *
    * Internally uses list() but only returns the tag with matching ID.
    */
-  public async read(props: ReadGitTagProps): Promise<GitTag> {
-    readGitTagSchema.parse(props);
+  public read(props: ReadGitTagProps): CoreResult<GitTag> {
+    return this.logged(
+      'read',
+      (() => {
+        const validated = parseSchema(readGitTagSchema, props);
+        if (validated.isErr()) return errAsync(validated.error);
 
-    const tags = await this.list({ path: props.path });
-    const tag = tags.list.find((tag) => {
-      return tag.id === props.id;
-    });
+        return this.list({ path: props.path }).andThen((tags) => {
+          const tag = tags.list.find((tag) => tag.id === props.id);
 
-    if (!tag) {
-      throw new GitError(
-        `Provided tag with UUID "${props.id}" did not match any known tags`
-      );
-    }
+          if (!tag) {
+            return errAsync(
+              CoreErrors.notFound(
+                `Provided tag with UUID "${props.id}" did not match any known tags`
+              )
+            );
+          }
 
-    return tag;
+          return okAsync(tag);
+        });
+      })()
+    );
   }
 
   /**
@@ -99,9 +112,11 @@ export class GitTagService
    * @deprecated
    * @see https://git-scm.com/docs/git-tag#_on_re_tagging
    */
-  public update(): never {
-    throw new Error(
-      'Updating a git tag is not supported. Please delete the old and create a new one'
+  public update(): CoreResult<GitTag> {
+    return errAsync(
+      CoreErrors.badRequest(
+        'Updating a git tag is not supported. Please delete the old and create a new one'
+      )
     );
   }
 
@@ -113,11 +128,17 @@ export class GitTagService
    * @param path  Path to the repository
    * @param id    UUID of the tag to delete
    */
-  public async delete(props: DeleteGitTagProps): Promise<void> {
-    deleteGitTagSchema.parse(props);
+  public delete(props: DeleteGitTagProps): CoreResult<void> {
+    return this.logged(
+      'delete',
+      (() => {
+        const validated = parseSchema(deleteGitTagSchema, props);
+        if (validated.isErr()) return errAsync(validated.error);
 
-    const args = ['tag', '--delete', props.id];
-    await this.git(props.path, args);
+        const args = ['tag', '--delete', props.id];
+        return this.git(props.path, args).map(() => undefined);
+      })()
+    );
   }
 
   /**
@@ -128,63 +149,72 @@ export class GitTagService
    *
    * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---list
    */
-  public async list(props: ListGitTagsProps): Promise<PaginatedList<GitTag>> {
-    listGitTagsSchema.parse(props);
+  public list(props: ListGitTagsProps): CoreResult<PaginatedList<GitTag>> {
+    return this.logged(
+      'list',
+      (() => {
+        const validated = parseSchema(listGitTagsSchema, props);
+        if (validated.isErr()) return errAsync(validated.error);
 
-    let args = ['tag', '--list'];
+        let args = ['tag', '--list'];
 
-    const format = [
-      '%(refname:short)',
-      '%(trailers:key=Type,valueonly)',
-      '%(trailers:key=Version,valueonly)',
-      '%(trailers:key=Core-Version,valueonly)',
-      '%(*authorname)',
-      '%(*authoremail)',
-      '%(*authordate:iso-strict)',
-    ].join('|');
-    args = [...args, '--sort=-*authordate', `--format=${format}`];
-    const result = await this.git(props.path, args);
+        const format = [
+          '%(refname:short)',
+          '%(trailers:key=Type,valueonly)',
+          '%(trailers:key=Version,valueonly)',
+          '%(trailers:key=Core-Version,valueonly)',
+          '%(*authorname)',
+          '%(*authoremail)',
+          '%(*authordate:iso-strict)',
+        ].join('|');
+        args = [...args, '--sort=-*authordate', `--format=${format}`];
 
-    // Trailer values from %(trailers:key=...,valueonly) include trailing newlines.
-    // Collapsing "\n|" into "|" rejoins the pipe-delimited fields into single lines.
-    const cleaned = result.stdout.replace(/\n\|/g, '|');
+        return this.git(props.path, args).map((result) => {
+          // Trailer values from %(trailers:key=...,valueonly) include trailing newlines.
+          // Collapsing "\n|" into "|" rejoins the pipe-delimited fields into single lines.
+          const cleaned = result.stdout.replace(/\n\|/g, '|');
 
-    const noEmptyLinesArr = cleaned.split('\n').filter((line) => {
-      return line.trim() !== '';
-    });
+          const noEmptyLinesArr = cleaned.split('\n').filter((line) => {
+            return line.trim() !== '';
+          });
 
-    const lineObjArr = noEmptyLinesArr.map((line) => {
-      const lineArray = line.split('|');
+          const lineObjArr = noEmptyLinesArr.map((line) => {
+            const lineArray = line.split('|');
 
-      // Remove the '<' and '>' enclosing the email
-      // @todo is there another format like authoremail that returns the original email?
-      if (lineArray[5]?.startsWith('<') && lineArray[5]?.endsWith('>')) {
-        lineArray[5] = lineArray[5].slice(1, -1);
-      }
+            // Remove the '<' and '>' enclosing the email
+            if (
+              lineArray[5]?.startsWith('<') &&
+              lineArray[5]?.endsWith('>')
+            ) {
+              lineArray[5] = lineArray[5].slice(1, -1);
+            }
 
-      return {
-        id: lineArray[0],
-        message: this.parseTagTrailers(
-          lineArray[1]?.trim(),
-          lineArray[2]?.trim(),
-          lineArray[3]?.trim()
-        ),
-        author: {
-          name: lineArray[4],
-          email: lineArray[5],
-        },
-        datetime: datetime(lineArray[6]),
-      };
-    });
+            return {
+              id: lineArray[0],
+              message: this.parseTagTrailers(
+                lineArray[1]?.trim(),
+                lineArray[2]?.trim(),
+                lineArray[3]?.trim()
+              ),
+              author: {
+                name: lineArray[4],
+                email: lineArray[5],
+              },
+              datetime: datetime(lineArray[6]),
+            };
+          });
 
-    const gitTags = lineObjArr.filter(this.isGitTag.bind(this));
+          const gitTags = lineObjArr.filter(this.isGitTag.bind(this));
 
-    return {
-      total: gitTags.length,
-      limit: 0,
-      offset: 0,
-      list: gitTags,
-    };
+          return {
+            total: gitTags.length,
+            limit: 0,
+            offset: 0,
+            list: gitTags,
+          };
+        });
+      })()
+    );
   }
 
   /**
@@ -195,11 +225,16 @@ export class GitTagService
    *
    * @param path Path to the repository
    */
-  public async count(props: CountGitTagsProps): Promise<number> {
-    countGitTagsSchema.parse(props);
+  public count(props: CountGitTagsProps): CoreResult<number> {
+    return this.logged(
+      'count',
+      (() => {
+        const validated = parseSchema(countGitTagsSchema, props);
+        if (validated.isErr()) return errAsync(validated.error);
 
-    const gitTags = await this.list({ path: props.path });
-    return gitTags.total;
+        return this.list({ path: props.path }).map((tags) => tags.total);
+      })()
+    );
   }
 
   /**

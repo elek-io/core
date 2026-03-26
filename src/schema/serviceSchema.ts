@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import type { CoreResult } from '../util/shared.js';
 import { uuidSchema } from './baseSchema.js';
 
 export const serviceTypeSchema = z.enum([
@@ -42,10 +43,10 @@ export interface PaginationOptions {
  * Implements create, read, update and delete methods
  */
 export interface CrudService<T> {
-  create: (props: never) => Promise<T>;
-  read: (props: never) => Promise<T>;
-  update: (props: never) => Promise<T>;
-  delete: (props: never) => Promise<void>;
+  create: (props: never) => CoreResult<T>;
+  read: (props: never) => CoreResult<T>;
+  update: (props: never) => CoreResult<T>;
+  delete: (props: never) => CoreResult<void>;
 }
 
 /**
@@ -59,11 +60,11 @@ export interface CrudServiceWithListCount<T> extends CrudService<T> {
    * Does not return objects where the schema validation fails.
    * If that is the case, upgrade the Client and then Project to the latest version.
    */
-  list: (...props: never[]) => Promise<PaginatedList<T>>;
+  list: (...props: never[]) => CoreResult<PaginatedList<T>>;
   /**
    * Returns the total number of this services objects
    */
-  count: (...props: never[]) => Promise<number>;
+  count: (...props: never[]) => CoreResult<number>;
 }
 
 const listSchema = z.object({

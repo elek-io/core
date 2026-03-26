@@ -247,12 +247,18 @@ async function generateTypesForProject(project: Project): Promise<string> {
   });
 
   // Load all collections and components
-  const collections = (
-    await core.collections.list({ projectId: project.id, limit: 0 })
-  ).list;
-  const components = (
-    await core.components.list({ projectId: project.id, limit: 0 })
-  ).list;
+  const collectionsResult = await core.collections.list({ projectId: project.id, limit: 0 });
+  if (collectionsResult.isErr()) {
+    console.error(collectionsResult.error.message);
+    process.exit(1);
+  }
+  const collections = collectionsResult.value.list;
+  const componentsResult = await core.components.list({ projectId: project.id, limit: 0 });
+  if (componentsResult.isErr()) {
+    console.error(componentsResult.error.message);
+    process.exit(1);
+  }
+  const components = componentsResult.value.list;
 
   // Build component map for dynamic field typing
   const componentMap = new Map<string, Component>();
@@ -510,10 +516,20 @@ export async function generateTypes({
   const projectsToGenerate: Project[] = [];
 
   if (projects === 'all') {
-    projectsToGenerate.push(...(await core.projects.list({ limit: 0 })).list);
+    const projectsListResult = await core.projects.list({ limit: 0 });
+    if (projectsListResult.isErr()) {
+      console.error(projectsListResult.error.message);
+      process.exit(1);
+    }
+    projectsToGenerate.push(...projectsListResult.value.list);
   } else {
     for (const projectId of projects) {
-      projectsToGenerate.push(await core.projects.read({ id: projectId }));
+      const projectResult = await core.projects.read({ id: projectId });
+      if (projectResult.isErr()) {
+        console.error(projectResult.error.message);
+        process.exit(1);
+      }
+      projectsToGenerate.push(projectResult.value);
     }
   }
 

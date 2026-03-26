@@ -38,7 +38,7 @@ describe('ReleaseService', function () {
   it('should detect new collections as MINOR bump on first release', async function () {
     collection = await createCollection(project.id);
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('minor');
     expect(diff.currentVersion).toEqual('0.0.1');
@@ -52,83 +52,81 @@ describe('ReleaseService', function () {
   });
 
   it('should create a preview release before full release', async function () {
-    const result = await core.releases.createPreview({
+    const result = (await core.releases.createPreview({
       projectId: project.id,
-    });
+    }))._unsafeUnwrap();
 
     expect(result.version).toEqual('0.1.0-preview.1');
     expect(result.diff.bump).toEqual('minor');
 
     // Verify project version was updated to preview
-    const updatedProject = await core.projects.read({ id: project.id });
+    const updatedProject = (await core.projects.read({ id: project.id }))._unsafeUnwrap();
     expect(updatedProject.version).toEqual('0.1.0-preview.1');
 
     // Verify we're still on work branch (no merge to production)
-    const currentBranch = await core.git.branches.current(
+    const currentBranch = (await core.git.branches.current(
       core.util.pathTo.project(project.id)
-    );
+    ))._unsafeUnwrap();
     expect(currentBranch).toEqual('work');
   });
 
   it('should increment preview number on subsequent preview releases', async function () {
     // Make a small change so there's something new
     collection.name.singular.en = 'Preview Product';
-    await core.collections.update({
+    (await core.collections.update({
       projectId: project.id,
       ...collection,
-    });
+    }))._unsafeUnwrap();
 
-    const result = await core.releases.createPreview({
+    const result = (await core.releases.createPreview({
       projectId: project.id,
-    });
+    }))._unsafeUnwrap();
 
     expect(result.version).toEqual('0.1.0-preview.2');
   });
 
   it('should create a first full release successfully', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('0.1.0');
     expect(result.diff.bump).toEqual('minor');
 
     // Verify project version was updated
-    const updatedProject = await core.projects.read({ id: project.id });
+    const updatedProject = (await core.projects.read({ id: project.id }))._unsafeUnwrap();
     expect(updatedProject.version).toEqual('0.1.0');
 
     // Verify we're back on work branch
-    const currentBranch = await core.git.branches.current(
+    const currentBranch = (await core.git.branches.current(
       core.util.pathTo.project(project.id)
-    );
+    ))._unsafeUnwrap();
     expect(currentBranch).toEqual('work');
   });
 
   it('should detect no changes after a release', async function () {
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toBeNull();
     expect(diff.nextVersion).toBeNull();
   });
 
-  it('should throw when creating a release with no changes', async function () {
-    await expect(
-      core.releases.create({ projectId: project.id })
-    ).rejects.toThrow('no changes detected since the last full release');
+  it('should return error when creating a release with no changes', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+    expect(result.isErr()).toBe(true);
   });
 
-  it('should throw when creating a preview release with no changes', async function () {
-    await expect(
-      core.releases.createPreview({ projectId: project.id })
-    ).rejects.toThrow('no changes detected since the last full release');
+  it('should return error when creating a preview release with no changes', async function () {
+    const result = await core.releases.createPreview({ projectId: project.id });
+    expect(result.isErr()).toBe(true);
   });
 
   it('should detect PATCH bump for label changes', async function () {
     collection.name.singular.en = 'Updated Product';
-    await core.collections.update({
+    (await core.collections.update({
       projectId: project.id,
       ...collection,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     // Collection field definitions didn't change, but the collection was updated
     // This shows as content-only changes (PATCH) since it's a commit between branches
@@ -136,7 +134,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a patch release', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('0.1.1');
     expect(result.diff.bump).toEqual('patch');
@@ -146,12 +144,12 @@ describe('ReleaseService', function () {
     const field = collection.fieldDefinitions[0]!;
     field.label.en = 'Updated Label';
 
-    await core.collections.update({
+    (await core.collections.update({
       projectId: project.id,
       ...collection,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('patch');
     expect(diff.fieldChanges.some((c) => c.changeType === 'labelChanged')).toBe(
@@ -160,7 +158,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create another patch release for field label change', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('0.1.2');
   });
@@ -172,12 +170,12 @@ describe('ReleaseService', function () {
     ).find((fd) => fd.fieldType === 'entry')!;
     (entryRefField as { isRequired: boolean }).isRequired = true;
 
-    await core.collections.update({
+    (await core.collections.update({
       projectId: project.id,
       ...collection,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('minor');
     expect(
@@ -186,7 +184,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a minor release', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('0.2.0');
   });
@@ -197,12 +195,12 @@ describe('ReleaseService', function () {
       (fd) => !('fieldType' in fd) || fd.fieldType !== 'entry'
     );
 
-    await core.collections.update({
+    (await core.collections.update({
       projectId: project.id,
       ...collection,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('major');
     expect(diff.fieldChanges.some((c) => c.changeType === 'deleted')).toBe(
@@ -211,7 +209,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a major release', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('1.0.0');
   });
@@ -219,32 +217,32 @@ describe('ReleaseService', function () {
   it('should reset preview numbering after a full release', async function () {
     // Make a change after the full release
     collection.description.en = 'Changed description after v1';
-    await core.collections.update({
+    (await core.collections.update({
       projectId: project.id,
       ...collection,
-    });
+    }))._unsafeUnwrap();
 
-    const result = await core.releases.createPreview({
+    const result = (await core.releases.createPreview({
       projectId: project.id,
-    });
+    }))._unsafeUnwrap();
 
     // New base version (1.0.1 patch), preview count resets to 1
     expect(result.version).toEqual('1.0.1-preview.1');
   });
 
   it('should still be able to do a full release after preview', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('1.0.1');
   });
 
   it('should detect MAJOR bump when a collection is deleted', async function () {
-    await core.collections.delete({
+    (await core.collections.delete({
       projectId: project.id,
       id: collection.id,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('major');
     expect(diff.collectionChanges.some((c) => c.changeType === 'deleted')).toBe(
@@ -253,7 +251,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a major release for deleted collection', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('2.0.0');
   });
@@ -263,7 +261,7 @@ describe('ReleaseService', function () {
     collection = await createCollection(project.id);
     asset = await createAsset(project.id);
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('minor');
     expect(
@@ -274,20 +272,20 @@ describe('ReleaseService', function () {
   });
 
   it('should create a minor release for added asset and collection', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('2.1.0');
   });
 
   it('should detect PATCH bump when asset metadata changes', async function () {
-    await core.assets.update({
+    (await core.assets.update({
       projectId: project.id,
       id: asset.id,
       name: 'Updated Asset Name',
       description: 'Updated description',
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('patch');
     expect(
@@ -298,19 +296,19 @@ describe('ReleaseService', function () {
   });
 
   it('should create a patch release for asset metadata change', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('2.1.1');
   });
 
   it('should detect MAJOR bump when an asset is deleted', async function () {
-    await core.assets.delete({
+    (await core.assets.delete({
       projectId: project.id,
       id: asset.id,
       extension: asset.extension,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('major');
     expect(
@@ -321,7 +319,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a major release for deleted asset', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('3.0.0');
   });
@@ -331,7 +329,7 @@ describe('ReleaseService', function () {
     asset = await createAsset(project.id);
     entry = await createEntry(project.id, collection.id, asset.id);
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('minor');
     expect(
@@ -342,13 +340,13 @@ describe('ReleaseService', function () {
   });
 
   it('should create a minor release for added entry', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('3.1.0');
   });
 
   it('should detect PATCH bump when entry values change', async function () {
-    await core.entries.update({
+    (await core.entries.update({
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
@@ -362,9 +360,9 @@ describe('ReleaseService', function () {
           },
         },
       },
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('patch');
     expect(
@@ -375,19 +373,19 @@ describe('ReleaseService', function () {
   });
 
   it('should create a patch release for modified entry', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('3.1.1');
   });
 
   it('should detect MAJOR bump when an entry is deleted', async function () {
-    await core.entries.delete({
+    (await core.entries.delete({
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('major');
     expect(
@@ -398,20 +396,20 @@ describe('ReleaseService', function () {
   });
 
   it('should create a major release for deleted entry', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('4.0.0');
   });
 
   it('should detect PATCH bump when project name changes', async function () {
-    await core.projects.update({
+    (await core.projects.update({
       id: project.id,
       name: 'Renamed Project',
       description: project.description,
       settings: project.settings,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('patch');
     expect(
@@ -420,7 +418,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a patch release for project name change', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('4.0.1');
     // Update local reference
@@ -428,9 +426,9 @@ describe('ReleaseService', function () {
   });
 
   it('should detect MINOR bump when a supported language is added', async function () {
-    const currentProject = await core.projects.read({ id: project.id });
+    const currentProject = (await core.projects.read({ id: project.id }))._unsafeUnwrap();
 
-    await core.projects.update({
+    (await core.projects.update({
       id: project.id,
       name: currentProject.name,
       description: currentProject.description,
@@ -440,9 +438,9 @@ describe('ReleaseService', function () {
           supported: [...currentProject.settings.language.supported, 'fr'],
         },
       },
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('minor');
     expect(
@@ -451,16 +449,16 @@ describe('ReleaseService', function () {
   });
 
   it('should create a minor release for added language', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('4.1.0');
     // Project state is re-read in subsequent tests to avoid stale references
   });
 
   it('should detect MAJOR bump when the default language changes', async function () {
-    const currentProject = await core.projects.read({ id: project.id });
+    const currentProject = (await core.projects.read({ id: project.id }))._unsafeUnwrap();
 
-    await core.projects.update({
+    (await core.projects.update({
       id: project.id,
       name: currentProject.name,
       description: currentProject.description,
@@ -470,9 +468,9 @@ describe('ReleaseService', function () {
           supported: currentProject.settings.language.supported,
         },
       },
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('major');
     expect(
@@ -481,16 +479,16 @@ describe('ReleaseService', function () {
   });
 
   it('should create a major release for default language change', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('5.0.0');
     // Project state is re-read in subsequent tests to avoid stale references
   });
 
   it('should detect MAJOR bump when a supported language is removed', async function () {
-    const currentProject = await core.projects.read({ id: project.id });
+    const currentProject = (await core.projects.read({ id: project.id }))._unsafeUnwrap();
 
-    await core.projects.update({
+    (await core.projects.update({
       id: project.id,
       name: currentProject.name,
       description: currentProject.description,
@@ -502,9 +500,9 @@ describe('ReleaseService', function () {
           ),
         },
       },
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('major');
     expect(
@@ -515,7 +513,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a major release for removed language', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('6.0.0');
   });
@@ -523,7 +521,7 @@ describe('ReleaseService', function () {
   // --- Component version bump tests ---
 
   it('should detect MINOR bump when a component is added', async function () {
-    component = await core.components.create({
+    component = (await core.components.create({
       projectId: project.id,
       name: { de: 'Hero' },
       slug: 'hero',
@@ -545,9 +543,9 @@ describe('ReleaseService', function () {
           max: null,
         },
       ],
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('minor');
     expect(
@@ -558,7 +556,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a minor release for added component', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('6.1.0');
   });
@@ -567,12 +565,12 @@ describe('ReleaseService', function () {
     const field = component.fieldDefinitions[0]!;
     field.label.de = 'Updated Title Label';
 
-    await core.components.update({
+    (await core.components.update({
       projectId: project.id,
       ...component,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('patch');
     expect(
@@ -581,7 +579,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a patch release for component field label change', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('6.1.1');
   });
@@ -603,12 +601,12 @@ describe('ReleaseService', function () {
       max: null,
     });
 
-    await core.components.update({
+    (await core.components.update({
       projectId: project.id,
       ...component,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('minor');
     expect(
@@ -617,7 +615,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a minor release for added component field', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('6.2.0');
   });
@@ -626,12 +624,12 @@ describe('ReleaseService', function () {
     const field = component.fieldDefinitions[0]!;
     field.slug = 'heading';
 
-    await core.components.update({
+    (await core.components.update({
       projectId: project.id,
       ...component,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('major');
     expect(
@@ -640,7 +638,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a major release for component field slug change', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('7.0.0');
   });
@@ -648,12 +646,12 @@ describe('ReleaseService', function () {
   it('should detect MAJOR bump when a component field is deleted', async function () {
     component.fieldDefinitions = component.fieldDefinitions.slice(0, 1);
 
-    await core.components.update({
+    (await core.components.update({
       projectId: project.id,
       ...component,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('major');
     expect(
@@ -662,18 +660,18 @@ describe('ReleaseService', function () {
   });
 
   it('should create a major release for deleted component field', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('8.0.0');
   });
 
   it('should detect MAJOR bump when a component is deleted', async function () {
-    await core.components.delete({
+    (await core.components.delete({
       projectId: project.id,
       id: component.id,
-    });
+    }))._unsafeUnwrap();
 
-    const diff = await core.releases.prepare({ projectId: project.id });
+    const diff = (await core.releases.prepare({ projectId: project.id }))._unsafeUnwrap();
 
     expect(diff.bump).toEqual('major');
     expect(
@@ -684,7 +682,7 @@ describe('ReleaseService', function () {
   });
 
   it('should create a major release for deleted component', async function () {
-    const result = await core.releases.create({ projectId: project.id });
+    const result = (await core.releases.create({ projectId: project.id }))._unsafeUnwrap();
 
     expect(result.version).toEqual('9.0.0');
   });

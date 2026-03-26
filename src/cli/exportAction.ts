@@ -44,18 +44,24 @@ async function exportProjectNested({
     >;
   }
 > {
-  const assets = (
-    await core.assets.list({ projectId: projectToExport.id, limit: 0 })
-  ).list;
+  const assetsResult = await core.assets.list({ projectId: projectToExport.id, limit: 0 });
+  if (assetsResult.isErr()) {
+    console.error(assetsResult.error.message);
+    process.exit(1);
+  }
+  const assets = assetsResult.value.list;
   let assetContent = {};
   for (const asset of assets) {
     assetContent = { ...assetContent, [asset.id]: { ...asset } };
   }
 
   let componentContent: Record<string, Component> = {};
-  const components = (
-    await core.components.list({ projectId: projectToExport.id, limit: 0 })
-  ).list;
+  const componentsResult = await core.components.list({ projectId: projectToExport.id, limit: 0 });
+  if (componentsResult.isErr()) {
+    console.error(componentsResult.error.message);
+    process.exit(1);
+  }
+  const components = componentsResult.value.list;
   for (const component of components) {
     componentContent = {
       ...componentContent,
@@ -69,18 +75,24 @@ async function exportProjectNested({
       entries: Record<string, Entry>;
     }
   > = {};
-  const collections = (
-    await core.collections.list({ projectId: projectToExport.id, limit: 0 })
-  ).list;
+  const collectionsResult = await core.collections.list({ projectId: projectToExport.id, limit: 0 });
+  if (collectionsResult.isErr()) {
+    console.error(collectionsResult.error.message);
+    process.exit(1);
+  }
+  const collections = collectionsResult.value.list;
   for (const collection of collections) {
     let entryContent: Record<string, Entry> = {};
-    const entries = (
-      await core.entries.list({
-        projectId: projectToExport.id,
-        collectionId: collection.id,
-        limit: 0,
-      })
-    ).list;
+    const entriesResult = await core.entries.list({
+      projectId: projectToExport.id,
+      collectionId: collection.id,
+      limit: 0,
+    });
+    if (entriesResult.isErr()) {
+      console.error(entriesResult.error.message);
+      process.exit(1);
+    }
+    const entries = entriesResult.value.list;
     for (const entry of entries) {
       entryContent = { ...entryContent, [entry.id]: { ...entry } };
     }
@@ -165,9 +177,12 @@ async function exportProjectsSeparate({
       content: project,
     });
 
-    const tmpAssets = (
-      await core.assets.list({ projectId: project.id, limit: 0 })
-    ).list;
+    const tmpAssetsResult = await core.assets.list({ projectId: project.id, limit: 0 });
+    if (tmpAssetsResult.isErr()) {
+      console.error(tmpAssetsResult.error.message);
+      process.exit(1);
+    }
+    const tmpAssets = tmpAssetsResult.value.list;
     const assets: Asset[] = [];
     const assetOutDir = Path.join(projectOutDir, 'assets');
     await Fs.ensureDir(assetOutDir);
@@ -189,9 +204,12 @@ async function exportProjectsSeparate({
       content: assets,
     });
 
-    const components = (
-      await core.components.list({ projectId: project.id, limit: 0 })
-    ).list;
+    const separateComponentsResult = await core.components.list({ projectId: project.id, limit: 0 });
+    if (separateComponentsResult.isErr()) {
+      console.error(separateComponentsResult.error.message);
+      process.exit(1);
+    }
+    const components = separateComponentsResult.value.list;
     const componentsOutDir = Path.join(projectOutDir, 'components');
     await Fs.ensureDir(componentsOutDir);
     for (const component of components) {
@@ -209,9 +227,12 @@ async function exportProjectsSeparate({
       content: components,
     });
 
-    const collections = (
-      await core.collections.list({ projectId: project.id, limit: 0 })
-    ).list;
+    const separateCollectionsResult = await core.collections.list({ projectId: project.id, limit: 0 });
+    if (separateCollectionsResult.isErr()) {
+      console.error(separateCollectionsResult.error.message);
+      process.exit(1);
+    }
+    const collections = separateCollectionsResult.value.list;
     const collectionsOutDir = Path.join(projectOutDir, 'collections');
     await Fs.ensureDir(collectionsOutDir);
     for (const collection of collections) {
@@ -227,13 +248,16 @@ async function exportProjectsSeparate({
 
         content: collection,
       });
-      const entries = (
-        await core.entries.list({
-          projectId: project.id,
-          collectionId: collection.id,
-          limit: 0,
-        })
-      ).list;
+      const separateEntriesResult = await core.entries.list({
+        projectId: project.id,
+        collectionId: collection.id,
+        limit: 0,
+      });
+      if (separateEntriesResult.isErr()) {
+        console.error(separateEntriesResult.error.message);
+        process.exit(1);
+      }
+      const entries = separateEntriesResult.value.list;
       await exportFile({
         resolvedOutDir: collectionOutDir,
         options,
@@ -262,10 +286,20 @@ async function exportProjects({
   await Fs.ensureDir(resolvedOutDir);
 
   if (projects === 'all') {
-    projectsToExport.push(...(await core.projects.list({ limit: 0 })).list);
+    const projectsListResult = await core.projects.list({ limit: 0 });
+    if (projectsListResult.isErr()) {
+      console.error(projectsListResult.error.message);
+      process.exit(1);
+    }
+    projectsToExport.push(...projectsListResult.value.list);
   } else {
     for (const projectId of projects) {
-      projectsToExport.push(await core.projects.read({ id: projectId }));
+      const projectResult = await core.projects.read({ id: projectId });
+      if (projectResult.isErr()) {
+        console.error(projectResult.error.message);
+        process.exit(1);
+      }
+      projectsToExport.push(projectResult.value);
     }
   }
 

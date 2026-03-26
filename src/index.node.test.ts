@@ -58,7 +58,7 @@ describe('Node.js', function () {
        * - Should the description be optional? -> Yes
        * - Should the description be an object with language keys? -> Yes
        */
-      const project = await core.projects.create({
+      const project = (await core.projects.create({
         name: 'elek.io Website',
         description: 'The official elek.io website',
         settings: {
@@ -67,16 +67,16 @@ describe('Node.js', function () {
             default: 'en',
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const asset = await core.assets.create({
+      const asset = (await core.assets.create({
         projectId: project.id,
         filePath: Path.resolve('src/test/data/150x150.png'),
         name: 'elek.io',
         description: 'A 150x150 image of the text "elek.io"',
-      });
+      }))._unsafeUnwrap();
 
-      const featuresCollection = await core.collections.create({
+      const featuresCollection = (await core.collections.create({
         projectId: project.id,
         icon: 'home',
         name: {
@@ -230,9 +230,9 @@ describe('Node.js', function () {
             max: 1,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryProjects = await core.entries.create({
+      const featureEntryProjects = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -295,9 +295,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryAssets = await core.entries.create({
+      const featureEntryAssets = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -360,9 +360,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryCollections = await core.entries.create({
+      const featureEntryCollections = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -425,9 +425,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryEntries = await core.entries.create({
+      const featureEntryEntries = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -490,9 +490,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryHistory = await core.entries.create({
+      const featureEntryHistory = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -555,9 +555,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryTeamwork = await core.entries.create({
+      const featureEntryTeamwork = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -620,9 +620,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryIntegrate = await core.entries.create({
+      const featureEntryIntegrate = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -685,9 +685,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryOfflineFirst = await core.entries.create({
+      const featureEntryOfflineFirst = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -740,9 +740,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryPerformanceAndSecurity = await core.entries.create({
+      const featureEntryPerformanceAndSecurity = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -795,9 +795,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryFreeAndSourceAvailable = await core.entries.create({
+      const featureEntryFreeAndSourceAvailable = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -850,9 +850,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryInstant = await core.entries.create({
+      const featureEntryInstant = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -915,9 +915,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryReplication = await core.entries.create({
+      const featureEntryReplication = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -980,9 +980,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryAutomation = await core.entries.create({
+      const featureEntryAutomation = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -1045,9 +1045,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryCode = await core.entries.create({
+      const featureEntryCode = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -1110,9 +1110,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryApiClients = await core.entries.create({
+      const featureEntryApiClients = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -1175,9 +1175,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const featureEntryExport = await core.entries.create({
+      const featureEntryExport = (await core.entries.create({
         projectId: project.id,
         collectionId: featuresCollection.id,
         values: {
@@ -1240,13 +1240,13 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
       /**
        * @todo:
        * - Should allow for sections of field definitions to visually group them.
        */
-      const productsCollection = await core.collections.create({
+      const productsCollection = (await core.collections.create({
         projectId: project.id,
         icon: 'home',
         name: {
@@ -1429,9 +1429,9 @@ describe('Node.js', function () {
             ],
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
-      const productEntryDesktop = await core.entries.create({
+      const productEntryDesktop = (await core.entries.create({
         projectId: project.id,
         collectionId: productsCollection.id,
         values: {
@@ -1604,9 +1604,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const productEntryCloud = await core.entries.create({
+      const productEntryCloud = (await core.entries.create({
         projectId: project.id,
         collectionId: productsCollection.id,
         values: {
@@ -1709,9 +1709,9 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      const productEntryCore = await core.entries.create({
+      const productEntryCore = (await core.entries.create({
         projectId: project.id,
         collectionId: productsCollection.id,
         values: {
@@ -1814,13 +1814,13 @@ describe('Node.js', function () {
             },
           },
         },
-      });
+      }))._unsafeUnwrap();
 
       /**
        * @todo:
        * - Conditional fields based on other field values e.g. if "External Link" is true, the "Target page" field is not visible and the "URL" field is shown.
        */
-      const navigationItemComponent = await core.components.create({
+      const navigationItemComponent = (await core.components.create({
         projectId: project.id,
         name: {
           en: 'Navigation Item',
@@ -1915,7 +1915,7 @@ describe('Node.js', function () {
             defaultValue: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
       /**
        * @todo:
@@ -1923,7 +1923,7 @@ describe('Node.js', function () {
        * - Should the description be optional? -> Yes
        * - Field definitions need a valueType of "reference" with the fieldType of "slug" and ofField referencing a field definition ID of the same collection to be able to generate slugs based on another field.
        */
-      const navigationCollection = await core.collections.create({
+      const navigationCollection = (await core.collections.create({
         projectId: project.id,
         icon: 'home',
         name: {
@@ -2009,9 +2009,9 @@ describe('Node.js', function () {
             max: null,
           },
         ],
-      });
+      }))._unsafeUnwrap();
 
-      await core.entries.create({
+      (await core.entries.create({
         projectId: project.id,
         collectionId: navigationCollection.id,
         values: {
@@ -2176,9 +2176,9 @@ describe('Node.js', function () {
             ],
           },
         },
-      });
+      }))._unsafeUnwrap();
 
-      await core.projects.delete({ id: project.id, force: true });
+      (await core.projects.delete({ id: project.id, force: true }))._unsafeUnwrap();
     }
   );
 });

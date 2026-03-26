@@ -35,10 +35,10 @@ describe('AssetService', function () {
     ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
     expect(asset.extension).toEqual('png');
     expect(asset.mimeType).toEqual('image/png');
-    const createHistory = await core.assets.history({
+    const createHistory = (await core.assets.history({
       projectId: project.id,
       id: asset.id,
-    });
+    }))._unsafeUnwrap();
     expect(createHistory.length).toEqual(1);
     expect(
       await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id)),
@@ -57,62 +57,62 @@ describe('AssetService', function () {
   });
 
   it('should be able to read an Asset', async function () {
-    const readAsset = await core.assets.read({
+    const readAsset = (await core.assets.read({
       projectId: project.id,
       id: asset.id,
-    });
+    }))._unsafeUnwrap();
 
     expect(readAsset.name).toEqual(asset.name);
   });
 
   it('should be able to update an Asset', async function () {
     asset.description = 'A 150x150 image of the text "elek.io"';
-    asset = await core.assets.update({
+    asset = (await core.assets.update({
       projectId: project.id,
       ...asset,
-    });
+    }))._unsafeUnwrap();
 
     expect(asset.description).toEqual('A 150x150 image of the text "elek.io"');
-    const updateHistory = await core.assets.history({
+    const updateHistory = (await core.assets.history({
       projectId: project.id,
       id: asset.id,
-    });
+    }))._unsafeUnwrap();
     expect(updateHistory.length).toEqual(2);
   });
 
   it('should be able to update an Asset with a new file', async function () {
     const newFilePath = Path.resolve('src/test/data/150x150.jpeg');
-    asset = await core.assets.update({
+    asset = (await core.assets.update({
       projectId: project.id,
       ...asset,
       newFilePath,
-    });
+    }))._unsafeUnwrap();
 
     expect(asset.extension).toEqual('jpg');
     expect(asset.size).toEqual(1342);
-    const newFileHistory = await core.assets.history({
+    const newFileHistory = (await core.assets.history({
       projectId: project.id,
       id: asset.id,
-    });
+    }))._unsafeUnwrap();
     expect(newFileHistory.length).toEqual(3);
   });
 
   it('should be able to get an Asset of a specific commit', async function () {
-    const assetHistory = await core.assets.history({
+    const assetHistory = (await core.assets.history({
       projectId: project.id,
       id: asset.id,
-    });
+    }))._unsafeUnwrap();
     const commitHash = assetHistory.at(-1)?.hash;
 
     if (!commitHash) {
       throw new Error('No commit hash found');
     }
 
-    const assetFromHistory = await core.assets.read({
+    const assetFromHistory = (await core.assets.read({
       projectId: project.id,
       id: asset.id,
       commitHash: commitHash,
-    });
+    }))._unsafeUnwrap();
 
     expect(assetFromHistory.extension).toEqual('png');
     expect(assetFromHistory.mimeType).toEqual('image/png');
@@ -136,10 +136,10 @@ describe('AssetService', function () {
   });
 
   it('should be able to get the same Asset from multiple commits', async function () {
-    const multiHistory = await core.assets.history({
+    const multiHistory = (await core.assets.history({
       projectId: project.id,
       id: asset.id,
-    });
+    }))._unsafeUnwrap();
     const previousCommitHash = multiHistory.at(-1)?.hash;
     const currentCommitHash = multiHistory[0]?.hash;
 
@@ -147,17 +147,17 @@ describe('AssetService', function () {
       throw new Error('No commit hash found');
     }
 
-    const previousAssetFromHistory = await core.assets.read({
+    const previousAssetFromHistory = (await core.assets.read({
       projectId: project.id,
       id: asset.id,
       commitHash: previousCommitHash,
-    });
+    }))._unsafeUnwrap();
 
-    const currentAssetFromHistory = await core.assets.read({
+    const currentAssetFromHistory = (await core.assets.read({
       projectId: project.id,
       id: asset.id,
       commitHash: currentCommitHash,
-    });
+    }))._unsafeUnwrap();
 
     expect(previousAssetFromHistory.extension).toEqual('png');
     expect(previousAssetFromHistory.mimeType).toEqual('image/png');
@@ -203,11 +203,11 @@ describe('AssetService', function () {
   it('should be able to save the current Asset version on disk', async function () {
     const filePathToSaveTo = Path.join(Os.homedir(), `saved-asset.jpg`);
 
-    await core.assets.save({
+    (await core.assets.save({
       projectId: project.id,
       id: asset.id,
       filePath: filePathToSaveTo,
-    });
+    }))._unsafeUnwrap();
 
     expect(
       await Fs.pathExists(filePathToSaveTo),
@@ -225,14 +225,14 @@ describe('AssetService', function () {
       `saved-asset-from-history.png`
     );
 
-    await core.assets.save({
+    (await core.assets.save({
       projectId: project.id,
       id: asset.id,
       commitHash: (
         await core.assets.history({ projectId: project.id, id: asset.id })
-      ).at(-1)?.hash,
+      )._unsafeUnwrap().at(-1)?.hash,
       filePath: filePathToSaveToFromHistory,
-    });
+    }))._unsafeUnwrap();
 
     expect(
       await Fs.pathExists(filePathToSaveToFromHistory),
@@ -245,14 +245,14 @@ describe('AssetService', function () {
   });
 
   it('should be able to list all Assets', async function () {
-    const assets = await core.assets.list({ projectId: project.id });
+    const assets = (await core.assets.list({ projectId: project.id }))._unsafeUnwrap();
 
     expect(assets.total).toEqual(1);
     expect(assets.list.find((a) => a.id === asset.id)?.id).toEqual(asset.id);
   });
 
   it('should be able to count all Assets', async function () {
-    const counted = await core.assets.count({ projectId: project.id });
+    const counted = (await core.assets.count({ projectId: project.id }))._unsafeUnwrap();
 
     expect(counted).toEqual(1);
   });
@@ -263,7 +263,7 @@ describe('AssetService', function () {
   });
 
   it('should be able to delete an Asset', async function () {
-    await core.assets.delete({ projectId: project.id, ...asset });
+    (await core.assets.delete({ projectId: project.id, ...asset }))._unsafeUnwrap();
 
     expect(
       await Fs.pathExists(
