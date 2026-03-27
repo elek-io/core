@@ -77,8 +77,7 @@ export class ReleaseService extends AbstractService {
       const projectPath = pathTo.project(props.projectId);
       const productionRef = projectBranchSchema.enum.production;
 
-      const currentBranch =
-        await this.gitService.branches.current(projectPath);
+      const currentBranch = await this.gitService.branches.current(projectPath);
       if (currentBranch !== projectBranchSchema.enum.work) {
         throw CoreError.preconditionFailed(
           `Not on work branch (currently on "${currentBranch}")`
@@ -223,10 +222,7 @@ export class ReleaseService extends AbstractService {
           projectPath,
           projectBranchSchema.enum.production
         );
-        await this.gitService.merge(
-          projectPath,
-          projectBranchSchema.enum.work
-        );
+        await this.gitService.merge(projectPath, projectBranchSchema.enum.work);
 
         const updatedProjectFile = {
           ...diff.project,
@@ -946,9 +942,7 @@ export class ReleaseService extends AbstractService {
       );
 
       const currentById = new Map(currentEntries.map((e) => [e.id, e]));
-      const productionById = new Map(
-        productionEntries.map((e) => [e.id, e])
-      );
+      const productionById = new Map(productionEntries.map((e) => [e.id, e]));
 
       // Deleted entries - MAJOR
       for (const [id] of productionById) {

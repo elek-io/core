@@ -134,7 +134,10 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId, componentIdOrSlug } = c.req.valid('param');
-      const id = await c.var.componentService.resolveComponentId({ projectId, idOrSlug: componentIdOrSlug });
+      const id = await c.var.componentService.resolveComponentId({
+        projectId,
+        idOrSlug: componentIdOrSlug,
+      });
       const data = await c.var.componentService.read({ projectId, id });
 
       return c.json(data, 200);

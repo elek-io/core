@@ -134,7 +134,10 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId, collectionIdOrSlug } = c.req.valid('param');
-      const id = await c.var.collectionService.resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug });
+      const id = await c.var.collectionService.resolveCollectionId({
+        projectId,
+        idOrSlug: collectionIdOrSlug,
+      });
       const data = await c.var.collectionService.read({ projectId, id });
 
       return c.json(data, 200);

@@ -136,81 +136,81 @@ export async function createAsset(projectId: string) {
 
 export async function createCollection(projectId: string) {
   const collection = await core.collections.create({
-      projectId,
-      icon: 'home',
-      name: {
-        singular: {
-          en: 'Product',
-        },
-        plural: {
-          en: 'Products',
-        },
+    projectId,
+    icon: 'home',
+    name: {
+      singular: {
+        en: 'Product',
       },
-      slug: {
-        singular: 'product',
-        plural: 'products',
+      plural: {
+        en: 'Products',
       },
-      description: {
-        en: 'A Collection that contains our Products',
+    },
+    slug: {
+      singular: 'product',
+      plural: 'products',
+    },
+    description: {
+      en: 'A Collection that contains our Products',
+    },
+    fieldDefinitions: [
+      {
+        id: ids.textFieldDefinition,
+        slug: slugs.textFieldDefinition,
+        valueType: 'string',
+        label: {
+          en: 'Name',
+        },
+        description: {
+          en: 'The title should be shirt and catchy, to grab the users attention',
+        },
+        fieldType: 'text',
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: true,
+        isUnique: true,
+        min: null,
+        defaultValue: null,
+        max: 70,
       },
-      fieldDefinitions: [
-        {
-          id: ids.textFieldDefinition,
-          slug: slugs.textFieldDefinition,
-          valueType: 'string',
-          label: {
-            en: 'Name',
-          },
-          description: {
-            en: 'The title should be shirt and catchy, to grab the users attention',
-          },
-          fieldType: 'text',
-          inputWidth: '12',
-          isDisabled: false,
-          isRequired: true,
-          isUnique: true,
-          min: null,
-          defaultValue: null,
-          max: 70,
+      {
+        id: ids.assetReferenceFieldDefinition,
+        slug: slugs.assetReferenceFieldDefinition,
+        valueType: 'reference',
+        label: {
+          en: 'Header image',
         },
-        {
-          id: ids.assetReferenceFieldDefinition,
-          slug: slugs.assetReferenceFieldDefinition,
-          valueType: 'reference',
-          label: {
-            en: 'Header image',
-          },
-          description: {
-            en: 'An image for this product displayed on top of the page',
-          },
-          fieldType: 'asset',
-          inputWidth: '12',
-          isDisabled: false,
-          isRequired: true,
-          isUnique: false,
-          min: null,
-          max: null,
+        description: {
+          en: 'An image for this product displayed on top of the page',
         },
-        {
-          id: ids.entryReferenceFieldDefinition,
-          slug: slugs.entryReferenceFieldDefinition,
-          valueType: 'reference',
-          label: {
-            en: 'Related products',
-          },
-          description: {
-            en: 'References to other products that the visitor might want to check out too',
-          },
-          fieldType: 'entry',
-          ofCollections: [],
-          inputWidth: '12',
-          isDisabled: false,
-          isRequired: false,
-          isUnique: false,
-          min: null,
-          max: null,
+        fieldType: 'asset',
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
+        min: null,
+        max: null,
+      },
+      {
+        id: ids.entryReferenceFieldDefinition,
+        slug: slugs.entryReferenceFieldDefinition,
+        valueType: 'reference',
+        label: {
+          en: 'Related products',
         },
-      ],
+        description: {
+          en: 'References to other products that the visitor might want to check out too',
+        },
+        fieldType: 'entry',
+        ofCollections: [],
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: false,
+        isUnique: false,
+        min: null,
+        max: null,
+      },
+    ],
   });
 
   // Add circular reference to products

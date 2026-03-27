@@ -100,24 +100,20 @@ export class AssetService extends AbstractEntityService {
           size,
         };
 
-        return this.withGitRollback(
-          projectPath,
-          async () => {
-            await Fs.copyFile(validatedProps.filePath, assetPath);
-            await this.jsonFileService.create(
-              assetFile,
-              assetFilePath,
-              assetFileSchema
-            );
-            await this.gitService.add(projectPath, [assetFilePath, assetPath]);
-            await this.gitService.commit(projectPath, {
-              method: 'create',
-              reference: { objectType: 'asset', id },
-            });
-            return this.toAsset(validatedProps.projectId, assetFile);
-          },
-          [assetPath, assetFilePath]
-        );
+        return this.withGitRollback(projectPath, async () => {
+          await Fs.copyFile(validatedProps.filePath, assetPath);
+          await this.jsonFileService.create(
+            assetFile,
+            assetFilePath,
+            assetFileSchema
+          );
+          await this.gitService.add(projectPath, [assetFilePath, assetPath]);
+          await this.gitService.commit(projectPath, {
+            method: 'create',
+            reference: { objectType: 'asset', id },
+          });
+          return this.toAsset(validatedProps.projectId, assetFile);
+        }, [assetPath, assetFilePath]);
       }
     );
   }
@@ -231,10 +227,7 @@ export class AssetService extends AbstractEntityService {
 
             await Fs.copyFile(validatedProps.newFilePath, assetPath);
             await Fs.remove(prevAssetPath);
-            await this.gitService.add(projectPath, [
-              prevAssetPath,
-              assetPath,
-            ]);
+            await this.gitService.add(projectPath, [prevAssetPath, assetPath]);
             await this.jsonFileService.update(
               assetFile,
               assetFilePath,
@@ -381,9 +374,7 @@ export class AssetService extends AbstractEntityService {
     const mimeType = mime.getType(filePath);
 
     if (mimeType === null) {
-      throw CoreError.badRequest(
-        `Unsupported MIME type of file "${filePath}"`
-      );
+      throw CoreError.badRequest(`Unsupported MIME type of file "${filePath}"`);
     }
 
     const extension = mime.getExtension(mimeType);

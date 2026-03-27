@@ -115,9 +115,7 @@ export abstract class AbstractEntityService extends AbstractService {
     switch (type) {
       case objectTypeSchema.enum.asset:
         if (!projectId) {
-          throw CoreError.badRequest(
-            'Missing required parameter "projectId"'
-          );
+          throw CoreError.badRequest('Missing required parameter "projectId"');
         }
         return this.getFileReferences(pathTo.lfs(projectId));
 
@@ -126,25 +124,19 @@ export abstract class AbstractEntityService extends AbstractService {
 
       case objectTypeSchema.enum.collection:
         if (!projectId) {
-          throw CoreError.badRequest(
-            'Missing required parameter "projectId"'
-          );
+          throw CoreError.badRequest('Missing required parameter "projectId"');
         }
         return this.getFolderReferences(pathTo.collections(projectId));
 
       case objectTypeSchema.enum.component:
         if (!projectId) {
-          throw CoreError.badRequest(
-            'Missing required parameter "projectId"'
-          );
+          throw CoreError.badRequest('Missing required parameter "projectId"');
         }
         return this.getFolderReferences(pathTo.components(projectId));
 
       case objectTypeSchema.enum.entry:
         if (!projectId) {
-          throw CoreError.badRequest(
-            'Missing required parameter "projectId"'
-          );
+          throw CoreError.badRequest('Missing required parameter "projectId"');
         }
         if (!collectionId) {
           throw CoreError.badRequest(

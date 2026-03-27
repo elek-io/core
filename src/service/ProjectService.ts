@@ -241,7 +241,11 @@ export class ProjectService
           updated: datetime(),
         };
 
-        await this.jsonFileService.update(projectFile, filePath, projectFileSchema);
+        await this.jsonFileService.update(
+          projectFile,
+          filePath,
+          projectFileSchema
+        );
         await this.gitService.add(projectPath, [filePath]);
         await this.gitService.commit(projectPath, {
           method: 'update',

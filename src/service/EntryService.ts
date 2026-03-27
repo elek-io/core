@@ -77,9 +77,7 @@ export class EntryService
   /**
    * Creates a new Entry for given Collection
    */
-  public create<T extends Entry = Entry>(
-    props: CreateEntryProps
-  ): Promise<T> {
+  public create<T extends Entry = Entry>(props: CreateEntryProps): Promise<T> {
     return this.validated('create', createEntrySchema, props, async () => {
       const id = uuid();
       const projectPath = pathTo.project(props.projectId);
@@ -108,10 +106,7 @@ export class EntryService
       const validatedResult =
         createEntrySchemaFromFieldDefinitions.safeParse(props);
       if (!validatedResult.success) {
-        throw CoreError.badRequest(
-          'Validation failed',
-          validatedResult.error
-        );
+        throw CoreError.badRequest('Validation failed', validatedResult.error);
       }
       const validatedProps = validatedResult.data;
 
@@ -124,27 +119,23 @@ export class EntryService
         updated: null,
       };
 
-      return this.withGitRollback(
-        projectPath,
-        async () => {
-          await this.jsonFileService.create(
-            entryFile,
-            entryFilePath,
-            entryFileSchema
-          );
-          await this.gitService.add(projectPath, [entryFilePath]);
-          await this.gitService.commit(projectPath, {
-            method: 'create',
-            reference: {
-              objectType: 'entry',
-              id: entryFile.id,
-              collectionId: props.collectionId,
-            },
-          });
-          return this.toEntry(entryFile) as T;
-        },
-        [entryFilePath]
-      );
+      return this.withGitRollback(projectPath, async () => {
+        await this.jsonFileService.create(
+          entryFile,
+          entryFilePath,
+          entryFileSchema
+        );
+        await this.gitService.add(projectPath, [entryFilePath]);
+        await this.gitService.commit(projectPath, {
+          method: 'create',
+          reference: {
+            objectType: 'entry',
+            id: entryFile.id,
+            collectionId: props.collectionId,
+          },
+        });
+        return this.toEntry(entryFile) as T;
+      }, [entryFilePath]);
     });
   }
 
@@ -191,9 +182,7 @@ export class EntryService
   /**
    * Updates an Entry of given Collection with new Values
    */
-  public update<T extends Entry = Entry>(
-    props: UpdateEntryProps
-  ): Promise<T> {
+  public update<T extends Entry = Entry>(props: UpdateEntryProps): Promise<T> {
     return this.validated('update', updateEntrySchema, props, async () => {
       const projectPath = pathTo.project(props.projectId);
       const entryFilePath = pathTo.entryFile(
@@ -227,10 +216,7 @@ export class EntryService
       const validatedResult =
         updateEntrySchemaFromFieldDefinitions.safeParse(props);
       if (!validatedResult.success) {
-        throw CoreError.badRequest(
-          'Validation failed',
-          validatedResult.error
-        );
+        throw CoreError.badRequest('Validation failed', validatedResult.error);
       }
       const validatedProps = validatedResult.data;
 

@@ -45,9 +45,7 @@ export abstract class AbstractService {
       return await body(parsed.data);
     } catch (error) {
       const coreError =
-        error instanceof CoreError
-          ? error
-          : CoreError.fromUnknown(error);
+        error instanceof CoreError ? error : CoreError.fromUnknown(error);
       this.logService.error({
         source: 'core',
         message: `[${coreError.type}] (${this.type}.${context}) ${coreError.message}`,

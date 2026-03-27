@@ -139,11 +139,10 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
       };
     },
     load: async (context) => {
-      const resolvedCollectionId =
-        await core.collections.resolveCollectionId({
-          projectId: props.projectId,
-          idOrSlug: props.collectionIdOrSlug,
-        });
+      const resolvedCollectionId = await core.collections.resolveCollectionId({
+        projectId: props.projectId,
+        idOrSlug: props.collectionIdOrSlug,
+      });
       context.logger.info(
         `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" and Project "${props.projectId}"`
       );

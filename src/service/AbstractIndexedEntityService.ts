@@ -48,9 +48,7 @@ export abstract class AbstractIndexedEntityService extends AbstractEntityService
    * Returns the cached index or rebuilds it from disk.
    * Deduplicates concurrent rebuild calls for the same project.
    */
-  protected async getIndex(
-    projectId: string
-  ): Promise<Record<string, string>> {
+  protected async getIndex(projectId: string): Promise<Record<string, string>> {
     const cached = this.cachedIndex.get(projectId);
     if (cached) return cached;
 
@@ -129,10 +127,7 @@ export abstract class AbstractIndexedEntityService extends AbstractEntityService
     return this.lookupBySlug(projectId, idOrSlug);
   }
 
-  private async lookupBySlug(
-    projectId: string,
-    slug: string
-  ): Promise<string> {
+  private async lookupBySlug(projectId: string, slug: string): Promise<string> {
     const index = await this.getIndex(projectId);
     for (const [uuid, slugValue] of Object.entries(index)) {
       if (slugValue === slug) {

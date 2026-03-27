@@ -133,23 +133,19 @@ export class CollectionService
           updated: null,
         };
 
-        await this.withGitRollback(
-          projectPath,
-          async () => {
-            await Fs.ensureDir(collectionPath);
-            await this.jsonFileService.create(
-              collectionFile,
-              collectionFilePath,
-              collectionFileSchema
-            );
-            await this.gitService.add(projectPath, [collectionFilePath]);
-            await this.gitService.commit(projectPath, {
-              method: 'create',
-              reference: { objectType: 'collection', id },
-            });
-          },
-          [collectionPath]
-        );
+        await this.withGitRollback(projectPath, async () => {
+          await Fs.ensureDir(collectionPath);
+          await this.jsonFileService.create(
+            collectionFile,
+            collectionFilePath,
+            collectionFileSchema
+          );
+          await this.gitService.add(projectPath, [collectionFilePath]);
+          await this.gitService.commit(projectPath, {
+            method: 'create',
+            reference: { objectType: 'collection', id },
+          });
+        }, [collectionPath]);
 
         // Update the index (not git-tracked, self-heals on failure)
         index[id] = slugPlural;
@@ -369,84 +365,69 @@ export class CollectionService
    * The Fields that Collection used are not deleted.
    */
   public async delete(props: DeleteCollectionProps): Promise<void> {
-    return this.validated(
-      'delete',
-      deleteCollectionSchema,
-      props,
-      async () => {
-        const projectPath = pathTo.project(props.projectId);
-        const collectionPath = pathTo.collection(props.projectId, props.id);
+    return this.validated('delete', deleteCollectionSchema, props, async () => {
+      const projectPath = pathTo.project(props.projectId);
+      const collectionPath = pathTo.collection(props.projectId, props.id);
 
-        await this.withGitRollback(projectPath, async () => {
-          await Fs.remove(collectionPath);
-          await this.gitService.add(projectPath, [collectionPath]);
-          await this.gitService.commit(projectPath, {
-            method: 'delete',
-            reference: { objectType: 'collection', id: props.id },
-          });
+      await this.withGitRollback(projectPath, async () => {
+        await Fs.remove(collectionPath);
+        await this.gitService.add(projectPath, [collectionPath]);
+        await this.gitService.commit(projectPath, {
+          method: 'delete',
+          reference: { objectType: 'collection', id: props.id },
         });
+      });
 
-        // Remove from index (not git-tracked, self-heals on failure)
-        const index = await this.getIndex(props.projectId);
-        delete index[props.id];
-        await this.safeWriteIndex(props.projectId, index);
-      }
-    );
+      // Remove from index (not git-tracked, self-heals on failure)
+      const index = await this.getIndex(props.projectId);
+      delete index[props.id];
+      await this.safeWriteIndex(props.projectId, index);
+    });
   }
 
   public async list<T extends Collection = Collection>(
     props: ListCollectionsProps
   ): Promise<PaginatedList<T>> {
-    return this.validated(
-      'list',
-      listCollectionsSchema,
-      props,
-      async () => {
-        const offset = props.offset || 0;
-        const limit = props.limit ?? 15;
+    return this.validated('list', listCollectionsSchema, props, async () => {
+      const offset = props.offset || 0;
+      const limit = props.limit ?? 15;
 
-        const collectionReferences = await this.listReferences(
-          objectTypeSchema.enum.collection,
-          props.projectId
-        );
+      const collectionReferences = await this.listReferences(
+        objectTypeSchema.enum.collection,
+        props.projectId
+      );
 
-        const partialCollectionReferences =
-          limit === 0
-            ? collectionReferences.slice(offset)
-            : collectionReferences.slice(offset, offset + limit);
+      const partialCollectionReferences =
+        limit === 0
+          ? collectionReferences.slice(offset)
+          : collectionReferences.slice(offset, offset + limit);
 
-        const collections = await this.collectResults(
-          partialCollectionReferences.map((reference) =>
-            this.read<T>({
-              projectId: props.projectId,
-              id: reference.id,
-            })
-          )
-        );
+      const collections = await this.collectResults(
+        partialCollectionReferences.map((reference) =>
+          this.read<T>({
+            projectId: props.projectId,
+            id: reference.id,
+          })
+        )
+      );
 
-        return {
-          total: collectionReferences.length,
-          limit,
-          offset,
-          list: collections,
-        };
-      }
-    );
+      return {
+        total: collectionReferences.length,
+        limit,
+        offset,
+        list: collections,
+      };
+    });
   }
 
   public async count(props: CountCollectionsProps): Promise<number> {
-    return this.validated(
-      'count',
-      countCollectionsSchema,
-      props,
-      async () => {
-        const refs = await this.listReferences(
-          objectTypeSchema.enum.collection,
-          props.projectId
-        );
-        return refs.length;
-      }
-    );
+    return this.validated('count', countCollectionsSchema, props, async () => {
+      const refs = await this.listReferences(
+        objectTypeSchema.enum.collection,
+        props.projectId
+      );
+      return refs.length;
+    });
   }
 
   /**

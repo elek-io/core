@@ -58,8 +58,16 @@ const router = createRouter()
     async (c) => {
       const { projectId, collectionIdOrSlug } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
-      const collectionId = await c.var.collectionService.resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug });
-      const data = await c.var.entryService.list({ projectId, collectionId, limit, offset });
+      const collectionId = await c.var.collectionService.resolveCollectionId({
+        projectId,
+        idOrSlug: collectionIdOrSlug,
+      });
+      const data = await c.var.entryService.list({
+        projectId,
+        collectionId,
+        limit,
+        offset,
+      });
 
       return c.json(data, 200);
     }
@@ -102,7 +110,10 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId, collectionIdOrSlug } = c.req.valid('param');
-      const collectionId = await c.var.collectionService.resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug });
+      const collectionId = await c.var.collectionService.resolveCollectionId({
+        projectId,
+        idOrSlug: collectionIdOrSlug,
+      });
       const data = await c.var.entryService.count({ projectId, collectionId });
 
       return c.json(data, 200);
@@ -152,8 +163,15 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId, collectionIdOrSlug, entryId } = c.req.valid('param');
-      const collectionId = await c.var.collectionService.resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug });
-      const data = await c.var.entryService.read({ projectId, collectionId, id: entryId });
+      const collectionId = await c.var.collectionService.resolveCollectionId({
+        projectId,
+        idOrSlug: collectionIdOrSlug,
+      });
+      const data = await c.var.entryService.read({
+        projectId,
+        collectionId,
+        id: entryId,
+      });
 
       return c.json(data, 200);
     }

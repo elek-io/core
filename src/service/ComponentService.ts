@@ -138,23 +138,19 @@ export class ComponentService
           updated: null,
         };
 
-        await this.withGitRollback(
-          projectPath,
-          async () => {
-            await Fs.ensureDir(componentPath);
-            await this.jsonFileService.create(
-              componentFile,
-              componentFilePath,
-              componentFileSchema
-            );
-            await this.gitService.add(projectPath, [componentFilePath]);
-            await this.gitService.commit(projectPath, {
-              method: 'create',
-              reference: { objectType: 'component', id },
-            });
-          },
-          [componentPath]
-        );
+        await this.withGitRollback(projectPath, async () => {
+          await Fs.ensureDir(componentPath);
+          await this.jsonFileService.create(
+            componentFile,
+            componentFilePath,
+            componentFileSchema
+          );
+          await this.gitService.add(projectPath, [componentFilePath]);
+          await this.gitService.commit(projectPath, {
+            method: 'create',
+            reference: { objectType: 'component', id },
+          });
+        }, [componentPath]);
 
         index[id] = componentSlug;
         await this.safeWriteIndex(validatedProps.projectId, index);
@@ -169,28 +165,23 @@ export class ComponentService
   public async read<T extends Component = Component>(
     props: ReadComponentProps
   ): Promise<T> {
-    return this.validated(
-      'read',
-      readComponentSchema,
-      props,
-      async () => {
-        if (!props.commitHash) {
-          const componentFile = await this.jsonFileService.read(
-            pathTo.componentFile(props.projectId, props.id),
-            componentFileSchema
-          );
-          return this.toComponent(componentFile) as T;
-        } else {
-          const content = await this.gitService.getFileContentAtCommit(
-            pathTo.project(props.projectId),
-            pathTo.componentFile(props.projectId, props.id),
-            props.commitHash
-          );
-          const componentFile = this.migrate(JSON.parse(content));
-          return this.toComponent(componentFile) as T;
-        }
+    return this.validated('read', readComponentSchema, props, async () => {
+      if (!props.commitHash) {
+        const componentFile = await this.jsonFileService.read(
+          pathTo.componentFile(props.projectId, props.id),
+          componentFileSchema
+        );
+        return this.toComponent(componentFile) as T;
+      } else {
+        const content = await this.gitService.getFileContentAtCommit(
+          pathTo.project(props.projectId),
+          pathTo.componentFile(props.projectId, props.id),
+          props.commitHash
+        );
+        const componentFile = this.migrate(JSON.parse(content));
+        return this.toComponent(componentFile) as T;
       }
-    );
+    });
   }
 
   /**
@@ -336,97 +327,82 @@ export class ComponentService
    * Blocks deletion if the Component is still referenced by a Collection or another Component.
    */
   public async delete(props: DeleteComponentProps): Promise<void> {
-    return this.validated(
-      'delete',
-      deleteComponentSchema,
-      props,
-      async () => {
-        const referencingEntities = await this.findReferences(
-          props.projectId,
-          props.id
+    return this.validated('delete', deleteComponentSchema, props, async () => {
+      const referencingEntities = await this.findReferences(
+        props.projectId,
+        props.id
+      );
+
+      if (referencingEntities.length > 0) {
+        const refs = referencingEntities
+          .map((r) => `${r.type} "${r.id}"`)
+          .join(', ');
+        throw CoreError.conflict(
+          `Cannot delete Component "${props.id}": it is still referenced by ${refs}`
         );
-
-        if (referencingEntities.length > 0) {
-          const refs = referencingEntities
-            .map((r) => `${r.type} "${r.id}"`)
-            .join(', ');
-          throw CoreError.conflict(
-            `Cannot delete Component "${props.id}": it is still referenced by ${refs}`
-          );
-        }
-
-        const projectPath = pathTo.project(props.projectId);
-        const componentPath = pathTo.component(props.projectId, props.id);
-
-        await this.withGitRollback(projectPath, async () => {
-          await Fs.remove(componentPath);
-          await this.gitService.add(projectPath, [componentPath]);
-          await this.gitService.commit(projectPath, {
-            method: 'delete',
-            reference: { objectType: 'component', id: props.id },
-          });
-        });
-
-        const index = await this.getIndex(props.projectId);
-        delete index[props.id];
-        await this.safeWriteIndex(props.projectId, index);
       }
-    );
+
+      const projectPath = pathTo.project(props.projectId);
+      const componentPath = pathTo.component(props.projectId, props.id);
+
+      await this.withGitRollback(projectPath, async () => {
+        await Fs.remove(componentPath);
+        await this.gitService.add(projectPath, [componentPath]);
+        await this.gitService.commit(projectPath, {
+          method: 'delete',
+          reference: { objectType: 'component', id: props.id },
+        });
+      });
+
+      const index = await this.getIndex(props.projectId);
+      delete index[props.id];
+      await this.safeWriteIndex(props.projectId, index);
+    });
   }
 
   public async list<T extends Component = Component>(
     props: ListComponentsProps
   ): Promise<PaginatedList<T>> {
-    return this.validated(
-      'list',
-      listComponentsSchema,
-      props,
-      async () => {
-        const offset = props.offset || 0;
-        const limit = props.limit ?? 15;
+    return this.validated('list', listComponentsSchema, props, async () => {
+      const offset = props.offset || 0;
+      const limit = props.limit ?? 15;
 
-        const componentReferences = await this.listReferences(
-          objectTypeSchema.enum.component,
-          props.projectId
-        );
+      const componentReferences = await this.listReferences(
+        objectTypeSchema.enum.component,
+        props.projectId
+      );
 
-        const partialComponentReferences =
-          limit === 0
-            ? componentReferences.slice(offset)
-            : componentReferences.slice(offset, offset + limit);
+      const partialComponentReferences =
+        limit === 0
+          ? componentReferences.slice(offset)
+          : componentReferences.slice(offset, offset + limit);
 
-        const components = await this.collectResults(
-          partialComponentReferences.map((reference) =>
-            this.read<T>({
-              projectId: props.projectId,
-              id: reference.id,
-            })
-          )
-        );
+      const components = await this.collectResults(
+        partialComponentReferences.map((reference) =>
+          this.read<T>({
+            projectId: props.projectId,
+            id: reference.id,
+          })
+        )
+      );
 
-        return {
-          total: componentReferences.length,
-          limit,
-          offset,
-          list: components,
-        };
-      }
-    );
+      return {
+        total: componentReferences.length,
+        limit,
+        offset,
+        list: components,
+      };
+    });
   }
 
   public async count(props: CountComponentsProps): Promise<number> {
-    return this.validated(
-      'count',
-      countComponentsSchema,
-      props,
-      async () => {
-        const refs = await this.listReferences(
-          objectTypeSchema.enum.component,
-          props.projectId
-        );
-        return refs.length;
-      }
-    );
+    return this.validated('count', countComponentsSchema, props, async () => {
+      const refs = await this.listReferences(
+        objectTypeSchema.enum.component,
+        props.projectId
+      );
+      return refs.length;
+    });
   }
 
   /**
@@ -589,10 +565,7 @@ export class ComponentService
           if (dynamicValue && Array.isArray(dynamicValue.content)) {
             for (const contentObject of dynamicValue.content) {
               if (contentObject.componentId === componentId) {
-                for (const {
-                  oldSlug,
-                  newSlug: renamedSlug,
-                } of slugRenames) {
+                for (const { oldSlug, newSlug: renamedSlug } of slugRenames) {
                   if (oldSlug in contentObject.values) {
                     contentObject.values[renamedSlug] =
                       contentObject.values[oldSlug]!;
