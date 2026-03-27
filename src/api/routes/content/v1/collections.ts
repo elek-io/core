@@ -1,4 +1,4 @@
-import { createRouter, handleResult } from '../../../lib/util.js';
+import { createRouter } from '../../../lib/util.js';
 import { createRoute, z } from '@hono/zod-openapi';
 import {
   collectionSchema,
@@ -51,13 +51,13 @@ const router = createRouter()
     async (c) => {
       const { projectId } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
-      const result = await c.var.collectionService.list({
+      const data = await c.var.collectionService.list({
         projectId,
         limit,
         offset,
       });
 
-      return handleResult(c, result);
+      return c.json(data, 200);
     }
   )
 
@@ -91,9 +91,9 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId } = c.req.valid('param');
-      const result = await c.var.collectionService.count({ projectId });
+      const data = await c.var.collectionService.count({ projectId });
 
-      return handleResult(c, result);
+      return c.json(data, 200);
     }
   )
 
@@ -134,11 +134,10 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId, collectionIdOrSlug } = c.req.valid('param');
-      const result = await c.var.collectionService
-        .resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug })
-        .andThen((id) => c.var.collectionService.read({ projectId, id }));
+      const id = await c.var.collectionService.resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug });
+      const data = await c.var.collectionService.read({ projectId, id });
 
-      return handleResult(c, result);
+      return c.json(data, 200);
     }
   );
 

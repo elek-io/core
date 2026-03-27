@@ -1,6 +1,5 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
-import { errAsync } from 'neverthrow';
 import {
   afterAll,
   afterEach,
@@ -10,7 +9,7 @@ import {
   it,
   vi,
 } from 'vitest';
-import { CoreErrors } from '../util/shared.js';
+import { CoreError } from '../util/shared.js';
 import core, {
   type Asset,
   type Collection,
@@ -49,30 +48,27 @@ describe('Error handling and rollback', function () {
     });
 
     it('should roll back a failed create', async function () {
-      const countBefore = (
-        await core.assets.count({
-          projectId: project.id,
-        })
-      )._unsafeUnwrap();
+      const countBefore = await core.assets.count({
+        projectId: project.id,
+      });
 
       vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
+        Promise.reject(CoreError.internal('Simulated commit failure'))
       );
 
-      const rollbackResult1 = await core.assets.create({
-        projectId: project.id,
-        filePath: Path.resolve('src/test/data/150x150.png'),
-        name: 'rollback-test',
-        description: 'Should not persist',
-      });
-      expect(rollbackResult1.isErr()).toBe(true);
+      await expect(
+        core.assets.create({
+          projectId: project.id,
+          filePath: Path.resolve('src/test/data/150x150.png'),
+          name: 'rollback-test',
+          description: 'Should not persist',
+        })
+      ).rejects.toThrow();
 
       // Count unchanged - the new asset was cleaned up
-      const countAfter = (
-        await core.assets.count({
-          projectId: project.id,
-        })
-      )._unsafeUnwrap();
+      const countAfter = await core.assets.count({
+        projectId: project.id,
+      });
       expect(countAfter).toEqual(countBefore);
     });
 
@@ -85,43 +81,43 @@ describe('Error handling and rollback', function () {
       const oldHash = await getFileHash(oldAssetPath);
 
       vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
+        Promise.reject(CoreError.internal('Simulated commit failure'))
       );
 
-      const rollbackResult2 = await core.assets.update({
-        projectId: project.id,
-        id: asset.id,
-        name: 'updated-name',
-        description: asset.description,
-        newFilePath: Path.resolve('src/test/data/150x150.jpeg'),
-      });
-      expect(rollbackResult2.isErr()).toBe(true);
+      await expect(
+        core.assets.update({
+          projectId: project.id,
+          id: asset.id,
+          name: 'updated-name',
+          description: asset.description,
+          newFilePath: Path.resolve('src/test/data/150x150.jpeg'),
+        })
+      ).rejects.toThrow();
 
       // Original file still exists and is unchanged
       expect(await Fs.pathExists(oldAssetPath)).toBe(true);
       expect(await getFileHash(oldAssetPath)).toEqual(oldHash);
 
       // Asset is still readable with original data
-      const readAsset = (
-        await core.assets.read({
-          projectId: project.id,
-          id: asset.id,
-        })
-      )._unsafeUnwrap();
+      const readAsset = await core.assets.read({
+        projectId: project.id,
+        id: asset.id,
+      });
       expect(readAsset.name).toEqual(asset.name);
     });
 
     it('should roll back a failed delete and restore the file', async function () {
       vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
+        Promise.reject(CoreError.internal('Simulated commit failure'))
       );
 
-      const rollbackResult3 = await core.assets.delete({
-        projectId: project.id,
-        id: asset.id,
-        extension: asset.extension,
-      });
-      expect(rollbackResult3.isErr()).toBe(true);
+      await expect(
+        core.assets.delete({
+          projectId: project.id,
+          id: asset.id,
+          extension: asset.extension,
+        })
+      ).rejects.toThrow();
 
       // Asset file and metadata still exist
       expect(
@@ -134,12 +130,10 @@ describe('Error handling and rollback', function () {
       ).toBe(true);
 
       // Asset is still readable
-      const readAsset = (
-        await core.assets.read({
-          projectId: project.id,
-          id: asset.id,
-        })
-      )._unsafeUnwrap();
+      const readAsset = await core.assets.read({
+        projectId: project.id,
+        id: asset.id,
+      });
       expect(readAsset.id).toEqual(asset.id);
     });
   });
@@ -163,35 +157,32 @@ describe('Error handling and rollback', function () {
     });
 
     it('should roll back a failed create', async function () {
-      const countBefore = (
-        await core.collections.count({
-          projectId: project.id,
-        })
-      )._unsafeUnwrap();
+      const countBefore = await core.collections.count({
+        projectId: project.id,
+      });
 
       vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
+        Promise.reject(CoreError.internal('Simulated commit failure'))
       );
 
-      const rollbackResult4 = await core.collections.create({
-        projectId: project.id,
-        icon: 'home',
-        name: {
-          singular: { en: 'Rollback Item' },
-          plural: { en: 'Rollback Items' },
-        },
-        slug: { singular: 'rollback-item', plural: 'rollback-items' },
-        description: { en: 'Should not persist' },
-        fieldDefinitions: [],
-      });
-      expect(rollbackResult4.isErr()).toBe(true);
+      await expect(
+        core.collections.create({
+          projectId: project.id,
+          icon: 'home',
+          name: {
+            singular: { en: 'Rollback Item' },
+            plural: { en: 'Rollback Items' },
+          },
+          slug: { singular: 'rollback-item', plural: 'rollback-items' },
+          description: { en: 'Should not persist' },
+          fieldDefinitions: [],
+        })
+      ).rejects.toThrow();
 
       // Count unchanged - the new collection was cleaned up
-      const countAfter = (
-        await core.collections.count({
-          projectId: project.id,
-        })
-      )._unsafeUnwrap();
+      const countAfter = await core.collections.count({
+        projectId: project.id,
+      });
       expect(countAfter).toEqual(countBefore);
     });
 
@@ -199,18 +190,19 @@ describe('Error handling and rollback', function () {
       const originalName = collection.name;
 
       vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
+        Promise.reject(CoreError.internal('Simulated commit failure'))
       );
 
-      const rollbackResult5 = await core.collections.update({
-        ...collection,
-        projectId: project.id,
-        name: {
-          singular: { en: 'Updated Name' },
-          plural: { en: 'Updated Names' },
-        },
-      });
-      expect(rollbackResult5.isErr()).toBe(true);
+      await expect(
+        core.collections.update({
+          ...collection,
+          projectId: project.id,
+          name: {
+            singular: { en: 'Updated Name' },
+            plural: { en: 'Updated Names' },
+          },
+        })
+      ).rejects.toThrow();
 
       // Collection file exists and contains original data
       expect(
@@ -219,25 +211,24 @@ describe('Error handling and rollback', function () {
         )
       ).toBe(true);
 
-      const readCollection = (
-        await core.collections.read({
-          projectId: project.id,
-          id: collection.id,
-        })
-      )._unsafeUnwrap();
+      const readCollection = await core.collections.read({
+        projectId: project.id,
+        id: collection.id,
+      });
       expect(readCollection.name.singular.en).toEqual(originalName.singular.en);
     });
 
     it('should roll back a failed delete and restore the collection', async function () {
       vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
+        Promise.reject(CoreError.internal('Simulated commit failure'))
       );
 
-      const rollbackResult6 = await core.collections.delete({
-        projectId: project.id,
-        id: collection.id,
-      });
-      expect(rollbackResult6.isErr()).toBe(true);
+      await expect(
+        core.collections.delete({
+          projectId: project.id,
+          id: collection.id,
+        })
+      ).rejects.toThrow();
 
       // Collection folder and file still exist
       expect(
@@ -247,12 +238,10 @@ describe('Error handling and rollback', function () {
       ).toBe(true);
 
       // Collection is still readable
-      const readCollection = (
-        await core.collections.read({
-          projectId: project.id,
-          id: collection.id,
-        })
-      )._unsafeUnwrap();
+      const readCollection = await core.collections.read({
+        projectId: project.id,
+        id: collection.id,
+      });
       expect(readCollection.id).toEqual(collection.id);
     });
 
@@ -267,39 +256,33 @@ describe('Error handling and rollback', function () {
         await Fs.chmod(indexPath, 0o444);
 
         // Create should succeed - git commit works, safeWriteIndex swallows the error
-        const newCollection = (
-          await core.collections.create({
-            projectId: project.id,
-            icon: 'plus',
-            name: {
-              singular: { en: 'Index Test' },
-              plural: { en: 'Index Tests' },
-            },
-            slug: { singular: 'index-test', plural: 'index-tests' },
-            description: { en: 'Testing safeWriteIndex' },
-            fieldDefinitions: [],
-          })
-        )._unsafeUnwrap();
+        const newCollection = await core.collections.create({
+          projectId: project.id,
+          icon: 'plus',
+          name: {
+            singular: { en: 'Index Test' },
+            plural: { en: 'Index Tests' },
+          },
+          slug: { singular: 'index-test', plural: 'index-tests' },
+          description: { en: 'Testing safeWriteIndex' },
+          fieldDefinitions: [],
+        });
 
         // Restore permissions before assertions
         await Fs.chmod(indexPath, 0o644);
 
         // Entity was committed successfully - readable by ID
-        const readById = (
-          await core.collections.read({
-            projectId: project.id,
-            id: newCollection.id,
-          })
-        )._unsafeUnwrap();
+        const readById = await core.collections.read({
+          projectId: project.id,
+          id: newCollection.id,
+        });
         expect(readById.id).toEqual(newCollection.id);
 
         // Readable by slug - triggers index rebuild from disk
-        const readBySlug = (
-          await core.collections.readBySlug({
-            projectId: project.id,
-            slug: newCollection.slug.plural,
-          })
-        )._unsafeUnwrap();
+        const readBySlug = await core.collections.readBySlug({
+          projectId: project.id,
+          slug: newCollection.slug.plural,
+        });
         expect(readBySlug.id).toEqual(newCollection.id);
       } finally {
         // Ensure permissions are always restored
@@ -327,47 +310,44 @@ describe('Error handling and rollback', function () {
     });
 
     it('should roll back a failed create', async function () {
-      const countBefore = (
-        await core.components.count({
-          projectId: project.id,
-        })
-      )._unsafeUnwrap();
+      const countBefore = await core.components.count({
+        projectId: project.id,
+      });
 
       vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
+        Promise.reject(CoreError.internal('Simulated commit failure'))
       );
 
-      const rollbackResult7 = await core.components.create({
-        projectId: project.id,
-        name: { en: 'Rollback Component' },
-        slug: 'rollback-component',
-        description: { en: 'Should not persist' },
-        fieldDefinitions: [
-          {
-            id: uuid(),
-            slug: 'test-field',
-            valueType: 'string',
-            fieldType: 'text',
-            label: { en: 'Test' },
-            description: null,
-            defaultValue: null,
-            isRequired: false,
-            isDisabled: false,
-            isUnique: false,
-            inputWidth: '12',
-            min: null,
-            max: null,
-          },
-        ],
-      });
-      expect(rollbackResult7.isErr()).toBe(true);
+      await expect(
+        core.components.create({
+          projectId: project.id,
+          name: { en: 'Rollback Component' },
+          slug: 'rollback-component',
+          description: { en: 'Should not persist' },
+          fieldDefinitions: [
+            {
+              id: uuid(),
+              slug: 'test-field',
+              valueType: 'string',
+              fieldType: 'text',
+              label: { en: 'Test' },
+              description: null,
+              defaultValue: null,
+              isRequired: false,
+              isDisabled: false,
+              isUnique: false,
+              inputWidth: '12',
+              min: null,
+              max: null,
+            },
+          ],
+        })
+      ).rejects.toThrow();
 
       // Count unchanged
-      const countAfter = (
-        await core.components.count({
-          projectId: project.id,
-        })
-      )._unsafeUnwrap();
+      const countAfter = await core.components.count({
+        projectId: project.id,
+      });
       expect(countAfter).toEqual(countBefore);
     });
 
@@ -375,15 +355,16 @@ describe('Error handling and rollback', function () {
       const originalName = component.name;
 
       vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
+        Promise.reject(CoreError.internal('Simulated commit failure'))
       );
 
-      const rollbackResult8 = await core.components.update({
-        ...component,
-        projectId: project.id,
-        name: { en: 'Updated Component' },
-      });
-      expect(rollbackResult8.isErr()).toBe(true);
+      await expect(
+        core.components.update({
+          ...component,
+          projectId: project.id,
+          name: { en: 'Updated Component' },
+        })
+      ).rejects.toThrow();
 
       // Component file exists and contains original data
       expect(
@@ -392,25 +373,24 @@ describe('Error handling and rollback', function () {
         )
       ).toBe(true);
 
-      const readComponent = (
-        await core.components.read({
-          projectId: project.id,
-          id: component.id,
-        })
-      )._unsafeUnwrap();
+      const readComponent = await core.components.read({
+        projectId: project.id,
+        id: component.id,
+      });
       expect(readComponent.name.en).toEqual(originalName.en);
     });
 
     it('should roll back a failed delete and restore the component', async function () {
       vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
+        Promise.reject(CoreError.internal('Simulated commit failure'))
       );
 
-      const rollbackResult9 = await core.components.delete({
-        projectId: project.id,
-        id: component.id,
-      });
-      expect(rollbackResult9.isErr()).toBe(true);
+      await expect(
+        core.components.delete({
+          projectId: project.id,
+          id: component.id,
+        })
+      ).rejects.toThrow();
 
       // Component folder and file still exist
       expect(
@@ -420,12 +400,10 @@ describe('Error handling and rollback', function () {
       ).toBe(true);
 
       // Component is still readable
-      const readComponent = (
-        await core.components.read({
-          projectId: project.id,
-          id: component.id,
-        })
-      )._unsafeUnwrap();
+      const readComponent = await core.components.read({
+        projectId: project.id,
+        id: component.id,
+      });
       expect(readComponent.id).toEqual(component.id);
     });
   });
@@ -453,47 +431,44 @@ describe('Error handling and rollback', function () {
     });
 
     it('should roll back a failed create', async function () {
-      const countBefore = (
-        await core.entries.count({
-          projectId: project.id,
-          collectionId: collection.id,
-        })
-      )._unsafeUnwrap();
-
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
-      );
-
-      const result = await core.entries.create({
+      const countBefore = await core.entries.count({
         projectId: project.id,
         collectionId: collection.id,
-        values: {
-          'product-name': {
-            objectType: 'value',
-            valueType: 'string',
-            content: { en: 'rollback test' },
-          },
-          'header-image': {
-            objectType: 'value',
-            valueType: 'reference',
-            content: { en: [{ objectType: 'asset', id: asset.id }] },
-          },
-          'related-products': {
-            objectType: 'value',
-            valueType: 'reference',
-            content: { en: [] },
-          },
-        },
       });
-      expect(result.isErr()).toBe(true);
 
-      // Count unchanged
-      const countAfter = (
-        await core.entries.count({
+      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
+        Promise.reject(CoreError.internal('Simulated commit failure'))
+      );
+
+      await expect(
+        core.entries.create({
           projectId: project.id,
           collectionId: collection.id,
+          values: {
+            'product-name': {
+              objectType: 'value',
+              valueType: 'string',
+              content: { en: 'rollback test' },
+            },
+            'header-image': {
+              objectType: 'value',
+              valueType: 'reference',
+              content: { en: [{ objectType: 'asset', id: asset.id }] },
+            },
+            'related-products': {
+              objectType: 'value',
+              valueType: 'reference',
+              content: { en: [] },
+            },
+          },
         })
-      )._unsafeUnwrap();
+      ).rejects.toThrow();
+
+      // Count unchanged
+      const countAfter = await core.entries.count({
+        projectId: project.id,
+        collectionId: collection.id,
+      });
       expect(countAfter).toEqual(countBefore);
     });
 
@@ -501,23 +476,24 @@ describe('Error handling and rollback', function () {
       const originalValues = entry.values;
 
       vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
+        Promise.reject(CoreError.internal('Simulated commit failure'))
       );
 
-      const rollbackResult10 = await core.entries.update({
-        projectId: project.id,
-        collectionId: collection.id,
-        id: entry.id,
-        values: {
-          ...entry.values,
-          'product-name': {
-            objectType: 'value',
-            valueType: 'string',
-            content: { en: 'UPDATED SHOULD NOT PERSIST' },
+      await expect(
+        core.entries.update({
+          projectId: project.id,
+          collectionId: collection.id,
+          id: entry.id,
+          values: {
+            ...entry.values,
+            'product-name': {
+              objectType: 'value',
+              valueType: 'string',
+              content: { en: 'UPDATED SHOULD NOT PERSIST' },
+            },
           },
-        },
-      });
-      expect(rollbackResult10.isErr()).toBe(true);
+        })
+      ).rejects.toThrow();
 
       // Entry file exists and contains original data
       const entryFilePath = core.util.pathTo.entryFile(
@@ -527,27 +503,26 @@ describe('Error handling and rollback', function () {
       );
       expect(await Fs.pathExists(entryFilePath)).toBe(true);
 
-      const readEntry = (
-        await core.entries.read({
-          projectId: project.id,
-          collectionId: collection.id,
-          id: entry.id,
-        })
-      )._unsafeUnwrap();
+      const readEntry = await core.entries.read({
+        projectId: project.id,
+        collectionId: collection.id,
+        id: entry.id,
+      });
       expect(readEntry.values).toEqual(originalValues);
     });
 
     it('should roll back a failed delete and restore the entry', async function () {
       vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        errAsync(CoreErrors.internal('Simulated commit failure'))
+        Promise.reject(CoreError.internal('Simulated commit failure'))
       );
 
-      const rollbackResult11 = await core.entries.delete({
-        projectId: project.id,
-        collectionId: collection.id,
-        id: entry.id,
-      });
-      expect(rollbackResult11.isErr()).toBe(true);
+      await expect(
+        core.entries.delete({
+          projectId: project.id,
+          collectionId: collection.id,
+          id: entry.id,
+        })
+      ).rejects.toThrow();
 
       // Entry file still exists
       const entryFilePath = core.util.pathTo.entryFile(
@@ -558,13 +533,11 @@ describe('Error handling and rollback', function () {
       expect(await Fs.pathExists(entryFilePath)).toBe(true);
 
       // Entry is still readable
-      const readEntry = (
-        await core.entries.read({
-          projectId: project.id,
-          collectionId: collection.id,
-          id: entry.id,
-        })
-      )._unsafeUnwrap();
+      const readEntry = await core.entries.read({
+        projectId: project.id,
+        collectionId: collection.id,
+        id: entry.id,
+      });
       expect(readEntry.id).toEqual(entry.id);
     });
   });

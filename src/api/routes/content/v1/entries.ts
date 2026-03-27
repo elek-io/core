@@ -1,4 +1,4 @@
-import { createRouter, handleResult } from '../../../lib/util.js';
+import { createRouter } from '../../../lib/util.js';
 import { createRoute, z } from '@hono/zod-openapi';
 import {
   entrySchema,
@@ -58,13 +58,10 @@ const router = createRouter()
     async (c) => {
       const { projectId, collectionIdOrSlug } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
-      const result = await c.var.collectionService
-        .resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug })
-        .andThen((collectionId) =>
-          c.var.entryService.list({ projectId, collectionId, limit, offset })
-        );
+      const collectionId = await c.var.collectionService.resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug });
+      const data = await c.var.entryService.list({ projectId, collectionId, limit, offset });
 
-      return handleResult(c, result);
+      return c.json(data, 200);
     }
   )
 
@@ -105,13 +102,10 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId, collectionIdOrSlug } = c.req.valid('param');
-      const result = await c.var.collectionService
-        .resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug })
-        .andThen((collectionId) =>
-          c.var.entryService.count({ projectId, collectionId })
-        );
+      const collectionId = await c.var.collectionService.resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug });
+      const data = await c.var.entryService.count({ projectId, collectionId });
 
-      return handleResult(c, result);
+      return c.json(data, 200);
     }
   )
 
@@ -158,13 +152,10 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId, collectionIdOrSlug, entryId } = c.req.valid('param');
-      const result = await c.var.collectionService
-        .resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug })
-        .andThen((collectionId) =>
-          c.var.entryService.read({ projectId, collectionId, id: entryId })
-        );
+      const collectionId = await c.var.collectionService.resolveCollectionId({ projectId, idOrSlug: collectionIdOrSlug });
+      const data = await c.var.entryService.read({ projectId, collectionId, id: entryId });
 
-      return handleResult(c, result);
+      return c.json(data, 200);
     }
   );
 

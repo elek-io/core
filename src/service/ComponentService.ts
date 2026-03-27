@@ -1,6 +1,5 @@
 import Fs from 'fs-extra';
-import { ResultAsync, errAsync, okAsync } from 'neverthrow';
-import { CoreErrors, parseSchema, type CoreResult } from '../util/shared.js';
+import { CoreError } from '../util/shared.js';
 import {
   componentFileSchema,
   countComponentsSchema,
@@ -88,170 +87,142 @@ export class ComponentService
   /**
    * Resolves a UUID-or-slug string to a component UUID.
    */
-  public resolveComponentId(
+  public async resolveComponentId(
     props: ResolveComponentIdProps
-  ): CoreResult<string> {
-    return this.logged(
-      'resolveComponentId',
-      this.resolveId(props.projectId, props.idOrSlug)
-    );
+  ): Promise<string> {
+    return this.resolveId(props.projectId, props.idOrSlug);
   }
 
   /**
    * Creates a new Component
    */
-  public create<T extends Component = Component>(
+  public async create<T extends Component = Component>(
     props: CreateComponentProps
-  ): CoreResult<T> {
-    return this.logged(
+  ): Promise<T> {
+    return this.validated(
       'create',
-      (() => {
-        const validated = parseSchema(createComponentSchema, props);
-        if (validated.isErr()) return errAsync(validated.error);
-
-        const validatedProps = validated.value;
-
-        return this.validateNoCircularReferences(
+      createComponentSchema,
+      props,
+      async (validatedProps) => {
+        await this.validateNoCircularReferences(
           null,
           validatedProps.fieldDefinitions,
           validatedProps.projectId
-        ).andThen(() => {
-          const id = uuid();
-          const projectPath = pathTo.project(validatedProps.projectId);
-          const componentPath = pathTo.component(validatedProps.projectId, id);
-          const componentFilePath = pathTo.componentFile(
-            validatedProps.projectId,
-            id
+        );
+
+        const id = uuid();
+        const projectPath = pathTo.project(validatedProps.projectId);
+        const componentPath = pathTo.component(validatedProps.projectId, id);
+        const componentFilePath = pathTo.componentFile(
+          validatedProps.projectId,
+          id
+        );
+        const componentSlug = slug(validatedProps.slug);
+
+        const index = await this.getIndex(validatedProps.projectId);
+
+        if (Object.values(index).includes(componentSlug)) {
+          throw CoreError.conflict(
+            `Component slug "${componentSlug}" is already in use by another component`
           );
-          const componentSlug = slug(validatedProps.slug);
+        }
 
-          return this.getIndex(validatedProps.projectId).andThen((index) => {
-            if (Object.values(index).includes(componentSlug)) {
-              return errAsync(
-                CoreErrors.conflict(
-                  `Component slug "${componentSlug}" is already in use by another component`
-                )
-              );
-            }
+        const { projectId: _, ...validatedComponentProps } = validatedProps;
+        const componentFile: ComponentFile = {
+          ...validatedComponentProps,
+          objectType: 'component',
+          id,
+          coreVersion: this.coreVersion,
+          slug: componentSlug,
+          created: datetime(),
+          updated: null,
+        };
 
-            const { projectId: _, ...validatedComponentProps } = validatedProps;
-            const componentFile: ComponentFile = {
-              ...validatedComponentProps,
-              objectType: 'component',
-              id,
-              coreVersion: this.coreVersion,
-              slug: componentSlug,
-              created: datetime(),
-              updated: null,
-            };
-
-            return this.withGitRollback(
-              projectPath,
-              () =>
-                ResultAsync.fromPromise(
-                  Fs.ensureDir(componentPath),
-                  CoreErrors.fromUnknown
-                )
-                  .andThen(() =>
-                    this.jsonFileService.create(
-                      componentFile,
-                      componentFilePath,
-                      componentFileSchema
-                    )
-                  )
-                  .andThen(() =>
-                    this.gitService.add(projectPath, [componentFilePath])
-                  )
-                  .andThen(() =>
-                    this.gitService.commit(projectPath, {
-                      method: 'create',
-                      reference: { objectType: 'component', id },
-                    })
-                  ),
-              [componentPath]
-            ).andThen(() => {
-              index[id] = componentSlug;
-              return ResultAsync.fromPromise(
-                this.safeWriteIndex(validatedProps.projectId, index),
-                CoreErrors.fromUnknown
-              ).map(() => this.toComponent(componentFile) as T);
+        await this.withGitRollback(
+          projectPath,
+          async () => {
+            await Fs.ensureDir(componentPath);
+            await this.jsonFileService.create(
+              componentFile,
+              componentFilePath,
+              componentFileSchema
+            );
+            await this.gitService.add(projectPath, [componentFilePath]);
+            await this.gitService.commit(projectPath, {
+              method: 'create',
+              reference: { objectType: 'component', id },
             });
-          });
-        });
-      })()
+          },
+          [componentPath]
+        );
+
+        index[id] = componentSlug;
+        await this.safeWriteIndex(validatedProps.projectId, index);
+        return this.toComponent(componentFile) as T;
+      }
     );
   }
 
   /**
    * Returns a Component by ID
    */
-  public read<T extends Component = Component>(
+  public async read<T extends Component = Component>(
     props: ReadComponentProps
-  ): CoreResult<T> {
-    return this.logged(
+  ): Promise<T> {
+    return this.validated(
       'read',
-      (() => {
-        const validated = parseSchema(readComponentSchema, props);
-        if (validated.isErr()) return errAsync(validated.error);
-
+      readComponentSchema,
+      props,
+      async () => {
         if (!props.commitHash) {
-          return this.jsonFileService
-            .read(
-              pathTo.componentFile(props.projectId, props.id),
-              componentFileSchema
-            )
-            .map((componentFile) => this.toComponent(componentFile) as T);
+          const componentFile = await this.jsonFileService.read(
+            pathTo.componentFile(props.projectId, props.id),
+            componentFileSchema
+          );
+          return this.toComponent(componentFile) as T;
         } else {
-          return this.gitService
-            .getFileContentAtCommit(
-              pathTo.project(props.projectId),
-              pathTo.componentFile(props.projectId, props.id),
-              props.commitHash
-            )
-            .map((content) => {
-              const componentFile = this.migrate(JSON.parse(content));
-              return this.toComponent(componentFile) as T;
-            });
+          const content = await this.gitService.getFileContentAtCommit(
+            pathTo.project(props.projectId),
+            pathTo.componentFile(props.projectId, props.id),
+            props.commitHash
+          );
+          const componentFile = this.migrate(JSON.parse(content));
+          return this.toComponent(componentFile) as T;
         }
-      })()
+      }
     );
   }
 
   /**
    * Reads a Component by its slug
    */
-  public readBySlug<T extends Component = Component>(
+  public async readBySlug<T extends Component = Component>(
     props: ReadBySlugComponentProps
-  ): CoreResult<T> {
-    return this.logged(
-      'readBySlug',
-      this.resolveComponentId({
-        projectId: props.projectId,
-        idOrSlug: props.slug,
-      }).andThen((id) =>
-        this.read<T>({
-          projectId: props.projectId,
-          id,
-          commitHash: props.commitHash,
-        })
-      )
-    );
+  ): Promise<T> {
+    const id = await this.resolveComponentId({
+      projectId: props.projectId,
+      idOrSlug: props.slug,
+    });
+    return this.read<T>({
+      projectId: props.projectId,
+      id,
+      commitHash: props.commitHash,
+    });
   }
 
   /**
    * Returns the commit history of a Component
    */
-  public history(props: ComponentHistoryProps): CoreResult<GitCommit[]> {
-    return this.logged(
+  public async history(props: ComponentHistoryProps): Promise<GitCommit[]> {
+    return this.validated(
       'history',
-      (() => {
-        const validated = parseSchema(componentHistorySchema, props);
-        if (validated.isErr()) return errAsync(validated.error);
-
+      componentHistorySchema,
+      props,
+      async () => {
         return this.gitService.log(pathTo.project(props.projectId), {
           filePath: pathTo.componentFile(props.projectId, props.id),
         });
-      })()
+      }
     );
   }
 
@@ -261,126 +232,101 @@ export class ComponentService
    * Handles fieldDefinition slug rename cascade: when a sub-field slug changes
    * (matched by UUID), all Entry data referencing this Component is updated.
    */
-  public update<T extends Component = Component>(
+  public async update<T extends Component = Component>(
     props: UpdateComponentProps
-  ): CoreResult<T> {
-    return this.logged(
+  ): Promise<T> {
+    return this.validated(
       'update',
-      (() => {
-        const validated = parseSchema(updateComponentSchema, props);
-        if (validated.isErr()) return errAsync(validated.error);
-
-        const validatedProps = validated.value;
-
-        return this.validateNoCircularReferences(
+      updateComponentSchema,
+      props,
+      async (validatedProps) => {
+        await this.validateNoCircularReferences(
           validatedProps.id,
           validatedProps.fieldDefinitions,
           validatedProps.projectId
-        ).andThen(() => {
-          const projectPath = pathTo.project(validatedProps.projectId);
-          const componentFilePath = pathTo.componentFile(
-            validatedProps.projectId,
-            validatedProps.id
+        );
+
+        const projectPath = pathTo.project(validatedProps.projectId);
+        const componentFilePath = pathTo.componentFile(
+          validatedProps.projectId,
+          validatedProps.id
+        );
+
+        const prevComponentFile = await this.read(validatedProps);
+
+        const { projectId: _, ...validatedUpdateProps } = validatedProps;
+        const componentFile: ComponentFile = {
+          ...prevComponentFile,
+          ...validatedUpdateProps,
+          updated: datetime(),
+        };
+
+        const newSlug = slug(validatedProps.slug);
+
+        // If component slug changed, enforce uniqueness before mutating
+        if (prevComponentFile.slug !== newSlug) {
+          const index = await this.getIndex(validatedProps.projectId);
+          const existingUuid = Object.entries(index).find(
+            ([, s]) => s === newSlug
           );
+          if (existingUuid && existingUuid[0] !== validatedProps.id) {
+            throw CoreError.conflict(
+              `Component slug "${newSlug}" is already in use by another component`
+            );
+          }
+        }
 
-          return this.read(validatedProps).andThen((prevComponentFile) => {
-            const { projectId: _, ...validatedUpdateProps } = validatedProps;
-            const componentFile: ComponentFile = {
-              ...prevComponentFile,
-              ...validatedUpdateProps,
-              updated: datetime(),
-            };
+        const oldFieldDefs = prevComponentFile.fieldDefinitions;
+        const newFieldDefs = validatedProps.fieldDefinitions;
+        const slugRenames: Array<{ oldSlug: string; newSlug: string }> = [];
 
-            const newSlug = slug(validatedProps.slug);
-
-            const slugCheckResult: CoreResult<void> =
-              prevComponentFile.slug !== newSlug
-                ? this.getIndex(validatedProps.projectId).andThen((index) => {
-                    const existingUuid = Object.entries(index).find(
-                      ([, s]) => s === newSlug
-                    );
-                    if (existingUuid && existingUuid[0] !== validatedProps.id) {
-                      return errAsync(
-                        CoreErrors.conflict(
-                          `Component slug "${newSlug}" is already in use by another component`
-                        )
-                      );
-                    }
-                    return okAsync(undefined);
-                  })
-                : okAsync(undefined);
-
-            return slugCheckResult.andThen(() => {
-              const oldFieldDefs = prevComponentFile.fieldDefinitions;
-              const newFieldDefs = validatedProps.fieldDefinitions;
-              const slugRenames: Array<{ oldSlug: string; newSlug: string }> =
-                [];
-
-              const oldByUuid = new Map(
-                oldFieldDefs.map((fd) => [fd.id, fd])
-              );
-              for (const newFd of newFieldDefs) {
-                const oldFd = oldByUuid.get(newFd.id);
-                if (oldFd && oldFd.slug !== newFd.slug) {
-                  slugRenames.push({
-                    oldSlug: oldFd.slug,
-                    newSlug: newFd.slug,
-                  });
-                }
-              }
-
-              return this.withGitRollback(projectPath, () => {
-                const filesToGitAdd: string[] = [componentFilePath];
-
-                const cascadeResult: CoreResult<void> =
-                  slugRenames.length > 0
-                    ? this.cascadeComponentSlugRenames(
-                        validatedProps.projectId,
-                        validatedProps.id,
-                        slugRenames
-                      ).map((cascadedFiles) => {
-                        filesToGitAdd.push(...cascadedFiles);
-                      })
-                    : okAsync(undefined);
-
-                return cascadeResult
-                  .andThen(() =>
-                    this.jsonFileService.update(
-                      componentFile,
-                      componentFilePath,
-                      componentFileSchema
-                    )
-                  )
-                  .andThen(() =>
-                    this.gitService.add(projectPath, filesToGitAdd)
-                  )
-                  .andThen(() =>
-                    this.gitService.commit(projectPath, {
-                      method: 'update',
-                      reference: {
-                        objectType: 'component',
-                        id: componentFile.id,
-                      },
-                    })
-                  );
-              }).andThen(() => {
-                if (prevComponentFile.slug !== newSlug) {
-                  return this.getIndex(validatedProps.projectId).andThen(
-                    (index) => {
-                      index[validatedProps.id] = newSlug;
-                      return ResultAsync.fromPromise(
-                        this.safeWriteIndex(validatedProps.projectId, index),
-                        CoreErrors.fromUnknown
-                      ).map(() => this.toComponent(componentFile) as T);
-                    }
-                  );
-                }
-                return okAsync(this.toComponent(componentFile) as T);
-              });
+        const oldByUuid = new Map(oldFieldDefs.map((fd) => [fd.id, fd]));
+        for (const newFd of newFieldDefs) {
+          const oldFd = oldByUuid.get(newFd.id);
+          if (oldFd && oldFd.slug !== newFd.slug) {
+            slugRenames.push({
+              oldSlug: oldFd.slug,
+              newSlug: newFd.slug,
             });
+          }
+        }
+
+        await this.withGitRollback(projectPath, async () => {
+          const filesToGitAdd: string[] = [componentFilePath];
+
+          if (slugRenames.length > 0) {
+            const cascadedFiles = await this.cascadeComponentSlugRenames(
+              validatedProps.projectId,
+              validatedProps.id,
+              slugRenames
+            );
+            filesToGitAdd.push(...cascadedFiles);
+          }
+
+          await this.jsonFileService.update(
+            componentFile,
+            componentFilePath,
+            componentFileSchema
+          );
+          await this.gitService.add(projectPath, filesToGitAdd);
+          await this.gitService.commit(projectPath, {
+            method: 'update',
+            reference: {
+              objectType: 'component',
+              id: componentFile.id,
+            },
           });
         });
-      })()
+
+        // Update index after successful commit
+        if (prevComponentFile.slug !== newSlug) {
+          const index = await this.getIndex(validatedProps.projectId);
+          index[validatedProps.id] = newSlug;
+          await this.safeWriteIndex(validatedProps.projectId, index);
+        }
+
+        return this.toComponent(componentFile) as T;
+      }
     );
   }
 
@@ -389,115 +335,97 @@ export class ComponentService
    *
    * Blocks deletion if the Component is still referenced by a Collection or another Component.
    */
-  public delete(props: DeleteComponentProps): CoreResult<void> {
-    return this.logged(
+  public async delete(props: DeleteComponentProps): Promise<void> {
+    return this.validated(
       'delete',
-      (() => {
-        const validated = parseSchema(deleteComponentSchema, props);
-        if (validated.isErr()) return errAsync(validated.error);
-
-        return this.findReferences(props.projectId, props.id).andThen(
-          (referencingEntities) => {
-            if (referencingEntities.length > 0) {
-              const refs = referencingEntities
-                .map((r) => `${r.type} "${r.id}"`)
-                .join(', ');
-              return errAsync(
-                CoreErrors.conflict(
-                  `Cannot delete Component "${props.id}": it is still referenced by ${refs}`
-                )
-              );
-            }
-
-            const projectPath = pathTo.project(props.projectId);
-            const componentPath = pathTo.component(
-              props.projectId,
-              props.id
-            );
-
-            return this.withGitRollback(projectPath, () =>
-              ResultAsync.fromPromise(
-                Fs.remove(componentPath),
-                CoreErrors.fromUnknown
-              )
-                .andThen(() =>
-                  this.gitService.add(projectPath, [componentPath])
-                )
-                .andThen(() =>
-                  this.gitService.commit(projectPath, {
-                    method: 'delete',
-                    reference: { objectType: 'component', id: props.id },
-                  })
-                )
-            ).andThen(() =>
-              this.getIndex(props.projectId).andThen((index) => {
-                delete index[props.id];
-                return ResultAsync.fromPromise(
-                  this.safeWriteIndex(props.projectId, index),
-                  CoreErrors.fromUnknown
-                );
-              })
-            );
-          }
+      deleteComponentSchema,
+      props,
+      async () => {
+        const referencingEntities = await this.findReferences(
+          props.projectId,
+          props.id
         );
-      })()
+
+        if (referencingEntities.length > 0) {
+          const refs = referencingEntities
+            .map((r) => `${r.type} "${r.id}"`)
+            .join(', ');
+          throw CoreError.conflict(
+            `Cannot delete Component "${props.id}": it is still referenced by ${refs}`
+          );
+        }
+
+        const projectPath = pathTo.project(props.projectId);
+        const componentPath = pathTo.component(props.projectId, props.id);
+
+        await this.withGitRollback(projectPath, async () => {
+          await Fs.remove(componentPath);
+          await this.gitService.add(projectPath, [componentPath]);
+          await this.gitService.commit(projectPath, {
+            method: 'delete',
+            reference: { objectType: 'component', id: props.id },
+          });
+        });
+
+        const index = await this.getIndex(props.projectId);
+        delete index[props.id];
+        await this.safeWriteIndex(props.projectId, index);
+      }
     );
   }
 
-  public list<T extends Component = Component>(
+  public async list<T extends Component = Component>(
     props: ListComponentsProps
-  ): CoreResult<PaginatedList<T>> {
-    return this.logged(
+  ): Promise<PaginatedList<T>> {
+    return this.validated(
       'list',
-      (() => {
-        const validated = parseSchema(listComponentsSchema, props);
-        if (validated.isErr()) return errAsync(validated.error);
-
+      listComponentsSchema,
+      props,
+      async () => {
         const offset = props.offset || 0;
         const limit = props.limit ?? 15;
 
-        return this.listReferences(
+        const componentReferences = await this.listReferences(
           objectTypeSchema.enum.component,
           props.projectId
-        ).andThen((componentReferences) => {
-          const partialComponentReferences =
-            limit === 0
-              ? componentReferences.slice(offset)
-              : componentReferences.slice(offset, offset + limit);
+        );
 
-          return ResultAsync.fromPromise(
-            this.collectResults(
-              partialComponentReferences.map((reference) => {
-                return this.read<T>({
-                  projectId: props.projectId,
-                  id: reference.id,
-                });
-              })
-            ),
-            CoreErrors.fromUnknown
-          ).map((components) => ({
-            total: componentReferences.length,
-            limit,
-            offset,
-            list: components,
-          }));
-        });
-      })()
+        const partialComponentReferences =
+          limit === 0
+            ? componentReferences.slice(offset)
+            : componentReferences.slice(offset, offset + limit);
+
+        const components = await this.collectResults(
+          partialComponentReferences.map((reference) =>
+            this.read<T>({
+              projectId: props.projectId,
+              id: reference.id,
+            })
+          )
+        );
+
+        return {
+          total: componentReferences.length,
+          limit,
+          offset,
+          list: components,
+        };
+      }
     );
   }
 
-  public count(props: CountComponentsProps): CoreResult<number> {
-    return this.logged(
+  public async count(props: CountComponentsProps): Promise<number> {
+    return this.validated(
       'count',
-      (() => {
-        const validated = parseSchema(countComponentsSchema, props);
-        if (validated.isErr()) return errAsync(validated.error);
-
-        return this.listReferences(
+      countComponentsSchema,
+      props,
+      async () => {
+        const refs = await this.listReferences(
           objectTypeSchema.enum.component,
           props.projectId
-        ).map((refs) => refs.length);
-      })()
+        );
+        return refs.length;
+      }
     );
   }
 
@@ -511,11 +439,9 @@ export class ComponentService
   /**
    * Returns all Component UUIDs for a given project
    */
-  public listAllIds(projectId: string): CoreResult<string[]> {
-    return this.logged(
-      'listAllIds',
-      this.getIndex(projectId).map((index) => Object.keys(index))
-    );
+  public async listAllIds(projectId: string): Promise<string[]> {
+    const index = await this.getIndex(projectId);
+    return Object.keys(index);
   }
 
   /**
@@ -543,18 +469,16 @@ export class ComponentService
    * Validates that no circular references exist in dynamic field definitions.
    * Walks the tree of ofComponents references to detect cycles.
    */
-  private validateNoCircularReferences(
+  private async validateNoCircularReferences(
     componentId: string | null,
     fieldDefinitions: FieldDefinition[],
     projectId: string,
     visited: Set<string> = new Set()
-  ): CoreResult<void> {
+  ): Promise<void> {
     if (componentId !== null) {
       if (visited.has(componentId)) {
-        return errAsync(
-          CoreErrors.badRequest(
-            `Circular component reference detected: Component "${componentId}" creates a cycle`
-          )
+        throw CoreError.badRequest(
+          `Circular component reference detected: Component "${componentId}" creates a cycle`
         );
       }
       visited.add(componentId);
@@ -565,40 +489,32 @@ export class ComponentService
     );
 
     if (componentFieldDefs.length === 0) {
-      return okAsync(undefined);
+      return;
     }
-
-    // Process each component field definition sequentially
-    let chain: CoreResult<void> = okAsync(undefined);
 
     for (const fieldDefinition of componentFieldDefs) {
-      chain = chain.andThen(() => {
-        const getComponentIds: CoreResult<string[]> =
-          fieldDefinition.valueType === 'component' &&
-          fieldDefinition.ofComponents.length > 0
-            ? okAsync(fieldDefinition.ofComponents)
-            : this.getIndex(projectId).map((index) => Object.keys(index));
+      let componentIds: string[];
 
-        return getComponentIds.andThen((componentIds) => {
-          let innerChain: CoreResult<void> = okAsync(undefined);
-          for (const cId of componentIds) {
-            innerChain = innerChain.andThen(() =>
-              this.read({ projectId, id: cId }).andThen((component) =>
-                this.validateNoCircularReferences(
-                  cId,
-                  component.fieldDefinitions,
-                  projectId,
-                  new Set(visited)
-                )
-              )
-            );
-          }
-          return innerChain;
-        });
-      });
+      if (
+        fieldDefinition.valueType === 'component' &&
+        fieldDefinition.ofComponents.length > 0
+      ) {
+        componentIds = fieldDefinition.ofComponents;
+      } else {
+        const index = await this.getIndex(projectId);
+        componentIds = Object.keys(index);
+      }
+
+      for (const cId of componentIds) {
+        const component = await this.read({ projectId, id: cId });
+        await this.validateNoCircularReferences(
+          cId,
+          component.fieldDefinitions,
+          projectId,
+          new Set(visited)
+        );
+      }
     }
-
-    return chain;
   }
 
   /**
@@ -606,152 +522,112 @@ export class ComponentService
    * this Component (directly or nested inside other Components).
    * Returns the list of modified Entry file paths for git staging.
    */
-  private cascadeComponentSlugRenames(
+  private async cascadeComponentSlugRenames(
     projectId: string,
     componentId: string,
     slugRenames: Array<{ oldSlug: string; newSlug: string }>
-  ): CoreResult<string[]> {
+  ): Promise<string[]> {
     const modifiedFiles: string[] = [];
     const collectionsPath = pathTo.collections(projectId);
 
-    return ResultAsync.fromPromise(
-      Fs.pathExists(collectionsPath),
-      CoreErrors.fromUnknown
-    ).andThen((exists) => {
-      if (!exists) return okAsync(modifiedFiles);
+    const exists = await Fs.pathExists(collectionsPath);
+    if (!exists) return modifiedFiles;
 
-      return ResultAsync.fromPromise(
-        folders(collectionsPath),
-        CoreErrors.fromUnknown
-      ).andThen((collectionFolders) => {
-        let chain: CoreResult<void> = okAsync(undefined);
+    const collectionFolders = await folders(collectionsPath);
+    const validFolders = collectionFolders.filter(
+      (f) => uuidSchema.safeParse(f.name).success
+    );
 
-        for (const collectionFolder of collectionFolders) {
-          if (!uuidSchema.safeParse(collectionFolder.name).success) continue;
+    for (const collectionFolder of validFolders) {
+      const collectionFile = await this.jsonFileService.read(
+        pathTo.collectionFile(projectId, collectionFolder.name),
+        collectionFileSchema
+      );
 
-          chain = chain.andThen(() =>
-            this.jsonFileService
-              .read(
-                pathTo.collectionFile(projectId, collectionFolder.name),
-                collectionFileSchema
-              )
-              .andThen((collectionFile) => {
-                const fieldDefs = flattenFieldDefinitions(
-                  collectionFile.fieldDefinitions
-                );
+      const fieldDefs = flattenFieldDefinitions(
+        collectionFile.fieldDefinitions
+      );
 
-                return this.findDynamicFieldsReferencingComponent(
-                  fieldDefs,
+      const referencingDynamicFields =
+        await this.findDynamicFieldsReferencingComponent(
+          fieldDefs,
+          componentId,
+          projectId
+        );
+
+      if (referencingDynamicFields.length === 0) continue;
+
+      const entriesPath = pathTo.entries(projectId, collectionFolder.name);
+
+      const entriesExist = await Fs.pathExists(entriesPath);
+      if (!entriesExist) continue;
+
+      const allEntryFiles = await Fs.readdir(entriesPath);
+      const entryFiles = allEntryFiles.filter(
+        (entryFile) =>
+          entryFile.endsWith('.json') && entryFile !== 'collection.json'
+      );
+
+      for (const entryFileName of entryFiles) {
+        const entryId = entryFileName.replace('.json', '');
+        const entryFilePath = pathTo.entryFile(
+          projectId,
+          collectionFolder.name,
+          entryId
+        );
+
+        const entryFile = await this.jsonFileService.read(
+          entryFilePath,
+          entryFileSchema
+        );
+
+        let changed = false;
+        const newValues = { ...entryFile.values };
+
+        for (const s of referencingDynamicFields) {
+          const dynamicValue = newValues[s];
+          if (dynamicValue && Array.isArray(dynamicValue.content)) {
+            for (const contentObject of dynamicValue.content) {
+              if (contentObject.componentId === componentId) {
+                for (const {
+                  oldSlug,
+                  newSlug: renamedSlug,
+                } of slugRenames) {
+                  if (oldSlug in contentObject.values) {
+                    contentObject.values[renamedSlug] =
+                      contentObject.values[oldSlug]!;
+                    delete contentObject.values[oldSlug];
+                    changed = true;
+                  }
+                }
+              }
+
+              changed =
+                this.renameInNestedComponentItems(
+                  contentObject.values,
                   componentId,
-                  projectId
-                ).andThen((referencingDynamicFields) => {
-                  if (referencingDynamicFields.length === 0)
-                    return okAsync(undefined);
-
-                  const entriesPath = pathTo.entries(
-                    projectId,
-                    collectionFolder.name
-                  );
-
-                  return ResultAsync.fromPromise(
-                    Fs.pathExists(entriesPath),
-                    CoreErrors.fromUnknown
-                  ).andThen((entriesExist) => {
-                    if (!entriesExist) return okAsync(undefined);
-
-                    return ResultAsync.fromPromise(
-                      Fs.readdir(entriesPath),
-                      CoreErrors.fromUnknown
-                    ).andThen((allEntryFiles) => {
-                      const entryFiles = allEntryFiles.filter(
-                        (entryFile) =>
-                          entryFile.endsWith('.json') &&
-                          entryFile !== 'collection.json'
-                      );
-
-                      let entryChain: CoreResult<void> = okAsync(undefined);
-
-                      for (const entryFileName of entryFiles) {
-                        const entryId = entryFileName.replace('.json', '');
-                        const entryFilePath = pathTo.entryFile(
-                          projectId,
-                          collectionFolder.name,
-                          entryId
-                        );
-
-                        entryChain = entryChain.andThen(() =>
-                          this.jsonFileService
-                            .read(entryFilePath, entryFileSchema)
-                            .andThen((entryFile) => {
-                              let changed = false;
-                              const newValues = { ...entryFile.values };
-
-                              for (const s of referencingDynamicFields) {
-                                const dynamicValue = newValues[s];
-                                if (
-                                  dynamicValue &&
-                                  Array.isArray(dynamicValue.content)
-                                ) {
-                                  for (const contentObject of dynamicValue.content) {
-                                    if (
-                                      contentObject.componentId === componentId
-                                    ) {
-                                      for (const {
-                                        oldSlug,
-                                        newSlug: renamedSlug,
-                                      } of slugRenames) {
-                                        if (
-                                          oldSlug in contentObject.values
-                                        ) {
-                                          contentObject.values[renamedSlug] =
-                                            contentObject.values[oldSlug]!;
-                                          delete contentObject.values[oldSlug];
-                                          changed = true;
-                                        }
-                                      }
-                                    }
-
-                                    changed =
-                                      this.renameInNestedComponentItems(
-                                        contentObject.values,
-                                        componentId,
-                                        slugRenames
-                                      ) || changed;
-                                  }
-                                }
-                              }
-
-                              if (changed) {
-                                const updatedEntryFile = {
-                                  ...entryFile,
-                                  values: newValues,
-                                };
-                                return this.jsonFileService
-                                  .update(
-                                    updatedEntryFile,
-                                    entryFilePath,
-                                    entryFileSchema
-                                  )
-                                  .map(() => {
-                                    modifiedFiles.push(entryFilePath);
-                                  });
-                              }
-                              return okAsync(undefined);
-                            })
-                        );
-                      }
-
-                      return entryChain;
-                    });
-                  });
-                });
-              })
-          );
+                  slugRenames
+                ) || changed;
+            }
+          }
         }
 
-        return chain.map(() => modifiedFiles);
-      });
-    });
+        if (changed) {
+          const updatedEntryFile = {
+            ...entryFile,
+            values: newValues,
+          };
+          await this.jsonFileService.update(
+            updatedEntryFile,
+            entryFilePath,
+            entryFileSchema
+          );
+          modifiedFiles.push(entryFilePath);
+        }
+      }
+    }
+
+    return modifiedFiles;
   }
 
   /**
@@ -795,14 +671,13 @@ export class ComponentService
    * A dynamic field references a component if its ofComponents contains the componentId,
    * or if any of its ofComponents' own fieldDefinitions transitively reference it.
    */
-  private findDynamicFieldsReferencingComponent(
+  private async findDynamicFieldsReferencingComponent(
     fieldDefinitions: FieldDefinition[],
     componentId: string,
     projectId: string,
     visited: Set<string> = new Set()
-  ): CoreResult<string[]> {
+  ): Promise<string[]> {
     const result: string[] = [];
-    let chain: CoreResult<void> = okAsync(undefined);
 
     for (const fieldDefinition of fieldDefinitions) {
       if (fieldDefinition.valueType === 'component') {
@@ -812,120 +687,91 @@ export class ComponentService
         ) {
           result.push(fieldDefinition.slug);
         } else {
-          const fdSlug = fieldDefinition.slug;
           const referencedIds = fieldDefinition.ofComponents;
+          let found = false;
 
-          chain = chain.andThen(() => {
-            let innerChain: CoreResult<boolean> = okAsync(false);
+          for (const referencedComponentId of referencedIds) {
+            if (found) break;
+            if (visited.has(referencedComponentId)) continue;
 
-            for (const referencedComponentId of referencedIds) {
-              if (visited.has(referencedComponentId)) continue;
-
-              innerChain = innerChain.andThen((alreadyFound) => {
-                if (alreadyFound) return okAsync(true);
-                visited.add(referencedComponentId);
-                return this.read({
-                  projectId,
-                  id: referencedComponentId,
-                }).andThen((component) =>
-                  this.findDynamicFieldsReferencingComponent(
-                    component.fieldDefinitions,
-                    componentId,
-                    projectId,
-                    visited
-                  ).map((nested) => {
-                    if (nested.length > 0) {
-                      result.push(fdSlug);
-                      return true;
-                    }
-                    return false;
-                  })
-                );
-              });
+            visited.add(referencedComponentId);
+            const component = await this.read({
+              projectId,
+              id: referencedComponentId,
+            });
+            const nested = await this.findDynamicFieldsReferencingComponent(
+              component.fieldDefinitions,
+              componentId,
+              projectId,
+              visited
+            );
+            if (nested.length > 0) {
+              result.push(fieldDefinition.slug);
+              found = true;
             }
-
-            return innerChain.map(() => undefined);
-          });
+          }
         }
       }
     }
 
-    return chain.map(() => result);
+    return result;
   }
 
   /**
    * Finds all Collections and Components that reference the given componentId
    * via dynamic (ofComponents) fields.
    */
-  private findReferences(
+  private async findReferences(
     projectId: string,
     componentId: string
-  ): CoreResult<Array<{ type: 'collection' | 'component'; id: string }>> {
-    const results: Array<{ type: 'collection' | 'component'; id: string }> =
-      [];
+  ): Promise<Array<{ type: 'collection' | 'component'; id: string }>> {
+    const results: Array<{ type: 'collection' | 'component'; id: string }> = [];
 
-    return this.getIndex(projectId).andThen((componentIndex) => {
-      let chain: CoreResult<void> = okAsync(undefined);
+    const componentIndex = await this.getIndex(projectId);
+    const otherIds = Object.keys(componentIndex).filter(
+      (id) => id !== componentId
+    );
 
-      for (const otherId of Object.keys(componentIndex)) {
-        if (otherId === componentId) continue;
-        chain = chain.andThen(() =>
-          this.read({ projectId, id: otherId }).map((other) => {
-            if (
-              this.areFieldDefinitionsReferencingComponent(
-                other.fieldDefinitions,
-                componentId
-              )
-            ) {
-              results.push({ type: 'component', id: otherId });
-            }
-          })
-        );
+    for (const otherId of otherIds) {
+      const other = await this.read({ projectId, id: otherId });
+      if (
+        this.areFieldDefinitionsReferencingComponent(
+          other.fieldDefinitions,
+          componentId
+        )
+      ) {
+        results.push({ type: 'component', id: otherId });
       }
+    }
 
-      return chain.andThen(() => {
-        const collectionsPath = pathTo.collections(projectId);
-        return ResultAsync.fromPromise(
-          Fs.pathExists(collectionsPath),
-          CoreErrors.fromUnknown
-        ).andThen((exists) => {
-          if (!exists) return okAsync(results);
+    const collectionsPath = pathTo.collections(projectId);
+    const exists = await Fs.pathExists(collectionsPath);
+    if (!exists) return results;
 
-          return ResultAsync.fromPromise(
-            folders(collectionsPath),
-            CoreErrors.fromUnknown
-          ).andThen((collectionFolders) => {
-            let colChain: CoreResult<void> = okAsync(undefined);
+    const collectionFolders = await folders(collectionsPath);
+    const validFolders = collectionFolders.filter(
+      (f) => uuidSchema.safeParse(f.name).success
+    );
 
-            for (const folder of collectionFolders) {
-              if (!uuidSchema.safeParse(folder.name).success) continue;
-              colChain = colChain.andThen(() =>
-                this.jsonFileService
-                  .read(
-                    pathTo.collectionFile(projectId, folder.name),
-                    collectionFileSchema
-                  )
-                  .map((collectionFile) => {
-                    const fieldDefinitions = flattenFieldDefinitions(
-                      collectionFile.fieldDefinitions
-                    );
-                    if (
-                      this.areFieldDefinitionsReferencingComponent(
-                        fieldDefinitions,
-                        componentId
-                      )
-                    ) {
-                      results.push({ type: 'collection', id: folder.name });
-                    }
-                  })
-              );
-            }
+    for (const folder of validFolders) {
+      const collectionFile = await this.jsonFileService.read(
+        pathTo.collectionFile(projectId, folder.name),
+        collectionFileSchema
+      );
+      const fieldDefinitions = flattenFieldDefinitions(
+        collectionFile.fieldDefinitions
+      );
+      if (
+        this.areFieldDefinitionsReferencingComponent(
+          fieldDefinitions,
+          componentId
+        )
+      ) {
+        results.push({ type: 'collection', id: folder.name });
+      }
+    }
 
-            return colChain.map(() => results);
-          });
-        });
-      });
-    });
+    return results;
   }
 
   /**

@@ -1,4 +1,3 @@
-import { errAsync, okAsync } from 'neverthrow';
 import {
   userTypeSchema,
   setUserSchema,
@@ -8,7 +7,7 @@ import {
   type UserFile,
 } from '../schema/index.js';
 import { pathTo } from '../util/node.js';
-import { parseSchema, type CoreResult } from '../util/shared.js';
+import { CoreError } from '../util/shared.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
@@ -27,13 +26,13 @@ export class UserService {
   /**
    * Returns the User currently working with Core
    */
-  public get(): CoreResult<User | null> {
-    return this.jsonFileService
-      .read(pathTo.userFile, userFileSchema)
-      .orElse(() => {
-        this.logService.info({ source: 'core', message: 'No User found' });
-        return okAsync(null);
-      });
+  public async get(): Promise<User | null> {
+    try {
+      return await this.jsonFileService.read(pathTo.userFile, userFileSchema);
+    } catch {
+      this.logService.info({ source: 'core', message: 'No User found' });
+      return null;
+    }
   }
 
   /**
@@ -41,10 +40,10 @@ export class UserService {
    *
    * By doing so all git operations are done with the signature of this User
    */
-  public set(props: SetUserProps): CoreResult<User> {
-    const validated = parseSchema(setUserSchema, props);
-    if (validated.isErr()) {
-      return errAsync(validated.error);
+  public async set(props: SetUserProps): Promise<User> {
+    const parsed = setUserSchema.safeParse(props);
+    if (!parsed.success) {
+      throw CoreError.badRequest(parsed.error.message, parsed.error);
     }
 
     const userFilePath = pathTo.userFile;
@@ -58,14 +57,11 @@ export class UserService {
       // Return error on failure
     }
 
-    return this.jsonFileService
-      .update(userFile, userFilePath, userFileSchema)
-      .map(() => {
-        this.logService.debug({
-          source: 'core',
-          message: 'Updated User',
-        });
-        return userFile;
-      });
+    await this.jsonFileService.update(userFile, userFilePath, userFileSchema);
+    this.logService.debug({
+      source: 'core',
+      message: 'Updated User',
+    });
+    return userFile;
   }
 }

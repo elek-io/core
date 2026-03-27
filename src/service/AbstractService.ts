@@ -1,5 +1,6 @@
+import type { ZodType } from 'zod';
 import type { ElekIoCoreOptions, ServiceType } from '../schema/index.js';
-import type { CoreResult } from '../util/shared.js';
+import { CoreError } from '../util/shared.js';
 import type { LogService } from './LogService.js';
 
 /**
@@ -21,17 +22,38 @@ export abstract class AbstractService {
   }
 
   /**
-   * Logs errors at the service boundary and passes them through.
-   * Should wrap the return of every public service method.
+   * Validates input with a Zod schema and runs the body if valid.
+   * Logs errors at the service boundary and re-throws.
+   * Should be used at the entry point of every public service method that needs schema validation.
    */
-  protected logged<T>(context: string, result: CoreResult<T>): CoreResult<T> {
-    return result.mapErr((e) => {
+  protected async validated<TSchema, TResult>(
+    context: string,
+    schema: ZodType<TSchema>,
+    data: unknown,
+    body: (props: TSchema) => Promise<TResult>
+  ): Promise<TResult> {
+    const parsed = schema.safeParse(data);
+    if (!parsed.success) {
+      const error = CoreError.badRequest(parsed.error.message, parsed.error);
       this.logService.error({
         source: 'core',
-        message: `[${e.type}] (${this.type}.${context}) ${e.message}`,
-        meta: e,
+        message: `[${error.type}] (${this.type}.${context}) ${error.message}`,
       });
-      return e;
-    });
+      throw error;
+    }
+    try {
+      return await body(parsed.data);
+    } catch (error) {
+      const coreError =
+        error instanceof CoreError
+          ? error
+          : CoreError.fromUnknown(error);
+      this.logService.error({
+        source: 'core',
+        message: `[${coreError.type}] (${this.type}.${context}) ${coreError.message}`,
+        meta: { type: coreError.type, statusCode: coreError.statusCode },
+      });
+      throw coreError;
+    }
   }
 }

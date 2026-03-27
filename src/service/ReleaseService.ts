@@ -34,14 +34,7 @@ import {
   type CollectionChange,
 } from '../schema/index.js';
 import { pathTo } from '../util/node.js';
-import {
-  datetime,
-  CoreErrors,
-  parseSchema,
-  errAsync,
-  okAsync,
-  type CoreResult,
-} from '../util/shared.js';
+import { CoreError, datetime } from '../util/shared.js';
 import { AbstractService } from './AbstractService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
@@ -79,163 +72,126 @@ export class ReleaseService extends AbstractService {
    * Returns a read-only summary of all changes and the computed next version.
    * If there are no changes, the next version and bump will be null.
    */
-  public prepare(props: PrepareReleaseProps): CoreResult<ReleaseDiff> {
-    return this.logged(
-      'prepare',
-      (() => {
-        const validated = parseSchema(prepareReleaseSchema, props);
-        if (validated.isErr()) {
-          return errAsync(validated.error);
+  public prepare(props: PrepareReleaseProps): Promise<ReleaseDiff> {
+    return this.validated('prepare', prepareReleaseSchema, props, async () => {
+      const projectPath = pathTo.project(props.projectId);
+      const productionRef = projectBranchSchema.enum.production;
+
+      const currentBranch =
+        await this.gitService.branches.current(projectPath);
+      if (currentBranch !== projectBranchSchema.enum.work) {
+        throw CoreError.preconditionFailed(
+          `Not on work branch (currently on "${currentBranch}")`
+        );
+      }
+
+      const project = await this.projectService.read({ id: props.projectId });
+      const currentVersion = project.version;
+
+      const productionProject = await this.getProjectAtRef(
+        props.projectId,
+        projectPath,
+        productionRef
+      );
+      const projectDiff = this.diffProject(project, productionProject);
+
+      const currentCollections = await this.getCollectionsAtRef(
+        props.projectId,
+        projectPath,
+        projectBranchSchema.enum.work
+      );
+      const productionCollections = await this.getCollectionsAtRef(
+        props.projectId,
+        projectPath,
+        productionRef
+      );
+      const collectionDiff = this.diffCollections(
+        currentCollections,
+        productionCollections
+      );
+
+      const currentAssets = await this.getAssetsAtRef(
+        props.projectId,
+        projectPath,
+        projectBranchSchema.enum.work
+      );
+      const productionAssets = await this.getAssetsAtRef(
+        props.projectId,
+        projectPath,
+        productionRef
+      );
+      const assetDiff = this.diffAssets(currentAssets, productionAssets);
+
+      const currentComponents = await this.getComponentsAtRef(
+        props.projectId,
+        projectPath,
+        projectBranchSchema.enum.work
+      );
+      const productionComponents = await this.getComponentsAtRef(
+        props.projectId,
+        projectPath,
+        productionRef
+      );
+      const componentDiff = this.diffComponents(
+        currentComponents,
+        productionComponents
+      );
+
+      const allCollectionIds = new Set([
+        ...currentCollections.map((c) => c.id),
+        ...productionCollections.map((c) => c.id),
+      ]);
+
+      const entryDiff = await this.diffEntries(
+        props.projectId,
+        projectPath,
+        allCollectionIds,
+        productionRef
+      );
+
+      // Combine bumps from all diffs
+      let finalBump: SemverBump | null = null;
+      for (const bump of [
+        projectDiff.bump,
+        collectionDiff.bump,
+        componentDiff.bump,
+        assetDiff.bump,
+        entryDiff.bump,
+      ]) {
+        if (bump) {
+          finalBump = finalBump ? this.higherBump(finalBump, bump) : bump;
         }
+      }
 
-        const projectPath = pathTo.project(props.projectId);
-        const productionRef = projectBranchSchema.enum.production;
+      if (!finalBump) {
+        const hasContentChanges = await this.hasCommitsBetween(
+          projectPath,
+          productionRef,
+          projectBranchSchema.enum.work
+        );
+        if (hasContentChanges) {
+          finalBump = 'patch';
+        }
+      }
 
-        return this.gitService.branches
-          .current(projectPath)
-          .andThen((currentBranch) => {
-            if (currentBranch !== projectBranchSchema.enum.work) {
-              return errAsync(
-                CoreErrors.preconditionFailed(
-                  `Not on work branch (currently on "${currentBranch}")`
-                )
-              );
-            }
+      const nextVersion = finalBump
+        ? Semver.inc(currentVersion, finalBump)
+        : null;
 
-            return this.projectService.read({ id: props.projectId });
-          })
-          .andThen((project) => {
-            const currentVersion = project.version;
-
-            return this.getProjectAtRef(
-              props.projectId,
-              projectPath,
-              productionRef
-            ).andThen((productionProject) => {
-              const projectDiff = this.diffProject(project, productionProject);
-
-              return this.getCollectionsAtRef(
-                props.projectId,
-                projectPath,
-                projectBranchSchema.enum.work
-              ).andThen((currentCollections) =>
-                this.getCollectionsAtRef(
-                  props.projectId,
-                  projectPath,
-                  productionRef
-                ).andThen((productionCollections) => {
-                  const collectionDiff = this.diffCollections(
-                    currentCollections,
-                    productionCollections
-                  );
-
-                  return this.getAssetsAtRef(
-                    props.projectId,
-                    projectPath,
-                    projectBranchSchema.enum.work
-                  ).andThen((currentAssets) =>
-                    this.getAssetsAtRef(
-                      props.projectId,
-                      projectPath,
-                      productionRef
-                    ).andThen((productionAssets) => {
-                      const assetDiff = this.diffAssets(
-                        currentAssets,
-                        productionAssets
-                      );
-
-                      return this.getComponentsAtRef(
-                        props.projectId,
-                        projectPath,
-                        projectBranchSchema.enum.work
-                      ).andThen((currentComponents) =>
-                        this.getComponentsAtRef(
-                          props.projectId,
-                          projectPath,
-                          productionRef
-                        ).andThen((productionComponents) => {
-                          const componentDiff = this.diffComponents(
-                            currentComponents,
-                            productionComponents
-                          );
-
-                          const allCollectionIds = new Set([
-                            ...currentCollections.map((c) => c.id),
-                            ...productionCollections.map((c) => c.id),
-                          ]);
-
-                          return this.diffEntries(
-                            props.projectId,
-                            projectPath,
-                            allCollectionIds,
-                            productionRef
-                          ).andThen((entryDiff) => {
-                            // Combine bumps from all diffs
-                            let finalBump: SemverBump | null = null;
-                            for (const bump of [
-                              projectDiff.bump,
-                              collectionDiff.bump,
-                              componentDiff.bump,
-                              assetDiff.bump,
-                              entryDiff.bump,
-                            ]) {
-                              if (bump) {
-                                finalBump = finalBump
-                                  ? this.higherBump(finalBump, bump)
-                                  : bump;
-                              }
-                            }
-
-                            const finalize = (
-                              resolvedBump: SemverBump | null
-                            ): CoreResult<ReleaseDiff> => {
-                              const nextVersion = resolvedBump
-                                ? Semver.inc(currentVersion, resolvedBump)
-                                : null;
-
-                              return okAsync({
-                                project,
-                                bump: resolvedBump,
-                                currentVersion,
-                                nextVersion,
-                                projectChanges: projectDiff.projectChanges,
-                                collectionChanges:
-                                  collectionDiff.collectionChanges,
-                                fieldChanges: collectionDiff.fieldChanges,
-                                componentChanges:
-                                  componentDiff.componentChanges,
-                                componentFieldChanges:
-                                  componentDiff.componentFieldChanges,
-                                assetChanges: assetDiff.assetChanges,
-                                entryChanges: entryDiff.entryChanges,
-                              });
-                            };
-
-                            if (!finalBump) {
-                              return this.hasCommitsBetween(
-                                projectPath,
-                                productionRef,
-                                projectBranchSchema.enum.work
-                              ).andThen((hasContentChanges) => {
-                                if (hasContentChanges) {
-                                  finalBump = 'patch';
-                                }
-                                return finalize(finalBump);
-                              });
-                            }
-
-                            return finalize(finalBump);
-                          });
-                        })
-                      );
-                    })
-                  );
-                })
-              );
-            });
-          });
-      })()
-    );
+      return {
+        project,
+        bump: finalBump,
+        currentVersion,
+        nextVersion,
+        projectChanges: projectDiff.projectChanges,
+        collectionChanges: collectionDiff.collectionChanges,
+        fieldChanges: collectionDiff.fieldChanges,
+        componentChanges: componentDiff.componentChanges,
+        componentFieldChanges: componentDiff.componentFieldChanges,
+        assetChanges: assetDiff.assetChanges,
+        entryChanges: entryDiff.entryChanges,
+      };
+    });
   }
 
   /**
@@ -247,93 +203,82 @@ export class ReleaseService extends AbstractService {
    * 5. Merging `production` back into `work` (fast-forward to sync the version commit)
    * 6. Switching back to `work`
    */
-  public create(props: CreateReleaseProps): CoreResult<ReleaseResult> {
-    return this.logged(
-      'create',
-      (() => {
-        const validated = parseSchema(createReleaseSchema, props);
-        if (validated.isErr()) {
-          return errAsync(validated.error);
-        }
+  public create(props: CreateReleaseProps): Promise<ReleaseResult> {
+    return this.validated('create', createReleaseSchema, props, async () => {
+      const projectPath = pathTo.project(props.projectId);
+      const projectFilePath = pathTo.projectFile(props.projectId);
 
-        const projectPath = pathTo.project(props.projectId);
-        const projectFilePath = pathTo.projectFile(props.projectId);
+      const diff = await this.prepare(props);
 
-        return this.prepare(props).andThen((diff) => {
-          if (!diff.bump || !diff.nextVersion) {
-            return errAsync(
-              CoreErrors.preconditionFailed(
-                'Cannot create a release: no changes detected since the last full release'
-              )
-            );
-          }
+      if (!diff.bump || !diff.nextVersion) {
+        throw CoreError.preconditionFailed(
+          'Cannot create a release: no changes detected since the last full release'
+        );
+      }
 
-          const nextVersion = diff.nextVersion;
+      const nextVersion = diff.nextVersion;
 
-          return this.gitService.branches
-            .switch(projectPath, projectBranchSchema.enum.production)
-            .andThen(() =>
-              this.gitService.merge(projectPath, projectBranchSchema.enum.work)
-            )
-            .andThen(() => {
-              const updatedProjectFile = {
-                ...diff.project,
-                version: nextVersion,
-                updated: datetime(),
-              };
+      try {
+        await this.gitService.branches.switch(
+          projectPath,
+          projectBranchSchema.enum.production
+        );
+        await this.gitService.merge(
+          projectPath,
+          projectBranchSchema.enum.work
+        );
 
-              return this.jsonFileService.update(
-                updatedProjectFile,
-                projectFilePath,
-                projectFileSchema
-              );
-            })
-            .andThen(() => this.gitService.add(projectPath, [projectFilePath]))
-            .andThen(() =>
-              this.gitService.commit(projectPath, {
-                method: 'release',
-                reference: { objectType: 'project', id: props.projectId },
-              })
-            )
-            .andThen(() =>
-              this.gitService.tags.create({
-                path: projectPath,
-                message: { type: 'release', version: nextVersion },
-              })
-            )
-            .andThen(() =>
-              this.gitService.branches.switch(
-                projectPath,
-                projectBranchSchema.enum.work
-              )
-            )
-            .andThen(() =>
-              this.gitService.merge(
-                projectPath,
-                projectBranchSchema.enum.production
-              )
-            )
-            .map(() => {
-              this.logService.info({
-                source: 'core',
-                message: `Released version ${nextVersion} (${diff.bump} bump)`,
-              });
+        const updatedProjectFile = {
+          ...diff.project,
+          version: nextVersion,
+          updated: datetime(),
+        };
 
-              return {
-                version: nextVersion,
-                diff,
-              };
-            })
-            .orElse((error) => {
-              // Best-effort recovery: switch back to work branch
-              return this.gitService.branches
-                .switch(projectPath, projectBranchSchema.enum.work)
-                .andThen(() => errAsync(error))
-                .orElse(() => errAsync(error));
-            });
+        await this.jsonFileService.update(
+          updatedProjectFile,
+          projectFilePath,
+          projectFileSchema
+        );
+        await this.gitService.add(projectPath, [projectFilePath]);
+        await this.gitService.commit(projectPath, {
+          method: 'release',
+          reference: { objectType: 'project', id: props.projectId },
         });
-      })()
-    );
+        await this.gitService.tags.create({
+          path: projectPath,
+          message: { type: 'release', version: nextVersion },
+        });
+        await this.gitService.branches.switch(
+          projectPath,
+          projectBranchSchema.enum.work
+        );
+        await this.gitService.merge(
+          projectPath,
+          projectBranchSchema.enum.production
+        );
+
+        this.logService.info({
+          source: 'core',
+          message: `Released version ${nextVersion} (${diff.bump} bump)`,
+        });
+
+        return {
+          version: nextVersion,
+          diff,
+        };
+      } catch (error) {
+        // Best-effort recovery: switch back to work branch
+        try {
+          await this.gitService.branches.switch(
+            projectPath,
+            projectBranchSchema.enum.work
+          );
+        } catch {
+          // Ignore recovery failure
+        }
+        throw error;
+      }
+    });
   }
 
   /**
@@ -348,303 +293,262 @@ export class ReleaseService extends AbstractService {
    */
   public createPreview(
     props: CreatePreviewReleaseProps
-  ): CoreResult<ReleaseResult> {
-    return this.logged(
+  ): Promise<ReleaseResult> {
+    return this.validated(
       'createPreview',
-      (() => {
-        const validated = parseSchema(createPreviewReleaseSchema, props);
-        if (validated.isErr()) {
-          return errAsync(validated.error);
-        }
-
+      createPreviewReleaseSchema,
+      props,
+      async () => {
         const projectPath = pathTo.project(props.projectId);
         const projectFilePath = pathTo.projectFile(props.projectId);
 
-        return this.prepare(props).andThen((diff) => {
-          if (!diff.bump || !diff.nextVersion) {
-            return errAsync(
-              CoreErrors.preconditionFailed(
-                'Cannot create a preview release: no changes detected since the last full release'
-              )
-            );
-          }
+        const diff = await this.prepare(props);
 
-          return this.countPreviewsSinceLastRelease(
-            projectPath,
-            diff.nextVersion
-          ).andThen((previewNumber) => {
-            const previewVersion = `${diff.nextVersion}-preview.${previewNumber + 1}`;
+        if (!diff.bump || !diff.nextVersion) {
+          throw CoreError.preconditionFailed(
+            'Cannot create a preview release: no changes detected since the last full release'
+          );
+        }
 
-            const updatedProjectFile = {
-              ...diff.project,
-              version: previewVersion,
-              updated: datetime(),
-            };
+        const previewNumber = await this.countPreviewsSinceLastRelease(
+          projectPath,
+          diff.nextVersion
+        );
+        const previewVersion = `${diff.nextVersion}-preview.${previewNumber + 1}`;
 
-            return this.jsonFileService
-              .update(updatedProjectFile, projectFilePath, projectFileSchema)
-              .andThen(() =>
-                this.gitService.add(projectPath, [projectFilePath])
-              )
-              .andThen(() =>
-                this.gitService.commit(projectPath, {
-                  method: 'release',
-                  reference: { objectType: 'project', id: props.projectId },
-                })
-              )
-              .andThen(() =>
-                this.gitService.tags.create({
-                  path: projectPath,
-                  message: { type: 'preview', version: previewVersion },
-                })
-              )
-              .map(() => {
-                this.logService.info({
-                  source: 'core',
-                  message: `Preview released version ${previewVersion} (${diff.bump} bump)`,
-                });
+        const updatedProjectFile = {
+          ...diff.project,
+          version: previewVersion,
+          updated: datetime(),
+        };
 
-                return {
-                  version: previewVersion,
-                  diff,
-                };
-              })
-              .orElse((error) => {
-                // Best-effort recovery: switch back to work branch
-                return this.gitService.branches
-                  .switch(projectPath, projectBranchSchema.enum.work)
-                  .andThen(() => errAsync(error))
-                  .orElse(() => errAsync(error));
-              });
+        try {
+          await this.jsonFileService.update(
+            updatedProjectFile,
+            projectFilePath,
+            projectFileSchema
+          );
+          await this.gitService.add(projectPath, [projectFilePath]);
+          await this.gitService.commit(projectPath, {
+            method: 'release',
+            reference: { objectType: 'project', id: props.projectId },
           });
-        });
-      })()
+          await this.gitService.tags.create({
+            path: projectPath,
+            message: { type: 'preview', version: previewVersion },
+          });
+
+          this.logService.info({
+            source: 'core',
+            message: `Preview released version ${previewVersion} (${diff.bump} bump)`,
+          });
+
+          return {
+            version: previewVersion,
+            diff,
+          };
+        } catch (error) {
+          // Best-effort recovery: switch back to work branch
+          try {
+            await this.gitService.branches.switch(
+              projectPath,
+              projectBranchSchema.enum.work
+            );
+          } catch {
+            // Ignore recovery failure
+          }
+          throw error;
+        }
+      }
     );
   }
 
   /**
    * Reads the project file as it exists at a given git ref
    */
-  private getProjectAtRef(
+  private async getProjectAtRef(
     projectId: string,
     projectPath: string,
     ref: string
-  ): CoreResult<ProjectFile | null> {
-    return this.gitService
-      .getFileContentAtCommit(projectPath, pathTo.projectFile(projectId), ref)
-      .andThen((content) => {
-        const parsed = parseSchema(projectFileSchema, JSON.parse(content));
-        if (parsed.isErr()) {
-          return errAsync(parsed.error);
-        }
-        return okAsync(parsed.value as ProjectFile | null);
-      })
-      .orElse(() => {
-        // Project may not exist at this ref (first release scenario)
-        return okAsync(null);
-      });
+  ): Promise<ProjectFile | null> {
+    try {
+      const content = await this.gitService.getFileContentAtCommit(
+        projectPath,
+        pathTo.projectFile(projectId),
+        ref
+      );
+      return projectFileSchema.parse(JSON.parse(content));
+    } catch {
+      // Project may not exist at this ref (first release scenario)
+      return null;
+    }
   }
 
   /**
    * Reads asset metadata files as they exist at a given git ref
    */
-  private getAssetsAtRef(
+  private async getAssetsAtRef(
     projectId: string,
     projectPath: string,
     ref: string
-  ): CoreResult<AssetFile[]> {
+  ): Promise<AssetFile[]> {
     const assetsPath = pathTo.assets(projectId);
+    const fileNames = await this.gitService.listTreeAtCommit(
+      projectPath,
+      assetsPath,
+      ref
+    );
+    const assets: AssetFile[] = [];
+    const jsonFiles = fileNames.filter((f) => f.endsWith('.json'));
 
-    return this.gitService
-      .listTreeAtCommit(projectPath, assetsPath, ref)
-      .andThen((fileNames) => {
-        const assets: AssetFile[] = [];
-        let chain: CoreResult<void> = okAsync(undefined);
+    for (const fileName of jsonFiles) {
+      const assetId = fileName.replace('.json', '');
+      const assetFilePath = pathTo.assetFile(projectId, assetId);
 
-        for (const fileName of fileNames) {
-          if (!fileName.endsWith('.json')) continue;
-
-          const assetId = fileName.replace('.json', '');
-          const assetFilePath = pathTo.assetFile(projectId, assetId);
-
-          chain = chain.andThen(() =>
-            this.gitService
-              .getFileContentAtCommit(projectPath, assetFilePath, ref)
-              .andThen((content) => {
-                const parsed = parseSchema(
-                  assetFileSchema,
-                  JSON.parse(content)
-                );
-                if (parsed.isOk()) {
-                  assets.push(parsed.value);
-                }
-                return okAsync(undefined);
-              })
-              .orElse(() => {
-                this.logService.debug({
-                  source: 'core',
-                  message: `Skipping asset "${fileName}" at ref "${ref}" during release diff`,
-                });
-                return okAsync(undefined);
-              })
-          );
+      try {
+        const content = await this.gitService.getFileContentAtCommit(
+          projectPath,
+          assetFilePath,
+          ref
+        );
+        const parsed = assetFileSchema.safeParse(JSON.parse(content));
+        if (parsed.success) {
+          assets.push(parsed.data);
         }
+      } catch {
+        this.logService.debug({
+          source: 'core',
+          message: `Skipping asset "${fileName}" at ref "${ref}" during release diff`,
+        });
+      }
+    }
 
-        return chain.map(() => assets);
-      });
+    return assets;
   }
 
   /**
    * Reads entry files for a single collection as they exist at a given git ref
    */
-  private getEntriesAtRef(
+  private async getEntriesAtRef(
     projectId: string,
     projectPath: string,
     collectionId: string,
     ref: string
-  ): CoreResult<EntryFile[]> {
+  ): Promise<EntryFile[]> {
     const entriesPath = pathTo.entries(projectId, collectionId);
+    const fileNames = await this.gitService.listTreeAtCommit(
+      projectPath,
+      entriesPath,
+      ref
+    );
+    const entries: EntryFile[] = [];
+    const entryFiles = fileNames.filter(
+      (f) => f.endsWith('.json') && f !== 'collection.json'
+    );
 
-    return this.gitService
-      .listTreeAtCommit(projectPath, entriesPath, ref)
-      .andThen((fileNames) => {
-        const entries: EntryFile[] = [];
-        let chain: CoreResult<void> = okAsync(undefined);
+    for (const fileName of entryFiles) {
+      const entryId = fileName.replace('.json', '');
+      const entryFilePath = pathTo.entryFile(projectId, collectionId, entryId);
 
-        for (const fileName of fileNames) {
-          if (!fileName.endsWith('.json') || fileName === 'collection.json')
-            continue;
-
-          const entryId = fileName.replace('.json', '');
-          const entryFilePath = pathTo.entryFile(
-            projectId,
-            collectionId,
-            entryId
-          );
-
-          chain = chain.andThen(() =>
-            this.gitService
-              .getFileContentAtCommit(projectPath, entryFilePath, ref)
-              .andThen((content) => {
-                const parsed = parseSchema(
-                  entryFileSchema,
-                  JSON.parse(content)
-                );
-                if (parsed.isOk()) {
-                  entries.push(parsed.value);
-                }
-                return okAsync(undefined);
-              })
-              .orElse(() => {
-                this.logService.debug({
-                  source: 'core',
-                  message: `Skipping entry "${fileName}" in collection "${collectionId}" at ref "${ref}" during release diff`,
-                });
-                return okAsync(undefined);
-              })
-          );
+      try {
+        const content = await this.gitService.getFileContentAtCommit(
+          projectPath,
+          entryFilePath,
+          ref
+        );
+        const parsed = entryFileSchema.safeParse(JSON.parse(content));
+        if (parsed.success) {
+          entries.push(parsed.data);
         }
+      } catch {
+        this.logService.debug({
+          source: 'core',
+          message: `Skipping entry "${fileName}" in collection "${collectionId}" at ref "${ref}" during release diff`,
+        });
+      }
+    }
 
-        return chain.map(() => entries);
-      });
+    return entries;
   }
 
   /**
    * Reads collections as they exist at a given git ref (branch or commit)
    */
-  private getCollectionsAtRef(
+  private async getCollectionsAtRef(
     projectId: string,
     projectPath: string,
     ref: string
-  ): CoreResult<CollectionFile[]> {
+  ): Promise<CollectionFile[]> {
     const collectionsPath = pathTo.collections(projectId);
+    const folderNames = await this.gitService.listTreeAtCommit(
+      projectPath,
+      collectionsPath,
+      ref
+    );
+    const collections: CollectionFile[] = [];
 
-    return this.gitService
-      .listTreeAtCommit(projectPath, collectionsPath, ref)
-      .andThen((folderNames) => {
-        const collections: CollectionFile[] = [];
-        let chain: CoreResult<void> = okAsync(undefined);
+    for (const folderName of folderNames) {
+      const collectionFilePath = pathTo.collectionFile(projectId, folderName);
 
-        for (const folderName of folderNames) {
-          const collectionFilePath = pathTo.collectionFile(
-            projectId,
-            folderName
-          );
-
-          chain = chain.andThen(() =>
-            this.gitService
-              .getFileContentAtCommit(projectPath, collectionFilePath, ref)
-              .andThen((content) => {
-                const parsed = parseSchema(
-                  collectionFileSchema,
-                  JSON.parse(content)
-                );
-                if (parsed.isOk()) {
-                  collections.push(parsed.value);
-                }
-                return okAsync(undefined);
-              })
-              .orElse(() => {
-                this.logService.debug({
-                  source: 'core',
-                  message: `Skipping folder "${folderName}" at ref "${ref}" during release diff`,
-                });
-                return okAsync(undefined);
-              })
-          );
+      try {
+        const content = await this.gitService.getFileContentAtCommit(
+          projectPath,
+          collectionFilePath,
+          ref
+        );
+        const parsed = collectionFileSchema.safeParse(JSON.parse(content));
+        if (parsed.success) {
+          collections.push(parsed.data);
         }
+      } catch {
+        this.logService.debug({
+          source: 'core',
+          message: `Skipping folder "${folderName}" at ref "${ref}" during release diff`,
+        });
+      }
+    }
 
-        return chain.map(() => collections);
-      });
+    return collections;
   }
 
   /**
    * Reads component files as they exist at a given git ref
    */
-  private getComponentsAtRef(
+  private async getComponentsAtRef(
     projectId: string,
     projectPath: string,
     ref: string
-  ): CoreResult<ComponentFile[]> {
+  ): Promise<ComponentFile[]> {
     const componentsPath = pathTo.components(projectId);
+    const folderNames = await this.gitService.listTreeAtCommit(
+      projectPath,
+      componentsPath,
+      ref
+    );
+    const components: ComponentFile[] = [];
 
-    return this.gitService
-      .listTreeAtCommit(projectPath, componentsPath, ref)
-      .andThen((folderNames) => {
-        const components: ComponentFile[] = [];
-        let chain: CoreResult<void> = okAsync(undefined);
+    for (const folderName of folderNames) {
+      const componentFilePath = pathTo.componentFile(projectId, folderName);
 
-        for (const folderName of folderNames) {
-          const componentFilePath = pathTo.componentFile(
-            projectId,
-            folderName
-          );
-
-          chain = chain.andThen(() =>
-            this.gitService
-              .getFileContentAtCommit(projectPath, componentFilePath, ref)
-              .andThen((content) => {
-                const parsed = parseSchema(
-                  componentFileSchema,
-                  JSON.parse(content)
-                );
-                if (parsed.isOk()) {
-                  components.push(parsed.value);
-                }
-                return okAsync(undefined);
-              })
-              .orElse(() => {
-                this.logService.debug({
-                  source: 'core',
-                  message: `Skipping component folder "${folderName}" at ref "${ref}" during release diff`,
-                });
-                return okAsync(undefined);
-              })
-          );
+      try {
+        const content = await this.gitService.getFileContentAtCommit(
+          projectPath,
+          componentFilePath,
+          ref
+        );
+        const parsed = componentFileSchema.safeParse(JSON.parse(content));
+        if (parsed.success) {
+          components.push(parsed.data);
         }
+      } catch {
+        this.logService.debug({
+          source: 'core',
+          message: `Skipping component folder "${folderName}" at ref "${ref}" during release diff`,
+        });
+      }
+    }
 
-        return chain.map(() => components);
-      });
+    return components;
   }
 
   /**
@@ -782,21 +686,21 @@ export class ReleaseService extends AbstractService {
   /**
    * Checks if there are any commits between two refs
    */
-  private hasCommitsBetween(
+  private async hasCommitsBetween(
     projectPath: string,
     from: string,
     to: string
-  ): CoreResult<boolean> {
-    return this.gitService
-      .log(projectPath, {
+  ): Promise<boolean> {
+    try {
+      const commits = await this.gitService.log(projectPath, {
         between: { from, to },
-      })
-      .map((commits) => commits.length > 0)
-      .orElse(() => {
-        // If production branch has no commits yet (first release scenario),
-        // treat as having changes
-        return okAsync(true);
       });
+      return commits.length > 0;
+    } catch {
+      // If production branch has no commits yet (first release scenario),
+      // treat as having changes
+      return true;
+    }
   }
 
   /**
@@ -1015,90 +919,81 @@ export class ReleaseService extends AbstractService {
   /**
    * Diffs entries across all collections between current and production.
    */
-  private diffEntries(
+  private async diffEntries(
     projectId: string,
     projectPath: string,
     allCollectionIds: Set<string>,
     productionRef: string
-  ): CoreResult<{
+  ): Promise<{
     bump: SemverBump | null;
     entryChanges: EntryChange[];
   }> {
     const entryChanges: EntryChange[] = [];
     let highestBump: SemverBump | null = null;
 
-    let chain: CoreResult<void> = okAsync(undefined);
-
     for (const collectionId of allCollectionIds) {
-      chain = chain.andThen(() =>
-        this.getEntriesAtRef(
-          projectId,
-          projectPath,
-          collectionId,
-          projectBranchSchema.enum.work
-        ).andThen((currentEntries) =>
-          this.getEntriesAtRef(
-            projectId,
-            projectPath,
-            collectionId,
-            productionRef
-          ).andThen((productionEntries) => {
-            const currentById = new Map(
-              currentEntries.map((e) => [e.id, e])
-            );
-            const productionById = new Map(
-              productionEntries.map((e) => [e.id, e])
-            );
-
-            // Deleted entries - MAJOR
-            for (const [id] of productionById) {
-              if (!currentById.has(id)) {
-                entryChanges.push({
-                  collectionId,
-                  entryId: id,
-                  changeType: 'deleted',
-                  bump: 'major',
-                });
-                highestBump = 'major';
-              }
-            }
-
-            // New entries - MINOR
-            for (const [id] of currentById) {
-              if (!productionById.has(id)) {
-                entryChanges.push({
-                  collectionId,
-                  entryId: id,
-                  changeType: 'added',
-                  bump: 'minor',
-                });
-                highestBump = this.higherBump(highestBump, 'minor');
-              }
-            }
-
-            // Modified entries - PATCH
-            for (const [id, current] of currentById) {
-              const production = productionById.get(id);
-              if (!production) continue;
-
-              if (!isDeepStrictEqual(current.values, production.values)) {
-                entryChanges.push({
-                  collectionId,
-                  entryId: id,
-                  changeType: 'modified',
-                  bump: 'patch',
-                });
-                highestBump = this.higherBump(highestBump, 'patch');
-              }
-            }
-
-            return okAsync(undefined);
-          })
-        )
+      const currentEntries = await this.getEntriesAtRef(
+        projectId,
+        projectPath,
+        collectionId,
+        projectBranchSchema.enum.work
       );
+      const productionEntries = await this.getEntriesAtRef(
+        projectId,
+        projectPath,
+        collectionId,
+        productionRef
+      );
+
+      const currentById = new Map(currentEntries.map((e) => [e.id, e]));
+      const productionById = new Map(
+        productionEntries.map((e) => [e.id, e])
+      );
+
+      // Deleted entries - MAJOR
+      for (const [id] of productionById) {
+        if (!currentById.has(id)) {
+          entryChanges.push({
+            collectionId,
+            entryId: id,
+            changeType: 'deleted',
+            bump: 'major',
+          });
+          highestBump = 'major';
+        }
+      }
+
+      // New entries - MINOR
+      for (const [id] of currentById) {
+        if (!productionById.has(id)) {
+          entryChanges.push({
+            collectionId,
+            entryId: id,
+            changeType: 'added',
+            bump: 'minor',
+          });
+          highestBump = this.higherBump(highestBump, 'minor');
+        }
+      }
+
+      // Modified entries - PATCH
+      for (const [id, current] of currentById) {
+        const production = productionById.get(id);
+        if (!production) continue;
+
+        if (!isDeepStrictEqual(current.values, production.values)) {
+          entryChanges.push({
+            collectionId,
+            entryId: id,
+            changeType: 'modified',
+            bump: 'patch',
+          });
+          highestBump = this.higherBump(highestBump, 'patch');
+        }
+      }
     }
 
-    return chain.map(() => ({ bump: highestBump, entryChanges }));
+    return { bump: highestBump, entryChanges };
   }
 
   /**
@@ -1395,32 +1290,31 @@ export class ReleaseService extends AbstractService {
   /**
    * Counts existing preview tags for a given base version since the last full release.
    */
-  private countPreviewsSinceLastRelease(
+  private async countPreviewsSinceLastRelease(
     projectPath: string,
     baseVersion: string
-  ): CoreResult<number> {
-    return this.gitService.tags.list({ path: projectPath }).map((tags) => {
-      let count = 0;
+  ): Promise<number> {
+    const tags = await this.gitService.tags.list({ path: projectPath });
+    let count = 0;
 
-      for (const tag of tags.list) {
-        if (tag.message.type === 'upgrade') continue;
+    for (const tag of tags.list) {
+      if (tag.message.type === 'upgrade') continue;
 
-        if (tag.message.type === 'release') {
-          // Hit the last full release - stop counting
-          break;
-        }
-
-        if (tag.message.type === 'preview') {
-          // Check if this preview is for the same base version
-          const previewBase = tag.message.version.split('-')[0];
-          if (previewBase === baseVersion) {
-            count++;
-          }
-        }
+      if (tag.message.type === 'release') {
+        // Hit the last full release - stop counting
+        break;
       }
 
-      return count;
-    });
+      if (tag.message.type === 'preview') {
+        // Check if this preview is for the same base version
+        const previewBase = tag.message.version.split('-')[0];
+        if (previewBase === baseVersion) {
+          count++;
+        }
+      }
+    }
+
+    return count;
   }
 
   /**

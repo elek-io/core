@@ -1,4 +1,4 @@
-import type { Context, Schema, TypedResponse } from 'hono';
+import type { Schema } from 'hono';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { requestId } from 'hono/request-id';
 import { requestResponseLogger } from '../middleware/requestResponseLogger.js';
@@ -15,33 +15,7 @@ import type {
 } from '../../service/index.js';
 import { createMiddleware } from 'hono/factory';
 import { trimTrailingSlash } from 'hono/trailing-slash';
-import type { Result } from 'neverthrow';
-import type { CoreError } from '../../util/shared.js';
-
-/**
- * Handles a neverthrow Result by returning the appropriate JSON response
- */
-export function handleResult<T, S extends ContentfulStatusCode = 200>(
-  c: Context,
-  result: Result<T, CoreError>,
-  status: S = 200 as S
-): TypedResponse<T, S, 'json'> {
-  return result.match(
-    (data) => c.json(data, status),
-    (error) =>
-      c.json(
-        {
-          error: {
-            type: error.type,
-            message: error.message,
-            statusCode: error.statusCode,
-            stack: error.cause instanceof Error ? error.cause.stack : undefined,
-          },
-        },
-        error.statusCode
-      )
-  ) as TypedResponse<T, S, 'json'>;
-}
+import { CoreError } from '../../util/shared.js';
 
 /**
  * Creates a new OpenAPIHono router with default settings
@@ -115,6 +89,20 @@ export default function createApi(
   });
 
   api.onError((err, c) => {
+    if (err instanceof CoreError) {
+      return c.json(
+        {
+          error: {
+            type: err.type,
+            message: err.message,
+            statusCode: err.statusCode,
+            stack: err.cause instanceof Error ? err.cause.stack : undefined,
+          },
+        },
+        err.statusCode as ContentfulStatusCode
+      );
+    }
+
     const currentStatus =
       'status' in err ? err.status : c.newResponse(null).status;
     const statusCode =

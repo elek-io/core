@@ -51,23 +51,24 @@ describe('EntryService', function () {
   });
 
   it('should be able to read an Entry', async function () {
-    const readEntry = (await core.entries.read({
+    const readEntry = await core.entries.read({
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
-    }))._unsafeUnwrap();
+    });
 
     expect(readEntry.id).toEqual(entry.id);
   });
 
   it('should fail to update an Entry with no values while there are fieldDefinitions', async function () {
-    const emptyResult = await core.entries.update({
-      projectId: project.id,
-      collectionId: collection.id,
-      id: entry.id,
-      values: {},
-    });
-    expect(emptyResult.isErr()).toBe(true);
+    await expect(
+      core.entries.update({
+        projectId: project.id,
+        collectionId: collection.id,
+        id: entry.id,
+        values: {},
+      })
+    ).rejects.toThrow();
   });
 
   it('should fail to update an Entry with values not matching their fieldDefinitions', async function () {
@@ -82,13 +83,14 @@ describe('EntryService', function () {
       },
     };
 
-    const mismatchResult = await core.entries.update({
-      projectId: project.id,
-      collectionId: collection.id,
-      id: entry.id,
-      values,
-    });
-    expect(mismatchResult.isErr()).toBe(true);
+    await expect(
+      core.entries.update({
+        projectId: project.id,
+        collectionId: collection.id,
+        id: entry.id,
+        values,
+      })
+    ).rejects.toThrow();
   });
 
   it('should be able to update an Entry with values that match the Collections fieldDefinitions', async function () {
@@ -103,37 +105,37 @@ describe('EntryService', function () {
       },
     };
 
-    entry = (await core.entries.update({
+    entry = await core.entries.update({
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
       values,
-    }))._unsafeUnwrap();
+    });
 
     expect(entry.values).toEqual(values);
   });
 
   it('should be able to get an Entry of a specific commit', async function () {
-    const history = (await core.entries.history({
+    const history = await core.entries.history({
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
-    }))._unsafeUnwrap();
-    const entryFromHistory = (await core.entries.read({
+    });
+    const entryFromHistory = await core.entries.read({
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
       commitHash: history.at(-1)?.hash,
-    }))._unsafeUnwrap();
+    });
 
     expect(Object.keys(entryFromHistory.values).length).toEqual(3);
   });
 
   it('should be able to list all Entries', async function () {
-    const entries = (await core.entries.list({
+    const entries = await core.entries.list({
       projectId: project.id,
       collectionId: collection.id,
-    }))._unsafeUnwrap();
+    });
 
     expect(entries.list.length).toEqual(2);
     expect(entries.total).toEqual(2);
@@ -141,10 +143,10 @@ describe('EntryService', function () {
   });
 
   it('should be able to count all Entries', async function () {
-    const counted = (await core.entries.count({
+    const counted = await core.entries.count({
       projectId: project.id,
       collectionId: collection.id,
-    }))._unsafeUnwrap();
+    });
 
     expect(counted).toEqual(2);
   });
@@ -155,11 +157,11 @@ describe('EntryService', function () {
   });
 
   it('should be able to delete an Entry', async function () {
-    (await core.entries.delete({
+    await core.entries.delete({
       projectId: project.id,
       collectionId: collection.id,
       id: entry.id,
-    }))._unsafeUnwrap();
+    });
 
     expect(
       await Fs.pathExists(
@@ -179,7 +181,7 @@ describe('EntryService - component values', function () {
 
     // Create a component with a text field
     const titleFieldId = uuid();
-    component = (await core.components.create({
+    component = await core.components.create({
       projectId: project.id,
       name: { en: 'Hero' },
       slug: 'hero',
@@ -201,10 +203,10 @@ describe('EntryService - component values', function () {
           max: null,
         },
       ],
-    }))._unsafeUnwrap();
+    });
 
     // Create a collection with a dynamic field referencing the component
-    dynamicCollection = (await core.collections.create({
+    dynamicCollection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
       name: { singular: { en: 'Page' }, plural: { en: 'Pages' } },
@@ -227,7 +229,7 @@ describe('EntryService - component values', function () {
           max: null,
         },
       ],
-    }))._unsafeUnwrap();
+    });
   });
 
   afterAll(async function () {
@@ -239,7 +241,7 @@ describe('EntryService - component values', function () {
   });
 
   it('should be able to create an Entry with component values', async function () {
-    const entry = (await core.entries.create({
+    const entry = await core.entries.create({
       projectId: project.id,
       collectionId: dynamicCollection.id,
       values: {
@@ -260,35 +262,36 @@ describe('EntryService - component values', function () {
           ],
         },
       },
-    }))._unsafeUnwrap();
+    });
 
     expect(entry.id).toBeDefined();
     expect(entry.values['blocks']!.valueType).toEqual('component');
   });
 
   it('should reject an Entry with invalid component values', async function () {
-    const invalidResult = await core.entries.create({
-      projectId: project.id,
-      collectionId: dynamicCollection.id,
-      values: {
-        blocks: {
-          objectType: 'value',
-          valueType: 'component',
-          content: [
-            {
-              componentId: component.id,
-              values: {
-                title: {
-                  objectType: 'value',
-                  valueType: 'number',
-                  content: { en: 123 },
+    await expect(
+      core.entries.create({
+        projectId: project.id,
+        collectionId: dynamicCollection.id,
+        values: {
+          blocks: {
+            objectType: 'value',
+            valueType: 'component',
+            content: [
+              {
+                componentId: component.id,
+                values: {
+                  title: {
+                    objectType: 'value',
+                    valueType: 'number',
+                    content: { en: 123 },
+                  },
                 },
               },
-            },
-          ],
+            ],
+          },
         },
-      },
-    });
-    expect(invalidResult.isErr()).toBe(true);
+      })
+    ).rejects.toThrow();
   });
 });

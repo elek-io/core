@@ -1,10 +1,9 @@
 import type { ChildProcess } from 'node:child_process';
 import type { IGitExecutionOptions, IGitStringResult } from 'dugite';
 import { exec as gitExec } from 'dugite';
-import { ResultAsync, errAsync, okAsync } from 'neverthrow';
 import PQueue from 'p-queue';
 import Path from 'node:path';
-import { CoreErrors, parseSchema, type CoreResult } from '../util/shared.js';
+import { CoreError } from '../util/shared.js';
 import type { GitMergeOptions, GitMessage } from '../schema/index.js';
 import {
   gitCommitSchema,
@@ -84,19 +83,18 @@ export class GitService {
    * @param path    Path to initialize in. Fails if path does not exist
    * @param options Options specific to the init operation
    */
-  public init(
+  public async init(
     path: string,
     options?: Partial<GitInitOptions>
-  ): CoreResult<void> {
+  ): Promise<void> {
     let args = ['init'];
 
     if (options?.initialBranch) {
       args = [...args, `--initial-branch=${options.initialBranch}`];
     }
 
-    return this.git(path, args)
-      .andThen(() => this.setLocalConfig(path))
-      .map(() => undefined);
+    await this.git(path, args);
+    await this.setLocalConfig(path);
   }
 
   /**
@@ -111,11 +109,11 @@ export class GitService {
    *                Which is only working if the directory is existing and empty.
    * @param options Options specific to the clone operation
    */
-  public clone(
+  public async clone(
     url: string,
     path: string,
     options?: Partial<GitCloneOptions>
-  ): CoreResult<void> {
+  ): Promise<void> {
     let args = ['clone', '--progress'];
 
     if (options?.bare) {
@@ -134,9 +132,8 @@ export class GitService {
       args = [...args, '--single-branch'];
     }
 
-    return this.git('', [...args, url, path])
-      .andThen(() => this.setLocalConfig(path))
-      .map(() => undefined);
+    await this.git('', [...args, url, path]);
+    await this.setLocalConfig(path);
   }
 
   /**
@@ -147,32 +144,33 @@ export class GitService {
    * @param path  Path to the repository
    * @param files Files to add
    */
-  public add(path: string, files: string[]): CoreResult<void> {
+  public async add(path: string, files: string[]): Promise<void> {
     const relativePathsFromRepositoryRoot = files.map((filePath) => {
       return filePath.replace(`${path}${Path.sep}`, '');
     });
 
     const args = ['add', '--', ...relativePathsFromRepositoryRoot];
 
-    return this.git(path, args).map(() => undefined);
+    await this.git(path, args);
   }
 
-  public status(path: string): CoreResult<{ filePath: string | undefined }[]> {
+  public async status(
+    path: string
+  ): Promise<{ filePath: string | undefined }[]> {
     const args = ['status', '--porcelain=2'];
-    return this.git(path, args).map((result) => {
-      return result.stdout
-        .split('\n')
-        .filter((line) => {
-          return line.trim() !== '';
-        })
-        .map((line) => {
-          const lineArr = line.trim().split(' ');
+    const result = await this.git(path, args);
+    return result.stdout
+      .split('\n')
+      .filter((line) => {
+        return line.trim() !== '';
+      })
+      .map((line) => {
+        const lineArr = line.trim().split(' ');
 
-          return {
-            filePath: lineArr[8],
-          };
-        });
-    });
+        return {
+          filePath: lineArr[8],
+        };
+      });
   }
 
   public branches = {
@@ -183,29 +181,30 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    list: (path: string): CoreResult<{ local: string[]; remote: string[] }> => {
+    list: async (
+      path: string
+    ): Promise<{ local: string[]; remote: string[] }> => {
       const args = ['branch', '--list', '--all'];
-      return this.git(path, args).map((result) => {
-        const normalizedLinesArr = result.stdout
-          .split('\n')
-          .filter((line) => {
-            return line.trim() !== '';
-          })
-          .map((line) => {
-            return line.trim().replace('* ', '');
-          });
-
-        const local: string[] = [];
-        const remote: string[] = [];
-        normalizedLinesArr.forEach((line) => {
-          if (line.startsWith('remotes/')) {
-            remote.push(line.replace('remotes/', ''));
-          } else {
-            local.push(line);
-          }
+      const result = await this.git(path, args);
+      const normalizedLinesArr = result.stdout
+        .split('\n')
+        .filter((line) => {
+          return line.trim() !== '';
+        })
+        .map((line) => {
+          return line.trim().replace('* ', '');
         });
-        return { local, remote };
+
+      const local: string[] = [];
+      const remote: string[] = [];
+      normalizedLinesArr.forEach((line) => {
+        if (line.startsWith('remotes/')) {
+          remote.push(line.replace('remotes/', ''));
+        } else {
+          local.push(line);
+        }
       });
+      return { local, remote };
     },
     /**
      * Returns the name of the current branch. In detached HEAD state, an empty string is returned.
@@ -214,9 +213,10 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    current: (path: string): CoreResult<string> => {
+    current: async (path: string): Promise<string> => {
       const args = ['branch', '--show-current'];
-      return this.git(path, args).map((result) => result.stdout.trim());
+      const result = await this.git(path, args);
+      return result.stdout.trim();
     },
     /**
      * Switch branches
@@ -227,22 +227,22 @@ export class GitService {
      * @param branch  Name of the branch to switch to
      * @param options Options specific to the switch operation
      */
-    switch: (
+    switch: async (
       path: string,
       branch: string,
       options?: GitSwitchOptions
-    ): CoreResult<void> => {
-      return this.checkBranchOrTagName(path, branch).andThen(() => {
-        let args = ['switch'];
+    ): Promise<void> => {
+      await this.checkBranchOrTagName(path, branch);
 
-        if (options?.isNew === true) {
-          args = [...args, '--create', branch];
-        } else {
-          args = [...args, branch];
-        }
+      let args = ['switch'];
 
-        return this.git(path, args).map(() => undefined);
-      });
+      if (options?.isNew === true) {
+        args = [...args, '--create', branch];
+      } else {
+        args = [...args, branch];
+      }
+
+      await this.git(path, args);
     },
     /**
      * Delete a branch
@@ -252,18 +252,18 @@ export class GitService {
      * @param path Path to the repository
      * @param branch Name of the branch to delete
      */
-    delete: (
+    delete: async (
       path: string,
       branch: string,
       force?: boolean
-    ): CoreResult<void> => {
+    ): Promise<void> => {
       let args = ['branch', '--delete'];
 
       if (force === true) {
         args = [...args, '--force'];
       }
 
-      return this.git(path, [...args, branch]).map(() => undefined);
+      await this.git(path, [...args, branch]);
     },
   };
 
@@ -275,12 +275,11 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    list: (path: string): CoreResult<string[]> => {
+    list: async (path: string): Promise<string[]> => {
       const args = ['remote'];
-      return this.git(path, args).map((result) => {
-        return result.stdout.split('\n').filter((line) => {
-          return line.trim() !== '';
-        });
+      const result = await this.git(path, args);
+      return result.stdout.split('\n').filter((line) => {
+        return line.trim() !== '';
       });
     },
     /**
@@ -288,8 +287,9 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    hasOrigin: (path: string): CoreResult<boolean> => {
-      return this.remotes.list(path).map((remotes) => remotes.includes('origin'));
+    hasOrigin: async (path: string): Promise<boolean> => {
+      const remotes = await this.remotes.list(path);
+      return remotes.includes('origin');
     },
     /**
      * Adds the `origin` remote with given URL
@@ -300,9 +300,9 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    addOrigin: (path: string, url: string): CoreResult<void> => {
+    addOrigin: async (path: string, url: string): Promise<void> => {
       const args = ['remote', 'add', 'origin', url.trim()];
-      return this.git(path, args).map(() => undefined);
+      await this.git(path, args);
     },
     /**
      * Returns the current `origin` remote URL
@@ -313,12 +313,11 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    getOriginUrl: (path: string): CoreResult<string | null> => {
+    getOriginUrl: async (path: string): Promise<string | null> => {
       const args = ['remote', 'get-url', 'origin'];
-      return this.git(path, args).map((result) => {
-        const url = result.stdout.trim();
-        return url.length === 0 ? null : url;
-      });
+      const result = await this.git(path, args);
+      const url = result.stdout.trim();
+      return url.length === 0 ? null : url;
     },
     /**
      * Sets the current `origin` remote URL
@@ -329,9 +328,9 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    setOriginUrl: (path: string, url: string): CoreResult<void> => {
+    setOriginUrl: async (path: string, url: string): Promise<void> => {
       const args = ['remote', 'set-url', 'origin', url.trim()];
-      return this.git(path, args).map(() => undefined);
+      await this.git(path, args);
     },
   };
 
@@ -340,11 +339,11 @@ export class GitService {
    *
    * @see https://git-scm.com/docs/git-merge
    */
-  public merge(
+  public async merge(
     path: string,
     branch: string,
     options?: Partial<GitMergeOptions>
-  ): CoreResult<void> {
+  ): Promise<void> {
     let args = ['merge'];
 
     if (options?.squash === true) {
@@ -353,7 +352,7 @@ export class GitService {
 
     args = [...args, branch];
 
-    return this.git(path, args).map(() => undefined);
+    await this.git(path, args);
   }
 
   /**
@@ -366,13 +365,13 @@ export class GitService {
    * @param mode    Modifies the working tree depending on given mode
    * @param commit  Resets the current branch head to this commit / tag
    */
-  public reset(
+  public async reset(
     path: string,
     mode: 'soft' | 'hard',
     commit: string
-  ): CoreResult<void> {
+  ): Promise<void> {
     const args = ['reset', `--${mode}`, commit];
-    return this.git(path, args).map(() => undefined);
+    await this.git(path, args);
   }
 
   /**
@@ -382,9 +381,9 @@ export class GitService {
    *
    * @param path Path to the repository
    */
-  public fetch(path: string): CoreResult<void> {
+  public async fetch(path: string): Promise<void> {
     const args = ['fetch'];
-    return this.git(path, args).map(() => undefined);
+    await this.git(path, args);
   }
 
   /**
@@ -394,9 +393,9 @@ export class GitService {
    *
    * @param path Path to the repository
    */
-  public pull(path: string): CoreResult<void> {
+  public async pull(path: string): Promise<void> {
     const args = ['pull'];
-    return this.git(path, args).map(() => undefined);
+    await this.git(path, args);
   }
 
   /**
@@ -406,10 +405,10 @@ export class GitService {
    *
    * @param path Path to the repository
    */
-  public push(
+  public async push(
     path: string,
     options?: Partial<{ all: boolean; force: boolean }>
-  ): CoreResult<void> {
+  ): Promise<void> {
     let args = ['push', 'origin'];
 
     if (options?.all === true) {
@@ -420,7 +419,7 @@ export class GitService {
       args = [...args, '--force'];
     }
 
-    return this.git(path, args).map(() => undefined);
+    await this.git(path, args);
   }
 
   /**
@@ -431,39 +430,37 @@ export class GitService {
    * @param path    Path to the repository
    * @param message An object describing the changes
    */
-  public commit(path: string, message: GitMessage): CoreResult<void> {
-    const validated = parseSchema(gitMessageSchema, message);
-    if (validated.isErr()) {
-      return errAsync(validated.error);
+  public async commit(path: string, message: GitMessage): Promise<void> {
+    const parsed = gitMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      throw CoreError.badRequest(parsed.error.message, parsed.error);
     }
 
-    return this.userService.get().andThen((user) => {
-      if (!user) {
-        return errAsync(
-          CoreErrors.unauthorized(
-            'No user is set in Core. Please set a User before doing any git operations.'
-          )
-        );
-      }
+    const user = await this.userService.get();
 
-      const subject = `${message.method.charAt(0).toUpperCase() + message.method.slice(1)} ${message.reference.objectType} ${message.reference.id}`;
-      const trailers = [
-        `Method: ${message.method}`,
-        `Object-Type: ${message.reference.objectType}`,
-        `Object-Id: ${message.reference.id}`,
-      ];
-      if (message.reference.collectionId) {
-        trailers.push(`Collection-Id: ${message.reference.collectionId}`);
-      }
-      const fullMessage = `${subject}\n\n${trailers.join('\n')}`;
+    if (!user) {
+      throw CoreError.unauthorized(
+        'No user is set in Core. Please set a User before doing any git operations.'
+      );
+    }
 
-      const args = [
-        'commit',
-        `--message=${fullMessage}`,
-        `--author=${user.name} <${user.email}>`,
-      ];
-      return this.git(path, args).map(() => undefined);
-    });
+    const subject = `${message.method.charAt(0).toUpperCase() + message.method.slice(1)} ${message.reference.objectType} ${message.reference.id}`;
+    const trailers = [
+      `Method: ${message.method}`,
+      `Object-Type: ${message.reference.objectType}`,
+      `Object-Id: ${message.reference.id}`,
+    ];
+    if (message.reference.collectionId) {
+      trailers.push(`Collection-Id: ${message.reference.collectionId}`);
+    }
+    const fullMessage = `${subject}\n\n${trailers.join('\n')}`;
+
+    const args = [
+      'commit',
+      `--message=${fullMessage}`,
+      `--author=${user.name} <${user.email}>`,
+    ];
+    await this.git(path, args);
   }
 
   /**
@@ -477,10 +474,10 @@ export class GitService {
    * @param path    Path to the repository
    * @param options Options specific to the log operation
    */
-  public log(
+  public async log(
     path: string,
     options?: Partial<GitLogOptions>
-  ): CoreResult<GitCommit[]> {
+  ): Promise<GitCommit[]> {
     let args = ['log'];
 
     if (options?.between?.from) {
@@ -511,50 +508,51 @@ export class GitService {
       args = [...args, '--', options.filePath];
     }
 
-    return this.git(path, args).andThen((result) => {
-      // Trailer values from %(trailers:key=...,valueonly) include trailing newlines.
-      // Collapsing "\n|" into "|" rejoins the pipe-delimited fields into single lines.
-      const cleaned = result.stdout.replace(/\n\|/g, '|');
+    const result = await this.git(path, args);
 
-      const noEmptyLinesArr = cleaned.split('\n').filter((line) => {
-        return line.trim() !== '';
-      });
+    // Trailer values from %(trailers:key=...,valueonly) include trailing newlines.
+    // Collapsing "\n|" into "|" rejoins the pipe-delimited fields into single lines.
+    const cleaned = result.stdout.replace(/\n\|/g, '|');
 
-      return ResultAsync.fromSafePromise(
-        Promise.all(
-          noEmptyLinesArr.map(async (line) => {
-            const lineArray = line.split('|');
-            const tagId = this.refNameToTagName(lineArray[8]?.trim() || '');
-            let tag = null;
-            if (tagId) {
-              const tagResult = await this.tags.read({ path, id: tagId });
-              tag = tagResult.isOk() ? tagResult.value : null;
-            }
-            const collectionId = lineArray[4]?.trim();
-
-            return {
-              hash: lineArray[0],
-              message: {
-                method: lineArray[1]?.trim(),
-                reference: {
-                  objectType: lineArray[2]?.trim(),
-                  id: lineArray[3]?.trim(),
-                  ...(collectionId ? { collectionId } : {}),
-                },
-              },
-              author: {
-                name: lineArray[5],
-                email: lineArray[6],
-              },
-              datetime: datetime(lineArray[7]),
-              tag,
-            };
-          })
-        )
-      ).map((lineObjArr) =>
-        lineObjArr.filter((obj) => this.isGitCommit(obj))
-      );
+    const noEmptyLinesArr = cleaned.split('\n').filter((line) => {
+      return line.trim() !== '';
     });
+
+    const lineObjArr = await Promise.all(
+      noEmptyLinesArr.map(async (line) => {
+        const lineArray = line.split('|');
+        const tagId = this.refNameToTagName(lineArray[8]?.trim() || '');
+        let tag = null;
+        if (tagId) {
+          try {
+            tag = await this.tags.read({ path, id: tagId });
+          } catch {
+            tag = null;
+          }
+        }
+        const collectionId = lineArray[4]?.trim();
+
+        return {
+          hash: lineArray[0],
+          message: {
+            method: lineArray[1]?.trim(),
+            reference: {
+              objectType: lineArray[2]?.trim(),
+              id: lineArray[3]?.trim(),
+              ...(collectionId ? { collectionId } : {}),
+            },
+          },
+          author: {
+            name: lineArray[5],
+            email: lineArray[6],
+          },
+          datetime: datetime(lineArray[7]),
+          tag,
+        };
+      })
+    );
+
+    return lineObjArr.filter((obj) => this.isGitCommit(obj));
   }
 
   /**
@@ -562,12 +560,12 @@ export class GitService {
    *
    * @see https://git-scm.com/docs/git-show
    */
-  public getFileContentAtCommit(
+  public async getFileContentAtCommit(
     path: string,
     filePath: string,
     commitHash: string,
     encoding: 'utf8' | 'binary' = 'utf8'
-  ): CoreResult<string> {
+  ): Promise<string> {
     const relativePathFromRepositoryRoot = filePath.replace(
       `${path}${Path.sep}`,
       ''
@@ -580,9 +578,10 @@ export class GitService {
       }
     };
 
-    return this.git(path, args, {
+    const result = await this.git(path, args, {
       processCallback: setEncoding,
-    }).map((result) => result.stdout);
+    });
+    return result.stdout;
   }
 
   /**
@@ -597,32 +596,31 @@ export class GitService {
    * @param treePath  Relative path within the repository to list
    * @param commitRef Commit hash, branch name, or other git ref
    */
-  public listTreeAtCommit(
+  public async listTreeAtCommit(
     path: string,
     treePath: string,
     commitRef: string
-  ): CoreResult<string[]> {
+  ): Promise<string[]> {
     const relativeTreePath = treePath.replace(`${path}${Path.sep}`, '');
     const normalizedPath = relativeTreePath.split('\\').join('/');
     const args = ['ls-tree', '--name-only', commitRef, `${normalizedPath}/`];
 
-    return this.git(path, args)
-      .map((result) =>
-        result.stdout
-          .split('\n')
-          .map((line) => line.trim())
-          .filter((line) => line !== '')
-          .map((entry) => {
-            // ls-tree returns paths relative to repo root like "collections/uuid"
-            // Extract just the last segment (the folder/file name)
-            const parts = entry.split('/');
-            return parts[parts.length - 1] || entry;
-          })
-      )
-      .orElse(() =>
-        // If the path or ref doesn't exist (e.g. first release), return empty.
-        okAsync([])
-      );
+    try {
+      const result = await this.git(path, args);
+      return result.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line !== '')
+        .map((entry) => {
+          // ls-tree returns paths relative to repo root like "collections/uuid"
+          // Extract just the last segment (the folder/file name)
+          const parts = entry.split('/');
+          return parts[parts.length - 1] || entry;
+        });
+    } catch {
+      // If the path or ref doesn't exist (e.g. first release), return empty.
+      return [];
+    }
   }
 
   public refNameToTagName(refName: string) {
@@ -642,9 +640,11 @@ export class GitService {
    * This can help debugging
    */
   private async updateVersion(): Promise<void> {
-    const result = await this.git('', ['--version']);
-    if (result.isOk()) {
-      this.version = result.value.stdout.replace('git version', '').trim();
+    try {
+      const result = await this.git('', ['--version']);
+      this.version = result.stdout.replace('git version', '').trim();
+    } catch {
+      // Silently ignore - version is optional debug info
     }
   }
 
@@ -656,9 +656,11 @@ export class GitService {
    * @see https://github.com/desktop/dugite/blob/main/lib/git-environment.ts
    */
   private async updateGitPath(): Promise<void> {
-    const result = await this.git('', ['--exec-path']);
-    if (result.isOk()) {
-      this.gitPath = result.value.stdout.trim();
+    try {
+      const result = await this.git('', ['--exec-path']);
+      this.gitPath = result.stdout.trim();
+    } catch {
+      // Silently ignore - gitPath is optional debug info
     }
   }
 
@@ -671,15 +673,11 @@ export class GitService {
    * @param path Path to the repository
    * @param name Name to check
    */
-  private checkBranchOrTagName(
+  private async checkBranchOrTagName(
     path: string,
     name: string
-  ): CoreResult<void> {
-    return this.git(path, [
-      'check-ref-format',
-      '--allow-onelevel',
-      name,
-    ]).map(() => undefined);
+  ): Promise<void> {
+    await this.git(path, ['check-ref-format', '--allow-onelevel', name]);
   }
 
   /**
@@ -687,37 +685,34 @@ export class GitService {
    *
    * @param path Path to the repository
    */
-  private setLocalConfig(path: string): CoreResult<void> {
-    return this.userService.get().andThen((user) => {
-      if (!user) {
-        return errAsync(
-          CoreErrors.unauthorized(
-            'No user is set in Core. Please set a User before doing any git operations.'
-          )
-        );
-      }
+  private async setLocalConfig(path: string): Promise<void> {
+    const user = await this.userService.get();
 
-      // Setup the local User
-      const userNameArgs = ['config', '--local', 'user.name', user.name];
-      const userEmailArgs = ['config', '--local', 'user.email', user.email];
-      // By default new branches that are pushed are automatically tracking
-      // their remote without the need of using the `--set-upstream` argument of `git push`
-      const autoSetupRemoteArgs = [
-        'config',
-        '--local',
-        'push.autoSetupRemote',
-        'true',
-      ];
-      // By default `git pull` will try to rebase first
-      // to reduce the amount of merge commits
-      const pullRebaseArgs = ['config', '--local', 'pull.rebase', 'true'];
+    if (!user) {
+      throw CoreError.unauthorized(
+        'No user is set in Core. Please set a User before doing any git operations.'
+      );
+    }
 
-      return this.git(path, userNameArgs)
-        .andThen(() => this.git(path, userEmailArgs))
-        .andThen(() => this.git(path, autoSetupRemoteArgs))
-        .andThen(() => this.git(path, pullRebaseArgs))
-        .map(() => undefined);
-    });
+    // Setup the local User
+    const userNameArgs = ['config', '--local', 'user.name', user.name];
+    const userEmailArgs = ['config', '--local', 'user.email', user.email];
+    // By default new branches that are pushed are automatically tracking
+    // their remote without the need of using the `--set-upstream` argument of `git push`
+    const autoSetupRemoteArgs = [
+      'config',
+      '--local',
+      'push.autoSetupRemote',
+      'true',
+    ];
+    // By default `git pull` will try to rebase first
+    // to reduce the amount of merge commits
+    const pullRebaseArgs = ['config', '--local', 'pull.rebase', 'true'];
+
+    await this.git(path, userNameArgs);
+    await this.git(path, userEmailArgs);
+    await this.git(path, autoSetupRemoteArgs);
+    await this.git(path, pullRebaseArgs);
   }
 
   /**
@@ -736,61 +731,54 @@ export class GitService {
    * @param path Path to the repository
    * @param args Arguments to append after the `git` command
    */
-  private git(
+  private async git(
     path: string,
     args: string[],
     options?: IGitExecutionOptions
-  ): CoreResult<IGitStringResult> {
-    return ResultAsync.fromPromise(
-      this.queue.add(async () => {
-        const start = Date.now();
-        const gitResult = await gitExec(args, path, options);
-        const durationMs = Date.now() - start;
-        return { gitResult, durationMs };
-      }),
-      CoreErrors.fromUnknown
-    ).andThen((result) => {
-      if (!result) {
-        return errAsync(
-          CoreErrors.internal(
-            `Git ${this.version} (${this.gitPath}) command "git ${args.join(
-              ' '
-            )}" executed for "${path}" failed to return a result`
-          )
-        );
-      }
-
-      const gitLog: LogProps = {
-        source: 'core',
-        message: `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`,
-        meta: { command: `git ${args.join(' ')}` },
-      };
-      if (result.durationMs >= 100) {
-        this.logService.warn(gitLog);
-      } else {
-        this.logService.debug(gitLog);
-      }
-
-      if (result.gitResult.exitCode !== 0) {
-        return errAsync(
-          CoreErrors.internal(
-            `Git ${this.version} (${this.gitPath}) command "git ${args.join(
-              ' '
-            )}" executed for "${path}" failed with exit code "${
-              result.gitResult.exitCode
-            }" and message "${
-              result.gitResult.stderr.toString().trim() ||
-              result.gitResult.stdout.toString().trim()
-            }"`
-          )
-        );
-      }
-
-      return okAsync({
-        ...result.gitResult,
-        stdout: result.gitResult.stdout.toString(),
-        stderr: result.gitResult.stderr.toString(),
-      });
+  ): Promise<IGitStringResult> {
+    const result = await this.queue.add(async () => {
+      const start = Date.now();
+      const gitResult = await gitExec(args, path, options);
+      const durationMs = Date.now() - start;
+      return { gitResult, durationMs };
     });
+
+    if (!result) {
+      throw CoreError.internal(
+        `Git ${this.version} (${this.gitPath}) command "git ${args.join(
+          ' '
+        )}" executed for "${path}" failed to return a result`
+      );
+    }
+
+    const gitLog: LogProps = {
+      source: 'core',
+      message: `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`,
+      meta: { command: `git ${args.join(' ')}` },
+    };
+    if (result.durationMs >= 100) {
+      this.logService.warn(gitLog);
+    } else {
+      this.logService.debug(gitLog);
+    }
+
+    if (result.gitResult.exitCode !== 0) {
+      throw CoreError.internal(
+        `Git ${this.version} (${this.gitPath}) command "git ${args.join(
+          ' '
+        )}" executed for "${path}" failed with exit code "${
+          result.gitResult.exitCode
+        }" and message "${
+          result.gitResult.stderr.toString().trim() ||
+          result.gitResult.stdout.toString().trim()
+        }"`
+      );
+    }
+
+    return {
+      ...result.gitResult,
+      stdout: result.gitResult.stdout.toString(),
+      stderr: result.gitResult.stderr.toString(),
+    };
   }
 }

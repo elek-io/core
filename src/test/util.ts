@@ -27,7 +27,7 @@ export async function ensureCleanGitStatus(
   task: Readonly<RunnerTestCase>,
   projectId: string
 ) {
-  const status = (await core.git.status(core.util.pathTo.project(projectId)))._unsafeUnwrap();
+  const status = await core.git.status(core.util.pathTo.project(projectId));
   if (status.length > 0) {
     core.logger.error({
       source: 'core',
@@ -61,11 +61,11 @@ export async function getFileHash(path: string): Promise<string> {
 export async function createLocalRemoteRepository() {
   const remoteProject = await createProject('Remote Project');
   const remoteProjectPath = Path.join(core.util.pathTo.tmp, remoteProject.id);
-  (await core.git.clone(
+  await core.git.clone(
     core.util.pathTo.project(remoteProject.id),
     remoteProjectPath,
     { bare: true }
-  ))._unsafeUnwrap();
+  );
   await Fs.remove(core.util.pathTo.project(remoteProject.id));
 
   return remoteProject;
@@ -77,7 +77,7 @@ export async function createLocalRemoteRepository() {
  * The Project has a special destroy method, that removes the Project again.
  */
 export async function createProject(name?: string, settings?: ProjectSettings) {
-  const project = (await core.projects.create({
+  const project = await core.projects.create({
     name: name || faker.company.name(),
     description: faker.company.catchPhrase(),
     settings: settings || {
@@ -86,17 +86,17 @@ export async function createProject(name?: string, settings?: ProjectSettings) {
         supported: ['en', 'de'],
       },
     },
-  }))._unsafeUnwrap();
+  });
 
   const destroy = async () => {
-    (await core.projects.delete({ id: project.id, force: true }))._unsafeUnwrap();
+    await core.projects.delete({ id: project.id, force: true });
   };
 
   return { ...project, destroy };
 }
 
 export async function createComponent(projectId: string) {
-  const component = (await core.components.create({
+  const component = await core.components.create({
     projectId,
     name: { en: 'Hero' },
     slug: 'hero',
@@ -118,100 +118,100 @@ export async function createComponent(projectId: string) {
         max: null,
       },
     ],
-  }))._unsafeUnwrap();
+  });
 
   return component;
 }
 
 export async function createAsset(projectId: string) {
-  const asset = (await core.assets.create({
+  const asset = await core.assets.create({
     projectId,
     filePath: Path.resolve('src/test/data/150x150.png'),
     name: 'elek.io',
     description: 'A 150x150 image of the text "elek.ioo"',
-  }))._unsafeUnwrap();
+  });
 
   return asset;
 }
 
 export async function createCollection(projectId: string) {
-  const collection = (await core.collections.create({
-    projectId,
-    icon: 'home',
-    name: {
-      singular: {
-        en: 'Product',
+  const collection = await core.collections.create({
+      projectId,
+      icon: 'home',
+      name: {
+        singular: {
+          en: 'Product',
+        },
+        plural: {
+          en: 'Products',
+        },
       },
-      plural: {
-        en: 'Products',
+      slug: {
+        singular: 'product',
+        plural: 'products',
       },
-    },
-    slug: {
-      singular: 'product',
-      plural: 'products',
-    },
-    description: {
-      en: 'A Collection that contains our Products',
-    },
-    fieldDefinitions: [
-      {
-        id: ids.textFieldDefinition,
-        slug: slugs.textFieldDefinition,
-        valueType: 'string',
-        label: {
-          en: 'Name',
-        },
-        description: {
-          en: 'The title should be shirt and catchy, to grab the users attention',
-        },
-        fieldType: 'text',
-        inputWidth: '12',
-        isDisabled: false,
-        isRequired: true,
-        isUnique: true,
-        min: null,
-        defaultValue: null,
-        max: 70,
+      description: {
+        en: 'A Collection that contains our Products',
       },
-      {
-        id: ids.assetReferenceFieldDefinition,
-        slug: slugs.assetReferenceFieldDefinition,
-        valueType: 'reference',
-        label: {
-          en: 'Header image',
+      fieldDefinitions: [
+        {
+          id: ids.textFieldDefinition,
+          slug: slugs.textFieldDefinition,
+          valueType: 'string',
+          label: {
+            en: 'Name',
+          },
+          description: {
+            en: 'The title should be shirt and catchy, to grab the users attention',
+          },
+          fieldType: 'text',
+          inputWidth: '12',
+          isDisabled: false,
+          isRequired: true,
+          isUnique: true,
+          min: null,
+          defaultValue: null,
+          max: 70,
         },
-        description: {
-          en: 'An image for this product displayed on top of the page',
+        {
+          id: ids.assetReferenceFieldDefinition,
+          slug: slugs.assetReferenceFieldDefinition,
+          valueType: 'reference',
+          label: {
+            en: 'Header image',
+          },
+          description: {
+            en: 'An image for this product displayed on top of the page',
+          },
+          fieldType: 'asset',
+          inputWidth: '12',
+          isDisabled: false,
+          isRequired: true,
+          isUnique: false,
+          min: null,
+          max: null,
         },
-        fieldType: 'asset',
-        inputWidth: '12',
-        isDisabled: false,
-        isRequired: true,
-        isUnique: false,
-        min: null,
-        max: null,
-      },
-      {
-        id: ids.entryReferenceFieldDefinition,
-        slug: slugs.entryReferenceFieldDefinition,
-        valueType: 'reference',
-        label: {
-          en: 'Related products',
+        {
+          id: ids.entryReferenceFieldDefinition,
+          slug: slugs.entryReferenceFieldDefinition,
+          valueType: 'reference',
+          label: {
+            en: 'Related products',
+          },
+          description: {
+            en: 'References to other products that the visitor might want to check out too',
+          },
+          fieldType: 'entry',
+          ofCollections: [],
+          inputWidth: '12',
+          isDisabled: false,
+          isRequired: false,
+          isUnique: false,
+          min: null,
+          max: null,
         },
-        description: {
-          en: 'References to other products that the visitor might want to check out too',
-        },
-        fieldType: 'entry',
-        ofCollections: [],
-        inputWidth: '12',
-        isDisabled: false,
-        isRequired: false,
-        isUnique: false,
-        min: null,
-        max: null,
-      },
-    ],
-  }))._unsafeUnwrap();
+      ],
+  });
 
   // Add circular reference to products
   (
@@ -220,10 +220,10 @@ export async function createCollection(projectId: string) {
     }) as EntryFieldDefinition
   ).ofCollections = [collection.id];
 
-  const updatedCollection = (await core.collections.update({
+  const updatedCollection = await core.collections.update({
     ...collection,
     projectId,
-  }))._unsafeUnwrap();
+  });
 
   return updatedCollection;
 }
@@ -234,7 +234,7 @@ export async function createEntry(
   assetValueId: string,
   entryValueId?: string
 ) {
-  const entry = (await core.entries.create({
+  const entry = await core.entries.create({
     projectId: projectId,
     collectionId: collectionId,
     values: {
@@ -273,7 +273,7 @@ export async function createEntry(
         },
       },
     },
-  }))._unsafeUnwrap();
+  });
 
   return entry;
 }

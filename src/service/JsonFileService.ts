@@ -1,9 +1,7 @@
 import Fs from 'fs-extra';
 import type { z } from '@hono/zod-openapi';
-import { ResultAsync, errAsync, okAsync } from 'neverthrow';
 import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
-import { CoreErrors, parseSchema, type CoreResult } from '../util/shared.js';
 import { AbstractService } from './AbstractService.js';
 import type { LogService } from './LogService.js';
 
@@ -25,33 +23,22 @@ export class JsonFileService extends AbstractService {
    * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
-  public create<T extends z.ZodTypeAny>(
+  public async create<T extends z.ZodTypeAny>(
     data: unknown,
     path: string,
     schema: T
-  ): CoreResult<z.output<T>> {
-    const parsed = parseSchema(schema, data);
-    if (parsed.isErr()) {
-      return this.logged('create', errAsync(parsed.error));
-    }
-    const parsedData = parsed.value as z.output<T>;
+  ): Promise<z.output<T>> {
+    const parsedData: z.output<T> = schema.parse(data);
     const string = this.serialize(parsedData);
-    return this.logged(
-      'create',
-      ResultAsync.fromPromise(
-        Fs.writeFile(path, string, { flag: 'wx', encoding: 'utf8' }),
-        CoreErrors.fromUnknown
-      ).map(() => {
-        if (this.options.file.cache === true) {
-          this.cache.set(path, parsedData);
-        }
-        this.logService.debug({
-          source: 'core',
-          message: `Created file "${path}"`,
-        });
-        return parsedData;
-      })
-    );
+    await Fs.writeFile(path, string, { flag: 'wx', encoding: 'utf8' });
+    if (this.options.file.cache === true) {
+      this.cache.set(path, parsedData);
+    }
+    this.logService.debug({
+      source: 'core',
+      message: `Created file "${path}"`,
+    });
+    return parsedData;
   }
 
   /**
@@ -61,41 +48,30 @@ export class JsonFileService extends AbstractService {
    * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
-  public read<T extends z.ZodTypeAny>(
+  public async read<T extends z.ZodTypeAny>(
     path: string,
     schema: T
-  ): CoreResult<z.output<T>> {
+  ): Promise<z.output<T>> {
     if (this.options.file.cache === true && this.cache.has(path)) {
       this.logService.debug({
         source: 'core',
         message: `Cache hit reading file "${path}"`,
       });
       const json = this.cache.get(path);
-      const parsed = parseSchema(schema, json);
-      if (parsed.isErr()) return this.logged('read', errAsync(parsed.error));
-      return this.logged('read', okAsync(parsed.value as z.output<T>));
+      return schema.parse(json) as z.output<T>;
     }
 
     this.logService.debug({
       source: 'core',
       message: `Cache miss reading file "${path}"`,
     });
-    return this.logged(
-      'read',
-      ResultAsync.fromPromise(
-        Fs.readFile(path, { flag: 'r', encoding: 'utf8' }),
-        CoreErrors.fromUnknown
-      ).andThen((data) => {
-        const json = this.deserialize(data);
-        const parsed = parseSchema(schema, json);
-        if (parsed.isErr()) return errAsync(parsed.error);
-        const value = parsed.value as z.output<T>;
-        if (this.options.file.cache === true) {
-          this.cache.set(path, value);
-        }
-        return okAsync(value);
-      })
-    );
+    const data = await Fs.readFile(path, { flag: 'r', encoding: 'utf8' });
+    const json = this.deserialize(data);
+    const value: z.output<T> = schema.parse(json);
+    if (this.options.file.cache === true) {
+      this.cache.set(path, value);
+    }
+    return value;
   }
 
   /**
@@ -110,20 +86,13 @@ export class JsonFileService extends AbstractService {
    * @param path Path to read the file from
    * @returns Unvalidated content of the file from disk
    */
-  public unsafeRead(path: string): CoreResult<unknown> {
-    return this.logged(
-      'unsafeRead',
-      ResultAsync.fromPromise(
-        Fs.readFile(path, { flag: 'r', encoding: 'utf8' }),
-        CoreErrors.fromUnknown
-      ).map((data) => {
-        this.logService.warn({
-          source: 'core',
-          message: `Unsafe reading of file "${path}"`,
-        });
-        return this.deserialize(data);
-      })
-    );
+  public async unsafeRead(path: string): Promise<unknown> {
+    const data = await Fs.readFile(path, { flag: 'r', encoding: 'utf8' });
+    this.logService.warn({
+      source: 'core',
+      message: `Unsafe reading of file "${path}"`,
+    });
+    return this.deserialize(data);
   }
 
   /**
@@ -136,33 +105,22 @@ export class JsonFileService extends AbstractService {
    * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
-  public update<T extends z.ZodTypeAny>(
+  public async update<T extends z.ZodTypeAny>(
     data: unknown,
     path: string,
     schema: T
-  ): CoreResult<z.output<T>> {
-    const parsed = parseSchema(schema, data);
-    if (parsed.isErr()) {
-      return this.logged('update', errAsync(parsed.error));
-    }
-    const parsedData = parsed.value as z.output<T>;
+  ): Promise<z.output<T>> {
+    const parsedData: z.output<T> = schema.parse(data);
     const string = this.serialize(parsedData);
-    return this.logged(
-      'update',
-      ResultAsync.fromPromise(
-        Fs.writeFile(path, string, { flag: 'w', encoding: 'utf8' }),
-        CoreErrors.fromUnknown
-      ).map(() => {
-        if (this.options.file.cache === true) {
-          this.cache.set(path, parsedData);
-        }
-        this.logService.debug({
-          source: 'core',
-          message: `Updated file "${path}"`,
-        });
-        return parsedData;
-      })
-    );
+    await Fs.writeFile(path, string, { flag: 'w', encoding: 'utf8' });
+    if (this.options.file.cache === true) {
+      this.cache.set(path, parsedData);
+    }
+    this.logService.debug({
+      source: 'core',
+      message: `Updated file "${path}"`,
+    });
+    return parsedData;
   }
 
   /**

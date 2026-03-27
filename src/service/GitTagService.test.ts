@@ -22,51 +22,49 @@ describe('GitTagService', function () {
   });
 
   it('should be able to create a new tag', async function () {
-    tag = (await core.git.tags.create({
+    tag = await core.git.tags.create({
       path: projectPath,
       message: { type: 'release', version: '1.0.0' },
-    }))._unsafeUnwrap();
+    });
 
     expect(tag.message).toEqual({ type: 'release', version: '1.0.0' });
   });
 
   it('should be able to read a tag', async function () {
-    const readTag = (await core.git.tags.read({
+    const readTag = await core.git.tags.read({
       path: projectPath,
       id: tag.id,
-    }))._unsafeUnwrap();
+    });
 
     expect(readTag.message).toEqual({ type: 'release', version: '1.0.0' });
   });
 
   it('should return an error when trying to update a tag', async function () {
-    const result = await core.git.tags.update();
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.type).toBe('BadRequest');
-    }
+    await expect(core.git.tags.update()).rejects.toMatchObject({
+      type: 'BadRequest',
+    });
   });
 
   it('should be able to count all tags', async function () {
-    const numberOfTags = (await core.git.tags.count({
+    const numberOfTags = await core.git.tags.count({
       path: projectPath,
-    }))._unsafeUnwrap();
+    });
 
     expect(numberOfTags).toEqual(1);
   });
 
   it('should be able to list all tags', async function () {
-    const tags = (await core.git.tags.list({
+    const tags = await core.git.tags.list({
       path: projectPath,
-    }))._unsafeUnwrap();
+    });
 
     expect(tags.list.length).toEqual(1);
   });
 
   it('should preserve the full author email when listing tags', async function () {
-    const tags = (await core.git.tags.list({
+    const tags = await core.git.tags.list({
       path: projectPath,
-    }))._unsafeUnwrap();
+    });
 
     const listedTag = tags.list[0];
     expect(listedTag).toBeDefined();
@@ -75,22 +73,22 @@ describe('GitTagService', function () {
   });
 
   it('should be able to delete the tag', async function () {
-    (await core.git.tags.delete({
+    await core.git.tags.delete({
       path: projectPath,
       id: tag.id,
-    }))._unsafeUnwrap();
+    });
 
-    const numberOfTags = (await core.git.tags.count({ path: projectPath }))._unsafeUnwrap();
+    const numberOfTags = await core.git.tags.count({ path: projectPath });
 
     expect(numberOfTags).toEqual(0);
   });
 
   it('should be able to create a new tag at specific commit hash', async function () {
-    tag = (await core.git.tags.create({
+    tag = await core.git.tags.create({
       path: projectPath,
       message: { type: 'upgrade', coreVersion: '0.16.0' },
       hash: 'HEAD',
-    }))._unsafeUnwrap();
+    });
 
     expect(tag.message).toEqual({ type: 'upgrade', coreVersion: '0.16.0' });
   });

@@ -1,6 +1,4 @@
 import Fs from 'fs-extra';
-import { ResultAsync, errAsync, okAsync } from 'neverthrow';
-import { CoreErrors, parseSchema, type CoreResult } from '../util/shared.js';
 import {
   countEntriesSchema,
   createEntrySchema,
@@ -35,7 +33,7 @@ import {
 } from '../schema/index.js';
 import { applyMigrations, entryMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
-import { datetime, uuid } from '../util/shared.js';
+import { datetime, uuid, CoreError } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { CollectionService } from './CollectionService.js';
 import type { ComponentService } from './ComponentService.js';
@@ -63,7 +61,13 @@ export class EntryService
     collectionService: CollectionService,
     componentService: ComponentService
   ) {
-    super(serviceTypeSchema.enum.Entry, options, logService, gitService, jsonFileService);
+    super(
+      serviceTypeSchema.enum.Entry,
+      options,
+      logService,
+      gitService,
+      jsonFileService
+    );
 
     this.coreVersion = coreVersion;
     this.collectionService = collectionService;
@@ -75,69 +79,73 @@ export class EntryService
    */
   public create<T extends Entry = Entry>(
     props: CreateEntryProps
-  ): CoreResult<T> {
-    const validated = parseSchema(createEntrySchema, props);
-    if (validated.isErr()) return this.logged('create', errAsync(validated.error));
+  ): Promise<T> {
+    return this.validated('create', createEntrySchema, props, async () => {
+      const id = uuid();
+      const projectPath = pathTo.project(props.projectId);
+      const entryFilePath = pathTo.entryFile(
+        props.projectId,
+        props.collectionId,
+        id
+      );
 
-    const id = uuid();
-    const projectPath = pathTo.project(props.projectId);
-    const entryFilePath = pathTo.entryFile(
-      props.projectId,
-      props.collectionId,
-      id
-    );
-
-    const result = this.collectionService.read({
-      projectId: props.projectId,
-      id: props.collectionId,
-    }).andThen((collection) => {
-      return this.buildComponentResolver(
-        flattenFieldDefinitions(collection.fieldDefinitions),
-        props.projectId
-      ).andThen(({ resolver: componentResolver, fieldDefinitions }) => {
-        const createEntrySchemaFromFieldDefinitions =
-          getCreateEntrySchemaFromFieldDefinitions(
-            fieldDefinitions,
-            componentResolver
-          );
-        const validatedResult = parseSchema(createEntrySchemaFromFieldDefinitions, props);
-        if (validatedResult.isErr()) return errAsync(validatedResult.error);
-        const validatedProps = validatedResult.value;
-
-        const entryFile: EntryFile = {
-          objectType: 'entry',
-          id,
-          coreVersion: this.coreVersion,
-          values: validatedProps.values,
-          created: datetime(),
-          updated: null,
-        };
-
-        return this.withGitRollback(
-          projectPath,
-          () =>
-            this.jsonFileService.create(
-              entryFile,
-              entryFilePath,
-              entryFileSchema
-            ).andThen(() =>
-              this.gitService.add(projectPath, [entryFilePath])
-            ).andThen(() =>
-              this.gitService.commit(projectPath, {
-                method: 'create',
-                reference: {
-                  objectType: 'entry',
-                  id: entryFile.id,
-                  collectionId: props.collectionId,
-                },
-              })
-            ).map(() => this.toEntry(entryFile) as T),
-          [entryFilePath]
-        );
+      const collection = await this.collectionService.read({
+        projectId: props.projectId,
+        id: props.collectionId,
       });
-    });
 
-    return this.logged('create', result);
+      const { resolver: componentResolver, fieldDefinitions } =
+        await this.buildComponentResolver(
+          flattenFieldDefinitions(collection.fieldDefinitions),
+          props.projectId
+        );
+
+      const createEntrySchemaFromFieldDefinitions =
+        getCreateEntrySchemaFromFieldDefinitions(
+          fieldDefinitions,
+          componentResolver
+        );
+      const validatedResult =
+        createEntrySchemaFromFieldDefinitions.safeParse(props);
+      if (!validatedResult.success) {
+        throw CoreError.badRequest(
+          'Validation failed',
+          validatedResult.error
+        );
+      }
+      const validatedProps = validatedResult.data;
+
+      const entryFile: EntryFile = {
+        objectType: 'entry',
+        id,
+        coreVersion: this.coreVersion,
+        values: validatedProps.values,
+        created: datetime(),
+        updated: null,
+      };
+
+      return this.withGitRollback(
+        projectPath,
+        async () => {
+          await this.jsonFileService.create(
+            entryFile,
+            entryFilePath,
+            entryFileSchema
+          );
+          await this.gitService.add(projectPath, [entryFilePath]);
+          await this.gitService.commit(projectPath, {
+            method: 'create',
+            reference: {
+              objectType: 'entry',
+              id: entryFile.id,
+              collectionId: props.collectionId,
+            },
+          });
+          return this.toEntry(entryFile) as T;
+        },
+        [entryFilePath]
+      );
+    });
   }
 
   /**
@@ -145,45 +153,39 @@ export class EntryService
    *
    * If a commit hash is provided, the Entry is read from history
    */
-  public read<T extends Entry = Entry>(
-    props: ReadEntryProps
-  ): CoreResult<T> {
-    const validated = parseSchema(readEntrySchema, props);
-    if (validated.isErr()) return this.logged('read', errAsync(validated.error));
-
-    if (!props.commitHash) {
-      const result = this.jsonFileService.read(
-        pathTo.entryFile(props.projectId, props.collectionId, props.id),
-        entryFileSchema
-      ).map((entryFile) => this.toEntry(entryFile) as T);
-
-      return this.logged('read', result);
-    } else {
-      const result = this.gitService.getFileContentAtCommit(
-        pathTo.project(props.projectId),
-        pathTo.entryFile(props.projectId, props.collectionId, props.id),
-        props.commitHash
-      ).map((content) => {
+  public read<T extends Entry = Entry>(props: ReadEntryProps): Promise<T> {
+    return this.validated('read', readEntrySchema, props, async () => {
+      if (!props.commitHash) {
+        const entryFile = await this.jsonFileService.read(
+          pathTo.entryFile(props.projectId, props.collectionId, props.id),
+          entryFileSchema
+        );
+        return this.toEntry(entryFile) as T;
+      } else {
+        const content = await this.gitService.getFileContentAtCommit(
+          pathTo.project(props.projectId),
+          pathTo.entryFile(props.projectId, props.collectionId, props.id),
+          props.commitHash
+        );
         const entryFile = this.migrate(JSON.parse(content));
         return this.toEntry(entryFile) as T;
-      });
-
-      return this.logged('read', result);
-    }
+      }
+    });
   }
 
   /**
    * Returns the commit history of an Entry
    */
-  public history(props: EntryHistoryProps): CoreResult<GitCommit[]> {
-    const validated = parseSchema(entryHistorySchema, props);
-    if (validated.isErr()) return this.logged('history', errAsync(validated.error));
-
-    const result = this.gitService.log(pathTo.project(props.projectId), {
-      filePath: pathTo.entryFile(props.projectId, props.collectionId, props.id),
+  public history(props: EntryHistoryProps): Promise<GitCommit[]> {
+    return this.validated('history', entryHistorySchema, props, async () => {
+      return this.gitService.log(pathTo.project(props.projectId), {
+        filePath: pathTo.entryFile(
+          props.projectId,
+          props.collectionId,
+          props.id
+        ),
+      });
     });
-
-    return this.logged('history', result);
   }
 
   /**
@@ -191,156 +193,144 @@ export class EntryService
    */
   public update<T extends Entry = Entry>(
     props: UpdateEntryProps
-  ): CoreResult<T> {
-    const validated = parseSchema(updateEntrySchema, props);
-    if (validated.isErr()) return this.logged('update', errAsync(validated.error));
+  ): Promise<T> {
+    return this.validated('update', updateEntrySchema, props, async () => {
+      const projectPath = pathTo.project(props.projectId);
+      const entryFilePath = pathTo.entryFile(
+        props.projectId,
+        props.collectionId,
+        props.id
+      );
 
-    const projectPath = pathTo.project(props.projectId);
-    const entryFilePath = pathTo.entryFile(
-      props.projectId,
-      props.collectionId,
-      props.id
-    );
+      const collection = await this.collectionService.read({
+        projectId: props.projectId,
+        id: props.collectionId,
+      });
 
-    const result = this.collectionService.read({
-      projectId: props.projectId,
-      id: props.collectionId,
-    }).andThen((collection) =>
-      this.read<T>({
+      const prevEntryFile = await this.read<T>({
         projectId: props.projectId,
         collectionId: props.collectionId,
         id: props.id,
-      }).andThen((prevEntryFile) =>
-        this.buildComponentResolver(
+      });
+
+      const { resolver: componentResolver, fieldDefinitions } =
+        await this.buildComponentResolver(
           flattenFieldDefinitions(collection.fieldDefinitions),
           props.projectId
-        ).andThen(({ resolver: componentResolver, fieldDefinitions }) => {
-          const updateEntrySchemaFromFieldDefinitions =
-            getUpdateEntrySchemaFromFieldDefinitions(
-              fieldDefinitions,
-              componentResolver
-            );
-          const validatedResult = parseSchema(updateEntrySchemaFromFieldDefinitions, props);
-          if (validatedResult.isErr()) return errAsync(validatedResult.error);
-          const validatedProps = validatedResult.value;
+        );
 
-          const entryFile: EntryFile = {
-            ...prevEntryFile,
-            values: validatedProps.values,
-            updated: datetime(),
-          };
+      const updateEntrySchemaFromFieldDefinitions =
+        getUpdateEntrySchemaFromFieldDefinitions(
+          fieldDefinitions,
+          componentResolver
+        );
+      const validatedResult =
+        updateEntrySchemaFromFieldDefinitions.safeParse(props);
+      if (!validatedResult.success) {
+        throw CoreError.badRequest(
+          'Validation failed',
+          validatedResult.error
+        );
+      }
+      const validatedProps = validatedResult.data;
 
-          return this.withGitRollback(projectPath, () =>
-            this.jsonFileService.update(
-              entryFile,
-              entryFilePath,
-              entryFileSchema
-            ).andThen(() =>
-              this.gitService.add(projectPath, [entryFilePath])
-            ).andThen(() =>
-              this.gitService.commit(projectPath, {
-                method: 'update',
-                reference: {
-                  objectType: 'entry',
-                  id: entryFile.id,
-                  collectionId: props.collectionId,
-                },
-              })
-            ).map(() => this.toEntry(entryFile) as T)
-          );
-        })
-      )
-    );
+      const entryFile: EntryFile = {
+        ...prevEntryFile,
+        values: validatedProps.values,
+        updated: datetime(),
+      };
 
-    return this.logged('update', result);
+      return this.withGitRollback(projectPath, async () => {
+        await this.jsonFileService.update(
+          entryFile,
+          entryFilePath,
+          entryFileSchema
+        );
+        await this.gitService.add(projectPath, [entryFilePath]);
+        await this.gitService.commit(projectPath, {
+          method: 'update',
+          reference: {
+            objectType: 'entry',
+            id: entryFile.id,
+            collectionId: props.collectionId,
+          },
+        });
+        return this.toEntry(entryFile) as T;
+      });
+    });
   }
 
   /**
    * Deletes given Entry from it's Collection
    */
-  public delete(props: DeleteEntryProps): CoreResult<void> {
-    const validated = parseSchema(deleteEntrySchema, props);
-    if (validated.isErr()) return this.logged('delete', errAsync(validated.error));
+  public delete(props: DeleteEntryProps): Promise<void> {
+    return this.validated('delete', deleteEntrySchema, props, async () => {
+      const projectPath = pathTo.project(props.projectId);
+      const entryFilePath = pathTo.entryFile(
+        props.projectId,
+        props.collectionId,
+        props.id
+      );
 
-    const projectPath = pathTo.project(props.projectId);
-    const entryFilePath = pathTo.entryFile(
-      props.projectId,
-      props.collectionId,
-      props.id
-    );
-
-    const result = this.withGitRollback(projectPath, () =>
-      ResultAsync.fromPromise(
-        Fs.remove(entryFilePath),
-        CoreErrors.fromUnknown
-      ).andThen(() =>
-        this.gitService.add(projectPath, [entryFilePath])
-      ).andThen(() =>
-        this.gitService.commit(projectPath, {
+      return this.withGitRollback(projectPath, async () => {
+        await Fs.remove(entryFilePath);
+        await this.gitService.add(projectPath, [entryFilePath]);
+        await this.gitService.commit(projectPath, {
           method: 'delete',
           reference: {
             objectType: 'entry',
             id: props.id,
             collectionId: props.collectionId,
           },
-        })
-      ).map(() => undefined)
-    );
-
-    return this.logged('delete', result);
+        });
+      });
+    });
   }
 
   public list<T extends Entry = Entry>(
     props: ListEntriesProps
-  ): CoreResult<PaginatedList<T>> {
-    const validated = parseSchema(listEntriesSchema, props);
-    if (validated.isErr()) return this.logged('list', errAsync(validated.error));
+  ): Promise<PaginatedList<T>> {
+    return this.validated('list', listEntriesSchema, props, async () => {
+      const offset = props.offset || 0;
+      const limit = props.limit ?? 15;
 
-    const offset = props.offset || 0;
-    const limit = props.limit ?? 15;
-
-    const result = this.listReferences(
-      objectTypeSchema.enum.entry,
-      props.projectId,
-      props.collectionId
-    ).andThen((entryReferences) => {
+      const entryReferences = await this.listReferences(
+        objectTypeSchema.enum.entry,
+        props.projectId,
+        props.collectionId
+      );
       const partialEntryReferences =
         limit === 0
           ? entryReferences.slice(offset)
           : entryReferences.slice(offset, offset + limit);
 
-      return ResultAsync.fromSafePromise(
-        this.collectResults(
-          partialEntryReferences.map((reference) => {
-            return this.read<T>({
-              projectId: props.projectId,
-              collectionId: props.collectionId,
-              id: reference.id,
-            });
-          })
-        )
-      ).map((entries) => ({
+      const entries = await this.collectResults(
+        partialEntryReferences.map((reference) => {
+          return this.read<T>({
+            projectId: props.projectId,
+            collectionId: props.collectionId,
+            id: reference.id,
+          });
+        })
+      );
+      return {
         total: entryReferences.length,
         limit,
         offset,
         list: entries,
-      }));
+      };
     });
-
-    return this.logged('list', result);
   }
 
-  public count(props: CountEntriesProps): CoreResult<number> {
-    const validated = parseSchema(countEntriesSchema, props);
-    if (validated.isErr()) return this.logged('count', errAsync(validated.error));
-
-    const result = this.listReferences(
-      objectTypeSchema.enum.entry,
-      props.projectId,
-      props.collectionId
-    ).map((entryReferences) => entryReferences.length);
-
-    return this.logged('count', result);
+  public count(props: CountEntriesProps): Promise<number> {
+    return this.validated('count', countEntriesSchema, props, async () => {
+      const entryReferences = await this.listReferences(
+        objectTypeSchema.enum.entry,
+        props.projectId,
+        props.collectionId
+      );
+      return entryReferences.length;
+    });
   }
 
   /**
@@ -376,84 +366,72 @@ export class EntryService
    * all project components are loaded and the returned field definitions have
    * ofComponents populated with the full list of component IDs.
    */
-  private buildComponentResolver(
+  private async buildComponentResolver(
     fieldDefinitions: FieldDefinition[],
     projectId: string
-  ): CoreResult<{
+  ): Promise<{
     resolver: ComponentResolver;
     fieldDefinitions: FieldDefinition[];
   }> {
     const resolvedFieldDefinitions = [...fieldDefinitions];
 
     // First pass: resolve empty ofComponents arrays by loading all component IDs
-    const resolveStep = resolvedFieldDefinitions.reduce<CoreResult<string[]>>(
-      (acc, fieldDefinition, index) => {
-        if (fieldDefinition.valueType === 'component') {
-          return acc.andThen((queue) => {
-            if (fieldDefinition.ofComponents.length > 0) {
-              return okAsync([...queue, ...fieldDefinition.ofComponents]);
-            }
-            return this.componentService.listAllIds(projectId).map((componentIds) => {
-              resolvedFieldDefinitions[index] = {
-                ...fieldDefinition,
-                ofComponents: componentIds,
-              };
-              return [...queue, ...componentIds];
-            });
-          });
+    const initialQueue: string[] = [];
+    for (let index = 0; index < resolvedFieldDefinitions.length; index++) {
+      const fieldDefinition = resolvedFieldDefinitions[index]!;
+      if (fieldDefinition.valueType === 'component') {
+        if (fieldDefinition.ofComponents.length > 0) {
+          initialQueue.push(...fieldDefinition.ofComponents);
+        } else {
+          const componentIds =
+            await this.componentService.listAllIds(projectId);
+          resolvedFieldDefinitions[index] = {
+            ...fieldDefinition,
+            ofComponents: componentIds,
+          };
+          initialQueue.push(...componentIds);
         }
-        return acc;
-      },
-      okAsync([])
-    );
+      }
+    }
 
     // BFS: load all referenced components into componentMap
-    return resolveStep.andThen((initialQueue) => {
-      const componentMap = new Map<string, FieldDefinition[]>();
-      const queue = [...initialQueue];
+    const componentMap = new Map<string, FieldDefinition[]>();
+    const queue = [...initialQueue];
 
-      const processQueue = (): CoreResult<Map<string, FieldDefinition[]>> => {
-        if (queue.length === 0) {
-          return okAsync(componentMap);
-        }
+    while (queue.length > 0) {
+      const componentId = queue.shift()!;
+      if (componentMap.has(componentId)) {
+        continue;
+      }
 
-        const componentId = queue.shift()!;
-        if (componentMap.has(componentId)) {
-          return processQueue();
-        }
+      const component = await this.componentService.read({
+        projectId,
+        id: componentId,
+      });
+      componentMap.set(componentId, component.fieldDefinitions);
 
-        return this.componentService.read({
-          projectId,
-          id: componentId,
-        }).andThen((component) => {
-          componentMap.set(componentId, component.fieldDefinitions);
-
-          for (const nestedFieldDef of component.fieldDefinitions) {
-            if (nestedFieldDef.valueType === 'component') {
-              for (const nestedComponentId of nestedFieldDef.ofComponents) {
-                if (!componentMap.has(nestedComponentId)) {
-                  queue.push(nestedComponentId);
-                }
-              }
+      for (const nestedFieldDef of component.fieldDefinitions) {
+        if (nestedFieldDef.valueType === 'component') {
+          for (const nestedComponentId of nestedFieldDef.ofComponents) {
+            if (!componentMap.has(nestedComponentId)) {
+              queue.push(nestedComponentId);
             }
           }
+        }
+      }
+    }
 
-          return processQueue();
-        });
-      };
-
-      return processQueue().map(() => ({
-        resolver: ((id: string) => {
-          const fds = componentMap.get(id);
-          if (!fds) {
-            throw new Error(
-              `Component "${id}" was not pre-loaded. This is an internal error.`
-            );
-          }
-          return fds;
-        }) as ComponentResolver,
-        fieldDefinitions: resolvedFieldDefinitions,
-      }));
-    });
+    return {
+      resolver: ((id: string) => {
+        const fds = componentMap.get(id);
+        if (!fds) {
+          throw new Error(
+            `Component "${id}" was not pre-loaded. This is an internal error.`
+          );
+        }
+        return fds;
+      }) as ComponentResolver,
+      fieldDefinitions: resolvedFieldDefinitions,
+    };
   }
 }

@@ -1,7 +1,5 @@
 import slugify from '@sindresorhus/slugify';
 import { v4 as generateUuid } from 'uuid';
-import { ResultAsync, Result, ok, err, okAsync, errAsync } from 'neverthrow';
-import type { ZodType } from 'zod';
 import { type Uuid } from '../schema/baseSchema.js';
 
 /**
@@ -44,85 +42,62 @@ export function slug(string: string): string {
 
 // --- Error types ---
 
-type CoreErrorBase = { message: string; cause?: unknown };
+export type CoreErrorType =
+  | 'NotFound'
+  | 'BadRequest'
+  | 'Unauthorized'
+  | 'Conflict'
+  | 'PreconditionFailed'
+  | 'UpgradeFailed'
+  | 'Internal';
 
-export type CoreError =
-  | (CoreErrorBase & { type: 'NotFound'; statusCode: 404 })
-  | (CoreErrorBase & { type: 'BadRequest'; statusCode: 400 })
-  | (CoreErrorBase & { type: 'Unauthorized'; statusCode: 401 })
-  | (CoreErrorBase & { type: 'Conflict'; statusCode: 409 })
-  | (CoreErrorBase & { type: 'PreconditionFailed'; statusCode: 412 })
-  | (CoreErrorBase & { type: 'UpgradeFailed'; statusCode: 422 })
-  | (CoreErrorBase & { type: 'Internal'; statusCode: 500 });
-
-export const CoreErrors = {
-  notFound: (message: string, cause?: unknown): CoreError => ({
-    type: 'NotFound',
-    message,
-    statusCode: 404,
-    cause,
-  }),
-  badRequest: (message: string, cause?: unknown): CoreError => ({
-    type: 'BadRequest',
-    message,
-    statusCode: 400,
-    cause,
-  }),
-  unauthorized: (message: string, cause?: unknown): CoreError => ({
-    type: 'Unauthorized',
-    message,
-    statusCode: 401,
-    cause,
-  }),
-  conflict: (message: string, cause?: unknown): CoreError => ({
-    type: 'Conflict',
-    message,
-    statusCode: 409,
-    cause,
-  }),
-  preconditionFailed: (message: string, cause?: unknown): CoreError => ({
-    type: 'PreconditionFailed',
-    message,
-    statusCode: 412,
-    cause,
-  }),
-  upgradeFailed: (message: string, cause?: unknown): CoreError => ({
-    type: 'UpgradeFailed',
-    message,
-    statusCode: 422,
-    cause,
-  }),
-  internal: (message: string, cause?: unknown): CoreError => ({
-    type: 'Internal',
-    message,
-    statusCode: 500,
-    cause,
-  }),
-  fromUnknown: (e: unknown): CoreError => ({
-    type: 'Internal',
-    message: e instanceof Error ? e.message : String(e),
-    statusCode: 500,
-    cause: e,
-  }),
+const statusCodes: Record<CoreErrorType, number> = {
+  NotFound: 404,
+  BadRequest: 400,
+  Unauthorized: 401,
+  Conflict: 409,
+  PreconditionFailed: 412,
+  UpgradeFailed: 422,
+  Internal: 500,
 };
 
-// --- Result types ---
+export class CoreError extends Error {
+  public readonly type: CoreErrorType;
+  public readonly statusCode: number;
 
-export type CoreResult<T> = ResultAsync<T, CoreError>;
-export type CoreResultSync<T> = Result<T, CoreError>;
-
-/**
- * Wraps Zod safeParse into a sync Result
- */
-export function parseSchema<T>(
-  schema: ZodType<T>,
-  data: unknown
-): CoreResultSync<T> {
-  const result = schema.safeParse(data);
-  if (result.success) {
-    return ok(result.data);
+  constructor(type: CoreErrorType, message: string, cause?: unknown) {
+    super(message, { cause });
+    this.name = 'CoreError';
+    this.type = type;
+    this.statusCode = statusCodes[type];
   }
-  return err(CoreErrors.badRequest(result.error.message, result.error));
-}
 
-export { ResultAsync, Result, ok, err, okAsync, errAsync };
+  static notFound(message: string, cause?: unknown) {
+    return new CoreError('NotFound', message, cause);
+  }
+  static badRequest(message: string, cause?: unknown) {
+    return new CoreError('BadRequest', message, cause);
+  }
+  static unauthorized(message: string, cause?: unknown) {
+    return new CoreError('Unauthorized', message, cause);
+  }
+  static conflict(message: string, cause?: unknown) {
+    return new CoreError('Conflict', message, cause);
+  }
+  static preconditionFailed(message: string, cause?: unknown) {
+    return new CoreError('PreconditionFailed', message, cause);
+  }
+  static upgradeFailed(message: string, cause?: unknown) {
+    return new CoreError('UpgradeFailed', message, cause);
+  }
+  static internal(message: string, cause?: unknown) {
+    return new CoreError('Internal', message, cause);
+  }
+  static fromUnknown(e: unknown) {
+    return new CoreError(
+      'Internal',
+      e instanceof Error ? e.message : String(e),
+      e
+    );
+  }
+}

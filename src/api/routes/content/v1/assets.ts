@@ -1,4 +1,4 @@
-import { createRouter, handleResult } from '../../../lib/util.js';
+import { createRouter } from '../../../lib/util.js';
 import { createRoute, z } from '@hono/zod-openapi';
 import {
   assetSchema,
@@ -51,13 +51,13 @@ const router = createRouter()
     async (c) => {
       const { projectId } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
-      const result = await c.var.assetService.list({
+      const data = await c.var.assetService.list({
         projectId,
         limit,
         offset,
       });
 
-      return handleResult(c, result);
+      return c.json(data, 200);
     }
   )
 
@@ -91,9 +91,9 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId } = c.req.valid('param');
-      const result = await c.var.assetService.count({ projectId });
+      const data = await c.var.assetService.count({ projectId });
 
-      return handleResult(c, result);
+      return c.json(data, 200);
     }
   )
 
@@ -133,12 +133,12 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId, assetId } = c.req.valid('param');
-      const result = await c.var.assetService.read({
+      const data = await c.var.assetService.read({
         projectId,
         id: assetId,
       });
 
-      return handleResult(c, result);
+      return c.json(data, 200);
     }
   );
 

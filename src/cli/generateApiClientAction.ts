@@ -1,6 +1,12 @@
 import { build as compileToJs } from 'tsdown';
 import type { GenerateApiClientProps } from '../schema/index.js';
 import {
+  CoreError,
+  flattenFieldDefinitions,
+  type Collection,
+  type Project,
+} from '../index.node.js';
+import {
   core,
   watchProjects,
   AUTO_GENERATED_HEADER,
@@ -11,11 +17,6 @@ import Path from 'node:path';
 import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
 import assert from 'node:assert';
-import {
-  flattenFieldDefinitions,
-  type Collection,
-  type Project,
-} from '../index.node.js';
 
 /**
  * API Client generator
@@ -60,27 +61,17 @@ async function generateApiClient(
 
   // Pre-compute which entry types each types file provides,
   // so we can write the correct imports up front
-  const projectsResult = await core.projects.list({ limit: 0 });
-  if (projectsResult.isErr()) {
-    console.error(projectsResult.error.message);
-    process.exit(1);
-  }
-  const projects = projectsResult.value;
+  const projects = await core.projects.list({ limit: 0 });
   const entryTypeImports = new Map<string, string[]>(); // typesFile -> entryTypeNames[]
   for (const project of projects.list) {
     const typesFile = typesMap.get(project.id);
     if (!typesFile) continue;
 
-    const collectionsResult = await core.collections.list({
+    const collections = await core.collections.list({
       projectId: project.id,
       limit: 0,
       offset: 0,
     });
-    if (collectionsResult.isErr()) {
-      console.error(collectionsResult.error.message);
-      process.exit(1);
-    }
-    const collections = collectionsResult.value;
     const entryTypeNames = collections.list.map(
       (c) => `${toPascalCase(c.slug.plural)}Entry`
     );
@@ -162,12 +153,7 @@ async function generateApiClient(
 }
 
 async function writeProjectsObject(writer: CodeBlockWriter) {
-  const projectsResult = await core.projects.list({ limit: 0 });
-  if (projectsResult.isErr()) {
-    console.error(projectsResult.error.message);
-    process.exit(1);
-  }
-  const projects = projectsResult.value;
+  const projects = await core.projects.list({ limit: 0 });
 
   for (let index = 0; index < projects.list.length; index++) {
     const project = projects.list[index];
@@ -185,15 +171,10 @@ async function writeCollectionsObject(
   writer: CodeBlockWriter,
   project: Project
 ) {
-  const collectionsResult = await core.collections.list({
+  const collections = await core.collections.list({
     projectId: project.id,
     limit: 0,
   });
-  if (collectionsResult.isErr()) {
-    console.error(collectionsResult.error.message);
-    process.exit(1);
-  }
-  const collections = collectionsResult.value;
 
   for (let index = 0; index < collections.list.length; index++) {
     const collection = collections.list[index];
@@ -344,20 +325,31 @@ export const generateApiClientAction = async ({
   target,
   options,
 }: GenerateApiClientProps) => {
-  await generateApiClientAs({ outDir, language, format, target, options });
+  try {
+    await generateApiClientAs({ outDir, language, format, target, options });
 
-  if (options.watch === true) {
-    core.logger.info({
-      source: 'core',
-      message: 'Watching for changes to regenerate the API Client',
-    });
-
-    watchProjects().on('all', (event, path) => {
+    if (options.watch === true) {
       core.logger.info({
         source: 'core',
-        message: `Regenerating API Client due to ${event} on "${path}"`,
+        message: 'Watching for changes to regenerate the API Client',
       });
-      void generateApiClientAs({ outDir, language, format, target, options });
-    });
+
+      watchProjects().on('all', (event, path) => {
+        core.logger.info({
+          source: 'core',
+          message: `Regenerating API Client due to ${event} on "${path}"`,
+        });
+        void generateApiClientAs({
+          outDir,
+          language,
+          format,
+          target,
+          options,
+        });
+      });
+    }
+  } catch (error) {
+    console.error(error instanceof CoreError ? error.message : String(error));
+    process.exit(1);
   }
 };

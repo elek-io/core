@@ -4,6 +4,7 @@ import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
 import {
   flattenFieldDefinitions,
+  CoreError,
   type Component,
   type FieldDefinition,
   type Project,
@@ -247,18 +248,14 @@ async function generateTypesForProject(project: Project): Promise<string> {
   });
 
   // Load all collections and components
-  const collectionsResult = await core.collections.list({ projectId: project.id, limit: 0 });
-  if (collectionsResult.isErr()) {
-    console.error(collectionsResult.error.message);
-    process.exit(1);
-  }
-  const collections = collectionsResult.value.list;
-  const componentsResult = await core.components.list({ projectId: project.id, limit: 0 });
-  if (componentsResult.isErr()) {
-    console.error(componentsResult.error.message);
-    process.exit(1);
-  }
-  const components = componentsResult.value.list;
+  const { list: collections } = await core.collections.list({
+    projectId: project.id,
+    limit: 0,
+  });
+  const { list: components } = await core.components.list({
+    projectId: project.id,
+    limit: 0,
+  });
 
   // Build component map for dynamic field typing
   const componentMap = new Map<string, Component>();
@@ -516,20 +513,12 @@ export async function generateTypes({
   const projectsToGenerate: Project[] = [];
 
   if (projects === 'all') {
-    const projectsListResult = await core.projects.list({ limit: 0 });
-    if (projectsListResult.isErr()) {
-      console.error(projectsListResult.error.message);
-      process.exit(1);
-    }
-    projectsToGenerate.push(...projectsListResult.value.list);
+    const { list } = await core.projects.list({ limit: 0 });
+    projectsToGenerate.push(...list);
   } else {
     for (const projectId of projects) {
-      const projectResult = await core.projects.read({ id: projectId });
-      if (projectResult.isErr()) {
-        console.error(projectResult.error.message);
-        process.exit(1);
-      }
-      projectsToGenerate.push(projectResult.value);
+      const project = await core.projects.read({ id: projectId });
+      projectsToGenerate.push(project);
     }
   }
 
@@ -605,20 +594,25 @@ export const generateTypesAction = async ({
   projects,
   options,
 }: GenerateTypesProps) => {
-  await generateTypesAs({ outDir, language, projects });
+  try {
+    await generateTypesAs({ outDir, language, projects });
 
-  if (options.watch === true) {
-    core.logger.info({
-      source: 'core',
-      message: 'Watching for changes to regenerate types',
-    });
-
-    watchProjects().on('all', (event, path) => {
+    if (options.watch === true) {
       core.logger.info({
         source: 'core',
-        message: `Regenerating types due to ${event} on "${path}"`,
+        message: 'Watching for changes to regenerate types',
       });
-      void generateTypesAs({ outDir, language, projects });
-    });
+
+      watchProjects().on('all', (event, path) => {
+        core.logger.info({
+          source: 'core',
+          message: `Regenerating types due to ${event} on "${path}"`,
+        });
+        void generateTypesAs({ outDir, language, projects });
+      });
+    }
+  } catch (error) {
+    console.error(error instanceof CoreError ? error.message : String(error));
+    process.exit(1);
   }
 };
