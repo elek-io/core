@@ -95,7 +95,7 @@ export class GitTagService
    * @deprecated
    * @see https://git-scm.com/docs/git-tag#_on_re_tagging
    */
-  public async update(): Promise<GitTag> {
+  public update(): never {
     throw CoreError.badRequest(
       'Updating a git tag is not supported. Please delete the old and create a new one'
     );

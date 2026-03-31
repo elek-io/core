@@ -68,7 +68,7 @@ describe('CLI', function () {
 
     // Dynamically import the generated client because it is generated
     // during this files execution and not available at the start
-    // @ts-ignore The API Client is generated dynamically, so TS cannot know about the module
+    // @ts-expect-error The API Client is generated dynamically, so TS cannot know about the module
     const { apiClient } = await import('../.elek.io/client.js');
     const client = apiClient({
       baseUrl: 'http://localhost:31310',

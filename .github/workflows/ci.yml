@@ -5,13 +5,12 @@ on:
 
 jobs:
   test:
-    name: Testing on ${{ matrix.platform }} with Node.js ${{ matrix.node-version }}
+    name: Testing on ${{ matrix.platform }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         platform: [ubuntu-24.04, macos-15-intel, macos-15, windows-2025]
-        node-version: [24]
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Check out code
@@ -20,12 +19,10 @@ jobs:
           fetch-depth: 1
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - name: Setup Node.js ${{ matrix.node-version }} environment
+      - name: Setup Node.js environment
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: '.node-version'
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
