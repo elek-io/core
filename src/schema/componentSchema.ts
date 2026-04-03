@@ -5,6 +5,7 @@ import {
   translatableStringSchema,
   uuidSchema,
 } from './baseSchema.js';
+import { valueSchema } from './valueSchema.js';
 import {
   fieldDefinitionSchema,
   fieldDefinitionSlugUniquenessSuperRefinement,
@@ -73,6 +74,9 @@ export const updateComponentSchema = componentFileSchema
   })
   .extend({
     projectId: uuidSchema.readonly(),
+    resolutions: z
+      .record(uuidSchema, z.record(slugSchema, valueSchema))
+      .optional(),
   });
 export type UpdateComponentProps = z.infer<typeof updateComponentSchema>;
 

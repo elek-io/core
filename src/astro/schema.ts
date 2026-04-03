@@ -42,6 +42,7 @@ export function buildEntryValuesSchema(fieldDefinitions: FieldDefinition[]) {
       case valueTypeSchema.enum.component:
         shape[fieldDef.slug] = z.array(
           z.object({
+            id: z.string(),
             componentId: z.string(),
             values: z.record(z.string(), z.unknown()),
           })
@@ -91,7 +92,7 @@ function valueTypeToTsType(valueType: string): string {
     case 'reference':
       return 'Array<{ id: string; objectType: string }>';
     case 'component':
-      return 'Array<{ componentId: string; values: Record<string, Partial<Record<SupportedLanguage, unknown>>> }>';
+      return 'Array<{ id: string; componentId: string; values: Record<string, Partial<Record<SupportedLanguage, unknown>>> }>';
     default:
       return 'unknown';
   }

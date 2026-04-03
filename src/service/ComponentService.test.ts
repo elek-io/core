@@ -198,6 +198,7 @@ describe('ComponentService', function () {
             valueType: 'component',
             content: [
               {
+                id: uuid(),
                 componentId: heroComponent.id,
                 values: {
                   heading: {
@@ -467,6 +468,7 @@ describe('ComponentService', function () {
             valueType: 'component',
             content: [
               {
+                id: uuid(),
                 componentId: outerComponent.id,
                 values: {
                   nested: {
@@ -474,6 +476,7 @@ describe('ComponentService', function () {
                     valueType: 'component',
                     content: [
                       {
+                        id: uuid(),
                         componentId: innerComponent.id,
                         values: {
                           'old-name': {
@@ -667,6 +670,7 @@ describe('ComponentService', function () {
             valueType: 'component',
             content: [
               {
+                id: uuid(),
                 componentId: compA.id,
                 values: {
                   title: {
@@ -679,6 +683,7 @@ describe('ComponentService', function () {
                     valueType: 'component',
                     content: [
                       {
+                        id: uuid(),
                         componentId: compB.id,
                         values: {
                           'item-count': {

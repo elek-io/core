@@ -13,6 +13,7 @@ export function transformEntryValues(values: Record<string, Value>) {
   for (const [slug, value] of Object.entries(values)) {
     if (value.valueType === 'component') {
       result[slug] = value.content.map((item) => ({
+        id: item.id,
         componentId: item.componentId,
         values: transformEntryValues(item.values),
       }));

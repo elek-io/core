@@ -2036,6 +2036,7 @@ describe('Node.js', function () {
             valueType: 'component',
             content: [
               {
+                id: uuid(),
                 componentId: navigationItemComponent.id,
                 values: {
                   name: {
@@ -2082,6 +2083,7 @@ describe('Node.js', function () {
                 },
               },
               {
+                id: uuid(),
                 componentId: navigationItemComponent.id,
                 values: {
                   name: {
@@ -2128,6 +2130,7 @@ describe('Node.js', function () {
                 },
               },
               {
+                id: uuid(),
                 componentId: navigationItemComponent.id,
                 values: {
                   name: {

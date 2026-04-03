@@ -111,7 +111,7 @@ async function exportProjectsNested({
   options: ExportProps['options'];
 }) {
   if (projectsToExport.length === 1) {
-    const projectToExport = projectsToExport[0] as Project;
+    const projectToExport = projectsToExport[0]!;
     const project = await exportProjectNested({
       resolvedOutDir,
       projectToExport,

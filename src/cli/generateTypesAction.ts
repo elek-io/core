@@ -419,7 +419,7 @@ async function generateTypesForProject(project: Project): Promise<string> {
             writer
               .indent(1)
               .write(
-                `| { componentId: typeof ${compPascal}ComponentId; values: ${compPascal}ComponentValues }${separator}`
+                `| { id: string; componentId: typeof ${compPascal}ComponentId; values: ${compPascal}ComponentValues }${separator}`
               )
               .newLine();
           }

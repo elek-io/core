@@ -110,6 +110,7 @@ describe('transformEntryValues', () => {
         valueType: 'component',
         content: [
           {
+            id: '11111111-1111-1111-1111-111111111111',
             componentId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
             values: {
               heading: {
@@ -133,6 +134,7 @@ describe('transformEntryValues', () => {
     expect(result).toEqual({
       sections: [
         {
+          id: '11111111-1111-1111-1111-111111111111',
           componentId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
           values: {
             heading: { en: 'Welcome', de: 'Willkommen' },

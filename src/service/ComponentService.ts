@@ -1,5 +1,6 @@
 import Fs from 'fs-extra';
 import { CoreError } from '../util/shared.js';
+import { isDeepStrictEqual } from 'node:util';
 import {
   componentFileSchema,
   countComponentsSchema,
@@ -8,6 +9,7 @@ import {
   deleteComponentSchema,
   listComponentsSchema,
   objectTypeSchema,
+  projectFileSchema,
   type ReadBySlugComponentProps,
   readComponentSchema,
   serviceTypeSchema,
@@ -32,8 +34,11 @@ import {
   entryFileSchema,
   flattenFieldDefinitions,
   type FieldDefinition,
-  type Value,
 } from '../schema/index.js';
+import { diffFieldDefinitions } from '../util/fieldDefinitionDiff.js';
+import { transformComponentValues } from '../util/componentTransform.js';
+import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
+import type { EntryIssue } from '../util/entryTransform.js';
 import { applyMigrations, componentMigrations } from './migrations/index.js';
 import { folders, pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
@@ -46,7 +51,7 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for Component files on disk
  */
 export class ComponentService
-  extends AbstractIndexedEntityService
+  extends AbstractIndexedEntityService<ComponentFile>
   implements CrudServiceWithListCount<Component>
 {
   private coreVersion: string;
@@ -62,8 +67,8 @@ export class ComponentService
   protected entityFilePath(projectId: string, id: string): string {
     return pathTo.componentFile(projectId, id);
   }
-  protected extractSlug(file: unknown): string {
-    return (file as ComponentFile).slug;
+  protected extractSlug(file: ComponentFile): string {
+    return file.slug;
   }
 
   constructor(
@@ -165,23 +170,28 @@ export class ComponentService
   public async read<T extends Component = Component>(
     props: ReadComponentProps
   ): Promise<T> {
-    return this.validated('read', readComponentSchema, props, async () => {
-      if (!props.commitHash) {
-        const componentFile = await this.jsonFileService.read(
-          pathTo.componentFile(props.projectId, props.id),
-          componentFileSchema
-        );
-        return this.toComponent(componentFile) as T;
-      } else {
-        const content = await this.gitService.getFileContentAtCommit(
-          pathTo.project(props.projectId),
-          pathTo.componentFile(props.projectId, props.id),
-          props.commitHash
-        );
-        const componentFile = this.migrate(JSON.parse(content));
-        return this.toComponent(componentFile) as T;
+    return this.validated(
+      'read',
+      readComponentSchema,
+      props,
+      async (validatedProps) => {
+        if (!validatedProps.commitHash) {
+          const componentFile = await this.jsonFileService.read(
+            pathTo.componentFile(validatedProps.projectId, validatedProps.id),
+            componentFileSchema
+          );
+          return this.toComponent(componentFile) as T;
+        } else {
+          const content = await this.gitService.getFileContentAtCommit(
+            pathTo.project(validatedProps.projectId),
+            pathTo.componentFile(validatedProps.projectId, validatedProps.id),
+            validatedProps.commitHash
+          );
+          const componentFile = this.migrate(JSON.parse(content));
+          return this.toComponent(componentFile) as T;
+        }
       }
-    });
+    );
   }
 
   /**
@@ -209,9 +219,12 @@ export class ComponentService
       'history',
       componentHistorySchema,
       props,
-      async () => {
-        return this.gitService.log(pathTo.project(props.projectId), {
-          filePath: pathTo.componentFile(props.projectId, props.id),
+      async (validatedProps) => {
+        return this.gitService.log(pathTo.project(validatedProps.projectId), {
+          filePath: pathTo.componentFile(
+            validatedProps.projectId,
+            validatedProps.id
+          ),
         });
       }
     );
@@ -220,8 +233,10 @@ export class ComponentService
   /**
    * Updates given Component
    *
-   * Handles fieldDefinition slug rename cascade: when a sub-field slug changes
-   * (matched by UUID), all Entry data referencing this Component is updated.
+   * Handles fieldDefinition change cascade across all entries that reference
+   * this Component. Deterministic changes (slug renames, field removals,
+   * additions with defaults) are applied automatically. Ambiguous changes
+   * throw CoreError.conflict() with structured issues.
    */
   public async update<T extends Component = Component>(
     props: UpdateComponentProps
@@ -245,7 +260,11 @@ export class ComponentService
 
         const prevComponentFile = await this.read(validatedProps);
 
-        const { projectId: _, ...validatedUpdateProps } = validatedProps;
+        const {
+          projectId: _,
+          resolutions,
+          ...validatedUpdateProps
+        } = validatedProps;
         const componentFile: ComponentFile = {
           ...prevComponentFile,
           ...validatedUpdateProps,
@@ -258,7 +277,7 @@ export class ComponentService
         if (prevComponentFile.slug !== newSlug) {
           const index = await this.getIndex(validatedProps.projectId);
           const existingUuid = Object.entries(index).find(
-            ([, s]) => s === newSlug
+            ([, slug]) => slug === newSlug
           );
           if (existingUuid && existingUuid[0] !== validatedProps.id) {
             throw CoreError.conflict(
@@ -269,29 +288,159 @@ export class ComponentService
 
         const oldFieldDefs = prevComponentFile.fieldDefinitions;
         const newFieldDefs = validatedProps.fieldDefinitions;
-        const slugRenames: Array<{ oldSlug: string; newSlug: string }> = [];
-
-        const oldByUuid = new Map(oldFieldDefs.map((fd) => [fd.id, fd]));
-        for (const newFd of newFieldDefs) {
-          const oldFd = oldByUuid.get(newFd.id);
-          if (oldFd && oldFd.slug !== newFd.slug) {
-            slugRenames.push({
-              oldSlug: oldFd.slug,
-              newSlug: newFd.slug,
-            });
-          }
-        }
+        const changes = diffFieldDefinitions(oldFieldDefs, newFieldDefs);
 
         await this.withGitRollback(projectPath, async () => {
           const filesToGitAdd: string[] = [componentFilePath];
 
-          if (slugRenames.length > 0) {
-            const cascadedFiles = await this.cascadeComponentSlugRenames(
-              validatedProps.projectId,
-              validatedProps.id,
-              slugRenames
+          if (changes.length > 0) {
+            // Read project to get supported languages
+            const projectFile = await this.jsonFileService.read(
+              pathTo.projectFile(validatedProps.projectId),
+              projectFileSchema
             );
-            filesToGitAdd.push(...cascadedFiles);
+            const languages = projectFile.settings.language.supported;
+
+            const allIssues: EntryIssue[] = [];
+
+            // Find all collections that reference this component
+            const collectionsPath = pathTo.collections(
+              validatedProps.projectId
+            );
+            const collectionsExist = await Fs.pathExists(collectionsPath);
+
+            if (collectionsExist) {
+              const collectionFolders = await folders(collectionsPath);
+              const validFolders = collectionFolders.filter(
+                (f) => uuidSchema.safeParse(f.name).success
+              );
+
+              for (const collectionFolder of validFolders) {
+                const collectionFile = await this.jsonFileService.read(
+                  pathTo.collectionFile(
+                    validatedProps.projectId,
+                    collectionFolder.name
+                  ),
+                  collectionFileSchema
+                );
+
+                const fieldDefs = flattenFieldDefinitions(
+                  collectionFile.fieldDefinitions
+                );
+
+                const referencingDynamicFields =
+                  await this.findDynamicFieldsReferencingComponent(
+                    fieldDefs,
+                    validatedProps.id,
+                    validatedProps.projectId
+                  );
+
+                if (referencingDynamicFields.length === 0) continue;
+
+                const entriesPath = pathTo.entries(
+                  validatedProps.projectId,
+                  collectionFolder.name
+                );
+                const entriesExist = await Fs.pathExists(entriesPath);
+                if (!entriesExist) continue;
+
+                const allEntryFiles = await Fs.readdir(entriesPath);
+                const entryFileNames = allEntryFiles.filter(
+                  (f) => f.endsWith('.json') && f !== 'collection.json'
+                );
+
+                for (const entryFileName of entryFileNames) {
+                  const entryId = entryFileName.replace('.json', '');
+                  const entryFilePath = pathTo.entryFile(
+                    validatedProps.projectId,
+                    collectionFolder.name,
+                    entryId
+                  );
+
+                  const entryFile = await this.jsonFileService.read(
+                    entryFilePath,
+                    entryFileSchema
+                  );
+
+                  const result = transformComponentValues(
+                    entryFile.id,
+                    collectionFolder.name,
+                    entryFile.values,
+                    validatedProps.id,
+                    oldFieldDefs,
+                    newFieldDefs,
+                    changes,
+                    referencingDynamicFields,
+                    languages
+                  );
+
+                  allIssues.push(...result.issues);
+
+                  if (result.changed || result.issues.length > 0) {
+                    // Apply resolutions if provided
+                    const finalValues = result.values;
+                    if (resolutions && result.issues.length > 0) {
+                      const entryResolutions = resolutions[entryFile.id];
+                      if (entryResolutions) {
+                        for (const [fieldSlug, resolvedValue] of Object.entries(
+                          entryResolutions
+                        )) {
+                          const fieldDef = newFieldDefs.find(
+                            (fd) => fd.slug === fieldSlug
+                          );
+                          if (fieldDef) {
+                            const schema =
+                              getValueSchemaFromFieldDefinition(fieldDef);
+                            const parseResult = schema.safeParse(resolvedValue);
+                            if (!parseResult.success) {
+                              throw CoreError.badRequest(
+                                'Resolution validation failed',
+                                parseResult.error
+                              );
+                            }
+                          }
+                          finalValues[fieldSlug] = resolvedValue;
+                        }
+                      }
+                    }
+
+                    if (
+                      isDeepStrictEqual(entryFile.values, finalValues) === false
+                    ) {
+                      const updatedEntryFile = {
+                        ...entryFile,
+                        values: finalValues,
+                      };
+                      await this.jsonFileService.update(
+                        updatedEntryFile,
+                        entryFilePath,
+                        entryFileSchema
+                      );
+                      filesToGitAdd.push(entryFilePath);
+                    }
+                  }
+                }
+              }
+            }
+
+            // Check for unresolved issues
+            if (allIssues.length > 0) {
+              const unresolvedIssues = resolutions
+                ? allIssues.filter((issue) => {
+                    const entryResolutions = resolutions[issue.entryId];
+                    return !(
+                      entryResolutions && issue.fieldSlug in entryResolutions
+                    );
+                  })
+                : allIssues;
+
+              if (unresolvedIssues.length > 0) {
+                throw CoreError.conflict(
+                  'Component field definition changes require entry resolutions',
+                  unresolvedIssues
+                );
+              }
+            }
           }
 
           await this.jsonFileService.update(
@@ -491,152 +640,6 @@ export class ComponentService
         );
       }
     }
-  }
-
-  /**
-   * Cascades field definition slug renames through all Entries that reference
-   * this Component (directly or nested inside other Components).
-   * Returns the list of modified Entry file paths for git staging.
-   */
-  private async cascadeComponentSlugRenames(
-    projectId: string,
-    componentId: string,
-    slugRenames: Array<{ oldSlug: string; newSlug: string }>
-  ): Promise<string[]> {
-    const modifiedFiles: string[] = [];
-    const collectionsPath = pathTo.collections(projectId);
-
-    const exists = await Fs.pathExists(collectionsPath);
-    if (!exists) return modifiedFiles;
-
-    const collectionFolders = await folders(collectionsPath);
-    const validFolders = collectionFolders.filter(
-      (f) => uuidSchema.safeParse(f.name).success
-    );
-
-    for (const collectionFolder of validFolders) {
-      const collectionFile = await this.jsonFileService.read(
-        pathTo.collectionFile(projectId, collectionFolder.name),
-        collectionFileSchema
-      );
-
-      const fieldDefs = flattenFieldDefinitions(
-        collectionFile.fieldDefinitions
-      );
-
-      const referencingDynamicFields =
-        await this.findDynamicFieldsReferencingComponent(
-          fieldDefs,
-          componentId,
-          projectId
-        );
-
-      if (referencingDynamicFields.length === 0) continue;
-
-      const entriesPath = pathTo.entries(projectId, collectionFolder.name);
-
-      const entriesExist = await Fs.pathExists(entriesPath);
-      if (!entriesExist) continue;
-
-      const allEntryFiles = await Fs.readdir(entriesPath);
-      const entryFiles = allEntryFiles.filter(
-        (entryFile) =>
-          entryFile.endsWith('.json') && entryFile !== 'collection.json'
-      );
-
-      for (const entryFileName of entryFiles) {
-        const entryId = entryFileName.replace('.json', '');
-        const entryFilePath = pathTo.entryFile(
-          projectId,
-          collectionFolder.name,
-          entryId
-        );
-
-        const entryFile = await this.jsonFileService.read(
-          entryFilePath,
-          entryFileSchema
-        );
-
-        let changed = false;
-        const newValues = { ...entryFile.values };
-
-        for (const s of referencingDynamicFields) {
-          const dynamicValue = newValues[s];
-          if (dynamicValue && Array.isArray(dynamicValue.content)) {
-            for (const contentObject of dynamicValue.content) {
-              if (contentObject.componentId === componentId) {
-                for (const { oldSlug, newSlug: renamedSlug } of slugRenames) {
-                  if (oldSlug in contentObject.values) {
-                    contentObject.values[renamedSlug] =
-                      contentObject.values[oldSlug]!;
-                    delete contentObject.values[oldSlug];
-                    changed = true;
-                  }
-                }
-              }
-
-              changed =
-                this.renameInNestedComponentItems(
-                  contentObject.values,
-                  componentId,
-                  slugRenames
-                ) || changed;
-            }
-          }
-        }
-
-        if (changed) {
-          const updatedEntryFile = {
-            ...entryFile,
-            values: newValues,
-          };
-          await this.jsonFileService.update(
-            updatedEntryFile,
-            entryFilePath,
-            entryFileSchema
-          );
-          modifiedFiles.push(entryFilePath);
-        }
-      }
-    }
-
-    return modifiedFiles;
-  }
-
-  /**
-   * Recursively renames slugs inside nested component items.
-   * Returns true if any values were modified.
-   */
-  private renameInNestedComponentItems(
-    values: Record<string, Value>,
-    componentId: string,
-    slugRenames: Array<{ oldSlug: string; newSlug: string }>
-  ): boolean {
-    let changed = false;
-    for (const value of Object.values(values)) {
-      if (value && value.valueType === 'component') {
-        for (const contentObject of value.content) {
-          if (contentObject.componentId === componentId) {
-            for (const { oldSlug, newSlug: renamedSlug } of slugRenames) {
-              if (oldSlug in contentObject.values) {
-                contentObject.values[renamedSlug] =
-                  contentObject.values[oldSlug]!;
-                delete contentObject.values[oldSlug];
-                changed = true;
-              }
-            }
-          }
-          // Continue recursing into nested items
-          changed =
-            this.renameInNestedComponentItems(
-              contentObject.values,
-              componentId,
-              slugRenames
-            ) || changed;
-        }
-      }
-    }
-    return changed;
   }
 
   /**

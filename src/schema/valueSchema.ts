@@ -90,17 +90,19 @@ export const referencedValueSchema = z.object({
 });
 export type ReferencedValue = z.infer<typeof referencedValueSchema>;
 
+export const componentItemSchema = z.object({
+  id: uuidSchema.readonly(),
+  componentId: uuidSchema,
+  get values() {
+    return z.record(slugSchema, valueSchema);
+  },
+});
+export type ComponentItem = z.infer<typeof componentItemSchema>;
+
 export const componentValueSchema = z.object({
   objectType: z.literal(objectTypeSchema.enum.value).readonly(),
   valueType: z.literal(valueTypeSchema.enum.component).readonly(),
-  content: z.array(
-    z.object({
-      componentId: uuidSchema,
-      get values() {
-        return z.record(slugSchema, valueSchema);
-      },
-    })
-  ),
+  content: z.array(componentItemSchema),
 });
 export type ComponentValue = z.infer<typeof componentValueSchema>;
 

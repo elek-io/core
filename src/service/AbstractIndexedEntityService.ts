@@ -18,7 +18,9 @@ import type { LogService } from './LogService.js';
  * A service for entities that support UUID-to-slug indexing.
  * Subclasses must implement abstract methods to define entity paths and slug extraction.
  */
-export abstract class AbstractIndexedEntityService extends AbstractEntityService {
+export abstract class AbstractIndexedEntityService<
+  TFile = unknown,
+> extends AbstractEntityService {
   private cachedIndex: Map<string, Record<string, string>> = new Map();
   private rebuildPromise: Map<string, Promise<Record<string, string>>> =
     new Map();
@@ -40,7 +42,7 @@ export abstract class AbstractIndexedEntityService extends AbstractEntityService
   /** Path to the JSON file for a specific entity */
   protected abstract entityFilePath(projectId: string, id: string): string;
   /** Extract the slug value from a parsed entity file */
-  protected abstract extractSlug(file: unknown): string;
+  protected abstract extractSlug(file: TFile): string;
   /** Zod schema for validating entity files */
   protected abstract entityFileSchema: z.ZodTypeAny;
 
@@ -171,7 +173,7 @@ export abstract class AbstractIndexedEntityService extends AbstractEntityService
           this.entityFilePath(projectId, folder.name),
           this.entityFileSchema
         );
-        index[folder.name] = this.extractSlug(file);
+        index[folder.name] = this.extractSlug(file as TFile);
       } catch (error) {
         this.logService.warn({
           source: 'core',

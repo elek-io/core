@@ -975,7 +975,7 @@ export class ReleaseService extends AbstractService {
         const production = productionById.get(id);
         if (!production) continue;
 
-        if (!isDeepStrictEqual(current.values, production.values)) {
+        if (isDeepStrictEqual(current.values, production.values) === false) {
           entryChanges.push({
             collectionId,
             entryId: id,
@@ -1106,10 +1106,10 @@ export class ReleaseService extends AbstractService {
 
     if (current.fieldType === 'entry' && production.fieldType === 'entry') {
       if (
-        !isDeepStrictEqual(
+        isDeepStrictEqual(
           [...current.ofCollections].sort(),
           [...production.ofCollections].sort()
-        )
+        ) === false
       ) {
         changes.push({
           ...base,
@@ -1147,11 +1147,13 @@ export class ReleaseService extends AbstractService {
       });
     }
 
-    if (!isDeepStrictEqual(current.label, production.label)) {
+    if (isDeepStrictEqual(current.label, production.label) === false) {
       changes.push({ ...base, changeType: 'labelChanged', bump: 'patch' });
     }
 
-    if (!isDeepStrictEqual(current.description, production.description)) {
+    if (
+      isDeepStrictEqual(current.description, production.description) === false
+    ) {
       changes.push({
         ...base,
         changeType: 'descriptionChanged',
@@ -1162,7 +1164,7 @@ export class ReleaseService extends AbstractService {
     if (
       'defaultValue' in current &&
       'defaultValue' in production &&
-      !isDeepStrictEqual(current.defaultValue, production.defaultValue)
+      isDeepStrictEqual(current.defaultValue, production.defaultValue) === false
     ) {
       changes.push({
         ...base,

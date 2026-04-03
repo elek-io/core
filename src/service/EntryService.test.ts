@@ -250,6 +250,7 @@ describe('EntryService - component values', function () {
           valueType: 'component',
           content: [
             {
+              id: uuid(),
               componentId: component.id,
               values: {
                 title: {
@@ -279,6 +280,7 @@ describe('EntryService - component values', function () {
             valueType: 'component',
             content: [
               {
+                id: uuid(),
                 componentId: component.id,
                 values: {
                   title: {

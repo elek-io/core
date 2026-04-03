@@ -238,6 +238,7 @@ function getComponentValueContentSchemaFromFieldDefinition(
       );
     }
     return z.object({
+      id: uuidSchema.readonly(),
       componentId: z.literal(componentId),
       values: z.object(shape),
     });
@@ -248,6 +249,7 @@ function getComponentValueContentSchemaFromFieldDefinition(
   if (!first) {
     // Empty ofComponents means "all components allowed" - use a permissive schema
     itemSchema = z.object({
+      id: uuidSchema.readonly(),
       componentId: uuidSchema,
       values: z.record(slugSchema, valueSchema),
     });

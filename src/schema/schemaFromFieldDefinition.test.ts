@@ -1590,6 +1590,7 @@ describe('Dynamic zod schema from field definition', () => {
       valueType: 'component',
       content: [
         {
+          id: uuid(),
           componentId: componentId1,
           values: {
             title: {
@@ -1668,6 +1669,7 @@ describe('Dynamic zod schema from field definition', () => {
         ...validComponentValue,
         content: [
           {
+            id: uuid(),
             componentId: componentId1,
             values: {
               title: {
@@ -1697,6 +1699,7 @@ describe('Dynamic zod schema from field definition', () => {
         valueType: 'component',
         content: [
           {
+            id: uuid(),
             componentId: componentId1,
             values: {
               title: {
@@ -1712,6 +1715,7 @@ describe('Dynamic zod schema from field definition', () => {
             },
           },
           {
+            id: uuid(),
             componentId: componentId2,
             values: {
               count: {
@@ -1844,6 +1848,7 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
       valueType: 'component',
       content: [
         {
+          id: uuid(),
           componentId: uuid(),
           values: {
             title: {

@@ -1,4 +1,5 @@
 import Fs from 'fs-extra';
+import { isDeepStrictEqual } from 'node:util';
 import { CoreError } from '../util/shared.js';
 import {
   collectionFileSchema,
@@ -9,6 +10,7 @@ import {
   entryFileSchema,
   listCollectionsSchema,
   objectTypeSchema,
+  projectFileSchema,
   type ReadBySlugCollectionProps,
   readCollectionSchema,
   serviceTypeSchema,
@@ -30,6 +32,12 @@ import {
   collectionHistorySchema,
   flattenFieldDefinitions,
 } from '../schema/index.js';
+import { diffFieldDefinitions } from '../util/fieldDefinitionDiff.js';
+import {
+  transformEntryValues,
+  type EntryIssue,
+} from '../util/entryTransform.js';
+import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
 import { applyMigrations, collectionMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
@@ -42,7 +50,7 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for Collection files on disk
  */
 export class CollectionService
-  extends AbstractIndexedEntityService
+  extends AbstractIndexedEntityService<CollectionFile>
   implements CrudServiceWithListCount<Collection>
 {
   private coreVersion: string;
@@ -58,8 +66,8 @@ export class CollectionService
   protected entityFilePath(projectId: string, id: string): string {
     return pathTo.collectionFile(projectId, id);
   }
-  protected extractSlug(file: unknown): string {
-    return (file as CollectionFile).slug.plural;
+  protected extractSlug(file: CollectionFile): string {
+    return file.slug.plural;
   }
 
   constructor(
@@ -163,23 +171,28 @@ export class CollectionService
   public async read<T extends Collection = Collection>(
     props: ReadCollectionProps
   ): Promise<T> {
-    return this.validated('read', readCollectionSchema, props, async () => {
-      if (!props.commitHash) {
-        const collectionFile = await this.jsonFileService.read(
-          pathTo.collectionFile(props.projectId, props.id),
-          collectionFileSchema
-        );
-        return this.toCollection(collectionFile) as T;
-      } else {
-        const content = await this.gitService.getFileContentAtCommit(
-          pathTo.project(props.projectId),
-          pathTo.collectionFile(props.projectId, props.id),
-          props.commitHash
-        );
-        const collectionFile = this.migrate(JSON.parse(content));
-        return this.toCollection(collectionFile) as T;
+    return this.validated(
+      'read',
+      readCollectionSchema,
+      props,
+      async (validatedProps) => {
+        if (!validatedProps.commitHash) {
+          const collectionFile = await this.jsonFileService.read(
+            pathTo.collectionFile(validatedProps.projectId, validatedProps.id),
+            collectionFileSchema
+          );
+          return this.toCollection(collectionFile) as T;
+        } else {
+          const content = await this.gitService.getFileContentAtCommit(
+            pathTo.project(validatedProps.projectId),
+            pathTo.collectionFile(validatedProps.projectId, validatedProps.id),
+            validatedProps.commitHash
+          );
+          const collectionFile = this.migrate(JSON.parse(content));
+          return this.toCollection(collectionFile) as T;
+        }
       }
-    });
+    );
   }
 
   /**
@@ -207,9 +220,12 @@ export class CollectionService
       'history',
       collectionHistorySchema,
       props,
-      async () => {
-        return this.gitService.log(pathTo.project(props.projectId), {
-          filePath: pathTo.collectionFile(props.projectId, props.id),
+      async (validatedProps) => {
+        return this.gitService.log(pathTo.project(validatedProps.projectId), {
+          filePath: pathTo.collectionFile(
+            validatedProps.projectId,
+            validatedProps.id
+          ),
         });
       }
     );
@@ -218,7 +234,15 @@ export class CollectionService
   /**
    * Updates given Collection
    *
-   * Handles fieldDefinition slug rename cascade and collection slug uniqueness.
+   * Handles fieldDefinition change cascade:
+   * - Slug renames, field additions (with defaults), field removals, and
+   *   disallowed component/reference stripping are applied automatically.
+   * - Changes requiring user decisions (required field with no default,
+   *   type mismatches, constraint violations) throw CoreError.conflict()
+   *   with structured EntryIssue[] as cause.
+   * - The caller can retry with `resolutions` to resolve all issues.
+   *
+   * Also enforces collection slug uniqueness.
    */
   public async update<T extends Collection = Collection>(
     props: UpdateCollectionProps
@@ -236,29 +260,25 @@ export class CollectionService
 
         const prevCollectionFile = await this.read(validatedProps);
 
-        const { projectId: _, ...validatedUpdateProps } = validatedProps;
+        const {
+          projectId: _,
+          resolutions,
+          ...validatedUpdateProps
+        } = validatedProps;
         const collectionFile: CollectionFile = {
           ...prevCollectionFile,
           ...validatedUpdateProps,
           updated: datetime(),
         };
 
-        // FieldDefinition slug rename cascade:
+        // Diff field definitions
         const oldFieldDefs = flattenFieldDefinitions(
           prevCollectionFile.fieldDefinitions
         );
         const newFieldDefs = flattenFieldDefinitions(
           validatedProps.fieldDefinitions
         );
-        const slugRenames: Array<{ oldSlug: string; newSlug: string }> = [];
-
-        const oldByUuid = new Map(oldFieldDefs.map((fd) => [fd.id, fd]));
-        for (const newFd of newFieldDefs) {
-          const oldFd = oldByUuid.get(newFd.id);
-          if (oldFd && oldFd.slug !== newFd.slug) {
-            slugRenames.push({ oldSlug: oldFd.slug, newSlug: newFd.slug });
-          }
-        }
+        const changes = diffFieldDefinitions(oldFieldDefs, newFieldDefs);
 
         const newSlugPlural = slug(validatedProps.slug.plural);
 
@@ -266,7 +286,7 @@ export class CollectionService
         if (prevCollectionFile.slug.plural !== newSlugPlural) {
           const index = await this.getIndex(validatedProps.projectId);
           const existingUuid = Object.entries(index).find(
-            ([, s]) => s === newSlugPlural
+            ([, slugPlural]) => slugPlural === newSlugPlural
           );
           if (existingUuid && existingUuid[0] !== validatedProps.id) {
             throw CoreError.conflict(
@@ -278,7 +298,7 @@ export class CollectionService
         await this.withGitRollback(projectPath, async () => {
           const filesToGitAdd: string[] = [collectionFilePath];
 
-          if (slugRenames.length > 0) {
+          if (changes.length > 0) {
             const entriesPath = pathTo.entries(
               validatedProps.projectId,
               validatedProps.id
@@ -288,45 +308,110 @@ export class CollectionService
             if (exists) {
               const dirEntries = await Fs.readdir(entriesPath);
               const entryFiles = dirEntries.filter(
-                (f) => f.endsWith('.json') && f !== 'collection.json'
+                (dirEntry) =>
+                  dirEntry.endsWith('.json') && dirEntry !== 'collection.json'
               );
 
-              for (const entryFileName of entryFiles) {
-                const entryFilePath = pathTo.entryFile(
-                  validatedProps.projectId,
-                  validatedProps.id,
-                  entryFileName.replace('.json', '')
+              if (entryFiles.length > 0) {
+                // Read project to get supported languages
+                const projectFile = await this.jsonFileService.read(
+                  pathTo.projectFile(validatedProps.projectId),
+                  projectFileSchema
                 );
+                const languages = projectFile.settings.language.supported;
 
-                const entryFile = await this.jsonFileService.read(
-                  entryFilePath,
-                  entryFileSchema
-                );
+                const allIssues: EntryIssue[] = [];
 
-                let changed = false;
-                const newValues: Record<string, unknown> = {
-                  ...entryFile.values,
-                };
+                for (const entryFileName of entryFiles) {
+                  const entryId = entryFileName.replace('.json', '');
+                  const entryFilePath = pathTo.entryFile(
+                    validatedProps.projectId,
+                    validatedProps.id,
+                    entryId
+                  );
 
-                for (const { oldSlug, newSlug: renamedSlug } of slugRenames) {
-                  if (oldSlug in newValues) {
-                    newValues[renamedSlug] = newValues[oldSlug];
-                    delete newValues[oldSlug];
-                    changed = true;
-                  }
-                }
-
-                if (changed) {
-                  const updatedEntryFile = {
-                    ...entryFile,
-                    values: newValues,
-                  };
-                  await this.jsonFileService.update(
-                    updatedEntryFile,
+                  const entryFile = await this.jsonFileService.read(
                     entryFilePath,
                     entryFileSchema
                   );
-                  filesToGitAdd.push(entryFilePath);
+
+                  const result = transformEntryValues(
+                    entryFile.id,
+                    validatedProps.id,
+                    entryFile.values,
+                    oldFieldDefs,
+                    newFieldDefs,
+                    changes,
+                    languages
+                  );
+
+                  allIssues.push(...result.issues);
+
+                  if (result.changed || result.issues.length > 0) {
+                    // Apply resolutions if provided
+                    const finalValues = result.values;
+                    if (resolutions && result.issues.length > 0) {
+                      const entryResolutions = resolutions[entryFile.id];
+                      if (entryResolutions) {
+                        // Validate and apply each resolution
+                        for (const [fieldSlug, resolvedValue] of Object.entries(
+                          entryResolutions
+                        )) {
+                          const fieldDef = newFieldDefs.find(
+                            (fieldDef) => fieldDef.slug === fieldSlug
+                          );
+                          if (fieldDef) {
+                            const schema =
+                              getValueSchemaFromFieldDefinition(fieldDef);
+                            const parseResult = schema.safeParse(resolvedValue);
+                            if (!parseResult.success) {
+                              throw CoreError.badRequest(
+                                'Resolution validation failed',
+                                parseResult.error
+                              );
+                            }
+                          }
+                          finalValues[fieldSlug] = resolvedValue;
+                        }
+                      }
+                    }
+
+                    if (
+                      isDeepStrictEqual(entryFile.values, finalValues) === false
+                    ) {
+                      const updatedEntryFile = {
+                        ...entryFile,
+                        values: finalValues,
+                      };
+                      await this.jsonFileService.update(
+                        updatedEntryFile,
+                        entryFilePath,
+                        entryFileSchema
+                      );
+                      filesToGitAdd.push(entryFilePath);
+                    }
+                  }
+                }
+
+                // After processing all entries, check for unresolved issues
+                if (allIssues.length > 0) {
+                  // Remove issues that have matching resolutions
+                  const unresolvedIssues = resolutions
+                    ? allIssues.filter((issue) => {
+                        const entryResolutions = resolutions[issue.entryId];
+                        return !(
+                          entryResolutions &&
+                          issue.fieldSlug in entryResolutions
+                        );
+                      })
+                    : allIssues;
+
+                  if (unresolvedIssues.length > 0) {
+                    throw CoreError.conflict(
+                      'Field definition changes require entry resolutions',
+                      unresolvedIssues
+                    );
+                  }
                 }
               }
             }
@@ -365,69 +450,87 @@ export class CollectionService
    * The Fields that Collection used are not deleted.
    */
   public async delete(props: DeleteCollectionProps): Promise<void> {
-    return this.validated('delete', deleteCollectionSchema, props, async () => {
-      const projectPath = pathTo.project(props.projectId);
-      const collectionPath = pathTo.collection(props.projectId, props.id);
+    return this.validated(
+      'delete',
+      deleteCollectionSchema,
+      props,
+      async (validatedProps) => {
+        const projectPath = pathTo.project(validatedProps.projectId);
+        const collectionPath = pathTo.collection(
+          validatedProps.projectId,
+          validatedProps.id
+        );
 
-      await this.withGitRollback(projectPath, async () => {
-        await Fs.remove(collectionPath);
-        await this.gitService.add(projectPath, [collectionPath]);
-        await this.gitService.commit(projectPath, {
-          method: 'delete',
-          reference: { objectType: 'collection', id: props.id },
+        await this.withGitRollback(projectPath, async () => {
+          await Fs.remove(collectionPath);
+          await this.gitService.add(projectPath, [collectionPath]);
+          await this.gitService.commit(projectPath, {
+            method: 'delete',
+            reference: { objectType: 'collection', id: validatedProps.id },
+          });
         });
-      });
 
-      // Remove from index (not git-tracked, self-heals on failure)
-      const index = await this.getIndex(props.projectId);
-      delete index[props.id];
-      await this.safeWriteIndex(props.projectId, index);
-    });
+        // Remove from index (not git-tracked, self-heals on failure)
+        const index = await this.getIndex(validatedProps.projectId);
+        delete index[validatedProps.id];
+        await this.safeWriteIndex(validatedProps.projectId, index);
+      }
+    );
   }
 
   public async list<T extends Collection = Collection>(
     props: ListCollectionsProps
   ): Promise<PaginatedList<T>> {
-    return this.validated('list', listCollectionsSchema, props, async () => {
-      const offset = props.offset || 0;
-      const limit = props.limit ?? 15;
+    return this.validated(
+      'list',
+      listCollectionsSchema,
+      props,
+      async (validatedProps) => {
+        const offset = validatedProps.offset || 0;
+        const limit = validatedProps.limit ?? 15;
 
-      const collectionReferences = await this.listReferences(
-        objectTypeSchema.enum.collection,
-        props.projectId
-      );
+        const collectionReferences = await this.listReferences(
+          objectTypeSchema.enum.collection,
+          validatedProps.projectId
+        );
 
-      const partialCollectionReferences =
-        limit === 0
-          ? collectionReferences.slice(offset)
-          : collectionReferences.slice(offset, offset + limit);
+        const partialCollectionReferences =
+          limit === 0
+            ? collectionReferences.slice(offset)
+            : collectionReferences.slice(offset, offset + limit);
 
-      const collections = await this.collectResults(
-        partialCollectionReferences.map((reference) =>
-          this.read<T>({
-            projectId: props.projectId,
-            id: reference.id,
-          })
-        )
-      );
+        const collections = await this.collectResults(
+          partialCollectionReferences.map((reference) =>
+            this.read<T>({
+              projectId: validatedProps.projectId,
+              id: reference.id,
+            })
+          )
+        );
 
-      return {
-        total: collectionReferences.length,
-        limit,
-        offset,
-        list: collections,
-      };
-    });
+        return {
+          total: collectionReferences.length,
+          limit,
+          offset,
+          list: collections,
+        };
+      }
+    );
   }
 
   public async count(props: CountCollectionsProps): Promise<number> {
-    return this.validated('count', countCollectionsSchema, props, async () => {
-      const refs = await this.listReferences(
-        objectTypeSchema.enum.collection,
-        props.projectId
-      );
-      return refs.length;
-    });
+    return this.validated(
+      'count',
+      countCollectionsSchema,
+      props,
+      async (validatedProps) => {
+        const refs = await this.listReferences(
+          objectTypeSchema.enum.collection,
+          validatedProps.projectId
+        );
+        return refs.length;
+      }
+    );
   }
 
   /**

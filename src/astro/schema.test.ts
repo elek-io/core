@@ -220,6 +220,7 @@ describe('buildEntryValuesSchema', () => {
     const valid = {
       sections: [
         {
+          id: uuid(),
           componentId: uuid(),
           values: { heading: { en: 'Hello' } },
         },

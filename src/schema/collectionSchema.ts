@@ -6,6 +6,7 @@ import {
   translatableStringSchema,
   uuidSchema,
 } from './baseSchema.js';
+import { valueSchema } from './valueSchema.js';
 import { entryExportSchema } from './entrySchema.js';
 import {
   fieldDefinitionOrGroupSchema,
@@ -85,6 +86,9 @@ export const updateCollectionSchema = collectionFileSchema
   })
   .extend({
     projectId: uuidSchema.readonly(),
+    resolutions: z
+      .record(uuidSchema, z.record(slugSchema, valueSchema))
+      .optional(),
   });
 export type UpdateCollectionProps = z.infer<typeof updateCollectionSchema>;
 
