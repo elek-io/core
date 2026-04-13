@@ -6,6 +6,7 @@ export default defineConfig({
     // are getting the total number of Projects, Assets etc.
     // which fails depending on the timing they are run (race condition).
     fileParallelism: false,
+    globalSetup: './src/test/globalSetup.ts',
     coverage: {
       reporter: ['text', 'lcov'],
     },
