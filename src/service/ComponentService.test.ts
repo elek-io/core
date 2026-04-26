@@ -25,16 +25,16 @@ describe('ComponentService', function () {
       // Create a Component
       const heroComponent = await core.components.create({
         projectId: project.id,
-        name: { en: 'Hero' },
+        name: { en: 'Hero', de: 'Hero' },
         slug: 'hero',
-        description: { en: 'A hero section' },
+        description: { en: 'A hero section', de: 'A hero section' },
         fieldDefinitions: [
           {
             id: uuid(),
             slug: 'title',
             valueType: 'string',
             fieldType: 'text',
-            label: { en: 'Title' },
+            label: { en: 'Title', de: 'Title' },
             description: null,
             defaultValue: null,
             isRequired: true,
@@ -49,7 +49,7 @@ describe('ComponentService', function () {
             slug: 'subtitle',
             valueType: 'string',
             fieldType: 'text',
-            label: { en: 'Subtitle' },
+            label: { en: 'Subtitle', de: 'Subtitle' },
             description: null,
             defaultValue: null,
             isRequired: false,
@@ -95,16 +95,19 @@ describe('ComponentService', function () {
       const updatedComponent = await core.components.update({
         projectId: project.id,
         id: heroComponent.id,
-        name: { en: 'Hero Section' },
+        name: { en: 'Hero Section', de: 'Hero Section' },
         slug: 'hero',
-        description: { en: 'An updated hero section' },
+        description: {
+          en: 'An updated hero section',
+          de: 'An updated hero section',
+        },
         fieldDefinitions: [
           {
             id: titleFieldId,
             slug: 'heading', // renamed from 'title'
             valueType: 'string',
             fieldType: 'text',
-            label: { en: 'Heading' },
+            label: { en: 'Heading', de: 'Heading' },
             description: null,
             defaultValue: null,
             isRequired: true,
@@ -119,7 +122,7 @@ describe('ComponentService', function () {
             slug: 'subtitle',
             valueType: 'string',
             fieldType: 'text',
-            label: { en: 'Subtitle' },
+            label: { en: 'Subtitle', de: 'Subtitle' },
             description: null,
             defaultValue: null,
             isRequired: false,
@@ -137,7 +140,7 @@ describe('ComponentService', function () {
       // Create a second Component to test delete protection
       const cardComponent = await core.components.create({
         projectId: project.id,
-        name: { en: 'Card' },
+        name: { en: 'Card', de: 'Card' },
         slug: 'card',
         description: null,
         fieldDefinitions: [
@@ -146,7 +149,7 @@ describe('ComponentService', function () {
             slug: 'label',
             valueType: 'string',
             fieldType: 'text',
-            label: { en: 'Label' },
+            label: { en: 'Label', de: 'Label' },
             description: null,
             defaultValue: null,
             isRequired: true,
@@ -164,10 +167,13 @@ describe('ComponentService', function () {
         projectId: project.id,
         icon: 'home',
         name: {
-          singular: { en: 'Page' },
-          plural: { en: 'Pages' },
+          singular: { en: 'Page', de: 'Page' },
+          plural: { en: 'Pages', de: 'Pages' },
         },
-        description: { en: 'Pages with dynamic blocks' },
+        description: {
+          en: 'Pages with dynamic blocks',
+          de: 'Pages with dynamic blocks',
+        },
         slug: { singular: 'page', plural: 'pages' },
         fieldDefinitions: [
           {
@@ -175,7 +181,7 @@ describe('ComponentService', function () {
             slug: 'blocks',
             valueType: 'component',
             fieldType: 'dynamic',
-            label: { en: 'Blocks' },
+            label: { en: 'Blocks', de: 'Blocks' },
             description: null,
             isRequired: false,
             isDisabled: false,
@@ -204,12 +210,12 @@ describe('ComponentService', function () {
                   heading: {
                     objectType: 'value',
                     valueType: 'string',
-                    content: { en: 'Welcome' },
+                    content: { en: 'Welcome', de: 'Welcome' },
                   },
                   subtitle: {
                     objectType: 'value',
                     valueType: 'string',
-                    content: {},
+                    content: { en: null, de: null },
                   },
                 },
               },
@@ -267,7 +273,7 @@ describe('ComponentService', function () {
     async function () {
       const compA = await core.components.create({
         projectId: project.id,
-        name: { en: 'Component A' },
+        name: { en: 'Component A', de: 'Component A' },
         slug: 'comp-a',
         description: null,
         fieldDefinitions: [
@@ -276,7 +282,7 @@ describe('ComponentService', function () {
             slug: 'label',
             valueType: 'string',
             fieldType: 'text',
-            label: { en: 'Label' },
+            label: { en: 'Label', de: 'Label' },
             description: null,
             defaultValue: null,
             isRequired: false,
@@ -292,7 +298,7 @@ describe('ComponentService', function () {
       // Create Component B that references A - this is fine
       const compB = await core.components.create({
         projectId: project.id,
-        name: { en: 'Component B' },
+        name: { en: 'Component B', de: 'Component B' },
         slug: 'comp-b',
         description: null,
         fieldDefinitions: [
@@ -301,7 +307,7 @@ describe('ComponentService', function () {
             slug: 'nested-a',
             valueType: 'component',
             fieldType: 'dynamic',
-            label: { en: 'Nested A' },
+            label: { en: 'Nested A', de: 'Nested A' },
             description: null,
             isRequired: false,
             isDisabled: false,
@@ -319,7 +325,7 @@ describe('ComponentService', function () {
         core.components.update({
           projectId: project.id,
           id: compA.id,
-          name: { en: 'Component A' },
+          name: { en: 'Component A', de: 'Component A' },
           slug: 'comp-a',
           description: null,
           fieldDefinitions: [
@@ -328,7 +334,7 @@ describe('ComponentService', function () {
               slug: 'nested-b',
               valueType: 'component',
               fieldType: 'dynamic',
-              label: { en: 'Nested B' },
+              label: { en: 'Nested B', de: 'Nested B' },
               description: null,
               isRequired: false,
               isDisabled: false,
@@ -354,7 +360,7 @@ describe('ComponentService', function () {
     async function () {
       const comp = await core.components.create({
         projectId: project.id,
-        name: { en: 'Unique' },
+        name: { en: 'Unique', de: 'Unique' },
         slug: 'unique-slug',
         description: null,
         fieldDefinitions: [],
@@ -363,7 +369,7 @@ describe('ComponentService', function () {
       await expect(
         core.components.create({
           projectId: project.id,
-          name: { en: 'Duplicate' },
+          name: { en: 'Duplicate', de: 'Duplicate' },
           slug: 'unique-slug',
           description: null,
           fieldDefinitions: [],
@@ -382,7 +388,7 @@ describe('ComponentService', function () {
       const innerFieldId = uuid();
       const innerComponent = await core.components.create({
         projectId: project.id,
-        name: { en: 'Inner' },
+        name: { en: 'Inner', de: 'Inner' },
         slug: 'inner',
         description: null,
         fieldDefinitions: [
@@ -391,7 +397,7 @@ describe('ComponentService', function () {
             slug: 'old-name',
             valueType: 'string',
             fieldType: 'text',
-            label: { en: 'Name' },
+            label: { en: 'Name', de: 'Name' },
             description: null,
             defaultValue: null,
             isRequired: false,
@@ -407,7 +413,7 @@ describe('ComponentService', function () {
       // Create outer component that references inner
       const outerComponent = await core.components.create({
         projectId: project.id,
-        name: { en: 'Outer' },
+        name: { en: 'Outer', de: 'Outer' },
         slug: 'outer',
         description: null,
         fieldDefinitions: [
@@ -416,7 +422,7 @@ describe('ComponentService', function () {
             slug: 'nested',
             valueType: 'component',
             fieldType: 'dynamic',
-            label: { en: 'Nested' },
+            label: { en: 'Nested', de: 'Nested' },
             description: null,
             isRequired: false,
             isDisabled: false,
@@ -434,10 +440,13 @@ describe('ComponentService', function () {
         projectId: project.id,
         icon: 'home',
         name: {
-          singular: { en: 'Block Page' },
-          plural: { en: 'Block Pages' },
+          singular: { en: 'Block Page', de: 'Block Page' },
+          plural: { en: 'Block Pages', de: 'Block Pages' },
         },
-        description: { en: 'Pages with nested blocks' },
+        description: {
+          en: 'Pages with nested blocks',
+          de: 'Pages with nested blocks',
+        },
         slug: { singular: 'block-page', plural: 'block-pages' },
         fieldDefinitions: [
           {
@@ -445,7 +454,7 @@ describe('ComponentService', function () {
             slug: 'sections',
             valueType: 'component',
             fieldType: 'dynamic',
-            label: { en: 'Sections' },
+            label: { en: 'Sections', de: 'Sections' },
             description: null,
             isRequired: false,
             isDisabled: false,
@@ -482,7 +491,7 @@ describe('ComponentService', function () {
                           'old-name': {
                             objectType: 'value',
                             valueType: 'string',
-                            content: { en: 'Hello' },
+                            content: { en: 'Hello', de: 'Hello' },
                           },
                         },
                       },
@@ -499,7 +508,7 @@ describe('ComponentService', function () {
       await core.components.update({
         projectId: project.id,
         id: innerComponent.id,
-        name: { en: 'Inner' },
+        name: { en: 'Inner', de: 'Inner' },
         slug: 'inner',
         description: null,
         fieldDefinitions: [
@@ -508,7 +517,7 @@ describe('ComponentService', function () {
             slug: 'new-name', // renamed
             valueType: 'string',
             fieldType: 'text',
-            label: { en: 'Name' },
+            label: { en: 'Name', de: 'Name' },
             description: null,
             defaultValue: null,
             isRequired: false,
@@ -569,7 +578,7 @@ describe('ComponentService', function () {
       // Create Component B (simple)
       const compB = await core.components.create({
         projectId: project.id,
-        name: { en: 'Comp B' },
+        name: { en: 'Comp B', de: 'Comp B' },
         slug: 'comp-b-nested',
         description: null,
         fieldDefinitions: [
@@ -578,7 +587,7 @@ describe('ComponentService', function () {
             slug: 'item-count',
             valueType: 'number',
             fieldType: 'number',
-            label: { en: 'Count' },
+            label: { en: 'Count', de: 'Count' },
             description: null,
             defaultValue: null,
             isRequired: false,
@@ -594,7 +603,7 @@ describe('ComponentService', function () {
       // Create Component A with dynamic field -> B
       const compA = await core.components.create({
         projectId: project.id,
-        name: { en: 'Comp A' },
+        name: { en: 'Comp A', de: 'Comp A' },
         slug: 'comp-a-nested',
         description: null,
         fieldDefinitions: [
@@ -603,7 +612,7 @@ describe('ComponentService', function () {
             slug: 'title',
             valueType: 'string',
             fieldType: 'text',
-            label: { en: 'Title' },
+            label: { en: 'Title', de: 'Title' },
             description: null,
             defaultValue: null,
             isRequired: true,
@@ -618,7 +627,7 @@ describe('ComponentService', function () {
             slug: 'children',
             valueType: 'component',
             fieldType: 'dynamic',
-            label: { en: 'Children' },
+            label: { en: 'Children', de: 'Children' },
             description: null,
             isRequired: false,
             isDisabled: false,
@@ -636,10 +645,13 @@ describe('ComponentService', function () {
         projectId: project.id,
         icon: 'home',
         name: {
-          singular: { en: 'Nested Page' },
-          plural: { en: 'Nested Pages' },
+          singular: { en: 'Nested Page', de: 'Nested Page' },
+          plural: { en: 'Nested Pages', de: 'Nested Pages' },
         },
-        description: { en: 'Testing nested components' },
+        description: {
+          en: 'Testing nested components',
+          de: 'Testing nested components',
+        },
         slug: { singular: 'nested-page', plural: 'nested-pages' },
         fieldDefinitions: [
           {
@@ -647,7 +659,7 @@ describe('ComponentService', function () {
             slug: 'blocks',
             valueType: 'component',
             fieldType: 'dynamic',
-            label: { en: 'Blocks' },
+            label: { en: 'Blocks', de: 'Blocks' },
             description: null,
             isRequired: false,
             isDisabled: false,
@@ -676,7 +688,7 @@ describe('ComponentService', function () {
                   title: {
                     objectType: 'value',
                     valueType: 'string',
-                    content: { en: 'Hello' },
+                    content: { en: 'Hello', de: 'Hello' },
                   },
                   children: {
                     objectType: 'value',
@@ -689,7 +701,7 @@ describe('ComponentService', function () {
                           'item-count': {
                             objectType: 'value',
                             valueType: 'number',
-                            content: { en: 42 },
+                            content: { en: 42, de: 42 },
                           },
                         },
                       },

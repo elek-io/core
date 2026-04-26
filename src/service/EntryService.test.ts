@@ -101,7 +101,7 @@ describe('EntryService', function () {
       [firstSlug]: {
         ...entry.values[firstSlug]!,
         valueType: 'string',
-        content: { en: 'Changed Text' },
+        content: { en: 'Changed Text', de: 'Changed Text' },
       },
     };
 
@@ -183,7 +183,7 @@ describe('EntryService - component values', function () {
     const titleFieldId = uuid();
     component = await core.components.create({
       projectId: project.id,
-      name: { en: 'Hero' },
+      name: { en: 'Hero', de: 'Hero' },
       slug: 'hero',
       description: null,
       fieldDefinitions: [
@@ -192,7 +192,7 @@ describe('EntryService - component values', function () {
           slug: 'title',
           valueType: 'string',
           fieldType: 'text',
-          label: { en: 'Title' },
+          label: { en: 'Title', de: 'Title' },
           description: null,
           defaultValue: null,
           isRequired: true,
@@ -209,16 +209,22 @@ describe('EntryService - component values', function () {
     dynamicCollection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
-      name: { singular: { en: 'Page' }, plural: { en: 'Pages' } },
+      name: {
+        singular: { en: 'Page', de: 'Page' },
+        plural: { en: 'Pages', de: 'Pages' },
+      },
       slug: { singular: 'page', plural: 'pages' },
-      description: { en: 'Pages with dynamic content blocks' },
+      description: {
+        en: 'Pages with dynamic content blocks',
+        de: 'Pages with dynamic content blocks',
+      },
       fieldDefinitions: [
         {
           id: uuid(),
           slug: 'blocks',
           valueType: 'component',
           fieldType: 'dynamic',
-          label: { en: 'Content Blocks' },
+          label: { en: 'Content Blocks', de: 'Content Blocks' },
           description: null,
           isRequired: false,
           isDisabled: false,
@@ -256,7 +262,10 @@ describe('EntryService - component values', function () {
                 title: {
                   objectType: 'value',
                   valueType: 'string',
-                  content: { en: 'Welcome to our site' },
+                  content: {
+                    en: 'Welcome to our site',
+                    de: 'Welcome to our site',
+                  },
                 },
               },
             },

@@ -3,7 +3,6 @@ import { z } from '@hono/zod-openapi';
 import { v4 as uuid } from 'uuid';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
 import { assetSchema } from '../schema/assetSchema.js';
-import { supportedLanguageSchema } from '../schema/baseSchema.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
@@ -29,7 +28,7 @@ describe('buildEntryValuesSchema', () => {
       },
     ];
 
-    const schema = buildEntryValuesSchema(fieldDefs);
+    const schema = buildEntryValuesSchema(fieldDefs, ['en']);
     const valid = { title: { en: 'Hello' } };
     expect(schema.parse(valid)).toEqual(valid);
   });
@@ -53,7 +52,7 @@ describe('buildEntryValuesSchema', () => {
       },
     ];
 
-    const schema = buildEntryValuesSchema(fieldDefs);
+    const schema = buildEntryValuesSchema(fieldDefs, ['en']);
     const valid = { price: { en: 50 } };
     expect(schema.parse(valid)).toEqual(valid);
   });
@@ -77,7 +76,7 @@ describe('buildEntryValuesSchema', () => {
       },
     ];
 
-    const schema = buildEntryValuesSchema(fieldDefs);
+    const schema = buildEntryValuesSchema(fieldDefs, ['en']);
     expect(() => schema.parse({ price: { en: 200 } })).toThrow();
   });
 
@@ -98,7 +97,7 @@ describe('buildEntryValuesSchema', () => {
       },
     ];
 
-    const schema = buildEntryValuesSchema(fieldDefs);
+    const schema = buildEntryValuesSchema(fieldDefs, ['en']);
     const valid = { active: { en: true } };
     expect(schema.parse(valid)).toEqual(valid);
   });
@@ -120,7 +119,7 @@ describe('buildEntryValuesSchema', () => {
       },
     ];
 
-    const schema = buildEntryValuesSchema(fieldDefs);
+    const schema = buildEntryValuesSchema(fieldDefs, ['en']);
     expect(() =>
       schema.parse({
         active: { en: 'not-boolean' },
@@ -146,7 +145,7 @@ describe('buildEntryValuesSchema', () => {
       },
     ];
 
-    const schema = buildEntryValuesSchema(fieldDefs);
+    const schema = buildEntryValuesSchema(fieldDefs, ['en']);
     const valid = {
       image: {
         en: [
@@ -189,7 +188,7 @@ describe('buildEntryValuesSchema', () => {
       },
     ];
 
-    const schema = buildEntryValuesSchema(fieldDefs);
+    const schema = buildEntryValuesSchema(fieldDefs, ['en']);
     const valid = {
       name: { en: 'Test' },
       published: { en: true },
@@ -216,7 +215,7 @@ describe('buildEntryValuesSchema', () => {
       },
     ];
 
-    const schema = buildEntryValuesSchema(fieldDefs);
+    const schema = buildEntryValuesSchema(fieldDefs, ['en']);
     const valid = {
       sections: [
         {
@@ -230,7 +229,7 @@ describe('buildEntryValuesSchema', () => {
   });
 
   it('returns empty object schema for empty field definitions', () => {
-    const schema = buildEntryValuesSchema([]);
+    const schema = buildEntryValuesSchema([], ['en']);
     expect(schema.parse({})).toEqual({});
   });
 });
@@ -270,7 +269,7 @@ describe('z.toJSONSchema() compatibility', () => {
       },
     ];
 
-    const schema = buildEntryValuesSchema(fieldDefs);
+    const schema = buildEntryValuesSchema(fieldDefs, ['en']);
     const jsonSchema = z.toJSONSchema(schema);
 
     expect(jsonSchema).toBeDefined();
@@ -291,7 +290,7 @@ describe('z.toJSONSchema() compatibility', () => {
   });
 
   it('produces valid JSON Schema for empty entry values schema', () => {
-    const schema = buildEntryValuesSchema([]);
+    const schema = buildEntryValuesSchema([], ['en']);
     const jsonSchema = z.toJSONSchema(schema);
 
     expect(jsonSchema).toBeDefined();
@@ -361,7 +360,7 @@ describe('buildEntryValuesTypeString', () => {
       },
     ];
 
-    const types = buildEntryValuesTypeString(fieldDefs);
+    const types = buildEntryValuesTypeString(fieldDefs, ['en']);
 
     expect(types).toContain('export type Entry');
     expect(types).toContain('"title"');
@@ -372,7 +371,7 @@ describe('buildEntryValuesTypeString', () => {
     expect(types).toContain('number');
     expect(types).toContain('boolean');
     expect(types).toContain('Array<{ id: string; objectType: string }>');
-    expect(types).toContain('SupportedLanguage');
+    expect(types).toContain('ProjectLanguage');
   });
 
   it('generates TypeScript type string for component field definitions', () => {
@@ -394,13 +393,13 @@ describe('buildEntryValuesTypeString', () => {
       },
     ];
 
-    const types = buildEntryValuesTypeString(fieldDefs);
+    const types = buildEntryValuesTypeString(fieldDefs, ['en']);
 
     expect(types).toContain('"sections"');
     expect(types).toContain('componentId');
   });
 
-  it('uses SupportedLanguage values matching supportedLanguageSchema', () => {
+  it('uses project language values in the generated type', () => {
     const fieldDefs: FieldDefinition[] = [
       {
         id: uuid(),
@@ -419,15 +418,23 @@ describe('buildEntryValuesTypeString', () => {
       },
     ];
 
-    const types = buildEntryValuesTypeString(fieldDefs);
+    const projectLanguages = ['en', 'de'] as const;
+    const types = buildEntryValuesTypeString(fieldDefs, [...projectLanguages]);
 
-    for (const lang of supportedLanguageSchema.options) {
+    // Should contain only project languages, not all 23
+    for (const lang of projectLanguages) {
       expect(types).toContain(`"${lang}"`);
     }
+    // Should use ProjectLanguage type, not SupportedLanguage
+    expect(types).toContain('ProjectLanguage');
+    expect(types).not.toContain('SupportedLanguage');
+    // Should use Record, not Partial<Record>
+    expect(types).toContain('Record<ProjectLanguage');
+    expect(types).not.toContain('Partial<Record');
   });
 
   it('returns empty Record type for empty field definitions', () => {
-    const types = buildEntryValuesTypeString([]);
+    const types = buildEntryValuesTypeString([], ['en']);
     expect(types).toBe('export type Entry = Record<string, never>;');
   });
 
@@ -450,7 +457,7 @@ describe('buildEntryValuesTypeString', () => {
       },
     ];
 
-    const types = buildEntryValuesTypeString(fieldDefs);
+    const types = buildEntryValuesTypeString(fieldDefs, ['en']);
     expect(types).toContain('unknown');
   });
 });

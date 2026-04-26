@@ -1,7 +1,7 @@
 import { z } from '@hono/zod-openapi';
 import {
   slugSchema,
-  translatableStringSchema,
+  partialTranslatableStringSchema,
   uuidSchema,
 } from './baseSchema.js';
 import { valueTypeSchema } from './valueSchema.js';
@@ -39,7 +39,7 @@ export const fieldWidthSchema = z.enum(['12', '6', '4', '3']);
 //
 
 const selectOptionSchema = <T extends z.ZodTypeAny>(valueSchema: T) =>
-  z.object({ value: valueSchema, label: translatableStringSchema });
+  z.object({ value: valueSchema, label: partialTranslatableStringSchema });
 
 const selectDefaultValueMustBeInOptionsRefinement: [
   (data: {
@@ -114,8 +114,8 @@ export const fieldDefinitionSlugUniquenessSuperRefinement = (
 export const fieldDefinitionBaseSchema = z.object({
   id: uuidSchema.readonly(),
   slug: slugSchema,
-  label: translatableStringSchema,
-  description: translatableStringSchema.nullable(),
+  label: partialTranslatableStringSchema,
+  description: partialTranslatableStringSchema.nullable(),
   isRequired: z.boolean(),
   isDisabled: z.boolean(),
   isUnique: z.boolean(),
@@ -388,8 +388,8 @@ export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
 export const fieldDefinitionGroupSchema = z.object({
   isGroup: z.literal(true),
   id: uuidSchema.readonly(),
-  label: translatableStringSchema,
-  description: translatableStringSchema.nullable(),
+  label: partialTranslatableStringSchema,
+  description: partialTranslatableStringSchema.nullable(),
   fieldDefinitions: z.array(fieldDefinitionSchema), // No refinement for unique slugs here, since this takes place at the parent level in the collectionSchema (all definitions need to be compared together)
 });
 export type FieldDefinitionGroup = z.infer<typeof fieldDefinitionGroupSchema>;

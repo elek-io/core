@@ -214,7 +214,9 @@ function writeEntriesObject(
           2
         )
       )
+      .write(`,`)
       .newLine();
+    writer.write(JSON.stringify(project.settings.language.supported)).newLine();
   });
   writer.setIndentationLevel(0);
   writer.indent(6).write(`));`).newLine();

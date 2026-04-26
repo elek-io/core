@@ -16,8 +16,15 @@ export const projectSettingsSchema = z.object({
     default: supportedLanguageSchema,
     supported: z
       .array(supportedLanguageSchema)
-      .refine((langs) => new Set(langs).size === langs.length, {
-        message: 'Supported languages must not contain duplicates',
+      .nonempty()
+      .check((ctx) => {
+        if (new Set(ctx.value).size !== ctx.value.length) {
+          ctx.issues.push({
+            code: 'custom',
+            message: 'Supported languages must not contain duplicates',
+            input: ctx.value,
+          });
+        }
       }),
   }),
 });

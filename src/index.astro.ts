@@ -128,13 +128,17 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
         projectId: props.projectId,
         id: resolvedId,
       });
+      const project = await core.projects.read({ id: props.projectId });
+      const languages = project.settings.language.supported;
 
       return {
         schema: buildEntryValuesSchema(
-          flattenFieldDefinitions(collection.fieldDefinitions)
+          flattenFieldDefinitions(collection.fieldDefinitions),
+          languages
         ),
         types: buildEntryValuesTypeString(
-          flattenFieldDefinitions(collection.fieldDefinitions)
+          flattenFieldDefinitions(collection.fieldDefinitions),
+          languages
         ),
       };
     },

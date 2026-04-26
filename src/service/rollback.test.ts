@@ -170,11 +170,11 @@ describe('Error handling and rollback', function () {
           projectId: project.id,
           icon: 'home',
           name: {
-            singular: { en: 'Rollback Item' },
-            plural: { en: 'Rollback Items' },
+            singular: { en: 'Rollback Item', de: 'Rollback Item' },
+            plural: { en: 'Rollback Items', de: 'Rollback Items' },
           },
           slug: { singular: 'rollback-item', plural: 'rollback-items' },
-          description: { en: 'Should not persist' },
+          description: { en: 'Should not persist', de: 'Should not persist' },
           fieldDefinitions: [],
         })
       ).rejects.toThrow();
@@ -198,8 +198,8 @@ describe('Error handling and rollback', function () {
           ...collection,
           projectId: project.id,
           name: {
-            singular: { en: 'Updated Name' },
-            plural: { en: 'Updated Names' },
+            singular: { en: 'Updated Name', de: 'Updated Name' },
+            plural: { en: 'Updated Names', de: 'Updated Names' },
           },
         })
       ).rejects.toThrow();
@@ -260,11 +260,14 @@ describe('Error handling and rollback', function () {
           projectId: project.id,
           icon: 'plus',
           name: {
-            singular: { en: 'Index Test' },
-            plural: { en: 'Index Tests' },
+            singular: { en: 'Index Test', de: 'Index Test' },
+            plural: { en: 'Index Tests', de: 'Index Tests' },
           },
           slug: { singular: 'index-test', plural: 'index-tests' },
-          description: { en: 'Testing safeWriteIndex' },
+          description: {
+            en: 'Testing safeWriteIndex',
+            de: 'Testing safeWriteIndex',
+          },
           fieldDefinitions: [],
         });
 
@@ -321,16 +324,16 @@ describe('Error handling and rollback', function () {
       await expect(
         core.components.create({
           projectId: project.id,
-          name: { en: 'Rollback Component' },
+          name: { en: 'Rollback Component', de: 'Rollback Component' },
           slug: 'rollback-component',
-          description: { en: 'Should not persist' },
+          description: { en: 'Should not persist', de: 'Should not persist' },
           fieldDefinitions: [
             {
               id: uuid(),
               slug: 'test-field',
               valueType: 'string',
               fieldType: 'text',
-              label: { en: 'Test' },
+              label: { en: 'Test', de: 'Test' },
               description: null,
               defaultValue: null,
               isRequired: false,
@@ -362,7 +365,7 @@ describe('Error handling and rollback', function () {
         core.components.update({
           ...component,
           projectId: project.id,
-          name: { en: 'Updated Component' },
+          name: { en: 'Updated Component', de: 'Updated Component' },
         })
       ).rejects.toThrow();
 
@@ -448,7 +451,7 @@ describe('Error handling and rollback', function () {
             'product-name': {
               objectType: 'value',
               valueType: 'string',
-              content: { en: 'rollback test' },
+              content: { en: 'rollback test', de: 'rollback test' },
             },
             'header-image': {
               objectType: 'value',
@@ -489,7 +492,10 @@ describe('Error handling and rollback', function () {
             'product-name': {
               objectType: 'value',
               valueType: 'string',
-              content: { en: 'UPDATED SHOULD NOT PERSIST' },
+              content: {
+                en: 'UPDATED SHOULD NOT PERSIST',
+                de: 'UPDATED SHOULD NOT PERSIST',
+              },
             },
           },
         })

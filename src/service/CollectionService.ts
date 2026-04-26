@@ -1,20 +1,21 @@
 import Fs from 'fs-extra';
+import { z } from '@hono/zod-openapi';
 import { isDeepStrictEqual } from 'node:util';
 import { CoreError } from '../util/shared.js';
 import {
   collectionFileSchema,
   countCollectionsSchema,
   migrateCollectionSchema,
-  createCollectionSchema,
   deleteCollectionSchema,
   entryFileSchema,
+  getCreateCollectionSchemaFromLanguages,
+  getUpdateCollectionSchemaFromLanguages,
   listCollectionsSchema,
   objectTypeSchema,
-  projectFileSchema,
   type ReadBySlugCollectionProps,
   readCollectionSchema,
   serviceTypeSchema,
-  updateCollectionSchema,
+  uuidSchema,
   type Collection,
   type CollectionFile,
   type CountCollectionsProps,
@@ -103,9 +104,16 @@ export class CollectionService
   public async create<T extends Collection = Collection>(
     props: CreateCollectionProps
   ): Promise<T> {
+    const { projectId } = this.parseOrThrow(
+      'create',
+      z.object({ projectId: uuidSchema }),
+      props
+    );
+    const languages = await this.readProjectLanguages(projectId);
+
     return this.validated(
       'create',
-      createCollectionSchema,
+      getCreateCollectionSchemaFromLanguages(languages),
       props,
       async (validatedProps) => {
         const id = uuid();
@@ -247,9 +255,16 @@ export class CollectionService
   public async update<T extends Collection = Collection>(
     props: UpdateCollectionProps
   ): Promise<T> {
+    const { projectId } = this.parseOrThrow(
+      'update',
+      z.object({ projectId: uuidSchema }),
+      props
+    );
+    const languages = await this.readProjectLanguages(projectId);
+
     return this.validated(
       'update',
-      updateCollectionSchema,
+      getUpdateCollectionSchemaFromLanguages(languages),
       props,
       async (validatedProps) => {
         const projectPath = pathTo.project(validatedProps.projectId);
@@ -313,13 +328,6 @@ export class CollectionService
               );
 
               if (entryFiles.length > 0) {
-                // Read project to get supported languages
-                const projectFile = await this.jsonFileService.read(
-                  pathTo.projectFile(validatedProps.projectId),
-                  projectFileSchema
-                );
-                const languages = projectFile.settings.language.supported;
-
                 const allIssues: EntryIssue[] = [];
 
                 for (const entryFileName of entryFiles) {
@@ -361,8 +369,10 @@ export class CollectionService
                             (fieldDef) => fieldDef.slug === fieldSlug
                           );
                           if (fieldDef) {
-                            const schema =
-                              getValueSchemaFromFieldDefinition(fieldDef);
+                            const schema = getValueSchemaFromFieldDefinition(
+                              fieldDef,
+                              languages
+                            );
                             const parseResult = schema.safeParse(resolvedValue);
                             if (!parseResult.success) {
                               throw CoreError.badRequest(

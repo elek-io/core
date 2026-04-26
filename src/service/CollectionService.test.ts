@@ -239,21 +239,24 @@ describe('CollectionService - slug uniqueness', function () {
         projectId: project.id,
         icon: 'home',
         name: {
-          singular: { en: 'Duplicate' },
-          plural: { en: 'Duplicates' },
+          singular: { en: 'Duplicate', de: 'Duplicate' },
+          plural: { en: 'Duplicates', de: 'Duplicates' },
         },
         slug: {
           singular: 'duplicate',
           plural: collection.slug.plural, // same as existing
         },
-        description: { en: 'A duplicate slug collection' },
+        description: {
+          en: 'A duplicate slug collection',
+          de: 'A duplicate slug collection',
+        },
         fieldDefinitions: [
           {
             id: uuid(),
             slug: 'some-field',
             valueType: 'string',
-            label: { en: 'Field' },
-            description: { en: 'Field' },
+            label: { en: 'Field', de: 'Field' },
+            description: { en: 'Field', de: 'Field' },
             fieldType: 'text',
             inputWidth: '12',
             isDisabled: false,
@@ -274,21 +277,21 @@ describe('CollectionService - slug uniqueness', function () {
       projectId: project.id,
       icon: 'home',
       name: {
-        singular: { en: 'Other' },
-        plural: { en: 'Others' },
+        singular: { en: 'Other', de: 'Other' },
+        plural: { en: 'Others', de: 'Others' },
       },
       slug: {
         singular: 'other',
         plural: 'others',
       },
-      description: { en: 'Another collection' },
+      description: { en: 'Another collection', de: 'Another collection' },
       fieldDefinitions: [
         {
           id: uuid(),
           slug: 'other-field',
           valueType: 'string',
-          label: { en: 'Field' },
-          description: { en: 'Field' },
+          label: { en: 'Field', de: 'Field' },
+          description: { en: 'Field', de: 'Field' },
           fieldType: 'text',
           inputWidth: '12',
           isDisabled: false,
@@ -342,21 +345,21 @@ describe('CollectionService - fieldDefinition slug uniqueness', function () {
         projectId: project.id,
         icon: 'home',
         name: {
-          singular: { en: 'Item' },
-          plural: { en: 'Items' },
+          singular: { en: 'Item', de: 'Item' },
+          plural: { en: 'Items', de: 'Items' },
         },
         slug: {
           singular: 'item',
           plural: 'items',
         },
-        description: { en: 'Test' },
+        description: { en: 'Test', de: 'Test' },
         fieldDefinitions: [
           {
             id: uuid(),
             slug: 'duplicate-slug',
             valueType: 'string',
-            label: { en: 'Field 1' },
-            description: { en: 'Field 1' },
+            label: { en: 'Field 1', de: 'Field 1' },
+            description: { en: 'Field 1', de: 'Field 1' },
             fieldType: 'text',
             inputWidth: '12',
             isDisabled: false,
@@ -370,8 +373,8 @@ describe('CollectionService - fieldDefinition slug uniqueness', function () {
             id: uuid(),
             slug: 'duplicate-slug',
             valueType: 'string',
-            label: { en: 'Field 2' },
-            description: { en: 'Field 2' },
+            label: { en: 'Field 2', de: 'Field 2' },
+            description: { en: 'Field 2', de: 'Field 2' },
             fieldType: 'text',
             inputWidth: '12',
             isDisabled: false,
@@ -391,21 +394,21 @@ describe('CollectionService - fieldDefinition slug uniqueness', function () {
       projectId: project.id,
       icon: 'home',
       name: {
-        singular: { en: 'Widget' },
-        plural: { en: 'Widgets' },
+        singular: { en: 'Widget', de: 'Widget' },
+        plural: { en: 'Widgets', de: 'Widgets' },
       },
       slug: {
         singular: 'widget',
         plural: 'widgets',
       },
-      description: { en: 'Test' },
+      description: { en: 'Test', de: 'Test' },
       fieldDefinitions: [
         {
           id: uuid(),
           slug: 'field-a',
           valueType: 'string',
-          label: { en: 'Field A' },
-          description: { en: 'Field A' },
+          label: { en: 'Field A', de: 'Field A' },
+          description: { en: 'Field A', de: 'Field A' },
           fieldType: 'text',
           inputWidth: '12',
           isDisabled: false,
@@ -419,8 +422,8 @@ describe('CollectionService - fieldDefinition slug uniqueness', function () {
           id: uuid(),
           slug: 'field-b',
           valueType: 'string',
-          label: { en: 'Field B' },
-          description: { en: 'Field B' },
+          label: { en: 'Field B', de: 'Field B' },
+          description: { en: 'Field B', de: 'Field B' },
           fieldType: 'text',
           inputWidth: '12',
           isDisabled: false,
@@ -581,21 +584,21 @@ describe('CollectionService - collection index', function () {
       projectId: project.id,
       icon: 'home',
       name: {
-        singular: { en: 'Temp' },
-        plural: { en: 'Temps' },
+        singular: { en: 'Temp', de: 'Temp' },
+        plural: { en: 'Temps', de: 'Temps' },
       },
       slug: {
         singular: 'temp',
         plural: 'temps',
       },
-      description: { en: 'Temporary' },
+      description: { en: 'Temporary', de: 'Temporary' },
       fieldDefinitions: [
         {
           id: uuid(),
           slug: 'temp-field',
           valueType: 'string',
-          label: { en: 'Field' },
-          description: { en: 'Field' },
+          label: { en: 'Field', de: 'Field' },
+          description: { en: 'Field', de: 'Field' },
           fieldType: 'text',
           inputWidth: '12',
           isDisabled: false,
@@ -646,16 +649,19 @@ describe('CollectionService - fieldDefinition groups', function () {
     const collection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
-      name: { singular: { en: 'Product' }, plural: { en: 'Products' } },
+      name: {
+        singular: { en: 'Product', de: 'Product' },
+        plural: { en: 'Products', de: 'Products' },
+      },
       slug: { singular: 'product', plural: 'products' },
-      description: { en: 'Products' },
+      description: { en: 'Products', de: 'Products' },
       fieldDefinitions: [
         {
           id: uuid(),
           slug: 'ungrouped-field',
           valueType: 'string',
           fieldType: 'text',
-          label: { en: 'Ungrouped' },
+          label: { en: 'Ungrouped', de: 'Ungrouped' },
           description: null,
           inputWidth: '12',
           isDisabled: false,
@@ -668,15 +674,18 @@ describe('CollectionService - fieldDefinition groups', function () {
         {
           isGroup: true,
           id: groupId,
-          label: { en: 'Details' },
-          description: { en: 'Additional product details' },
+          label: { en: 'Details', de: 'Details' },
+          description: {
+            en: 'Additional product details',
+            de: 'Additional product details',
+          },
           fieldDefinitions: [
             {
               id: uuid(),
               slug: 'grouped-field',
               valueType: 'string',
               fieldType: 'text',
-              label: { en: 'Grouped' },
+              label: { en: 'Grouped', de: 'Grouped' },
               description: null,
               inputWidth: '12',
               isDisabled: false,
@@ -704,14 +713,17 @@ describe('CollectionService - fieldDefinition groups', function () {
     const collection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
-      name: { singular: { en: 'Article' }, plural: { en: 'Articles' } },
+      name: {
+        singular: { en: 'Article', de: 'Article' },
+        plural: { en: 'Articles', de: 'Articles' },
+      },
       slug: { singular: 'article', plural: 'articles' },
-      description: { en: 'Articles' },
+      description: { en: 'Articles', de: 'Articles' },
       fieldDefinitions: [
         {
           isGroup: true,
           id: uuid(),
-          label: { en: 'Content' },
+          label: { en: 'Content', de: 'Content' },
           description: null,
           fieldDefinitions: [
             {
@@ -719,7 +731,7 @@ describe('CollectionService - fieldDefinition groups', function () {
               slug: 'title',
               valueType: 'string',
               fieldType: 'text',
-              label: { en: 'Title' },
+              label: { en: 'Title', de: 'Title' },
               description: null,
               inputWidth: '12',
               isDisabled: false,
@@ -741,7 +753,7 @@ describe('CollectionService - fieldDefinition groups', function () {
         title: {
           objectType: 'value',
           valueType: 'string',
-          content: { en: 'Hello World' },
+          content: { en: 'Hello World', de: 'Hello World' },
         },
       },
     });
@@ -754,16 +766,19 @@ describe('CollectionService - fieldDefinition groups', function () {
       core.collections.create({
         projectId: project.id,
         icon: 'home',
-        name: { singular: { en: 'Dupe' }, plural: { en: 'Dupes' } },
+        name: {
+          singular: { en: 'Dupe', de: 'Dupe' },
+          plural: { en: 'Dupes', de: 'Dupes' },
+        },
         slug: { singular: 'dupe', plural: 'dupes' },
-        description: { en: 'Dupes' },
+        description: { en: 'Dupes', de: 'Dupes' },
         fieldDefinitions: [
           {
             id: uuid(),
             slug: 'same-slug',
             valueType: 'string',
             fieldType: 'text',
-            label: { en: 'Ungrouped' },
+            label: { en: 'Ungrouped', de: 'Ungrouped' },
             description: null,
             inputWidth: '12',
             isDisabled: false,
@@ -776,7 +791,7 @@ describe('CollectionService - fieldDefinition groups', function () {
           {
             isGroup: true,
             id: uuid(),
-            label: { en: 'Group' },
+            label: { en: 'Group', de: 'Group' },
             description: null,
             fieldDefinitions: [
               {
@@ -784,7 +799,7 @@ describe('CollectionService - fieldDefinition groups', function () {
                 slug: 'same-slug',
                 valueType: 'string',
                 fieldType: 'text',
-                label: { en: 'Grouped duplicate' },
+                label: { en: 'Grouped duplicate', de: 'Grouped duplicate' },
                 description: null,
                 inputWidth: '12',
                 isDisabled: false,
@@ -806,14 +821,17 @@ describe('CollectionService - fieldDefinition groups', function () {
     const collection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
-      name: { singular: { en: 'Post' }, plural: { en: 'Posts' } },
+      name: {
+        singular: { en: 'Post', de: 'Post' },
+        plural: { en: 'Posts', de: 'Posts' },
+      },
       slug: { singular: 'post', plural: 'posts' },
-      description: { en: 'Posts' },
+      description: { en: 'Posts', de: 'Posts' },
       fieldDefinitions: [
         {
           isGroup: true,
           id: uuid(),
-          label: { en: 'Meta' },
+          label: { en: 'Meta', de: 'Meta' },
           description: null,
           fieldDefinitions: [
             {
@@ -821,7 +839,7 @@ describe('CollectionService - fieldDefinition groups', function () {
               slug: 'old-slug',
               valueType: 'string',
               fieldType: 'text',
-              label: { en: 'Field' },
+              label: { en: 'Field', de: 'Field' },
               description: null,
               inputWidth: '12',
               isDisabled: false,
@@ -843,7 +861,7 @@ describe('CollectionService - fieldDefinition groups', function () {
         'old-slug': {
           objectType: 'value',
           valueType: 'string',
-          content: { en: 'test' },
+          content: { en: 'test', de: 'test' },
         },
       },
     });
@@ -867,7 +885,7 @@ describe('CollectionService - fieldDefinition groups', function () {
               slug: 'new-slug',
               valueType: 'string',
               fieldType: 'text',
-              label: { en: 'Field' },
+              label: { en: 'Field', de: 'Field' },
               description: null,
               inputWidth: '12',
               isDisabled: false,
@@ -899,16 +917,19 @@ describe('CollectionService - fieldDefinition groups', function () {
       projectId: project.id,
       icon: 'home',
       name: {
-        singular: { en: 'Empty Group Test' },
-        plural: { en: 'Empty Group Tests' },
+        singular: { en: 'Empty Group Test', de: 'Empty Group Test' },
+        plural: { en: 'Empty Group Tests', de: 'Empty Group Tests' },
       },
       slug: { singular: 'empty-group-test', plural: 'empty-group-tests' },
-      description: { en: 'A collection with an empty group' },
+      description: {
+        en: 'A collection with an empty group',
+        de: 'A collection with an empty group',
+      },
       fieldDefinitions: [
         {
           isGroup: true,
           id: uuid(),
-          label: { en: 'Empty Group' },
+          label: { en: 'Empty Group', de: 'Empty Group' },
           description: null,
           fieldDefinitions: [],
         },

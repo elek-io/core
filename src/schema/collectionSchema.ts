@@ -3,7 +3,7 @@ import {
   objectTypeSchema,
   slugSchema,
   supportedIconSchema,
-  translatableStringSchema,
+  partialTranslatableStringSchema,
   uuidSchema,
 } from './baseSchema.js';
 import { valueSchema } from './valueSchema.js';
@@ -17,14 +17,14 @@ import { baseFileSchema } from './fileSchema.js';
 export const collectionFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.collection).readonly(),
   name: z.object({
-    singular: translatableStringSchema,
-    plural: translatableStringSchema,
+    singular: partialTranslatableStringSchema,
+    plural: partialTranslatableStringSchema,
   }),
   slug: z.object({
     singular: slugSchema,
     plural: slugSchema,
   }),
-  description: translatableStringSchema,
+  description: partialTranslatableStringSchema,
   icon: supportedIconSchema,
   fieldDefinitions: z
     .array(fieldDefinitionOrGroupSchema)

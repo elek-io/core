@@ -158,6 +158,7 @@ export function transformEntryValues(
     if (updatedFieldIds.has(fieldUuid)) {
       const schema = getValueSchemaFromFieldDefinition(
         newFieldDef,
+        languages,
         componentResolver
       );
       const result = schema.safeParse(processedValue);

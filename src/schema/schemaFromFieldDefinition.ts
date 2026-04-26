@@ -8,15 +8,10 @@
 import { z } from '@hono/zod-openapi';
 import {
   slugSchema,
-  supportedLanguageSchema,
   uuidSchema,
+  type SupportedLanguage,
   type Uuid,
 } from './baseSchema.js';
-import {
-  createEntrySchema,
-  entrySchema,
-  updateEntrySchema,
-} from './entrySchema.js';
 import type {
   AssetFieldDefinition,
   DynamicFieldDefinition,
@@ -180,10 +175,11 @@ function getReferenceValueContentSchemaFromFieldDefinition(
 }
 
 export function getTranslatableStringValueContentSchemaFromFieldDefinition(
-  fieldDefinition: StringFieldDefinition
+  fieldDefinition: StringFieldDefinition,
+  languages: SupportedLanguage[]
 ) {
-  return z.partialRecord(
-    supportedLanguageSchema,
+  return z.record(
+    z.enum(languages as [SupportedLanguage, ...SupportedLanguage[]]),
     getStringValueContentSchemaFromFieldDefinition(fieldDefinition)
   );
 }
@@ -192,26 +188,30 @@ export function getTranslatableNumberValueContentSchemaFromFieldDefinition(
   fieldDefinition:
     | NumberFieldDefinition
     | RangeFieldDefinition
-    | NumberSelectFieldDefinition
+    | NumberSelectFieldDefinition,
+  languages: SupportedLanguage[]
 ) {
-  return z.partialRecord(
-    supportedLanguageSchema,
+  return z.record(
+    z.enum(languages as [SupportedLanguage, ...SupportedLanguage[]]),
     getNumberValueContentSchemaFromFieldDefinition(fieldDefinition)
   );
 }
 
-export function getTranslatableBooleanValueContentSchemaFromFieldDefinition() {
-  return z.partialRecord(
-    supportedLanguageSchema,
+export function getTranslatableBooleanValueContentSchemaFromFieldDefinition(
+  languages: SupportedLanguage[]
+) {
+  return z.record(
+    z.enum(languages as [SupportedLanguage, ...SupportedLanguage[]]),
     getBooleanValueContentSchemaFromFieldDefinition()
   );
 }
 
 export function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
-  fieldDefinition: AssetFieldDefinition | EntryFieldDefinition
+  fieldDefinition: AssetFieldDefinition | EntryFieldDefinition,
+  languages: SupportedLanguage[]
 ) {
-  return z.partialRecord(
-    supportedLanguageSchema,
+  return z.record(
+    z.enum(languages as [SupportedLanguage, ...SupportedLanguage[]]),
     getReferenceValueContentSchemaFromFieldDefinition(fieldDefinition)
   );
 }
@@ -224,6 +224,7 @@ export function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
  */
 function getComponentValueContentSchemaFromFieldDefinition(
   fieldDefinition: DynamicFieldDefinition,
+  languages: SupportedLanguage[],
   componentResolver: ComponentResolver,
   visited: Set<string>
 ) {
@@ -233,6 +234,7 @@ function getComponentValueContentSchemaFromFieldDefinition(
     for (const fieldDefinition of fieldDefinitions) {
       shape[fieldDefinition.slug] = getValueSchemaFromFieldDefinition(
         fieldDefinition,
+        languages,
         componentResolver,
         visited
       );
@@ -280,34 +282,38 @@ function getComponentValueContentSchemaFromFieldDefinition(
  */
 export function getValueSchemaFromFieldDefinition(
   fieldDefinition: FieldDefinition,
+  languages: SupportedLanguage[],
   componentResolver?: ComponentResolver,
   visited: Set<string> = new Set()
 ) {
   switch (fieldDefinition.valueType) {
     case valueTypeSchema.enum.boolean:
       return directBooleanValueSchema.extend({
-        content: getTranslatableBooleanValueContentSchemaFromFieldDefinition(),
+        content:
+          getTranslatableBooleanValueContentSchemaFromFieldDefinition(
+            languages
+          ),
       });
     case valueTypeSchema.enum.number:
       return directNumberValueSchema.extend({
-        content:
-          getTranslatableNumberValueContentSchemaFromFieldDefinition(
-            fieldDefinition
-          ),
+        content: getTranslatableNumberValueContentSchemaFromFieldDefinition(
+          fieldDefinition,
+          languages
+        ),
       });
     case valueTypeSchema.enum.string:
       return directStringValueSchema.extend({
-        content:
-          getTranslatableStringValueContentSchemaFromFieldDefinition(
-            fieldDefinition
-          ),
+        content: getTranslatableStringValueContentSchemaFromFieldDefinition(
+          fieldDefinition,
+          languages
+        ),
       });
     case valueTypeSchema.enum.reference:
       return referencedValueSchema.extend({
-        content:
-          getTranslatableReferenceValueContentSchemaFromFieldDefinition(
-            fieldDefinition
-          ),
+        content: getTranslatableReferenceValueContentSchemaFromFieldDefinition(
+          fieldDefinition,
+          languages
+        ),
       });
     case valueTypeSchema.enum.component: {
       if (!componentResolver) {
@@ -327,6 +333,7 @@ export function getValueSchemaFromFieldDefinition(
       return componentValueSchema.extend({
         content: getComponentValueContentSchemaFromFieldDefinition(
           fieldDefinition,
+          languages,
           componentResolver,
           visited
         ),
@@ -345,6 +352,7 @@ export function getValueSchemaFromFieldDefinition(
  */
 function getValuesShapeFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
+  languages: SupportedLanguage[],
   componentResolver?: ComponentResolver,
   visited?: Set<string>
 ) {
@@ -352,6 +360,7 @@ function getValuesShapeFromFieldDefinitions(
   for (const fieldDef of fieldDefinitions) {
     shape[fieldDef.slug] = getValueSchemaFromFieldDefinition(
       fieldDef,
+      languages,
       componentResolver,
       visited
     );
@@ -360,56 +369,22 @@ function getValuesShapeFromFieldDefinitions(
 }
 
 /**
- * Generates a schema for an Entry based on the given Field definitions and Values
- */
-export function getEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[],
-  componentResolver?: ComponentResolver
-) {
-  return z.object({
-    ...entrySchema.shape,
-    values: getValuesSchema(fieldDefinitions, componentResolver),
-  });
-}
-
-/**
- * Generates a schema for creating a new Entry based on the given Field definitions and Values
- */
-export function getCreateEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[],
-  componentResolver?: ComponentResolver
-) {
-  return z.object({
-    ...createEntrySchema.shape,
-    values: getValuesSchema(fieldDefinitions, componentResolver),
-  });
-}
-
-/**
- * Generates a schema for updating an existing Entry based on the given Field definitions and Values
- */
-export function getUpdateEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[],
-  componentResolver?: ComponentResolver
-) {
-  return z.object({
-    ...updateEntrySchema.shape,
-    values: getValuesSchema(fieldDefinitions, componentResolver),
-  });
-}
-
-/**
  * Builds a values schema that validates each field individually
  * and pipes through `z.record(slugSchema, valueSchema)` so
  * the output type is correctly inferred as `Record<string, Value>`.
  */
-function getValuesSchema(
+export function getValuesSchema(
   fieldDefinitions: FieldDefinition[],
+  languages: SupportedLanguage[],
   componentResolver?: ComponentResolver
 ) {
   return z
     .object(
-      getValuesShapeFromFieldDefinitions(fieldDefinitions, componentResolver)
+      getValuesShapeFromFieldDefinitions(
+        fieldDefinitions,
+        languages,
+        componentResolver
+      )
     )
     .pipe(z.record(slugSchema, valueSchema));
 }

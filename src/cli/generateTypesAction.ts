@@ -39,6 +39,27 @@ function getValueTypeName(valueType: string): string {
 }
 
 /**
+ * Maps a valueType to a narrowed type string with project-scoped language keys.
+ * Uses `Omit + &` to override the `content` field with `Record<ProjectLanguage, T>`.
+ */
+function getNarrowedValueType(valueType: string): string {
+  switch (valueType) {
+    case 'string':
+      return `Omit<DirectStringValue, 'content'> & { content: Record<ProjectLanguage, string> }`;
+    case 'number':
+      return `Omit<DirectNumberValue, 'content'> & { content: Record<ProjectLanguage, number> }`;
+    case 'boolean':
+      return `Omit<DirectBooleanValue, 'content'> & { content: Record<ProjectLanguage, boolean> }`;
+    case 'reference':
+      return 'ReferencedValue';
+    case 'component':
+      return 'ComponentValue';
+    default:
+      return 'Value';
+  }
+}
+
+/**
  * Maps a fieldType + valueType to the corresponding FieldDefinition subtype name.
  */
 function getFieldDefinitionTypeName(fieldDefinition: FieldDefinition): string {
@@ -116,80 +137,89 @@ function collectUsedValueTypes(
  */
 function writeFieldDefinitionNarrowing(
   writer: CodeBlockWriter,
-  fd: FieldDefinition,
+  fieldDefinition: FieldDefinition,
   baseIndent: number
 ): void {
   writer.write(` & {`).newLine();
   writer
     .indent(baseIndent + 1)
-    .write(`slug: '${fd.slug}';`)
+    .write(`label: Record<ProjectLanguage, string>;`)
     .newLine();
   writer
     .indent(baseIndent + 1)
-    .write(`isRequired: ${fd.isRequired};`)
+    .write(`description: Record<ProjectLanguage, string> | null;`)
     .newLine();
   writer
     .indent(baseIndent + 1)
-    .write(`isDisabled: ${fd.isDisabled};`)
+    .write(`slug: '${fieldDefinition.slug}';`)
     .newLine();
   writer
     .indent(baseIndent + 1)
-    .write(`isUnique: ${fd.isUnique};`)
+    .write(`isRequired: ${fieldDefinition.isRequired};`)
     .newLine();
   writer
     .indent(baseIndent + 1)
-    .write(`inputWidth: '${fd.inputWidth}';`)
+    .write(`isDisabled: ${fieldDefinition.isDisabled};`)
+    .newLine();
+  writer
+    .indent(baseIndent + 1)
+    .write(`isUnique: ${fieldDefinition.isUnique};`)
+    .newLine();
+  writer
+    .indent(baseIndent + 1)
+    .write(`inputWidth: '${fieldDefinition.inputWidth}';`)
     .newLine();
 
   // defaultValue - present on direct fields
-  if ('defaultValue' in fd) {
-    const dv = fd.defaultValue;
-    if (dv === null) {
+  if ('defaultValue' in fieldDefinition) {
+    if (fieldDefinition.defaultValue === null) {
       writer
         .indent(baseIndent + 1)
         .write(`defaultValue: null;`)
         .newLine();
-    } else if (typeof dv === 'string') {
+    } else if (typeof fieldDefinition.defaultValue === 'string') {
       writer
         .indent(baseIndent + 1)
-        .write(`defaultValue: '${escapeForSingleQuotedString(dv)}';`)
+        .write(
+          `defaultValue: '${escapeForSingleQuotedString(fieldDefinition.defaultValue)}';`
+        )
         .newLine();
     } else {
       writer
         .indent(baseIndent + 1)
-        .write(`defaultValue: ${dv};`)
+        .write(`defaultValue: ${fieldDefinition.defaultValue};`)
         .newLine();
     }
   }
 
   // min / max - present on text, number, range, asset, entry, dynamic
-  if ('min' in fd) {
+  if ('min' in fieldDefinition) {
     writer
       .indent(baseIndent + 1)
-      .write(`min: ${fd.min};`)
+      .write(`min: ${fieldDefinition.min};`)
       .newLine();
   }
-  if ('max' in fd) {
+  if ('max' in fieldDefinition) {
     writer
       .indent(baseIndent + 1)
-      .write(`max: ${fd.max};`)
+      .write(`max: ${fieldDefinition.max};`)
       .newLine();
   }
 
   // Select options - narrow values to literals
-  if ('options' in fd && Array.isArray(fd.options)) {
+  if ('options' in fieldDefinition && Array.isArray(fieldDefinition.options)) {
     writer
       .indent(baseIndent + 1)
       .write(`options: [`)
       .newLine();
-    for (const opt of fd.options) {
-      const val =
-        typeof opt.value === 'string'
-          ? `'${escapeForSingleQuotedString(opt.value)}'`
-          : opt.value;
+    for (const option of fieldDefinition.options) {
+      const value =
+        typeof option.value === 'string'
+          ? `'${escapeForSingleQuotedString(option.value)}'`
+          : option.value;
       writer
         .indent(baseIndent + 2)
-        .write(`{ value: ${val}; label: TranslatableString },`)
+        .write(`{ value: ${value}; label: Record<ProjectLanguage, string> },`)
         .newLine();
     }
     writer
@@ -199,21 +229,27 @@ function writeFieldDefinitionNarrowing(
   }
 
   // ofCollections - for entry fields
-  if ('ofCollections' in fd && Array.isArray(fd.ofCollections)) {
+  if (
+    'ofCollections' in fieldDefinition &&
+    Array.isArray(fieldDefinition.ofCollections)
+  ) {
     writer
       .indent(baseIndent + 1)
       .write(
-        `ofCollections: [${fd.ofCollections.map((id) => `'${id}'`).join(', ')}];`
+        `ofCollections: [${fieldDefinition.ofCollections.map((id) => `'${id}'`).join(', ')}];`
       )
       .newLine();
   }
 
   // ofComponents - for dynamic fields
-  if ('ofComponents' in fd && Array.isArray(fd.ofComponents)) {
+  if (
+    'ofComponents' in fieldDefinition &&
+    Array.isArray(fieldDefinition.ofComponents)
+  ) {
     writer
       .indent(baseIndent + 1)
       .write(
-        `ofComponents: [${fd.ofComponents.map((id) => `'${id}'`).join(', ')}];`
+        `ofComponents: [${fieldDefinition.ofComponents.map((id) => `'${id}'`).join(', ')}];`
       )
       .newLine();
   }
@@ -227,11 +263,11 @@ function writeFieldDefinitionNarrowing(
  */
 function writeFieldDefinitionTupleEntry(
   writer: CodeBlockWriter,
-  fd: FieldDefinition,
+  fieldDefinition: FieldDefinition,
   baseIndent: number
 ): void {
-  writer.write(`${getFieldDefinitionTypeName(fd)}`);
-  writeFieldDefinitionNarrowing(writer, fd, baseIndent);
+  writer.write(`${getFieldDefinitionTypeName(fieldDefinition)}`);
+  writeFieldDefinitionNarrowing(writer, fieldDefinition, baseIndent);
   writer.write(`,`);
   writer.newLine();
 }
@@ -273,7 +309,8 @@ async function generateTypesForProject(project: Project): Promise<string> {
   }
 
   const usedValueTypes = collectUsedValueTypes(allFieldDefs);
-  const usedFdTypes = collectUsedFieldDefinitionTypes(allFieldDefs);
+  const usedFieldDefinitionTypes =
+    collectUsedFieldDefinitionTypes(allFieldDefs);
 
   // Header
   writer.writeLine(AUTO_GENERATED_HEADER);
@@ -281,28 +318,27 @@ async function generateTypesForProject(project: Project): Promise<string> {
 
   // Imports
   const coreImports: string[] = ['Entry', 'Collection', 'Component'];
-  for (const vt of usedValueTypes) {
-    if (!coreImports.includes(vt)) coreImports.push(vt);
+  for (const valueType of usedValueTypes) {
+    if (!coreImports.includes(valueType)) coreImports.push(valueType);
   }
-  for (const fdt of usedFdTypes) {
-    if (!coreImports.includes(fdt)) coreImports.push(fdt);
+  for (const fieldDefinitionType of usedFieldDefinitionTypes) {
+    if (!coreImports.includes(fieldDefinitionType))
+      coreImports.push(fieldDefinitionType);
   }
 
-  // Always import TranslatableString since it's used in field definition groups
-  if (!coreImports.includes('TranslatableString')) {
-    coreImports.push('TranslatableString');
-  }
   // Always import FieldDefinitionGroup if any collection uses groups
-  const hasGroups = collections.some((c) =>
-    c.fieldDefinitions.some((fdOrGroup) => 'isGroup' in fdOrGroup)
+  const hasGroups = collections.some((collection) =>
+    collection.fieldDefinitions.some(
+      (fieldDefinitionOrGroup) => 'isGroup' in fieldDefinitionOrGroup
+    )
   );
   if (hasGroups && !coreImports.includes('FieldDefinitionGroup')) {
     coreImports.push('FieldDefinitionGroup');
   }
 
   writer.writeLine(`import type {`);
-  for (const imp of coreImports) {
-    writer.indent(1).write(`${imp},`).newLine();
+  for (const coreImport of coreImports) {
+    writer.indent(1).write(`${coreImport},`).newLine();
   }
   writer.writeLine(`} from '@elek-io/core';`);
   writer.blankLine();
@@ -311,6 +347,13 @@ async function generateTypesForProject(project: Project): Promise<string> {
   writer.writeLine(`// ─── Project ───`);
   writer.blankLine();
   writer.writeLine(`export const ProjectId = '${project.id}' as const;`);
+  writer.blankLine();
+
+  // Project Language type — narrowed to this project's supported languages
+  const languageUnion = project.settings.language.supported
+    .map((language) => `'${language}'`)
+    .join(' | ');
+  writer.writeLine(`export type ProjectLanguage = ${languageUnion};`);
   writer.blankLine();
 
   // Components
@@ -332,39 +375,51 @@ async function generateTypesForProject(project: Project): Promise<string> {
 
       // Values interface
       writer.writeLine(`export interface ${pascalName}ComponentValues {`);
-      for (const fd of component.fieldDefinitions) {
-        const isRequired = fd.isRequired ? ', required' : '';
+      for (const fieldDefinition of component.fieldDefinitions) {
+        const isRequired = fieldDefinition.isRequired ? ', required' : '';
         writer
           .indent(1)
           .write(
-            `/** ${fd.slug} (${fd.fieldType}, ${fd.valueType}${isRequired}) */`
+            `/** ${fieldDefinition.slug} (${fieldDefinition.fieldType}, ${fieldDefinition.valueType}${isRequired}) */`
           )
           .newLine();
 
-        const propName = fd.slug.includes('-') ? `'${fd.slug}'` : fd.slug;
+        const propName = fieldDefinition.slug.includes('-')
+          ? `'${fieldDefinition.slug}'`
+          : fieldDefinition.slug;
 
-        if (fd.valueType === 'component') {
+        if (fieldDefinition.valueType === 'component') {
           // Dynamic field within component - type as ComponentValue for simplicity
           // (deeply nested component typing would require recursive generation)
           writer.indent(1).write(`${propName}: ComponentValue;`).newLine();
         } else {
           writer
             .indent(1)
-            .write(`${propName}: ${getValueTypeName(fd.valueType)};`)
+            .write(
+              `${propName}: ${getNarrowedValueType(fieldDefinition.valueType)};`
+            )
             .newLine();
         }
       }
       writer.writeLine(`}`);
       writer.blankLine();
 
-      // Component wrapper with narrowed fieldDefinitions
+      // Component wrapper with narrowed fieldDefinitions and project-scoped language types
       writer.writeLine(
-        `export interface ${pascalName}Component extends Component {`
+        `export type ${pascalName}Component = Omit<Component, 'name' | 'description' | 'fieldDefinitions'> & {`
       );
+      writer
+        .indent(1)
+        .write(`name: Record<ProjectLanguage, string>;`)
+        .newLine();
+      writer
+        .indent(1)
+        .write(`description: Record<ProjectLanguage, string> | null;`)
+        .newLine();
       writer.indent(1).write(`fieldDefinitions: [`).newLine();
-      for (const fd of component.fieldDefinitions) {
+      for (const fieldDefinition of component.fieldDefinitions) {
         writer.indent(2);
-        writeFieldDefinitionTupleEntry(writer, fd, 2);
+        writeFieldDefinitionTupleEntry(writer, fieldDefinition, 2);
       }
       writer.indent(1).write(`];`).newLine();
       writer.writeLine(`}`);
@@ -379,7 +434,7 @@ async function generateTypesForProject(project: Project): Promise<string> {
 
     for (const collection of collections) {
       const pascalName = toPascalCase(collection.slug.plural);
-      const flatFieldDefs = flattenFieldDefinitions(
+      const flatFieldDefinitions = flattenFieldDefinitions(
         collection.fieldDefinitions
       );
 
@@ -396,25 +451,25 @@ async function generateTypesForProject(project: Project): Promise<string> {
       writer.blankLine();
 
       // Dynamic field item types (discriminated unions for component fields)
-      for (const fd of flatFieldDefs) {
-        if (fd.valueType === 'component') {
-          const fieldPascal = toPascalCase(fd.slug);
+      for (const fieldDefinition of flatFieldDefinitions) {
+        if (fieldDefinition.valueType === 'component') {
+          const fieldPascal = toPascalCase(fieldDefinition.slug);
           const typeName = `${pascalName}${fieldPascal}Item`;
 
           // Resolve component IDs
           const componentIds =
-            fd.ofComponents.length > 0
-              ? fd.ofComponents
-              : components.map((c) => c.id);
+            fieldDefinition.ofComponents.length > 0
+              ? fieldDefinition.ofComponents
+              : components.map((component) => component.id);
 
           writer.writeLine(
-            `/** Discriminated union for dynamic field '${fd.slug}' */`
+            `/** Discriminated union for dynamic field '${fieldDefinition.slug}' */`
           );
           writer.write(`export type ${typeName} =`).newLine();
-          for (const [i, cid] of componentIds.entries()) {
-            const comp = componentMap.get(cid);
-            if (!comp) continue;
-            const compPascal = toPascalCase(comp.slug);
+          for (const [i, componentId] of componentIds.entries()) {
+            const component = componentMap.get(componentId);
+            if (!component) continue;
+            const compPascal = toPascalCase(component.slug);
             const separator = i < componentIds.length - 1 ? '' : ';';
             writer
               .indent(1)
@@ -429,19 +484,21 @@ async function generateTypesForProject(project: Project): Promise<string> {
 
       // Values interface
       writer.writeLine(`export interface ${pascalName}Values {`);
-      for (const fd of flatFieldDefs) {
-        const isRequired = fd.isRequired ? ', required' : '';
+      for (const fieldDefinition of flatFieldDefinitions) {
+        const isRequired = fieldDefinition.isRequired ? ', required' : '';
         writer
           .indent(1)
           .write(
-            `/** ${fd.slug} (${fd.fieldType}, ${fd.valueType}${isRequired}) */`
+            `/** ${fieldDefinition.slug} (${fieldDefinition.fieldType}, ${fieldDefinition.valueType}${isRequired}) */`
           )
           .newLine();
 
-        const propName = fd.slug.includes('-') ? `'${fd.slug}'` : fd.slug;
+        const propName = fieldDefinition.slug.includes('-')
+          ? `'${fieldDefinition.slug}'`
+          : fieldDefinition.slug;
 
-        if (fd.valueType === 'component') {
-          const fieldPascal = toPascalCase(fd.slug);
+        if (fieldDefinition.valueType === 'component') {
+          const fieldPascal = toPascalCase(fieldDefinition.slug);
           const itemTypeName = `${pascalName}${fieldPascal}Item`;
           writer.indent(1).write(`${propName}: {`).newLine();
           writer.indent(2).write(`objectType: 'value';`).newLine();
@@ -451,7 +508,9 @@ async function generateTypesForProject(project: Project): Promise<string> {
         } else {
           writer
             .indent(1)
-            .write(`${propName}: ${getValueTypeName(fd.valueType)};`)
+            .write(
+              `${propName}: ${getNarrowedValueType(fieldDefinition.valueType)};`
+            )
             .newLine();
         }
       }
@@ -466,26 +525,44 @@ async function generateTypesForProject(project: Project): Promise<string> {
       writer.writeLine(`};`);
       writer.blankLine();
 
-      // Collection wrapper with narrowed fieldDefinitions (preserving groups)
+      // Collection wrapper with narrowed fieldDefinitions and project-scoped language types
       writer.writeLine(
-        `export interface ${pascalName}Collection extends Collection {`
+        `export type ${pascalName}Collection = Omit<Collection, 'name' | 'description' | 'fieldDefinitions'> & {`
       );
+      writer
+        .indent(1)
+        .write(
+          `name: { singular: Record<ProjectLanguage, string>; plural: Record<ProjectLanguage, string> };`
+        )
+        .newLine();
+      writer
+        .indent(1)
+        .write(`description: Record<ProjectLanguage, string>;`)
+        .newLine();
       writer.indent(1).write(`fieldDefinitions: [`).newLine();
-      for (const fdOrGroup of collection.fieldDefinitions) {
-        if ('isGroup' in fdOrGroup) {
+      for (const fieldDefinitionOrGroup of collection.fieldDefinitions) {
+        if ('isGroup' in fieldDefinitionOrGroup) {
           // FieldDefinitionGroup
           writer.indent(2).write(`FieldDefinitionGroup & {`).newLine();
           writer.indent(3).write(`isGroup: true;`).newLine();
+          writer
+            .indent(3)
+            .write(`label: Record<ProjectLanguage, string>;`)
+            .newLine();
+          writer
+            .indent(3)
+            .write(`description: Record<ProjectLanguage, string> | null;`)
+            .newLine();
           writer.indent(3).write(`fieldDefinitions: [`).newLine();
-          for (const fd of fdOrGroup.fieldDefinitions) {
+          for (const fieldDefinition of fieldDefinitionOrGroup.fieldDefinitions) {
             writer.indent(4);
-            writeFieldDefinitionTupleEntry(writer, fd, 4);
+            writeFieldDefinitionTupleEntry(writer, fieldDefinition, 4);
           }
           writer.indent(3).write(`];`).newLine();
           writer.indent(2).write(`},`).newLine();
         } else {
           writer.indent(2);
-          writeFieldDefinitionTupleEntry(writer, fdOrGroup, 2);
+          writeFieldDefinitionTupleEntry(writer, fieldDefinitionOrGroup, 2);
         }
       }
       writer.indent(1).write(`];`).newLine();

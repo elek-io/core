@@ -2078,7 +2078,7 @@ describe('Node.js', function () {
                   url: {
                     objectType: 'value',
                     valueType: 'string',
-                    content: {},
+                    content: { en: null, de: null },
                   },
                 },
               },
@@ -2125,7 +2125,7 @@ describe('Node.js', function () {
                   url: {
                     objectType: 'value',
                     valueType: 'string',
-                    content: {},
+                    content: { en: null, de: null },
                   },
                 },
               },
@@ -2172,7 +2172,7 @@ describe('Node.js', function () {
                   url: {
                     objectType: 'value',
                     valueType: 'string',
-                    content: {},
+                    content: { en: null, de: null },
                   },
                 },
               },

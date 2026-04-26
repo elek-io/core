@@ -2,11 +2,8 @@ import { z } from '@hono/zod-openapi';
 import {
   objectTypeSchema,
   slugSchema,
-  translatableArrayOf,
-  translatableBooleanSchema,
-  translatableNumberSchema,
-  translatableStringSchema,
   uuidSchema,
+  partialTranslatableRecordOf,
 } from './baseSchema.js';
 
 export const valueTypeSchema = z.enum([
@@ -60,19 +57,20 @@ export const directValueBaseSchema = z.object({
 
 export const directStringValueSchema = directValueBaseSchema.extend({
   valueType: z.literal(valueTypeSchema.enum.string).readonly(),
-  content: translatableStringSchema,
+  content: partialTranslatableRecordOf(z.string().trim().min(1).nullable()),
 });
 export type DirectStringValue = z.infer<typeof directStringValueSchema>;
 
 export const directNumberValueSchema = directValueBaseSchema.extend({
   valueType: z.literal(valueTypeSchema.enum.number).readonly(),
-  content: translatableNumberSchema,
+  content: partialTranslatableRecordOf(z.number().nullable()),
 });
 export type DirectNumberValue = z.infer<typeof directNumberValueSchema>;
 
 export const directBooleanValueSchema = directValueBaseSchema.extend({
   valueType: z.literal(valueTypeSchema.enum.boolean).readonly(),
-  content: translatableBooleanSchema,
+  // A boolean Value is never nullable, since it's always either true or false
+  content: partialTranslatableRecordOf(z.boolean()),
 });
 export type DirectBooleanValue = z.infer<typeof directBooleanValueSchema>;
 
@@ -86,7 +84,7 @@ export type DirectValue = z.infer<typeof directValueSchema>;
 export const referencedValueSchema = z.object({
   objectType: z.literal(objectTypeSchema.enum.value).readonly(),
   valueType: z.literal(valueTypeSchema.enum.reference).readonly(),
-  content: translatableArrayOf(valueContentReferenceSchema),
+  content: partialTranslatableRecordOf(z.array(valueContentReferenceSchema)),
 });
 export type ReferencedValue = z.infer<typeof referencedValueSchema>;
 

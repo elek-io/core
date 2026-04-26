@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
+import type { SupportedLanguage } from '../schema/baseSchema.js';
 import {
   getTranslatableBooleanValueContentSchemaFromFieldDefinition,
   getTranslatableNumberValueContentSchemaFromFieldDefinition,
@@ -7,7 +8,6 @@ import {
   getTranslatableStringValueContentSchemaFromFieldDefinition,
 } from '../schema/schemaFromFieldDefinition.js';
 import { valueTypeSchema } from '../schema/valueSchema.js';
-import { supportedLanguageSchema } from '../schema/baseSchema.js';
 
 /**
  * Generates a flat Zod object schema from collection field definitions
@@ -16,27 +16,39 @@ import { supportedLanguageSchema } from '../schema/baseSchema.js';
  * Each key is the field definition slug and each value schema
  * is the translatable content schema for that field type.
  */
-export function buildEntryValuesSchema(fieldDefinitions: FieldDefinition[]) {
+export function buildEntryValuesSchema(
+  fieldDefinitions: FieldDefinition[],
+  languages: SupportedLanguage[]
+) {
   const shape: Record<string, z.ZodTypeAny> = {};
 
   for (const fieldDef of fieldDefinitions) {
     switch (fieldDef.valueType) {
       case valueTypeSchema.enum.string:
         shape[fieldDef.slug] =
-          getTranslatableStringValueContentSchemaFromFieldDefinition(fieldDef);
+          getTranslatableStringValueContentSchemaFromFieldDefinition(
+            fieldDef,
+            languages
+          );
         break;
       case valueTypeSchema.enum.number:
         shape[fieldDef.slug] =
-          getTranslatableNumberValueContentSchemaFromFieldDefinition(fieldDef);
+          getTranslatableNumberValueContentSchemaFromFieldDefinition(
+            fieldDef,
+            languages
+          );
         break;
       case valueTypeSchema.enum.boolean:
         shape[fieldDef.slug] =
-          getTranslatableBooleanValueContentSchemaFromFieldDefinition();
+          getTranslatableBooleanValueContentSchemaFromFieldDefinition(
+            languages
+          );
         break;
       case valueTypeSchema.enum.reference:
         shape[fieldDef.slug] =
           getTranslatableReferenceValueContentSchemaFromFieldDefinition(
-            fieldDef
+            fieldDef,
+            languages
           );
         break;
       case valueTypeSchema.enum.component:
@@ -62,7 +74,8 @@ export function buildEntryValuesSchema(fieldDefinitions: FieldDefinition[]) {
  * as the `Entry` type for the collection.
  */
 export function buildEntryValuesTypeString(
-  fieldDefinitions: FieldDefinition[]
+  fieldDefinitions: FieldDefinition[],
+  languages: SupportedLanguage[]
 ): string {
   if (fieldDefinitions.length === 0) {
     return 'export type Entry = Record<string, never>;';
@@ -70,11 +83,11 @@ export function buildEntryValuesTypeString(
 
   const fields = fieldDefinitions.map((fieldDef) => {
     const tsType = valueTypeToTsType(fieldDef.valueType);
-    return `  "${fieldDef.slug}": Partial<Record<SupportedLanguage, ${tsType}>>`;
+    return `  "${fieldDef.slug}": Record<ProjectLanguage, ${tsType}>`;
   });
 
   return [
-    `type SupportedLanguage = ${supportedLanguageSchema.options.map((language) => `"${language}"`).join(' | ')};`,
+    `type ProjectLanguage = ${languages.map((language) => `"${language}"`).join(' | ')};`,
     `export type Entry = {`,
     fields.join(';\n') + ';',
     `};`,

@@ -1,7 +1,7 @@
 import Fs from 'fs-extra';
+import { z } from '@hono/zod-openapi';
 import {
   countEntriesSchema,
-  createEntrySchema,
   migrateEntrySchema,
   deleteEntrySchema,
   entryFileSchema,
@@ -13,7 +13,7 @@ import {
   objectTypeSchema,
   readEntrySchema,
   serviceTypeSchema,
-  updateEntrySchema,
+  uuidSchema,
   entryHistorySchema,
   type CountEntriesProps,
   type CreateEntryProps,
@@ -33,7 +33,7 @@ import {
 } from '../schema/index.js';
 import { applyMigrations, entryMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
-import { datetime, uuid, CoreError } from '../util/shared.js';
+import { datetime, uuid } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { CollectionService } from './CollectionService.js';
 import type { ComponentService } from './ComponentService.js';
@@ -77,66 +77,70 @@ export class EntryService
   /**
    * Creates a new Entry for given Collection
    */
-  public create<T extends Entry = Entry>(props: CreateEntryProps): Promise<T> {
-    return this.validated('create', createEntrySchema, props, async () => {
-      const id = uuid();
-      const projectPath = pathTo.project(props.projectId);
-      const entryFilePath = pathTo.entryFile(
-        props.projectId,
-        props.collectionId,
-        id
+  public async create<T extends Entry = Entry>(
+    props: CreateEntryProps
+  ): Promise<T> {
+    const { projectId, collectionId } = this.parseOrThrow(
+      'create',
+      z.object({ projectId: uuidSchema, collectionId: uuidSchema }),
+      props
+    );
+    const languages = await this.readProjectLanguages(projectId);
+    const collection = await this.collectionService.read({
+      projectId,
+      id: collectionId,
+    });
+    const { resolver: componentResolver, fieldDefinitions } =
+      await this.buildComponentResolver(
+        flattenFieldDefinitions(collection.fieldDefinitions),
+        projectId
       );
 
-      const collection = await this.collectionService.read({
-        projectId: props.projectId,
-        id: props.collectionId,
-      });
-
-      const { resolver: componentResolver, fieldDefinitions } =
-        await this.buildComponentResolver(
-          flattenFieldDefinitions(collection.fieldDefinitions),
-          props.projectId
+    return this.validated(
+      'create',
+      getCreateEntrySchemaFromFieldDefinitions(
+        fieldDefinitions,
+        languages,
+        componentResolver
+      ),
+      props,
+      async (validatedProps) => {
+        const id = uuid();
+        const projectPath = pathTo.project(validatedProps.projectId);
+        const entryFilePath = pathTo.entryFile(
+          validatedProps.projectId,
+          validatedProps.collectionId,
+          id
         );
 
-      const createEntrySchemaFromFieldDefinitions =
-        getCreateEntrySchemaFromFieldDefinitions(
-          fieldDefinitions,
-          componentResolver
-        );
-      const validatedResult =
-        createEntrySchemaFromFieldDefinitions.safeParse(props);
-      if (!validatedResult.success) {
-        throw CoreError.badRequest('Validation failed', validatedResult.error);
+        const entryFile: EntryFile = {
+          objectType: 'entry',
+          id,
+          coreVersion: this.coreVersion,
+          values: validatedProps.values,
+          created: datetime(),
+          updated: null,
+        };
+
+        return this.withGitRollback(projectPath, async () => {
+          await this.jsonFileService.create(
+            entryFile,
+            entryFilePath,
+            entryFileSchema
+          );
+          await this.gitService.add(projectPath, [entryFilePath]);
+          await this.gitService.commit(projectPath, {
+            method: 'create',
+            reference: {
+              objectType: 'entry',
+              id: entryFile.id,
+              collectionId: validatedProps.collectionId,
+            },
+          });
+          return this.toEntry(entryFile) as T;
+        }, [entryFilePath]);
       }
-      const validatedProps = validatedResult.data;
-
-      const entryFile: EntryFile = {
-        objectType: 'entry',
-        id,
-        coreVersion: this.coreVersion,
-        values: validatedProps.values,
-        created: datetime(),
-        updated: null,
-      };
-
-      return this.withGitRollback(projectPath, async () => {
-        await this.jsonFileService.create(
-          entryFile,
-          entryFilePath,
-          entryFileSchema
-        );
-        await this.gitService.add(projectPath, [entryFilePath]);
-        await this.gitService.commit(projectPath, {
-          method: 'create',
-          reference: {
-            objectType: 'entry',
-            id: entryFile.id,
-            collectionId: props.collectionId,
-          },
-        });
-        return this.toEntry(entryFile) as T;
-      }, [entryFilePath]);
-    });
+    );
   }
 
   /**
@@ -182,68 +186,72 @@ export class EntryService
   /**
    * Updates an Entry of given Collection with new Values
    */
-  public update<T extends Entry = Entry>(props: UpdateEntryProps): Promise<T> {
-    return this.validated('update', updateEntrySchema, props, async () => {
-      const projectPath = pathTo.project(props.projectId);
-      const entryFilePath = pathTo.entryFile(
-        props.projectId,
-        props.collectionId,
-        props.id
+  public async update<T extends Entry = Entry>(
+    props: UpdateEntryProps
+  ): Promise<T> {
+    const { projectId, collectionId } = this.parseOrThrow(
+      'update',
+      z.object({ projectId: uuidSchema, collectionId: uuidSchema }),
+      props
+    );
+    const languages = await this.readProjectLanguages(projectId);
+    const collection = await this.collectionService.read({
+      projectId,
+      id: collectionId,
+    });
+    const { resolver: componentResolver, fieldDefinitions } =
+      await this.buildComponentResolver(
+        flattenFieldDefinitions(collection.fieldDefinitions),
+        projectId
       );
 
-      const collection = await this.collectionService.read({
-        projectId: props.projectId,
-        id: props.collectionId,
-      });
-
-      const prevEntryFile = await this.read<T>({
-        projectId: props.projectId,
-        collectionId: props.collectionId,
-        id: props.id,
-      });
-
-      const { resolver: componentResolver, fieldDefinitions } =
-        await this.buildComponentResolver(
-          flattenFieldDefinitions(collection.fieldDefinitions),
-          props.projectId
+    return this.validated(
+      'update',
+      getUpdateEntrySchemaFromFieldDefinitions(
+        fieldDefinitions,
+        languages,
+        componentResolver
+      ),
+      props,
+      async (validatedProps) => {
+        const projectPath = pathTo.project(validatedProps.projectId);
+        const entryFilePath = pathTo.entryFile(
+          validatedProps.projectId,
+          validatedProps.collectionId,
+          validatedProps.id
         );
 
-      const updateEntrySchemaFromFieldDefinitions =
-        getUpdateEntrySchemaFromFieldDefinitions(
-          fieldDefinitions,
-          componentResolver
-        );
-      const validatedResult =
-        updateEntrySchemaFromFieldDefinitions.safeParse(props);
-      if (!validatedResult.success) {
-        throw CoreError.badRequest('Validation failed', validatedResult.error);
-      }
-      const validatedProps = validatedResult.data;
-
-      const entryFile: EntryFile = {
-        ...prevEntryFile,
-        values: validatedProps.values,
-        updated: datetime(),
-      };
-
-      return this.withGitRollback(projectPath, async () => {
-        await this.jsonFileService.update(
-          entryFile,
-          entryFilePath,
-          entryFileSchema
-        );
-        await this.gitService.add(projectPath, [entryFilePath]);
-        await this.gitService.commit(projectPath, {
-          method: 'update',
-          reference: {
-            objectType: 'entry',
-            id: entryFile.id,
-            collectionId: props.collectionId,
-          },
+        const prevEntryFile = await this.read<T>({
+          projectId: validatedProps.projectId,
+          collectionId: validatedProps.collectionId,
+          id: validatedProps.id,
         });
-        return this.toEntry(entryFile) as T;
-      });
-    });
+
+        const entryFile: EntryFile = {
+          ...prevEntryFile,
+          values: validatedProps.values,
+          updated: datetime(),
+        };
+
+        return this.withGitRollback(projectPath, async () => {
+          await this.jsonFileService.update(
+            entryFile,
+            entryFilePath,
+            entryFileSchema
+          );
+          await this.gitService.add(projectPath, [entryFilePath]);
+          await this.gitService.commit(projectPath, {
+            method: 'update',
+            reference: {
+              objectType: 'entry',
+              id: entryFile.id,
+              collectionId: validatedProps.collectionId,
+            },
+          });
+          return this.toEntry(entryFile) as T;
+        });
+      }
+    );
   }
 
   /**

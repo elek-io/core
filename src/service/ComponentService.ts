@@ -1,19 +1,19 @@
 import Fs from 'fs-extra';
+import { z } from '@hono/zod-openapi';
 import { CoreError } from '../util/shared.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
   componentFileSchema,
   countComponentsSchema,
   migrateComponentSchema,
-  createComponentSchema,
   deleteComponentSchema,
+  getCreateComponentSchemaFromLanguages,
+  getUpdateComponentSchemaFromLanguages,
   listComponentsSchema,
   objectTypeSchema,
-  projectFileSchema,
   type ReadBySlugComponentProps,
   readComponentSchema,
   serviceTypeSchema,
-  updateComponentSchema,
   uuidSchema,
   type Component,
   type ComponentFile,
@@ -104,9 +104,16 @@ export class ComponentService
   public async create<T extends Component = Component>(
     props: CreateComponentProps
   ): Promise<T> {
+    const { projectId } = this.parseOrThrow(
+      'create',
+      z.object({ projectId: uuidSchema }),
+      props
+    );
+    const languages = await this.readProjectLanguages(projectId);
+
     return this.validated(
       'create',
-      createComponentSchema,
+      getCreateComponentSchemaFromLanguages(languages),
       props,
       async (validatedProps) => {
         await this.validateNoCircularReferences(
@@ -241,9 +248,16 @@ export class ComponentService
   public async update<T extends Component = Component>(
     props: UpdateComponentProps
   ): Promise<T> {
+    const { projectId } = this.parseOrThrow(
+      'update',
+      z.object({ projectId: uuidSchema }),
+      props
+    );
+    const languages = await this.readProjectLanguages(projectId);
+
     return this.validated(
       'update',
-      updateComponentSchema,
+      getUpdateComponentSchemaFromLanguages(languages),
       props,
       async (validatedProps) => {
         await this.validateNoCircularReferences(
@@ -294,13 +308,6 @@ export class ComponentService
           const filesToGitAdd: string[] = [componentFilePath];
 
           if (changes.length > 0) {
-            // Read project to get supported languages
-            const projectFile = await this.jsonFileService.read(
-              pathTo.projectFile(validatedProps.projectId),
-              projectFileSchema
-            );
-            const languages = projectFile.settings.language.supported;
-
             const allIssues: EntryIssue[] = [];
 
             // Find all collections that reference this component
@@ -389,8 +396,10 @@ export class ComponentService
                             (fd) => fd.slug === fieldSlug
                           );
                           if (fieldDef) {
-                            const schema =
-                              getValueSchemaFromFieldDefinition(fieldDef);
+                            const schema = getValueSchemaFromFieldDefinition(
+                              fieldDef,
+                              languages
+                            );
                             const parseResult = schema.safeParse(resolvedValue);
                             if (!parseResult.success) {
                               throw CoreError.badRequest(

@@ -359,6 +359,7 @@ describe('ReleaseService', function () {
           valueType: 'string',
           content: {
             en: 'Modified Product Name',
+            de: 'Modified Product Name',
           },
         },
       },
@@ -525,16 +526,16 @@ describe('ReleaseService', function () {
   it('should detect MINOR bump when a component is added', async function () {
     component = await core.components.create({
       projectId: project.id,
-      name: { de: 'Hero' },
+      name: { de: 'Hero', fr: 'Hero' },
       slug: 'hero',
-      description: { de: 'A hero section' },
+      description: { de: 'A hero section', fr: 'A hero section' },
       fieldDefinitions: [
         {
           id: uuid(),
           slug: 'title',
           valueType: 'string',
           fieldType: 'text',
-          label: { de: 'Title' },
+          label: { de: 'Title', fr: 'Title' },
           description: null,
           defaultValue: null,
           isRequired: true,
@@ -592,7 +593,7 @@ describe('ReleaseService', function () {
       slug: 'subtitle',
       valueType: 'string',
       fieldType: 'text',
-      label: { de: 'Subtitle' },
+      label: { de: 'Subtitle', fr: 'Subtitle' },
       description: null,
       defaultValue: null,
       isRequired: false,

@@ -70,7 +70,7 @@ describe('transformEntryValues', () => {
     const oldDefs = [makeTextField({ id: fieldId, slug: 'title' })];
     const newDefs = [makeTextField({ id: fieldId, slug: 'name' })];
     const values: Record<string, Value> = {
-      title: makeStringValue({ en: 'Hello' }),
+      title: makeStringValue({ en: 'Hello', de: 'Hello' }),
     };
     const changes = diffFieldDefinitions(oldDefs, newDefs);
 
@@ -85,7 +85,9 @@ describe('transformEntryValues', () => {
     );
 
     expect(result.changed).toBe(true);
-    expect(result.values['name']).toEqual(makeStringValue({ en: 'Hello' }));
+    expect(result.values['name']).toEqual(
+      makeStringValue({ en: 'Hello', de: 'Hello' })
+    );
     expect(result.values['title']).toBeUndefined();
     expect(result.issues).toHaveLength(0);
   });
@@ -102,8 +104,8 @@ describe('transformEntryValues', () => {
       makeTextField({ id: idB, slug: 'title' }),
     ];
     const values: Record<string, Value> = {
-      title: makeStringValue({ en: 'A-value' }),
-      name: makeStringValue({ en: 'B-value' }),
+      title: makeStringValue({ en: 'A-value', de: 'A-value' }),
+      name: makeStringValue({ en: 'B-value', de: 'B-value' }),
     };
     const changes = diffFieldDefinitions(oldDefs, newDefs);
 
@@ -118,8 +120,12 @@ describe('transformEntryValues', () => {
     );
 
     expect(result.changed).toBe(true);
-    expect(result.values['name']).toEqual(makeStringValue({ en: 'A-value' }));
-    expect(result.values['title']).toEqual(makeStringValue({ en: 'B-value' }));
+    expect(result.values['name']).toEqual(
+      makeStringValue({ en: 'A-value', de: 'A-value' })
+    );
+    expect(result.values['title']).toEqual(
+      makeStringValue({ en: 'B-value', de: 'B-value' })
+    );
   });
 
   it('handles rename + add-with-same-slug', () => {
@@ -131,7 +137,7 @@ describe('transformEntryValues', () => {
       makeTextField({ id: idB, slug: 'title', defaultValue: 'default' }),
     ];
     const values: Record<string, Value> = {
-      title: makeStringValue({ en: 'Original' }),
+      title: makeStringValue({ en: 'Original', de: 'Original' }),
     };
     const changes = diffFieldDefinitions(oldDefs, newDefs);
 
@@ -145,7 +151,9 @@ describe('transformEntryValues', () => {
       languages
     );
 
-    expect(result.values['name']).toEqual(makeStringValue({ en: 'Original' }));
+    expect(result.values['name']).toEqual(
+      makeStringValue({ en: 'Original', de: 'Original' })
+    );
     expect(result.values['title']).toEqual(
       makeStringValue({ en: 'default', de: 'default' })
     );
@@ -161,8 +169,8 @@ describe('transformEntryValues', () => {
     ];
     const newDefs = [makeTextField({ id: idA, slug: 'title' })];
     const values: Record<string, Value> = {
-      title: makeStringValue({ en: 'Keep' }),
-      subtitle: makeStringValue({ en: 'Remove' }),
+      title: makeStringValue({ en: 'Keep', de: 'Keep' }),
+      subtitle: makeStringValue({ en: 'Remove', de: 'Remove' }),
     };
     const changes = diffFieldDefinitions(oldDefs, newDefs);
 
@@ -191,7 +199,7 @@ describe('transformEntryValues', () => {
       makeTextField({ id: newId, slug: 'subtitle', isRequired: false }),
     ];
     const values: Record<string, Value> = {
-      title: makeStringValue({ en: 'Hello' }),
+      title: makeStringValue({ en: 'Hello', de: 'Hello' }),
     };
     const changes = diffFieldDefinitions(oldDefs, newDefs);
 
@@ -228,7 +236,7 @@ describe('transformEntryValues', () => {
       }),
     ];
     const values: Record<string, Value> = {
-      title: makeStringValue({ en: 'Hello' }),
+      title: makeStringValue({ en: 'Hello', de: 'Hello' }),
     };
     const changes = diffFieldDefinitions(oldDefs, newDefs);
 
@@ -265,7 +273,7 @@ describe('transformEntryValues', () => {
       }),
     ];
     const values: Record<string, Value> = {
-      title: makeStringValue({ en: 'Hello' }),
+      title: makeStringValue({ en: 'Hello', de: 'Hello' }),
     };
     const changes = diffFieldDefinitions(oldDefs, newDefs);
 
@@ -295,7 +303,7 @@ describe('transformEntryValues', () => {
         slug: 'count',
         valueType: 'number' as const,
         fieldType: 'number' as const,
-        label: { en: 'count' },
+        label: { en: 'count', de: 'count' },
         description: null,
         isRequired: false,
         isDisabled: false,
@@ -307,7 +315,7 @@ describe('transformEntryValues', () => {
       },
     ];
     const values: Record<string, Value> = {
-      count: makeStringValue({ en: 'not a number' }),
+      count: makeStringValue({ en: 'not a number', de: 'not a number' }),
     };
     const changes = diffFieldDefinitions(oldDefs, newDefs);
 
@@ -324,7 +332,7 @@ describe('transformEntryValues', () => {
     expect(result.issues).toHaveLength(1);
     expect(result.issues[0]!.issue).toBe('type_mismatch');
     expect(result.issues[0]!.currentValue).toEqual(
-      makeStringValue({ en: 'not a number' })
+      makeStringValue({ en: 'not a number', de: 'not a number' })
     );
   });
 
@@ -367,7 +375,7 @@ describe('transformEntryValues', () => {
       makeTextField({ id: newId, slug: 'required-field', isRequired: true }),
     ];
     const values: Record<string, Value> = {
-      title: makeStringValue({ en: 'Hello' }),
+      title: makeStringValue({ en: 'Hello', de: 'Hello' }),
     };
     const changes = diffFieldDefinitions(oldDefs, newDefs);
 
@@ -383,7 +391,7 @@ describe('transformEntryValues', () => {
 
     expect(result.issues).toHaveLength(1);
     expect(result.issues[0]!.transformedValues['title']).toEqual(
-      makeStringValue({ en: 'Hello' })
+      makeStringValue({ en: 'Hello', de: 'Hello' })
     );
   });
 
@@ -397,7 +405,7 @@ describe('transformEntryValues', () => {
         slug: 'blocks',
         valueType: 'component' as const,
         fieldType: 'dynamic' as const,
-        label: { en: 'Blocks' },
+        label: { en: 'Blocks', de: 'Blocks' },
         description: null,
         isRequired: false,
         isDisabled: false,
@@ -452,7 +460,7 @@ describe('transformEntryValues', () => {
         slug: 'related',
         valueType: 'reference' as const,
         fieldType: 'entry' as const,
-        label: { en: 'Related' },
+        label: { en: 'Related', de: 'Related' },
         description: null,
         isRequired: false,
         isDisabled: false,
@@ -516,7 +524,7 @@ describe('transformEntryValues', () => {
         slug: 'blocks',
         valueType: 'component' as const,
         fieldType: 'dynamic' as const,
-        label: { en: 'Blocks' },
+        label: { en: 'Blocks', de: 'Blocks' },
         description: null,
         isRequired: false,
         isDisabled: false,

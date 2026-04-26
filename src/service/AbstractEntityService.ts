@@ -3,10 +3,14 @@ import { CoreError } from '../util/shared.js';
 import {
   fileReferenceSchema,
   objectTypeSchema,
+  projectFileSchema,
   type ElekIoCoreOptions,
   type FileReference,
   type ObjectType,
+  type ProjectFile,
   type ServiceType,
+  type SupportedLanguage,
+  type Uuid,
 } from '../schema/index.js';
 import { files, folders, isNotEmpty, pathTo } from '../util/node.js';
 import { AbstractService } from './AbstractService.js';
@@ -32,6 +36,27 @@ export abstract class AbstractEntityService extends AbstractService {
     super(type, options, logService);
     this.gitService = gitService;
     this.jsonFileService = jsonFileService;
+  }
+
+  /**
+   * Reads and parses the project file for the given project id.
+   */
+  protected async readProjectFile(projectId: Uuid): Promise<ProjectFile> {
+    return this.jsonFileService.read(
+      pathTo.projectFile(projectId),
+      projectFileSchema
+    );
+  }
+
+  /**
+   * Returns the project's supported languages, used to build strict
+   * entity schemas before `validated()` runs.
+   */
+  protected async readProjectLanguages(
+    projectId: Uuid
+  ): Promise<SupportedLanguage[]> {
+    const projectFile = await this.readProjectFile(projectId);
+    return projectFile.settings.language.supported;
   }
 
   /**

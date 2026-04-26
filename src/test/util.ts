@@ -98,16 +98,16 @@ export async function createProject(name?: string, settings?: ProjectSettings) {
 export async function createComponent(projectId: string) {
   const component = await core.components.create({
     projectId,
-    name: { en: 'Hero' },
+    name: { en: 'Hero', de: 'Hero' },
     slug: 'hero',
-    description: { en: 'A hero section' },
+    description: { en: 'A hero section', de: 'A hero section' },
     fieldDefinitions: [
       {
         id: uuid(),
         slug: 'title',
         valueType: 'string',
         fieldType: 'text',
-        label: { en: 'Title' },
+        label: { en: 'Title', de: 'Title' },
         description: null,
         defaultValue: null,
         isRequired: true,
@@ -141,9 +141,11 @@ export async function createCollection(projectId: string) {
     name: {
       singular: {
         en: 'Product',
+        de: 'Product',
       },
       plural: {
         en: 'Products',
+        de: 'Products',
       },
     },
     slug: {
@@ -152,6 +154,7 @@ export async function createCollection(projectId: string) {
     },
     description: {
       en: 'A Collection that contains our Products',
+      de: 'A Collection that contains our Products',
     },
     fieldDefinitions: [
       {
@@ -160,9 +163,11 @@ export async function createCollection(projectId: string) {
         valueType: 'string',
         label: {
           en: 'Name',
+          de: 'Name',
         },
         description: {
           en: 'The title should be shirt and catchy, to grab the users attention',
+          de: 'The title should be shirt and catchy, to grab the users attention',
         },
         fieldType: 'text',
         inputWidth: '12',
@@ -179,9 +184,11 @@ export async function createCollection(projectId: string) {
         valueType: 'reference',
         label: {
           en: 'Header image',
+          de: 'Header image',
         },
         description: {
           en: 'An image for this product displayed on top of the page',
+          de: 'An image for this product displayed on top of the page',
         },
         fieldType: 'asset',
         inputWidth: '12',
@@ -197,9 +204,11 @@ export async function createCollection(projectId: string) {
         valueType: 'reference',
         label: {
           en: 'Related products',
+          de: 'Related products',
         },
         description: {
           en: 'References to other products that the visitor might want to check out too',
+          de: 'References to other products that the visitor might want to check out too',
         },
         fieldType: 'entry',
         ofCollections: [],
@@ -243,6 +252,7 @@ export async function createEntry(
         valueType: 'string',
         content: {
           en: faker.commerce.product(),
+          de: faker.commerce.product(),
         },
       },
       [slugs.assetReferenceFieldDefinition]: {
@@ -255,6 +265,12 @@ export async function createEntry(
               id: assetValueId,
             },
           ],
+          de: [
+            {
+              objectType: 'asset',
+              id: assetValueId,
+            },
+          ],
         },
       },
       [slugs.entryReferenceFieldDefinition]: {
@@ -262,6 +278,15 @@ export async function createEntry(
         valueType: 'reference',
         content: {
           en:
+            (entryValueId && [
+              {
+                objectType: 'entry',
+                id: entryValueId,
+                collectionId: collectionId,
+              },
+            ]) ||
+            [],
+          de:
             (entryValueId && [
               {
                 objectType: 'entry',

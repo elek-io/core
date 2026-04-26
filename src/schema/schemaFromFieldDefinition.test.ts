@@ -13,12 +13,9 @@ import {
   entrySchema,
   uuid,
 } from '../test/setup.js';
-import {
-  getValueSchemaFromFieldDefinition,
-  getEntrySchemaFromFieldDefinitions,
-  getCreateEntrySchemaFromFieldDefinitions,
-  getUpdateEntrySchemaFromFieldDefinitions,
-} from './schemaFromFieldDefinition.js';
+import { getValueSchemaFromFieldDefinition } from './schemaFromFieldDefinition.js';
+
+const languages = ['en'] as const;
 
 describe('Dynamic zod schema from field definition', () => {
   const defaultBooleanValue: DirectBooleanValue = {
@@ -43,23 +40,26 @@ describe('Dynamic zod schema from field definition', () => {
   };
 
   it('from toggle Field definition can be generated and parsed with', () => {
-    const booleanValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'boolean',
-      fieldType: 'toggle',
-      label: {
-        en: 'Test',
+    const booleanValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'boolean',
+        fieldType: 'toggle',
+        label: {
+          en: 'Test',
+        },
+        description: {
+          en: 'Test',
+        },
+        defaultValue: true,
+        inputWidth: '12',
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
       },
-      description: {
-        en: 'Test',
-      },
-      defaultValue: true,
-      inputWidth: '12',
-      isRequired: true,
-      isDisabled: false,
-      isUnique: false,
-    });
+      [...languages]
+    );
 
     booleanValueschema.parse({
       ...defaultBooleanValue,
@@ -109,25 +109,28 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required number Field type definition can be generated and parsed with', () => {
-    const requiredNumberValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'number',
-      fieldType: 'number',
-      label: {
-        en: 'Test',
+    const requiredNumberValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'number',
+        fieldType: 'number',
+        label: {
+          en: 'Test',
+        },
+        description: {
+          en: 'Test',
+        },
+        min: 5,
+        max: 10,
+        defaultValue: 7,
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
       },
-      description: {
-        en: 'Test',
-      },
-      min: 5,
-      max: 10,
-      defaultValue: 7,
-      inputWidth: '12',
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+      [...languages]
+    );
 
     requiredNumberValueschema.parse({
       ...defaultNumberValue,
@@ -193,25 +196,28 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from optional number Field type definition can be generated and parsed with', () => {
-    const optionalNumberValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'number',
-      fieldType: 'number',
-      label: {
-        en: 'Test',
+    const optionalNumberValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'number',
+        fieldType: 'number',
+        label: {
+          en: 'Test',
+        },
+        description: {
+          en: 'Test',
+        },
+        min: 5,
+        max: 10,
+        defaultValue: 7,
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: false,
+        isUnique: false,
       },
-      description: {
-        en: 'Test',
-      },
-      min: 5,
-      max: 10,
-      defaultValue: 7,
-      inputWidth: '12',
-      isDisabled: false,
-      isRequired: false,
-      isUnique: false,
-    });
+      [...languages]
+    );
 
     optionalNumberValueschema.parse({
       ...defaultNumberValue,
@@ -275,25 +281,28 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required range Field type definition can be generated and parsed with', () => {
-    const requiredRangeValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'number',
-      fieldType: 'range',
-      label: {
-        en: 'Test',
+    const requiredRangeValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'number',
+        fieldType: 'range',
+        label: {
+          en: 'Test',
+        },
+        description: {
+          en: 'Test',
+        },
+        min: 5,
+        max: 10,
+        defaultValue: 7,
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
       },
-      description: {
-        en: 'Test',
-      },
-      min: 5,
-      max: 10,
-      defaultValue: 7,
-      inputWidth: '12',
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+      [...languages]
+    );
 
     requiredRangeValueschema.parse({
       ...defaultNumberValue,
@@ -359,25 +368,28 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required text Field type definition can be generated and parsed with', () => {
-    const requiredTextValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'string',
-      fieldType: 'text',
-      label: {
-        en: 'Test',
+    const requiredTextValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'string',
+        fieldType: 'text',
+        label: {
+          en: 'Test',
+        },
+        description: {
+          en: 'Test',
+        },
+        min: 5,
+        max: 8,
+        defaultValue: 'Test',
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
       },
-      description: {
-        en: 'Test',
-      },
-      min: 5,
-      max: 8,
-      defaultValue: 'Test',
-      inputWidth: '12',
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+      [...languages]
+    );
 
     requiredTextValueschema.parse({
       ...defaultStringValue,
@@ -453,25 +465,28 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from optional text Field type definition can be generated and parsed with', () => {
-    const optionalTextValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'string',
-      fieldType: 'text',
-      label: {
-        en: 'Test',
+    const optionalTextValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'string',
+        fieldType: 'text',
+        label: {
+          en: 'Test',
+        },
+        description: {
+          en: 'Test',
+        },
+        min: 5,
+        max: 8,
+        defaultValue: 'Test',
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: false,
+        isUnique: false,
       },
-      description: {
-        en: 'Test',
-      },
-      min: 5,
-      max: 8,
-      defaultValue: 'Test',
-      inputWidth: '12',
-      isDisabled: false,
-      isRequired: false,
-      isUnique: false,
-    });
+      [...languages]
+    );
 
     optionalTextValueschema.parse({
       ...defaultStringValue,
@@ -533,23 +548,26 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required email Field type definition can be generated and parsed with', () => {
-    const requiredEmailValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'string',
-      fieldType: 'email',
-      label: {
-        en: 'Test',
+    const requiredEmailValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'string',
+        fieldType: 'email',
+        label: {
+          en: 'Test',
+        },
+        description: {
+          en: 'Test',
+        },
+        defaultValue: null,
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
       },
-      description: {
-        en: 'Test',
-      },
-      defaultValue: null,
-      inputWidth: '12',
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+      [...languages]
+    );
 
     requiredEmailValueschema.parse({
       ...defaultStringValue,
@@ -625,23 +643,26 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from optional email Field type definition can be generated and parsed with', () => {
-    const optionalEmailValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'string',
-      fieldType: 'email',
-      label: {
-        en: 'Test',
+    const optionalEmailValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'string',
+        fieldType: 'email',
+        label: {
+          en: 'Test',
+        },
+        description: {
+          en: 'Test',
+        },
+        inputWidth: '12',
+        defaultValue: null,
+        isDisabled: false,
+        isRequired: false,
+        isUnique: false,
       },
-      description: {
-        en: 'Test',
-      },
-      inputWidth: '12',
-      defaultValue: null,
-      isDisabled: false,
-      isRequired: false,
-      isUnique: false,
-    });
+      [...languages]
+    );
 
     optionalEmailValueschema.parse({
       ...defaultStringValue,
@@ -715,23 +736,26 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required url Field type definition can be generated and parsed with', () => {
-    const requiredUrlValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'string',
-      fieldType: 'url',
-      label: {
-        en: 'Test',
+    const requiredUrlValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'string',
+        fieldType: 'url',
+        label: {
+          en: 'Test',
+        },
+        description: {
+          en: 'Test',
+        },
+        inputWidth: '12',
+        defaultValue: null,
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
       },
-      description: {
-        en: 'Test',
-      },
-      inputWidth: '12',
-      defaultValue: null,
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+      [...languages]
+    );
 
     requiredUrlValueschema.parse({
       ...defaultStringValue,
@@ -823,19 +847,22 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from optional url Field type definition can be generated and parsed with', () => {
-    const optionalUrlValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'string',
-      fieldType: 'url',
-      label: { en: 'Test' },
-      description: { en: 'Test' },
-      inputWidth: '12',
-      defaultValue: null,
-      isDisabled: false,
-      isRequired: false,
-      isUnique: false,
-    });
+    const optionalUrlValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'string',
+        fieldType: 'url',
+        label: { en: 'Test' },
+        description: { en: 'Test' },
+        inputWidth: '12',
+        defaultValue: null,
+        isDisabled: false,
+        isRequired: false,
+        isUnique: false,
+      },
+      [...languages]
+    );
     optionalUrlValueschema.parse({
       ...defaultStringValue,
       content: { en: 'http://example.com' },
@@ -881,19 +908,22 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required ipv4 Field type definition can be generated and parsed with', () => {
-    const requiredIpValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'string',
-      fieldType: 'ipv4',
-      label: { en: 'Test' },
-      description: { en: 'Test' },
-      inputWidth: '12',
-      defaultValue: null,
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+    const requiredIpValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'string',
+        fieldType: 'ipv4',
+        label: { en: 'Test' },
+        description: { en: 'Test' },
+        inputWidth: '12',
+        defaultValue: null,
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
+      },
+      [...languages]
+    );
     requiredIpValueschema.parse({
       ...defaultStringValue,
       content: { en: faker.internet.ipv4() },
@@ -940,19 +970,22 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required date Field type definition can be generated and parsed with', () => {
-    const requiredDateValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'string',
-      fieldType: 'date',
-      label: { en: 'Test' },
-      description: { en: 'Test' },
-      inputWidth: '12',
-      defaultValue: null,
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+    const requiredDateValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'string',
+        fieldType: 'date',
+        label: { en: 'Test' },
+        description: { en: 'Test' },
+        inputWidth: '12',
+        defaultValue: null,
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
+      },
+      [...languages]
+    );
     const date = faker.date.anytime().toISOString().split('T')[0];
     requiredDateValueschema.parse({
       ...defaultStringValue,
@@ -997,19 +1030,22 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required time Field type definition can be generated and parsed with', () => {
-    const requiredTimeValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'string',
-      fieldType: 'time',
-      label: { en: 'Test' },
-      description: { en: 'Test' },
-      inputWidth: '12',
-      defaultValue: null,
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+    const requiredTimeValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'string',
+        fieldType: 'time',
+        label: { en: 'Test' },
+        description: { en: 'Test' },
+        inputWidth: '12',
+        defaultValue: null,
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
+      },
+      [...languages]
+    );
     requiredTimeValueschema.parse({
       ...defaultStringValue,
       content: { en: '00:00:00' },
@@ -1061,19 +1097,22 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required datetime Field type definition can be generated and parsed with', () => {
-    const requiredDatetimeValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'string',
-      fieldType: 'datetime',
-      label: { en: 'Test' },
-      description: { en: 'Test' },
-      inputWidth: '12',
-      defaultValue: null,
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+    const requiredDatetimeValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'string',
+        fieldType: 'datetime',
+        label: { en: 'Test' },
+        description: { en: 'Test' },
+        inputWidth: '12',
+        defaultValue: null,
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
+      },
+      [...languages]
+    );
     const datetime = faker.date.anytime().toISOString();
     requiredDatetimeValueschema.parse({
       ...defaultStringValue,
@@ -1118,19 +1157,22 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required telephone Field type definition can be generated and parsed with', () => {
-    const requiredTelephoneValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'string',
-      fieldType: 'telephone',
-      label: { en: 'Test' },
-      description: { en: 'Test' },
-      inputWidth: '12',
-      defaultValue: null,
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+    const requiredTelephoneValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'string',
+        fieldType: 'telephone',
+        label: { en: 'Test' },
+        description: { en: 'Test' },
+        inputWidth: '12',
+        defaultValue: null,
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
+      },
+      [...languages]
+    );
     requiredTelephoneValueschema.parse({
       ...defaultStringValue,
       content: { en: faker.phone.number({ style: 'international' }) },
@@ -1174,20 +1216,23 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required Asset Field type definition can be generated and parsed with', () => {
-    const requiredAssetValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'reference',
-      fieldType: 'asset',
-      label: { en: 'Test' },
-      description: { en: 'Test' },
-      inputWidth: '12',
-      min: null,
-      max: null,
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+    const requiredAssetValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'reference',
+        fieldType: 'asset',
+        label: { en: 'Test' },
+        description: { en: 'Test' },
+        inputWidth: '12',
+        min: null,
+        max: null,
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
+      },
+      [...languages]
+    );
     requiredAssetValueschema.parse({
       ...defaultReferenceValue,
       content: {
@@ -1245,20 +1290,23 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from optional Asset Field type definition can be generated and parsed with', () => {
-    const optionalAssetValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'reference',
-      fieldType: 'asset',
-      label: { en: 'Test' },
-      description: { en: 'Test' },
-      inputWidth: '12',
-      min: null,
-      max: null,
-      isDisabled: false,
-      isRequired: false,
-      isUnique: false,
-    });
+    const optionalAssetValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'reference',
+        fieldType: 'asset',
+        label: { en: 'Test' },
+        description: { en: 'Test' },
+        inputWidth: '12',
+        min: null,
+        max: null,
+        isDisabled: false,
+        isRequired: false,
+        isUnique: false,
+      },
+      [...languages]
+    );
     optionalAssetValueschema.parse({
       ...defaultReferenceValue,
       content: { en: [{ objectType: 'asset', id: uuid(), language: 'en' }] },
@@ -1300,20 +1348,23 @@ describe('Dynamic zod schema from field definition', () => {
   });
 
   it('from required Asset Field type definition with a min and max can be generated and parsed with', () => {
-    const requiredAssetValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'reference',
-      fieldType: 'asset',
-      label: { en: 'Test' },
-      description: { en: 'Test' },
-      min: 2,
-      max: 3,
-      inputWidth: '12',
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+    const requiredAssetValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'reference',
+        fieldType: 'asset',
+        label: { en: 'Test' },
+        description: { en: 'Test' },
+        min: 2,
+        max: 3,
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
+      },
+      [...languages]
+    );
     requiredAssetValueschema.parse({
       ...defaultReferenceValue,
       content: {
@@ -1392,21 +1443,24 @@ describe('Dynamic zod schema from field definition', () => {
 
   it('from required Entry Field type definition can be generated and parsed with', () => {
     const allowedCollectionId = uuid();
-    const requiredEntryValueschema = getValueSchemaFromFieldDefinition({
-      id: uuid(),
-      slug: 'test-field',
-      valueType: 'reference',
-      fieldType: 'entry',
-      label: { en: 'Test' },
-      description: { en: 'Test' },
-      inputWidth: '12',
-      min: null,
-      max: null,
-      ofCollections: [allowedCollectionId],
-      isDisabled: false,
-      isRequired: true,
-      isUnique: false,
-    });
+    const requiredEntryValueschema = getValueSchemaFromFieldDefinition(
+      {
+        id: uuid(),
+        slug: 'test-field',
+        valueType: 'reference',
+        fieldType: 'entry',
+        label: { en: 'Test' },
+        description: { en: 'Test' },
+        inputWidth: '12',
+        min: null,
+        max: null,
+        ofCollections: [allowedCollectionId],
+        isDisabled: false,
+        isRequired: true,
+        isUnique: false,
+      },
+      [...languages]
+    );
     requiredEntryValueschema.parse({
       ...defaultReferenceValue,
       content: {
@@ -1611,6 +1665,7 @@ describe('Dynamic zod schema from field definition', () => {
     it('can be generated and parsed with a valid component value', () => {
       const schema = getValueSchemaFromFieldDefinition(
         dynamicFieldDef,
+        [...languages],
         componentResolver
       );
       schema.parse(validComponentValue);
@@ -1619,6 +1674,7 @@ describe('Dynamic zod schema from field definition', () => {
     it('accepts an empty content array when not required', () => {
       const schema = getValueSchemaFromFieldDefinition(
         dynamicFieldDef,
+        [...languages],
         componentResolver
       );
       schema.parse({ ...validComponentValue, content: [] });
@@ -1628,6 +1684,7 @@ describe('Dynamic zod schema from field definition', () => {
       const requiredDef = { ...dynamicFieldDef, isRequired: true };
       const schema = getValueSchemaFromFieldDefinition(
         requiredDef,
+        [...languages],
         componentResolver
       );
       expect(() =>
@@ -1639,6 +1696,7 @@ describe('Dynamic zod schema from field definition', () => {
       const minDef = { ...dynamicFieldDef, min: 2 };
       const schema = getValueSchemaFromFieldDefinition(
         minDef,
+        [...languages],
         componentResolver
       );
       expect(() => schema.parse(validComponentValue)).toThrow();
@@ -1648,6 +1706,7 @@ describe('Dynamic zod schema from field definition', () => {
       const maxDef = { ...dynamicFieldDef, max: 1 };
       const schema = getValueSchemaFromFieldDefinition(
         maxDef,
+        [...languages],
         componentResolver
       );
       const twoItemValue: ComponentValue = {
@@ -1663,6 +1722,7 @@ describe('Dynamic zod schema from field definition', () => {
     it('rejects an item where a required sub-field has an empty string content', () => {
       const schema = getValueSchemaFromFieldDefinition(
         dynamicFieldDef,
+        [...languages],
         componentResolver
       );
       const invalidValue: ComponentValue = {
@@ -1692,6 +1752,7 @@ describe('Dynamic zod schema from field definition', () => {
       };
       const schema = getValueSchemaFromFieldDefinition(
         multiDef,
+        [...languages],
         componentResolver
       );
       const mixedValue: ComponentValue = {
@@ -1759,7 +1820,11 @@ describe('Dynamic zod schema from field definition', () => {
         ofComponents: [circularId],
       };
       expect(() =>
-        getValueSchemaFromFieldDefinition(circularDef, circularResolver)
+        getValueSchemaFromFieldDefinition(
+          circularDef,
+          [...languages],
+          circularResolver
+        )
       ).toThrow(/[Cc]ircular/);
     });
   });
@@ -1841,6 +1906,7 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
     // Should not throw - empty ofComponents means "all allowed"
     const schema = getValueSchemaFromFieldDefinition(
       dynamicFieldDef,
+      [...languages],
       noopResolver
     );
     schema.parse({
@@ -1879,7 +1945,9 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
       max: null,
     };
 
-    expect(() => getValueSchemaFromFieldDefinition(dynamicFieldDef)).toThrow(
+    expect(() =>
+      getValueSchemaFromFieldDefinition(dynamicFieldDef, [...languages])
+    ).toThrow(
       'componentResolver is required for dynamic (component) field definitions'
     );
   });
@@ -1903,6 +1971,7 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
 
     const schema = getValueSchemaFromFieldDefinition(
       dynamicFieldDef,
+      [...languages],
       noopResolver
     );
     schema.parse({
@@ -1913,108 +1982,3 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
   });
 });
 
-describe('getEntrySchemaFromFieldDefinitions', () => {
-  const stringFieldDef = {
-    id: uuid(),
-    slug: 'title',
-    valueType: 'string' as const,
-    fieldType: 'text' as const,
-    label: { en: 'Title' },
-    description: null,
-    isRequired: true,
-    isDisabled: false,
-    isUnique: false as const,
-    inputWidth: '12' as const,
-    min: null,
-    max: null,
-    defaultValue: null,
-  };
-
-  it('generates a valid entry schema with dynamic values', () => {
-    const schema = getEntrySchemaFromFieldDefinitions([stringFieldDef]);
-    const valid = {
-      objectType: 'entry',
-      id: uuid(),
-      coreVersion: '0.16.0',
-      created: new Date().toISOString(),
-      updated: null,
-      values: {
-        title: {
-          objectType: 'value',
-          valueType: 'string',
-          content: { en: 'Hello' },
-        },
-      },
-    };
-    expect(() => schema.parse(valid)).not.toThrow();
-  });
-});
-
-describe('getCreateEntrySchemaFromFieldDefinitions', () => {
-  const stringFieldDef = {
-    id: uuid(),
-    slug: 'title',
-    valueType: 'string' as const,
-    fieldType: 'text' as const,
-    label: { en: 'Title' },
-    description: null,
-    isRequired: true,
-    isDisabled: false,
-    isUnique: false as const,
-    inputWidth: '12' as const,
-    min: null,
-    max: null,
-    defaultValue: null,
-  };
-
-  it('generates a valid create entry schema with dynamic values', () => {
-    const schema = getCreateEntrySchemaFromFieldDefinitions([stringFieldDef]);
-    const valid = {
-      projectId: uuid(),
-      collectionId: uuid(),
-      values: {
-        title: {
-          objectType: 'value',
-          valueType: 'string',
-          content: { en: 'Hello' },
-        },
-      },
-    };
-    expect(() => schema.parse(valid)).not.toThrow();
-  });
-});
-
-describe('getUpdateEntrySchemaFromFieldDefinitions', () => {
-  const stringFieldDef = {
-    id: uuid(),
-    slug: 'title',
-    valueType: 'string' as const,
-    fieldType: 'text' as const,
-    label: { en: 'Title' },
-    description: null,
-    isRequired: true,
-    isDisabled: false,
-    isUnique: false as const,
-    inputWidth: '12' as const,
-    min: null,
-    max: null,
-    defaultValue: null,
-  };
-
-  it('generates a valid update entry schema with dynamic values', () => {
-    const schema = getUpdateEntrySchemaFromFieldDefinitions([stringFieldDef]);
-    const valid = {
-      id: uuid(),
-      projectId: uuid(),
-      collectionId: uuid(),
-      values: {
-        title: {
-          objectType: 'value',
-          valueType: 'string',
-          content: { en: 'Hello' },
-        },
-      },
-    };
-    expect(() => schema.parse(valid)).not.toThrow();
-  });
-});

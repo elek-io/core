@@ -2,7 +2,7 @@ import { z } from '@hono/zod-openapi';
 import {
   objectTypeSchema,
   slugSchema,
-  translatableStringSchema,
+  partialTranslatableStringSchema,
   uuidSchema,
 } from './baseSchema.js';
 import { valueSchema } from './valueSchema.js';
@@ -14,9 +14,9 @@ import { baseFileSchema } from './fileSchema.js';
 
 export const componentFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.component).readonly(),
-  name: translatableStringSchema,
+  name: partialTranslatableStringSchema,
   slug: slugSchema,
-  description: translatableStringSchema.nullable(),
+  description: partialTranslatableStringSchema.nullable(),
   fieldDefinitions: z
     .array(fieldDefinitionSchema)
     .superRefine(fieldDefinitionSlugUniquenessSuperRefinement),
