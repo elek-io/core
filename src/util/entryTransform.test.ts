@@ -3,14 +3,14 @@ import { v4 as uuid } from 'uuid';
 import { transformEntryValues } from './entryTransform.js';
 import { diffFieldDefinitions } from './fieldDefinitionDiff.js';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
-import type { SupportedLanguage } from '../schema/baseSchema.js';
+import type { ProjectLanguages } from '../schema/projectSchema.js';
 import type {
   ComponentValue,
   ReferencedValue,
   Value,
 } from '../schema/valueSchema.js';
 
-const languages: SupportedLanguage[] = ['en', 'de'];
+const languages: ProjectLanguages = ['en', 'de'];
 const entryId = uuid();
 const collectionId = uuid();
 

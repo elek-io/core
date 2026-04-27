@@ -8,8 +8,8 @@ import {
   type FileReference,
   type ObjectType,
   type ProjectFile,
+  type ProjectLanguages,
   type ServiceType,
-  type SupportedLanguage,
   type Uuid,
 } from '../schema/index.js';
 import { files, folders, isNotEmpty, pathTo } from '../util/node.js';
@@ -54,7 +54,7 @@ export abstract class AbstractEntityService extends AbstractService {
    */
   protected async readProjectLanguages(
     projectId: Uuid
-  ): Promise<SupportedLanguage[]> {
+  ): Promise<ProjectLanguages> {
     const projectFile = await this.readProjectFile(projectId);
     return projectFile.settings.language.supported;
   }

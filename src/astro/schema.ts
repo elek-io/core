@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
-import type { SupportedLanguage } from '../schema/baseSchema.js';
+import type { ProjectLanguages } from '../schema/projectSchema.js';
 import {
   getTranslatableBooleanValueContentSchemaFromFieldDefinition,
   getTranslatableNumberValueContentSchemaFromFieldDefinition,
@@ -18,7 +18,7 @@ import { valueTypeSchema } from '../schema/valueSchema.js';
  */
 export function buildEntryValuesSchema(
   fieldDefinitions: FieldDefinition[],
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ) {
   const shape: Record<string, z.ZodTypeAny> = {};
 
@@ -75,7 +75,7 @@ export function buildEntryValuesSchema(
  */
 export function buildEntryValuesTypeString(
   fieldDefinitions: FieldDefinition[],
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ): string {
   if (fieldDefinitions.length === 0) {
     return 'export type Entry = Record<string, never>;';
@@ -83,6 +83,10 @@ export function buildEntryValuesTypeString(
 
   const fields = fieldDefinitions.map((fieldDef) => {
     const tsType = valueTypeToTsType(fieldDef.valueType);
+    // Component fields are a flat array, not a translatable record - match buildEntryValuesSchema.
+    if (fieldDef.valueType === valueTypeSchema.enum.component) {
+      return `  "${fieldDef.slug}": ${tsType}`;
+    }
     return `  "${fieldDef.slug}": Record<ProjectLanguage, ${tsType}>`;
   });
 
@@ -105,7 +109,7 @@ function valueTypeToTsType(valueType: string): string {
     case 'reference':
       return 'Array<{ id: string; objectType: string }>';
     case 'component':
-      return 'Array<{ id: string; componentId: string; values: Record<string, Partial<Record<SupportedLanguage, unknown>>> }>';
+      return 'Array<{ id: string; componentId: string; values: Record<string, Record<ProjectLanguage, unknown>> }>';
     default:
       return 'unknown';
   }

@@ -3,10 +3,10 @@ import { v4 as uuid } from 'uuid';
 import { transformComponentValues } from './componentTransform.js';
 import { diffFieldDefinitions } from './fieldDefinitionDiff.js';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
-import type { SupportedLanguage } from '../schema/baseSchema.js';
+import type { ProjectLanguages } from '../schema/projectSchema.js';
 import type { ComponentValue, Value } from '../schema/valueSchema.js';
 
-const languages: SupportedLanguage[] = ['en'];
+const languages: ProjectLanguages = ['en'];
 const entryId = uuid();
 const collectionId = uuid();
 

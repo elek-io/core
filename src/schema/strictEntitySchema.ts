@@ -12,7 +12,6 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { type SupportedLanguage } from './baseSchema.js';
 import {
   createCollectionSchema,
   updateCollectionSchema,
@@ -28,6 +27,7 @@ import {
 } from './entrySchema.js';
 import type { FieldDefinition } from './fieldSchema.js';
 import { flattenFieldDefinitions } from './fieldSchema.js';
+import type { ProjectLanguages } from './projectSchema.js';
 import {
   type ComponentResolver,
   getValuesSchema,
@@ -39,19 +39,16 @@ import {
 
 export function strictTranslatableRecordOf<T extends z.ZodTypeAny>(
   schema: T,
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ) {
-  return z.record(
-    z.enum(languages as [SupportedLanguage, ...SupportedLanguage[]]),
-    schema
-  );
+  return z.record(z.enum(languages), schema);
 }
 
 /**
  * A record that must contain every project-supported language with a
  * non-empty string value.
  */
-export function strictTranslatableString(languages: SupportedLanguage[]) {
+export function strictTranslatableString(languages: ProjectLanguages) {
   return strictTranslatableRecordOf(z.string().trim().min(1), languages);
 }
 
@@ -85,7 +82,11 @@ function checkCollectionAdminMetadata(
   for (const [i, fd] of flattenFieldDefinitions(
     val.fieldDefinitions
   ).entries()) {
-    checkStrictTranslatable(fd.label, ts, ctx, ['fieldDefinitions', i, 'label']);
+    checkStrictTranslatable(fd.label, ts, ctx, [
+      'fieldDefinitions',
+      i,
+      'label',
+    ]);
     checkStrictTranslatable(
       fd.description,
       ts,
@@ -104,7 +105,11 @@ function checkComponentAdminMetadata(
   checkStrictTranslatable(val.name, ts, ctx, ['name']);
   checkStrictTranslatable(val.description, ts, ctx, ['description'], true);
   for (const [i, fd] of val.fieldDefinitions.entries()) {
-    checkStrictTranslatable(fd.label, ts, ctx, ['fieldDefinitions', i, 'label']);
+    checkStrictTranslatable(fd.label, ts, ctx, [
+      'fieldDefinitions',
+      i,
+      'label',
+    ]);
     checkStrictTranslatable(
       fd.description,
       ts,
@@ -120,7 +125,7 @@ function checkComponentAdminMetadata(
 // ---------------------------------------------------------------------------
 
 export function getCreateCollectionSchemaFromLanguages(
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ) {
   const ts = strictTranslatableString(languages);
   return createCollectionSchema.superRefine((val, ctx) => {
@@ -129,7 +134,7 @@ export function getCreateCollectionSchemaFromLanguages(
 }
 
 export function getUpdateCollectionSchemaFromLanguages(
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ) {
   const ts = strictTranslatableString(languages);
   return updateCollectionSchema.superRefine((val, ctx) => {
@@ -142,7 +147,7 @@ export function getUpdateCollectionSchemaFromLanguages(
 // ---------------------------------------------------------------------------
 
 export function getCreateComponentSchemaFromLanguages(
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ) {
   const ts = strictTranslatableString(languages);
   return createComponentSchema.superRefine((val, ctx) => {
@@ -151,7 +156,7 @@ export function getCreateComponentSchemaFromLanguages(
 }
 
 export function getUpdateComponentSchemaFromLanguages(
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ) {
   const ts = strictTranslatableString(languages);
   return updateComponentSchema.superRefine((val, ctx) => {
@@ -160,12 +165,12 @@ export function getUpdateComponentSchemaFromLanguages(
 }
 
 // ---------------------------------------------------------------------------
-// Entry (moved from schemaFromFieldDefinition.ts — bodies unchanged)
+// Entry
 // ---------------------------------------------------------------------------
 
 export function getEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
-  languages: SupportedLanguage[],
+  languages: ProjectLanguages,
   componentResolver?: ComponentResolver
 ) {
   return z.object({
@@ -176,7 +181,7 @@ export function getEntrySchemaFromFieldDefinitions(
 
 export function getCreateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
-  languages: SupportedLanguage[],
+  languages: ProjectLanguages,
   componentResolver?: ComponentResolver
 ) {
   return z.object({
@@ -187,7 +192,7 @@ export function getCreateEntrySchemaFromFieldDefinitions(
 
 export function getUpdateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
-  languages: SupportedLanguage[],
+  languages: ProjectLanguages,
   componentResolver?: ComponentResolver
 ) {
   return z.object({

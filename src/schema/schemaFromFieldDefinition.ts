@@ -6,12 +6,8 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import {
-  slugSchema,
-  uuidSchema,
-  type SupportedLanguage,
-  type Uuid,
-} from './baseSchema.js';
+import { slugSchema, uuidSchema, type Uuid } from './baseSchema.js';
+import type { ProjectLanguages } from './projectSchema.js';
 import type {
   AssetFieldDefinition,
   DynamicFieldDefinition,
@@ -176,10 +172,10 @@ function getReferenceValueContentSchemaFromFieldDefinition(
 
 export function getTranslatableStringValueContentSchemaFromFieldDefinition(
   fieldDefinition: StringFieldDefinition,
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ) {
   return z.record(
-    z.enum(languages as [SupportedLanguage, ...SupportedLanguage[]]),
+    z.enum(languages),
     getStringValueContentSchemaFromFieldDefinition(fieldDefinition)
   );
 }
@@ -189,29 +185,29 @@ export function getTranslatableNumberValueContentSchemaFromFieldDefinition(
     | NumberFieldDefinition
     | RangeFieldDefinition
     | NumberSelectFieldDefinition,
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ) {
   return z.record(
-    z.enum(languages as [SupportedLanguage, ...SupportedLanguage[]]),
+    z.enum(languages),
     getNumberValueContentSchemaFromFieldDefinition(fieldDefinition)
   );
 }
 
 export function getTranslatableBooleanValueContentSchemaFromFieldDefinition(
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ) {
   return z.record(
-    z.enum(languages as [SupportedLanguage, ...SupportedLanguage[]]),
+    z.enum(languages),
     getBooleanValueContentSchemaFromFieldDefinition()
   );
 }
 
 export function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
   fieldDefinition: AssetFieldDefinition | EntryFieldDefinition,
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ) {
   return z.record(
-    z.enum(languages as [SupportedLanguage, ...SupportedLanguage[]]),
+    z.enum(languages),
     getReferenceValueContentSchemaFromFieldDefinition(fieldDefinition)
   );
 }
@@ -224,7 +220,7 @@ export function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
  */
 function getComponentValueContentSchemaFromFieldDefinition(
   fieldDefinition: DynamicFieldDefinition,
-  languages: SupportedLanguage[],
+  languages: ProjectLanguages,
   componentResolver: ComponentResolver,
   visited: Set<string>
 ) {
@@ -282,7 +278,7 @@ function getComponentValueContentSchemaFromFieldDefinition(
  */
 export function getValueSchemaFromFieldDefinition(
   fieldDefinition: FieldDefinition,
-  languages: SupportedLanguage[],
+  languages: ProjectLanguages,
   componentResolver?: ComponentResolver,
   visited: Set<string> = new Set()
 ) {
@@ -352,7 +348,7 @@ export function getValueSchemaFromFieldDefinition(
  */
 function getValuesShapeFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
-  languages: SupportedLanguage[],
+  languages: ProjectLanguages,
   componentResolver?: ComponentResolver,
   visited?: Set<string>
 ) {
@@ -375,7 +371,7 @@ function getValuesShapeFromFieldDefinitions(
  */
 export function getValuesSchema(
   fieldDefinitions: FieldDefinition[],
-  languages: SupportedLanguage[],
+  languages: ProjectLanguages,
   componentResolver?: ComponentResolver
 ) {
   return z

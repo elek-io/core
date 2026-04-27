@@ -30,6 +30,15 @@ export const projectSettingsSchema = z.object({
 });
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 
+/**
+ * The non-empty tuple of languages a Project supports. Derived from the
+ * Project schema so that any change to the schema flows through the type.
+ *
+ * Used by strict entity factories and code generators to type the
+ * `languages` parameter, carrying the non-empty guarantee end-to-end.
+ */
+export type ProjectLanguages = ProjectSettings['language']['supported'];
+
 export const projectFolderSchema = z.enum([
   'assets',
   'collections',

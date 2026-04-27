@@ -1,5 +1,6 @@
-import type { SupportedLanguage, Uuid } from '../schema/baseSchema.js';
+import type { Uuid } from '../schema/baseSchema.js';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
+import type { ProjectLanguages } from '../schema/projectSchema.js';
 import {
   type ComponentResolver,
   getValueSchemaFromFieldDefinition,
@@ -52,7 +53,7 @@ export function transformEntryValues(
   oldFieldDefinitions: FieldDefinition[],
   newFieldDefinitions: FieldDefinition[],
   changes: FieldChange[],
-  languages: SupportedLanguage[],
+  languages: ProjectLanguages,
   componentResolver?: ComponentResolver
 ): TransformResult {
   const issues: EntryIssue[] = [];

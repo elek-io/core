@@ -397,6 +397,9 @@ describe('buildEntryValuesTypeString', () => {
 
     expect(types).toContain('"sections"');
     expect(types).toContain('componentId');
+    // Component fields are a flat array, not wrapped in Record<ProjectLanguage, ...>
+    expect(types).toContain('"sections": Array<');
+    expect(types).not.toContain('"sections": Record<ProjectLanguage');
   });
 
   it('uses project language values in the generated type', () => {

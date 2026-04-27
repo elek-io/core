@@ -1,5 +1,5 @@
-import type { SupportedLanguage } from '../schema/baseSchema.js';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
+import type { ProjectLanguages } from '../schema/projectSchema.js';
 import type { Value } from '../schema/valueSchema.js';
 
 /**
@@ -10,7 +10,7 @@ import type { Value } from '../schema/valueSchema.js';
  */
 export function buildDefaultValue(
   fieldDefinition: FieldDefinition,
-  languages: SupportedLanguage[]
+  languages: ProjectLanguages
 ): Value | null {
   switch (fieldDefinition.valueType) {
     case 'string': {

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { v4 as uuid } from 'uuid';
 import { buildDefaultValue } from './defaultValueBuilder.js';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
-import type { SupportedLanguage } from '../schema/baseSchema.js';
+import type { ProjectLanguages } from '../schema/projectSchema.js';
 
-const languages: SupportedLanguage[] = ['en', 'de'];
+const languages: ProjectLanguages = ['en', 'de'];
 
 function makeField(overrides: Record<string, unknown>): FieldDefinition {
   return {

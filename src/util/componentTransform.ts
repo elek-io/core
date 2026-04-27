@@ -1,6 +1,7 @@
-import type { SupportedLanguage, Uuid } from '../schema/baseSchema.js';
+import type { Uuid } from '../schema/baseSchema.js';
 import { isDeepStrictEqual } from 'node:util';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
+import type { ProjectLanguages } from '../schema/projectSchema.js';
 import type { ComponentResolver } from '../schema/schemaFromFieldDefinition.js';
 import type { Value } from '../schema/valueSchema.js';
 import { buildDefaultValue } from './defaultValueBuilder.js';
@@ -25,7 +26,7 @@ export function transformComponentValues(
   newComponentFieldDefinitions: FieldDefinition[],
   changes: FieldChange[],
   referencingDynamicFieldSlugs: string[],
-  languages: SupportedLanguage[],
+  languages: ProjectLanguages,
   componentResolver?: ComponentResolver,
   visited: Set<string> = new Set()
 ): TransformResult {
@@ -205,7 +206,7 @@ function transformNestedComponentItems(
   oldComponentFieldDefinitions: FieldDefinition[],
   newComponentFieldDefinitions: FieldDefinition[],
   changes: FieldChange[],
-  languages: SupportedLanguage[],
+  languages: ProjectLanguages,
   componentResolver?: ComponentResolver,
   visited: Set<string> = new Set()
 ): TransformResult {

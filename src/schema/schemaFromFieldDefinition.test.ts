@@ -13,9 +13,10 @@ import {
   entrySchema,
   uuid,
 } from '../test/setup.js';
+import type { ProjectLanguages } from './projectSchema.js';
 import { getValueSchemaFromFieldDefinition } from './schemaFromFieldDefinition.js';
 
-const languages = ['en'] as const;
+const languages: ProjectLanguages = ['en'];
 
 describe('Dynamic zod schema from field definition', () => {
   const defaultBooleanValue: DirectBooleanValue = {
@@ -58,7 +59,7 @@ describe('Dynamic zod schema from field definition', () => {
         isDisabled: false,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
 
     booleanValueschema.parse({
@@ -129,7 +130,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
 
     requiredNumberValueschema.parse({
@@ -216,7 +217,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: false,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
 
     optionalNumberValueschema.parse({
@@ -301,7 +302,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
 
     requiredRangeValueschema.parse({
@@ -388,7 +389,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
 
     requiredTextValueschema.parse({
@@ -485,7 +486,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: false,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
 
     optionalTextValueschema.parse({
@@ -566,7 +567,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
 
     requiredEmailValueschema.parse({
@@ -661,7 +662,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: false,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
 
     optionalEmailValueschema.parse({
@@ -754,7 +755,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
 
     requiredUrlValueschema.parse({
@@ -861,7 +862,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: false,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
     optionalUrlValueschema.parse({
       ...defaultStringValue,
@@ -922,7 +923,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
     requiredIpValueschema.parse({
       ...defaultStringValue,
@@ -984,7 +985,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
     const date = faker.date.anytime().toISOString().split('T')[0];
     requiredDateValueschema.parse({
@@ -1044,7 +1045,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
     requiredTimeValueschema.parse({
       ...defaultStringValue,
@@ -1111,7 +1112,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
     const datetime = faker.date.anytime().toISOString();
     requiredDatetimeValueschema.parse({
@@ -1171,7 +1172,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
     requiredTelephoneValueschema.parse({
       ...defaultStringValue,
@@ -1231,7 +1232,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
     requiredAssetValueschema.parse({
       ...defaultReferenceValue,
@@ -1305,7 +1306,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: false,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
     optionalAssetValueschema.parse({
       ...defaultReferenceValue,
@@ -1363,7 +1364,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
     requiredAssetValueschema.parse({
       ...defaultReferenceValue,
@@ -1459,7 +1460,7 @@ describe('Dynamic zod schema from field definition', () => {
         isRequired: true,
         isUnique: false,
       },
-      [...languages]
+      languages
     );
     requiredEntryValueschema.parse({
       ...defaultReferenceValue,
@@ -1665,7 +1666,7 @@ describe('Dynamic zod schema from field definition', () => {
     it('can be generated and parsed with a valid component value', () => {
       const schema = getValueSchemaFromFieldDefinition(
         dynamicFieldDef,
-        [...languages],
+        languages,
         componentResolver
       );
       schema.parse(validComponentValue);
@@ -1674,7 +1675,7 @@ describe('Dynamic zod schema from field definition', () => {
     it('accepts an empty content array when not required', () => {
       const schema = getValueSchemaFromFieldDefinition(
         dynamicFieldDef,
-        [...languages],
+        languages,
         componentResolver
       );
       schema.parse({ ...validComponentValue, content: [] });
@@ -1684,7 +1685,7 @@ describe('Dynamic zod schema from field definition', () => {
       const requiredDef = { ...dynamicFieldDef, isRequired: true };
       const schema = getValueSchemaFromFieldDefinition(
         requiredDef,
-        [...languages],
+        languages,
         componentResolver
       );
       expect(() =>
@@ -1696,7 +1697,7 @@ describe('Dynamic zod schema from field definition', () => {
       const minDef = { ...dynamicFieldDef, min: 2 };
       const schema = getValueSchemaFromFieldDefinition(
         minDef,
-        [...languages],
+        languages,
         componentResolver
       );
       expect(() => schema.parse(validComponentValue)).toThrow();
@@ -1706,7 +1707,7 @@ describe('Dynamic zod schema from field definition', () => {
       const maxDef = { ...dynamicFieldDef, max: 1 };
       const schema = getValueSchemaFromFieldDefinition(
         maxDef,
-        [...languages],
+        languages,
         componentResolver
       );
       const twoItemValue: ComponentValue = {
@@ -1722,7 +1723,7 @@ describe('Dynamic zod schema from field definition', () => {
     it('rejects an item where a required sub-field has an empty string content', () => {
       const schema = getValueSchemaFromFieldDefinition(
         dynamicFieldDef,
-        [...languages],
+        languages,
         componentResolver
       );
       const invalidValue: ComponentValue = {
@@ -1752,7 +1753,7 @@ describe('Dynamic zod schema from field definition', () => {
       };
       const schema = getValueSchemaFromFieldDefinition(
         multiDef,
-        [...languages],
+        languages,
         componentResolver
       );
       const mixedValue: ComponentValue = {
@@ -1822,7 +1823,7 @@ describe('Dynamic zod schema from field definition', () => {
       expect(() =>
         getValueSchemaFromFieldDefinition(
           circularDef,
-          [...languages],
+          languages,
           circularResolver
         )
       ).toThrow(/[Cc]ircular/);
@@ -1906,7 +1907,7 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
     // Should not throw - empty ofComponents means "all allowed"
     const schema = getValueSchemaFromFieldDefinition(
       dynamicFieldDef,
-      [...languages],
+      languages,
       noopResolver
     );
     schema.parse({
@@ -1946,7 +1947,7 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
     };
 
     expect(() =>
-      getValueSchemaFromFieldDefinition(dynamicFieldDef, [...languages])
+      getValueSchemaFromFieldDefinition(dynamicFieldDef, languages)
     ).toThrow(
       'componentResolver is required for dynamic (component) field definitions'
     );
@@ -1971,7 +1972,7 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
 
     const schema = getValueSchemaFromFieldDefinition(
       dynamicFieldDef,
-      [...languages],
+      languages,
       noopResolver
     );
     schema.parse({

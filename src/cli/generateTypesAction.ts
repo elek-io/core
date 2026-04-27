@@ -349,7 +349,7 @@ async function generateTypesForProject(project: Project): Promise<string> {
   writer.writeLine(`export const ProjectId = '${project.id}' as const;`);
   writer.blankLine();
 
-  // Project Language type — narrowed to this project's supported languages
+  // Project Language type - narrowed to this project's supported languages
   const languageUnion = project.settings.language.supported
     .map((language) => `'${language}'`)
     .join(' | ');
