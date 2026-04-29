@@ -3,6 +3,7 @@ import {
   slugSchema,
   partialTranslatableStringSchema,
   uuidSchema,
+  type Uuid,
 } from './baseSchema.js';
 import { valueTypeSchema } from './valueSchema.js';
 
@@ -417,4 +418,17 @@ export function flattenFieldDefinitions(
       ? fieldDefinitionOrGroup.fieldDefinitions
       : [fieldDefinitionOrGroup]
   );
+}
+
+/**
+ * Resolves the effective list of Component IDs a dynamic field references.
+ * An empty `ofComponents` array means "all Components in the Project".
+ */
+export function resolveOfComponents(
+  fieldDefinition: DynamicFieldDefinition,
+  allComponentIds: readonly Uuid[]
+): readonly Uuid[] {
+  return fieldDefinition.ofComponents.length > 0
+    ? fieldDefinition.ofComponents
+    : allComponentIds;
 }

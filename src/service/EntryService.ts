@@ -416,15 +416,15 @@ export class EntryService
     }
 
     return {
-      resolver: ((id: string) => {
-        const fds = componentMap.get(id);
-        if (!fds) {
+      resolver: (id: string) => {
+        const fieldDefinitions = componentMap.get(id);
+        if (!fieldDefinitions) {
           throw new Error(
             `Component "${id}" was not pre-loaded. This is an internal error.`
           );
         }
-        return fds;
-      }) as ComponentResolver,
+        return fieldDefinitions;
+      },
       fieldDefinitions: resolvedFieldDefinitions,
     };
   }

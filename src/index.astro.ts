@@ -10,6 +10,7 @@ import {
   buildEntryValuesTypeString,
 } from './astro/schema.js';
 import { transformEntryValues } from './astro/transform.js';
+import { toPascalCase } from './cli/util.js';
 
 interface ElekAssetsProps {
   projectId: string;
@@ -130,15 +131,22 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
       });
       const project = await core.projects.read({ id: props.projectId });
       const languages = project.settings.language.supported;
+      const { list: components } = await core.components.list({
+        projectId: props.projectId,
+        limit: 0,
+      });
 
       return {
         schema: buildEntryValuesSchema(
           flattenFieldDefinitions(collection.fieldDefinitions),
-          languages
+          languages,
+          components
         ),
         types: buildEntryValuesTypeString(
           flattenFieldDefinitions(collection.fieldDefinitions),
-          languages
+          languages,
+          components,
+          toPascalCase(collection.slug.plural)
         ),
       };
     },

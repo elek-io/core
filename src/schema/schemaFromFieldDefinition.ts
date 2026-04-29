@@ -225,6 +225,14 @@ function getComponentValueContentSchemaFromFieldDefinition(
   visited: Set<string>
 ) {
   const componentSchemas = fieldDefinition.ofComponents.map((componentId) => {
+    if (visited.has(componentId)) {
+      throw new Error(
+        `Circular component reference detected: Component "${componentId}" is already in the schema generation chain`
+      );
+    }
+    const branchedVisited = new Set(visited);
+    branchedVisited.add(componentId);
+
     const fieldDefinitions = componentResolver(componentId);
     const shape: Record<string, z.ZodTypeAny> = {};
     for (const fieldDefinition of fieldDefinitions) {
@@ -232,7 +240,7 @@ function getComponentValueContentSchemaFromFieldDefinition(
         fieldDefinition,
         languages,
         componentResolver,
-        visited
+        branchedVisited
       );
     }
     return z.object({
@@ -316,15 +324,6 @@ export function getValueSchemaFromFieldDefinition(
         throw new Error(
           'componentResolver is required for dynamic (component) field definitions'
         );
-      }
-      // Circular reference protection during schema generation
-      for (const cid of fieldDefinition.ofComponents) {
-        if (visited.has(cid)) {
-          throw new Error(
-            `Circular component reference detected: Component "${cid}" is already in the schema generation chain`
-          );
-        }
-        visited.add(cid);
       }
       return componentValueSchema.extend({
         content: getComponentValueContentSchemaFromFieldDefinition(

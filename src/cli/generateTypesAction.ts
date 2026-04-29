@@ -4,8 +4,11 @@ import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
 import {
   flattenFieldDefinitions,
+  makeComponentsContext,
+  resolveOfComponents,
   CoreError,
-  type Component,
+  type ComponentsContext,
+  type DynamicFieldDefinition,
   type FieldDefinition,
   type Project,
   type GenerateTypesProps,
@@ -109,21 +112,24 @@ function collectUsedFieldDefinitionTypes(
   fieldDefinitions: FieldDefinition[]
 ): Set<string> {
   const types = new Set<string>();
-  for (const fd of fieldDefinitions) {
-    types.add(getFieldDefinitionTypeName(fd));
+  for (const fieldDefinition of fieldDefinitions) {
+    types.add(getFieldDefinitionTypeName(fieldDefinition));
   }
   return types;
 }
 
 /**
  * Collects all value type names used across field definitions.
+ * Excludes `ComponentValue`: dynamic fields are emitted as inlined envelope
+ * shapes referencing per-field discriminated unions, not as the broad type.
  */
 function collectUsedValueTypes(
   fieldDefinitions: FieldDefinition[]
 ): Set<string> {
   const types = new Set<string>();
-  for (const fd of fieldDefinitions) {
-    types.add(getValueTypeName(fd.valueType));
+  for (const fieldDefinition of fieldDefinitions) {
+    if (fieldDefinition.valueType === 'component') continue;
+    types.add(getValueTypeName(fieldDefinition.valueType));
   }
   return types;
 }
@@ -273,9 +279,88 @@ function writeFieldDefinitionTupleEntry(
 }
 
 /**
+ * Emits a discriminated union type for a dynamic field.
+ * Used by both the Collection pass and the Component pass.
+ * Throws if `ofComponents` references a Component not present in the project.
+ */
+function writeDynamicFieldItemUnion(
+  writer: CodeBlockWriter,
+  ownerPascalName: string,
+  fieldDefinition: DynamicFieldDefinition,
+  ctx: ComponentsContext
+): string {
+  const fieldPascal = toPascalCase(fieldDefinition.slug);
+  const typeName = `${ownerPascalName}${fieldPascal}Item`;
+  const componentIds = resolveOfComponents(fieldDefinition, ctx.allIds);
+
+  writer.writeLine(
+    `/** Discriminated union for dynamic field '${fieldDefinition.slug}' */`
+  );
+  writer.write(`export type ${typeName} =`).newLine();
+  for (const [i, componentId] of componentIds.entries()) {
+    const component = ctx.componentMap.get(componentId);
+    if (!component) {
+      throw new Error(
+        `Component "${componentId}" referenced by dynamic field "${fieldDefinition.slug}" not found in project`
+      );
+    }
+    const compPascal = toPascalCase(component.slug);
+    const separator = i < componentIds.length - 1 ? '' : ';';
+    writer
+      .indent(1)
+      .write(
+        `| { id: string; componentId: typeof ${compPascal}ComponentId; values: ${compPascal}ComponentValues }${separator}`
+      )
+      .newLine();
+  }
+  writer.blankLine();
+  return typeName;
+}
+
+/**
+ * Writes a single property line for a values interface. Handles both the
+ * direct/reference case (`prop: NarrowedType;`) and the dynamic case
+ * (inlined envelope referencing the prefixed Item type).
+ */
+function writeValuesProperty(
+  writer: CodeBlockWriter,
+  fieldDefinition: FieldDefinition,
+  ownerPascalName: string
+): void {
+  const isRequired = fieldDefinition.isRequired ? ', required' : '';
+  writer
+    .indent(1)
+    .write(
+      `/** ${fieldDefinition.slug} (${fieldDefinition.fieldType}, ${fieldDefinition.valueType}${isRequired}) */`
+    )
+    .newLine();
+
+  const propName = fieldDefinition.slug.includes('-')
+    ? `'${fieldDefinition.slug}'`
+    : fieldDefinition.slug;
+
+  if (fieldDefinition.valueType === 'component') {
+    const fieldPascal = toPascalCase(fieldDefinition.slug);
+    const itemTypeName = `${ownerPascalName}${fieldPascal}Item`;
+    writer.indent(1).write(`${propName}: {`).newLine();
+    writer.indent(2).write(`objectType: 'value';`).newLine();
+    writer.indent(2).write(`valueType: 'component';`).newLine();
+    writer.indent(2).write(`content: ${itemTypeName}[];`).newLine();
+    writer.indent(1).write(`};`).newLine();
+  } else {
+    writer
+      .indent(1)
+      .write(`${propName}: ${getNarrowedValueType(fieldDefinition.valueType)};`)
+      .newLine();
+  }
+}
+
+/**
  * Generates the types file content for a single project.
  */
-async function generateTypesForProject(project: Project): Promise<string> {
+export async function generateTypesForProject(
+  project: Project
+): Promise<string> {
   const writer = new CodeBlockWriter({
     newLine: '\n',
     indentNumberOfSpaces: 2,
@@ -293,11 +378,8 @@ async function generateTypesForProject(project: Project): Promise<string> {
     limit: 0,
   });
 
-  // Build component map for dynamic field typing
-  const componentMap = new Map<string, Component>();
-  for (const component of components) {
-    componentMap.set(component.id, component);
-  }
+  // Build component lookup context for dynamic field typing
+  const ctx = makeComponentsContext(components);
 
   // Collect all used types for imports
   const allFieldDefs: FieldDefinition[] = [];
@@ -373,33 +455,17 @@ async function generateTypesForProject(project: Project): Promise<string> {
       );
       writer.blankLine();
 
+      // Per-field discriminated unions for any nested dynamic fields
+      for (const fieldDefinition of component.fieldDefinitions) {
+        if (fieldDefinition.valueType === 'component') {
+          writeDynamicFieldItemUnion(writer, pascalName, fieldDefinition, ctx);
+        }
+      }
+
       // Values interface
       writer.writeLine(`export interface ${pascalName}ComponentValues {`);
       for (const fieldDefinition of component.fieldDefinitions) {
-        const isRequired = fieldDefinition.isRequired ? ', required' : '';
-        writer
-          .indent(1)
-          .write(
-            `/** ${fieldDefinition.slug} (${fieldDefinition.fieldType}, ${fieldDefinition.valueType}${isRequired}) */`
-          )
-          .newLine();
-
-        const propName = fieldDefinition.slug.includes('-')
-          ? `'${fieldDefinition.slug}'`
-          : fieldDefinition.slug;
-
-        if (fieldDefinition.valueType === 'component') {
-          // Dynamic field within component - type as ComponentValue for simplicity
-          // (deeply nested component typing would require recursive generation)
-          writer.indent(1).write(`${propName}: ComponentValue;`).newLine();
-        } else {
-          writer
-            .indent(1)
-            .write(
-              `${propName}: ${getNarrowedValueType(fieldDefinition.valueType)};`
-            )
-            .newLine();
-        }
+        writeValuesProperty(writer, fieldDefinition, pascalName);
       }
       writer.writeLine(`}`);
       writer.blankLine();
@@ -453,66 +519,14 @@ async function generateTypesForProject(project: Project): Promise<string> {
       // Dynamic field item types (discriminated unions for component fields)
       for (const fieldDefinition of flatFieldDefinitions) {
         if (fieldDefinition.valueType === 'component') {
-          const fieldPascal = toPascalCase(fieldDefinition.slug);
-          const typeName = `${pascalName}${fieldPascal}Item`;
-
-          // Resolve component IDs
-          const componentIds =
-            fieldDefinition.ofComponents.length > 0
-              ? fieldDefinition.ofComponents
-              : components.map((component) => component.id);
-
-          writer.writeLine(
-            `/** Discriminated union for dynamic field '${fieldDefinition.slug}' */`
-          );
-          writer.write(`export type ${typeName} =`).newLine();
-          for (const [i, componentId] of componentIds.entries()) {
-            const component = componentMap.get(componentId);
-            if (!component) continue;
-            const compPascal = toPascalCase(component.slug);
-            const separator = i < componentIds.length - 1 ? '' : ';';
-            writer
-              .indent(1)
-              .write(
-                `| { id: string; componentId: typeof ${compPascal}ComponentId; values: ${compPascal}ComponentValues }${separator}`
-              )
-              .newLine();
-          }
-          writer.blankLine();
+          writeDynamicFieldItemUnion(writer, pascalName, fieldDefinition, ctx);
         }
       }
 
       // Values interface
       writer.writeLine(`export interface ${pascalName}Values {`);
       for (const fieldDefinition of flatFieldDefinitions) {
-        const isRequired = fieldDefinition.isRequired ? ', required' : '';
-        writer
-          .indent(1)
-          .write(
-            `/** ${fieldDefinition.slug} (${fieldDefinition.fieldType}, ${fieldDefinition.valueType}${isRequired}) */`
-          )
-          .newLine();
-
-        const propName = fieldDefinition.slug.includes('-')
-          ? `'${fieldDefinition.slug}'`
-          : fieldDefinition.slug;
-
-        if (fieldDefinition.valueType === 'component') {
-          const fieldPascal = toPascalCase(fieldDefinition.slug);
-          const itemTypeName = `${pascalName}${fieldPascal}Item`;
-          writer.indent(1).write(`${propName}: {`).newLine();
-          writer.indent(2).write(`objectType: 'value';`).newLine();
-          writer.indent(2).write(`valueType: 'component';`).newLine();
-          writer.indent(2).write(`content: ${itemTypeName}[];`).newLine();
-          writer.indent(1).write(`};`).newLine();
-        } else {
-          writer
-            .indent(1)
-            .write(
-              `${propName}: ${getNarrowedValueType(fieldDefinition.valueType)};`
-            )
-            .newLine();
-        }
+        writeValuesProperty(writer, fieldDefinition, pascalName);
       }
       writer.writeLine(`}`);
       writer.blankLine();

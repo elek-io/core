@@ -26,6 +26,25 @@ export type ComponentFile = z.infer<typeof componentFileSchema>;
 export const componentSchema = componentFileSchema.openapi('Component');
 export type Component = z.infer<typeof componentSchema>;
 
+/**
+ * Lookup context derived from a project's full Component list. Consumers that
+ * walk the Component graph (CLI/Astro generators) build this once and pass it
+ * down so the map and id list aren't recomputed per recursion.
+ */
+export interface ComponentsContext {
+  componentMap: ReadonlyMap<string, Component>;
+  allIds: readonly string[];
+}
+
+export function makeComponentsContext(
+  components: readonly Component[]
+): ComponentsContext {
+  return {
+    componentMap: new Map(components.map((c) => [c.id, c])),
+    allIds: components.map((c) => c.id),
+  };
+}
+
 export const componentHistorySchema = z.object({
   id: uuidSchema.readonly(),
   projectId: uuidSchema.readonly(),

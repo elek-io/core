@@ -1828,6 +1828,76 @@ describe('Dynamic zod schema from field definition', () => {
         )
       ).toThrow(/[Cc]ircular/);
     });
+
+    it('does not throw when sibling dynamic fields reference the same Component', () => {
+      // Component "outer" has two sibling dynamic fields, both pointing at "inner".
+      // No actual cycle - must not trigger a false-positive cycle error.
+      const outerId = uuid();
+      const innerId = uuid();
+      const resolver = (id: string) => {
+        if (id === outerId) {
+          return [
+            {
+              id: uuid(),
+              slug: 'first',
+              fieldType: 'dynamic' as const,
+              valueType: 'component' as const,
+              label: { en: 'First' },
+              description: null,
+              isRequired: false,
+              isDisabled: false,
+              isUnique: false as const,
+              inputWidth: '12' as const,
+              ofComponents: [innerId],
+              min: null,
+              max: null,
+            },
+            {
+              id: uuid(),
+              slug: 'second',
+              fieldType: 'dynamic' as const,
+              valueType: 'component' as const,
+              label: { en: 'Second' },
+              description: null,
+              isRequired: false,
+              isDisabled: false,
+              isUnique: false as const,
+              inputWidth: '12' as const,
+              ofComponents: [innerId],
+              min: null,
+              max: null,
+            },
+          ];
+        }
+        if (id === innerId) {
+          return [
+            {
+              id: uuid(),
+              slug: 'leaf',
+              fieldType: 'text' as const,
+              valueType: 'string' as const,
+              label: { en: 'Leaf' },
+              description: null,
+              isRequired: false,
+              isDisabled: false,
+              isUnique: false,
+              inputWidth: '12' as const,
+              defaultValue: null,
+              min: null,
+              max: null,
+            },
+          ];
+        }
+        throw new Error(`Unknown component: ${id}`);
+      };
+      const outerDef = {
+        ...dynamicFieldDef,
+        ofComponents: [outerId],
+      };
+      expect(() =>
+        getValueSchemaFromFieldDefinition(outerDef, languages, resolver)
+      ).not.toThrow();
+    });
   });
 });
 
@@ -1982,4 +2052,3 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
     });
   });
 });
-
