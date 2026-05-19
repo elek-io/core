@@ -144,6 +144,7 @@ describe('Node.js', function () {
             isUnique: false,
             min: null,
             max: 1,
+            ofAssetMimeTypes: [],
           },
           {
             id: uuid(),
@@ -1371,6 +1372,7 @@ describe('Node.js', function () {
             isUnique: false,
             min: null,
             max: 1,
+            ofAssetMimeTypes: [],
           },
           {
             id: uuid(),

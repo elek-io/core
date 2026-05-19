@@ -101,6 +101,8 @@ function getFieldDefinitionTypeName(fieldDefinition: FieldDefinition): string {
       return 'EntryFieldDefinition';
     case 'dynamic':
       return 'DynamicFieldDefinition';
+    case 'markdown':
+      return 'MarkdownFieldDefinition';
   }
 }
 
@@ -301,7 +303,7 @@ function writeDynamicFieldItemUnion(
     const component = ctx.componentMap.get(componentId);
     if (!component) {
       throw new Error(
-        `Component "${componentId}" referenced by dynamic field "${fieldDefinition.slug}" not found in project`
+        `Component "${componentId}" referenced by dynamic field "${fieldDefinition.slug}" not found in Project`
       );
     }
     const compPascal = toPascalCase(component.slug);

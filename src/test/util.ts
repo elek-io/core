@@ -197,6 +197,7 @@ export async function createCollection(projectId: string) {
         isUnique: false,
         min: null,
         max: null,
+        ofAssetMimeTypes: [],
       },
       {
         id: ids.entryReferenceFieldDefinition,

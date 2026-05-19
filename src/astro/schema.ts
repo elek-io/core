@@ -13,6 +13,7 @@ import {
 import type { ProjectLanguages } from '../schema/projectSchema.js';
 import {
   getTranslatableBooleanValueContentSchemaFromFieldDefinition,
+  getTranslatableMdAstValueContentSchemaFromFieldDefinition,
   getTranslatableNumberValueContentSchemaFromFieldDefinition,
   getTranslatableReferenceValueContentSchemaFromFieldDefinition,
   getTranslatableStringValueContentSchemaFromFieldDefinition,
@@ -110,6 +111,11 @@ function buildValueContentSchema(
       );
     case valueTypeSchema.enum.component:
       return buildComponentArraySchema(fieldDef, languages, ctx);
+    case valueTypeSchema.enum.mdast:
+      return getTranslatableMdAstValueContentSchemaFromFieldDefinition(
+        fieldDef,
+        languages
+      );
   }
 }
 

@@ -1,6 +1,7 @@
 export * from './apiClientSchema.js';
 export * from './assetSchema.js';
 export * from './baseSchema.js';
+export * from './buildMdAstSchema.js';
 export * from './collectionSchema.js';
 export * from './componentSchema.js';
 export * from './coreSchema.js';

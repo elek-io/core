@@ -108,6 +108,37 @@ export function buildDefaultValue(
       };
     }
 
+    case 'mdast': {
+      // Apply the single defaultValue tree to every supported language.
+      // When the field is required and no default is configured, return
+      // null to signal user-required resolution (same as other types).
+      if (
+        'defaultValue' in fieldDefinition &&
+        fieldDefinition.defaultValue !== null
+      ) {
+        return {
+          objectType: 'value',
+          valueType: 'mdast',
+          content: Object.fromEntries(
+            languages.map((language) => [
+              language,
+              fieldDefinition.defaultValue,
+            ])
+          ),
+        };
+      }
+      if (fieldDefinition.isRequired) {
+        return null; // Cannot auto-resolve
+      }
+      return {
+        objectType: 'value',
+        valueType: 'mdast',
+        content: Object.fromEntries(
+          languages.map((language) => [language, null])
+        ),
+      };
+    }
+
     default:
       throw new Error(
         // @ts-expect-error Code cannot be reached, but if we add a new ValueType and forget to update this function, we want to be notified about it

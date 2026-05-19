@@ -1231,6 +1231,7 @@ describe('Dynamic zod schema from field definition', () => {
         isDisabled: false,
         isRequired: true,
         isUnique: false,
+        ofAssetMimeTypes: [],
       },
       languages
     );
@@ -1305,6 +1306,7 @@ describe('Dynamic zod schema from field definition', () => {
         isDisabled: false,
         isRequired: false,
         isUnique: false,
+        ofAssetMimeTypes: [],
       },
       languages
     );
@@ -1363,6 +1365,7 @@ describe('Dynamic zod schema from field definition', () => {
         isDisabled: false,
         isRequired: true,
         isUnique: false,
+        ofAssetMimeTypes: [],
       },
       languages
     );
@@ -1599,6 +1602,7 @@ describe('Dynamic zod schema from field definition', () => {
             inputWidth: '12' as const,
             min: null,
             max: null,
+            ofAssetMimeTypes: [],
           },
         ];
       }

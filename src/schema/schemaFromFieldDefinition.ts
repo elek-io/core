@@ -13,17 +13,20 @@ import type {
   DynamicFieldDefinition,
   EntryFieldDefinition,
   FieldDefinition,
+  MarkdownFieldDefinition,
   NumberFieldDefinition,
   NumberSelectFieldDefinition,
   RangeFieldDefinition,
   StringFieldDefinition,
 } from './fieldSchema.js';
 import { fieldTypeSchema } from './fieldSchema.js';
+import { buildMdAstSchemaForFeatures } from './buildMdAstSchema.js';
 import {
   componentValueSchema,
   directBooleanValueSchema,
   directNumberValueSchema,
   directStringValueSchema,
+  mdastValueSchema,
   referencedValueSchema,
   valueContentReferenceToAssetSchema,
   valueContentReferenceToEntrySchema,
@@ -213,6 +216,27 @@ export function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
 }
 
 /**
+ * Builds the per-language content schema for a markdown field. Each
+ * language slot accepts either `null` (when not required) or an
+ * `MdAstRoot` narrowed to the field's `features` configuration.
+ */
+export function getTranslatableMdAstValueContentSchemaFromFieldDefinition(
+  fieldDefinition: MarkdownFieldDefinition,
+  languages: ProjectLanguages
+) {
+  return z.record(
+    z.enum(languages),
+    buildMdAstSchemaForFeatures({
+      features: fieldDefinition.features,
+      ofCollections: fieldDefinition.ofCollections,
+      min: fieldDefinition.min,
+      max: fieldDefinition.max,
+      isRequired: fieldDefinition.isRequired,
+    })
+  );
+}
+
+/**
  * Generates the content schema for a dynamic (component) field.
  * For each referenced Component, builds a per-component item schema with a
  * z.literal componentId discriminator and a strict values object.
@@ -334,6 +358,13 @@ export function getValueSchemaFromFieldDefinition(
         ),
       });
     }
+    case valueTypeSchema.enum.mdast:
+      return mdastValueSchema.extend({
+        content: getTranslatableMdAstValueContentSchemaFromFieldDefinition(
+          fieldDefinition,
+          languages
+        ),
+      });
     default:
       throw new Error(
         // @ts-expect-error Code cannot be reached, but if we add a new ValueType and forget to update this function, we want to be notified about it

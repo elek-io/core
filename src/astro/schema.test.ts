@@ -9,7 +9,10 @@ import {
   buildEntryValuesTypeString,
 } from './schema.js';
 
-function makeComponent(overrides: Partial<Component> & Pick<Component, 'id' | 'slug' | 'fieldDefinitions'>): Component {
+function makeComponent(
+  overrides: Partial<Component> &
+    Pick<Component, 'id' | 'slug' | 'fieldDefinitions'>
+): Component {
   return {
     objectType: 'component',
     fileType: 'component',
@@ -155,6 +158,7 @@ describe('buildEntryValuesSchema', () => {
         inputWidth: '12',
         min: null,
         max: null,
+        ofAssetMimeTypes: [],
       },
     ];
 
@@ -606,7 +610,7 @@ describe('buildEntryValuesSchema cycle and reference handling', () => {
     ];
 
     expect(() => buildEntryValuesSchema(fieldDefs, ['en'], [])).toThrow(
-      `Component "${orphanId}" referenced by dynamic field "blocks" not found in project`
+      `Component "${orphanId}" referenced by dynamic field "blocks" not found in Project`
     );
   });
 });
@@ -734,6 +738,7 @@ describe('buildEntryValuesTypeString', () => {
         inputWidth: '12',
         min: null,
         max: null,
+        ofAssetMimeTypes: [],
       },
     ];
 
@@ -953,7 +958,7 @@ describe('buildEntryValuesTypeString', () => {
     expect(() =>
       buildEntryValuesTypeString(fieldDefs, ['en'], [], 'BlogPosts')
     ).toThrow(
-      `Component "${orphanId}" referenced by dynamic field "blocks" not found in project`
+      `Component "${orphanId}" referenced by dynamic field "blocks" not found in Project`
     );
   });
 });

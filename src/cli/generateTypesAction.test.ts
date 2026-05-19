@@ -185,7 +185,7 @@ describe('generateTypesForProject - missing component reference', () => {
 
   it('throws when ofComponents references an unknown Component', async () => {
     await expect(generateTypesForProject(project)).rejects.toThrow(
-      `Component "${orphanId}" referenced by dynamic field "blocks" not found in project`
+      `Component "${orphanId}" referenced by dynamic field "blocks" not found in Project`
     );
   });
 });

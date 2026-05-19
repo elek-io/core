@@ -5,7 +5,11 @@ import {
   uuidSchema,
   type Uuid,
 } from './baseSchema.js';
-import { valueTypeSchema } from './valueSchema.js';
+import {
+  buildMdAstSchemaForFeatures,
+  markdownFeaturesSchema,
+} from './buildMdAstSchema.js';
+import { mdAstRootSchema, valueTypeSchema } from './valueSchema.js';
 
 export const fieldTypeSchema = z.enum([
   // String Values
@@ -30,6 +34,8 @@ export const fieldTypeSchema = z.enum([
   'entry',
   // Dynamic Values (polymorphic blocks referencing Components)
   'dynamic',
+  // Mdast Values (structured rich-text content)
+  'markdown',
 ]);
 export type FieldType = z.infer<typeof fieldTypeSchema>;
 
@@ -330,6 +336,14 @@ export const assetFieldDefinitionSchema = referenceFieldDefinitionBaseSchema
     fieldType: z.literal(fieldTypeSchema.enum.asset),
     min: z.int().min(1).nullable(),
     max: z.int().min(1).nullable(),
+    /**
+     * Allowed MIME types for referenced Assets. Empty array = any MIME.
+     * Enforced at write time by `EntryService.validateValueReferences`,
+     * which reads each referenced Asset's `mimeType` and compares against
+     * this list. Schema-level enforcement isn't possible because asset
+     * references carry only `id` - MIME info lives on the asset file.
+     */
+    ofAssetMimeTypes: z.array(z.string()),
   })
   .refine(...minMustBeLessOrEqualMaxRefinement);
 export type AssetFieldDefinition = z.infer<typeof assetFieldDefinitionSchema>;
@@ -373,10 +387,92 @@ export type DynamicFieldDefinition = z.infer<
   typeof dynamicFieldDefinitionSchema
 >;
 
+//
+// Mdast Field definitions (structured rich-text content)
+//
+
+/**
+ * A markdown field stores rich body content as a structured mdast tree
+ * (one tree per language). The writer experience is markdown-style; the
+ * storage shape is the structured AST. See `docs/markdown-content.md`.
+ *
+ * The per-field schema (constructed by `buildMdAstSchemaForFeatures`) is
+ * what actually validates an entry's tree at write time - it narrows the
+ * permissive `mdAstRootSchema` to only the node types enabled in the
+ * `features` config, enforces `ofCollections` structurally on
+ * `entryReference` nodes, and applies block-count min/max.
+ *
+ * Existence + MIME validation lives in `EntryService.validateValueReferences`
+ * because both require IO (read the target asset/entry file).
+ */
+export const markdownFieldDefinitionSchema = fieldDefinitionBaseSchema
+  .extend({
+    valueType: z.literal(valueTypeSchema.enum.mdast),
+    fieldType: z.literal(fieldTypeSchema.enum.markdown),
+    // Mdast trees can't be sensibly unique-indexed.
+    isUnique: z.literal(false),
+    /** Minimum number of top-level blocks. */
+    min: z.int().min(1).nullable(),
+    /** Maximum number of top-level blocks. */
+    max: z.int().min(1).nullable(),
+    features: markdownFeaturesSchema,
+    /** Empty array = any Collection allowed for entryReference targets. */
+    ofCollections: z.array(uuidSchema),
+    /** Empty array = any MIME allowed for assetReference targets. */
+    ofAssetMimeTypes: z.array(z.string()),
+    /**
+     * Single tree applied to every supported language at entry creation.
+     * Same language-agnostic posture as `text.defaultValue` -
+     * per-language translation of the default is an authoring concern.
+     */
+    defaultValue: mdAstRootSchema.nullable(),
+  })
+  .refine(...minMustBeLessOrEqualMaxRefinement)
+  .superRefine((def, ctx) => {
+    // Refinement 1: taskListItems requires lists
+    if (def.features.taskListItems && !def.features.lists) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'taskListItems requires lists to be enabled',
+        path: ['features', 'taskListItems'],
+      });
+    }
+
+    // Refinement 2: defaultValue (when non-null) must satisfy the
+    // features-derived tree schema. Catches contradictory configs early
+    // (e.g. defaultValue contains a `table` node but features.tables is
+    // false). Mirrors `selectDefaultValueMustBeInOptionsRefinement`.
+    if (def.defaultValue !== null) {
+      const featureSchema = buildMdAstSchemaForFeatures({
+        features: def.features,
+        ofCollections: def.ofCollections,
+        min: def.min,
+        max: def.max,
+        // For defaultValue validation, treat as required so we don't
+        // accept `null` (we already know it's non-null here).
+        isRequired: true,
+      });
+      const result = featureSchema.safeParse(def.defaultValue);
+      if (!result.success) {
+        for (const issue of result.error.issues) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `defaultValue: ${issue.message}`,
+            path: ['defaultValue', ...issue.path],
+          });
+        }
+      }
+    }
+  });
+export type MarkdownFieldDefinition = z.infer<
+  typeof markdownFieldDefinitionSchema
+>;
+
 export const fieldDefinitionSchema = z.union([
   directFieldDefinitionSchema,
   referenceFieldDefinitionSchema,
   dynamicFieldDefinitionSchema,
+  markdownFieldDefinitionSchema,
 ]);
 export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
 
