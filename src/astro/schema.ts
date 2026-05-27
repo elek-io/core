@@ -18,7 +18,7 @@ import {
   getTranslatableReferenceValueContentSchemaFromFieldDefinition,
   getTranslatableStringValueContentSchemaFromFieldDefinition,
 } from '../schema/schemaFromFieldDefinition.js';
-import { valueTypeSchema } from '../schema/valueSchema.js';
+import { valueTypeSchema, type ValueType } from '../schema/valueSchema.js';
 
 /**
  * Walks the Component graph reachable from `rootFieldDefinitions`, returning
@@ -214,6 +214,22 @@ export function buildEntryValuesTypeString(
 
   const lines: string[] = [];
 
+  // Import MdAstRoot when any field (top-level or inside a referenced
+  // component) is a markdown field. The emitted type for mdast values
+  // references this name (see valueTypeToTsType).
+  const hasMarkdownField =
+    fieldDefinitions.some(
+      (fieldDef) => fieldDef.valueType === valueTypeSchema.enum.mdast
+    ) ||
+    referenced.some((component) =>
+      component.fieldDefinitions.some(
+        (fieldDef) => fieldDef.valueType === valueTypeSchema.enum.mdast
+      )
+    );
+  if (hasMarkdownField) {
+    lines.push(`import type { MdAstRoot } from '@elek-io/core';`);
+  }
+
   lines.push(
     `type ProjectLanguage = ${languages
       .map((language) => `"${language}"`)
@@ -315,7 +331,15 @@ function renderComponentValuesType(
   ].join('\n');
 }
 
-function valueTypeToTsType(valueType: string): string {
+/**
+ * Maps a valueType to its emitted TS leaf type, used inside
+ * `Record<ProjectLanguage, ...>` in the Astro-generated entry types.
+ *
+ * The `'component'` case is unreachable because `renderEntryValuesType`
+ * and `renderComponentValuesType` special-case it before calling here.
+ * Included for exhaustiveness.
+ */
+function valueTypeToTsType(valueType: ValueType): string {
   switch (valueType) {
     case 'string':
       return 'string';
@@ -325,7 +349,15 @@ function valueTypeToTsType(valueType: string): string {
       return 'boolean';
     case 'reference':
       return 'Array<{ id: string; objectType: string }>';
-    default:
+    case 'component':
+      // Unreachable — component fields are handled inline before calling
+      // valueTypeToTsType. Returned value is a safe fallback.
       return 'unknown';
+    case 'mdast':
+      // Broad narrowing: per-language MdAstRoot | null. The schema layer
+      // enforces per-field feature constraints at write time, so the
+      // tree on disk is always a valid subset; consumers walk with the
+      // broad MdAst* types from @elek-io/core. See docs/markdown-content.md.
+      return 'MdAstRoot | null';
   }
 }

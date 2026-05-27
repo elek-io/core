@@ -12,6 +12,7 @@ import {
   type FieldDefinition,
   type Project,
   type GenerateTypesProps,
+  type ValueType,
 } from '../index.node.js';
 import {
   core,
@@ -24,7 +25,7 @@ import {
 /**
  * Maps a valueType to the corresponding TypeScript type name from @elek-io/core.
  */
-function getValueTypeName(valueType: string): string {
+function getValueTypeName(valueType: ValueType): string {
   switch (valueType) {
     case 'string':
       return 'DirectStringValue';
@@ -36,16 +37,19 @@ function getValueTypeName(valueType: string): string {
       return 'ReferencedValue';
     case 'component':
       return 'ComponentValue';
-    default:
-      return 'Value';
+    case 'mdast':
+      return 'MdAstValue';
   }
 }
 
 /**
  * Maps a valueType to a narrowed type string with project-scoped language keys.
  * Uses `Omit + &` to override the `content` field with `Record<ProjectLanguage, T>`.
+ *
+ * Typed parameter (not `string`) so adding a new `valueType` is a
+ * compile-time error here until every case is handled.
  */
-function getNarrowedValueType(valueType: string): string {
+function getNarrowedValueType(valueType: ValueType): string {
   switch (valueType) {
     case 'string':
       return `Omit<DirectStringValue, 'content'> & { content: Record<ProjectLanguage, string> }`;
@@ -57,8 +61,14 @@ function getNarrowedValueType(valueType: string): string {
       return 'ReferencedValue';
     case 'component':
       return 'ComponentValue';
-    default:
-      return 'Value';
+    case 'mdast':
+      // Broad narrowing: content is per-language MdAstRoot | null. The
+      // per-field feature config (which node types are allowed) is
+      // emitted as a literal in the fieldDefinitions tuple instead — see
+      // writeFieldDefinitionNarrowing's markdown branch. Consumer
+      // renderers walk the tree with the broad MdAst* types; the schema
+      // layer guarantees disallowed node types never reach disk.
+      return `Omit<MdAstValue, 'content'> & { content: Record<ProjectLanguage, MdAstRoot | null> }`;
   }
 }
 
@@ -262,6 +272,54 @@ function writeFieldDefinitionNarrowing(
       .newLine();
   }
 
+  // ofAssetMimeTypes - for asset reference fields and markdown fields
+  if (
+    'ofAssetMimeTypes' in fieldDefinition &&
+    Array.isArray(fieldDefinition.ofAssetMimeTypes)
+  ) {
+    writer
+      .indent(baseIndent + 1)
+      .write(
+        `ofAssetMimeTypes: [${fieldDefinition.ofAssetMimeTypes.map((m) => `'${escapeForSingleQuotedString(m)}'`).join(', ')}];`
+      )
+      .newLine();
+  }
+
+  // features - for markdown fields. Emit each key as a literal so
+  // consumers can introspect at compile time (e.g.
+  // `if (fieldDef.features.assetReferences) { renderAssetRef(...) }`).
+  if (
+    'features' in fieldDefinition &&
+    fieldDefinition.features !== null &&
+    typeof fieldDefinition.features === 'object'
+  ) {
+    const features = fieldDefinition.features as Record<string, unknown>;
+    writer
+      .indent(baseIndent + 1)
+      .write(`features: {`)
+      .newLine();
+    // Sort keys for stable output across regenerations.
+    const sortedKeys = Object.keys(features).sort();
+    for (const key of sortedKeys) {
+      const value = features[key];
+      const literal = Array.isArray(value)
+        ? `[${value.map((v) => (typeof v === 'string' ? `'${v}'` : String(v))).join(', ')}]`
+        : typeof value === 'boolean'
+          ? String(value)
+          : typeof value === 'string'
+            ? `'${escapeForSingleQuotedString(value)}'`
+            : String(value);
+      writer
+        .indent(baseIndent + 2)
+        .write(`${key}: ${literal};`)
+        .newLine();
+    }
+    writer
+      .indent(baseIndent + 1)
+      .write(`};`)
+      .newLine();
+  }
+
   writer.indent(baseIndent).write(`}`);
 }
 
@@ -418,6 +476,17 @@ export async function generateTypesForProject(
   );
   if (hasGroups && !coreImports.includes('FieldDefinitionGroup')) {
     coreImports.push('FieldDefinitionGroup');
+  }
+
+  // `MdAstRoot` is referenced inside the narrowed mdast value type
+  // (`Record<ProjectLanguage, MdAstRoot | null>`) emitted by
+  // `getNarrowedValueType('mdast')`. Add to imports when any markdown
+  // field is present.
+  const hasMarkdownField = allFieldDefs.some(
+    (fieldDef) => fieldDef.valueType === 'mdast'
+  );
+  if (hasMarkdownField && !coreImports.includes('MdAstRoot')) {
+    coreImports.push('MdAstRoot');
   }
 
   writer.writeLine(`import type {`);

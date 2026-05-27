@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import core, { type Project, uuid } from '../test/setup.js';
+import core, { type MarkdownFeatures, type Project, uuid } from '../test/setup.js';
 import { createProject } from '../test/util.js';
 import { generateTypesForProject } from './generateTypesAction.js';
 
@@ -186,6 +186,127 @@ describe('generateTypesForProject - missing component reference', () => {
   it('throws when ofComponents references an unknown Component', async () => {
     await expect(generateTypesForProject(project)).rejects.toThrow(
       `Component "${orphanId}" referenced by dynamic field "blocks" not found in Project`
+    );
+  });
+});
+
+describe('generateTypesForProject - markdown field', () => {
+  let project: Project & { destroy: () => Promise<void> };
+
+  beforeAll(async () => {
+    project = await createProject('generateTypesForProject Markdown Test');
+
+    const features: MarkdownFeatures = {
+      headings: [2, 3],
+      blockquotes: true,
+      lists: true,
+      codeBlocks: false,
+      thematicBreak: false,
+      rawHtml: false,
+      tables: false,
+      taskListItems: true,
+      footnotes: false,
+      emphasis: true,
+      strong: true,
+      inlineCode: false,
+      externalLinks: true,
+      entryReferences: true,
+      externalImages: false,
+      assetReferences: true,
+      strikethrough: false,
+      hardLineBreaks: false,
+    };
+
+    await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Article', de: 'Article' },
+        plural: { en: 'Articles', de: 'Articles' },
+      },
+      slug: { singular: 'article', plural: 'articles' },
+      description: { en: 'Articles', de: 'Articles' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'body',
+          valueType: 'mdast',
+          fieldType: 'markdown',
+          label: { en: 'Body', de: 'Body' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+          features,
+          ofCollections: [],
+          ofAssetMimeTypes: ['image/jpeg', 'image/png'],
+          defaultValue: null,
+        },
+      ],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    await project.destroy();
+  });
+
+  it('imports MdAstValue and MdAstRoot from @elek-io/core', async () => {
+    const output = await generateTypesForProject(project);
+    expect(output).toContain('MdAstValue');
+    expect(output).toContain('MdAstRoot');
+  });
+
+  it('imports MarkdownFieldDefinition from @elek-io/core', async () => {
+    const output = await generateTypesForProject(project);
+    expect(output).toContain('MarkdownFieldDefinition');
+  });
+
+  it('emits the narrowed mdast content type on the Values interface', async () => {
+    const output = await generateTypesForProject(project);
+
+    const valuesBlockMatch = output.match(
+      /export interface ArticlesValues \{[\s\S]*?\n\}/
+    );
+    expect(valuesBlockMatch).not.toBeNull();
+    const valuesBlock = valuesBlockMatch?.[0] ?? '';
+
+    expect(valuesBlock).toContain('body:');
+    // The narrowed mdast value type from getNarrowedValueType('mdast').
+    expect(valuesBlock).toContain(
+      `Omit<MdAstValue, 'content'> & { content: Record<ProjectLanguage, MdAstRoot | null> }`
+    );
+  });
+
+  it('emits features, ofCollections, ofAssetMimeTypes as literals in the fieldDefinitions tuple', async () => {
+    const output = await generateTypesForProject(project);
+
+    // The narrowed fieldDefinitions tuple lives inside the Collection
+    // wrapper type — find that block and inspect it.
+    const collectionBlockMatch = output.match(
+      /export type ArticlesCollection[\s\S]*?\n\}/
+    );
+    expect(collectionBlockMatch).not.toBeNull();
+    const collectionBlock = collectionBlockMatch?.[0] ?? '';
+
+    // features as a literal object (alphabetical key order)
+    expect(collectionBlock).toContain('features:');
+    expect(collectionBlock).toContain('headings: [2, 3];');
+    expect(collectionBlock).toContain('emphasis: true;');
+    expect(collectionBlock).toContain('strong: true;');
+    expect(collectionBlock).toContain('rawHtml: false;');
+    expect(collectionBlock).toContain('lists: true;');
+    expect(collectionBlock).toContain('taskListItems: true;');
+    expect(collectionBlock).toContain('codeBlocks: false;');
+
+    // ofCollections as a literal array (empty here)
+    expect(collectionBlock).toContain('ofCollections: [];');
+
+    // ofAssetMimeTypes as a literal array
+    expect(collectionBlock).toContain(
+      `ofAssetMimeTypes: ['image/jpeg', 'image/png'];`
     );
   });
 });

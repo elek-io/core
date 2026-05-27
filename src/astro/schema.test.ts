@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from '@hono/zod-openapi';
 import { v4 as uuid } from 'uuid';
+import type { MarkdownFeatures } from '../schema/buildMdAstSchema.js';
 import type { Component } from '../schema/componentSchema.js';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
 import { assetSchema } from '../schema/assetSchema.js';
@@ -8,6 +9,54 @@ import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
 } from './schema.js';
+
+/** Markdown features with everything disabled — tests opt in. */
+const offMarkdownFeatures: MarkdownFeatures = {
+  headings: [],
+  blockquotes: false,
+  lists: false,
+  codeBlocks: false,
+  thematicBreak: false,
+  rawHtml: false,
+  tables: false,
+  taskListItems: false,
+  footnotes: false,
+  emphasis: false,
+  strong: false,
+  inlineCode: false,
+  externalLinks: false,
+  entryReferences: false,
+  externalImages: false,
+  assetReferences: false,
+  strikethrough: false,
+  hardLineBreaks: false,
+};
+
+function makeMarkdownFieldDef(overrides: {
+  slug?: string;
+  features?: Partial<MarkdownFeatures>;
+  ofCollections?: string[];
+  ofAssetMimeTypes?: string[];
+}): FieldDefinition {
+  return {
+    id: uuid(),
+    slug: overrides.slug ?? 'body',
+    valueType: 'mdast' as const,
+    fieldType: 'markdown' as const,
+    label: { en: 'Body' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false as const,
+    inputWidth: '12' as const,
+    min: null,
+    max: null,
+    features: { ...offMarkdownFeatures, ...(overrides.features ?? {}) },
+    ofCollections: overrides.ofCollections ?? [],
+    ofAssetMimeTypes: overrides.ofAssetMimeTypes ?? [],
+    defaultValue: null,
+  };
+}
 
 function makeComponent(
   overrides: Partial<Component> &
@@ -960,5 +1009,185 @@ describe('buildEntryValuesTypeString', () => {
     ).toThrow(
       `Component "${orphanId}" referenced by dynamic field "blocks" not found in Project`
     );
+  });
+});
+
+describe('buildEntryValuesSchema with markdown fields', () => {
+  it('accepts an mdast value with a valid tree', () => {
+    const fieldDefs: FieldDefinition[] = [
+      makeMarkdownFieldDef({ features: { headings: [2] } }),
+    ];
+    const schema = buildEntryValuesSchema(fieldDefs, ['en'], []);
+    const valid = {
+      body: {
+        en: {
+          type: 'root',
+          children: [
+            {
+              type: 'heading',
+              depth: 2,
+              children: [{ type: 'text', value: 'Hello' }],
+            },
+          ],
+        },
+      },
+    };
+    expect(schema.parse(valid)).toEqual(valid);
+  });
+
+  it('accepts null per language when the field is not required', () => {
+    const fieldDefs: FieldDefinition[] = [makeMarkdownFieldDef({})];
+    const schema = buildEntryValuesSchema(fieldDefs, ['en', 'de'], []);
+    const valid = { body: { en: null, de: null } };
+    expect(schema.parse(valid)).toEqual(valid);
+  });
+
+  it('rejects a tree containing a node type disabled by features', () => {
+    const fieldDefs: FieldDefinition[] = [
+      makeMarkdownFieldDef({ features: { tables: false } }),
+    ];
+    const schema = buildEntryValuesSchema(fieldDefs, ['en'], []);
+    expect(() =>
+      schema.parse({
+        body: {
+          en: {
+            type: 'root',
+            children: [
+              {
+                type: 'table',
+                align: [null],
+                children: [
+                  {
+                    type: 'tableRow',
+                    children: [
+                      {
+                        type: 'tableCell',
+                        children: [{ type: 'text', value: 'x' }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      })
+    ).toThrow();
+  });
+
+  it('rejects an entryReference whose collectionId is not in ofCollections', () => {
+    const allowedCollection = uuid();
+    const fieldDefs: FieldDefinition[] = [
+      makeMarkdownFieldDef({
+        features: { entryReferences: true },
+        ofCollections: [allowedCollection],
+      }),
+    ];
+    const schema = buildEntryValuesSchema(fieldDefs, ['en'], []);
+    expect(() =>
+      schema.parse({
+        body: {
+          en: {
+            type: 'root',
+            children: [
+              {
+                type: 'paragraph',
+                children: [
+                  {
+                    type: 'entryReference',
+                    collectionId: uuid(), // not in ofCollections
+                    entryId: uuid(),
+                    children: [{ type: 'text', value: 'x' }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      })
+    ).toThrow();
+  });
+});
+
+describe('buildEntryValuesTypeString with markdown fields', () => {
+  it('imports MdAstRoot when a markdown field is present', () => {
+    const types = buildEntryValuesTypeString(
+      [makeMarkdownFieldDef({})],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(`import type { MdAstRoot } from '@elek-io/core';`);
+  });
+
+  it('does not import MdAstRoot when no markdown field exists', () => {
+    const types = buildEntryValuesTypeString(
+      [
+        {
+          id: uuid(),
+          slug: 'title',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Title' },
+          description: null,
+          isRequired: true,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+          defaultValue: null,
+        },
+      ],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).not.toContain(`from '@elek-io/core'`);
+  });
+
+  it('emits Record<ProjectLanguage, MdAstRoot | null> as the field type', () => {
+    const types = buildEntryValuesTypeString(
+      [makeMarkdownFieldDef({ slug: 'body' })],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(
+      `"body": Record<ProjectLanguage, MdAstRoot | null>`
+    );
+  });
+
+  it('imports MdAstRoot when a markdown field appears inside a referenced Component', () => {
+    const componentId = uuid();
+    const component: Component = makeComponent({
+      id: componentId,
+      slug: 'rich-block',
+      fieldDefinitions: [makeMarkdownFieldDef({ slug: 'prose' })],
+    });
+
+    const types = buildEntryValuesTypeString(
+      [
+        {
+          id: uuid(),
+          slug: 'blocks',
+          valueType: 'component',
+          fieldType: 'dynamic',
+          label: { en: 'Blocks' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          ofComponents: [componentId],
+          min: null,
+          max: null,
+        },
+      ],
+      ['en'],
+      [component],
+      'Articles'
+    );
+    expect(types).toContain(`import type { MdAstRoot } from '@elek-io/core';`);
   });
 });
