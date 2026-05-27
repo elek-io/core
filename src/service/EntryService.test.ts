@@ -1,6 +1,11 @@
 import Fs from 'fs-extra';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import type { Value } from '../test/setup.js';
+import { CoreError } from '../util/shared.js';
+import type {
+  EntryReferenceIssue,
+  MarkdownFeatures,
+  Value,
+} from '../test/setup.js';
 import core, {
   uuid,
   type Asset,
@@ -304,5 +309,567 @@ describe('EntryService - component values', function () {
         },
       })
     ).rejects.toThrow();
+  });
+});
+
+/**
+ * Helper: extract `error.cause.issues` from a thrown `CoreError`.
+ * Returns `null` if the error isn't a CoreError with the expected shape.
+ */
+function getReferenceIssues(error: unknown): EntryReferenceIssue[] | null {
+  if (!(error instanceof CoreError)) return null;
+  const cause = error.cause as { issues?: unknown } | undefined;
+  if (!cause || !Array.isArray(cause.issues)) return null;
+  return cause.issues as EntryReferenceIssue[];
+}
+
+/** Markdown features map with everything disabled — tests opt in. */
+const offMarkdownFeatures: MarkdownFeatures = {
+  headings: [],
+  blockquotes: false,
+  lists: false,
+  codeBlocks: false,
+  thematicBreak: false,
+  rawHtml: false,
+  tables: false,
+  taskListItems: false,
+  footnotes: false,
+  emphasis: false,
+  strong: false,
+  inlineCode: false,
+  externalLinks: false,
+  entryReferences: false,
+  externalImages: false,
+  assetReferences: false,
+  strikethrough: false,
+  hardLineBreaks: false,
+};
+
+describe('EntryService - reference validation', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let imageAsset: Asset; // image/png from the test fixture
+  let referencedEntry: Entry;
+  let collectionForRefs: Collection;
+  let collectionWithMarkdown: Collection;
+  /** Slugs used on `collectionForRefs`. */
+  const refSlugs = {
+    assetImagesOnly: 'asset-images-only',
+    entryRef: 'entry-ref',
+  };
+  /** Slugs used on `collectionWithMarkdown`. */
+  const mdSlugs = {
+    body: 'body',
+  };
+
+  beforeAll(async function () {
+    project = await createProject('EntryService Ref Validation');
+    imageAsset = await createAsset(project.id);
+
+    // First create the markdown collection so we have somewhere to put a
+    // referenced entry. Markdown features include entryReferences AND
+    // assetReferences so we can test mdast tree refs end-to-end.
+    collectionWithMarkdown = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Article', de: 'Article' },
+        plural: { en: 'Articles', de: 'Articles' },
+      },
+      slug: { singular: 'article', plural: 'articles' },
+      description: {
+        en: 'Articles with markdown body content',
+        de: 'Articles with markdown body content',
+      },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: mdSlugs.body,
+          valueType: 'mdast',
+          fieldType: 'markdown',
+          label: { en: 'Body', de: 'Body' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+          features: {
+            ...offMarkdownFeatures,
+            entryReferences: true,
+            assetReferences: true,
+          },
+          ofCollections: [],
+          // Allow only JPEG so PNG assets (the test fixture) trigger
+          // asset_mime_mismatch.
+          ofAssetMimeTypes: ['image/jpeg'],
+          defaultValue: null,
+        },
+      ],
+    });
+
+    // Create a referenced entry first (the body field is optional → no
+    // refs needed).
+    referencedEntry = await core.entries.create({
+      projectId: project.id,
+      collectionId: collectionWithMarkdown.id,
+      values: {
+        [mdSlugs.body]: {
+          objectType: 'value',
+          valueType: 'mdast',
+          content: { en: null, de: null },
+        },
+      },
+    });
+
+    // Collection with flat asset + entry reference fields.
+    collectionForRefs = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Product', de: 'Product' },
+        plural: { en: 'Products', de: 'Products' },
+      },
+      slug: { singular: 'product-ref', plural: 'products-ref' },
+      description: { en: 'Products', de: 'Products' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: refSlugs.assetImagesOnly,
+          valueType: 'reference',
+          fieldType: 'asset',
+          label: { en: 'Image', de: 'Image' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+          // Allow only JPEG — the test fixture asset is PNG, so any
+          // reference to it triggers asset_mime_mismatch.
+          ofAssetMimeTypes: ['image/jpeg'],
+        },
+        {
+          id: uuid(),
+          slug: refSlugs.entryRef,
+          valueType: 'reference',
+          fieldType: 'entry',
+          label: { en: 'Related', de: 'Related' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+          ofCollections: [],
+        },
+      ],
+    });
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  describe('flat asset reference fields', function () {
+    it('rejects an Entry whose asset reference points to a non-existent asset', async function () {
+      const ghostAssetId = uuid();
+      try {
+        await core.entries.create({
+          projectId: project.id,
+          collectionId: collectionForRefs.id,
+          values: {
+            [refSlugs.assetImagesOnly]: {
+              objectType: 'value',
+              valueType: 'reference',
+              content: {
+                en: [{ objectType: 'asset', id: ghostAssetId }],
+                de: [],
+              },
+            },
+            [refSlugs.entryRef]: {
+              objectType: 'value',
+              valueType: 'reference',
+              content: { en: [], de: [] },
+            },
+          },
+        });
+        throw new Error('expected create to throw');
+      } catch (error) {
+        const issues = getReferenceIssues(error);
+        expect(issues).not.toBeNull();
+        expect(issues).toHaveLength(1);
+        expect(issues![0]).toMatchObject({
+          kind: 'reference_not_found',
+          refKind: 'asset',
+          refId: ghostAssetId,
+          fieldSlug: refSlugs.assetImagesOnly,
+          language: 'en',
+          index: 0,
+          treePath: [],
+        });
+      }
+    });
+
+    it('rejects an Entry whose asset reference has the wrong MIME type', async function () {
+      // imageAsset is image/png; the field allows only image/jpeg.
+      try {
+        await core.entries.create({
+          projectId: project.id,
+          collectionId: collectionForRefs.id,
+          values: {
+            [refSlugs.assetImagesOnly]: {
+              objectType: 'value',
+              valueType: 'reference',
+              content: {
+                en: [{ objectType: 'asset', id: imageAsset.id }],
+                de: [],
+              },
+            },
+            [refSlugs.entryRef]: {
+              objectType: 'value',
+              valueType: 'reference',
+              content: { en: [], de: [] },
+            },
+          },
+        });
+        throw new Error('expected create to throw');
+      } catch (error) {
+        const issues = getReferenceIssues(error);
+        expect(issues).not.toBeNull();
+        expect(issues).toHaveLength(1);
+        expect(issues![0]).toMatchObject({
+          kind: 'asset_mime_mismatch',
+          assetId: imageAsset.id,
+          expectedMimeTypes: ['image/jpeg'],
+          actualMimeType: 'image/png',
+          fieldSlug: refSlugs.assetImagesOnly,
+          language: 'en',
+        });
+      }
+    });
+  });
+
+  describe('flat entry reference fields', function () {
+    it('rejects an Entry whose entry reference points to a non-existent entry', async function () {
+      const ghostEntryId = uuid();
+      try {
+        await core.entries.create({
+          projectId: project.id,
+          collectionId: collectionForRefs.id,
+          values: {
+            [refSlugs.assetImagesOnly]: {
+              objectType: 'value',
+              valueType: 'reference',
+              content: { en: [], de: [] },
+            },
+            [refSlugs.entryRef]: {
+              objectType: 'value',
+              valueType: 'reference',
+              content: {
+                en: [
+                  {
+                    objectType: 'entry',
+                    id: ghostEntryId,
+                    collectionId: collectionWithMarkdown.id,
+                  },
+                ],
+                de: [],
+              },
+            },
+          },
+        });
+        throw new Error('expected create to throw');
+      } catch (error) {
+        const issues = getReferenceIssues(error);
+        expect(issues).not.toBeNull();
+        expect(issues).toHaveLength(1);
+        expect(issues![0]).toMatchObject({
+          kind: 'reference_not_found',
+          refKind: 'entry',
+          refId: ghostEntryId,
+          collectionId: collectionWithMarkdown.id,
+          fieldSlug: refSlugs.entryRef,
+          language: 'en',
+          index: 0,
+          treePath: [],
+        });
+      }
+    });
+
+    it('accepts an Entry whose entry reference points to a real entry', async function () {
+      const entry = await core.entries.create({
+        projectId: project.id,
+        collectionId: collectionForRefs.id,
+        values: {
+          [refSlugs.assetImagesOnly]: {
+            objectType: 'value',
+            valueType: 'reference',
+            content: { en: [], de: [] },
+          },
+          [refSlugs.entryRef]: {
+            objectType: 'value',
+            valueType: 'reference',
+            content: {
+              en: [
+                {
+                  objectType: 'entry',
+                  id: referencedEntry.id,
+                  collectionId: collectionWithMarkdown.id,
+                },
+              ],
+              de: [],
+            },
+          },
+        },
+      });
+      expect(entry.id).toBeDefined();
+    });
+  });
+
+  describe('mdast tree references', function () {
+    it('rejects an mdast entryReference to a non-existent entry', async function () {
+      const ghostEntryId = uuid();
+      try {
+        await core.entries.create({
+          projectId: project.id,
+          collectionId: collectionWithMarkdown.id,
+          values: {
+            [mdSlugs.body]: {
+              objectType: 'value',
+              valueType: 'mdast',
+              content: {
+                en: {
+                  type: 'root',
+                  children: [
+                    {
+                      type: 'paragraph',
+                      children: [
+                        {
+                          type: 'entryReference',
+                          collectionId: collectionWithMarkdown.id,
+                          entryId: ghostEntryId,
+                          children: [{ type: 'text', value: 'gone' }],
+                        },
+                      ],
+                    },
+                  ],
+                },
+                de: null,
+              },
+            },
+          },
+        });
+        throw new Error('expected create to throw');
+      } catch (error) {
+        const issues = getReferenceIssues(error);
+        expect(issues).not.toBeNull();
+        expect(issues).toHaveLength(1);
+        expect(issues![0]).toMatchObject({
+          kind: 'reference_not_found',
+          refKind: 'entry',
+          refId: ghostEntryId,
+          collectionId: collectionWithMarkdown.id,
+          fieldSlug: mdSlugs.body,
+          language: 'en',
+          index: null,
+          // root.children[0] (paragraph) -> children[0] (entryReference)
+          treePath: [0, 0],
+        });
+      }
+    });
+
+    it('rejects an mdast assetReference whose MIME does not match ofAssetMimeTypes', async function () {
+      try {
+        await core.entries.create({
+          projectId: project.id,
+          collectionId: collectionWithMarkdown.id,
+          values: {
+            [mdSlugs.body]: {
+              objectType: 'value',
+              valueType: 'mdast',
+              content: {
+                en: {
+                  type: 'root',
+                  children: [
+                    {
+                      type: 'paragraph',
+                      children: [
+                        {
+                          type: 'assetReference',
+                          assetId: imageAsset.id,
+                          alt: 'png logo',
+                          title: null,
+                        },
+                      ],
+                    },
+                  ],
+                },
+                de: null,
+              },
+            },
+          },
+        });
+        throw new Error('expected create to throw');
+      } catch (error) {
+        const issues = getReferenceIssues(error);
+        expect(issues).not.toBeNull();
+        expect(issues).toHaveLength(1);
+        expect(issues![0]).toMatchObject({
+          kind: 'asset_mime_mismatch',
+          assetId: imageAsset.id,
+          expectedMimeTypes: ['image/jpeg'],
+          actualMimeType: 'image/png',
+          fieldSlug: mdSlugs.body,
+          language: 'en',
+          index: null,
+          treePath: [0, 0],
+        });
+      }
+    });
+
+    it('rejects an mdast assetReference to a non-existent asset', async function () {
+      const ghostAssetId = uuid();
+      try {
+        await core.entries.create({
+          projectId: project.id,
+          collectionId: collectionWithMarkdown.id,
+          values: {
+            [mdSlugs.body]: {
+              objectType: 'value',
+              valueType: 'mdast',
+              content: {
+                en: {
+                  type: 'root',
+                  children: [
+                    {
+                      type: 'paragraph',
+                      children: [
+                        {
+                          type: 'assetReference',
+                          assetId: ghostAssetId,
+                          alt: 'missing',
+                          title: null,
+                        },
+                      ],
+                    },
+                  ],
+                },
+                de: null,
+              },
+            },
+          },
+        });
+        throw new Error('expected create to throw');
+      } catch (error) {
+        const issues = getReferenceIssues(error);
+        expect(issues).not.toBeNull();
+        expect(issues).toHaveLength(1);
+        expect(issues![0]).toMatchObject({
+          kind: 'reference_not_found',
+          refKind: 'asset',
+          refId: ghostAssetId,
+          fieldSlug: mdSlugs.body,
+          language: 'en',
+          index: null,
+          treePath: [0, 0],
+        });
+      }
+    });
+
+    it('accepts an mdast entryReference to a real entry', async function () {
+      const entry = await core.entries.create({
+        projectId: project.id,
+        collectionId: collectionWithMarkdown.id,
+        values: {
+          [mdSlugs.body]: {
+            objectType: 'value',
+            valueType: 'mdast',
+            content: {
+              en: {
+                type: 'root',
+                children: [
+                  {
+                    type: 'paragraph',
+                    children: [
+                      {
+                        type: 'entryReference',
+                        collectionId: collectionWithMarkdown.id,
+                        entryId: referencedEntry.id,
+                        children: [{ type: 'text', value: 'tutorial' }],
+                      },
+                    ],
+                  },
+                ],
+              },
+              de: null,
+            },
+          },
+        },
+      });
+      expect(entry.id).toBeDefined();
+    });
+  });
+
+  describe('update path', function () {
+    it('rejects an update that introduces a dangling asset reference', async function () {
+      // Create a clean entry first.
+      const entry = await core.entries.create({
+        projectId: project.id,
+        collectionId: collectionForRefs.id,
+        values: {
+          [refSlugs.assetImagesOnly]: {
+            objectType: 'value',
+            valueType: 'reference',
+            content: { en: [], de: [] },
+          },
+          [refSlugs.entryRef]: {
+            objectType: 'value',
+            valueType: 'reference',
+            content: { en: [], de: [] },
+          },
+        },
+      });
+
+      const ghostAssetId = uuid();
+      try {
+        await core.entries.update({
+          projectId: project.id,
+          collectionId: collectionForRefs.id,
+          id: entry.id,
+          values: {
+            [refSlugs.assetImagesOnly]: {
+              objectType: 'value',
+              valueType: 'reference',
+              content: {
+                en: [{ objectType: 'asset', id: ghostAssetId }],
+                de: [],
+              },
+            },
+            [refSlugs.entryRef]: {
+              objectType: 'value',
+              valueType: 'reference',
+              content: { en: [], de: [] },
+            },
+          },
+        });
+        throw new Error('expected update to throw');
+      } catch (error) {
+        const issues = getReferenceIssues(error);
+        expect(issues).not.toBeNull();
+        expect(issues).toHaveLength(1);
+        expect(issues![0]).toMatchObject({
+          kind: 'reference_not_found',
+          refKind: 'asset',
+          refId: ghostAssetId,
+        });
+      }
+    });
   });
 });

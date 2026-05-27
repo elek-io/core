@@ -1,6 +1,7 @@
 import Fs from 'fs-extra';
 import { z } from '@hono/zod-openapi';
 import {
+  assetFileSchema,
   countEntriesSchema,
   migrateEntrySchema,
   deleteEntrySchema,
@@ -15,6 +16,8 @@ import {
   serviceTypeSchema,
   uuidSchema,
   entryHistorySchema,
+  type AssetFieldDefinition,
+  type EntryFieldDefinition,
   type CountEntriesProps,
   type CreateEntryProps,
   type CrudServiceWithListCount,
@@ -22,18 +25,24 @@ import {
   type ElekIoCoreOptions,
   type Entry,
   type EntryFile,
+  type EntryReferenceIssue,
   type ListEntriesProps,
+  type MdAstAssetReference,
+  type MdAstEntryReference,
+  type MdAstRoot,
   type PaginatedList,
   type ReadEntryProps,
+  type SupportedLanguage,
   type UpdateEntryProps,
   type EntryHistoryProps,
   type GitCommit,
   type FieldDefinition,
   type ComponentResolver,
+  type Value,
 } from '../schema/index.js';
 import { applyMigrations, entryMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
-import { datetime, uuid } from '../util/shared.js';
+import { CoreError, datetime, uuid } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { CollectionService } from './CollectionService.js';
 import type { ComponentService } from './ComponentService.js';
@@ -105,6 +114,17 @@ export class EntryService
       ),
       props,
       async (validatedProps) => {
+        const refIssues = await this.validateValueReferences(
+          validatedProps.values,
+          fieldDefinitions,
+          validatedProps.projectId
+        );
+        if (refIssues.length > 0) {
+          throw CoreError.badRequest('Entry contains invalid references', {
+            issues: refIssues,
+          });
+        }
+
         const id = uuid();
         const projectPath = pathTo.project(validatedProps.projectId);
         const entryFilePath = pathTo.entryFile(
@@ -214,6 +234,17 @@ export class EntryService
       ),
       props,
       async (validatedProps) => {
+        const refIssues = await this.validateValueReferences(
+          validatedProps.values,
+          fieldDefinitions,
+          validatedProps.projectId
+        );
+        if (refIssues.length > 0) {
+          throw CoreError.badRequest('Entry contains invalid references', {
+            issues: refIssues,
+          });
+        }
+
         const projectPath = pathTo.project(validatedProps.projectId);
         const entryFilePath = pathTo.entryFile(
           validatedProps.projectId,
@@ -353,6 +384,261 @@ export class EntryService
   }
 
   /**
+   * Validates cross-entity reference targets on an Entry's values. Runs
+   * AFTER the per-field Zod schema has accepted the structural shape, as
+   * the first step inside the `create` / `update` callback bodies.
+   *
+   * What this checks (and the schema does not):
+   *   - Each referenced Asset's file exists on disk.
+   *   - Each referenced Asset's `mimeType` is in the field's
+   *     `ofAssetMimeTypes` allowlist (when non-empty).
+   *   - Each referenced Entry's file exists at the claimed
+   *     `<projectId>/<collectionId>/<entryId>` path.
+   *
+   * What the schema layer already enforces (not re-checked here):
+   *   - Tree shape, allowed node types, allowed heading depths.
+   *   - `ofCollections` on `entryReference` claims (cheap structural check
+   *     using the `collectionId` already carried in the ref).
+   *
+   * Why `jsonFileService.read` directly instead of
+   * `assetService.read` / `this.read`:
+   *   - `AbstractService.validated` logs every `CoreError` before
+   *     re-throwing. For 10 references with 1 missing, the public read
+   *     path would emit a misleading `[NotFound] (Entry.read) …` log
+   *     line at the service boundary for an expected validator outcome.
+   *   - No need to re-run Zod on the input UUIDs (already validated by
+   *     the outer `create`/`update` schema).
+   *   - No recursive `validated()` nesting.
+   *
+   * The path-keyed cache on `JsonFileService` absorbs the duplicate-read
+   * case (one Asset referenced N times = 1 disk hit + cache reuse).
+   */
+  private async validateValueReferences(
+    values: Record<string, Value>,
+    fieldDefinitions: FieldDefinition[],
+    projectId: string
+  ): Promise<EntryReferenceIssue[]> {
+    const issues: EntryReferenceIssue[] = [];
+
+    for (const fieldDef of fieldDefinitions) {
+      const value = values[fieldDef.slug];
+      if (value === undefined) continue;
+
+      if (
+        fieldDef.valueType === 'reference' &&
+        value.valueType === 'reference'
+      ) {
+        await this.collectFlatReferenceIssues(
+          value,
+          fieldDef,
+          projectId,
+          issues
+        );
+      } else if (
+        fieldDef.valueType === 'mdast' &&
+        value.valueType === 'mdast'
+      ) {
+        await this.collectMdAstReferenceIssues(
+          value,
+          fieldDef,
+          projectId,
+          issues
+        );
+      }
+    }
+
+    return issues;
+  }
+
+  /**
+   * Walks each language slot of a flat reference field's value, checking
+   * each Entry / Asset reference against the filesystem.
+   */
+  private async collectFlatReferenceIssues(
+    value: Extract<Value, { valueType: 'reference' }>,
+    fieldDef: AssetFieldDefinition | EntryFieldDefinition,
+    projectId: string,
+    issues: EntryReferenceIssue[]
+  ): Promise<void> {
+    const allowedMimeTypes =
+      fieldDef.fieldType === 'asset' ? fieldDef.ofAssetMimeTypes : null;
+
+    for (const [language, refs] of Object.entries(value.content)) {
+      if (!refs) continue;
+      const lang = language as SupportedLanguage;
+
+      for (let index = 0; index < refs.length; index++) {
+        const ref = refs[index];
+        if (ref === undefined) continue;
+
+        if (ref.objectType === 'asset') {
+          await this.checkAsset({
+            projectId,
+            assetId: ref.id,
+            allowedMimeTypes,
+            location: {
+              fieldSlug: fieldDef.slug,
+              language: lang,
+              treePath: [],
+              index,
+            },
+            issues,
+          });
+        } else if (ref.objectType === 'entry') {
+          await this.checkEntry({
+            projectId,
+            collectionId: ref.collectionId,
+            entryId: ref.id,
+            location: {
+              fieldSlug: fieldDef.slug,
+              language: lang,
+              treePath: [],
+              index,
+            },
+            issues,
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Walks each language's mdast tree, checking every
+   * `entryReference` / `assetReference` node against the filesystem.
+   */
+  private async collectMdAstReferenceIssues(
+    value: Extract<Value, { valueType: 'mdast' }>,
+    fieldDef: { slug: string; ofAssetMimeTypes: string[] },
+    projectId: string,
+    issues: EntryReferenceIssue[]
+  ): Promise<void> {
+    for (const [language, root] of Object.entries(value.content)) {
+      if (!root) continue;
+      const lang = language as SupportedLanguage;
+
+      for (const { node, treePath } of collectMdAstRefs(root)) {
+        if (node.type === 'assetReference') {
+          await this.checkAsset({
+            projectId,
+            assetId: node.assetId,
+            allowedMimeTypes: fieldDef.ofAssetMimeTypes,
+            location: {
+              fieldSlug: fieldDef.slug,
+              language: lang,
+              treePath,
+              index: null,
+            },
+            issues,
+          });
+        } else {
+          // node.type === 'entryReference'
+          await this.checkEntry({
+            projectId,
+            collectionId: node.collectionId,
+            entryId: node.entryId,
+            location: {
+              fieldSlug: fieldDef.slug,
+              language: lang,
+              treePath,
+              index: null,
+            },
+            issues,
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Reads an Asset's file directly via JsonFileService (bypassing
+   * `AssetService.read`'s `validated()` wrapper to avoid log noise on
+   * expected NotFound outcomes) and classifies the result.
+   */
+  private async checkAsset(params: {
+    projectId: string;
+    assetId: string;
+    allowedMimeTypes: string[] | null;
+    location: {
+      fieldSlug: string;
+      language: SupportedLanguage;
+      treePath: number[];
+      index: number | null;
+    };
+    issues: EntryReferenceIssue[];
+  }): Promise<void> {
+    const { projectId, assetId, allowedMimeTypes, location, issues } = params;
+    try {
+      const assetFile = await this.jsonFileService.read(
+        pathTo.assetFile(projectId, assetId),
+        assetFileSchema
+      );
+      if (
+        allowedMimeTypes !== null &&
+        allowedMimeTypes.length > 0 &&
+        !allowedMimeTypes.includes(assetFile.mimeType)
+      ) {
+        issues.push({
+          kind: 'asset_mime_mismatch',
+          ...location,
+          assetId,
+          expectedMimeTypes: allowedMimeTypes,
+          actualMimeType: assetFile.mimeType,
+        });
+      }
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        issues.push({
+          kind: 'reference_not_found',
+          ...location,
+          refKind: 'asset',
+          refId: assetId,
+          collectionId: null,
+        });
+        return;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Reads an Entry's file directly via JsonFileService (bypassing
+   * `EntryService.read`'s `validated()` wrapper to avoid log noise on
+   * expected NotFound outcomes) and classifies the result.
+   */
+  private async checkEntry(params: {
+    projectId: string;
+    collectionId: string;
+    entryId: string;
+    location: {
+      fieldSlug: string;
+      language: SupportedLanguage;
+      treePath: number[];
+      index: number | null;
+    };
+    issues: EntryReferenceIssue[];
+  }): Promise<void> {
+    const { projectId, collectionId, entryId, location, issues } = params;
+    try {
+      await this.jsonFileService.read(
+        pathTo.entryFile(projectId, collectionId, entryId),
+        entryFileSchema
+      );
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        issues.push({
+          kind: 'reference_not_found',
+          ...location,
+          refKind: 'entry',
+          refId: entryId,
+          collectionId,
+        });
+        return;
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Pre-loads all Components referenced (transitively) by the given field definitions
    * and returns a synchronous ComponentResolver for use during schema generation.
    *
@@ -428,4 +714,74 @@ export class EntryService
       fieldDefinitions: resolvedFieldDefinitions,
     };
   }
+}
+
+//
+// Helpers for cross-entity reference validation
+//
+
+/**
+ * `CoreError.notFound` predicate. `JsonFileService.read` wraps the
+ * underlying ENOENT in `CoreError.notFound` (via `CoreError.fromUnknown`
+ * — but actually the read path throws directly when the file is absent;
+ * see `JsonFileService.read`'s `Fs.readFile` call). We catch both shapes
+ * defensively.
+ */
+function isNotFoundError(error: unknown): boolean {
+  if (error instanceof CoreError && error.type === 'NotFound') {
+    return true;
+  }
+  // Node's fs errors carry a `code` property.
+  if (
+    error !== null &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code: unknown }).code === 'ENOENT'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Returns every `entryReference` and `assetReference` node in an mdast
+ * tree, along with the path of `children` indices from the root to the
+ * node. Used by `EntryService.validateValueReferences` to report the
+ * location of problematic references.
+ *
+ * Hand-rolled rather than via `unist-util-visit` because we need the
+ * full path (sequence of indices), not just the immediate parent.
+ */
+function collectMdAstRefs(root: MdAstRoot): Array<{
+  node: MdAstEntryReference | MdAstAssetReference;
+  treePath: number[];
+}> {
+  const result: Array<{
+    node: MdAstEntryReference | MdAstAssetReference;
+    treePath: number[];
+  }> = [];
+
+  function walk(
+    node: { type: string; children?: unknown[] },
+    path: number[]
+  ): void {
+    if (node.type === 'entryReference' || node.type === 'assetReference') {
+      result.push({
+        node: node as unknown as MdAstEntryReference | MdAstAssetReference,
+        treePath: path,
+      });
+    }
+    if (Array.isArray(node.children)) {
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i] as {
+          type: string;
+          children?: unknown[];
+        };
+        walk(child, [...path, i]);
+      }
+    }
+  }
+
+  walk(root, []);
+  return result;
 }
