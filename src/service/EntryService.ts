@@ -761,23 +761,34 @@ function collectMdAstRefs(root: MdAstRoot): Array<{
     treePath: number[];
   }> = [];
 
-  function walk(
-    node: { type: string; children?: unknown[] },
-    path: number[]
-  ): void {
-    if (node.type === 'entryReference' || node.type === 'assetReference') {
-      result.push({
-        node: node as unknown as MdAstEntryReference | MdAstAssetReference,
-        treePath: path,
-      });
+  function isMdAstNode(value: unknown): value is { type: string } {
+    return typeof value === 'object' && value !== null && 'type' in value;
+  }
+
+  function isEntryReference(node: { type: string }): node is MdAstEntryReference {
+    return node.type === 'entryReference';
+  }
+
+  function isAssetReference(node: { type: string }): node is MdAstAssetReference {
+    return node.type === 'assetReference';
+  }
+
+  function hasChildren(
+    node: { type: string }
+  ): node is { type: string; children: unknown[] } {
+    if (!('children' in node)) return false;
+    const { children } = node as { children: unknown };
+    return Array.isArray(children);
+  }
+
+  function walk(node: unknown, path: number[]): void {
+    if (!isMdAstNode(node)) return;
+    if (isEntryReference(node) || isAssetReference(node)) {
+      result.push({ node, treePath: path });
     }
-    if (Array.isArray(node.children)) {
-      for (let i = 0; i < node.children.length; i++) {
-        const child = node.children[i] as {
-          type: string;
-          children?: unknown[];
-        };
-        walk(child, [...path, i]);
+    if (hasChildren(node)) {
+      for (let i = 0; i < node.children.length; i += 1) {
+        walk(node.children[i], [...path, i]);
       }
     }
   }

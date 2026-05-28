@@ -309,4 +309,39 @@ describe('generateTypesForProject - markdown field', () => {
       `ofAssetMimeTypes: ['image/jpeg', 'image/png'];`
     );
   });
+
+  it('emits every MarkdownFeatures key (no silent drift when a new flag is added)', async () => {
+    const output = await generateTypesForProject(project);
+    const collectionBlockMatch = output.match(
+      /export type ArticlesCollection[\s\S]*?\n\}/
+    );
+    const collectionBlock = collectionBlockMatch?.[0] ?? '';
+
+    // Drive expectation off a fully-populated MarkdownFeatures instance so
+    // adding a new feature flag forces this test to acknowledge it.
+    const fullFeatures: MarkdownFeatures = {
+      headings: [],
+      blockquotes: false,
+      lists: false,
+      codeBlocks: false,
+      thematicBreak: false,
+      rawHtml: false,
+      tables: false,
+      taskListItems: false,
+      footnotes: false,
+      emphasis: false,
+      strong: false,
+      inlineCode: false,
+      externalLinks: false,
+      entryReferences: false,
+      externalImages: false,
+      assetReferences: false,
+      strikethrough: false,
+      hardLineBreaks: false,
+    };
+
+    for (const key of Object.keys(fullFeatures)) {
+      expect(collectionBlock).toContain(`${key}:`);
+    }
+  });
 });

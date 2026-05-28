@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { uuid } from '../test/setup.js';
 import {
+  MAX_MDAST_DEPTH,
   buildMdAstSchemaForFeatures,
   markdownFeaturesSchema,
   type MarkdownFeatures,
 } from './buildMdAstSchema.js';
+import type { MdAstBlockNode, MdAstRoot } from './valueSchema.js';
 
 /** All features OFF. Tests opt in to the ones they need. */
 const baseFeatures: MarkdownFeatures = {
@@ -386,6 +388,123 @@ describe('buildMdAstSchemaForFeatures', () => {
           ],
         })
       ).toThrow();
+    });
+  });
+
+  describe('depth limit', () => {
+    /**
+     * Builds a `root` tree whose deepest leaf is at the given 1-based depth
+     * (root = 1). Wraps `paragraph[text]` in nested `wrapper` containers.
+     * For `wrapper='blockquote'`: each wrapper directly nests the next.
+     * For `wrapper='list'`: each wrapper is `list > listItem` (counts as 2
+     * depth levels per nesting), so requested depth must be even.
+     */
+    function nest(
+      wrapper: 'blockquote' | 'footnoteDefinition',
+      depth: number
+    ): MdAstRoot {
+      // depth = ancestor count of the text node + 1 (text itself).
+      // root (1) → wrappers... → paragraph (depth-1) → text (depth).
+      const wrapperCount = depth - 3; // root + paragraph + text = 3 nodes outside wrappers
+      if (wrapperCount < 0) {
+        throw new Error('depth must be >= 3 (root + paragraph + text)');
+      }
+      let block: MdAstBlockNode = {
+        type: 'paragraph',
+        children: [{ type: 'text', value: 'x' }],
+      };
+      for (let i = 0; i < wrapperCount; i += 1) {
+        if (wrapper === 'blockquote') {
+          block = { type: 'blockquote', children: [block] };
+        } else {
+          block = {
+            type: 'footnoteDefinition',
+            identifier: `n-${i}`,
+            label: null,
+            children: [block],
+          };
+        }
+      }
+      return { type: 'root', children: [block] };
+    }
+
+    it('exports MAX_MDAST_DEPTH = 100', () => {
+      expect(MAX_MDAST_DEPTH).toBe(100);
+    });
+
+    it('accepts a blockquote chain at exactly MAX_MDAST_DEPTH', () => {
+      const schema = buildMdAstSchemaForFeatures(
+        makeCtx({ blockquotes: true })
+      );
+      expect(() => schema.parse(nest('blockquote', MAX_MDAST_DEPTH))).not.toThrow();
+    });
+
+    it('rejects a blockquote chain one level deeper than MAX_MDAST_DEPTH', () => {
+      const schema = buildMdAstSchemaForFeatures(
+        makeCtx({ blockquotes: true })
+      );
+      expect(() =>
+        schema.parse(nest('blockquote', MAX_MDAST_DEPTH + 1))
+      ).toThrow();
+    });
+
+    it('rejects a footnoteDefinition chain one level deeper than MAX_MDAST_DEPTH', () => {
+      const schema = buildMdAstSchemaForFeatures(
+        makeCtx({ footnotes: true })
+      );
+      expect(() =>
+        schema.parse(nest('footnoteDefinition', MAX_MDAST_DEPTH + 1))
+      ).toThrow();
+    });
+
+    it('rejects a list/listItem chain one level deeper than MAX_MDAST_DEPTH', () => {
+      const schema = buildMdAstSchemaForFeatures(makeCtx({ lists: true }));
+      // list > listItem alternation: 2 levels per "list nesting".
+      // root + paragraph + text = 3 fixed nodes; remaining = depth - 3 levels.
+      // To overshoot MAX_MDAST_DEPTH by 1, build (MAX_MDAST_DEPTH + 1 - 3)/2
+      // alternations if even, else one extra list wrapper.
+      const wrappersNeeded = MAX_MDAST_DEPTH + 1 - 3;
+      let block: MdAstBlockNode = {
+        type: 'paragraph',
+        children: [{ type: 'text', value: 'x' }],
+      };
+      // We can pair list+listItem; wrappersNeeded must be even for clean
+      // alternation, otherwise add a final list on the outside.
+      const pairs = Math.floor(wrappersNeeded / 2);
+      for (let i = 0; i < pairs; i += 1) {
+        block = {
+          type: 'list',
+          ordered: false,
+          start: null,
+          spread: false,
+          children: [
+            {
+              type: 'listItem',
+              spread: false,
+              checked: null,
+              children: [block],
+            },
+          ],
+        } as MdAstBlockNode;
+      }
+      if (wrappersNeeded % 2 !== 0) {
+        block = {
+          type: 'list',
+          ordered: false,
+          start: null,
+          spread: false,
+          children: [
+            {
+              type: 'listItem',
+              spread: false,
+              checked: null,
+              children: [block],
+            },
+          ],
+        } as MdAstBlockNode;
+      }
+      const root: MdAstRoot = { type: 'root', children: [block] };
+      expect(() => schema.parse(root)).toThrow();
     });
   });
 });

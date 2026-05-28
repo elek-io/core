@@ -10,6 +10,7 @@ import {
   type ComponentsContext,
   type DynamicFieldDefinition,
   type FieldDefinition,
+  type MarkdownFeatures,
   type Project,
   type GenerateTypesProps,
   type ValueType,
@@ -144,6 +145,23 @@ function collectUsedValueTypes(
     types.add(getValueTypeName(fieldDefinition.valueType));
   }
   return types;
+}
+
+/**
+ * Renders a single MarkdownFeatures value as a TypeScript literal. Typed
+ * by `keyof MarkdownFeatures` so adding a new feature flag is a TS error
+ * here until handled — this is the single point that has to change when
+ * the feature shape evolves.
+ */
+function markdownFeatureLiteral<K extends keyof MarkdownFeatures>(
+  features: MarkdownFeatures,
+  key: K
+): string {
+  const value = features[key];
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => String(v)).join(', ')}]`;
+  }
+  return String(value);
 }
 
 /**
@@ -288,30 +306,19 @@ function writeFieldDefinitionNarrowing(
   // features - for markdown fields. Emit each key as a literal so
   // consumers can introspect at compile time (e.g.
   // `if (fieldDef.features.assetReferences) { renderAssetRef(...) }`).
-  if (
-    'features' in fieldDefinition &&
-    fieldDefinition.features !== null &&
-    typeof fieldDefinition.features === 'object'
-  ) {
-    const features = fieldDefinition.features as Record<string, unknown>;
+  if (fieldDefinition.fieldType === 'markdown') {
+    const { features } = fieldDefinition;
     writer
       .indent(baseIndent + 1)
       .write(`features: {`)
       .newLine();
-    // Sort keys for stable output across regenerations.
-    const sortedKeys = Object.keys(features).sort();
-    for (const key of sortedKeys) {
-      const value = features[key];
-      const literal = Array.isArray(value)
-        ? `[${value.map((v) => (typeof v === 'string' ? `'${v}'` : String(v))).join(', ')}]`
-        : typeof value === 'boolean'
-          ? String(value)
-          : typeof value === 'string'
-            ? `'${escapeForSingleQuotedString(value)}'`
-            : String(value);
+    // Sort keys for stable output across regenerations. Cast to the typed
+    // key array so adding a new MarkdownFeatures flag is a TS error here.
+    const keys = (Object.keys(features) as Array<keyof MarkdownFeatures>).sort();
+    for (const key of keys) {
       writer
         .indent(baseIndent + 2)
-        .write(`${key}: ${literal};`)
+        .write(`${key}: ${markdownFeatureLiteral(features, key)};`)
         .newLine();
     }
     writer

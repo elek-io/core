@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { uuid } from '../test/setup.js';
 import {
   isEmptyParagraphOnly,
+  mdAstImageSchema,
+  mdAstLinkSchema,
   mdAstRootSchema,
   mdastValueSchema,
   type MdAstRoot,
@@ -202,6 +204,77 @@ describe('isEmptyParagraphOnly', () => {
 
   it('returns false for empty children array', () => {
     expect(isEmptyParagraphOnly({ children: [] })).toBe(false);
+  });
+});
+
+describe('mdAstLinkSchema URL scheme allowlist', () => {
+  function parseLinkUrl(url: string): void {
+    mdAstLinkSchema.parse({
+      type: 'link',
+      url,
+      title: null,
+      children: [{ type: 'text', value: 'x' }],
+    });
+  }
+
+  it.each([
+    ['https://example.com/x', 'absolute https'],
+    ['http://x.test', 'absolute http'],
+    ['mailto:foo@example.com', 'mailto'],
+    ['tel:+15551234', 'tel'],
+    ['/about', 'site-absolute relative'],
+    ['./next', 'sibling relative'],
+    ['../up', 'parent relative'],
+    ['#section-2', 'fragment only'],
+  ])('accepts %s (%s)', (url) => {
+    expect(() => parseLinkUrl(url)).not.toThrow();
+  });
+
+  it.each([
+    ['javascript:alert(1)', 'javascript: scheme'],
+    ['data:text/html,<script>alert(1)</script>', 'data: text/html'],
+    ['data:image/svg+xml,<svg/onload=alert(1)>', 'data: image/svg'],
+    ['file:///etc/passwd', 'file: scheme'],
+    ['vbscript:msgbox(1)', 'vbscript: scheme'],
+    ['//evil.example.com', 'protocol-relative (inherits scheme)'],
+    ['', 'empty string'],
+  ])('rejects %s (%s)', (url) => {
+    expect(() => parseLinkUrl(url)).toThrow();
+  });
+});
+
+describe('mdAstImageSchema URL scheme allowlist', () => {
+  function parseImageUrl(url: string): void {
+    mdAstImageSchema.parse({
+      type: 'image',
+      url,
+      title: null,
+      alt: 'x',
+    });
+  }
+
+  it.each([
+    ['https://cdn.example.com/x.png', 'absolute https'],
+    ['http://x.test/y.jpg', 'absolute http'],
+  ])('accepts %s (%s)', (url) => {
+    expect(() => parseImageUrl(url)).not.toThrow();
+  });
+
+  it.each([
+    ['javascript:alert(1)', 'javascript: scheme'],
+    ['data:text/html,<script>alert(1)</script>', 'data: text/html'],
+    ['data:image/svg+xml,<svg/onload=alert(1)>', 'data: image/svg'],
+    ['data:image/png;base64,iVBORw0KGgo=', 'data: image/png'],
+    ['file:///etc/passwd', 'file: scheme'],
+    ['vbscript:msgbox(1)', 'vbscript: scheme'],
+    ['mailto:foo@example.com', 'mailto (links only)'],
+    ['tel:+15551234', 'tel (links only)'],
+    ['/about', 'relative (images must be absolute)'],
+    ['./hero.png', 'relative (images must be absolute)'],
+    ['#fragment', 'fragment (images must be absolute)'],
+    ['', 'empty string'],
+  ])('rejects %s (%s)', (url) => {
+    expect(() => parseImageUrl(url)).toThrow();
   });
 });
 

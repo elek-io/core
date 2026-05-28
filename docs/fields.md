@@ -8,8 +8,8 @@ For a cross-CMS comparison against Strapi, Directus, Payload, and TinaCMS, see [
 
 Two type axes describe every field:
 
-- **Value type** (`string` | `number` | `boolean` | `reference` | `component`) — how data is stored at runtime in the Entry JSON file.
-- **Field type** (17 in total) — layered on top of the value type to add validation, constraints, and editor semantics.
+- **Value type** (`string` | `number` | `boolean` | `reference` | `component` | `mdast`) — how data is stored at runtime in the Entry JSON file.
+- **Field type** (18 in total) — layered on top of the value type to add validation, constraints, and editor semantics.
 
 A `select` field, for example, stores either a `string` or `number` value depending on its variant; a `dynamic` field stores a `component` value (an array of Component instances).
 
@@ -43,7 +43,7 @@ Every field definition extends `fieldDefinitionBaseSchema`:
 | `label`       | Translatable; must contain a non-empty string for every project-supported language at validation time.     |
 | `description` | Translatable or `null`.                                                                                    |
 | `isRequired`  | Forced `true` on `toggle` and `range` (those types always carry a value).                                  |
-| `isUnique`    | Only meaningful on `string` / `number` value types; the schema forces `false` on `boolean`, `reference`, and `dynamic`. |
+| `isUnique`    | Only meaningful on `string` / `number` value types; the schema forces `false` on `boolean`, `reference`, `dynamic`, and `mdast`. |
 | `inputWidth`  | Layout hint for the editor's 12-column grid. `'12'` = full row, `'6'` = half, `'4'` = third, `'3'` = quarter. |
 
 ## Field Type Catalogue
@@ -260,6 +260,61 @@ References one or more shared **Component** definitions. Editors add, remove, an
 
 The standalone `list` field type was removed in favour of `dynamic` + a Component. To represent a repeating set of fields, define a Component once and reference it from a `dynamic` field. See [Composing with Components](#composing-with-components) for a worked example.
 
+### Rich Text (value type: `mdast`)
+
+#### `markdown`
+
+Authoring of rich body content (formatted text, headings, lists, links, code, embedded references) backed by a structured mdast (markdown abstract syntax tree). The writer experience is markdown-style; storage is a typed JSON tree per language — not a markdown source string. This makes Asset and Entry references first-class typed nodes (`assetReference` / `entryReference`) rather than opaque URLs.
+
+```typescript
+{
+  fieldType: 'markdown',
+  valueType: 'mdast',
+  min: 1,            // optional, nullable, ≥1 - minimum top-level block count
+  max: null,         // optional, nullable, ≥1 - maximum top-level block count
+  features: {
+    // Block-level (8 booleans + headings array; paragraph + text are always allowed)
+    headings: [2, 3, 4],     // allowed depth literals; [] disables headings
+    blockquotes: true,
+    lists: true,
+    codeBlocks: false,
+    thematicBreak: true,
+    rawHtml: false,          // see Security note in markdown-content.md
+    tables: true,            // GFM
+    taskListItems: true,     // GFM; requires lists === true
+    footnotes: false,        // GFM
+    // Inline (9 booleans)
+    emphasis: true,
+    strong: true,
+    inlineCode: true,
+    externalLinks: true,     // [text](url) and <url> autolinks
+    entryReferences: true,   // custom entryReference node
+    externalImages: false,
+    assetReferences: true,   // custom assetReference node
+    strikethrough: false,    // GFM
+    hardLineBreaks: false,
+  },
+  ofCollections: [],         // empty array = no restriction (entryReference may target any Collection); a non-empty array restricts it to the listed Collection ids
+  ofAssetMimeTypes: ['image/jpeg', 'image/png'],  // empty array = no restriction (assetReference may target any MIME type); a non-empty array restricts it to the listed MIME types
+  defaultValue: null,        // null or a single MdAstRoot tree applied to every language
+  isUnique: false,           // forced
+  // ... common properties
+}
+```
+
+Validation:
+
+- When both `min` and `max` are set, `min` must be ≤ `max`. Trees that violate the configured `min`/`max` top-level block count are rejected at write time.
+- `features.taskListItems: true` requires `features.lists: true`.
+- `defaultValue` (when non-null) must satisfy the field's `features` configuration — a default tree can't contain node types the features map disables.
+- `entryReference` nodes inside an entry's tree are checked structurally against `ofCollections` at the schema layer (their claimed `collectionId` must be in the allowed list, when non-empty).
+- `assetReference` nodes are checked against `ofAssetMimeTypes` at the service layer (Core reads the referenced Asset's `mimeType` and compares it to the allowed list).
+- Reference existence (the referenced Asset / Entry actually exists on disk) is checked at write time; dangling references are rejected.
+
+Per-language value shape: `content: Record<ProjectLanguage, MdAstRoot | null>`. Empty markdown values are canonically `null` per language — the schema rejects empty trees and Milkdown-style empty-paragraph wrappers, forcing Desktop to normalize "effectively empty" editor state to `null` before saving.
+
+> For details on how to render markdown values, convert to a markdown string, and handle entry/asset references in tree nodes, see [`markdown-content.md`](./markdown-content.md).
+
 ## Field Grouping
 
 Inside a Collection, field definitions can be wrapped in a `FieldDefinitionGroup` for visual organization. Groups are presentational only — they have no effect on storage or validation, and they do not appear in the Entry JSON.
@@ -357,6 +412,7 @@ Direct values (`string` / `number` / `boolean`) and `reference` values store per
 | `boolean`   | `{ [lang]: boolean }` (never null)                                                         | yes           |
 | `reference` | `{ [lang]: Array<{ id: UUID, objectType: 'asset' \| 'entry', collectionId?: UUID }> }`     | yes           |
 | `component` | `ComponentItem[]` — `{ id, componentId, values: Record<slug, Value> }`                     | **no** (array shell is flat; nested values translate per their definitions) |
+| `mdast`     | `{ [lang]: MdAstRoot \| null }` (structured tree of typed mdast nodes; `null` = empty)     | yes           |
 
 The full Entry shape and the `Value` union live in `src/schema/valueSchema.ts`.
 
@@ -399,5 +455,6 @@ Field types are declared in code — there is no plugin or marketplace system. T
 
 - [`comparisons/fields.md`](./comparisons/fields.md) — cross-CMS comparison against Strapi, Directus, Payload, TinaCMS
 - [`language-scoped-validation.md`](./language-scoped-validation.md) — runtime/static schema layering for translatable values
+- [`markdown-content.md`](./markdown-content.md) — rendering, serialization, and security for `markdown` field values
 - [`migration-and-history-flow.md`](./migration-and-history-flow.md) — how field definition changes propagate through Project migrations
 - [`error-handling.md`](./error-handling.md) — `CoreError` and validation error patterns

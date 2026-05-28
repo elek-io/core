@@ -162,9 +162,17 @@ export const mdAstHtmlSchema = z.object({
 });
 export type MdAstHtml = z.infer<typeof mdAstHtmlSchema>;
 
+/**
+ * External image URL. Internal assets use `assetReference` instead — the
+ * `image` node is for external sources only. Allows `http`/`https`; rejects
+ * relative paths (use the asset library), `data:` URIs (payload bloat, SVG
+ * XSS), and exotic schemes.
+ */
+export const mdAstImageUrlSchema = z.url({ protocol: /^https?$/ });
+
 export const mdAstImageSchema = z.object({
   type: z.literal('image'),
-  url: z.string(),
+  url: mdAstImageUrlSchema,
   title: z.string().nullable(),
   alt: z.string(),
 });
@@ -264,9 +272,26 @@ export const mdAstDeleteSchema: z.ZodType<MdAstDelete> = z.object({
   },
 });
 
+/**
+ * External link URL. Internal entries use `entryReference` instead — the
+ * `link` node is for external destinations only. Accepts:
+ *  - `http`/`https` absolute URLs
+ *  - `mailto:` and `tel:` for contact links
+ *  - site-relative (`/path`), sibling/parent-relative (`./`, `../`), and
+ *    fragment-only (`#section`) URLs
+ *
+ * Rejects exotic schemes (`javascript:`, `data:`, `file:`, `vbscript:`) and
+ * protocol-relative URLs (`//host`, which inherit the page's scheme and
+ * make a malicious target indistinguishable from a benign one).
+ */
+export const mdAstLinkUrlSchema = z.union([
+  z.url({ protocol: /^(https?|mailto|tel)$/ }),
+  z.string().regex(/^\/(?!\/)|^\.\.?\/|^#/),
+]);
+
 export const mdAstLinkSchema: z.ZodType<MdAstLink> = z.object({
   type: z.literal('link'),
-  url: z.string(),
+  url: mdAstLinkUrlSchema,
   title: z.string().nullable(),
   get children() {
     return z.array(mdAstPhrasingNodeSchema);

@@ -783,6 +783,59 @@ describe('EntryService - reference validation', function () {
       }
     });
 
+    it('reports the treePath for a reference that is not the first child', async function () {
+      const ghostEntryId = uuid();
+      try {
+        await core.entries.create({
+          projectId: project.id,
+          collectionId: collectionWithMarkdown.id,
+          values: {
+            [mdSlugs.body]: {
+              objectType: 'value',
+              valueType: 'mdast',
+              content: {
+                en: {
+                  type: 'root',
+                  children: [
+                    {
+                      type: 'paragraph',
+                      children: [{ type: 'text', value: 'first block' }],
+                    },
+                    {
+                      type: 'paragraph',
+                      children: [
+                        { type: 'text', value: 'a ' },
+                        { type: 'text', value: 'b ' },
+                        {
+                          type: 'entryReference',
+                          collectionId: collectionWithMarkdown.id,
+                          entryId: ghostEntryId,
+                          children: [{ type: 'text', value: 'gone' }],
+                        },
+                      ],
+                    },
+                  ],
+                },
+                de: null,
+              },
+            },
+          },
+        });
+        throw new Error('expected create to throw');
+      } catch (error) {
+        const issues = getReferenceIssues(error);
+        expect(issues).not.toBeNull();
+        expect(issues).toHaveLength(1);
+        expect(issues![0]).toMatchObject({
+          kind: 'reference_not_found',
+          refKind: 'entry',
+          refId: ghostEntryId,
+          // root.children[1] (second paragraph) -> children[2] (third child = entryReference)
+          treePath: [1, 2],
+        });
+      }
+    });
+
     it('accepts an mdast entryReference to a real entry', async function () {
       const entry = await core.entries.create({
         projectId: project.id,

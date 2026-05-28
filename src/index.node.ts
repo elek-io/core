@@ -25,6 +25,10 @@ import * as Util from './util/node.js';
 // including code that requires filesystem access / git integration etc.
 export * from './schema/index.js';
 export * from './util/shared.js';
+export {
+  mdastToMarkdown,
+  type MdastToMarkdownOptions,
+} from './util/mdastToMarkdown.js';
 
 /**
  * elek.io Core

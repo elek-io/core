@@ -40,6 +40,34 @@ import {
 } from './valueSchema.js';
 
 /**
+ * Maximum nesting depth (1-based: root = 1) tolerated in a stored tree.
+ * Mirrors `markdown-it`'s `maxNesting` default of 100 - the most widely
+ * deployed Markdown parser's ceiling. Generous enough that no real
+ * document hits it; tight enough to stop adversarially deep trees from
+ * exhausting renderer stacks.
+ */
+export const MAX_MDAST_DEPTH = 100;
+
+/**
+ * Returns true when any node in `root` sits at depth > `maxDepth`.
+ * Depth is 1-based: root = 1, its children = 2, etc. Walks the tree
+ * once, bailing on the first overshoot.
+ */
+function exceedsMaxDepth(root: unknown, maxDepth: number): boolean {
+  function walk(node: unknown, depth: number): boolean {
+    if (depth > maxDepth) return true;
+    if (typeof node !== 'object' || node === null) return false;
+    const children = (node as { children?: unknown }).children;
+    if (!Array.isArray(children)) return false;
+    for (const child of children) {
+      if (walk(child, depth + 1)) return true;
+    }
+    return false;
+  }
+  return walk(root, 1);
+}
+
+/**
  * Heading depth - one of 1..6. Empty array on the field config disables
  * headings entirely.
  */
@@ -432,6 +460,10 @@ export function buildMdAstSchemaForFeatures(
     .refine((root) => !isEmptyParagraphOnly(root), {
       message:
         'Empty markdown values must be serialised as null per language, not as a tree containing only an empty paragraph',
+      path: ['children'],
+    })
+    .refine((root) => !exceedsMaxDepth(root, MAX_MDAST_DEPTH), {
+      message: `Markdown tree exceeds maximum nesting depth of ${MAX_MDAST_DEPTH}`,
       path: ['children'],
     });
 
