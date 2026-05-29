@@ -58,8 +58,6 @@
     "@sindresorhus/slugify": "3.0.0",
     "fs-extra": "11.3.4",
     "hono": "4.12.9",
-    "mdast-util-gfm": "3.1.0",
-    "mdast-util-to-markdown": "2.1.2",
     "mime": "4.1.0",
     "p-queue": "9.1.0",
     "semver": "7.7.4",

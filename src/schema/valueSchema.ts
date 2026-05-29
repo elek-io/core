@@ -515,9 +515,6 @@ export function isEmptyParagraphOnly(root: {
  * components/HTML. Gives full control over how entryReference / assetReference
  * nodes render (resolve to your URL structure of choice).
  *
- * For string export (search indexing, AI prompts, file export): call
- * `mdastToMarkdown(root, { resolveEntry, resolveAsset })` from @elek-io/core.
- *
  * See docs/markdown-content.md for rendering patterns and security notes
  * (especially around `rawHtml`-enabled fields).
  */
