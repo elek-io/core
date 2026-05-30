@@ -1,5 +1,11 @@
 # @elek-io/core
 
+## 0.18.1
+
+### Patch Changes
+
+- 372cef1: Upgraded to pnpm 11. Migrated build script approval from the removed `onlyBuiltDependencies` and `ignoredBuiltDependencies` fields to the new `allowBuilds` map, keeping dugite's build enabled and esbuild and sharp disabled.
+
 ## 0.18.0
 
 ### Minor Changes
