@@ -10,6 +10,7 @@ import {
 import {
   AssetService,
   CollectionService,
+  ComponentService,
   EntryService,
   GitService,
   JsonFileService,
@@ -40,6 +41,7 @@ export default class ElekIoCore {
   private readonly assetService: AssetService;
   private readonly projectService: ProjectService;
   private readonly collectionService: CollectionService;
+  private readonly componentService: ComponentService;
   private readonly entryService: EntryService;
   private readonly releaseService: ReleaseService;
   private readonly localApi: LocalApi;
@@ -80,13 +82,21 @@ export default class ElekIoCore {
       this.jsonFileService,
       this.gitService
     );
+    this.componentService = new ComponentService(
+      this.coreVersion,
+      this.options,
+      this.logService,
+      this.jsonFileService,
+      this.gitService
+    );
     this.entryService = new EntryService(
       this.coreVersion,
       this.options,
       this.logService,
       this.jsonFileService,
       this.gitService,
-      this.collectionService
+      this.collectionService,
+      this.componentService
     );
     this.projectService = new ProjectService(
       this.coreVersion,
@@ -96,6 +106,7 @@ export default class ElekIoCore {
       this.gitService,
       this.assetService,
       this.collectionService,
+      this.componentService,
       this.entryService
     );
     this.releaseService = new ReleaseService(
@@ -109,6 +120,7 @@ export default class ElekIoCore {
       this.logService,
       this.projectService,
       this.collectionService,
+      this.componentService,
       this.entryService,
       this.assetService
     );
@@ -174,6 +186,13 @@ export default class ElekIoCore {
   }
 
   /**
+   * CRUD methods to work with Components
+   */
+  public get components(): ComponentService {
+    return this.componentService;
+  }
+
+  /**
    * CRUD methods to work with Entries
    */
   public get entries(): EntryService {
@@ -193,5 +212,18 @@ export default class ElekIoCore {
    */
   public get api(): LocalApi {
     return this.localApi;
+  }
+
+  /**
+   * Stops the local API (if running) and closes the logger,
+   * removing the process-level exception and rejection handlers
+   */
+  public async dispose(): Promise<void> {
+    if (this.localApi.isRunning()) {
+      this.localApi.stop();
+    }
+    // Logged before closing so the final line is flushed
+    this.logService.info({ source: 'core', message: 'Disposing elek.io Core' });
+    await this.logService.close();
   }
 }

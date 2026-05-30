@@ -103,6 +103,48 @@ describe('transformEntryValues', () => {
     });
   });
 
+  it('transforms component values with recursive nested values', () => {
+    const values: Record<string, Value> = {
+      sections: {
+        objectType: 'value',
+        valueType: 'component',
+        content: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            componentId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            values: {
+              heading: {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Welcome', de: 'Willkommen' },
+              },
+              visible: {
+                objectType: 'value',
+                valueType: 'boolean',
+                content: { en: true },
+              },
+            },
+          },
+        ],
+      },
+    };
+
+    const result = transformEntryValues(values);
+
+    expect(result).toEqual({
+      sections: [
+        {
+          id: '11111111-1111-1111-1111-111111111111',
+          componentId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+          values: {
+            heading: { en: 'Welcome', de: 'Willkommen' },
+            visible: { en: true },
+          },
+        },
+      ],
+    });
+  });
+
   it('returns empty object for empty values record', () => {
     const result = transformEntryValues({});
     expect(result).toEqual({});

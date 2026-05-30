@@ -96,4 +96,20 @@ export class LogService {
 
     this.logger.error(message, { source, meta });
   }
+
+  /**
+   * Flushes and closes the logger, removing the process-level
+   * exception and rejection handlers it registered
+   */
+  public close(): Promise<void> {
+    // Remove the process handlers first, synchronously, so an ended logger is
+    // never left with a live exception or rejection handler
+    this.logger.exceptions.unhandle();
+    this.logger.rejections.unhandle();
+    return new Promise<void>((resolve) => {
+      // Graceful flush, ends each transport before emitting 'finish'
+      this.logger.once('finish', () => resolve());
+      this.logger.end();
+    });
+  }
 }

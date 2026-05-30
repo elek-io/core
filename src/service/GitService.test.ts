@@ -70,7 +70,7 @@ describe('GitService', function () {
   });
 
   it('should throw trying to add the remote origin if origin is added already', async function () {
-    await expect(() =>
+    await expect(
       core.git.remotes.addOrigin(projectPath, remoteProjectPath)
     ).rejects.toThrow();
   });

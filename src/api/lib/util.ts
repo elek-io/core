@@ -8,12 +8,14 @@ import { cors } from 'hono/cors';
 import type {
   AssetService,
   CollectionService,
+  ComponentService,
   EntryService,
   LogService,
   ProjectService,
 } from '../../service/index.js';
 import { createMiddleware } from 'hono/factory';
 import { trimTrailingSlash } from 'hono/trailing-slash';
+import { CoreError } from '../../util/shared.js';
 
 /**
  * Creates a new OpenAPIHono router with default settings
@@ -49,6 +51,7 @@ export default function createApi(
   logService: LogService,
   projectService: ProjectService,
   collectionService: CollectionService,
+  componentService: ComponentService,
   entryService: EntryService,
   assetService: AssetService
 ) {
@@ -68,6 +71,7 @@ export default function createApi(
         c.set('logService', logService);
         c.set('projectService', projectService);
         c.set('collectionService', collectionService);
+        c.set('componentService', componentService);
         c.set('entryService', entryService);
         c.set('assetService', assetService);
         return next();
@@ -85,6 +89,20 @@ export default function createApi(
   });
 
   api.onError((err, c) => {
+    if (err instanceof CoreError) {
+      return c.json(
+        {
+          error: {
+            type: err.type,
+            message: err.message,
+            statusCode: err.statusCode,
+            stack: err.cause instanceof Error ? err.cause.stack : undefined,
+          },
+        },
+        err.statusCode as ContentfulStatusCode
+      );
+    }
+
     const currentStatus =
       'status' in err ? err.status : c.newResponse(null).status;
     const statusCode =
@@ -107,6 +125,7 @@ export function createTestApi<S extends Schema>(
   logService: LogService,
   projectService: ProjectService,
   collectionService: CollectionService,
+  componentService: ComponentService,
   entryService: EntryService,
   assetService: AssetService
 ) {
@@ -114,6 +133,7 @@ export function createTestApi<S extends Schema>(
     logService,
     projectService,
     collectionService,
+    componentService,
     entryService,
     assetService
   ).route('/', router);

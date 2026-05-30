@@ -6,30 +6,40 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { supportedLanguageSchema } from './baseSchema.js';
-import {
-  createEntrySchema,
-  entrySchema,
-  updateEntrySchema,
-} from './entrySchema.js';
+import { slugSchema, uuidSchema, type Uuid } from './baseSchema.js';
+import type { ProjectLanguages } from './projectSchema.js';
 import type {
   AssetFieldDefinition,
+  DynamicFieldDefinition,
   EntryFieldDefinition,
   FieldDefinition,
+  MarkdownFieldDefinition,
   NumberFieldDefinition,
+  NumberSelectFieldDefinition,
   RangeFieldDefinition,
   StringFieldDefinition,
 } from './fieldSchema.js';
 import { fieldTypeSchema } from './fieldSchema.js';
+import { buildMdAstSchemaForFeatures } from './buildMdAstSchema.js';
 import {
+  componentValueSchema,
   directBooleanValueSchema,
   directNumberValueSchema,
   directStringValueSchema,
+  mdastValueSchema,
   referencedValueSchema,
   valueContentReferenceToAssetSchema,
   valueContentReferenceToEntrySchema,
+  valueSchema,
   valueTypeSchema,
 } from './valueSchema.js';
+
+/**
+ * Resolves a Component UUID to its flat array of FieldDefinitions.
+ * Callers pre-load all referenced Components into a Map before calling schema generation,
+ * keeping schema generation synchronous.
+ */
+export type ComponentResolver = (componentId: Uuid) => FieldDefinition[];
 
 /**
  * Boolean Values are always either true or false, so we don't need the Field definition here
@@ -42,7 +52,10 @@ function getBooleanValueContentSchemaFromFieldDefinition() {
  * Number Values can have min and max values and can be required or not
  */
 function getNumberValueContentSchemaFromFieldDefinition(
-  fieldDefinition: NumberFieldDefinition | RangeFieldDefinition
+  fieldDefinition:
+    | NumberFieldDefinition
+    | RangeFieldDefinition
+    | NumberSelectFieldDefinition
 ) {
   let schema = z.number();
 
@@ -93,6 +106,7 @@ function getStringValueContentSchemaFromFieldDefinition(
       break;
     case fieldTypeSchema.enum.text:
     case fieldTypeSchema.enum.textarea:
+    case fieldTypeSchema.enum.select:
       schema = z.string().trim();
       break;
   }
@@ -112,11 +126,11 @@ function getStringValueContentSchemaFromFieldDefinition(
 }
 
 /**
- * Reference Values can reference either Assets or Entries (or Shared Values in the future)
- * and can have min and max number of references and can be required or not
+ * Reference Values can reference either Assets or Entries,
+ * can have min / max number of references and can be required or not
  */
 function getReferenceValueContentSchemaFromFieldDefinition(
-  fieldDefinition: AssetFieldDefinition | EntryFieldDefinition // | SharedValueFieldDefinition
+  fieldDefinition: AssetFieldDefinition | EntryFieldDefinition
 ) {
   let schema;
 
@@ -128,22 +142,20 @@ function getReferenceValueContentSchemaFromFieldDefinition(
       break;
     case fieldTypeSchema.enum.entry:
       {
-        schema = z.array(valueContentReferenceToEntrySchema);
+        const entryRefSchema =
+          fieldDefinition.ofCollections.length > 0
+            ? valueContentReferenceToEntrySchema.refine(
+                (ref) =>
+                  fieldDefinition.ofCollections.includes(ref.collectionId),
+                {
+                  message:
+                    'Referenced Entry must belong to one of the allowed Collections',
+                }
+              )
+            : valueContentReferenceToEntrySchema;
+        schema = z.array(entryRefSchema);
       }
       break;
-    // case ValueInputTypeSchema.enum.sharedValue: {
-    //   let schema = valueContentReferenceToSharedValueSchema.extend({}); // Deep copy to not overwrite the base schema
-    //   if (definition.isRequired) {
-    //     const requiredReferences = schema.shape.references.min(
-    //       1,
-    //       'shared.assetValueRequired'
-    //     );
-    //     schema = schema.extend({
-    //       references: requiredReferences,
-    //     });
-    //   }
-    //   return valueContentReferenceToSharedValueSchema;
-    // }
   }
 
   if (fieldDefinition.isRequired) {
@@ -162,70 +174,196 @@ function getReferenceValueContentSchemaFromFieldDefinition(
 }
 
 export function getTranslatableStringValueContentSchemaFromFieldDefinition(
-  fieldDefinition: StringFieldDefinition
+  fieldDefinition: StringFieldDefinition,
+  languages: ProjectLanguages
 ) {
-  return z.partialRecord(
-    supportedLanguageSchema,
+  return z.record(
+    z.enum(languages),
     getStringValueContentSchemaFromFieldDefinition(fieldDefinition)
   );
 }
 
 export function getTranslatableNumberValueContentSchemaFromFieldDefinition(
-  fieldDefinition: NumberFieldDefinition | RangeFieldDefinition
+  fieldDefinition:
+    | NumberFieldDefinition
+    | RangeFieldDefinition
+    | NumberSelectFieldDefinition,
+  languages: ProjectLanguages
 ) {
-  return z.partialRecord(
-    supportedLanguageSchema,
+  return z.record(
+    z.enum(languages),
     getNumberValueContentSchemaFromFieldDefinition(fieldDefinition)
   );
 }
 
-export function getTranslatableBooleanValueContentSchemaFromFieldDefinition() {
-  return z.partialRecord(
-    supportedLanguageSchema,
+export function getTranslatableBooleanValueContentSchemaFromFieldDefinition(
+  languages: ProjectLanguages
+) {
+  return z.record(
+    z.enum(languages),
     getBooleanValueContentSchemaFromFieldDefinition()
   );
 }
 
 export function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
-  fieldDefinition: AssetFieldDefinition | EntryFieldDefinition
+  fieldDefinition: AssetFieldDefinition | EntryFieldDefinition,
+  languages: ProjectLanguages
 ) {
-  return z.partialRecord(
-    supportedLanguageSchema,
+  return z.record(
+    z.enum(languages),
     getReferenceValueContentSchemaFromFieldDefinition(fieldDefinition)
   );
 }
 
 /**
- * Generates a zod schema to check a Value based on given Field definition
+ * Builds the per-language content schema for a markdown field. Each
+ * language slot accepts either `null` (when not required) or an
+ * `MdAstRoot` narrowed to the field's `features` configuration.
+ */
+export function getTranslatableMdAstValueContentSchemaFromFieldDefinition(
+  fieldDefinition: MarkdownFieldDefinition,
+  languages: ProjectLanguages
+) {
+  return z.record(
+    z.enum(languages),
+    buildMdAstSchemaForFeatures({
+      features: fieldDefinition.features,
+      ofCollections: fieldDefinition.ofCollections,
+      min: fieldDefinition.min,
+      max: fieldDefinition.max,
+      isRequired: fieldDefinition.isRequired,
+    })
+  );
+}
+
+/**
+ * Generates the content schema for a dynamic (component) field.
+ * For each referenced Component, builds a per-component item schema with a
+ * z.literal componentId discriminator and a strict values object.
+ * Returns a z.array of the union (or single schema if only one component).
+ */
+function getComponentValueContentSchemaFromFieldDefinition(
+  fieldDefinition: DynamicFieldDefinition,
+  languages: ProjectLanguages,
+  componentResolver: ComponentResolver,
+  visited: Set<string>
+) {
+  const componentSchemas = fieldDefinition.ofComponents.map((componentId) => {
+    if (visited.has(componentId)) {
+      throw new Error(
+        `Circular component reference detected: Component "${componentId}" is already in the schema generation chain`
+      );
+    }
+    const branchedVisited = new Set(visited);
+    branchedVisited.add(componentId);
+
+    const fieldDefinitions = componentResolver(componentId);
+    const shape: Record<string, z.ZodTypeAny> = {};
+    for (const fieldDefinition of fieldDefinitions) {
+      shape[fieldDefinition.slug] = getValueSchemaFromFieldDefinition(
+        fieldDefinition,
+        languages,
+        componentResolver,
+        branchedVisited
+      );
+    }
+    return z.object({
+      id: uuidSchema.readonly(),
+      componentId: z.literal(componentId),
+      values: z.object(shape),
+    });
+  });
+
+  let itemSchema: z.ZodTypeAny;
+  const [first, second, ...rest] = componentSchemas;
+  if (!first) {
+    // Empty ofComponents means "all components allowed" - use a permissive schema
+    itemSchema = z.object({
+      id: uuidSchema.readonly(),
+      componentId: uuidSchema,
+      values: z.record(slugSchema, valueSchema),
+    });
+  } else if (!second) {
+    itemSchema = first;
+  } else {
+    itemSchema = z.discriminatedUnion('componentId', [first, second, ...rest]);
+  }
+
+  let schema = z.array(itemSchema);
+
+  if (fieldDefinition.min !== null) {
+    schema = schema.min(fieldDefinition.min);
+  } else if (fieldDefinition.isRequired) {
+    schema = schema.min(1);
+  }
+  if (fieldDefinition.max !== null) {
+    schema = schema.max(fieldDefinition.max);
+  }
+
+  return schema;
+}
+
+/**
+ * Generates a zod schema to check a Value based on given Field definition.
+ * For component (dynamic) fields, requires a componentResolver to look up
+ * sub-field definitions and a visited set for circular reference protection.
  */
 export function getValueSchemaFromFieldDefinition(
-  fieldDefinition: FieldDefinition
+  fieldDefinition: FieldDefinition,
+  languages: ProjectLanguages,
+  componentResolver?: ComponentResolver,
+  visited: Set<string> = new Set()
 ) {
   switch (fieldDefinition.valueType) {
     case valueTypeSchema.enum.boolean:
       return directBooleanValueSchema.extend({
-        content: getTranslatableBooleanValueContentSchemaFromFieldDefinition(),
+        content:
+          getTranslatableBooleanValueContentSchemaFromFieldDefinition(
+            languages
+          ),
       });
     case valueTypeSchema.enum.number:
       return directNumberValueSchema.extend({
-        content:
-          getTranslatableNumberValueContentSchemaFromFieldDefinition(
-            fieldDefinition
-          ),
+        content: getTranslatableNumberValueContentSchemaFromFieldDefinition(
+          fieldDefinition,
+          languages
+        ),
       });
     case valueTypeSchema.enum.string:
       return directStringValueSchema.extend({
-        content:
-          getTranslatableStringValueContentSchemaFromFieldDefinition(
-            fieldDefinition
-          ),
+        content: getTranslatableStringValueContentSchemaFromFieldDefinition(
+          fieldDefinition,
+          languages
+        ),
       });
     case valueTypeSchema.enum.reference:
       return referencedValueSchema.extend({
-        content:
-          getTranslatableReferenceValueContentSchemaFromFieldDefinition(
-            fieldDefinition
-          ),
+        content: getTranslatableReferenceValueContentSchemaFromFieldDefinition(
+          fieldDefinition,
+          languages
+        ),
+      });
+    case valueTypeSchema.enum.component: {
+      if (!componentResolver) {
+        throw new Error(
+          'componentResolver is required for dynamic (component) field definitions'
+        );
+      }
+      return componentValueSchema.extend({
+        content: getComponentValueContentSchemaFromFieldDefinition(
+          fieldDefinition,
+          languages,
+          componentResolver,
+          visited
+        ),
+      });
+    }
+    case valueTypeSchema.enum.mdast:
+      return mdastValueSchema.extend({
+        content: getTranslatableMdAstValueContentSchemaFromFieldDefinition(
+          fieldDefinition,
+          languages
+        ),
       });
     default:
       throw new Error(
@@ -239,50 +377,40 @@ export function getValueSchemaFromFieldDefinition(
  * Builds a z.object shape from field definitions, keyed by slug
  */
 function getValuesShapeFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[]
+  fieldDefinitions: FieldDefinition[],
+  languages: ProjectLanguages,
+  componentResolver?: ComponentResolver,
+  visited?: Set<string>
 ) {
-  const shape: Record<
-    string,
-    ReturnType<typeof getValueSchemaFromFieldDefinition>
-  > = {};
+  const shape: Record<string, z.ZodTypeAny> = {};
   for (const fieldDef of fieldDefinitions) {
-    shape[fieldDef.slug] = getValueSchemaFromFieldDefinition(fieldDef);
+    shape[fieldDef.slug] = getValueSchemaFromFieldDefinition(
+      fieldDef,
+      languages,
+      componentResolver,
+      visited
+    );
   }
   return shape;
 }
 
 /**
- * Generates a schema for an Entry based on the given Field definitions and Values
+ * Builds a values schema that validates each field individually
+ * and pipes through `z.record(slugSchema, valueSchema)` so
+ * the output type is correctly inferred as `Record<string, Value>`.
  */
-export function getEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[]
+export function getValuesSchema(
+  fieldDefinitions: FieldDefinition[],
+  languages: ProjectLanguages,
+  componentResolver?: ComponentResolver
 ) {
-  return z.object({
-    ...entrySchema.shape,
-    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
-  });
-}
-
-/**
- * Generates a schema for creating a new Entry based on the given Field definitions and Values
- */
-export function getCreateEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[]
-) {
-  return z.object({
-    ...createEntrySchema.shape,
-    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
-  });
-}
-
-/**
- * Generates a schema for updating an existing Entry based on the given Field definitions and Values
- */
-export function getUpdateEntrySchemaFromFieldDefinitions(
-  fieldDefinitions: FieldDefinition[]
-) {
-  return z.object({
-    ...updateEntrySchema.shape,
-    values: z.object(getValuesShapeFromFieldDefinitions(fieldDefinitions)),
-  });
+  return z
+    .object(
+      getValuesShapeFromFieldDefinitions(
+        fieldDefinitions,
+        languages,
+        componentResolver
+      )
+    )
+    .pipe(z.record(slugSchema, valueSchema));
 }

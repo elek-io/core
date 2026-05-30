@@ -2,12 +2,6 @@ import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
 import Semver from 'semver';
-import {
-  ProjectUpgradeError,
-  RequiredParameterMissingError,
-} from '../error/index.js';
-import { RemoteOriginMissingError } from '../error/RemoteOriginMissingError.js';
-import { SynchronizeLocalChangesError } from '../error/SynchronizeLocalChangesError.js';
 import type { FileReference, ObjectType, Version } from '../schema/index.js';
 import {
   cloneProjectSchema,
@@ -53,10 +47,11 @@ import {
 } from '../schema/index.js';
 import { applyMigrations, projectMigrations } from './migrations/index.js';
 import { isNotEmpty, pathTo } from '../util/node.js';
-import { datetime, uuid } from '../util/shared.js';
-import { AbstractCrudService } from './AbstractCrudService.js';
+import { CoreError, datetime, uuid } from '../util/shared.js';
+import { AbstractEntityService } from './AbstractEntityService.js';
 import type { AssetService } from './AssetService.js';
 import type { CollectionService } from './CollectionService.js';
+import type { ComponentService } from './ComponentService.js';
 import type { EntryService } from './EntryService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
@@ -66,14 +61,13 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for Project files on disk
  */
 export class ProjectService
-  extends AbstractCrudService
+  extends AbstractEntityService
   implements CrudServiceWithListCount<Project>
 {
   private coreVersion: Version;
-  private jsonFileService: JsonFileService;
-  private gitService: GitService;
   private assetService: AssetService;
   private collectionService: CollectionService;
+  private componentService: ComponentService;
   private entryService: EntryService;
 
   constructor(
@@ -84,104 +78,107 @@ export class ProjectService
     gitService: GitService,
     assetService: AssetService,
     collectionService: CollectionService,
+    componentService: ComponentService,
     entryService: EntryService
   ) {
-    super(serviceTypeSchema.enum.Project, options, logService);
+    super(
+      serviceTypeSchema.enum.Project,
+      options,
+      logService,
+      gitService,
+      jsonFileService
+    );
 
     this.coreVersion = coreVersion;
-    this.jsonFileService = jsonFileService;
-    this.gitService = gitService;
     this.assetService = assetService;
     this.collectionService = collectionService;
+    this.componentService = componentService;
     this.entryService = entryService;
   }
 
   /**
    * Creates a new Project
    */
-  public async create(props: CreateProjectProps): Promise<Project> {
-    createProjectSchema.parse(props);
+  public create(props: CreateProjectProps): Promise<Project> {
+    return this.validated(
+      'create',
+      createProjectSchema,
+      props,
+      async (validatedProps) => {
+        const id = uuid();
 
-    const id = uuid();
+        const projectFile: ProjectFile = {
+          ...validatedProps,
+          objectType: 'project',
+          id,
+          created: datetime(),
+          updated: null,
+          coreVersion: this.coreVersion,
+          version: '0.0.1',
+        };
 
-    const projectFile: ProjectFile = {
-      ...props,
-      objectType: 'project',
-      id,
-      created: datetime(),
-      updated: null,
-      coreVersion: this.coreVersion,
-      version: '0.0.1',
-    };
+        const projectPath = pathTo.project(id);
 
-    const projectPath = pathTo.project(id);
-
-    await Fs.ensureDir(projectPath);
-
-    try {
-      await this.createFolderStructure(projectPath);
-      await this.createGitignore(projectPath);
-      await this.gitService.init(projectPath, {
-        initialBranch: projectBranchSchema.enum.production,
-      });
-      await this.jsonFileService.create(
-        projectFile,
-        pathTo.projectFile(id),
-        projectFileSchema
-      );
-      await this.gitService.add(projectPath, ['.']);
-      await this.gitService.commit(projectPath, {
-        method: 'create',
-        reference: { objectType: 'project', id },
-      });
-      await this.gitService.branches.switch(
-        projectPath,
-        projectBranchSchema.enum.work,
-        {
-          isNew: true,
+        try {
+          await Fs.ensureDir(projectPath);
+          await this.createFolderStructure(projectPath);
+          await this.createGitignore(projectPath);
+          await this.gitService.init(projectPath, {
+            initialBranch: projectBranchSchema.enum.production,
+          });
+          await this.jsonFileService.create(
+            projectFile,
+            pathTo.projectFile(id),
+            projectFileSchema
+          );
+          await this.gitService.add(projectPath, ['.']);
+          await this.gitService.commit(projectPath, {
+            method: 'create',
+            reference: { objectType: 'project', id },
+          });
+          await this.gitService.branches.switch(
+            projectPath,
+            projectBranchSchema.enum.work,
+            {
+              isNew: true,
+            }
+          );
+          return await this.toProject(projectFile);
+        } catch (error) {
+          await this.delete({ id, force: true });
+          throw error;
         }
-      );
-    } catch (error) {
-      // To avoid partial data being added to the repository / git status reporting uncommitted files
-      await this.delete({
-        id,
-        force: true,
-      });
-      throw error;
-    }
-
-    return await this.toProject(projectFile);
+      }
+    );
   }
 
   /**
    * Clones a Project by URL
    */
-  public async clone(props: CloneProjectProps): Promise<Project> {
-    cloneProjectSchema.parse(props);
+  public clone(props: CloneProjectProps): Promise<Project> {
+    return this.validated('clone', cloneProjectSchema, props, async () => {
+      const tmpId = uuid();
+      const tmpProjectPath = Path.join(pathTo.tmp, tmpId);
 
-    const tmpId = uuid();
-    const tmpProjectPath = Path.join(pathTo.tmp, tmpId);
-    // await Fs.ensureDir(tmpProjectPath);
-    await this.gitService.clone(props.url, tmpProjectPath);
-
-    // Check if it is actually a Project by trying to read it
-    const projectFile = await this.jsonFileService.read(
-      Path.join(tmpProjectPath, 'project.json'),
-      projectFileSchema
-    );
-
-    // If so, copy it into the correct directory
-    const projectPath = pathTo.project(projectFile.id);
-    const alreadyExists = await Fs.pathExists(projectPath);
-    if (alreadyExists) {
-      throw new Error(
-        `Tried to clone Project "${projectFile.id}" from "${props.url}" - but the Project already exists locally`
+      await this.gitService.clone(props.url, tmpProjectPath);
+      const projectFile = await this.jsonFileService.read(
+        Path.join(tmpProjectPath, 'project.json'),
+        projectFileSchema
       );
-    }
-    await Fs.copy(tmpProjectPath, projectPath);
-    await Fs.remove(tmpProjectPath);
 
-    return await this.toProject(projectFile);
+      const projectPath = pathTo.project(projectFile.id);
+      const alreadyExists = await Fs.pathExists(projectPath);
+
+      if (alreadyExists) {
+        throw CoreError.conflict(
+          `Tried to clone Project "${projectFile.id}" from "${props.url}" - but the Project already exists locally`
+        );
+      }
+
+      await Fs.copy(tmpProjectPath, projectPath);
+      await Fs.remove(tmpProjectPath);
+      return await this.toProject(projectFile);
+    });
   }
 
   /**
@@ -189,72 +186,74 @@ export class ProjectService
    *
    * If a commit hash is provided, the Project is read from history
    */
-  public async read(props: ReadProjectProps): Promise<Project> {
-    readProjectSchema.parse(props);
-
-    if (!props.commitHash) {
-      const projectFile = await this.jsonFileService.read(
-        pathTo.projectFile(props.id),
-        projectFileSchema
-      );
-
-      return await this.toProject(projectFile);
-    } else {
-      const projectFile = this.migrate(
-        JSON.parse(
-          await this.gitService.getFileContentAtCommit(
-            pathTo.project(props.id),
-            pathTo.projectFile(props.id),
-            props.commitHash
-          )
-        )
-      );
-
-      return await this.toProject(projectFile);
-    }
+  public read(props: ReadProjectProps): Promise<Project> {
+    return this.validated('read', readProjectSchema, props, async () => {
+      if (!props.commitHash) {
+        const projectFile = await this.jsonFileService.read(
+          pathTo.projectFile(props.id),
+          projectFileSchema
+        );
+        return await this.toProject(projectFile);
+      } else {
+        const content = await this.gitService.getFileContentAtCommit(
+          pathTo.project(props.id),
+          pathTo.projectFile(props.id),
+          props.commitHash
+        );
+        const projectFile = this.migrate(JSON.parse(content));
+        return await this.toProject(projectFile);
+      }
+    });
   }
 
   /**
    * Returns the commit history of a Project
    */
-  public async history(
-    props: ProjectHistoryProps
-  ): Promise<ProjectHistoryResult> {
-    projectHistorySchema.parse(props);
-    const projectPath = pathTo.project(props.id);
+  public history(props: ProjectHistoryProps): Promise<ProjectHistoryResult> {
+    return this.validated('history', projectHistorySchema, props, async () => {
+      const projectPath = pathTo.project(props.id);
 
-    const fullHistory = await this.gitService.log(projectPath);
-    const history = await this.gitService.log(projectPath, {
-      filePath: pathTo.projectFile(props.id),
+      const fullHistory = await this.gitService.log(projectPath);
+      const history = await this.gitService.log(projectPath, {
+        filePath: pathTo.projectFile(props.id),
+      });
+      return { history, fullHistory };
     });
-
-    return { history, fullHistory };
   }
 
   /**
    * Updates given Project
    */
-  public async update(props: UpdateProjectProps): Promise<Project> {
-    updateProjectSchema.parse(props);
+  public update(props: UpdateProjectProps): Promise<Project> {
+    return this.validated(
+      'update',
+      updateProjectSchema,
+      props,
+      async (validatedProps) => {
+        const projectPath = pathTo.project(validatedProps.id);
+        const filePath = pathTo.projectFile(validatedProps.id);
 
-    const projectPath = pathTo.project(props.id);
-    const filePath = pathTo.projectFile(props.id);
-    const prevProjectFile = await this.read(props);
+        const prevProjectFile = await this.read(validatedProps);
 
-    const projectFile: ProjectFile = {
-      ...prevProjectFile,
-      ...props,
-      updated: datetime(),
-    };
+        const projectFile: ProjectFile = {
+          ...prevProjectFile,
+          ...validatedProps,
+          updated: datetime(),
+        };
 
-    await this.jsonFileService.update(projectFile, filePath, projectFileSchema);
-    await this.gitService.add(projectPath, [filePath]);
-    await this.gitService.commit(projectPath, {
-      method: 'update',
-      reference: { objectType: 'project', id: projectFile.id },
-    });
-
-    return await this.toProject(projectFile);
+        await this.jsonFileService.update(
+          projectFile,
+          filePath,
+          projectFileSchema
+        );
+        await this.gitService.add(projectPath, [filePath]);
+        await this.gitService.commit(projectPath, {
+          method: 'update',
+          reference: { objectType: 'project', id: projectFile.id },
+        });
+        return await this.toProject(projectFile);
+      }
+    );
   }
 
   /**
@@ -262,168 +261,187 @@ export class ProjectService
    *
    * Needed when a new Core version is requiring changes to existing files or structure.
    */
-  public async upgrade(props: UpgradeProjectProps): Promise<void> {
-    upgradeProjectSchema.parse(props);
+  public upgrade(props: UpgradeProjectProps): Promise<void> {
+    return this.validated('upgrade', upgradeProjectSchema, props, async () => {
+      const projectPath = pathTo.project(props.id);
+      const projectFilePath = pathTo.projectFile(props.id);
 
-    const projectPath = pathTo.project(props.id);
-    const projectFilePath = pathTo.projectFile(props.id);
-    const currentBranch = await this.gitService.branches.current(projectPath);
+      const currentBranch = await this.gitService.branches.current(projectPath);
+      if (currentBranch !== projectBranchSchema.enum.work) {
+        await this.gitService.branches.switch(
+          projectPath,
+          projectBranchSchema.enum.work
+        );
+      }
 
-    if (currentBranch !== projectBranchSchema.enum.work) {
-      await this.gitService.branches.switch(
-        projectPath,
-        projectBranchSchema.enum.work
+      const currentProjectFile = (await this.jsonFileService.unsafeRead(
+        projectFilePath
+      )) as Record<string, unknown> & { coreVersion: string };
+
+      if (Semver.gt(currentProjectFile.coreVersion, this.coreVersion)) {
+        throw CoreError.upgradeFailed(
+          `The Projects Core version "${currentProjectFile.coreVersion}" is higher than the current Core version "${this.coreVersion}".`
+        );
+      }
+
+      if (
+        Semver.eq(currentProjectFile.coreVersion, this.coreVersion) &&
+        props.force !== true
+      ) {
+        throw CoreError.upgradeFailed(
+          `The Projects Core version "${currentProjectFile.coreVersion}" is already up to date.`
+        );
+      }
+
+      const assetReferences = await this.listReferences('asset', props.id);
+      const componentReferences = await this.listReferences(
+        'component',
+        props.id
       );
-    }
-
-    // Get the current Project file (loose-parsed for version checks; full migration happens in upgradeObjectFile)
-    const currentProjectFile = (await this.jsonFileService.unsafeRead(
-      projectFilePath
-    )) as Record<string, unknown> & { coreVersion: string };
-
-    if (Semver.gt(currentProjectFile.coreVersion, this.coreVersion)) {
-      // Upgrade of the client needed before the project can be upgraded
-      throw new ProjectUpgradeError(
-        `The Projects Core version "${currentProjectFile.coreVersion}" is higher than the current Core version "${this.coreVersion}".`
+      const collectionReferences = await this.listReferences(
+        'collection',
+        props.id
       );
-    }
 
-    if (
-      Semver.eq(currentProjectFile.coreVersion, this.coreVersion) &&
-      props.force !== true
-    ) {
-      // Nothing, since both are equal
-      throw new ProjectUpgradeError(
-        `The Projects Core version "${currentProjectFile.coreVersion}" is already up to date.`
-      );
-    }
+      this.logService.info({
+        source: 'core',
+        message: `Attempting to upgrade Project "${props.id}" from Core version ${currentProjectFile.coreVersion} to ${this.coreVersion}`,
+      });
 
-    const assetReferences = await this.listReferences('asset', props.id);
-    const collectionReferences = await this.listReferences(
-      'collection',
-      props.id
-    );
+      const upgradeBranchName = `upgrade/core-${currentProjectFile.coreVersion}-to-${this.coreVersion}`;
 
-    this.logService.info({
-      source: 'core',
-      message: `Attempting to upgrade Project "${props.id}" from Core version ${currentProjectFile.coreVersion} to ${this.coreVersion}`,
-    });
+      try {
+        await this.gitService.branches.switch(projectPath, upgradeBranchName, {
+          isNew: true,
+        });
 
-    // Create a new branch to work on this migration
-    const upgradeBranchName = `upgrade/core-${currentProjectFile.coreVersion}-to-${this.coreVersion}`;
-    await this.gitService.branches.switch(projectPath, upgradeBranchName, {
-      isNew: true,
-    });
-
-    try {
-      await Promise.all(
-        assetReferences.map(async (reference) => {
+        for (const reference of assetReferences) {
           await this.upgradeObjectFile(props.id, 'asset', reference);
-        })
-      );
+        }
 
-      await Promise.all(
-        collectionReferences.map(async (reference) => {
+        for (const reference of componentReferences) {
+          await this.upgradeObjectFile(props.id, 'component', reference);
+        }
+
+        for (const reference of collectionReferences) {
           await this.upgradeObjectFile(props.id, 'collection', reference);
-        })
-      );
+        }
 
-      await Promise.all(
-        collectionReferences.map(async (collectionReference) => {
+        for (const collectionReference of collectionReferences) {
           const entryReferences = await this.listReferences(
             'entry',
             props.id,
             collectionReference.id
           );
+          for (const reference of entryReferences) {
+            await this.upgradeObjectFile(
+              props.id,
+              'entry',
+              reference,
+              collectionReference.id
+            );
+          }
+        }
 
-          await Promise.all(
-            entryReferences.map(async (reference) => {
-              await this.upgradeObjectFile(
-                props.id,
-                'entry',
-                reference,
-                collectionReference.id
-              );
-            })
+        const migratedProjectFile = this.migrate(currentProjectFile);
+        await this.update(migratedProjectFile);
+        await this.gitService.branches.switch(
+          projectPath,
+          projectBranchSchema.enum.work
+        );
+        await this.gitService.merge(projectPath, upgradeBranchName, {
+          squash: true,
+        });
+        await this.gitService.commit(projectPath, {
+          method: 'upgrade',
+          reference: {
+            objectType: 'project',
+            id: migratedProjectFile.id,
+          },
+        });
+        await this.gitService.tags.create({
+          path: projectPath,
+          message: {
+            type: 'upgrade',
+            coreVersion: migratedProjectFile.coreVersion,
+          },
+        });
+        await this.gitService.branches.delete(
+          projectPath,
+          upgradeBranchName,
+          true
+        );
+
+        this.logService.info({
+          source: 'core',
+          message: `Successfully upgraded Project "${props.id}" to Core version "${this.coreVersion}"`,
+          meta: {
+            previous: currentProjectFile,
+            migrated: migratedProjectFile,
+          },
+        });
+      } catch (error) {
+        try {
+          await this.gitService.branches.switch(
+            projectPath,
+            projectBranchSchema.enum.work
           );
-        })
-      );
-
-      // Upgrade the Project file itself
-      const migratedProjectFile = this.migrate(currentProjectFile);
-      await this.update(migratedProjectFile);
-
-      // Merge the upgrade branch back into the work branch
-      await this.gitService.branches.switch(
-        projectPath,
-        projectBranchSchema.enum.work
-      );
-      await this.gitService.merge(projectPath, upgradeBranchName, {
-        squash: true,
-      });
-      await this.gitService.commit(projectPath, {
-        method: 'upgrade',
-        reference: { objectType: 'project', id: migratedProjectFile.id },
-      });
-      await this.gitService.tags.create({
-        path: projectPath,
-        message: {
-          type: 'upgrade',
-          coreVersion: migratedProjectFile.coreVersion,
-        },
-      });
-      await this.gitService.branches.delete(
-        projectPath,
-        upgradeBranchName,
-        true
-      );
-
-      this.logService.info({
-        source: 'core',
-        message: `Successfully upgraded Project "${props.id}" to Core version "${this.coreVersion}"`,
-        meta: {
-          previous: currentProjectFile,
-          migrated: migratedProjectFile,
-        },
-      });
-    } catch (error) {
-      // Revert back to the work branch and delete the upgrade branch
-      await this.gitService.branches.switch(
-        projectPath,
-        projectBranchSchema.enum.work
-      );
-      await this.gitService.branches.delete(
-        projectPath,
-        upgradeBranchName,
-        true
-      );
-
-      throw error;
-    }
+          await this.gitService.branches.delete(
+            projectPath,
+            upgradeBranchName,
+            true
+          );
+        } catch {
+          // Best-effort cleanup
+        }
+        throw error;
+      }
+    });
   }
 
   public branches = {
-    list: async (props: ListBranchesProjectProps) => {
-      listBranchesProjectSchema.parse(props);
-      const projectPath = pathTo.project(props.id);
-      const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
-      if (hasOrigin) {
-        await this.gitService.fetch(projectPath);
-      }
-      return await this.gitService.branches.list(projectPath);
+    list: (
+      props: ListBranchesProjectProps
+    ): Promise<{ local: string[]; remote: string[] }> => {
+      return this.validated(
+        'branches.list',
+        listBranchesProjectSchema,
+        props,
+        async () => {
+          const projectPath = pathTo.project(props.id);
+          const hasOrigin =
+            await this.gitService.remotes.hasOrigin(projectPath);
+          if (hasOrigin) {
+            await this.gitService.fetch(projectPath);
+          }
+          return await this.gitService.branches.list(projectPath);
+        }
+      );
     },
-    current: async (props: CurrentBranchProjectProps) => {
-      currentBranchProjectSchema.parse(props);
-      const projectPath = pathTo.project(props.id);
-      return await this.gitService.branches.current(projectPath);
+    current: (props: CurrentBranchProjectProps): Promise<string> => {
+      return this.validated(
+        'branches.current',
+        currentBranchProjectSchema,
+        props,
+        async () => {
+          const projectPath = pathTo.project(props.id);
+          return await this.gitService.branches.current(projectPath);
+        }
+      );
     },
-    switch: async (props: SwitchBranchProjectProps) => {
-      switchBranchProjectSchema.parse(props);
-      const projectPath = pathTo.project(props.id);
-      return await this.gitService.branches.switch(
-        projectPath,
-        props.branch,
-        props.options
+    switch: (props: SwitchBranchProjectProps): Promise<void> => {
+      return this.validated(
+        'branches.switch',
+        switchBranchProjectSchema,
+        props,
+        async () => {
+          const projectPath = pathTo.project(props.id);
+          return await this.gitService.branches.switch(
+            projectPath,
+            props.branch,
+            props.options
+          );
+        }
       );
     },
   };
@@ -433,15 +451,28 @@ export class ProjectService
    *
    * @todo maybe add this logic to the update method
    */
-  public async setRemoteOriginUrl(props: SetRemoteOriginUrlProjectProps) {
-    setRemoteOriginUrlProjectSchema.parse(props);
-    const projectPath = pathTo.project(props.id);
-    const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
-    if (!hasOrigin) {
-      await this.gitService.remotes.addOrigin(projectPath, props.url);
-    } else {
-      await this.gitService.remotes.setOriginUrl(projectPath, props.url);
-    }
+  public setRemoteOriginUrl(
+    props: SetRemoteOriginUrlProjectProps
+  ): Promise<void> {
+    return this.validated(
+      'setRemoteOriginUrl',
+      setRemoteOriginUrlProjectSchema,
+      props,
+      async () => {
+        const projectPath = pathTo.project(props.id);
+        const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
+        if (!hasOrigin) {
+          return await this.gitService.remotes.addOrigin(
+            projectPath,
+            props.url
+          );
+        }
+        return await this.gitService.remotes.setOriginUrl(
+          projectPath,
+          props.url
+        );
+      }
+    );
   }
 
   /**
@@ -453,40 +484,59 @@ export class ProjectService
    * - `behind` contains a list of commits on the current branch that are available on the remote `origin` but not yet locally
    * - `ahead` contains a list of commits on the current branch that are available locally but not yet on the remote `origin`
    */
-  public async getChanges(props: GetChangesProjectProps) {
-    getChangesProjectSchema.parse(props);
-    const projectPath = pathTo.project(props.id);
-    const hasRemoteOrigin =
-      await this.gitService.remotes.hasOrigin(projectPath);
-    if (hasRemoteOrigin === false) {
-      throw new Error(`Project "${props.id}" does not have a remote origin`);
-    }
-    const currentBranch = await this.gitService.branches.current(projectPath);
+  public getChanges(props: GetChangesProjectProps) {
+    return this.validated(
+      'getChanges',
+      getChangesProjectSchema,
+      props,
+      async () => {
+        const projectPath = pathTo.project(props.id);
+        const hasRemoteOrigin =
+          await this.gitService.remotes.hasOrigin(projectPath);
 
-    await this.gitService.fetch(projectPath);
-    const behind = await this.gitService.log(projectPath, {
-      between: { from: currentBranch, to: `origin/${currentBranch}` },
-    });
-    const ahead = await this.gitService.log(projectPath, {
-      between: { from: `origin/${currentBranch}`, to: currentBranch },
-    });
+        if (hasRemoteOrigin === false) {
+          throw CoreError.preconditionFailed(
+            `Project "${props.id}" does not have a remote origin`
+          );
+        }
 
-    return {
-      behind,
-      ahead,
-    };
+        const currentBranch =
+          await this.gitService.branches.current(projectPath);
+        await this.gitService.fetch(projectPath);
+
+        const behind = await this.gitService.log(projectPath, {
+          between: {
+            from: currentBranch,
+            to: `origin/${currentBranch}`,
+          },
+        });
+        const ahead = await this.gitService.log(projectPath, {
+          between: {
+            from: `origin/${currentBranch}`,
+            to: currentBranch,
+          },
+        });
+
+        return { behind, ahead };
+      }
+    );
   }
 
   /**
    * Pulls remote changes of `origin` down to the local repository
    * and then pushes local commits to the upstream branch
    */
-  public async synchronize(props: SynchronizeProjectProps) {
-    synchronizeProjectSchema.parse(props);
-    const projectPath = pathTo.project(props.id);
-
-    await this.gitService.pull(projectPath);
-    await this.gitService.push(projectPath);
+  public synchronize(props: SynchronizeProjectProps): Promise<void> {
+    return this.validated(
+      'synchronize',
+      synchronizeProjectSchema,
+      props,
+      async () => {
+        const projectPath = pathTo.project(props.id);
+        await this.gitService.pull(projectPath);
+        await this.gitService.push(projectPath);
+      }
+    );
   }
 
   /**
@@ -496,25 +546,29 @@ export class ProjectService
    * Throws in case a Project is only available locally and could be lost forever,
    * or changes are not pushed to a remote yet.
    */
-  public async delete(props: DeleteProjectProps): Promise<void> {
-    deleteProjectSchema.parse(props);
+  public delete(props: DeleteProjectProps): Promise<void> {
+    return this.validated('delete', deleteProjectSchema, props, async () => {
+      const hasRemoteOrigin = await this.gitService.remotes.hasOrigin(
+        pathTo.project(props.id)
+      );
 
-    const hasRemoteOrigin = await this.gitService.remotes.hasOrigin(
-      pathTo.project(props.id)
-    );
-
-    if (hasRemoteOrigin === false && props.force !== true) {
-      throw new RemoteOriginMissingError(props.id);
-    }
-
-    if (hasRemoteOrigin === true && props.force !== true) {
-      const changes = await this.getChanges({ id: props.id });
-      if (changes.ahead.length > 0) {
-        throw new SynchronizeLocalChangesError(props.id);
+      if (hasRemoteOrigin === false && props.force !== true) {
+        throw CoreError.preconditionFailed(
+          `Project "${props.id}" does not have a remote origin. Use force to delete anyway.`
+        );
       }
-    }
 
-    await Fs.remove(pathTo.project(props.id));
+      if (hasRemoteOrigin === true && props.force !== true) {
+        const changes = await this.getChanges({ id: props.id });
+        if (changes.ahead.length > 0) {
+          throw CoreError.conflict(
+            `Project "${props.id}" has local changes that are not pushed to the remote origin. Use force to delete anyway.`
+          );
+        }
+      }
+
+      await Fs.remove(pathTo.project(props.id));
+    });
   }
 
   /**
@@ -525,29 +579,36 @@ export class ProjectService
       objectTypeSchema.enum.project
     );
 
-    const result = await Promise.all(
+    const results = await Promise.all(
       projectReferences.map(async (reference) => {
-        const json = await this.jsonFileService.unsafeRead(
-          pathTo.projectFile(reference.id)
-        );
-        const projectFile = migrateProjectSchema.parse(json);
+        try {
+          const json = await this.jsonFileService.unsafeRead(
+            pathTo.projectFile(reference.id)
+          );
+          const projectFile = migrateProjectSchema.parse(json);
 
-        if (projectFile.coreVersion !== this.coreVersion) {
-          return this.migrate(projectFile);
+          if (projectFile.coreVersion !== this.coreVersion) {
+            return this.migrate(projectFile);
+          }
+
+          return null;
+        } catch {
+          return null;
         }
-
-        return null;
       })
     );
 
-    return result.filter(isNotEmpty);
+    return results.filter(isNotEmpty);
   }
 
   public async list(
     props?: ListProjectsProps
   ): Promise<PaginatedList<Project>> {
     if (props) {
-      listProjectsSchema.parse(props);
+      const parsed = listProjectsSchema.safeParse(props);
+      if (!parsed.success) {
+        throw CoreError.badRequest(parsed.error.message, parsed.error);
+      }
     }
 
     const offset = props?.offset || 0;
@@ -562,10 +623,10 @@ export class ProjectService
         ? projectReferences.slice(offset)
         : projectReferences.slice(offset, offset + limit);
 
-    const projects = await this.returnResolved(
-      partialProjectReferences.map((reference) => {
-        return this.read({ id: reference.id });
-      })
+    const projects = await this.collectResults(
+      partialProjectReferences.map((reference) =>
+        this.read({ id: reference.id })
+      )
     );
 
     return {
@@ -577,7 +638,8 @@ export class ProjectService
   }
 
   public async count(): Promise<number> {
-    return (await this.listReferences(objectTypeSchema.enum.project)).length;
+    const refs = await this.listReferences(objectTypeSchema.enum.project);
+    return refs.length;
   }
 
   /**
@@ -606,15 +668,18 @@ export class ProjectService
   private async toProject(projectFile: ProjectFile): Promise<Project> {
     const projectPath = pathTo.project(projectFile.id);
 
-    let remoteOriginUrl = null;
     const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
     if (hasOrigin) {
-      remoteOriginUrl = await this.gitService.remotes.getOriginUrl(projectPath);
+      const remoteOriginUrl =
+        await this.gitService.remotes.getOriginUrl(projectPath);
+      return {
+        ...projectFile,
+        remoteOriginUrl,
+      };
     }
-
     return {
       ...projectFile,
-      remoteOriginUrl,
+      remoteOriginUrl: null,
     };
   }
 
@@ -651,9 +716,7 @@ export class ProjectService
       '',
       '# elek.io related ignores',
       'collections/index.json',
-      // projectFolderSchema.enum.theme + '/',
-      // projectFolderSchema.enum.public + '/',
-      // projectFolderSchema.enum.logs + '/',
+      'components/index.json',
     ];
     await Fs.writeFile(Path.join(path, '.gitignore'), lines.join(Os.EOL));
   }
@@ -663,7 +726,7 @@ export class ProjectService
     objectType: ObjectType,
     reference: FileReference,
     collectionId?: string
-  ) {
+  ): Promise<void> {
     switch (objectType) {
       case 'asset': {
         const assetFilePath = pathTo.assetFile(projectId, reference.id);
@@ -677,6 +740,26 @@ export class ProjectService
           meta: {
             previous: prevAssetFile,
             migrated: migratedAssetFile,
+          },
+        });
+        return;
+      }
+      case 'component': {
+        const componentFilePath = pathTo.componentFile(projectId, reference.id);
+        const prevComponentFile =
+          await this.jsonFileService.unsafeRead(componentFilePath);
+        const migratedComponentFile =
+          this.componentService.migrate(prevComponentFile);
+        await this.componentService.update({
+          projectId,
+          ...migratedComponentFile,
+        });
+        this.logService.info({
+          source: 'core',
+          message: `Upgraded ${objectType} "${componentFilePath}"`,
+          meta: {
+            previous: prevComponentFile,
+            migrated: migratedComponentFile,
           },
         });
         return;
@@ -706,7 +789,9 @@ export class ProjectService
       }
       case 'entry': {
         if (!collectionId) {
-          throw new RequiredParameterMissingError('collectionId');
+          throw CoreError.badRequest(
+            'Missing required parameter "collectionId"'
+          );
         }
         const entryFilePath = pathTo.entryFile(
           projectId,
@@ -732,7 +817,7 @@ export class ProjectService
         return;
       }
       default:
-        throw new Error(
+        throw CoreError.badRequest(
           `Trying to upgrade unsupported object file of type "${objectType}"`
         );
     }

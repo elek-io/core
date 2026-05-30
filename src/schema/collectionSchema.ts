@@ -3,26 +3,32 @@ import {
   objectTypeSchema,
   slugSchema,
   supportedIconSchema,
-  translatableStringSchema,
+  partialTranslatableStringSchema,
   uuidSchema,
 } from './baseSchema.js';
+import { valueSchema } from './valueSchema.js';
 import { entryExportSchema } from './entrySchema.js';
-import { fieldDefinitionSchema } from './fieldSchema.js';
+import {
+  fieldDefinitionOrGroupSchema,
+  fieldDefinitionSlugUniquenessSuperRefinement,
+} from './fieldSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 
 export const collectionFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.collection).readonly(),
   name: z.object({
-    singular: translatableStringSchema,
-    plural: translatableStringSchema,
+    singular: partialTranslatableStringSchema,
+    plural: partialTranslatableStringSchema,
   }),
   slug: z.object({
     singular: slugSchema,
     plural: slugSchema,
   }),
-  description: translatableStringSchema,
+  description: partialTranslatableStringSchema,
   icon: supportedIconSchema,
-  fieldDefinitions: z.array(fieldDefinitionSchema),
+  fieldDefinitions: z
+    .array(fieldDefinitionOrGroupSchema)
+    .superRefine(fieldDefinitionSlugUniquenessSuperRefinement),
 });
 export type CollectionFile = z.infer<typeof collectionFileSchema>;
 
@@ -80,6 +86,9 @@ export const updateCollectionSchema = collectionFileSchema
   })
   .extend({
     projectId: uuidSchema.readonly(),
+    resolutions: z
+      .record(uuidSchema, z.record(slugSchema, valueSchema))
+      .optional(),
   });
 export type UpdateCollectionProps = z.infer<typeof updateCollectionSchema>;
 

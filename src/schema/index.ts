@@ -1,6 +1,9 @@
+export * from './apiClientSchema.js';
 export * from './assetSchema.js';
 export * from './baseSchema.js';
+export * from './buildMdAstSchema.js';
 export * from './collectionSchema.js';
+export * from './componentSchema.js';
 export * from './coreSchema.js';
 export * from './entrySchema.js';
 export * from './fieldSchema.js';
@@ -8,6 +11,7 @@ export * from './fileSchema.js';
 export * from './gitSchema.js';
 export * from './projectSchema.js';
 export * from './schemaFromFieldDefinition.js';
+export * from './strictEntitySchema.js';
 export * from './serviceSchema.js';
 export * from './userSchema.js';
 export * from './valueSchema.js';

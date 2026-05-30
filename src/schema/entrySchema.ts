@@ -1,5 +1,11 @@
 import { z } from '@hono/zod-openapi';
-import { objectTypeSchema, slugSchema, uuidSchema } from './baseSchema.js';
+import {
+  objectTypeSchema,
+  slugSchema,
+  uuidSchema,
+  type SupportedLanguage,
+  type Uuid,
+} from './baseSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 import { valueSchema } from './valueSchema.js';
 
@@ -71,3 +77,59 @@ export const countEntriesSchema = z.object({
   collectionId: uuidSchema.readonly(),
 });
 export type CountEntriesProps = z.infer<typeof countEntriesSchema>;
+
+/**
+ * Location of a problematic reference within an Entry's `values`.
+ */
+export interface EntryReferenceIssueLocation {
+  /**
+   * The field's slug.
+   */
+  fieldSlug: string;
+  /**
+   * Per-language slot of the field's content.
+   */
+  language: SupportedLanguage;
+  /**
+   * Path through mdast tree `children` arrays to the offending node,
+   * descending from `root.children`. Empty for flat reference fields.
+   */
+  treePath: number[];
+  /**
+   * Index into the flat reference array (for flat asset/entry fields).
+   * `null` for mdast refs (use `treePath`).
+   */
+  index: number | null;
+}
+
+/**
+ * A reference points to an entity that doesn't exist on disk.
+ */
+export interface EntryReferenceNotFoundIssue extends EntryReferenceIssueLocation {
+  kind: 'reference_not_found';
+  refKind: 'asset' | 'entry';
+  /**
+   * The referenced entity's id (assetId or entryId).
+   */
+  refId: Uuid;
+  /**
+   * The claimed Collection (carried by entry refs for path resolution).
+   * `null` for Asset refs.
+   */
+  collectionId: Uuid | null;
+}
+
+/**
+ * An asset reference points to an Asset whose `mimeType` is not in the
+ * field's `ofAssetMimeTypes` allowlist.
+ */
+export interface AssetMimeMismatchIssue extends EntryReferenceIssueLocation {
+  kind: 'asset_mime_mismatch';
+  assetId: Uuid;
+  expectedMimeTypes: string[];
+  actualMimeType: string;
+}
+
+export type EntryReferenceIssue =
+  | EntryReferenceNotFoundIssue
+  | AssetMimeMismatchIssue;

@@ -1,9 +1,6 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { ProjectUpgradeError } from '../error/ProjectUpgradeError.js';
-import { RemoteOriginMissingError } from '../error/RemoteOriginMissingError.js';
-import { SynchronizeLocalChangesError } from '../error/SynchronizeLocalChangesError.js';
 import core, { projectFileSchema, type Project } from '../test/setup.js';
 import {
   createAsset,
@@ -129,7 +126,7 @@ describe('ProjectService', function () {
   }) {
     await expect(
       core.projects.upgrade({ id: project.id })
-    ).rejects.toThrowError(ProjectUpgradeError);
+    ).rejects.toMatchObject({ type: 'UpgradeFailed' });
     await ensureCleanGitStatus(task, project.id);
   });
 
@@ -159,7 +156,7 @@ describe('ProjectService', function () {
 
     await expect(
       core.projects.upgrade({ id: project.id })
-    ).rejects.toThrowError(ProjectUpgradeError);
+    ).rejects.toMatchObject({ type: 'UpgradeFailed' });
     await ensureCleanGitStatus(task, project.id);
   });
 
@@ -226,9 +223,9 @@ describe('ProjectService', function () {
   });
 
   it('should fail to delete a Project without a remote origin', async function () {
-    await expect(core.projects.delete({ id: project.id })).rejects.toThrowError(
-      RemoteOriginMissingError
-    );
+    await expect(
+      core.projects.delete({ id: project.id })
+    ).rejects.toMatchObject({ type: 'PreconditionFailed' });
   });
 
   it('should be able to force delete a Project', async function () {
@@ -268,7 +265,7 @@ describe('ProjectService', function () {
   it('should fail to delete a Project with a remote origin but changes to push', async function () {
     await expect(
       core.projects.delete({ id: clonedProject.id })
-    ).rejects.toThrowError(SynchronizeLocalChangesError);
+    ).rejects.toMatchObject({ type: 'Conflict' });
   });
 
   it('should be able to synchronize the cloned Project with its remote', async function ({
@@ -286,7 +283,7 @@ describe('ProjectService', function () {
   it('should fail when trying to clone a Project twice', async function () {
     await expect(
       core.projects.clone({ url: remoteProjectPath })
-    ).rejects.toThrowError();
+    ).rejects.toThrow();
   });
 
   it('should be able to delete the cloned Project locally', async function () {

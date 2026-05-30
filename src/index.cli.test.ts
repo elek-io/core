@@ -36,11 +36,11 @@ describe('CLI', function () {
     await project1.destroy();
     await project2.destroy();
 
-    await fs.remove(`./.elek.io/projects.json`);
-    await fs.remove(`./.elek.io/project-${project1.id}.json`);
-    await fs.remove(`./.elek.io/project-${project2.id}.json`);
-    await fs.remove(`./.elek.io/project-${project1.id}`);
-    await fs.remove(`./.elek.io/project-${project2.id}`);
+    // Empty the CLI output directory. It is the throwaway default
+    // outDir for generate:client and export, recreated on demand. Leaving the
+    // generated client.ts/.js/.d.ts behind makes a later tsc run fail, so the
+    // cleanup must cover every artifact, not just the export JSON.
+    await fs.emptyDir('./.elek.io');
   });
 
   it('should be able to generate the TS API Client with default options', async function () {
@@ -77,7 +77,7 @@ describe('CLI', function () {
 
     const entriesOfProject1 =
       await client.content.v1.projects[project1.id].collections[
-        collection.id
+        collection.slug.plural
       ].entries.list();
 
     expect(entriesOfProject1.list.length).toEqual(1);

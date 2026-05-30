@@ -7,6 +7,7 @@ import {
   versionSchema,
 } from './baseSchema.js';
 import { collectionExportSchema } from './collectionSchema.js';
+import { componentExportSchema } from './componentSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 import { gitCommitSchema, gitSwitchOptionsSchema } from './gitSchema.js';
 
@@ -15,17 +16,33 @@ export const projectSettingsSchema = z.object({
     default: supportedLanguageSchema,
     supported: z
       .array(supportedLanguageSchema)
-      .refine((langs) => new Set(langs).size === langs.length, {
-        message: 'Supported languages must not contain duplicates',
+      .nonempty()
+      .check((ctx) => {
+        if (new Set(ctx.value).size !== ctx.value.length) {
+          ctx.issues.push({
+            code: 'custom',
+            message: 'Supported languages must not contain duplicates',
+            input: ctx.value,
+          });
+        }
       }),
   }),
 });
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 
+/**
+ * The non-empty tuple of languages a Project supports. Derived from the
+ * Project schema so that any change to the schema flows through the type.
+ *
+ * Used by strict entity factories and code generators to type the
+ * `languages` parameter, carrying the non-empty guarantee end-to-end.
+ */
+export type ProjectLanguages = ProjectSettings['language']['supported'];
+
 export const projectFolderSchema = z.enum([
   'assets',
   'collections',
-  'shared-values',
+  'components',
   'lfs',
   // 'logs',
   // 'public',
@@ -78,6 +95,7 @@ export type MigrateProjectProps = z.infer<typeof migrateProjectSchema>;
 export const projectExportSchema = projectSchema.extend({
   assets: z.array(assetExportSchema),
   collections: z.array(collectionExportSchema),
+  components: z.array(componentExportSchema),
 });
 export type ProjectExport = z.infer<typeof projectExportSchema>;
 

@@ -3,10 +3,12 @@ import Fs from 'fs-extra';
 import type {
   Asset,
   Collection,
+  Component,
   Entry,
   ExportProps,
   Project,
 } from '../schema/index.js';
+import { CoreError } from '../index.node.js';
 import { core, watchProjects } from './index.js';
 
 async function exportFile({
@@ -34,6 +36,7 @@ async function exportProjectNested({
 }): Promise<
   Project & {
     assets: Record<string, Asset>;
+    components: Record<string, Component>;
     collections: Record<
       string,
       Collection & {
@@ -42,12 +45,25 @@ async function exportProjectNested({
     >;
   }
 > {
-  const assets = (
-    await core.assets.list({ projectId: projectToExport.id, limit: 0 })
-  ).list;
+  const { list: assets } = await core.assets.list({
+    projectId: projectToExport.id,
+    limit: 0,
+  });
   let assetContent = {};
   for (const asset of assets) {
     assetContent = { ...assetContent, [asset.id]: { ...asset } };
+  }
+
+  let componentContent: Record<string, Component> = {};
+  const { list: components } = await core.components.list({
+    projectId: projectToExport.id,
+    limit: 0,
+  });
+  for (const component of components) {
+    componentContent = {
+      ...componentContent,
+      [component.slug]: { ...component },
+    };
   }
 
   let collectionContent: Record<
@@ -56,18 +72,17 @@ async function exportProjectNested({
       entries: Record<string, Entry>;
     }
   > = {};
-  const collections = (
-    await core.collections.list({ projectId: projectToExport.id, limit: 0 })
-  ).list;
+  const { list: collections } = await core.collections.list({
+    projectId: projectToExport.id,
+    limit: 0,
+  });
   for (const collection of collections) {
     let entryContent: Record<string, Entry> = {};
-    const entries = (
-      await core.entries.list({
-        projectId: projectToExport.id,
-        collectionId: collection.id,
-        limit: 0,
-      })
-    ).list;
+    const { list: entries } = await core.entries.list({
+      projectId: projectToExport.id,
+      collectionId: collection.id,
+      limit: 0,
+    });
     for (const entry of entries) {
       entryContent = { ...entryContent, [entry.id]: { ...entry } };
     }
@@ -81,6 +96,7 @@ async function exportProjectNested({
   return {
     ...projectToExport,
     assets: assetContent,
+    components: componentContent,
     collections: collectionContent,
   };
 }
@@ -95,7 +111,7 @@ async function exportProjectsNested({
   options: ExportProps['options'];
 }) {
   if (projectsToExport.length === 1) {
-    const projectToExport = projectsToExport[0] as Project;
+    const projectToExport = projectsToExport[0]!;
     const project = await exportProjectNested({
       resolvedOutDir,
       projectToExport,
@@ -151,9 +167,10 @@ async function exportProjectsSeparate({
       content: project,
     });
 
-    const tmpAssets = (
-      await core.assets.list({ projectId: project.id, limit: 0 })
-    ).list;
+    const { list: tmpAssets } = await core.assets.list({
+      projectId: project.id,
+      limit: 0,
+    });
     const assets: Asset[] = [];
     const assetOutDir = Path.join(projectOutDir, 'assets');
     await Fs.ensureDir(assetOutDir);
@@ -175,9 +192,31 @@ async function exportProjectsSeparate({
       content: assets,
     });
 
-    const collections = (
-      await core.collections.list({ projectId: project.id, limit: 0 })
-    ).list;
+    const { list: components } = await core.components.list({
+      projectId: project.id,
+      limit: 0,
+    });
+    const componentsOutDir = Path.join(projectOutDir, 'components');
+    await Fs.ensureDir(componentsOutDir);
+    for (const component of components) {
+      await exportFile({
+        resolvedOutDir: componentsOutDir,
+        options,
+        name: component.slug,
+        content: component,
+      });
+    }
+    await exportFile({
+      resolvedOutDir: componentsOutDir,
+      options,
+      name: 'components',
+      content: components,
+    });
+
+    const { list: collections } = await core.collections.list({
+      projectId: project.id,
+      limit: 0,
+    });
     const collectionsOutDir = Path.join(projectOutDir, 'collections');
     await Fs.ensureDir(collectionsOutDir);
     for (const collection of collections) {
@@ -193,13 +232,11 @@ async function exportProjectsSeparate({
 
         content: collection,
       });
-      const entries = (
-        await core.entries.list({
-          projectId: project.id,
-          collectionId: collection.id,
-          limit: 0,
-        })
-      ).list;
+      const { list: entries } = await core.entries.list({
+        projectId: project.id,
+        collectionId: collection.id,
+        limit: 0,
+      });
       await exportFile({
         resolvedOutDir: collectionOutDir,
         options,
@@ -228,10 +265,12 @@ async function exportProjects({
   await Fs.ensureDir(resolvedOutDir);
 
   if (projects === 'all') {
-    projectsToExport.push(...(await core.projects.list({ limit: 0 })).list);
+    const { list } = await core.projects.list({ limit: 0 });
+    projectsToExport.push(...list);
   } else {
     for (const projectId of projects) {
-      projectsToExport.push(await core.projects.read({ id: projectId }));
+      const project = await core.projects.read({ id: projectId });
+      projectsToExport.push(project);
     }
   }
 
@@ -259,20 +298,25 @@ export const exportAction = async ({
   template,
   options,
 }: ExportProps) => {
-  await exportProjects({ outDir, projects, template, options });
+  try {
+    await exportProjects({ outDir, projects, template, options });
 
-  if (options.watch === true) {
-    core.logger.info({
-      source: 'core',
-      message: 'Watching for changes to export Projects',
-    });
-
-    watchProjects().on('all', (event, path) => {
+    if (options.watch === true) {
       core.logger.info({
         source: 'core',
-        message: `Re-Exporting Projects due to ${event} on "${path}"`,
+        message: 'Watching for changes to export Projects',
       });
-      void exportProjects({ outDir, projects, template, options });
-    });
+
+      watchProjects().on('all', (event, path) => {
+        core.logger.info({
+          source: 'core',
+          message: `Re-Exporting Projects due to ${event} on "${path}"`,
+        });
+        void exportProjects({ outDir, projects, template, options });
+      });
+    }
+  } catch (error) {
+    console.error(error instanceof CoreError ? error.message : String(error));
+    process.exit(1);
   }
 };

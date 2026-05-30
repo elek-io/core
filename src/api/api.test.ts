@@ -1,37 +1,46 @@
 import { testClient } from 'hono/testing';
 import { createTestApi } from './lib/util.js';
 import router from './routes/index.js';
-import type { Asset, Collection, Entry, Project } from '../index.node.js';
+import type {
+  Asset,
+  Collection,
+  Component,
+  Entry,
+  Project,
+} from '../index.node.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createProject,
   createAsset,
   createCollection,
+  createComponent,
   createEntry,
 } from '../test/util.js';
 import core from '../test/setup.js';
 
-const client = testClient(
-  createTestApi(
-    router,
-    core.logger,
-    core.projects,
-    core.collections,
-    core.entries,
-    core.assets
-  )
+const app = createTestApi(
+  router,
+  core.logger,
+  core.projects,
+  core.collections,
+  core.components,
+  core.entries,
+  core.assets
 );
+const client = testClient(app);
 
 describe('API', function () {
   let project: Project & { destroy: () => Promise<void> };
   let asset: Asset;
   let collection: Collection;
+  let component: Component;
   let entry: Entry;
 
   beforeAll(async function () {
     project = await createProject();
     asset = await createAsset(project.id);
     collection = await createCollection(project.id);
+    component = await createComponent(project.id);
     entry = await createEntry(project.id, collection.id, asset.id);
   });
 
@@ -155,6 +164,64 @@ describe('API', function () {
     expect(count).toEqual(1);
   });
 
+  // Components
+
+  it('should be able to list all Components via API', async function () {
+    const res = await client.content.v1.projects[':projectId'].components.$get({
+      param: { projectId: project.id },
+      query: {},
+    });
+
+    expect(res.status).toEqual(200);
+    const components = await res.json();
+    expect(components.list.length).toEqual(1);
+    expect(components.total).toEqual(1);
+    expect(components.list.find((p) => p.id === component.id)?.id).toEqual(
+      component.id
+    );
+  });
+
+  it('should be able to read a Component via API', async function () {
+    const res = await client.content.v1.projects[':projectId'].components[
+      ':componentIdOrSlug'
+    ].$get({
+      param: { projectId: project.id, componentIdOrSlug: component.id },
+    });
+
+    expect(res.status).toEqual(200);
+    const readComponent = await res.json();
+    expect(core.components.isComponent(readComponent)).toEqual(true);
+    expect(readComponent.id).toEqual(component.id);
+  });
+
+  it('should be able to read a Component by slug via API', async function () {
+    const res = await client.content.v1.projects[':projectId'].components[
+      ':componentIdOrSlug'
+    ].$get({
+      param: {
+        projectId: project.id,
+        componentIdOrSlug: component.slug,
+      },
+    });
+
+    expect(res.status).toEqual(200);
+    const readComponent = await res.json();
+    expect(core.components.isComponent(readComponent)).toEqual(true);
+    expect(readComponent.id).toEqual(component.id);
+  });
+
+  it('should be able to count all Components via API', async function () {
+    const res = await client.content.v1.projects[
+      ':projectId'
+    ].components.count.$get({
+      param: { projectId: project.id },
+    });
+
+    expect(res.status).toEqual(200);
+    const count = await res.json();
+    expect(count).toEqual(1);
+  });
+
   // // Entries
 
   it('should be able to list all Entries via API', async function () {
@@ -256,6 +323,43 @@ describe('API', function () {
     expect(res.status).toEqual(200);
     const count = await res.json();
     expect(count).toEqual(1);
+  });
+
+  // Error handling
+
+  it('should return 422 for invalid request parameters', async function () {
+    const res = await app.request('/content/v1/projects/not-a-uuid');
+
+    expect(res.status).toEqual(422);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { name: string; issues: unknown[] };
+    };
+    expect(body.success).toEqual(false);
+    expect(body.error.name).toEqual('ZodError');
+    expect(body.error.issues).toBeDefined();
+  });
+
+  it('should return 404 for unknown routes', async function () {
+    const res = await app.request('/this-does-not-exist');
+
+    expect(res.status).toEqual(404);
+    const body = (await res.json()) as { message: string };
+    expect(body.message).toEqual('Not Found - /this-does-not-exist');
+  });
+
+  it('should return 500 for internal errors', async function () {
+    const res = await app.request(
+      `/content/v1/projects/${crypto.randomUUID()}`
+    );
+
+    expect(res.status).toEqual(500);
+    const body = (await res.json()) as {
+      error: { type: string; message: string };
+    };
+    expect(body.error).toBeDefined();
+    expect(body.error.type).toBe('Internal');
+    expect(body.error.message).toBeDefined();
   });
 
   it('should be able to stop the API and verify it is not running anymore', async function () {

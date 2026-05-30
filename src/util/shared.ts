@@ -2,6 +2,11 @@ import slugify from '@sindresorhus/slugify';
 import { v4 as generateUuid } from 'uuid';
 import { type Uuid } from '../schema/baseSchema.js';
 
+// Framework-agnostic mdast rendering primitive, surfaced on the main
+// @elek-io/core entry for both node and browser. Framework bindings such as
+// @elek-io/core/astro wrap it. See docs/markdown-content.md.
+export * from './mdastRender.js';
+
 /**
  * Returns a new UUID
  */
@@ -38,4 +43,66 @@ export function slug(string: string): string {
     lowercase: true,
     decamelize: true,
   });
+}
+
+// --- Error types ---
+
+export type CoreErrorType =
+  | 'NotFound'
+  | 'BadRequest'
+  | 'Unauthorized'
+  | 'Conflict'
+  | 'PreconditionFailed'
+  | 'UpgradeFailed'
+  | 'Internal';
+
+const statusCodes: Record<CoreErrorType, number> = {
+  NotFound: 404,
+  BadRequest: 400,
+  Unauthorized: 401,
+  Conflict: 409,
+  PreconditionFailed: 412,
+  UpgradeFailed: 422,
+  Internal: 500,
+};
+
+export class CoreError extends Error {
+  public readonly type: CoreErrorType;
+  public readonly statusCode: number;
+
+  constructor(type: CoreErrorType, message: string, cause?: unknown) {
+    super(message, { cause });
+    this.name = 'CoreError';
+    this.type = type;
+    this.statusCode = statusCodes[type];
+  }
+
+  static notFound(message: string, cause?: unknown) {
+    return new CoreError('NotFound', message, cause);
+  }
+  static badRequest(message: string, cause?: unknown) {
+    return new CoreError('BadRequest', message, cause);
+  }
+  static unauthorized(message: string, cause?: unknown) {
+    return new CoreError('Unauthorized', message, cause);
+  }
+  static conflict(message: string, cause?: unknown) {
+    return new CoreError('Conflict', message, cause);
+  }
+  static preconditionFailed(message: string, cause?: unknown) {
+    return new CoreError('PreconditionFailed', message, cause);
+  }
+  static upgradeFailed(message: string, cause?: unknown) {
+    return new CoreError('UpgradeFailed', message, cause);
+  }
+  static internal(message: string, cause?: unknown) {
+    return new CoreError('Internal', message, cause);
+  }
+  static fromUnknown(e: unknown) {
+    return new CoreError(
+      'Internal',
+      e instanceof Error ? e.message : String(e),
+      e
+    );
+  }
 }

@@ -225,12 +225,14 @@ describe('AssetService', function () {
       `saved-asset-from-history.png`
     );
 
+    const history = await core.assets.history({
+      projectId: project.id,
+      id: asset.id,
+    });
     await core.assets.save({
       projectId: project.id,
       id: asset.id,
-      commitHash: (
-        await core.assets.history({ projectId: project.id, id: asset.id })
-      ).at(-1)?.hash,
+      commitHash: history.at(-1)?.hash,
       filePath: filePathToSaveToFromHistory,
     });
 

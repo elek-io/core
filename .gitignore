@@ -26,6 +26,11 @@ lib-cov
 coverage
 *.lcov
 
+# Codecov CLI uploader (downloaded and verified at CI runtime, never committed)
+codecov
+codecov.SHA256SUM
+codecov.SHA256SUM.sig
+
 # nyc test coverage
 .nyc_output
 

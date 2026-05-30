@@ -2,25 +2,14 @@ import { z } from '@hono/zod-openapi';
 
 /**
  * All currently supported, BCP 47 compliant language tags
- *
- * The support depends on the tools and libraries we use.
- * We can't support a given language, if there is no support
- * for it from used third parties. Currently, to check if a langauge
- * tag can be added to this list, it needs to be supported by:
- * - DeepL translation API
- *
- * @see https://www.deepl.com/docs-api/other-functions/listing-supported-languages/
  */
 export const supportedLanguageSchema = z.enum([
-  /**
-   * Bulgarian
-   */
-  'bg', //
+  'bg', // Bulgarian
   'cs', // Czech
   'da', // Danish
   'de', // German
   'el', // Greek
-  'en', // (US) English
+  'en', // English
   'es', // Spanish
   'et', // Estonian
   'fi', // Finnish
@@ -38,7 +27,7 @@ export const supportedLanguageSchema = z.enum([
   'sk', // Slovak
   'sl', // Slovenian
   'sv', // Swedish
-  'zh', // (Simplified) Chinese
+  'zh', // Chinese
 ]);
 export type SupportedLanguage = z.infer<typeof supportedLanguageSchema>;
 
@@ -49,9 +38,9 @@ export const objectTypeSchema = z.enum([
   'project',
   'asset',
   'collection',
+  'component',
   'entry',
   'value',
-  'sharedValue',
 ]);
 export type ObjectType = z.infer<typeof objectTypeSchema>;
 
@@ -69,35 +58,33 @@ export const uuidSchema = z.uuid();
 export type Uuid = z.infer<typeof uuidSchema>;
 
 /**
- * A record that can be used to translate a string value into all supported languages
+ * A record keyed by every language the DeepL API supports - every key is
+ * intentionally optional. This is the structural type used for file I/O and
+ * for Core's exported TypeScript types.
+ *
+ * Static types stay broad here because a project's supported languages are
+ * runtime data (`project.settings.language.supported`) and TypeScript cannot
+ * narrow a static type from a runtime value. Per-project completeness is
+ * enforced at service boundaries by the strict factories in
+ * `strictEntitySchema.ts`, and generated code (CLI types, Astro, the
+ * generated API client) emits narrow `Record<ProjectLanguage, T>` types.
+ *
+ * @see ./strictEntitySchema.ts
+ * @see ../../docs/language-scoped-validation.md
  */
-export const translatableStringSchema = z.partialRecord(
-  supportedLanguageSchema,
+export function partialTranslatableRecordOf<T extends z.ZodTypeAny>(schema: T) {
+  return z.partialRecord(supportedLanguageSchema, schema);
+}
+
+/**
+ * A record that can be used to translate a string value into all supported languages.
+ *
+ * @see {@link partialTranslatableRecordOf} for why keys are optional and where
+ *   per-project language completeness is enforced.
+ */
+export const partialTranslatableStringSchema = partialTranslatableRecordOf(
   z.string().trim().min(1)
 );
-export type TranslatableString = z.infer<typeof translatableStringSchema>;
-
-/**
- * A record that can be used to translate a number value into all supported languages
- */
-export const translatableNumberSchema = z.partialRecord(
-  supportedLanguageSchema,
-  z.number()
-);
-export type TranslatableNumber = z.infer<typeof translatableNumberSchema>;
-
-/**
- * A record that can be used to translate a boolean value into all supported languages
- */
-export const translatableBooleanSchema = z.partialRecord(
-  supportedLanguageSchema,
-  z.boolean()
-);
-export type TranslatableBoolean = z.infer<typeof translatableBooleanSchema>;
-
-export function translatableArrayOf<T extends z.ZodTypeAny>(schema: T) {
-  return z.partialRecord(supportedLanguageSchema, z.array(schema));
-}
 
 export const reservedSlugs = new Set([
   'index',

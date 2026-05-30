@@ -2,10 +2,42 @@ import { faker } from '@faker-js/faker';
 import crypto from 'node:crypto';
 import Fs from 'fs-extra';
 import Path from 'node:path';
+import ts from 'typescript';
 import type { RunnerTestCase } from 'vitest';
 import { expect } from 'vitest';
 import type { EntryFieldDefinition } from './setup.js';
-import core, { uuid, type ProjectSettings } from './setup.js';
+import core, {
+  flattenFieldDefinitions,
+  uuid,
+  type ProjectSettings,
+} from './setup.js';
+
+/**
+ * Asserts that a string of generated TypeScript transpiles without syntax
+ * errors. Uses `ts.transpileModule`, which is single-file (isolatedModules)
+ * transpilation: it catches malformed output - unbalanced braces, invalid
+ * tokens, broken type literals - but does NOT resolve imports or type-check
+ * against other modules. A diagnostic here means the generator emitted
+ * invalid source; fix the generator, do not loosen this assertion.
+ *
+ * Note: because transpilation is single-file, a plain `export { Foo }` for a
+ * type (instead of `export type { Foo }`) surfaces as a real diagnostic - the
+ * same thing esbuild/tsdown would reject in the product's `language: 'js'`
+ * path, so treat it as a true positive.
+ */
+export function expectTranspiles(source: string, label = 'generated source') {
+  const { diagnostics } = ts.transpileModule(source, {
+    reportDiagnostics: true,
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2020,
+    },
+  });
+  const messages = (diagnostics ?? []).map((diagnostic) =>
+    ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')
+  );
+  expect(messages, `${label} should transpile without diagnostics`).toEqual([]);
+}
 
 const ids = {
   textFieldDefinition: uuid(),
@@ -91,6 +123,34 @@ export async function createProject(name?: string, settings?: ProjectSettings) {
   return { ...project, destroy };
 }
 
+export async function createComponent(projectId: string) {
+  const component = await core.components.create({
+    projectId,
+    name: { en: 'Hero', de: 'Hero' },
+    slug: 'hero',
+    description: { en: 'A hero section', de: 'A hero section' },
+    fieldDefinitions: [
+      {
+        id: uuid(),
+        slug: 'title',
+        valueType: 'string',
+        fieldType: 'text',
+        label: { en: 'Title', de: 'Title' },
+        description: null,
+        defaultValue: null,
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        min: null,
+        max: null,
+      },
+    ],
+  });
+
+  return component;
+}
+
 export async function createAsset(projectId: string) {
   const asset = await core.assets.create({
     projectId,
@@ -109,9 +169,11 @@ export async function createCollection(projectId: string) {
     name: {
       singular: {
         en: 'Product',
+        de: 'Product',
       },
       plural: {
         en: 'Products',
+        de: 'Products',
       },
     },
     slug: {
@@ -120,6 +182,7 @@ export async function createCollection(projectId: string) {
     },
     description: {
       en: 'A Collection that contains our Products',
+      de: 'A Collection that contains our Products',
     },
     fieldDefinitions: [
       {
@@ -128,9 +191,11 @@ export async function createCollection(projectId: string) {
         valueType: 'string',
         label: {
           en: 'Name',
+          de: 'Name',
         },
         description: {
           en: 'The title should be shirt and catchy, to grab the users attention',
+          de: 'The title should be shirt and catchy, to grab the users attention',
         },
         fieldType: 'text',
         inputWidth: '12',
@@ -147,9 +212,11 @@ export async function createCollection(projectId: string) {
         valueType: 'reference',
         label: {
           en: 'Header image',
+          de: 'Header image',
         },
         description: {
           en: 'An image for this product displayed on top of the page',
+          de: 'An image for this product displayed on top of the page',
         },
         fieldType: 'asset',
         inputWidth: '12',
@@ -158,6 +225,7 @@ export async function createCollection(projectId: string) {
         isUnique: false,
         min: null,
         max: null,
+        ofAssetMimeTypes: [],
       },
       {
         id: ids.entryReferenceFieldDefinition,
@@ -165,9 +233,11 @@ export async function createCollection(projectId: string) {
         valueType: 'reference',
         label: {
           en: 'Related products',
+          de: 'Related products',
         },
         description: {
           en: 'References to other products that the visitor might want to check out too',
+          de: 'References to other products that the visitor might want to check out too',
         },
         fieldType: 'entry',
         ofCollections: [],
@@ -183,7 +253,7 @@ export async function createCollection(projectId: string) {
 
   // Add circular reference to products
   (
-    collection.fieldDefinitions.find((definition) => {
+    flattenFieldDefinitions(collection.fieldDefinitions).find((definition) => {
       return definition.slug === slugs.entryReferenceFieldDefinition;
     }) as EntryFieldDefinition
   ).ofCollections = [collection.id];
@@ -211,6 +281,7 @@ export async function createEntry(
         valueType: 'string',
         content: {
           en: faker.commerce.product(),
+          de: faker.commerce.product(),
         },
       },
       [slugs.assetReferenceFieldDefinition]: {
@@ -218,6 +289,12 @@ export async function createEntry(
         valueType: 'reference',
         content: {
           en: [
+            {
+              objectType: 'asset',
+              id: assetValueId,
+            },
+          ],
+          de: [
             {
               objectType: 'asset',
               id: assetValueId,
@@ -234,6 +311,16 @@ export async function createEntry(
               {
                 objectType: 'entry',
                 id: entryValueId,
+                collectionId: collectionId,
+              },
+            ]) ||
+            [],
+          de:
+            (entryValueId && [
+              {
+                objectType: 'entry',
+                id: entryValueId,
+                collectionId: collectionId,
               },
             ]) ||
             [],

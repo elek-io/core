@@ -51,13 +51,13 @@ const router = createRouter()
     async (c) => {
       const { projectId } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
-      const collections = await c.var.collectionService.list({
+      const data = await c.var.collectionService.list({
         projectId,
         limit,
         offset,
       });
 
-      return c.json(collections, 200);
+      return c.json(data, 200);
     }
   )
 
@@ -91,9 +91,9 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId } = c.req.valid('param');
-      const count = await c.var.collectionService.count({ projectId });
+      const data = await c.var.collectionService.count({ projectId });
 
-      return c.json(count, 200);
+      return c.json(data, 200);
     }
   )
 
@@ -134,16 +134,13 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId, collectionIdOrSlug } = c.req.valid('param');
-      const resolvedId = await c.var.collectionService.resolveCollectionId({
+      const id = await c.var.collectionService.resolveCollectionId({
         projectId,
         idOrSlug: collectionIdOrSlug,
       });
-      const collection = await c.var.collectionService.read({
-        projectId,
-        id: resolvedId,
-      });
+      const data = await c.var.collectionService.read({ projectId, id });
 
-      return c.json(collection, 200);
+      return c.json(data, 200);
     }
   );
 

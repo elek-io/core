@@ -1,16 +1,14 @@
 import Fs from 'fs-extra';
 import type { z } from '@hono/zod-openapi';
 import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
-import type { BaseFile } from '../schema/fileSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
-import type { UserFile } from '../schema/userSchema.js';
-import { AbstractCrudService } from './AbstractCrudService.js';
+import { AbstractService } from './AbstractService.js';
 import type { LogService } from './LogService.js';
 
 /**
  * Service that manages CRUD functionality for JSON files on disk
  */
-export class JsonFileService extends AbstractCrudService {
+export class JsonFileService extends AbstractService {
   private cache: Map<string, unknown> = new Map();
 
   constructor(options: ElekIoCoreOptions, logService: LogService) {
@@ -25,17 +23,14 @@ export class JsonFileService extends AbstractCrudService {
    * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
-  public async create<T extends z.ZodType<BaseFile>>(
+  public async create<T extends z.ZodTypeAny>(
     data: unknown,
     path: string,
     schema: T
   ): Promise<z.output<T>> {
-    const parsedData = schema.parse(data);
+    const parsedData: z.output<T> = schema.parse(data);
     const string = this.serialize(parsedData);
-    await Fs.writeFile(path, string, {
-      flag: 'wx',
-      encoding: 'utf8',
-    });
+    await Fs.writeFile(path, string, { flag: 'wx', encoding: 'utf8' });
     if (this.options.file.cache === true) {
       this.cache.set(path, parsedData);
     }
@@ -43,7 +38,6 @@ export class JsonFileService extends AbstractCrudService {
       source: 'core',
       message: `Created file "${path}"`,
     });
-
     return parsedData;
   }
 
@@ -54,7 +48,7 @@ export class JsonFileService extends AbstractCrudService {
    * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
-  public async read<T extends z.ZodType<BaseFile | UserFile>>(
+  public async read<T extends z.ZodTypeAny>(
     path: string,
     schema: T
   ): Promise<z.output<T>> {
@@ -64,25 +58,20 @@ export class JsonFileService extends AbstractCrudService {
         message: `Cache hit reading file "${path}"`,
       });
       const json = this.cache.get(path);
-      const parsedData = schema.parse(json);
-      return parsedData;
+      return schema.parse(json);
     }
 
     this.logService.debug({
       source: 'core',
       message: `Cache miss reading file "${path}"`,
     });
-    const data = await Fs.readFile(path, {
-      flag: 'r',
-      encoding: 'utf8',
-    });
+    const data = await Fs.readFile(path, { flag: 'r', encoding: 'utf8' });
     const json = this.deserialize(data);
-    const parsedData = schema.parse(json);
+    const value: z.output<T> = schema.parse(json);
     if (this.options.file.cache === true) {
-      this.cache.set(path, parsedData);
+      this.cache.set(path, value);
     }
-
-    return parsedData;
+    return value;
   }
 
   /**
@@ -98,17 +87,12 @@ export class JsonFileService extends AbstractCrudService {
    * @returns Unvalidated content of the file from disk
    */
   public async unsafeRead(path: string): Promise<unknown> {
+    const data = await Fs.readFile(path, { flag: 'r', encoding: 'utf8' });
     this.logService.warn({
       source: 'core',
       message: `Unsafe reading of file "${path}"`,
     });
-    const data = await Fs.readFile(path, {
-      flag: 'r',
-      encoding: 'utf8',
-    });
-    const json = this.deserialize(data);
-
-    return json;
+    return this.deserialize(data);
   }
 
   /**
@@ -121,17 +105,14 @@ export class JsonFileService extends AbstractCrudService {
    * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
-  public async update<T extends z.ZodType<BaseFile | UserFile>>(
+  public async update<T extends z.ZodTypeAny>(
     data: unknown,
     path: string,
     schema: T
   ): Promise<z.output<T>> {
-    const parsedData = schema.parse(data);
+    const parsedData: z.output<T> = schema.parse(data);
     const string = this.serialize(parsedData);
-    await Fs.writeFile(path, string, {
-      flag: 'w',
-      encoding: 'utf8',
-    });
+    await Fs.writeFile(path, string, { flag: 'w', encoding: 'utf8' });
     if (this.options.file.cache === true) {
       this.cache.set(path, parsedData);
     }
@@ -139,8 +120,18 @@ export class JsonFileService extends AbstractCrudService {
       source: 'core',
       message: `Updated file "${path}"`,
     });
-
     return parsedData;
+  }
+
+  /**
+   * Clears the in-memory file cache.
+   *
+   * Should be called after operations that modify files outside
+   * of JsonFileService (e.g. git reset --hard HEAD), since the
+   * cache may hold stale data that no longer matches disk.
+   */
+  public clearCache(): void {
+    this.cache.clear();
   }
 
   private serialize(data: unknown): string {

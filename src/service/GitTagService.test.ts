@@ -39,8 +39,12 @@ describe('GitTagService', function () {
     expect(readTag.message).toEqual({ type: 'release', version: '1.0.0' });
   });
 
-  it('should throw when trying to update a tag', function () {
-    expect(() => core.git.tags.update()).toThrow();
+  it('should return an error when trying to update a tag', function () {
+    expect(() => core.git.tags.update()).toThrow(
+      expect.objectContaining({
+        type: 'BadRequest',
+      })
+    );
   });
 
   it('should be able to count all tags', async function () {

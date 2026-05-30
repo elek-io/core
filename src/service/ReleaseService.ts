@@ -3,6 +3,7 @@ import Semver from 'semver';
 import {
   assetFileSchema,
   collectionFileSchema,
+  componentFileSchema,
   entryFileSchema,
   projectBranchSchema,
   projectFileSchema,
@@ -13,9 +14,13 @@ import {
   type AssetChange,
   type AssetFile,
   type CollectionFile,
+  type ComponentChange,
+  type ComponentFieldChange,
+  type ComponentFile,
   type ElekIoCoreOptions,
   type EntryChange,
   type EntryFile,
+  flattenFieldDefinitions,
   type FieldDefinition,
   type PrepareReleaseProps,
   type CreateReleaseProps,
@@ -29,8 +34,8 @@ import {
   type CollectionChange,
 } from '../schema/index.js';
 import { pathTo } from '../util/node.js';
-import { datetime } from '../util/shared.js';
-import { AbstractCrudService } from './AbstractCrudService.js';
+import { CoreError, datetime } from '../util/shared.js';
+import { AbstractService } from './AbstractService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -42,7 +47,7 @@ import type { ProjectService } from './ProjectService.js';
  * A release diffs the current `work` branch against the `production` branch
  * to determine what changed, computes a semver bump, and merges work into production.
  */
-export class ReleaseService extends AbstractCrudService {
+export class ReleaseService extends AbstractService {
   private gitService: GitService;
   private jsonFileService: JsonFileService;
   private projectService: ProjectService;
@@ -67,111 +72,125 @@ export class ReleaseService extends AbstractCrudService {
    * Returns a read-only summary of all changes and the computed next version.
    * If there are no changes, the next version and bump will be null.
    */
-  public async prepare(props: PrepareReleaseProps): Promise<ReleaseDiff> {
-    prepareReleaseSchema.parse(props);
+  public prepare(props: PrepareReleaseProps): Promise<ReleaseDiff> {
+    return this.validated('prepare', prepareReleaseSchema, props, async () => {
+      const projectPath = pathTo.project(props.projectId);
+      const productionRef = projectBranchSchema.enum.production;
 
-    const projectPath = pathTo.project(props.projectId);
-
-    // Ensure we're on the work branch
-    const currentBranch = await this.gitService.branches.current(projectPath);
-    if (currentBranch !== projectBranchSchema.enum.work) {
-      throw new Error(`Not on work branch (currently on "${currentBranch}")`);
-    }
-
-    const project = await this.projectService.read({ id: props.projectId });
-    const currentVersion = project.version;
-
-    const productionRef = projectBranchSchema.enum.production;
-
-    // Diff project settings
-    const productionProject = await this.getProjectAtRef(
-      props.projectId,
-      projectPath,
-      productionRef
-    );
-    const projectDiff = this.diffProject(project, productionProject);
-
-    // Diff collections
-    const currentCollections = await this.getCollectionsAtRef(
-      props.projectId,
-      projectPath,
-      projectBranchSchema.enum.work
-    );
-    const productionCollections = await this.getCollectionsAtRef(
-      props.projectId,
-      projectPath,
-      productionRef
-    );
-    const collectionDiff = this.diffCollections(
-      currentCollections,
-      productionCollections
-    );
-
-    // Diff assets
-    const currentAssets = await this.getAssetsAtRef(
-      props.projectId,
-      projectPath,
-      projectBranchSchema.enum.work
-    );
-    const productionAssets = await this.getAssetsAtRef(
-      props.projectId,
-      projectPath,
-      productionRef
-    );
-    const assetDiff = this.diffAssets(currentAssets, productionAssets);
-
-    // Diff entries across all collections (union of current and production IDs)
-    const allCollectionIds = new Set([
-      ...currentCollections.map((c) => c.id),
-      ...productionCollections.map((c) => c.id),
-    ]);
-    const entryDiff = await this.diffEntries(
-      props.projectId,
-      projectPath,
-      allCollectionIds,
-      productionRef
-    );
-
-    // Combine bumps from all diffs
-    let finalBump: SemverBump | null = null;
-    for (const bump of [
-      projectDiff.bump,
-      collectionDiff.bump,
-      assetDiff.bump,
-      entryDiff.bump,
-    ]) {
-      if (bump) {
-        finalBump = finalBump ? this.higherBump(finalBump, bump) : bump;
+      const currentBranch = await this.gitService.branches.current(projectPath);
+      if (currentBranch !== projectBranchSchema.enum.work) {
+        throw CoreError.preconditionFailed(
+          `Not on work branch (currently on "${currentBranch}")`
+        );
       }
-    }
 
-    // Fallback: check if there are any commits between production and work
-    if (!finalBump) {
-      const hasContentChanges = await this.hasCommitsBetween(
+      const project = await this.projectService.read({ id: props.projectId });
+      const currentVersion = project.version;
+
+      const productionProject = await this.getProjectAtRef(
+        props.projectId,
         projectPath,
-        productionRef,
+        productionRef
+      );
+      const projectDiff = this.diffProject(project, productionProject);
+
+      const currentCollections = await this.getCollectionsAtRef(
+        props.projectId,
+        projectPath,
         projectBranchSchema.enum.work
       );
-      if (hasContentChanges) {
-        finalBump = 'patch';
+      const productionCollections = await this.getCollectionsAtRef(
+        props.projectId,
+        projectPath,
+        productionRef
+      );
+      const collectionDiff = this.diffCollections(
+        currentCollections,
+        productionCollections
+      );
+
+      const currentAssets = await this.getAssetsAtRef(
+        props.projectId,
+        projectPath,
+        projectBranchSchema.enum.work
+      );
+      const productionAssets = await this.getAssetsAtRef(
+        props.projectId,
+        projectPath,
+        productionRef
+      );
+      const assetDiff = this.diffAssets(currentAssets, productionAssets);
+
+      const currentComponents = await this.getComponentsAtRef(
+        props.projectId,
+        projectPath,
+        projectBranchSchema.enum.work
+      );
+      const productionComponents = await this.getComponentsAtRef(
+        props.projectId,
+        projectPath,
+        productionRef
+      );
+      const componentDiff = this.diffComponents(
+        currentComponents,
+        productionComponents
+      );
+
+      const allCollectionIds = new Set([
+        ...currentCollections.map((c) => c.id),
+        ...productionCollections.map((c) => c.id),
+      ]);
+
+      const entryDiff = await this.diffEntries(
+        props.projectId,
+        projectPath,
+        allCollectionIds,
+        productionRef
+      );
+
+      // Combine bumps from all diffs
+      let finalBump: SemverBump | null = null;
+      for (const bump of [
+        projectDiff.bump,
+        collectionDiff.bump,
+        componentDiff.bump,
+        assetDiff.bump,
+        entryDiff.bump,
+      ]) {
+        if (bump) {
+          finalBump = finalBump ? this.higherBump(finalBump, bump) : bump;
+        }
       }
-    }
 
-    const nextVersion = finalBump
-      ? Semver.inc(currentVersion, finalBump)
-      : null;
+      if (!finalBump) {
+        const hasContentChanges = await this.hasCommitsBetween(
+          projectPath,
+          productionRef,
+          projectBranchSchema.enum.work
+        );
+        if (hasContentChanges) {
+          finalBump = 'patch';
+        }
+      }
 
-    return {
-      project,
-      bump: finalBump,
-      currentVersion,
-      nextVersion,
-      projectChanges: projectDiff.projectChanges,
-      collectionChanges: collectionDiff.collectionChanges,
-      fieldChanges: collectionDiff.fieldChanges,
-      assetChanges: assetDiff.assetChanges,
-      entryChanges: entryDiff.entryChanges,
-    };
+      const nextVersion = finalBump
+        ? Semver.inc(currentVersion, finalBump)
+        : null;
+
+      return {
+        project,
+        bump: finalBump,
+        currentVersion,
+        nextVersion,
+        projectChanges: projectDiff.projectChanges,
+        collectionChanges: collectionDiff.collectionChanges,
+        fieldChanges: collectionDiff.fieldChanges,
+        componentChanges: componentDiff.componentChanges,
+        componentFieldChanges: componentDiff.componentFieldChanges,
+        assetChanges: assetDiff.assetChanges,
+        entryChanges: entryDiff.entryChanges,
+      };
+    });
   }
 
   /**
@@ -183,83 +202,79 @@ export class ReleaseService extends AbstractCrudService {
    * 5. Merging `production` back into `work` (fast-forward to sync the version commit)
    * 6. Switching back to `work`
    */
-  public async create(props: CreateReleaseProps): Promise<ReleaseResult> {
-    createReleaseSchema.parse(props);
+  public create(props: CreateReleaseProps): Promise<ReleaseResult> {
+    return this.validated('create', createReleaseSchema, props, async () => {
+      const projectPath = pathTo.project(props.projectId);
+      const projectFilePath = pathTo.projectFile(props.projectId);
 
-    const projectPath = pathTo.project(props.projectId);
-    const projectFilePath = pathTo.projectFile(props.projectId);
+      const diff = await this.prepare(props);
 
-    // Recompute the diff
-    const diff = await this.prepare(props);
+      if (!diff.bump || !diff.nextVersion) {
+        throw CoreError.preconditionFailed(
+          'Cannot create a release: no changes detected since the last full release'
+        );
+      }
 
-    if (!diff.bump || !diff.nextVersion) {
-      throw new Error(
-        'Cannot create a release: no changes detected since the last full release'
-      );
-    }
+      const nextVersion = diff.nextVersion;
 
-    const nextVersion = diff.nextVersion;
+      try {
+        await this.gitService.branches.switch(
+          projectPath,
+          projectBranchSchema.enum.production
+        );
+        await this.gitService.merge(projectPath, projectBranchSchema.enum.work);
 
-    try {
-      // Merge work into production
-      await this.gitService.branches.switch(
-        projectPath,
-        projectBranchSchema.enum.production
-      );
-      await this.gitService.merge(projectPath, projectBranchSchema.enum.work);
+        const updatedProjectFile = {
+          ...diff.project,
+          version: nextVersion,
+          updated: datetime(),
+        };
 
-      // Update project version on production
-      const updatedProjectFile = {
-        ...diff.project,
-        version: nextVersion,
-        updated: datetime(),
-      };
-
-      await this.jsonFileService.update(
-        updatedProjectFile,
-        projectFilePath,
-        projectFileSchema
-      );
-      await this.gitService.add(projectPath, [projectFilePath]);
-      await this.gitService.commit(projectPath, {
-        method: 'release',
-        reference: { objectType: 'project', id: props.projectId },
-      });
-
-      // Tag on production
-      await this.gitService.tags.create({
-        path: projectPath,
-        message: { type: 'release', version: nextVersion },
-      });
-
-      // Switch back to work and sync the version commit
-      await this.gitService.branches.switch(
-        projectPath,
-        projectBranchSchema.enum.work
-      );
-      await this.gitService.merge(
-        projectPath,
-        projectBranchSchema.enum.production
-      );
-    } catch (error) {
-      // Ensure we switch back to work branch on failure
-      await this.gitService.branches
-        .switch(projectPath, projectBranchSchema.enum.work)
-        .catch(() => {
-          // Best-effort recovery — log but don't mask the original error
+        await this.jsonFileService.update(
+          updatedProjectFile,
+          projectFilePath,
+          projectFileSchema
+        );
+        await this.gitService.add(projectPath, [projectFilePath]);
+        await this.gitService.commit(projectPath, {
+          method: 'release',
+          reference: { objectType: 'project', id: props.projectId },
         });
-      throw error;
-    }
+        await this.gitService.tags.create({
+          path: projectPath,
+          message: { type: 'release', version: nextVersion },
+        });
+        await this.gitService.branches.switch(
+          projectPath,
+          projectBranchSchema.enum.work
+        );
+        await this.gitService.merge(
+          projectPath,
+          projectBranchSchema.enum.production
+        );
 
-    this.logService.info({
-      source: 'core',
-      message: `Released version ${nextVersion} (${diff.bump} bump)`,
+        this.logService.info({
+          source: 'core',
+          message: `Released version ${nextVersion} (${diff.bump} bump)`,
+        });
+
+        return {
+          version: nextVersion,
+          diff,
+        };
+      } catch (error) {
+        // Best-effort recovery: switch back to work branch
+        try {
+          await this.gitService.branches.switch(
+            projectPath,
+            projectBranchSchema.enum.work
+          );
+        } catch {
+          // Ignore recovery failure
+        }
+        throw error;
+      }
     });
-
-    return {
-      version: nextVersion,
-      diff,
-    };
   }
 
   /**
@@ -270,75 +285,78 @@ export class ReleaseService extends AbstractCrudService {
    * 4. Tagging on `work` (no merge into production)
    *
    * Preview releases are snapshots of the current work state.
-   * They don't promote to production — only full releases do.
+   * They don't promote to production - only full releases do.
    */
-  public async createPreview(
+  public createPreview(
     props: CreatePreviewReleaseProps
   ): Promise<ReleaseResult> {
-    createPreviewReleaseSchema.parse(props);
+    return this.validated(
+      'createPreview',
+      createPreviewReleaseSchema,
+      props,
+      async () => {
+        const projectPath = pathTo.project(props.projectId);
+        const projectFilePath = pathTo.projectFile(props.projectId);
 
-    const projectPath = pathTo.project(props.projectId);
-    const projectFilePath = pathTo.projectFile(props.projectId);
+        const diff = await this.prepare(props);
 
-    // Recompute the diff
-    const diff = await this.prepare(props);
+        if (!diff.bump || !diff.nextVersion) {
+          throw CoreError.preconditionFailed(
+            'Cannot create a preview release: no changes detected since the last full release'
+          );
+        }
 
-    if (!diff.bump || !diff.nextVersion) {
-      throw new Error(
-        'Cannot create a preview release: no changes detected since the last full release'
-      );
-    }
+        const previewNumber = await this.countPreviewsSinceLastRelease(
+          projectPath,
+          diff.nextVersion
+        );
+        const previewVersion = `${diff.nextVersion}-preview.${previewNumber + 1}`;
 
-    // Count existing preview tags for this base version to determine the N in preview.N
-    const previewNumber = await this.countPreviewsSinceLastRelease(
-      projectPath,
-      diff.nextVersion
+        const updatedProjectFile = {
+          ...diff.project,
+          version: previewVersion,
+          updated: datetime(),
+        };
+
+        try {
+          await this.jsonFileService.update(
+            updatedProjectFile,
+            projectFilePath,
+            projectFileSchema
+          );
+          await this.gitService.add(projectPath, [projectFilePath]);
+          await this.gitService.commit(projectPath, {
+            method: 'release',
+            reference: { objectType: 'project', id: props.projectId },
+          });
+          await this.gitService.tags.create({
+            path: projectPath,
+            message: { type: 'preview', version: previewVersion },
+          });
+
+          this.logService.info({
+            source: 'core',
+            message: `Preview released version ${previewVersion} (${diff.bump} bump)`,
+          });
+
+          return {
+            version: previewVersion,
+            diff,
+          };
+        } catch (error) {
+          // Best-effort recovery: switch back to work branch
+          try {
+            await this.gitService.branches.switch(
+              projectPath,
+              projectBranchSchema.enum.work
+            );
+          } catch {
+            // Ignore recovery failure
+          }
+          throw error;
+        }
+      }
     );
-    const previewVersion = `${diff.nextVersion}-preview.${previewNumber + 1}`;
-
-    try {
-      // Update project version on work branch
-      const updatedProjectFile = {
-        ...diff.project,
-        version: previewVersion,
-        updated: datetime(),
-      };
-
-      await this.jsonFileService.update(
-        updatedProjectFile,
-        projectFilePath,
-        projectFileSchema
-      );
-      await this.gitService.add(projectPath, [projectFilePath]);
-      await this.gitService.commit(projectPath, {
-        method: 'release',
-        reference: { objectType: 'project', id: props.projectId },
-      });
-
-      // Tag on work (not production)
-      await this.gitService.tags.create({
-        path: projectPath,
-        message: { type: 'preview', version: previewVersion },
-      });
-    } catch (error) {
-      // Ensure we stay on work branch on failure
-      await this.gitService.branches
-        .switch(projectPath, projectBranchSchema.enum.work)
-        .catch(() => {
-          // Best-effort recovery — log but don't mask the original error
-        });
-      throw error;
-    }
-
-    this.logService.info({
-      source: 'core',
-      message: `Preview released version ${previewVersion} (${diff.bump} bump)`,
-    });
-
-    return {
-      version: previewVersion,
-      diff,
-    };
   }
 
   /**
@@ -371,18 +389,15 @@ export class ReleaseService extends AbstractCrudService {
     ref: string
   ): Promise<AssetFile[]> {
     const assetsPath = pathTo.assets(projectId);
-
     const fileNames = await this.gitService.listTreeAtCommit(
       projectPath,
       assetsPath,
       ref
     );
-
     const assets: AssetFile[] = [];
+    const jsonFiles = fileNames.filter((f) => f.endsWith('.json'));
 
-    for (const fileName of fileNames) {
-      if (!fileName.endsWith('.json')) continue;
-
+    for (const fileName of jsonFiles) {
       const assetId = fileName.replace('.json', '');
       const assetFilePath = pathTo.assetFile(projectId, assetId);
 
@@ -392,8 +407,10 @@ export class ReleaseService extends AbstractCrudService {
           assetFilePath,
           ref
         );
-        const assetFile = assetFileSchema.parse(JSON.parse(content));
-        assets.push(assetFile);
+        const parsed = assetFileSchema.safeParse(JSON.parse(content));
+        if (parsed.success) {
+          assets.push(parsed.data);
+        }
       } catch {
         this.logService.debug({
           source: 'core',
@@ -415,19 +432,17 @@ export class ReleaseService extends AbstractCrudService {
     ref: string
   ): Promise<EntryFile[]> {
     const entriesPath = pathTo.entries(projectId, collectionId);
-
     const fileNames = await this.gitService.listTreeAtCommit(
       projectPath,
       entriesPath,
       ref
     );
-
     const entries: EntryFile[] = [];
+    const entryFiles = fileNames.filter(
+      (f) => f.endsWith('.json') && f !== 'collection.json'
+    );
 
-    for (const fileName of fileNames) {
-      if (!fileName.endsWith('.json') || fileName === 'collection.json')
-        continue;
-
+    for (const fileName of entryFiles) {
       const entryId = fileName.replace('.json', '');
       const entryFilePath = pathTo.entryFile(projectId, collectionId, entryId);
 
@@ -437,8 +452,10 @@ export class ReleaseService extends AbstractCrudService {
           entryFilePath,
           ref
         );
-        const entryFile = entryFileSchema.parse(JSON.parse(content));
-        entries.push(entryFile);
+        const parsed = entryFileSchema.safeParse(JSON.parse(content));
+        if (parsed.success) {
+          entries.push(parsed.data);
+        }
       } catch {
         this.logService.debug({
           source: 'core',
@@ -459,14 +476,11 @@ export class ReleaseService extends AbstractCrudService {
     ref: string
   ): Promise<CollectionFile[]> {
     const collectionsPath = pathTo.collections(projectId);
-
-    // List collection folders at the ref
     const folderNames = await this.gitService.listTreeAtCommit(
       projectPath,
       collectionsPath,
       ref
     );
-
     const collections: CollectionFile[] = [];
 
     for (const folderName of folderNames) {
@@ -478,10 +492,11 @@ export class ReleaseService extends AbstractCrudService {
           collectionFilePath,
           ref
         );
-        const collectionFile = collectionFileSchema.parse(JSON.parse(content));
-        collections.push(collectionFile);
+        const parsed = collectionFileSchema.safeParse(JSON.parse(content));
+        if (parsed.success) {
+          collections.push(parsed.data);
+        }
       } catch {
-        // Collection may not have a valid collection.json (e.g. .gitkeep only)
         this.logService.debug({
           source: 'core',
           message: `Skipping folder "${folderName}" at ref "${ref}" during release diff`,
@@ -490,6 +505,178 @@ export class ReleaseService extends AbstractCrudService {
     }
 
     return collections;
+  }
+
+  /**
+   * Reads component files as they exist at a given git ref
+   */
+  private async getComponentsAtRef(
+    projectId: string,
+    projectPath: string,
+    ref: string
+  ): Promise<ComponentFile[]> {
+    const componentsPath = pathTo.components(projectId);
+    const folderNames = await this.gitService.listTreeAtCommit(
+      projectPath,
+      componentsPath,
+      ref
+    );
+    const components: ComponentFile[] = [];
+
+    for (const folderName of folderNames) {
+      const componentFilePath = pathTo.componentFile(projectId, folderName);
+
+      try {
+        const content = await this.gitService.getFileContentAtCommit(
+          projectPath,
+          componentFilePath,
+          ref
+        );
+        const parsed = componentFileSchema.safeParse(JSON.parse(content));
+        if (parsed.success) {
+          components.push(parsed.data);
+        }
+      } catch {
+        this.logService.debug({
+          source: 'core',
+          message: `Skipping component folder "${folderName}" at ref "${ref}" during release diff`,
+        });
+      }
+    }
+
+    return components;
+  }
+
+  /**
+   * Diffs two sets of components and returns all changes with the computed bump level.
+   *
+   * Component-level changes: added (MINOR), deleted (MAJOR).
+   * Field-level changes within matched components reuse the same rules as collection fields.
+   */
+  private diffComponents(
+    currentComponents: ComponentFile[],
+    productionComponents: ComponentFile[]
+  ): {
+    bump: SemverBump | null;
+    componentChanges: ComponentChange[];
+    componentFieldChanges: ComponentFieldChange[];
+  } {
+    const componentChanges: ComponentChange[] = [];
+    const componentFieldChanges: ComponentFieldChange[] = [];
+    let highestBump: SemverBump | null = null;
+
+    const currentById = new Map(currentComponents.map((c) => [c.id, c]));
+    const productionById = new Map(productionComponents.map((c) => [c.id, c]));
+
+    // Deleted components (in production but not in current) - MAJOR
+    for (const [id] of productionById) {
+      if (!currentById.has(id)) {
+        componentChanges.push({
+          componentId: id,
+          changeType: 'deleted',
+          bump: 'major',
+        });
+        highestBump = 'major';
+      }
+    }
+
+    // New components (in current but not in production) - MINOR
+    for (const [id] of currentById) {
+      if (!productionById.has(id)) {
+        componentChanges.push({
+          componentId: id,
+          changeType: 'added',
+          bump: 'minor',
+        });
+        highestBump = this.higherBump(highestBump, 'minor');
+      }
+    }
+
+    // Matched components - diff their field definitions
+    for (const [id, currentComponent] of currentById) {
+      const productionComponent = productionById.get(id);
+      if (!productionComponent) continue;
+
+      const changes = this.diffComponentFieldDefinitions(
+        id,
+        currentComponent.fieldDefinitions,
+        productionComponent.fieldDefinitions
+      );
+
+      componentFieldChanges.push(...changes);
+
+      for (const change of changes) {
+        highestBump = this.higherBump(highestBump, change.bump);
+      }
+    }
+
+    return { bump: highestBump, componentChanges, componentFieldChanges };
+  }
+
+  /**
+   * Diffs field definitions of a single component.
+   * Reuses the same classification rules as collection field diffs.
+   */
+  private diffComponentFieldDefinitions(
+    componentId: string,
+    currentFields: FieldDefinition[],
+    productionFields: FieldDefinition[]
+  ): ComponentFieldChange[] {
+    const changes: ComponentFieldChange[] = [];
+
+    const currentById = new Map(currentFields.map((f) => [f.id, f]));
+    const productionById = new Map(productionFields.map((f) => [f.id, f]));
+
+    // Deleted fields - MAJOR
+    for (const [id, field] of productionById) {
+      if (!currentById.has(id)) {
+        changes.push({
+          componentId,
+          fieldId: id,
+          fieldSlug: field.slug,
+          changeType: 'deleted',
+          bump: 'major',
+        });
+      }
+    }
+
+    // New fields - MINOR
+    for (const [id, field] of currentById) {
+      if (!productionById.has(id)) {
+        changes.push({
+          componentId,
+          fieldId: id,
+          fieldSlug: field.slug,
+          changeType: 'added',
+          bump: 'minor',
+        });
+      }
+    }
+
+    // Matched fields - compare property by property
+    for (const [id, currentField] of currentById) {
+      const productionField = productionById.get(id);
+      if (!productionField) continue;
+
+      const fieldChanges = this.diffSingleField(
+        componentId,
+        currentField,
+        productionField
+      );
+
+      // Map FieldChange to ComponentFieldChange
+      for (const fc of fieldChanges) {
+        changes.push({
+          componentId,
+          fieldId: fc.fieldId,
+          fieldSlug: fc.fieldSlug,
+          changeType: fc.changeType,
+          bump: fc.bump,
+        });
+      }
+    }
+
+    return changes;
   }
 
   /**
@@ -556,15 +743,15 @@ export class ReleaseService extends AbstractCrudService {
       }
     }
 
-    // Matched collections — diff their field definitions
+    // Matched collections - diff their field definitions
     for (const [id, currentCollection] of currentById) {
       const productionCollection = productionById.get(id);
       if (!productionCollection) continue;
 
       const changes = this.diffFieldDefinitions(
         id,
-        currentCollection.fieldDefinitions,
-        productionCollection.fieldDefinitions
+        flattenFieldDefinitions(currentCollection.fieldDefinitions),
+        flattenFieldDefinitions(productionCollection.fieldDefinitions)
       );
 
       fieldChanges.push(...changes);
@@ -591,7 +778,7 @@ export class ReleaseService extends AbstractCrudService {
   } {
     const projectChanges: ProjectChange[] = [];
 
-    // No production project means first release — no changes to report
+    // No production project means first release - no changes to report
     if (!production) {
       return { bump: null, projectChanges };
     }
@@ -669,7 +856,7 @@ export class ReleaseService extends AbstractCrudService {
     const currentById = new Map(currentAssets.map((a) => [a.id, a]));
     const productionById = new Map(productionAssets.map((a) => [a.id, a]));
 
-    // Deleted assets (in production but not in current) — MAJOR
+    // Deleted assets (in production but not in current) - MAJOR
     for (const [id] of productionById) {
       if (!currentById.has(id)) {
         assetChanges.push({
@@ -681,7 +868,7 @@ export class ReleaseService extends AbstractCrudService {
       }
     }
 
-    // New assets (in current but not in production) — MINOR
+    // New assets (in current but not in production) - MINOR
     for (const [id] of currentById) {
       if (!productionById.has(id)) {
         assetChanges.push({ assetId: id, changeType: 'added', bump: 'minor' });
@@ -689,12 +876,12 @@ export class ReleaseService extends AbstractCrudService {
       }
     }
 
-    // Modified assets — compare properties
+    // Modified assets - compare properties
     for (const [id, current] of currentById) {
       const production = productionById.get(id);
       if (!production) continue;
 
-      // Binary changed (extension, mimeType, or size differ) — PATCH
+      // Binary changed (extension, mimeType, or size differ) - PATCH
       if (
         current.extension !== production.extension ||
         current.mimeType !== production.mimeType ||
@@ -708,7 +895,7 @@ export class ReleaseService extends AbstractCrudService {
         highestBump = this.higherBump(highestBump, 'patch');
       }
 
-      // Metadata changed (name or description differ) — PATCH
+      // Metadata changed (name or description differ) - PATCH
       if (
         current.name !== production.name ||
         current.description !== production.description
@@ -757,7 +944,7 @@ export class ReleaseService extends AbstractCrudService {
       const currentById = new Map(currentEntries.map((e) => [e.id, e]));
       const productionById = new Map(productionEntries.map((e) => [e.id, e]));
 
-      // Deleted entries — MAJOR
+      // Deleted entries - MAJOR
       for (const [id] of productionById) {
         if (!currentById.has(id)) {
           entryChanges.push({
@@ -770,7 +957,7 @@ export class ReleaseService extends AbstractCrudService {
         }
       }
 
-      // New entries — MINOR
+      // New entries - MINOR
       for (const [id] of currentById) {
         if (!productionById.has(id)) {
           entryChanges.push({
@@ -783,12 +970,12 @@ export class ReleaseService extends AbstractCrudService {
         }
       }
 
-      // Modified entries — PATCH
+      // Modified entries - PATCH
       for (const [id, current] of currentById) {
         const production = productionById.get(id);
         if (!production) continue;
 
-        if (!isDeepStrictEqual(current.values, production.values)) {
+        if (isDeepStrictEqual(current.values, production.values) === false) {
           entryChanges.push({
             collectionId,
             entryId: id,
@@ -845,7 +1032,7 @@ export class ReleaseService extends AbstractCrudService {
       }
     }
 
-    // Matched fields — compare property by property
+    // Matched fields - compare property by property
     for (const [id, currentField] of currentById) {
       const productionField = productionById.get(id);
       if (!productionField) continue;
@@ -919,10 +1106,10 @@ export class ReleaseService extends AbstractCrudService {
 
     if (current.fieldType === 'entry' && production.fieldType === 'entry') {
       if (
-        !isDeepStrictEqual(
+        isDeepStrictEqual(
           [...current.ofCollections].sort(),
           [...production.ofCollections].sort()
-        )
+        ) === false
       ) {
         changes.push({
           ...base,
@@ -960,11 +1147,13 @@ export class ReleaseService extends AbstractCrudService {
       });
     }
 
-    if (!isDeepStrictEqual(current.label, production.label)) {
+    if (isDeepStrictEqual(current.label, production.label) === false) {
       changes.push({ ...base, changeType: 'labelChanged', bump: 'patch' });
     }
 
-    if (!isDeepStrictEqual(current.description, production.description)) {
+    if (
+      isDeepStrictEqual(current.description, production.description) === false
+    ) {
       changes.push({
         ...base,
         changeType: 'descriptionChanged',
@@ -975,7 +1164,7 @@ export class ReleaseService extends AbstractCrudService {
     if (
       'defaultValue' in current &&
       'defaultValue' in production &&
-      !isDeepStrictEqual(current.defaultValue, production.defaultValue)
+      isDeepStrictEqual(current.defaultValue, production.defaultValue) === false
     ) {
       changes.push({
         ...base,
@@ -1108,7 +1297,7 @@ export class ReleaseService extends AbstractCrudService {
       if (tag.message.type === 'upgrade') continue;
 
       if (tag.message.type === 'release') {
-        // Hit the last full release — stop counting
+        // Hit the last full release - stop counting
         break;
       }
 

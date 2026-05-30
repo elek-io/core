@@ -39,6 +39,22 @@ export const pathTo = {
     return Path.join(pathTo.project(projectId), projectFolderSchema.enum.lfs);
   },
 
+  components: (projectId: string): string => {
+    return Path.join(
+      pathTo.project(projectId),
+      projectFolderSchema.enum.components
+    );
+  },
+  component: (projectId: string, id: string) => {
+    return Path.join(pathTo.components(projectId), id);
+  },
+  componentFile: (projectId: string, id: string) => {
+    return Path.join(pathTo.component(projectId, id), 'component.json');
+  },
+  componentIndex: (projectId: string) => {
+    return Path.join(pathTo.components(projectId), 'index.json');
+  },
+
   collections: (projectId: string): string => {
     return Path.join(
       pathTo.project(projectId),
@@ -60,13 +76,6 @@ export const pathTo = {
   },
   entryFile: (projectId: string, collectionId: string, id: string) => {
     return Path.join(pathTo.entries(projectId, collectionId), `${id}.json`);
-  },
-
-  sharedValues: (projectId: string): string => {
-    return Path.join(pathTo.project(projectId), 'shared-values');
-  },
-  sharedValueFile: (projectId: string, id: string, language: string) => {
-    return Path.join(pathTo.sharedValues(projectId), `${id}.${language}.json`);
   },
 
   assets: (projectId: string): string => {
@@ -102,16 +111,6 @@ export function isNotEmpty<T>(value: T | null | undefined): value is T {
     }
   }
   return true;
-}
-
-/**
- * Used as parameter for filter() methods to assure,
- * only items that are not of type Error are returned
- *
- * @param item Item to check
- */
-export function isNotAnError<T>(item: T | Error): item is T {
-  return item instanceof Error !== true;
 }
 
 /**

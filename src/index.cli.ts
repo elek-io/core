@@ -5,12 +5,14 @@ import * as packageJson from '../package.json' with { type: 'json' };
 import {
   exportAction,
   generateApiClientAction,
+  generateTypesAction,
   startApiAction,
 } from './cli/index.js';
 import {
   apiStartSchema,
   exportSchema,
   generateApiClientSchema,
+  generateTypesSchema,
 } from './schema/index.js';
 
 const program = new Command();
@@ -57,6 +59,37 @@ program
     });
 
     await generateApiClientAction(props);
+  });
+
+program
+  .command('generate:types')
+  .description(
+    'Generates TypeScript type definitions from Project content models'
+  )
+  .argument('[outDir]', 'The directory to generate the types in', './.elek.io')
+  .argument(
+    '[language]',
+    'The output language. Choose "ts" for TypeScript source, or "js" to compile to JavaScript with .d.ts declarations.',
+    'ts'
+  )
+  .argument(
+    '[projects]',
+    'One or more Project IDs, separated by commas. If not provided, all Projects will be used.',
+    'all'
+  )
+  .option(
+    '-w, --watch',
+    'Watches for changes in your Projects and regenerates types automatically.'
+  )
+  .action(async (outDir, language, projects, options) => {
+    const props = generateTypesSchema.parse({
+      outDir,
+      language,
+      projects,
+      options,
+    });
+
+    await generateTypesAction(props);
   });
 
 program

@@ -18,7 +18,6 @@ import {
   type AssetFile,
   type CountAssetsProps,
   type CreateAssetProps,
-  type CrudServiceWithListCount,
   type DeleteAssetProps,
   type ElekIoCoreOptions,
   type ListAssetsProps,
@@ -31,8 +30,8 @@ import {
 } from '../schema/index.js';
 import { applyMigrations, assetMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
-import { datetime, slug, uuid } from '../util/shared.js';
-import { AbstractCrudService } from './AbstractCrudService.js';
+import { datetime, slug, uuid, CoreError } from '../util/shared.js';
+import { AbstractEntityService } from './AbstractEntityService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -40,13 +39,8 @@ import type { LogService } from './LogService.js';
 /**
  * Service that manages CRUD functionality for Asset files on disk
  */
-export class AssetService
-  extends AbstractCrudService
-  implements CrudServiceWithListCount<Asset>
-{
+export class AssetService extends AbstractEntityService {
   private readonly coreVersion: string;
-  private readonly jsonFileService: JsonFileService;
-  private readonly gitService: GitService;
 
   constructor(
     coreVersion: string,
@@ -55,59 +49,73 @@ export class AssetService
     jsonFileService: JsonFileService,
     gitService: GitService
   ) {
-    super(serviceTypeSchema.enum.Asset, options, logService);
+    super(
+      serviceTypeSchema.enum.Asset,
+      options,
+      logService,
+      gitService,
+      jsonFileService
+    );
 
     this.coreVersion = coreVersion;
-    this.jsonFileService = jsonFileService;
-    this.gitService = gitService;
   }
 
   /**
    * Creates a new Asset
    */
-  public async create(props: CreateAssetProps): Promise<Asset> {
-    createAssetSchema.parse(props);
+  public create(props: CreateAssetProps): Promise<Asset> {
+    return this.validated(
+      'create',
+      createAssetSchema,
+      props,
+      async (validatedProps) => {
+        const id = uuid();
+        const projectPath = pathTo.project(validatedProps.projectId);
+        const fileType = this.getFileType(validatedProps.filePath);
 
-    const id = uuid();
-    const projectPath = pathTo.project(props.projectId);
-    const fileType = this.getFileType(props.filePath);
-    const size = await this.getFileSize(props.filePath);
-    const assetPath = pathTo.asset(props.projectId, id, fileType.extension);
-    const assetFilePath = pathTo.assetFile(props.projectId, id);
+        const assetPath = pathTo.asset(
+          validatedProps.projectId,
+          id,
+          fileType.extension
+        );
+        const assetFilePath = pathTo.assetFile(validatedProps.projectId, id);
 
-    const assetFile: AssetFile = {
-      ...props,
-      name: slug(props.name),
-      objectType: 'asset',
-      id,
-      coreVersion: this.coreVersion,
-      created: datetime(),
-      updated: null,
-      extension: fileType.extension,
-      mimeType: fileType.mimeType,
-      size,
-    };
+        const {
+          projectId: _,
+          filePath: __,
+          ...validatedAssetProps
+        } = validatedProps;
 
-    try {
-      await Fs.copyFile(props.filePath, assetPath);
-      await this.jsonFileService.create(
-        assetFile,
-        assetFilePath,
-        assetFileSchema
-      );
-    } catch (error) {
-      // To avoid partial data being added to the repository / git status reporting uncommitted files
-      await this.delete({ ...assetFile, projectId: props.projectId });
-      throw error;
-    }
+        const size = await this.getFileSize(validatedProps.filePath);
+        const assetFile: AssetFile = {
+          ...validatedAssetProps,
+          name: slug(validatedProps.name),
+          objectType: 'asset',
+          id,
+          coreVersion: this.coreVersion,
+          created: datetime(),
+          updated: null,
+          extension: fileType.extension,
+          mimeType: fileType.mimeType,
+          size,
+        };
 
-    await this.gitService.add(projectPath, [assetFilePath, assetPath]);
-    await this.gitService.commit(projectPath, {
-      method: 'create',
-      reference: { objectType: 'asset', id },
-    });
-
-    return this.toAsset(props.projectId, assetFile);
+        return this.withGitRollback(projectPath, async () => {
+          await Fs.copyFile(validatedProps.filePath, assetPath);
+          await this.jsonFileService.create(
+            assetFile,
+            assetFilePath,
+            assetFileSchema
+          );
+          await this.gitService.add(projectPath, [assetFilePath, assetPath]);
+          await this.gitService.commit(projectPath, {
+            method: 'create',
+            reference: { objectType: 'asset', id },
+          });
+          return this.toAsset(validatedProps.projectId, assetFile);
+        }, [assetPath, assetFilePath]);
+      }
+    );
   }
 
   /**
@@ -115,62 +123,56 @@ export class AssetService
    *
    * If a commit hash is provided, the Asset is read from history
    */
-  public async read(props: ReadAssetProps): Promise<Asset> {
-    readAssetSchema.parse(props);
-
-    if (!props.commitHash) {
-      const assetFile = await this.jsonFileService.read(
-        pathTo.assetFile(props.projectId, props.id),
-        assetFileSchema
-      );
-
-      return this.toAsset(props.projectId, assetFile);
-    } else {
-      const assetFile = this.migrate(
-        JSON.parse(
-          await this.gitService.getFileContentAtCommit(
-            pathTo.project(props.projectId),
-            pathTo.assetFile(props.projectId, props.id),
-            props.commitHash
-          )
-        )
-      );
-
-      const assetBlob = await this.gitService.getFileContentAtCommit(
-        pathTo.project(props.projectId),
-        pathTo.asset(props.projectId, props.id, assetFile.extension),
-        props.commitHash,
-        'binary'
-      );
-      await Fs.writeFile(
-        pathTo.tmpAsset(assetFile.id, props.commitHash, assetFile.extension),
-        assetBlob,
-        'binary'
-      );
-
-      return this.toAsset(props.projectId, assetFile, props.commitHash);
-    }
+  public read(props: ReadAssetProps): Promise<Asset> {
+    return this.validated('read', readAssetSchema, props, async () => {
+      if (!props.commitHash) {
+        const assetFile = await this.jsonFileService.read(
+          pathTo.assetFile(props.projectId, props.id),
+          assetFileSchema
+        );
+        return this.toAsset(props.projectId, assetFile);
+      } else {
+        const content = await this.gitService.getFileContentAtCommit(
+          pathTo.project(props.projectId),
+          pathTo.assetFile(props.projectId, props.id),
+          props.commitHash
+        );
+        const assetFile = this.migrate(JSON.parse(content));
+        const blob = await this.gitService.getFileContentAtCommit(
+          pathTo.project(props.projectId),
+          pathTo.asset(props.projectId, props.id, assetFile.extension),
+          props.commitHash,
+          'binary'
+        );
+        await Fs.writeFile(
+          pathTo.tmpAsset(assetFile.id, props.commitHash, assetFile.extension),
+          blob,
+          'binary'
+        );
+        return this.toAsset(props.projectId, assetFile, props.commitHash);
+      }
+    });
   }
 
   /**
    * Returns the commit history of an Asset
    */
-  public async history(props: AssetHistoryProps): Promise<GitCommit[]> {
-    assetHistorySchema.parse(props);
-
-    return this.gitService.log(pathTo.project(props.projectId), {
-      filePath: pathTo.assetFile(props.projectId, props.id),
+  public history(props: AssetHistoryProps): Promise<GitCommit[]> {
+    return this.validated('history', assetHistorySchema, props, async () => {
+      return this.gitService.log(pathTo.project(props.projectId), {
+        filePath: pathTo.assetFile(props.projectId, props.id),
+      });
     });
   }
 
   /**
    * Copies an Asset to given file path on disk
    */
-  public async save(props: SaveAssetProps) {
-    saveAssetSchema.parse(props);
-
-    const asset = await this.read(props);
-    await Fs.copyFile(asset.absolutePath, props.filePath);
+  public save(props: SaveAssetProps): Promise<void> {
+    return this.validated('save', saveAssetSchema, props, async () => {
+      const asset = await this.read(props);
+      await Fs.copyFile(asset.absolutePath, props.filePath);
+    });
   }
 
   /**
@@ -178,122 +180,147 @@ export class AssetService
    *
    * Use the optional "newFilePath" prop to update the Asset itself
    */
-  public async update(props: UpdateAssetProps): Promise<Asset> {
-    updateAssetSchema.parse(props);
+  public update(props: UpdateAssetProps): Promise<Asset> {
+    return this.validated(
+      'update',
+      updateAssetSchema,
+      props,
+      async (validatedProps) => {
+        const projectPath = pathTo.project(validatedProps.projectId);
+        const assetFilePath = pathTo.assetFile(
+          validatedProps.projectId,
+          validatedProps.id
+        );
 
-    const projectPath = pathTo.project(props.projectId);
-    const assetFilePath = pathTo.assetFile(props.projectId, props.id);
-    const prevAssetFile = await this.read(props);
+        const prevAsset = await this.read(validatedProps);
+        const {
+          projectId: _,
+          newFilePath: __,
+          ...validatedUpdateProps
+        } = validatedProps;
+        const assetFile: AssetFile = {
+          ...prevAsset,
+          ...validatedUpdateProps,
+          name: slug(validatedProps.name),
+          updated: datetime(),
+        };
 
-    // Overwrite old data with new
-    // It's ok to have projectId inside props, since the prevAssetFile is read with the same data
-    const assetFile: AssetFile = {
-      ...prevAssetFile,
-      ...props,
-      name: slug(props.name),
-      updated: datetime(),
-    };
+        return this.withGitRollback(projectPath, async () => {
+          if (validatedProps.newFilePath) {
+            const fileType = this.getFileType(validatedProps.newFilePath);
 
-    if (props.newFilePath) {
-      // Overwrite the file itself (in LFS folder)...
+            const prevAssetPath = pathTo.asset(
+              validatedProps.projectId,
+              validatedProps.id,
+              prevAsset.extension
+            );
+            const assetPath = pathTo.asset(
+              validatedProps.projectId,
+              validatedProps.id,
+              fileType.extension
+            );
 
-      const fileType = this.getFileType(props.newFilePath);
-      const size = await this.getFileSize(props.newFilePath);
-      const prevAssetPath = pathTo.asset(
-        props.projectId,
-        props.id,
-        prevAssetFile.extension
-      );
-      const assetPath = pathTo.asset(
-        props.projectId,
-        props.id,
-        fileType.extension
-      );
+            const size = await this.getFileSize(validatedProps.newFilePath);
+            assetFile.extension = fileType.extension;
+            assetFile.mimeType = fileType.mimeType;
+            assetFile.size = size;
 
-      // @todo use try catch to handle FS error and restore previous state
-      await Fs.remove(prevAssetPath); // Need to explicitly remove old Asset, because it could have a different extension
-      await Fs.copyFile(props.newFilePath, assetPath);
-      await this.gitService.add(projectPath, [prevAssetPath, assetPath]);
+            await Fs.copyFile(validatedProps.newFilePath, assetPath);
+            await Fs.remove(prevAssetPath);
+            await this.gitService.add(projectPath, [prevAssetPath, assetPath]);
+            await this.jsonFileService.update(
+              assetFile,
+              assetFilePath,
+              assetFileSchema
+            );
+            await this.gitService.add(projectPath, [assetFilePath]);
+            await this.gitService.commit(projectPath, {
+              method: 'update',
+              reference: { objectType: 'asset', id: assetFile.id },
+            });
+            return this.toAsset(validatedProps.projectId, assetFile);
+          }
 
-      // ...and update meta information
-      assetFile.extension = fileType.extension;
-      assetFile.mimeType = fileType.mimeType;
-      assetFile.size = size;
-    }
-
-    await this.jsonFileService.update(
-      assetFile,
-      assetFilePath,
-      assetFileSchema
+          await this.jsonFileService.update(
+            assetFile,
+            assetFilePath,
+            assetFileSchema
+          );
+          await this.gitService.add(projectPath, [assetFilePath]);
+          await this.gitService.commit(projectPath, {
+            method: 'update',
+            reference: { objectType: 'asset', id: assetFile.id },
+          });
+          return this.toAsset(validatedProps.projectId, assetFile);
+        });
+      }
     );
-    await this.gitService.add(projectPath, [assetFilePath]);
-    await this.gitService.commit(projectPath, {
-      method: 'update',
-      reference: { objectType: 'asset', id: assetFile.id },
-    });
-
-    return this.toAsset(props.projectId, assetFile);
   }
 
   /**
    * Deletes given Asset
    */
-  public async delete(props: DeleteAssetProps): Promise<void> {
-    deleteAssetSchema.parse(props);
+  public delete(props: DeleteAssetProps): Promise<void> {
+    return this.validated('delete', deleteAssetSchema, props, async () => {
+      const projectPath = pathTo.project(props.projectId);
+      const assetFilePath = pathTo.assetFile(props.projectId, props.id);
+      const assetPath = pathTo.asset(
+        props.projectId,
+        props.id,
+        props.extension
+      );
 
-    const projectPath = pathTo.project(props.projectId);
-    const assetFilePath = pathTo.assetFile(props.projectId, props.id);
-    const assetPath = pathTo.asset(props.projectId, props.id, props.extension);
-    await Fs.remove(assetPath);
-    await Fs.remove(assetFilePath);
-    await this.gitService.add(projectPath, [assetFilePath, assetPath]);
-    await this.gitService.commit(projectPath, {
-      method: 'delete',
-      reference: { objectType: 'asset', id: props.id },
+      return this.withGitRollback(projectPath, async () => {
+        await Fs.remove(assetPath);
+        await Fs.remove(assetFilePath);
+        await this.gitService.add(projectPath, [assetFilePath, assetPath]);
+        await this.gitService.commit(projectPath, {
+          method: 'delete',
+          reference: { objectType: 'asset', id: props.id },
+        });
+      });
     });
   }
 
-  public async list(props: ListAssetsProps): Promise<PaginatedList<Asset>> {
-    listAssetsSchema.parse(props);
+  public list(props: ListAssetsProps): Promise<PaginatedList<Asset>> {
+    return this.validated('list', listAssetsSchema, props, async () => {
+      const offset = props.offset || 0;
+      const limit = props.limit ?? 15;
 
-    const offset = props.offset || 0;
-    const limit = props.limit ?? 15;
+      const assetReferences = await this.listReferences(
+        objectTypeSchema.enum.asset,
+        props.projectId
+      );
+      const partialAssetReferences =
+        limit === 0
+          ? assetReferences.slice(offset)
+          : assetReferences.slice(offset, offset + limit);
 
-    const assetReferences = await this.listReferences(
-      objectTypeSchema.enum.asset,
-      props.projectId
-    );
-
-    const partialAssetReferences =
-      limit === 0
-        ? assetReferences.slice(offset)
-        : assetReferences.slice(offset, offset + limit);
-
-    const assets = await this.returnResolved(
-      partialAssetReferences.map((assetReference) => {
-        return this.read({
-          projectId: props.projectId,
-          id: assetReference.id,
-        });
-      })
-    );
-
-    return {
-      total: assetReferences.length,
-      limit,
-      offset,
-      list: assets,
-    };
+      const assets = await this.collectResults(
+        partialAssetReferences.map((assetReference) =>
+          this.read({
+            projectId: props.projectId,
+            id: assetReference.id,
+          })
+        )
+      );
+      return {
+        total: assetReferences.length,
+        limit,
+        offset,
+        list: assets,
+      };
+    });
   }
 
-  public async count(props: CountAssetsProps): Promise<number> {
-    countAssetsSchema.parse(props);
-
-    const count = (
-      await this.listReferences(objectTypeSchema.enum.asset, props.projectId)
-    ).length;
-
-    return count;
+  public count(props: CountAssetsProps): Promise<number> {
+    return this.validated('count', countAssetsSchema, props, async () => {
+      const refs = await this.listReferences(
+        objectTypeSchema.enum.asset,
+        props.projectId
+      );
+      return refs.length;
+    });
   }
 
   /**
@@ -304,12 +331,13 @@ export class AssetService
   }
 
   /**
-   * Returns the size of an file in bytes
+   * Returns the size of a file in bytes
    *
    * @param path Path of the file to get the size from
    */
-  private async getFileSize(path: string) {
-    return (await Fs.stat(path)).size;
+  private async getFileSize(path: string): Promise<number> {
+    const stats = await Fs.stat(path);
+    return stats.size;
   }
 
   /**
@@ -339,17 +367,20 @@ export class AssetService
    *
    * @param filePath Path to the file to check
    */
-  private getFileType(filePath: string) {
+  private getFileType(filePath: string): {
+    extension: string;
+    mimeType: string;
+  } {
     const mimeType = mime.getType(filePath);
 
     if (mimeType === null) {
-      throw new Error(`Unsupported MIME type of file "${filePath}"`);
+      throw CoreError.badRequest(`Unsupported MIME type of file "${filePath}"`);
     }
 
     const extension = mime.getExtension(mimeType);
 
     if (extension === null) {
-      throw new Error(
+      throw CoreError.badRequest(
         `Unsupported extension for MIME type "${mimeType}" of file "${filePath}"`
       );
     }
@@ -361,7 +392,7 @@ export class AssetService
   }
 
   /**
-   * Migrates an potentially outdated Asset file to the current schema
+   * Migrates a potentially outdated Asset file to the current schema
    */
   public migrate(potentiallyOutdatedAssetFile: unknown) {
     const loose = migrateAssetSchema.parse(potentiallyOutdatedAssetFile);

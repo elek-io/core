@@ -51,13 +51,13 @@ const router = createRouter()
     async (c) => {
       const { projectId } = c.req.valid('param');
       const { limit, offset } = c.req.valid('query');
-      const assets = await c.var.assetService.list({
+      const data = await c.var.assetService.list({
         projectId,
         limit,
         offset,
       });
 
-      return c.json(assets, 200);
+      return c.json(data, 200);
     }
   )
 
@@ -91,9 +91,9 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId } = c.req.valid('param');
-      const count = await c.var.assetService.count({ projectId });
+      const data = await c.var.assetService.count({ projectId });
 
-      return c.json(count, 200);
+      return c.json(data, 200);
     }
   )
 
@@ -133,12 +133,12 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId, assetId } = c.req.valid('param');
-      const asset = await c.var.assetService.read({
+      const data = await c.var.assetService.read({
         projectId,
         id: assetId,
       });
 
-      return c.json(asset, 200);
+      return c.json(data, 200);
     }
   );
 

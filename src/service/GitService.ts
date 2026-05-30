@@ -3,7 +3,7 @@ import type { IGitExecutionOptions, IGitStringResult } from 'dugite';
 import { exec as gitExec } from 'dugite';
 import PQueue from 'p-queue';
 import Path from 'node:path';
-import { GitError, NoCurrentUserError } from '../error/index.js';
+import { CoreError } from '../util/shared.js';
 import type { GitMergeOptions, GitMessage } from '../schema/index.js';
 import {
   gitCommitSchema,
@@ -154,11 +154,12 @@ export class GitService {
     await this.git(path, args);
   }
 
-  public async status(path: string) {
+  public async status(
+    path: string
+  ): Promise<{ filePath: string | undefined }[]> {
     const args = ['status', '--porcelain=2'];
     const result = await this.git(path, args);
-
-    const normalizedLinesArr = result.stdout
+    return result.stdout
       .split('\n')
       .filter((line) => {
         return line.trim() !== '';
@@ -170,8 +171,6 @@ export class GitService {
           filePath: lineArr[8],
         };
       });
-
-    return normalizedLinesArr;
   }
 
   public branches = {
@@ -182,10 +181,11 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    list: async (path: string) => {
+    list: async (
+      path: string
+    ): Promise<{ local: string[]; remote: string[] }> => {
       const args = ['branch', '--list', '--all'];
       const result = await this.git(path, args);
-
       const normalizedLinesArr = result.stdout
         .split('\n')
         .filter((line) => {
@@ -204,10 +204,7 @@ export class GitService {
           local.push(line);
         }
       });
-      return {
-        local,
-        remote,
-      };
+      return { local, remote };
     },
     /**
      * Returns the name of the current branch. In detached HEAD state, an empty string is returned.
@@ -216,10 +213,9 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    current: async (path: string) => {
+    current: async (path: string): Promise<string> => {
       const args = ['branch', '--show-current'];
       const result = await this.git(path, args);
-
       return result.stdout.trim();
     },
     /**
@@ -235,7 +231,7 @@ export class GitService {
       path: string,
       branch: string,
       options?: GitSwitchOptions
-    ) => {
+    ): Promise<void> => {
       await this.checkBranchOrTagName(path, branch);
 
       let args = ['switch'];
@@ -256,7 +252,11 @@ export class GitService {
      * @param path Path to the repository
      * @param branch Name of the branch to delete
      */
-    delete: async (path: string, branch: string, force?: boolean) => {
+    delete: async (
+      path: string,
+      branch: string,
+      force?: boolean
+    ): Promise<void> => {
       let args = ['branch', '--delete'];
 
       if (force === true) {
@@ -275,27 +275,21 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    list: async (path: string) => {
+    list: async (path: string): Promise<string[]> => {
       const args = ['remote'];
       const result = await this.git(path, args);
-      const normalizedLinesArr = result.stdout.split('\n').filter((line) => {
+      return result.stdout.split('\n').filter((line) => {
         return line.trim() !== '';
       });
-
-      return normalizedLinesArr;
     },
     /**
      * Returns true if the `origin` remote exists, otherwise false
      *
      * @param path  Path to the repository
      */
-    hasOrigin: async (path: string) => {
+    hasOrigin: async (path: string): Promise<boolean> => {
       const remotes = await this.remotes.list(path);
-
-      if (remotes.includes('origin')) {
-        return true;
-      }
-      return false;
+      return remotes.includes('origin');
     },
     /**
      * Adds the `origin` remote with given URL
@@ -306,7 +300,7 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    addOrigin: async (path: string, url: string) => {
+    addOrigin: async (path: string, url: string): Promise<void> => {
       const args = ['remote', 'add', 'origin', url.trim()];
       await this.git(path, args);
     },
@@ -319,11 +313,11 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    getOriginUrl: async (path: string) => {
+    getOriginUrl: async (path: string): Promise<string | null> => {
       const args = ['remote', 'get-url', 'origin'];
-      const result = (await this.git(path, args)).stdout.trim();
-
-      return result.length === 0 ? null : result;
+      const result = await this.git(path, args);
+      const url = result.stdout.trim();
+      return url.length === 0 ? null : url;
     },
     /**
      * Sets the current `origin` remote URL
@@ -334,7 +328,7 @@ export class GitService {
      *
      * @param path  Path to the repository
      */
-    setOriginUrl: async (path: string, url: string) => {
+    setOriginUrl: async (path: string, url: string): Promise<void> => {
       const args = ['remote', 'set-url', 'origin', url.trim()];
       await this.git(path, args);
     },
@@ -349,7 +343,7 @@ export class GitService {
     path: string,
     branch: string,
     options?: Partial<GitMergeOptions>
-  ) {
+  ): Promise<void> {
     let args = ['merge'];
 
     if (options?.squash === true) {
@@ -371,33 +365,14 @@ export class GitService {
    * @param mode    Modifies the working tree depending on given mode
    * @param commit  Resets the current branch head to this commit / tag
    */
-  public async reset(path: string, mode: 'soft' | 'hard', commit: string) {
+  public async reset(
+    path: string,
+    mode: 'soft' | 'hard',
+    commit: string
+  ): Promise<void> {
     const args = ['reset', `--${mode}`, commit];
     await this.git(path, args);
   }
-
-  /**
-   * Restore working tree files
-   *
-   * @see https://git-scm.com/docs/git-restore/
-   *
-   * @todo It's probably a good idea to not use restore
-   * for a use case where someone just wants to have a look
-   * and maybe copy something from a deleted file.
-   * We should use `checkout` without `add .` and `commit` for that
-   *
-   * @param path    Path to the repository
-   * @param source  Git commit SHA or tag name to restore to
-   * @param files   Files to restore
-   */
-  // public async restore(
-  //   path: string,
-  //   source: string,
-  //   files: string[]
-  // ): Promise<void> {
-  //   const args = ['restore', `--source=${source}`, ...files];
-  //   await this.git(path, args);
-  // }
 
   /**
    * Download objects and refs from remote `origin`
@@ -420,7 +395,6 @@ export class GitService {
    */
   public async pull(path: string): Promise<void> {
     const args = ['pull'];
-
     await this.git(path, args);
   }
 
@@ -433,16 +407,9 @@ export class GitService {
    */
   public async push(
     path: string,
-    // branch: string,
     options?: Partial<{ all: boolean; force: boolean }>
   ): Promise<void> {
     let args = ['push', 'origin'];
-
-    // if (options?.trackRemoteBranch === true) {
-    //   args = [...args, '--set-upstream'];
-    // }
-
-    // args = [...args, 'origin'];
 
     if (options?.all === true) {
       args = [...args, '--all'];
@@ -464,11 +431,17 @@ export class GitService {
    * @param message An object describing the changes
    */
   public async commit(path: string, message: GitMessage): Promise<void> {
-    gitMessageSchema.parse(message);
+    const parsed = gitMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      throw CoreError.badRequest(parsed.error.message, parsed.error);
+    }
 
     const user = await this.userService.get();
+
     if (!user) {
-      throw new NoCurrentUserError();
+      throw CoreError.unauthorized(
+        'No user is set in Core. Please set a User before doing any git operations.'
+      );
     }
 
     const subject = `${message.method.charAt(0).toUpperCase() + message.method.slice(1)} ${message.reference.objectType} ${message.reference.id}`;
@@ -549,7 +522,14 @@ export class GitService {
       noEmptyLinesArr.map(async (line) => {
         const lineArray = line.split('|');
         const tagId = this.refNameToTagName(lineArray[8]?.trim() || '');
-        const tag = tagId ? await this.tags.read({ path, id: tagId }) : null;
+        let tag = null;
+        if (tagId) {
+          try {
+            tag = await this.tags.read({ path, id: tagId });
+          } catch {
+            tag = null;
+          }
+        }
         const collectionId = lineArray[4]?.trim();
 
         return {
@@ -585,7 +565,7 @@ export class GitService {
     filePath: string,
     commitHash: string,
     encoding: 'utf8' | 'binary' = 'utf8'
-  ) {
+  ): Promise<string> {
     const relativePathFromRepositoryRoot = filePath.replace(
       `${path}${Path.sep}`,
       ''
@@ -598,11 +578,10 @@ export class GitService {
       }
     };
 
-    return (
-      await this.git(path, args, {
-        processCallback: setEncoding,
-      })
-    ).stdout;
+    const result = await this.git(path, args, {
+      processCallback: setEncoding,
+    });
+    return result.stdout;
   }
 
   /**
@@ -638,13 +617,9 @@ export class GitService {
           const parts = entry.split('/');
           return parts[parts.length - 1] || entry;
         });
-    } catch (error) {
+    } catch {
       // If the path or ref doesn't exist (e.g. first release), return empty.
-      // GitError is thrown for non-zero exit codes from git commands.
-      if (error instanceof GitError) {
-        return [];
-      }
-      throw error;
+      return [];
     }
   }
 
@@ -665,8 +640,12 @@ export class GitService {
    * This can help debugging
    */
   private async updateVersion(): Promise<void> {
-    const result = await this.git('', ['--version']);
-    this.version = result.stdout.replace('git version', '').trim();
+    try {
+      const result = await this.git('', ['--version']);
+      this.version = result.stdout.replace('git version', '').trim();
+    } catch {
+      // Silently ignore - version is optional debug info
+    }
   }
 
   /**
@@ -677,8 +656,12 @@ export class GitService {
    * @see https://github.com/desktop/dugite/blob/main/lib/git-environment.ts
    */
   private async updateGitPath(): Promise<void> {
-    const result = await this.git('', ['--exec-path']);
-    this.gitPath = result.stdout.trim();
+    try {
+      const result = await this.git('', ['--exec-path']);
+      this.gitPath = result.stdout.trim();
+    } catch {
+      // Silently ignore - gitPath is optional debug info
+    }
   }
 
   /**
@@ -690,7 +673,10 @@ export class GitService {
    * @param path Path to the repository
    * @param name Name to check
    */
-  private async checkBranchOrTagName(path: string, name: string) {
+  private async checkBranchOrTagName(
+    path: string,
+    name: string
+  ): Promise<void> {
     await this.git(path, ['check-ref-format', '--allow-onelevel', name]);
   }
 
@@ -699,10 +685,13 @@ export class GitService {
    *
    * @param path Path to the repository
    */
-  private async setLocalConfig(path: string) {
+  private async setLocalConfig(path: string): Promise<void> {
     const user = await this.userService.get();
+
     if (!user) {
-      throw new NoCurrentUserError();
+      throw CoreError.unauthorized(
+        'No user is set in Core. Please set a User before doing any git operations.'
+      );
     }
 
     // Setup the local User
@@ -751,14 +740,11 @@ export class GitService {
       const start = Date.now();
       const gitResult = await gitExec(args, path, options);
       const durationMs = Date.now() - start;
-      return {
-        gitResult,
-        durationMs,
-      };
+      return { gitResult, durationMs };
     });
 
     if (!result) {
-      throw new GitError(
+      throw CoreError.internal(
         `Git ${this.version} (${this.gitPath}) command "git ${args.join(
           ' '
         )}" executed for "${path}" failed to return a result`
@@ -777,7 +763,7 @@ export class GitService {
     }
 
     if (result.gitResult.exitCode !== 0) {
-      throw new GitError(
+      throw CoreError.internal(
         `Git ${this.version} (${this.gitPath}) command "git ${args.join(
           ' '
         )}" executed for "${path}" failed with exit code "${

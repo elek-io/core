@@ -42,9 +42,9 @@ const router = createRouter()
     }),
     async (c) => {
       const { limit, offset } = c.req.valid('query');
-      const projects = await c.var.projectService.list({ limit, offset });
+      const data = await c.var.projectService.list({ limit, offset });
 
-      return c.json(projects, 200);
+      return c.json(data, 200);
     }
   )
 
@@ -67,9 +67,9 @@ const router = createRouter()
       },
     }),
     async (c) => {
-      const count = await c.var.projectService.count();
+      const data = await c.var.projectService.count();
 
-      return c.json(count, 200);
+      return c.json(data, 200);
     }
   )
 
@@ -103,9 +103,9 @@ const router = createRouter()
     }),
     async (c) => {
       const { projectId } = c.req.valid('param');
-      const project = await c.var.projectService.read({ id: projectId });
+      const data = await c.var.projectService.read({ id: projectId });
 
-      return c.json(project, 200);
+      return c.json(data, 200);
     }
   );
 
