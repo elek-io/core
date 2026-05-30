@@ -1,16 +1,18 @@
-onlyBuiltDependencies:
+# Build script approval for dependencies.
+# pnpm 11 removed onlyBuiltDependencies and ignoredBuiltDependencies and replaced
+# them with a single allowBuilds map of package -> boolean.
+# See https://pnpm.io/settings#allowbuilds
+allowBuilds:
   # dugite is Core's git engine (see src/service/GitService.ts). Its postinstall
   # downloads the embedded git executable, so the build must run or every git
   # operation at runtime fails.
-  - dugite
-
-ignoredBuiltDependencies:
+  dugite: true
   # esbuild arrives transitively via astro, vite and vitest (all devDependencies)
   # and is never part of Core's runtime. Its platform binary already ships
   # prebuilt in @esbuild/<platform>, which the JS API resolves directly, so its
   # postinstall build is redundant.
-  - esbuild
+  esbuild: false
   # sharp arrives transitively via astro (a devDependency) for its image
   # optimization service. Core only provides Astro content loaders and never
   # processes images, so its native build is intentionally skipped.
-  - sharp
+  sharp: false
