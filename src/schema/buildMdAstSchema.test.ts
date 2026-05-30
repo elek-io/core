@@ -289,11 +289,14 @@ describe('buildMdAstSchemaForFeatures', () => {
       expect(() => schema.parse({ type: 'root', children: [] })).toThrow();
     });
 
-    it('accepts 0 blocks when not required', () => {
+    it('rejects an empty tree even when not required (empty must be null)', () => {
       const schema = buildMdAstSchemaForFeatures(makeCtx());
+      // null is the canonical empty value for an optional field.
+      expect(() => schema.parse(null)).not.toThrow();
+      // An empty tree is not a valid way to express "empty".
       expect(() =>
         schema.parse({ type: 'root', children: [] })
-      ).not.toThrow();
+      ).toThrow();
     });
 
     it('rejects fewer blocks than min', () => {
@@ -331,6 +334,56 @@ describe('buildMdAstSchemaForFeatures', () => {
           children: [{ type: 'paragraph', children: [] }],
         })
       ).toThrow();
+    });
+  });
+
+  describe('externalLinks URL safety', () => {
+    const linkTree = (url: string): MdAstRoot => ({
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            {
+              type: 'link',
+              url,
+              title: null,
+              children: [{ type: 'text', value: 'x' }],
+            },
+          ],
+        },
+      ],
+    });
+
+    const schema = buildMdAstSchemaForFeatures(
+      makeCtx({ externalLinks: true })
+    );
+
+    it('rejects dangerous link URL schemes', () => {
+      for (const url of [
+        'javascript:alert(1)',
+        'data:text/html,<script>alert(1)</script>',
+        'vbscript:msgbox(1)',
+        'file:///etc/passwd',
+        '//evil.example.com',
+      ]) {
+        expect(() => schema.parse(linkTree(url)), url).toThrow();
+      }
+    });
+
+    it('accepts safe link URL forms', () => {
+      for (const url of [
+        'https://example.com',
+        'http://example.com',
+        'mailto:hi@example.com',
+        'tel:+15551234',
+        '/internal/path',
+        './sibling',
+        '../parent',
+        '#section',
+      ]) {
+        expect(() => schema.parse(linkTree(url)), url).not.toThrow();
+      }
     });
   });
 

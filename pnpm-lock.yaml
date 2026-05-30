@@ -38,9 +38,6 @@ importers:
       semver:
         specifier: 7.7.4
         version: 7.7.4
-      unist-util-visit:
-        specifier: 5.1.0
-        version: 5.1.0
       uuid:
         specifier: 13.0.0
         version: 13.0.0

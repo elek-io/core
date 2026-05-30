@@ -28,9 +28,7 @@ import {
   mdAstHtmlSchema,
   mdAstImageSchema,
   mdAstInlineCodeSchema,
-  mdAstTableCellSchema,
-  mdAstTableRowSchema,
-  mdAstTableSchema,
+  mdAstLinkUrlSchema,
   mdAstTextSchema,
   mdAstThematicBreakSchema,
   isEmptyParagraphOnly,
@@ -243,7 +241,9 @@ export function buildMdAstSchemaForFeatures(
       children: MdAstPhrasingNode[];
     }> = z.object({
       type: z.literal('link'),
-      url: z.string(),
+      // Same URL scheme allowlist as the permissive schema. Without this the
+      // narrowed schema would accept javascript:/data: links. See valueSchema.
+      url: mdAstLinkUrlSchema,
       title: z.string().nullable(),
       get children() {
         return z.array(phrasingNodeSchema);
@@ -416,8 +416,6 @@ export function buildMdAstSchemaForFeatures(
         children: z.array(tableRowFieldSchema),
       })
     );
-    // Suppress unused-binding warning - the schemas are used inline.
-    void [tableCellFieldSchema, tableRowFieldSchema];
   }
   if (features.footnotes) {
     const footnoteDefinitionFieldSchema: z.ZodType<{
@@ -439,11 +437,6 @@ export function buildMdAstSchemaForFeatures(
   const blockNodeSchema: z.ZodType<MdAstBlockNode> =
     makeUnion<MdAstBlockNode>(blockMembers);
 
-  // Note: we intentionally use a generic ref-typed mdAstTableSchema /
-  // tableRow / tableCell suppression by NOT including the permissive
-  // versions - only the rebuilt narrowed versions appear above.
-  void [mdAstTableSchema, mdAstTableRowSchema, mdAstTableCellSchema];
-
   //
   // Root schema with block-count enforcement + empty-paragraph rejection.
   //
@@ -456,6 +449,14 @@ export function buildMdAstSchemaForFeatures(
     .object({
       type: z.literal('root'),
       children: childrenSchema,
+    })
+    // A present tree must hold at least one block. Empty content is expressed
+    // as null per language, never as an empty tree. Matches the permissive
+    // schema in valueSchema.ts.
+    .refine((root) => root.children.length >= 1, {
+      message:
+        'Empty markdown values must be serialised as null per language, not as an empty tree',
+      path: ['children'],
     })
     .refine((root) => !isEmptyParagraphOnly(root), {
       message:

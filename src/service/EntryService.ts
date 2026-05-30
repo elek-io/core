@@ -749,8 +749,9 @@ function isNotFoundError(error: unknown): boolean {
  * node. Used by `EntryService.validateValueReferences` to report the
  * location of problematic references.
  *
- * Hand-rolled rather than via `unist-util-visit` because we need the
- * full path (sequence of indices), not just the immediate parent.
+ * Hand-rolled because we need each node's index-path (the sequence of
+ * `children` indices from the root), which the unist visitor APIs do not
+ * provide directly.
  */
 function collectMdAstRefs(root: MdAstRoot): Array<{
   node: MdAstEntryReference | MdAstAssetReference;

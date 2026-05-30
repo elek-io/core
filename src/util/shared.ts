@@ -2,6 +2,11 @@ import slugify from '@sindresorhus/slugify';
 import { v4 as generateUuid } from 'uuid';
 import { type Uuid } from '../schema/baseSchema.js';
 
+// Framework-agnostic mdast rendering primitive, surfaced on the main
+// @elek-io/core entry for both node and browser. Framework bindings such as
+// @elek-io/core/astro wrap it. See docs/markdown-content.md.
+export * from './mdastRender.js';
+
 /**
  * Returns a new UUID
  */
