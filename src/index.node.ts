@@ -213,4 +213,17 @@ export default class ElekIoCore {
   public get api(): LocalApi {
     return this.localApi;
   }
+
+  /**
+   * Stops the local API (if running) and closes the logger,
+   * removing the process-level exception and rejection handlers
+   */
+  public async dispose(): Promise<void> {
+    if (this.localApi.isRunning()) {
+      this.localApi.stop();
+    }
+    // Logged before closing so the final line is flushed
+    this.logService.info({ source: 'core', message: 'Disposing elek.io Core' });
+    await this.logService.close();
+  }
 }
