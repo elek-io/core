@@ -3,7 +3,10 @@ import { z } from '@hono/zod-openapi';
 import { v4 as uuid } from 'uuid';
 import type { MarkdownFeatures } from '../schema/buildMdAstSchema.js';
 import type { Component } from '../schema/componentSchema.js';
-import type { FieldDefinition } from '../schema/fieldSchema.js';
+import type {
+  DynamicFieldDefinition,
+  FieldDefinition,
+} from '../schema/fieldSchema.js';
 import { assetSchema } from '../schema/assetSchema.js';
 import {
   buildEntryValuesSchema,
@@ -984,6 +987,42 @@ describe('buildEntryValuesTypeString', () => {
     expect(types).toContain('export type Entry = Record<string, never>;');
   });
 
+  it('emits an empty Record values type for a referenced Component with no fields', () => {
+    const spacerId = uuid();
+    const spacer = makeComponent({
+      id: spacerId,
+      slug: 'spacer',
+      fieldDefinitions: [],
+    });
+    const fieldDefs: FieldDefinition[] = [
+      {
+        id: uuid(),
+        slug: 'blocks',
+        valueType: 'component',
+        fieldType: 'dynamic',
+        label: { en: 'Blocks' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        ofComponents: [spacerId],
+        min: null,
+        max: null,
+      },
+    ];
+
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      [spacer],
+      'BlogPosts'
+    );
+    expect(types).toContain(
+      'type SpacerComponentValues = Record<string, never>;'
+    );
+  });
+
   it('throws when a referenced Component is missing', () => {
     const orphanId = uuid();
     const fieldDefs: FieldDefinition[] = [
@@ -1009,6 +1048,122 @@ describe('buildEntryValuesTypeString', () => {
     ).toThrow(
       `Component "${orphanId}" referenced by dynamic field "blocks" not found in Project`
     );
+  });
+});
+
+describe('buildEntryValuesSchema dynamic field arity edge cases', () => {
+  const textField = (slug: string): FieldDefinition => ({
+    id: uuid(),
+    slug,
+    valueType: 'string',
+    fieldType: 'text',
+    label: { en: slug },
+    description: null,
+    isRequired: true,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    min: null,
+    max: null,
+    defaultValue: null,
+  });
+
+  const dynamicField = (
+    slug: string,
+    ofComponents: string[],
+    overrides: Partial<DynamicFieldDefinition> = {}
+  ): FieldDefinition => ({
+    id: uuid(),
+    slug,
+    valueType: 'component',
+    fieldType: 'dynamic',
+    label: { en: slug },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    ofComponents,
+    min: null,
+    max: null,
+    ...overrides,
+  });
+
+  it('accepts only an empty array for an open dynamic field when the Project has no Components', () => {
+    // ofComponents: [] means "any Component"; with none in the Project the
+    // item schema collapses to z.never(), so no item can ever satisfy it.
+    const schema = buildEntryValuesSchema(
+      [dynamicField('blocks', [])],
+      ['en'],
+      []
+    );
+    expect(schema.parse({ blocks: [] })).toEqual({ blocks: [] });
+    expect(() =>
+      schema.parse({
+        blocks: [{ id: uuid(), componentId: uuid(), values: {} }],
+      })
+    ).toThrow();
+  });
+
+  it('builds a discriminated union when a dynamic field references two Components', () => {
+    const alphaId = uuid();
+    const betaId = uuid();
+    const alpha = makeComponent({
+      id: alphaId,
+      slug: 'alpha',
+      fieldDefinitions: [textField('a')],
+    });
+    const beta = makeComponent({
+      id: betaId,
+      slug: 'beta',
+      fieldDefinitions: [textField('b')],
+    });
+
+    const schema = buildEntryValuesSchema(
+      [dynamicField('blocks', [alphaId, betaId])],
+      ['en'],
+      [alpha, beta]
+    );
+
+    expect(
+      schema.parse({
+        blocks: [{ id: uuid(), componentId: alphaId, values: { a: { en: '1' } } }],
+      })
+    ).toBeTruthy();
+    expect(
+      schema.parse({
+        blocks: [{ id: uuid(), componentId: betaId, values: { b: { en: '2' } } }],
+      })
+    ).toBeTruthy();
+    expect(() =>
+      schema.parse({
+        blocks: [{ id: uuid(), componentId: uuid(), values: {} }],
+      })
+    ).toThrow();
+  });
+
+  it('requires at least one item for a required dynamic field with no explicit min', () => {
+    const heroId = uuid();
+    const hero = makeComponent({
+      id: heroId,
+      slug: 'hero',
+      fieldDefinitions: [textField('title')],
+    });
+
+    const schema = buildEntryValuesSchema(
+      [dynamicField('blocks', [heroId], { isRequired: true })],
+      ['en'],
+      [hero]
+    );
+
+    expect(() => schema.parse({ blocks: [] })).toThrow();
+    expect(
+      schema.parse({
+        blocks: [
+          { id: uuid(), componentId: heroId, values: { title: { en: 'x' } } },
+        ],
+      })
+    ).toBeTruthy();
   });
 });
 

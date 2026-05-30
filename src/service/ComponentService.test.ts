@@ -738,3 +738,287 @@ describe('ComponentService', function () {
     }
   );
 });
+
+describe('ComponentService - read at a commit', function () {
+  let project: Project & { destroy: () => Promise<void> };
+
+  beforeAll(async function () {
+    project = await createProject('ComponentService Commit Test');
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  it('reads the historical version of a Component at a given commit hash', { timeout: 30000 }, async function () {
+    const component = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Orig', de: 'Orig' },
+      slug: 'historic',
+      description: { en: 'Original', de: 'Original' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'title',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Title', de: 'Title' },
+          description: null,
+          defaultValue: null,
+          isRequired: true,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+        },
+      ],
+    });
+
+    const historyAfterCreate = await core.components.history({
+      projectId: project.id,
+      id: component.id,
+    });
+    const creationHash = historyAfterCreate[historyAfterCreate.length - 1]!.hash;
+
+    // A metadata-only update (name) — no field definition changes.
+    await core.components.update({
+      projectId: project.id,
+      id: component.id,
+      name: { en: 'Changed', de: 'Changed' },
+      slug: 'historic',
+      description: { en: 'Original', de: 'Original' },
+      fieldDefinitions: component.fieldDefinitions,
+    });
+
+    const historical = await core.components.read({
+      projectId: project.id,
+      id: component.id,
+      commitHash: creationHash,
+    });
+    expect(historical.name.en).to.equal('Orig');
+
+    const current = await core.components.read({
+      projectId: project.id,
+      id: component.id,
+    });
+    expect(current.name.en).to.equal('Changed');
+
+    await core.components.delete({ projectId: project.id, id: component.id });
+  });
+});
+
+describe('ComponentService - update slug conflict', function () {
+  let project: Project & { destroy: () => Promise<void> };
+
+  beforeAll(async function () {
+    project = await createProject('ComponentService Slug Conflict Test');
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  const textComponent = (slug: string) => ({
+    projectId: project.id,
+    name: { en: slug, de: slug },
+    slug,
+    description: { en: slug, de: slug },
+    fieldDefinitions: [
+      {
+        id: uuid(),
+        slug: 'title',
+        valueType: 'string' as const,
+        fieldType: 'text' as const,
+        label: { en: 'Title', de: 'Title' },
+        description: null,
+        defaultValue: null,
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12' as const,
+        min: null,
+        max: null,
+      },
+    ],
+  });
+
+  it('rejects updating a Component slug to one already used by another Component', { timeout: 30000 }, async function () {
+    const alpha = await core.components.create(textComponent('alpha'));
+    const beta = await core.components.create(textComponent('beta'));
+
+    await expect(
+      core.components.update({
+        projectId: project.id,
+        id: beta.id,
+        name: beta.name,
+        slug: 'alpha', // conflicts with the alpha component
+        description: beta.description,
+        fieldDefinitions: beta.fieldDefinitions,
+      })
+    ).rejects.toThrow(/already in use/);
+
+    await core.components.delete({ projectId: project.id, id: alpha.id });
+    await core.components.delete({ projectId: project.id, id: beta.id });
+  });
+});
+
+describe('ComponentService - update entry resolutions', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let heroId: string;
+  let collectionId: string;
+  let entryId: string;
+
+  // Adds a new REQUIRED field with no default to the hero Component, which
+  // cannot be auto-resolved for the existing entry's component item.
+  const heroWithRequiredSubtitle = () => ({
+    projectId: project.id,
+    id: heroId,
+    name: { en: 'Hero', de: 'Hero' },
+    slug: 'hero',
+    description: { en: 'Hero', de: 'Hero' },
+    fieldDefinitions: [
+      {
+        id: titleFieldId,
+        slug: 'title',
+        valueType: 'string' as const,
+        fieldType: 'text' as const,
+        label: { en: 'Title', de: 'Title' },
+        description: null,
+        defaultValue: null,
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12' as const,
+        min: null,
+        max: null,
+      },
+      {
+        id: uuid(),
+        slug: 'subtitle',
+        valueType: 'string' as const,
+        fieldType: 'text' as const,
+        label: { en: 'Subtitle', de: 'Subtitle' },
+        description: null,
+        defaultValue: null,
+        isRequired: true, // new required field, no default -> missing_required issue
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12' as const,
+        min: null,
+        max: null,
+      },
+    ],
+  });
+
+  let titleFieldId: string;
+
+  beforeAll(async function () {
+    project = await createProject('ComponentService Resolutions Test');
+
+    titleFieldId = uuid();
+    const hero = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Hero', de: 'Hero' },
+      slug: 'hero',
+      description: { en: 'Hero', de: 'Hero' },
+      fieldDefinitions: [
+        {
+          id: titleFieldId,
+          slug: 'title',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Title', de: 'Title' },
+          description: null,
+          defaultValue: null,
+          isRequired: true,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+        },
+      ],
+    });
+    heroId = hero.id;
+
+    const collection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: { singular: { en: 'Page', de: 'Page' }, plural: { en: 'Pages', de: 'Pages' } },
+      description: { en: 'Pages', de: 'Pages' },
+      slug: { singular: 'page', plural: 'pages' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'blocks',
+          valueType: 'component',
+          fieldType: 'dynamic',
+          label: { en: 'Blocks', de: 'Blocks' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          ofComponents: [heroId],
+          min: null,
+          max: null,
+        },
+      ],
+    });
+    collectionId = collection.id;
+
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId,
+      values: {
+        blocks: {
+          objectType: 'value',
+          valueType: 'component',
+          content: [
+            {
+              id: uuid(),
+              componentId: heroId,
+              values: {
+                title: {
+                  objectType: 'value',
+                  valueType: 'string',
+                  content: { en: 'Welcome', de: 'Welcome' },
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+    entryId = entry.id;
+  }, 30000);
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  it('throws a conflict when field changes need unresolved entry resolutions', { timeout: 30000 }, async function () {
+    await expect(
+      core.components.update(heroWithRequiredSubtitle())
+    ).rejects.toThrow(/require entry resolutions/);
+  });
+
+  it('rejects a resolution value that fails the new field schema', { timeout: 30000 }, async function () {
+    await expect(
+      core.components.update({
+        ...heroWithRequiredSubtitle(),
+        resolutions: {
+          // Generically a valid Value, but the wrong valueType for a string field.
+          [entryId]: {
+            subtitle: {
+              objectType: 'value',
+              valueType: 'number',
+              content: { en: 1, de: 1 },
+            },
+          },
+        },
+      })
+    ).rejects.toThrow(/Resolution validation failed/);
+  });
+});

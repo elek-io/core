@@ -444,6 +444,98 @@ describe('buildMdAstSchemaForFeatures', () => {
     });
   });
 
+  describe('per-feature node acceptance', () => {
+    // One case per feature flag whose narrowing branch is otherwise only
+    // exercised in the "off" state. `emphasis` and `rawHtml` already have
+    // dedicated tests above. `kind` decides where the node is placed: a
+    // phrasing node is nested in a paragraph, a block node sits beside one.
+    const cases: Array<{
+      name: string;
+      features: Partial<MarkdownFeatures>;
+      node: unknown;
+      kind: 'phrasing' | 'block';
+    }> = [
+      {
+        name: 'inlineCode',
+        features: { inlineCode: true },
+        node: { type: 'inlineCode', value: 'x' },
+        kind: 'phrasing',
+      },
+      {
+        name: 'hardLineBreaks (break)',
+        features: { hardLineBreaks: true },
+        node: { type: 'break' },
+        kind: 'phrasing',
+      },
+      {
+        name: 'externalImages (image)',
+        features: { externalImages: true },
+        node: {
+          type: 'image',
+          url: 'https://example.com/a.png',
+          title: null,
+          alt: 'a',
+        },
+        kind: 'phrasing',
+      },
+      {
+        name: 'strong',
+        features: { strong: true },
+        node: { type: 'strong', children: [{ type: 'text', value: 'x' }] },
+        kind: 'phrasing',
+      },
+      {
+        name: 'strikethrough (delete)',
+        features: { strikethrough: true },
+        node: { type: 'delete', children: [{ type: 'text', value: 'x' }] },
+        kind: 'phrasing',
+      },
+      {
+        name: 'codeBlocks (code)',
+        features: { codeBlocks: true },
+        node: { type: 'code', lang: null, meta: null, value: 'const x = 1;' },
+        kind: 'block',
+      },
+      {
+        name: 'thematicBreak',
+        features: { thematicBreak: true },
+        node: { type: 'thematicBreak' },
+        kind: 'block',
+      },
+    ];
+
+    const treeWith = (node: unknown, kind: 'phrasing' | 'block') =>
+      kind === 'phrasing'
+        ? {
+            type: 'root',
+            children: [
+              {
+                type: 'paragraph',
+                children: [{ type: 'text', value: 'x' }, node],
+              },
+            ],
+          }
+        : {
+            type: 'root',
+            children: [
+              { type: 'paragraph', children: [{ type: 'text', value: 'x' }] },
+              node,
+            ],
+          };
+
+    for (const c of cases) {
+      it(`accepts ${c.name} when its feature is on`, () => {
+        const schema = buildMdAstSchemaForFeatures(makeCtx(c.features));
+        expect(() => schema.parse(treeWith(c.node, c.kind))).not.toThrow();
+      });
+
+      it(`rejects ${c.name} when its feature is off`, () => {
+        const schema = buildMdAstSchemaForFeatures(makeCtx());
+        expect(() => schema.parse(treeWith(c.node, c.kind))).toThrow();
+      });
+    }
+  });
+
   describe('depth limit', () => {
     /**
      * Builds a `root` tree whose deepest leaf is at the given 1-based depth

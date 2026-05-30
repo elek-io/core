@@ -1,7 +1,31 @@
+import Fs from 'fs-extra';
+import Path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import core, { type MarkdownFeatures, type Project, uuid } from '../test/setup.js';
-import { createProject } from '../test/util.js';
-import { generateTypesForProject } from './generateTypesAction.js';
+import { createProject, expectTranspiles } from '../test/util.js';
+import { generateTypes, generateTypesForProject } from './generateTypesAction.js';
+
+/** All markdown features OFF — the all-field-types collection just needs a valid markdown field. */
+const offMarkdownFeatures: MarkdownFeatures = {
+  headings: [],
+  blockquotes: false,
+  lists: false,
+  codeBlocks: false,
+  thematicBreak: false,
+  rawHtml: false,
+  tables: false,
+  taskListItems: false,
+  footnotes: false,
+  emphasis: false,
+  strong: false,
+  inlineCode: false,
+  externalLinks: false,
+  entryReferences: false,
+  externalImages: false,
+  assetReferences: false,
+  strikethrough: false,
+  hardLineBreaks: false,
+};
 
 describe('generateTypesForProject', () => {
   let project: Project & { destroy: () => Promise<void> };
@@ -343,5 +367,168 @@ describe('generateTypesForProject - markdown field', () => {
     for (const key of Object.keys(fullFeatures)) {
       expect(collectionBlock).toContain(`${key}:`);
     }
+  });
+});
+
+describe('generateTypesForProject - every field type', () => {
+  let project: Project & { destroy: () => Promise<void> };
+  let output: string;
+
+  beforeAll(async () => {
+    // Single supported language keeps field labels to `{ en }` only.
+    project = await createProject('generateTypesForProject All Field Types', {
+      language: { default: 'en', supported: ['en'] },
+    });
+
+    // One field of every fieldType, plus a FieldDefinitionGroup. This drives
+    // every branch of getValueTypeName / getNarrowedValueType /
+    // getFieldDefinitionTypeName as well as the group-emitting branch.
+    const base = {
+      description: null,
+      isDisabled: false,
+      inputWidth: '12' as const,
+    };
+    await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Widget' },
+        plural: { en: 'Widgets' },
+      },
+      slug: { singular: 'widget', plural: 'widgets' },
+      description: { en: 'Widgets' },
+      fieldDefinitions: [
+        { ...base, id: uuid(), slug: 'text-field', valueType: 'string', fieldType: 'text', label: { en: 'Text' }, isRequired: false, isUnique: false, min: null, max: null, defaultValue: null },
+        { ...base, id: uuid(), slug: 'textarea-field', valueType: 'string', fieldType: 'textarea', label: { en: 'Textarea' }, isRequired: false, isUnique: false, min: null, max: null, defaultValue: null },
+        { ...base, id: uuid(), slug: 'email-field', valueType: 'string', fieldType: 'email', label: { en: 'Email' }, isRequired: false, isUnique: false, defaultValue: null },
+        { ...base, id: uuid(), slug: 'url-field', valueType: 'string', fieldType: 'url', label: { en: 'Url' }, isRequired: false, isUnique: false, defaultValue: null },
+        { ...base, id: uuid(), slug: 'ipv4-field', valueType: 'string', fieldType: 'ipv4', label: { en: 'Ipv4' }, isRequired: false, isUnique: false, defaultValue: null },
+        { ...base, id: uuid(), slug: 'date-field', valueType: 'string', fieldType: 'date', label: { en: 'Date' }, isRequired: false, isUnique: false, defaultValue: null },
+        { ...base, id: uuid(), slug: 'time-field', valueType: 'string', fieldType: 'time', label: { en: 'Time' }, isRequired: false, isUnique: false, defaultValue: null },
+        { ...base, id: uuid(), slug: 'datetime-field', valueType: 'string', fieldType: 'datetime', label: { en: 'Datetime' }, isRequired: false, isUnique: false, defaultValue: null },
+        { ...base, id: uuid(), slug: 'telephone-field', valueType: 'string', fieldType: 'telephone', label: { en: 'Telephone' }, isRequired: false, isUnique: false, defaultValue: null },
+        { ...base, id: uuid(), slug: 'string-select-field', valueType: 'string', fieldType: 'select', label: { en: 'String select' }, isRequired: false, isUnique: false, defaultValue: null, options: [{ value: 'a', label: { en: 'A' } }] },
+        { ...base, id: uuid(), slug: 'number-field', valueType: 'number', fieldType: 'number', label: { en: 'Number' }, isRequired: false, isUnique: false, min: null, max: null, defaultValue: null },
+        { ...base, id: uuid(), slug: 'range-field', valueType: 'number', fieldType: 'range', label: { en: 'Range' }, isRequired: true, isUnique: false, min: 0, max: 10, defaultValue: 5 },
+        { ...base, id: uuid(), slug: 'number-select-field', valueType: 'number', fieldType: 'select', label: { en: 'Number select' }, isRequired: false, isUnique: false, min: null, max: null, defaultValue: null, options: [{ value: 1, label: { en: 'One' } }] },
+        { ...base, id: uuid(), slug: 'toggle-field', valueType: 'boolean', fieldType: 'toggle', label: { en: 'Toggle' }, isRequired: true, isUnique: false, defaultValue: false },
+        { ...base, id: uuid(), slug: 'asset-field', valueType: 'reference', fieldType: 'asset', label: { en: 'Asset' }, isRequired: false, isUnique: false, min: null, max: null, ofAssetMimeTypes: [] },
+        { ...base, id: uuid(), slug: 'entry-field', valueType: 'reference', fieldType: 'entry', label: { en: 'Entry' }, isRequired: false, isUnique: false, min: null, max: null, ofCollections: [] },
+        { ...base, id: uuid(), slug: 'dynamic-field', valueType: 'component', fieldType: 'dynamic', label: { en: 'Dynamic' }, isRequired: false, isUnique: false, min: null, max: null, ofComponents: [] },
+        { ...base, id: uuid(), slug: 'markdown-field', valueType: 'mdast', fieldType: 'markdown', label: { en: 'Markdown' }, isRequired: false, isUnique: false, min: null, max: null, features: offMarkdownFeatures, ofCollections: [], ofAssetMimeTypes: [], defaultValue: null },
+        {
+          isGroup: true,
+          id: uuid(),
+          label: { en: 'Group' },
+          description: null,
+          fieldDefinitions: [
+            { ...base, id: uuid(), slug: 'grouped-text', valueType: 'string', fieldType: 'text', label: { en: 'Grouped text' }, isRequired: false, isUnique: false, min: null, max: null, defaultValue: null },
+          ],
+        },
+      ],
+    });
+
+    output = await generateTypesForProject(project);
+  }, 30000);
+
+  afterAll(async () => {
+    await project.destroy();
+  });
+
+  it('imports every FieldDefinition subtype used by the collection', () => {
+    for (const typeName of [
+      'TextFieldDefinition',
+      'TextareaFieldDefinition',
+      'EmailFieldDefinition',
+      'UrlFieldDefinition',
+      'Ipv4FieldDefinition',
+      'DateFieldDefinition',
+      'TimeFieldDefinition',
+      'DatetimeFieldDefinition',
+      'TelephoneFieldDefinition',
+      'StringSelectFieldDefinition',
+      'NumberFieldDefinition',
+      'RangeFieldDefinition',
+      'NumberSelectFieldDefinition',
+      'ToggleFieldDefinition',
+      'AssetFieldDefinition',
+      'EntryFieldDefinition',
+      'DynamicFieldDefinition',
+      'MarkdownFieldDefinition',
+    ]) {
+      expect(output, typeName).toContain(typeName);
+    }
+  });
+
+  it('emits the narrowed value types for direct, number, boolean, reference and mdast fields', () => {
+    expect(output).toContain('DirectStringValue');
+    expect(output).toContain('DirectNumberValue');
+    expect(output).toContain('DirectBooleanValue');
+    expect(output).toContain('ReferencedValue');
+    expect(output).toContain('MdAstValue');
+  });
+
+  it('emits a FieldDefinitionGroup wrapper for grouped fields', () => {
+    expect(output).toContain('FieldDefinitionGroup & {');
+    expect(output).toContain('isGroup: true;');
+  });
+
+  it('emits TypeScript that transpiles without syntax errors', () => {
+    // Substring assertions above check intent; this checks the output is
+    // actually well-formed TypeScript (the richest input: every field type
+    // plus a group, where malformed type literals are most likely).
+    expectTranspiles(output, 'generated types');
+  });
+});
+
+describe('generateTypes - writes type files to disk', () => {
+  let project: Project & { destroy: () => Promise<void> };
+  let outDir: string;
+
+  beforeAll(async () => {
+    project = await createProject('generateTypes Disk Test', {
+      language: { default: 'en', supported: ['en'] },
+    });
+    outDir = Path.join(core.util.pathTo.tmp, `generate-types-${uuid()}`);
+    await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Note' },
+        plural: { en: 'Notes' },
+      },
+      slug: { singular: 'note', plural: 'notes' },
+      description: { en: 'Notes' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'title',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Title' },
+          description: null,
+          isRequired: true,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+          defaultValue: null,
+        },
+      ],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    await project.destroy();
+    await Fs.remove(outDir);
+  });
+
+  it('writes a types.ts file and returns a project-id-to-file map', async () => {
+    const result = await generateTypes({ outDir, projects: [project.id] });
+
+    expect(result.get(project.id)).toBe('types.ts');
+    const written = await Fs.readFile(Path.join(outDir, 'types.ts'), 'utf-8');
+    expect(written).toContain('export type NotesCollection');
   });
 });

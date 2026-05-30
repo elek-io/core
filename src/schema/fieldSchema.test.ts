@@ -3,6 +3,7 @@ import { uuid } from '../test/setup.js';
 import {
   markdownFieldDefinitionSchema,
   resolveOfComponents,
+  stringSelectFieldDefinitionSchema,
   type DynamicFieldDefinition,
 } from './fieldSchema.js';
 import type { MarkdownFeatures } from './buildMdAstSchema.js';
@@ -233,5 +234,43 @@ describe('markdownFieldDefinitionSchema', () => {
         )
       ).not.toThrow();
     });
+  });
+});
+
+describe('stringSelectFieldDefinitionSchema defaultValue refinement', () => {
+  const makeSelectFieldDef = (defaultValue: string | null) => ({
+    id: uuid(),
+    slug: 'choice',
+    valueType: 'string' as const,
+    fieldType: 'select' as const,
+    label: { en: 'Choice' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12' as const,
+    defaultValue,
+    options: [
+      { value: 'a', label: { en: 'A' } },
+      { value: 'b', label: { en: 'B' } },
+    ],
+  });
+
+  it('accepts a non-null defaultValue that is one of the options', () => {
+    expect(() =>
+      stringSelectFieldDefinitionSchema.parse(makeSelectFieldDef('a'))
+    ).not.toThrow();
+  });
+
+  it('accepts a null defaultValue', () => {
+    expect(() =>
+      stringSelectFieldDefinitionSchema.parse(makeSelectFieldDef(null))
+    ).not.toThrow();
+  });
+
+  it('rejects a non-null defaultValue that is not among the options', () => {
+    expect(() =>
+      stringSelectFieldDefinitionSchema.parse(makeSelectFieldDef('c'))
+    ).toThrow();
   });
 });

@@ -15,6 +15,10 @@ import {
   createProject,
   ensureCleanGitStatus,
 } from '../test/util.js';
+// A second, independent Core instance (the CLI singleton) that shares the same
+// on-disk data directory — used to simulate another actor mutating disk behind
+// the test instance's cached index.
+import { core as cliCore } from '../cli/util.js';
 
 describe('CollectionService', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -947,5 +951,169 @@ describe('CollectionService - fieldDefinition groups', function () {
     });
 
     expect(entry.id).toBeDefined();
+  });
+});
+
+describe('CollectionService - update entry resolutions', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let collectionId: string;
+  let entryId: string;
+  let titleFieldId: string;
+
+  // Adds a new REQUIRED field with no default, which cannot be auto-resolved
+  // for the existing entry (missing_required issue per transformEntryValues).
+  const collectionWithRequiredSummary = () => ({
+    projectId: project.id,
+    id: collectionId,
+    icon: 'home' as const,
+    name: { singular: { en: 'Article', de: 'Article' }, plural: { en: 'Articles', de: 'Articles' } },
+    description: { en: 'Articles', de: 'Articles' },
+    slug: { singular: 'article', plural: 'articles' },
+    fieldDefinitions: [
+      {
+        id: titleFieldId,
+        slug: 'title',
+        valueType: 'string' as const,
+        fieldType: 'text' as const,
+        label: { en: 'Title', de: 'Title' },
+        description: null,
+        defaultValue: null,
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12' as const,
+        min: null,
+        max: null,
+      },
+      {
+        id: uuid(),
+        slug: 'summary',
+        valueType: 'string' as const,
+        fieldType: 'text' as const,
+        label: { en: 'Summary', de: 'Summary' },
+        description: null,
+        defaultValue: null,
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12' as const,
+        min: null,
+        max: null,
+      },
+    ],
+  });
+
+  beforeAll(async function () {
+    project = await createProject('CollectionService Resolutions Test');
+
+    titleFieldId = uuid();
+    const collection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: { singular: { en: 'Article', de: 'Article' }, plural: { en: 'Articles', de: 'Articles' } },
+      description: { en: 'Articles', de: 'Articles' },
+      slug: { singular: 'article', plural: 'articles' },
+      fieldDefinitions: [
+        {
+          id: titleFieldId,
+          slug: 'title',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Title', de: 'Title' },
+          description: null,
+          defaultValue: null,
+          isRequired: true,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+        },
+      ],
+    });
+    collectionId = collection.id;
+
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId,
+      values: {
+        title: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'Hello', de: 'Hallo' },
+        },
+      },
+    });
+    entryId = entry.id;
+  }, 30000);
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  it('throws a conflict when field changes need unresolved entry resolutions', { timeout: 30000 }, async function () {
+    await expect(
+      core.collections.update(collectionWithRequiredSummary())
+    ).rejects.toThrow(/require entry resolutions/);
+  });
+
+  it('rejects a resolution value that fails the new field schema', { timeout: 30000 }, async function () {
+    await expect(
+      core.collections.update({
+        ...collectionWithRequiredSummary(),
+        resolutions: {
+          // Generically a valid Value, but the wrong valueType for a string field.
+          [entryId]: {
+            summary: {
+              objectType: 'value',
+              valueType: 'number',
+              content: { en: 1, de: 1 },
+            },
+          },
+        },
+      })
+    ).rejects.toThrow(/Resolution validation failed/);
+  });
+});
+
+describe('AbstractIndexedEntityService - stale index cache', function () {
+  let project: Project & { destroy: () => Promise<void> };
+
+  const makeCollection = (core_: typeof core, plural: string, singular: string) =>
+    core_.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: singular, de: singular },
+        plural: { en: plural, de: plural },
+      },
+      description: { en: plural, de: plural },
+      slug: { singular, plural },
+      fieldDefinitions: [],
+    });
+
+  beforeAll(async function () {
+    project = await createProject('IndexedEntity Stale Cache Test');
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  it('rebuilds the index and retries when the cached index is stale', { timeout: 30000 }, async function () {
+    // Populate the test instance's cached index for this project.
+    await makeCollection(core, 'firsts', 'first');
+
+    // A second Core instance writes another Collection to the same data dir.
+    // The test instance's cached index does not know about it yet.
+    const second = await makeCollection(cliCore, 'seconds', 'second');
+
+    // Resolving by slug misses the stale cache, then rebuilds from disk and
+    // finds the Collection on the retry pass.
+    const resolvedId = await core.collections.resolveCollectionId({
+      projectId: project.id,
+      idOrSlug: 'seconds',
+    });
+    expect(resolvedId).to.equal(second.id);
   });
 });

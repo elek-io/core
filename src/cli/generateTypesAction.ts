@@ -374,21 +374,28 @@ function writeDynamicFieldItemUnion(
     `/** Discriminated union for dynamic field '${fieldDefinition.slug}' */`
   );
   writer.write(`export type ${typeName} =`).newLine();
-  for (const [i, componentId] of componentIds.entries()) {
-    const component = ctx.componentMap.get(componentId);
-    if (!component) {
-      throw new Error(
-        `Component "${componentId}" referenced by dynamic field "${fieldDefinition.slug}" not found in Project`
-      );
+  if (componentIds.length === 0) {
+    // Open `ofComponents` with no Components in the Project: no item can ever
+    // satisfy the field, so the union has no members. Emit `never` to keep the
+    // type alias well-formed, mirroring the runtime schema's z.never().
+    writer.indent(1).write('never;').newLine();
+  } else {
+    for (const [i, componentId] of componentIds.entries()) {
+      const component = ctx.componentMap.get(componentId);
+      if (!component) {
+        throw new Error(
+          `Component "${componentId}" referenced by dynamic field "${fieldDefinition.slug}" not found in Project`
+        );
+      }
+      const compPascal = toPascalCase(component.slug);
+      const separator = i < componentIds.length - 1 ? '' : ';';
+      writer
+        .indent(1)
+        .write(
+          `| { id: string; componentId: typeof ${compPascal}ComponentId; values: ${compPascal}ComponentValues }${separator}`
+        )
+        .newLine();
     }
-    const compPascal = toPascalCase(component.slug);
-    const separator = i < componentIds.length - 1 ? '' : ';';
-    writer
-      .indent(1)
-      .write(
-        `| { id: string; componentId: typeof ${compPascal}ComponentId; values: ${compPascal}ComponentValues }${separator}`
-      )
-      .newLine();
   }
   writer.blankLine();
   return typeName;

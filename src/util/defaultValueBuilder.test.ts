@@ -206,4 +206,49 @@ describe('buildDefaultValue', () => {
       expect(buildDefaultValue(fd, languages)).toBeNull();
     });
   });
+
+  describe('mdast (markdown) fields', () => {
+    const makeMarkdownField = (overrides: Record<string, unknown>) =>
+      makeField({
+        valueType: 'mdast',
+        fieldType: 'markdown',
+        min: null,
+        max: null,
+        features: {},
+        ofCollections: [],
+        ofAssetMimeTypes: [],
+        ...overrides,
+      });
+
+    it('applies a configured defaultValue tree to every language', () => {
+      const tree = {
+        type: 'root',
+        children: [
+          { type: 'paragraph', children: [{ type: 'text', value: 'Hi' }] },
+        ],
+      };
+      const fd = makeMarkdownField({ defaultValue: tree, isRequired: false });
+      const result = buildDefaultValue(fd, languages);
+      expect(result).toEqual({
+        objectType: 'value',
+        valueType: 'mdast',
+        content: { en: tree, de: tree },
+      });
+    });
+
+    it('returns null-content value for optional field without default', () => {
+      const fd = makeMarkdownField({ defaultValue: null, isRequired: false });
+      const result = buildDefaultValue(fd, languages);
+      expect(result).toEqual({
+        objectType: 'value',
+        valueType: 'mdast',
+        content: { en: null, de: null },
+      });
+    });
+
+    it('returns null for required field without default', () => {
+      const fd = makeMarkdownField({ defaultValue: null, isRequired: true });
+      expect(buildDefaultValue(fd, languages)).toBeNull();
+    });
+  });
 });

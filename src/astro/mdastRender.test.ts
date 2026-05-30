@@ -151,6 +151,94 @@ describe('mdastRender (Astro wrapper)', () => {
     });
   });
 
+  describe('block and inline defaults (blockquote, hr, footnotes, inlineCode, break)', () => {
+    const topBlocks = (root: MdAstRoot) =>
+      asVNode(mdastRender(root, minimalOverrides)).props.children as unknown[];
+
+    it('renders blockquote as <blockquote>', () => {
+      const root: MdAstRoot = {
+        type: 'root',
+        children: [
+          {
+            type: 'blockquote',
+            children: [
+              { type: 'paragraph', children: [{ type: 'text', value: 'q' }] },
+            ],
+          },
+        ],
+      };
+      expect(asVNode(topBlocks(root)[0]).type).toBe('blockquote');
+    });
+
+    it('renders thematicBreak as <hr>', () => {
+      const root: MdAstRoot = {
+        type: 'root',
+        children: [
+          { type: 'paragraph', children: [{ type: 'text', value: 'x' }] },
+          { type: 'thematicBreak' },
+        ],
+      };
+      expect(asVNode(topBlocks(root)[1]).type).toBe('hr');
+    });
+
+    it('renders footnoteDefinition as <div id="fn-...">', () => {
+      const root: MdAstRoot = {
+        type: 'root',
+        children: [
+          {
+            type: 'footnoteDefinition',
+            identifier: 'n1',
+            label: null,
+            children: [
+              { type: 'paragraph', children: [{ type: 'text', value: 'fn' }] },
+            ],
+          },
+        ],
+      };
+      const def = asVNode(topBlocks(root)[0]);
+      expect(def.type).toBe('div');
+      expect(def.props['id']).toBe('fn-n1');
+    });
+
+    it('renders inlineCode as <code> and break as <br>', () => {
+      const root: MdAstRoot = {
+        type: 'root',
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'inlineCode', value: 'x' },
+              { type: 'break' },
+            ],
+          },
+        ],
+      };
+      const inline = asVNode(topBlocks(root)[0]).props.children as unknown[];
+      expect(asVNode(inline[0]).type).toBe('code');
+      expect(asVNode(inline[1]).type).toBe('br');
+    });
+
+    it('renders footnoteReference as <sup><a href="#fn-..."></sup>', () => {
+      const root: MdAstRoot = {
+        type: 'root',
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'footnoteReference', identifier: 'n1', label: null },
+            ],
+          },
+        ],
+      };
+      const inline = asVNode(topBlocks(root)[0]).props.children as unknown[];
+      const sup = asVNode(inline[0]);
+      expect(sup.type).toBe('sup');
+      const anchor = asVNode(sup.props.children);
+      expect(anchor.type).toBe('a');
+      expect(anchor.props['href']).toBe('#fn-n1');
+    });
+  });
+
   describe('list and listItem defaults', () => {
     it('renders ordered list as <ol>', () => {
       const root: MdAstRoot = {
