@@ -324,7 +324,9 @@ function writeFieldDefinitionNarrowing(
       .newLine();
     // Sort keys for stable output across regenerations. Cast to the typed
     // key array so adding a new MarkdownFeatures flag is a TS error here.
-    const keys = (Object.keys(features) as Array<keyof MarkdownFeatures>).sort();
+    const keys = (
+      Object.keys(features) as Array<keyof MarkdownFeatures>
+    ).sort();
     for (const key of keys) {
       writer
         .indent(baseIndent + 2)

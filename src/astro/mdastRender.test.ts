@@ -206,10 +206,7 @@ describe('mdastRender (Astro wrapper)', () => {
         children: [
           {
             type: 'paragraph',
-            children: [
-              { type: 'inlineCode', value: 'x' },
-              { type: 'break' },
-            ],
+            children: [{ type: 'inlineCode', value: 'x' }, { type: 'break' }],
           },
         ],
       };
@@ -491,9 +488,7 @@ describe('mdastRender (Astro wrapper)', () => {
     it('calls the consumer-provided html handler', () => {
       const root: MdAstRoot = {
         type: 'root',
-        children: [
-          { type: 'html', value: '<aside>n</aside>' },
-        ],
+        children: [{ type: 'html', value: '<aside>n</aside>' }],
       };
       const overrides: MdastAstroRenderers = {
         ...minimalOverrides,
@@ -507,9 +502,7 @@ describe('mdastRender (Astro wrapper)', () => {
     it("accepts () => null for a required handler as a conscious 'render nothing' choice", () => {
       const root: MdAstRoot = {
         type: 'root',
-        children: [
-          { type: 'html', value: '<x/>' },
-        ],
+        children: [{ type: 'html', value: '<x/>' }],
       };
       const overrides: MdastAstroRenderers = {
         ...minimalOverrides,

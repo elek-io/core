@@ -30,12 +30,15 @@ const baseFeatures: MarkdownFeatures = {
   hardLineBreaks: false,
 };
 
-function makeCtx(overrides: Partial<MarkdownFeatures> = {}, opts: {
-  ofCollections?: string[];
-  min?: number | null;
-  max?: number | null;
-  isRequired?: boolean;
-} = {}) {
+function makeCtx(
+  overrides: Partial<MarkdownFeatures> = {},
+  opts: {
+    ofCollections?: string[];
+    min?: number | null;
+    max?: number | null;
+    isRequired?: boolean;
+  } = {}
+) {
   return {
     features: { ...baseFeatures, ...overrides },
     ofCollections: opts.ofCollections ?? [],
@@ -294,9 +297,7 @@ describe('buildMdAstSchemaForFeatures', () => {
       // null is the canonical empty value for an optional field.
       expect(() => schema.parse(null)).not.toThrow();
       // An empty tree is not a valid way to express "empty".
-      expect(() =>
-        schema.parse({ type: 'root', children: [] })
-      ).toThrow();
+      expect(() => schema.parse({ type: 'root', children: [] })).toThrow();
     });
 
     it('rejects fewer blocks than min', () => {
@@ -393,9 +394,7 @@ describe('buildMdAstSchemaForFeatures', () => {
       expect(() =>
         schema.parse({
           type: 'root',
-          children: [
-            { type: 'html', value: '<script>alert("xss")</script>' },
-          ],
+          children: [{ type: 'html', value: '<script>alert("xss")</script>' }],
         })
       ).toThrow();
     });
@@ -581,7 +580,9 @@ describe('buildMdAstSchemaForFeatures', () => {
       const schema = buildMdAstSchemaForFeatures(
         makeCtx({ blockquotes: true })
       );
-      expect(() => schema.parse(nest('blockquote', MAX_MDAST_DEPTH))).not.toThrow();
+      expect(() =>
+        schema.parse(nest('blockquote', MAX_MDAST_DEPTH))
+      ).not.toThrow();
     });
 
     it('rejects a blockquote chain one level deeper than MAX_MDAST_DEPTH', () => {
@@ -594,9 +595,7 @@ describe('buildMdAstSchemaForFeatures', () => {
     });
 
     it('rejects a footnoteDefinition chain one level deeper than MAX_MDAST_DEPTH', () => {
-      const schema = buildMdAstSchemaForFeatures(
-        makeCtx({ footnotes: true })
-      );
+      const schema = buildMdAstSchemaForFeatures(makeCtx({ footnotes: true }));
       expect(() =>
         schema.parse(nest('footnoteDefinition', MAX_MDAST_DEPTH + 1))
       ).toThrow();
@@ -630,7 +629,7 @@ describe('buildMdAstSchemaForFeatures', () => {
               children: [block],
             },
           ],
-        } as MdAstBlockNode;
+        };
       }
       if (wrappersNeeded % 2 !== 0) {
         block = {
@@ -646,7 +645,7 @@ describe('buildMdAstSchemaForFeatures', () => {
               children: [block],
             },
           ],
-        } as MdAstBlockNode;
+        };
       }
       const root: MdAstRoot = { type: 'root', children: [block] };
       expect(() => schema.parse(root)).toThrow();

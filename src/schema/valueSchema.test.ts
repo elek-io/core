@@ -151,9 +151,7 @@ describe('mdAstRootSchema (permissive)', () => {
       children: [
         {
           type: 'paragraph',
-          children: [
-            { type: 'text', value: 'x', position: { foo: 1 } },
-          ],
+          children: [{ type: 'text', value: 'x', position: { foo: 1 } }],
           position: { foo: 2 },
         },
       ],
@@ -197,7 +195,10 @@ describe('isEmptyParagraphOnly', () => {
   it('returns false for a heading (any non-paragraph first block)', () => {
     expect(
       isEmptyParagraphOnly({
-        children: [{ type: 'paragraph', children: [] }, { type: 'thematicBreak' }],
+        children: [
+          { type: 'paragraph', children: [] },
+          { type: 'thematicBreak' },
+        ],
       })
     ).toBe(false);
   });

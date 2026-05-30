@@ -400,7 +400,9 @@ describe('mdastRender (primitive)', () => {
       ...stringRenderers,
       root: (_, children) => `<article>${children.join('')}</article>`,
     };
-    expect(mdastRender(root, customRoot)).toBe('<article><p>wrap me</p></article>');
+    expect(mdastRender(root, customRoot)).toBe(
+      '<article><p>wrap me</p></article>'
+    );
   });
 });
 

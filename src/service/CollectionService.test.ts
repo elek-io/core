@@ -966,7 +966,10 @@ describe('CollectionService - update entry resolutions', function () {
     projectId: project.id,
     id: collectionId,
     icon: 'home' as const,
-    name: { singular: { en: 'Article', de: 'Article' }, plural: { en: 'Articles', de: 'Articles' } },
+    name: {
+      singular: { en: 'Article', de: 'Article' },
+      plural: { en: 'Articles', de: 'Articles' },
+    },
     description: { en: 'Articles', de: 'Articles' },
     slug: { singular: 'article', plural: 'articles' },
     fieldDefinitions: [
@@ -1010,7 +1013,10 @@ describe('CollectionService - update entry resolutions', function () {
     const collection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
-      name: { singular: { en: 'Article', de: 'Article' }, plural: { en: 'Articles', de: 'Articles' } },
+      name: {
+        singular: { en: 'Article', de: 'Article' },
+        plural: { en: 'Articles', de: 'Articles' },
+      },
       description: { en: 'Articles', de: 'Articles' },
       slug: { singular: 'article', plural: 'articles' },
       fieldDefinitions: [
@@ -1051,35 +1057,47 @@ describe('CollectionService - update entry resolutions', function () {
     await project.destroy();
   });
 
-  it('throws a conflict when field changes need unresolved entry resolutions', { timeout: 30000 }, async function () {
-    await expect(
-      core.collections.update(collectionWithRequiredSummary())
-    ).rejects.toThrow(/require entry resolutions/);
-  });
+  it(
+    'throws a conflict when field changes need unresolved entry resolutions',
+    { timeout: 30000 },
+    async function () {
+      await expect(
+        core.collections.update(collectionWithRequiredSummary())
+      ).rejects.toThrow(/require entry resolutions/);
+    }
+  );
 
-  it('rejects a resolution value that fails the new field schema', { timeout: 30000 }, async function () {
-    await expect(
-      core.collections.update({
-        ...collectionWithRequiredSummary(),
-        resolutions: {
-          // Generically a valid Value, but the wrong valueType for a string field.
-          [entryId]: {
-            summary: {
-              objectType: 'value',
-              valueType: 'number',
-              content: { en: 1, de: 1 },
+  it(
+    'rejects a resolution value that fails the new field schema',
+    { timeout: 30000 },
+    async function () {
+      await expect(
+        core.collections.update({
+          ...collectionWithRequiredSummary(),
+          resolutions: {
+            // Generically a valid Value, but the wrong valueType for a string field.
+            [entryId]: {
+              summary: {
+                objectType: 'value',
+                valueType: 'number',
+                content: { en: 1, de: 1 },
+              },
             },
           },
-        },
-      })
-    ).rejects.toThrow(/Resolution validation failed/);
-  });
+        })
+      ).rejects.toThrow(/Resolution validation failed/);
+    }
+  );
 });
 
 describe('AbstractIndexedEntityService - stale index cache', function () {
   let project: Project & { destroy: () => Promise<void> };
 
-  const makeCollection = (core_: typeof core, plural: string, singular: string) =>
+  const makeCollection = (
+    core_: typeof core,
+    plural: string,
+    singular: string
+  ) =>
     core_.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -1100,20 +1118,24 @@ describe('AbstractIndexedEntityService - stale index cache', function () {
     await project.destroy();
   });
 
-  it('rebuilds the index and retries when the cached index is stale', { timeout: 30000 }, async function () {
-    // Populate the test instance's cached index for this project.
-    await makeCollection(core, 'firsts', 'first');
+  it(
+    'rebuilds the index and retries when the cached index is stale',
+    { timeout: 30000 },
+    async function () {
+      // Populate the test instance's cached index for this project.
+      await makeCollection(core, 'firsts', 'first');
 
-    // A second Core instance writes another Collection to the same data dir.
-    // The test instance's cached index does not know about it yet.
-    const second = await makeCollection(cliCore, 'seconds', 'second');
+      // A second Core instance writes another Collection to the same data dir.
+      // The test instance's cached index does not know about it yet.
+      const second = await makeCollection(cliCore, 'seconds', 'second');
 
-    // Resolving by slug misses the stale cache, then rebuilds from disk and
-    // finds the Collection on the retry pass.
-    const resolvedId = await core.collections.resolveCollectionId({
-      projectId: project.id,
-      idOrSlug: 'seconds',
-    });
-    expect(resolvedId).to.equal(second.id);
-  });
+      // Resolving by slug misses the stale cache, then rebuilds from disk and
+      // finds the Collection on the retry pass.
+      const resolvedId = await core.collections.resolveCollectionId({
+        projectId: project.id,
+        idOrSlug: 'seconds',
+      });
+      expect(resolvedId).to.equal(second.id);
+    }
+  );
 });

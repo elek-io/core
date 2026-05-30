@@ -1127,12 +1127,16 @@ describe('buildEntryValuesSchema dynamic field arity edge cases', () => {
 
     expect(
       schema.parse({
-        blocks: [{ id: uuid(), componentId: alphaId, values: { a: { en: '1' } } }],
+        blocks: [
+          { id: uuid(), componentId: alphaId, values: { a: { en: '1' } } },
+        ],
       })
     ).toBeTruthy();
     expect(
       schema.parse({
-        blocks: [{ id: uuid(), componentId: betaId, values: { b: { en: '2' } } }],
+        blocks: [
+          { id: uuid(), componentId: betaId, values: { b: { en: '2' } } },
+        ],
       })
     ).toBeTruthy();
     expect(() =>

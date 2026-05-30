@@ -58,7 +58,7 @@ export class JsonFileService extends AbstractService {
         message: `Cache hit reading file "${path}"`,
       });
       const json = this.cache.get(path);
-      return schema.parse(json) as z.output<T>;
+      return schema.parse(json);
     }
 
     this.logService.debug({

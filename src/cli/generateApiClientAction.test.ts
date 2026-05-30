@@ -2,7 +2,11 @@ import Fs from 'fs-extra';
 import Path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import core, { type Project, uuid } from '../test/setup.js';
-import { createCollection, createProject, expectTranspiles } from '../test/util.js';
+import {
+  createCollection,
+  createProject,
+  expectTranspiles,
+} from '../test/util.js';
 import { generateApiClientAction } from './generateApiClientAction.js';
 
 /**

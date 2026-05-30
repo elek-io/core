@@ -259,7 +259,9 @@ const renderers: MdastRenderersBase<ReactNode> = {
   html: (node) => (
     <span dangerouslySetInnerHTML={{ __html: sanitize(node.value) }} />
   ),
-  assetReference: (node) => <img src={`/assets/${node.assetId}`} alt={node.alt} />,
+  assetReference: (node) => (
+    <img src={`/assets/${node.assetId}`} alt={node.alt} />
+  ),
   entryReference: (node, children) => (
     <a href={`/${node.collectionId}/${node.entryId}`}>{children}</a>
   ),

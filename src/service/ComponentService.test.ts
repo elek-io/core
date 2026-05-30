@@ -750,62 +750,67 @@ describe('ComponentService - read at a commit', function () {
     await project.destroy();
   });
 
-  it('reads the historical version of a Component at a given commit hash', { timeout: 30000 }, async function () {
-    const component = await core.components.create({
-      projectId: project.id,
-      name: { en: 'Orig', de: 'Orig' },
-      slug: 'historic',
-      description: { en: 'Original', de: 'Original' },
-      fieldDefinitions: [
-        {
-          id: uuid(),
-          slug: 'title',
-          valueType: 'string',
-          fieldType: 'text',
-          label: { en: 'Title', de: 'Title' },
-          description: null,
-          defaultValue: null,
-          isRequired: true,
-          isDisabled: false,
-          isUnique: false,
-          inputWidth: '12',
-          min: null,
-          max: null,
-        },
-      ],
-    });
+  it(
+    'reads the historical version of a Component at a given commit hash',
+    { timeout: 30000 },
+    async function () {
+      const component = await core.components.create({
+        projectId: project.id,
+        name: { en: 'Orig', de: 'Orig' },
+        slug: 'historic',
+        description: { en: 'Original', de: 'Original' },
+        fieldDefinitions: [
+          {
+            id: uuid(),
+            slug: 'title',
+            valueType: 'string',
+            fieldType: 'text',
+            label: { en: 'Title', de: 'Title' },
+            description: null,
+            defaultValue: null,
+            isRequired: true,
+            isDisabled: false,
+            isUnique: false,
+            inputWidth: '12',
+            min: null,
+            max: null,
+          },
+        ],
+      });
 
-    const historyAfterCreate = await core.components.history({
-      projectId: project.id,
-      id: component.id,
-    });
-    const creationHash = historyAfterCreate[historyAfterCreate.length - 1]!.hash;
+      const historyAfterCreate = await core.components.history({
+        projectId: project.id,
+        id: component.id,
+      });
+      const creationHash =
+        historyAfterCreate[historyAfterCreate.length - 1]!.hash;
 
-    // A metadata-only update (name) — no field definition changes.
-    await core.components.update({
-      projectId: project.id,
-      id: component.id,
-      name: { en: 'Changed', de: 'Changed' },
-      slug: 'historic',
-      description: { en: 'Original', de: 'Original' },
-      fieldDefinitions: component.fieldDefinitions,
-    });
+      // A metadata-only update (name) — no field definition changes.
+      await core.components.update({
+        projectId: project.id,
+        id: component.id,
+        name: { en: 'Changed', de: 'Changed' },
+        slug: 'historic',
+        description: { en: 'Original', de: 'Original' },
+        fieldDefinitions: component.fieldDefinitions,
+      });
 
-    const historical = await core.components.read({
-      projectId: project.id,
-      id: component.id,
-      commitHash: creationHash,
-    });
-    expect(historical.name.en).to.equal('Orig');
+      const historical = await core.components.read({
+        projectId: project.id,
+        id: component.id,
+        commitHash: creationHash,
+      });
+      expect(historical.name.en).to.equal('Orig');
 
-    const current = await core.components.read({
-      projectId: project.id,
-      id: component.id,
-    });
-    expect(current.name.en).to.equal('Changed');
+      const current = await core.components.read({
+        projectId: project.id,
+        id: component.id,
+      });
+      expect(current.name.en).to.equal('Changed');
 
-    await core.components.delete({ projectId: project.id, id: component.id });
-  });
+      await core.components.delete({ projectId: project.id, id: component.id });
+    }
+  );
 });
 
 describe('ComponentService - update slug conflict', function () {
@@ -843,24 +848,28 @@ describe('ComponentService - update slug conflict', function () {
     ],
   });
 
-  it('rejects updating a Component slug to one already used by another Component', { timeout: 30000 }, async function () {
-    const alpha = await core.components.create(textComponent('alpha'));
-    const beta = await core.components.create(textComponent('beta'));
+  it(
+    'rejects updating a Component slug to one already used by another Component',
+    { timeout: 30000 },
+    async function () {
+      const alpha = await core.components.create(textComponent('alpha'));
+      const beta = await core.components.create(textComponent('beta'));
 
-    await expect(
-      core.components.update({
-        projectId: project.id,
-        id: beta.id,
-        name: beta.name,
-        slug: 'alpha', // conflicts with the alpha component
-        description: beta.description,
-        fieldDefinitions: beta.fieldDefinitions,
-      })
-    ).rejects.toThrow(/already in use/);
+      await expect(
+        core.components.update({
+          projectId: project.id,
+          id: beta.id,
+          name: beta.name,
+          slug: 'alpha', // conflicts with the alpha component
+          description: beta.description,
+          fieldDefinitions: beta.fieldDefinitions,
+        })
+      ).rejects.toThrow(/already in use/);
 
-    await core.components.delete({ projectId: project.id, id: alpha.id });
-    await core.components.delete({ projectId: project.id, id: beta.id });
-  });
+      await core.components.delete({ projectId: project.id, id: alpha.id });
+      await core.components.delete({ projectId: project.id, id: beta.id });
+    }
+  );
 });
 
 describe('ComponentService - update entry resolutions', function () {
@@ -945,7 +954,10 @@ describe('ComponentService - update entry resolutions', function () {
     const collection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
-      name: { singular: { en: 'Page', de: 'Page' }, plural: { en: 'Pages', de: 'Pages' } },
+      name: {
+        singular: { en: 'Page', de: 'Page' },
+        plural: { en: 'Pages', de: 'Pages' },
+      },
       description: { en: 'Pages', de: 'Pages' },
       slug: { singular: 'page', plural: 'pages' },
       fieldDefinitions: [
@@ -998,27 +1010,35 @@ describe('ComponentService - update entry resolutions', function () {
     await project.destroy();
   });
 
-  it('throws a conflict when field changes need unresolved entry resolutions', { timeout: 30000 }, async function () {
-    await expect(
-      core.components.update(heroWithRequiredSubtitle())
-    ).rejects.toThrow(/require entry resolutions/);
-  });
+  it(
+    'throws a conflict when field changes need unresolved entry resolutions',
+    { timeout: 30000 },
+    async function () {
+      await expect(
+        core.components.update(heroWithRequiredSubtitle())
+      ).rejects.toThrow(/require entry resolutions/);
+    }
+  );
 
-  it('rejects a resolution value that fails the new field schema', { timeout: 30000 }, async function () {
-    await expect(
-      core.components.update({
-        ...heroWithRequiredSubtitle(),
-        resolutions: {
-          // Generically a valid Value, but the wrong valueType for a string field.
-          [entryId]: {
-            subtitle: {
-              objectType: 'value',
-              valueType: 'number',
-              content: { en: 1, de: 1 },
+  it(
+    'rejects a resolution value that fails the new field schema',
+    { timeout: 30000 },
+    async function () {
+      await expect(
+        core.components.update({
+          ...heroWithRequiredSubtitle(),
+          resolutions: {
+            // Generically a valid Value, but the wrong valueType for a string field.
+            [entryId]: {
+              subtitle: {
+                objectType: 'value',
+                valueType: 'number',
+                content: { en: 1, de: 1 },
+              },
             },
           },
-        },
-      })
-    ).rejects.toThrow(/Resolution validation failed/);
-  });
+        })
+      ).rejects.toThrow(/Resolution validation failed/);
+    }
+  );
 });

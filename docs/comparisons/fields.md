@@ -46,57 +46,57 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 
 ### Relationship Models
 
-| Relation Type                 | elek.io Core                                | Strapi                  | Directus               | Payload CMS              | TinaCMS                            |
-| ----------------------------- | ------------------------------------------- | ----------------------- | ---------------------- | ------------------------ | ---------------------------------- |
-| **Asset references**          | `asset` field (min/max)                     | Media                   | File / Image / Files   | Upload                   | Image                              |
-| **Entry references**          | `entry` field (`ofCollections` + min/max)   | Relation                | M2O / O2M / M2M        | Relationship             | Reference                          |
-| **Polymorphic (Many-to-Any)** | `ofCollections` (entry); `ofComponents` (dynamic) | --                | Yes (M2A)              | Yes (`relationTo` array) | Yes (multi-collection `reference`) |
-| **One-to-One**                | Yes (via `min: 1`, `max: 1`)                | Yes                     | Yes (M2O)              | Yes                      | --                                 |
-| **One-to-Many**               | Yes (via `min`/`max`)                       | Yes                     | Yes (O2M)              | Yes                      | --                                 |
-| **Many-to-One**               | -- (one-way refs only)                      | Yes                     | Yes (M2O)              | Yes                      | --                                 |
-| **Many-to-Many**              | --                                          | Yes                     | Yes (M2M via junction) | Yes                      | --                                 |
-| **One-way / No back-ref**     | Yes (all references are one-way)            | Yes (one-way, many-way) | --                     | --                       | --                                 |
-| **Translations**              | Built into all direct values (`TranslatableString`) | --              | Yes (specialized M2M)  | --                       | --                                 |
-| **Reverse/Virtual Join**      | --                                          | --                      | --                     | Yes (Join field)         | --                                 |
+| Relation Type                 | elek.io Core                                        | Strapi                  | Directus               | Payload CMS              | TinaCMS                            |
+| ----------------------------- | --------------------------------------------------- | ----------------------- | ---------------------- | ------------------------ | ---------------------------------- |
+| **Asset references**          | `asset` field (min/max)                             | Media                   | File / Image / Files   | Upload                   | Image                              |
+| **Entry references**          | `entry` field (`ofCollections` + min/max)           | Relation                | M2O / O2M / M2M        | Relationship             | Reference                          |
+| **Polymorphic (Many-to-Any)** | `ofCollections` (entry); `ofComponents` (dynamic)   | --                      | Yes (M2A)              | Yes (`relationTo` array) | Yes (multi-collection `reference`) |
+| **One-to-One**                | Yes (via `min: 1`, `max: 1`)                        | Yes                     | Yes (M2O)              | Yes                      | --                                 |
+| **One-to-Many**               | Yes (via `min`/`max`)                               | Yes                     | Yes (O2M)              | Yes                      | --                                 |
+| **Many-to-One**               | -- (one-way refs only)                              | Yes                     | Yes (M2O)              | Yes                      | --                                 |
+| **Many-to-Many**              | --                                                  | Yes                     | Yes (M2M via junction) | Yes                      | --                                 |
+| **One-way / No back-ref**     | Yes (all references are one-way)                    | Yes (one-way, many-way) | --                     | --                       | --                                 |
+| **Translations**              | Built into all direct values (`TranslatableString`) | --                      | Yes (specialized M2M)  | --                       | --                                 |
+| **Reverse/Virtual Join**      | --                                                  | --                      | --                     | Yes (Join field)         | --                                 |
 
 ### Composite / Structural Fields
 
-| Feature                | elek.io Core                                                                    | Strapi                   | Directus              | Payload CMS          | TinaCMS                  |
-| ---------------------- | ------------------------------------------------------------------------------- | ------------------------ | --------------------- | -------------------- | ------------------------ |
-| **Grouped fields**     | `FieldDefinitionGroup` (presentational, Collections only)                       | Component (single)       | Repeater (JSON)       | Group (keyed object) | Object (static `fields`) |
-| **Repeatable groups**  | `dynamic` field referencing one Component                                       | Component (repeatable)   | Repeater (JSON array) | Array                | Object + `list: true`    |
-| **Polymorphic blocks** | `dynamic` field (`ofComponents`)                                                | Dynamic Zone             | Builder (M2A)         | Blocks               | Object + `templates`     |
-| **Tabs**               | --                                                                              | --                       | --                    | Tabs (Named)         | --                       |
-| **Nesting**            | Components reusable across Collections; groups cannot nest; dynamic cannot nest dynamic | Components in components | --              | Groups in groups     | Objects in objects       |
+| Feature                | elek.io Core                                                                            | Strapi                   | Directus              | Payload CMS          | TinaCMS                  |
+| ---------------------- | --------------------------------------------------------------------------------------- | ------------------------ | --------------------- | -------------------- | ------------------------ |
+| **Grouped fields**     | `FieldDefinitionGroup` (presentational, Collections only)                               | Component (single)       | Repeater (JSON)       | Group (keyed object) | Object (static `fields`) |
+| **Repeatable groups**  | `dynamic` field referencing one Component                                               | Component (repeatable)   | Repeater (JSON array) | Array                | Object + `list: true`    |
+| **Polymorphic blocks** | `dynamic` field (`ofComponents`)                                                        | Dynamic Zone             | Builder (M2A)         | Blocks               | Object + `templates`     |
+| **Tabs**               | --                                                                                      | --                       | --                    | Tabs (Named)         | --                       |
+| **Nesting**            | Components reusable across Collections; groups cannot nest; dynamic cannot nest dynamic | Components in components | --                    | Groups in groups     | Objects in objects       |
 
 ### Presentation / Layout-Only Fields
 
-| Feature                   | elek.io Core                  | Strapi | Directus                | Payload CMS       | TinaCMS |
-| ------------------------- | ----------------------------- | ------ | ----------------------- | ----------------- | ------- |
-| **Field grouping**        | `FieldDefinitionGroup`        | --     | Accordion / Detail / Raw Group | Collapsible / Tabs | --   |
-| **Grid/width control**    | `inputWidth` (12/6/4/3 grid)  | --     | --                      | Row               | --      |
-| **Section headers**       | --                            | --     | Header                  | --                | --      |
-| **Dividers**              | --                            | --     | Divider                 | --                | --      |
-| **Collapsible sections**  | --                            | --     | Accordion, Detail Group | Collapsible       | --      |
-| **Horizontal rows**       | --                            | --     | --                      | Row               | --      |
-| **Notices/alerts**        | --                            | --     | Notice                  | --                | --      |
-| **Button/links**          | --                            | --     | Button Links            | --                | --      |
-| **Custom UI slot**        | --                            | --     | --                      | UI (custom React) | --      |
-| **Tabs (presentational)** | --                            | --     | --                      | Tabs (Unnamed)    | --      |
-| **Unstyled grouping**     | --                            | --     | Raw Group               | --                | --      |
+| Feature                   | elek.io Core                 | Strapi | Directus                       | Payload CMS        | TinaCMS |
+| ------------------------- | ---------------------------- | ------ | ------------------------------ | ------------------ | ------- |
+| **Field grouping**        | `FieldDefinitionGroup`       | --     | Accordion / Detail / Raw Group | Collapsible / Tabs | --      |
+| **Grid/width control**    | `inputWidth` (12/6/4/3 grid) | --     | --                             | Row                | --      |
+| **Section headers**       | --                           | --     | Header                         | --                 | --      |
+| **Dividers**              | --                           | --     | Divider                        | --                 | --      |
+| **Collapsible sections**  | --                           | --     | Accordion, Detail Group        | Collapsible        | --      |
+| **Horizontal rows**       | --                           | --     | --                             | Row                | --      |
+| **Notices/alerts**        | --                           | --     | Notice                         | --                 | --      |
+| **Button/links**          | --                           | --     | Button Links                   | --                 | --      |
+| **Custom UI slot**        | --                           | --     | --                             | UI (custom React)  | --      |
+| **Tabs (presentational)** | --                           | --     | --                             | Tabs (Unnamed)     | --      |
+| **Unstyled grouping**     | --                           | --     | Raw Group                      | --                 | --      |
 
 ### Architectural Differences
 
-| Aspect                      | elek.io Core                                              | Strapi                      | Directus                                               | Payload CMS                                | TinaCMS                                    |
-| --------------------------- | --------------------------------------------------------- | --------------------------- | ------------------------------------------------------ | ------------------------------------------ | ------------------------------------------ |
-| **Data storage**            | JSON files (Git-backed)                                   | Database                    | Database (wraps existing DB)                           | Database                                   | Markdown/MDX files (Git-backed)            |
-| **Rich text output**        | --                                                        | HTML or structured blocks   | HTML or JSON blocks                                    | Structured JSON (Lexical/Slate)            | Markdown AST                               |
-| **UI/data separation**      | Partially decoupled (`valueType` vs `fieldType`)          | Coupled (field = UI + data) | Decoupled (25 data types, 40 interfaces)               | Coupled with component overrides           | Decoupled (8 core types, UI plugins)       |
-| **i18n approach**           | Built into every direct value; narrowed to `ProjectLanguages` | Plugin / relation       | Specialized M2M                                        | Locale config                              | --                                         |
-| **Schema validation**       | Zod schemas generated from field definitions              | Config-based                | Database introspection                                 | Config-based                               | Config-based                               |
-| **Extensibility model**     | Code-level schema definitions (no plugin system)          | Marketplace plugins         | Extension SDK (interfaces, displays, layouts, modules) | Custom React components via config         | Custom React components via `ui.component` |
-| **Virtual/computed fields** | --                                                        | --                          | --                                                     | Any field with `virtual: true`, Join field | --                                         |
-| **Field count**             | 17 field types across 5 value types                       | ~14 built-in                | ~40 interfaces on 25 data types                        | ~17 field types                            | 8 core types + UI plugins                  |
+| Aspect                      | elek.io Core                                                  | Strapi                      | Directus                                               | Payload CMS                                | TinaCMS                                    |
+| --------------------------- | ------------------------------------------------------------- | --------------------------- | ------------------------------------------------------ | ------------------------------------------ | ------------------------------------------ |
+| **Data storage**            | JSON files (Git-backed)                                       | Database                    | Database (wraps existing DB)                           | Database                                   | Markdown/MDX files (Git-backed)            |
+| **Rich text output**        | --                                                            | HTML or structured blocks   | HTML or JSON blocks                                    | Structured JSON (Lexical/Slate)            | Markdown AST                               |
+| **UI/data separation**      | Partially decoupled (`valueType` vs `fieldType`)              | Coupled (field = UI + data) | Decoupled (25 data types, 40 interfaces)               | Coupled with component overrides           | Decoupled (8 core types, UI plugins)       |
+| **i18n approach**           | Built into every direct value; narrowed to `ProjectLanguages` | Plugin / relation           | Specialized M2M                                        | Locale config                              | --                                         |
+| **Schema validation**       | Zod schemas generated from field definitions                  | Config-based                | Database introspection                                 | Config-based                               | Config-based                               |
+| **Extensibility model**     | Code-level schema definitions (no plugin system)              | Marketplace plugins         | Extension SDK (interfaces, displays, layouts, modules) | Custom React components via config         | Custom React components via `ui.component` |
+| **Virtual/computed fields** | --                                                            | --                          | --                                                     | Any field with `virtual: true`, Join field | --                                         |
+| **Field count**             | 17 field types across 5 value types                           | ~14 built-in                | ~40 interfaces on 25 data types                        | ~17 field types                            | 8 core types + UI plugins                  |
 
 ## Per-CMS Reference
 
@@ -438,15 +438,15 @@ TinaCMS supports custom field components by passing a React component directly t
 
 ### Gaps
 
-| Gap                         | Who Has It                                         | Priority                                                        |
-| --------------------------- | -------------------------------------------------- | --------------------------------------------------------------- |
-| **Rich Text**               | All 4 CMS                                          | High - Essential for long-form content (articles, docs, pages). |
-| **Back-references / Joins** | Strapi, Directus, Payload                          | Medium - Limits complex relational modeling.                    |
-| **Many-to-Many**            | Strapi, Directus, Payload                          | Medium - No formal junction table support.                      |
-| **JSON / Arbitrary data**   | Strapi, Payload                                    | Medium - Useful for metadata, config, unstructured data.        |
-| **Code editor**             | Directus, Payload                                  | Low - Niche, mainly for developer-facing content.               |
-| **Color picker**            | Directus, TinaCMS                                  | Low - Nice-to-have for theming/branding fields.                 |
-| **Password/Hash**           | Strapi, Directus                                   | Low - Typically handled at auth layer, not content layer.       |
-| **Geospatial**              | Directus, Payload                                  | Low - Specialized use case.                                     |
+| Gap                         | Who Has It                | Priority                                                        |
+| --------------------------- | ------------------------- | --------------------------------------------------------------- |
+| **Rich Text**               | All 4 CMS                 | High - Essential for long-form content (articles, docs, pages). |
+| **Back-references / Joins** | Strapi, Directus, Payload | Medium - Limits complex relational modeling.                    |
+| **Many-to-Many**            | Strapi, Directus, Payload | Medium - No formal junction table support.                      |
+| **JSON / Arbitrary data**   | Strapi, Payload           | Medium - Useful for metadata, config, unstructured data.        |
+| **Code editor**             | Directus, Payload         | Low - Niche, mainly for developer-facing content.               |
+| **Color picker**            | Directus, TinaCMS         | Low - Nice-to-have for theming/branding fields.                 |
+| **Password/Hash**           | Strapi, Directus          | Low - Typically handled at auth layer, not content layer.       |
+| **Geospatial**              | Directus, Payload         | Low - Specialized use case.                                     |
 
 The lack of nested composition (no nested groups, no nested `dynamic` fields) is **intentional design** — Components are the reuse mechanism, kept flat to keep the data and editor model predictable — not an unmet need.

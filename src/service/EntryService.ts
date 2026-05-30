@@ -736,7 +736,7 @@ function isNotFoundError(error: unknown): boolean {
     error !== null &&
     typeof error === 'object' &&
     'code' in error &&
-    (error as { code: unknown }).code === 'ENOENT'
+    error.code === 'ENOENT'
   ) {
     return true;
   }
@@ -766,17 +766,21 @@ function collectMdAstRefs(root: MdAstRoot): Array<{
     return typeof value === 'object' && value !== null && 'type' in value;
   }
 
-  function isEntryReference(node: { type: string }): node is MdAstEntryReference {
+  function isEntryReference(node: {
+    type: string;
+  }): node is MdAstEntryReference {
     return node.type === 'entryReference';
   }
 
-  function isAssetReference(node: { type: string }): node is MdAstAssetReference {
+  function isAssetReference(node: {
+    type: string;
+  }): node is MdAstAssetReference {
     return node.type === 'assetReference';
   }
 
-  function hasChildren(
-    node: { type: string }
-  ): node is { type: string; children: unknown[] } {
+  function hasChildren(node: {
+    type: string;
+  }): node is { type: string; children: unknown[] } {
     if (!('children' in node)) return false;
     const { children } = node as { children: unknown };
     return Array.isArray(children);

@@ -938,80 +938,87 @@ describe('EntryService - dynamic field with open ofComponents', function () {
     await project.destroy();
   });
 
-  it('resolves all Project Components when a dynamic field has an empty ofComponents', { timeout: 30000 }, async function () {
-    const hero = await core.components.create({
-      projectId: project.id,
-      name: { en: 'Hero', de: 'Hero' },
-      slug: 'hero',
-      description: { en: 'Hero', de: 'Hero' },
-      fieldDefinitions: [
-        {
-          id: uuid(),
-          slug: 'title',
-          valueType: 'string',
-          fieldType: 'text',
-          label: { en: 'Title', de: 'Title' },
-          description: null,
-          defaultValue: null,
-          isRequired: true,
-          isDisabled: false,
-          isUnique: false,
-          inputWidth: '12',
-          min: null,
-          max: null,
-        },
-      ],
-    });
+  it(
+    'resolves all Project Components when a dynamic field has an empty ofComponents',
+    { timeout: 30000 },
+    async function () {
+      const hero = await core.components.create({
+        projectId: project.id,
+        name: { en: 'Hero', de: 'Hero' },
+        slug: 'hero',
+        description: { en: 'Hero', de: 'Hero' },
+        fieldDefinitions: [
+          {
+            id: uuid(),
+            slug: 'title',
+            valueType: 'string',
+            fieldType: 'text',
+            label: { en: 'Title', de: 'Title' },
+            description: null,
+            defaultValue: null,
+            isRequired: true,
+            isDisabled: false,
+            isUnique: false,
+            inputWidth: '12',
+            min: null,
+            max: null,
+          },
+        ],
+      });
 
-    const pages = await core.collections.create({
-      projectId: project.id,
-      icon: 'home',
-      name: { singular: { en: 'Page', de: 'Page' }, plural: { en: 'Pages', de: 'Pages' } },
-      description: { en: 'Pages', de: 'Pages' },
-      slug: { singular: 'page', plural: 'pages' },
-      fieldDefinitions: [
-        {
-          id: uuid(),
-          slug: 'blocks',
-          valueType: 'component',
-          fieldType: 'dynamic',
-          label: { en: 'Blocks', de: 'Blocks' },
-          description: null,
-          isRequired: false,
-          isDisabled: false,
-          isUnique: false,
-          inputWidth: '12',
-          ofComponents: [], // open: any Component is allowed
-          min: null,
-          max: null,
+      const pages = await core.collections.create({
+        projectId: project.id,
+        icon: 'home',
+        name: {
+          singular: { en: 'Page', de: 'Page' },
+          plural: { en: 'Pages', de: 'Pages' },
         },
-      ],
-    });
+        description: { en: 'Pages', de: 'Pages' },
+        slug: { singular: 'page', plural: 'pages' },
+        fieldDefinitions: [
+          {
+            id: uuid(),
+            slug: 'blocks',
+            valueType: 'component',
+            fieldType: 'dynamic',
+            label: { en: 'Blocks', de: 'Blocks' },
+            description: null,
+            isRequired: false,
+            isDisabled: false,
+            isUnique: false,
+            inputWidth: '12',
+            ofComponents: [], // open: any Component is allowed
+            min: null,
+            max: null,
+          },
+        ],
+      });
 
-    const entry = await core.entries.create({
-      projectId: project.id,
-      collectionId: pages.id,
-      values: {
-        blocks: {
-          objectType: 'value',
-          valueType: 'component',
-          content: [
-            {
-              id: uuid(),
-              componentId: hero.id,
-              values: {
-                title: {
-                  objectType: 'value',
-                  valueType: 'string',
-                  content: { en: 'Welcome', de: 'Willkommen' },
+      const entry = await core.entries.create({
+        projectId: project.id,
+        collectionId: pages.id,
+        values: {
+          blocks: {
+            objectType: 'value',
+            valueType: 'component',
+            content: [
+              {
+                id: uuid(),
+                componentId: hero.id,
+                values: {
+                  title: {
+                    objectType: 'value',
+                    valueType: 'string',
+                    content: { en: 'Welcome', de: 'Willkommen' },
+                  },
                 },
               },
-            },
-          ],
+            ],
+          },
         },
-      },
-    });
+      });
 
-    expect(entry.id).toBeDefined();
-  });
+      expect(entry.id).toBeDefined();
+    }
+  );
 });

@@ -84,10 +84,7 @@ describe('exportAction', () => {
       options: { watch: false },
     });
 
-    const projectDir = Path.join(
-      Path.resolve(outDir),
-      `project-${project.id}`
-    );
+    const projectDir = Path.join(Path.resolve(outDir), `project-${project.id}`);
 
     expect(await Fs.pathExists(Path.join(projectDir, 'project.json'))).toBe(
       true

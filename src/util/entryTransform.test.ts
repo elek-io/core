@@ -345,10 +345,7 @@ describe('transformEntryValues', () => {
       makeTextField({ id: fieldId, slug: 'title', isRequired: true }),
     ];
     const values: Record<string, Value> = {
-      title: makeStringValue({ en: null } as unknown as Record<
-        string,
-        string | null
-      >),
+      title: makeStringValue({ en: null }),
     };
     const changes = diffFieldDefinitions(oldDefs, newDefs);
 
