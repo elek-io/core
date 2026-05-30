@@ -1,5 +1,23 @@
 # @elek-io/core
 
+## 0.17.0
+
+### Minor Changes
+
+- 82c88f7: - Git commit messages now use human-readable subject lines with git trailers (Method:, Object-Type:, Object-Id:, Collection-Id:) instead of JSON.stringify
+  - Git tag messages use a typed GitTagMessage discriminated union (release, preview, upgrade) serialized as git trailers (Type:, Version:, Core-Version:)
+  - Removed releaseTypeSchema and releaseTagMessageSchema from releaseSchema.ts — tag message typing now lives in gitSchema.ts
+  - Tightened Zod schemas: commit hash uses z.hash('sha1'), datetimes use z.iso.datetime(), migrateProjectSchema uses z.looseObject()
+  - Fixed email truncation bug in GitTagService.list() caused by a redundant slice(0, -1)
+  - Added pipe-character validation on gitSignatureSchema.name to prevent delimiter collision in parsed output
+  - Changed parseTagTrailers to return null and log a warning for unrecognized tag types instead of throwing
+- d2ea641: Separated git history from CRUD return values for improved performance. `history` and `fullHistory` are no longer included on `Project`, `Collection`, `Entry`, and `Asset` objects. Use the new `history()` method on each service instead (e.g. `core.projects.history({ id })`, `core.entries.history({ projectId, collectionId, id })`).
+- cf284a4: - Access entry values by meaningful names: `entry.values.title` instead of `entry.values.find(v => v.fieldDefinitionId === '550e8400-...')`
+  - Reference collections by slug in API routes: `/collections/blog-posts/entries` instead of `/collections/550e8400-.../entries` and the astro integration
+- 4b88413: New `ReleaseService` that diffs the `work` branch against `production` to detect collection and field definition changes, computes the appropriate semver bump (major/minor/patch), and supports creating full releases and preview releases with git tags.
+- 3bcda72: - Added a migration chain for outdated files (reading from git history and upgrading to the latest schema version)
+  - Added documentation for the migration and history-reading flow in `docs/migration-and-history-flow.md`
+
 ## 0.16.2
 
 ### Patch Changes
