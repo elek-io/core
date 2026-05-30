@@ -220,7 +220,17 @@ function writeFieldDefinitionNarrowing(
           `defaultValue: '${escapeForSingleQuotedString(fieldDefinition.defaultValue)}';`
         )
         .newLine();
+    } else if (typeof fieldDefinition.defaultValue === 'object') {
+      // mdast root tree. Emit the broad node type instead of serialising the
+      // whole literal tree, matching the broad mdast posture in
+      // getNarrowedValueType. MdAstRoot is imported whenever a markdown field
+      // is present.
+      writer
+        .indent(baseIndent + 1)
+        .write(`defaultValue: MdAstRoot;`)
+        .newLine();
     } else {
+      // number | boolean
       writer
         .indent(baseIndent + 1)
         .write(`defaultValue: ${fieldDefinition.defaultValue};`)
