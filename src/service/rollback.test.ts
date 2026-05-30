@@ -52,8 +52,8 @@ describe('Error handling and rollback', function () {
         projectId: project.id,
       });
 
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
@@ -80,8 +80,8 @@ describe('Error handling and rollback', function () {
       );
       const oldHash = await getFileHash(oldAssetPath);
 
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
@@ -107,8 +107,8 @@ describe('Error handling and rollback', function () {
     });
 
     it('should roll back a failed delete and restore the file', async function () {
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
@@ -161,8 +161,8 @@ describe('Error handling and rollback', function () {
         projectId: project.id,
       });
 
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
@@ -189,8 +189,8 @@ describe('Error handling and rollback', function () {
     it('should roll back a failed update and preserve original data', async function () {
       const originalName = collection.name;
 
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
@@ -219,8 +219,8 @@ describe('Error handling and rollback', function () {
     });
 
     it('should roll back a failed delete and restore the collection', async function () {
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
@@ -317,8 +317,8 @@ describe('Error handling and rollback', function () {
         projectId: project.id,
       });
 
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
@@ -357,8 +357,8 @@ describe('Error handling and rollback', function () {
     it('should roll back a failed update and preserve original data', async function () {
       const originalName = component.name;
 
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
@@ -384,8 +384,8 @@ describe('Error handling and rollback', function () {
     });
 
     it('should roll back a failed delete and restore the component', async function () {
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
@@ -439,8 +439,8 @@ describe('Error handling and rollback', function () {
         collectionId: collection.id,
       });
 
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
@@ -478,8 +478,8 @@ describe('Error handling and rollback', function () {
     it('should roll back a failed update and preserve original data', async function () {
       const originalValues = entry.values;
 
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
@@ -518,8 +518,8 @@ describe('Error handling and rollback', function () {
     });
 
     it('should roll back a failed delete and restore the entry', async function () {
-      vi.spyOn(core.git, 'commit').mockReturnValueOnce(
-        Promise.reject(CoreError.internal('Simulated commit failure'))
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
       );
 
       await expect(
