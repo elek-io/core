@@ -9,11 +9,13 @@ export const baseUserSchema = gitSignatureSchema.extend({
   language: supportedLanguageSchema,
   localApi: z.object({
     /**
-     * If set to true the local API is started whenever Core is initialized
+     * Whether the local API should be started automatically. Stored for
+     * elek.io clients to act on (elek.io Desktop auto-starts the local API on
+     * launch). Core itself does not act on this flag.
      */
     isEnabled: z.boolean(),
     /**
-     * The port the local API uses
+     * The port the local API should use
      */
     port: z.number(),
   }),

@@ -1,5 +1,9 @@
 # Language-Scoped Validation
 
+How Core guarantees that translatable content - admin metadata and Entry values - carries exactly the languages a Project supports, both at runtime and in generated code. This is a design-level reference for the two-layer schema approach behind that guarantee.
+
+For the field system this validates, see [`fields.md`](./fields.md). For the Projects whose languages drive it, see [`concepts.md`](./concepts.md).
+
 ## Problem
 
 Translatable content was defined as `Partial<Record<SupportedLanguage, T>>`, making all 24 language keys optional. This meant:
@@ -184,12 +188,12 @@ The strict schema is what enforces required-ness: required fields use `z.string(
 | `src/schema/strictEntitySchema.ts`        | All strict entity schema factories (Collection / Component / Entry × Create / Update) + `strictTranslatableRecordOf` / `strictTranslatableString` primitives + `checkStrictTranslatable` helper |
 | `src/schema/schemaFromFieldDefinition.ts` | Low-level value-from-FD builders used by the strict entity factories                                                                                                                            |
 | `src/schema/valueSchema.ts`               | Static value schemas with nullable content for pipe compatibility                                                                                                                               |
-| `src/schema/projectSchema.ts`             | `.nonempty()` on supported languages array; exports `ProjectLanguages` type used by every strict factory                                                                                        |
-| `src/service/AbstractService.ts`          | `parseOrThrow` helper; `validated()` delegates to it                                                                                                                                            |
+| `src/schema/projectSchema.ts`             | `.nonempty()` on supported languages array. Exports `ProjectLanguages` type used by every strict factory                                                                                        |
+| `src/service/AbstractService.ts`          | `parseOrThrow` helper, `validated()` delegates to it                                                                                                                                            |
 | `src/service/AbstractEntityService.ts`    | `readProjectFile` / `readProjectLanguages` helpers                                                                                                                                              |
-| `src/service/EntryService.ts`             | Preamble reads Project + Collection + builds ComponentResolver; passes strict Entry schema to `validated()`                                                                                     |
-| `src/service/CollectionService.ts`        | Preamble reads Project languages; passes strict Collection schema to `validated()`                                                                                                              |
-| `src/service/ComponentService.ts`         | Preamble reads Project languages; passes strict Component schema to `validated()`                                                                                                               |
+| `src/service/EntryService.ts`             | Preamble reads Project + Collection + builds ComponentResolver, passes strict Entry schema to `validated()`                                                                                     |
+| `src/service/CollectionService.ts`        | Preamble reads Project languages, passes strict Collection schema to `validated()`                                                                                                              |
+| `src/service/ComponentService.ts`         | Preamble reads Project languages, passes strict Component schema to `validated()`                                                                                                               |
 | `src/astro/schema.ts`                     | Emits `Record<ProjectLanguage, T>` in generated Astro types                                                                                                                                     |
 | `src/cli/generateTypesAction.ts`          | Emits `ProjectLanguage` type and narrowed interfaces                                                                                                                                            |
 | `src/cli/generateApiClientAction.ts`      | Embeds Project languages in generated API client                                                                                                                                                |
@@ -201,3 +205,10 @@ If you add a new translatable field to a schema (e.g., a new `subtitle` on Colle
 1. Add it to the static schema as usual (`partialTranslatableStringSchema` or `.nullable()` variant)
 2. Add a `checkStrictTranslatable` call for it in the relevant factory in `strictEntitySchema.ts` (or in the shared `checkCollectionAdminMetadata` / `checkComponentAdminMetadata` helper)
 3. Update `generateTypesAction.ts` if the field should appear in generated narrow types
+
+## See Also
+
+- [`fields.md`](./fields.md) - the field system and translatable Value shapes
+- [`concepts.md`](./concepts.md) - Projects and their supported languages
+- [`api-clients.md`](./api-clients.md) - the narrowed types and clients this enables
+- [`error-handling.md`](./error-handling.md) - how validation failures surface as `CoreError`
