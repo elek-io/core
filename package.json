@@ -87,7 +87,7 @@
     "tsdown": "0.22.1",
     "typescript": "6.0.3",
     "typescript-eslint": "8.60.0",
-    "vitest": "4.1.7"
+    "vitest": "4.1.8"
   },
   "peerDependencies": {
     "astro": ">=6.0.0",
