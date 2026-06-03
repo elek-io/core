@@ -51,7 +51,7 @@
   "dependencies": {
     "@hono/node-server": "2.0.4",
     "@hono/zod-openapi": "1.4.0",
-    "@scalar/hono-api-reference": "0.10.19",
+    "@scalar/hono-api-reference": "0.10.20",
     "@sindresorhus/slugify": "3.0.0",
     "fs-extra": "11.3.5",
     "hono": "4.12.23",
