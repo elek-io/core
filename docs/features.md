@@ -9,7 +9,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 - **Git-backed JSON storage** - every Project is a git repository of plain, human-readable JSON files. Content is diffable, greppable and reviewable like code.
 - **No lock-in** - there is no proprietary database. The files on disk are the source of truth. You can read, back up or migrate them without Core.
 - **Offline-first** - Core runs fully locally and needs no server to create, edit or read content.
-- **Asset storage** - binary Assets are stored as the original file plus a JSON sidecar holding metadata (size, MIME type, dimensions, etc.).
+- **Asset storage** - binary Assets are stored via Git LFS (a pointer in history, the bytes in the local LFS store) plus a JSON sidecar holding metadata (size, MIME type, dimensions, etc.). See [`git-and-sync.md`](./git-and-sync.md#git-lfs).
 
 ## Content modeling
 
@@ -90,7 +90,7 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **No slug / UID field type** - slugs are plain `text` fields you keep correct by hand (and, per above, `isUnique` does not guard them).
 - **No conditional fields** - a field's visibility cannot depend on another field's value.
 - **`synchronize()` has no conflict handling** - it pulls then pushes with no guard for uncommitted changes. A conflicting rebase surfaces as a generic `Internal` error and can leave the repository mid-rebase.
-- **Git LFS is scaffolded but not active** - asset binaries live in an `lfs/` folder and `.gitattributes` is reserved for it, but no LFS tracking is configured, so binaries are committed as ordinary git objects and grow the repository with every version.
+- **Git LFS requires an LFS-capable remote** - asset binaries are tracked with Git LFS, so the remote you push to must support it. A remote without LFS (for example a self-hosted server with it disabled) fails the push with a descriptive `PreconditionFailed` error. See [`git-and-sync.md`](./git-and-sync.md#git-lfs).
 
 ### Intentional constraints
 

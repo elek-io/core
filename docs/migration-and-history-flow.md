@@ -169,7 +169,9 @@ read({ projectId, id, commitHash })
 Get asset JSON at commit -> JSON.parse -> migrate()
   |
   v
-Get binary asset content at commit -> write to temp path
+Get binary asset content at commit
+  -> if it is an LFS pointer, resolve it to the real bytes from the local store
+  -> write to temp path
   |
   v
 toAsset(projectId, assetFile, commitHash)  -- uses temp path
@@ -177,6 +179,8 @@ toAsset(projectId, assetFile, commitHash)  -- uses temp path
   v
 Return Asset
 ```
+
+Because Assets are tracked with Git LFS, the content at a commit is a pointer rather than the binary. Core resolves it to the real bytes from the local LFS store, which is always complete (see [`git-and-sync.md`](./git-and-sync.md#git-lfs)), so historical reads work offline.
 
 ### Collection and Entry history reads
 

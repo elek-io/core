@@ -81,7 +81,7 @@ The generated `.gitignore` ignores all hidden files (`.*`) except `.gitignore`, 
 
 ## The `lfs` folder
 
-Binary assets are stored under `lfs/` rather than alongside their metadata. The name and the surrounding scaffolding (the folder, an un-ignored `.gitattributes`) anticipate Git LFS, but Core does not currently configure LFS tracking - binaries are committed as ordinary git objects today. This is noted under [`features.md`](./features.md#limitations).
+Binary assets are stored under `lfs/` rather than alongside their metadata, and are tracked with Git LFS. A `.gitattributes` file generated at Project creation tracks `lfs/**`, so each binary is committed as a small pointer while the actual bytes live in the local LFS store (`.git/lfs/objects`). The working-tree file stays the real binary, so reading an Asset returns its content directly. See [`git-and-sync.md`](./git-and-sync.md#git-lfs) for how this works across clone, push and pull.
 
 ## See Also
 

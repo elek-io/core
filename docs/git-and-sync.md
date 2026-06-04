@@ -86,7 +86,7 @@ const { ahead, behind } = await core.projects.getChanges({ id: project.id });
 await core.projects.synchronize({ id: project.id });
 ```
 
-Because `pull.rebase` is set, local commits are replayed on top of the fetched remote commits. Note that `synchronize()` does not pre-check for a remote or for a clean working tree - if there is no `origin`, no upstream, or a conflicting change, the underlying git command fails and surfaces as a `CoreError` of type `Internal` carrying git's own message. Commit or discard working-tree changes before synchronizing.
+Because `pull.rebase` is set, local commits are replayed on top of the fetched remote commits. After pulling, Core fetches the full LFS history so every Asset stays available offline, then pushes (the LFS objects are uploaded first, see [Git LFS](#git-lfs)). Note that `synchronize()` does not pre-check for a remote or for a clean working tree - if there is no `origin`, no upstream, or a conflicting change, the underlying git command fails and surfaces as a `CoreError` of type `Internal` carrying git's own message. Commit or discard working-tree changes before synchronizing.
 
 ## Cloning an existing Project
 
@@ -97,6 +97,22 @@ const project = await core.projects.clone({
   url: 'https://github.com/acme/website-content.git',
 });
 ```
+
+After cloning, Core fetches the whole LFS history into the local store and materializes the working-tree binaries, so all Assets (including older versions) are available offline. See [Git LFS](#git-lfs).
+
+## Git LFS
+
+Asset binaries are tracked with [Git LFS](https://git-lfs.com). It is always on - there is no per-Project toggle. git-lfs ships with dugite, so there is no extra dependency to install.
+
+**What gets configured.** At `create()` Core writes a `.gitattributes` that tracks `lfs/**`, then runs `git lfs install --local` so the clean filter turns every binary added under `lfs/` into a small pointer. The pointer is committed to git history, the actual bytes go to the local LFS store (`.git/lfs/objects`). The working-tree file stays the real binary, so reading an Asset returns its content directly.
+
+**Offline-first guarantee.** Core keeps every LFS object for the whole history present locally, so reading any Asset (current or historical) never needs the network:
+
+- Locally created Projects already have their objects (the clean filter writes them on commit).
+- On `clone()`, Core runs `git lfs fetch --all` then `git lfs checkout` to pull every object across all refs and materialize the working tree.
+- On `synchronize()`, Core runs `git lfs fetch --all` after the pull to complete any newly pulled history.
+
+**Pushing.** `push()` (used by `synchronize()`) uploads the LFS objects in an explicit `git lfs push` step first, then pushes the refs. If the remote does not support Git LFS, has it disabled, or its LFS endpoint is unreachable, the upload fails and Core throws a `CoreError` of type `PreconditionFailed` naming the remote. Core tells this apart from a plain network or auth outage by probing the remote with `git ls-remote` - if git transport works but the LFS upload does not, it is an LFS endpoint problem. Choose a Git provider with LFS enabled.
 
 ## Deleting safely
 
@@ -122,12 +138,12 @@ This is how `core.releases` and the Project upgrade flow ([`migration-and-histor
 
 ## Errors during git operations
 
-| Error type                 | When                                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------------------- |
-| `Unauthorized` (401)       | A commit (or `init` / `clone` config) is attempted with no User set.                        |
-| `PreconditionFailed` (412) | `getChanges()` or a guarded `delete()` runs without a remote `origin`.                      |
-| `Conflict` (409)           | `clone()` targets an already-present Project, or a guarded `delete()` has unpushed commits. |
-| `Internal` (500)           | The underlying git command exits non-zero (no upstream, merge conflict, network, ...).      |
+| Error type                 | When                                                                                                                                |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Unauthorized` (401)       | A commit (or `init` / `clone` config) is attempted with no User set.                                                                |
+| `PreconditionFailed` (412) | `getChanges()` or a guarded `delete()` runs without a remote `origin`, or a push fails because the remote does not support Git LFS. |
+| `Conflict` (409)           | `clone()` targets an already-present Project, or a guarded `delete()` has unpushed commits.                                         |
+| `Internal` (500)           | The underlying git command exits non-zero (no upstream, merge conflict, network, ...).                                              |
 
 See [`error-handling.md`](./error-handling.md) for the full error model.
 

@@ -8,7 +8,7 @@ For how Assets are referenced from Entries, see [`fields.md`](./fields.md#relati
 
 Every Asset is stored as:
 
-- the **binary** at `lfs/{assetId}.{extension}`, and
+- the **binary** at `lfs/{assetId}.{extension}` (tracked with Git LFS, see [`git-and-sync.md`](./git-and-sync.md#git-lfs)), and
 - a **metadata file** at `assets/{assetId}.json`.
 
 The metadata file (`AssetFile`) carries:

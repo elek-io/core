@@ -123,6 +123,7 @@ export class ProjectService
           await Fs.ensureDir(projectPath);
           await this.createFolderStructure(projectPath);
           await this.createGitignore(projectPath);
+          await this.createGitattributes(projectPath);
           await this.gitService.init(projectPath, {
             initialBranch: projectBranchSchema.enum.production,
           });
@@ -533,7 +534,12 @@ export class ProjectService
       props,
       async () => {
         const projectPath = pathTo.project(props.id);
+        // `pull` already smudges the current branch's LFS files into the working
+        // tree. `fetchAll` (not `git lfs pull`) then tops up the local store with
+        // every OTHER ref's objects, so switching branches works offline. `git lfs
+        // pull` would re-checkout the current ref and is scoped to it only.
         await this.gitService.pull(projectPath);
+        await this.gitService.lfs.fetchAll(projectPath);
         await this.gitService.push(projectPath);
       }
     );
@@ -719,6 +725,23 @@ export class ProjectService
       'components/index.json',
     ];
     await Fs.writeFile(Path.join(path, '.gitignore'), lines.join(Os.EOL));
+  }
+
+  /**
+   * Writes the Projects .gitattributes file to disk
+   *
+   * Tracks every binary Asset under `lfs/` with Git LFS so they are stored as
+   * pointers in history while the bytes are offloaded. The `.gitkeep`
+   * placeholder is kept out of LFS (last matching pattern wins).
+   *
+   * @see https://git-lfs.com
+   */
+  private async createGitattributes(path: string): Promise<void> {
+    const lines = [
+      'lfs/** filter=lfs diff=lfs merge=lfs -text',
+      'lfs/.gitkeep -filter -diff -merge text',
+    ];
+    await Fs.writeFile(Path.join(path, '.gitattributes'), lines.join(Os.EOL));
   }
 
   private async upgradeObjectFile(

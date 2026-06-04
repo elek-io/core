@@ -138,12 +138,26 @@ export class AssetService extends AbstractEntityService {
           props.commitHash
         );
         const assetFile = this.migrate(JSON.parse(content));
-        const blob = await this.gitService.getFileContentAtCommit(
+        const assetPath = pathTo.asset(
+          props.projectId,
+          props.id,
+          assetFile.extension
+        );
+        let blob = await this.gitService.getFileContentAtCommit(
           pathTo.project(props.projectId),
-          pathTo.asset(props.projectId, props.id, assetFile.extension),
+          assetPath,
           props.commitHash,
           'binary'
         );
+        // LFS-tracked binaries are stored as pointers, so `getFileContentAtCommit` (`git show`) returns the
+        // pointer text. Resolve it to the real bytes from the local LFS store.
+        if (this.gitService.lfs.isPointer(blob)) {
+          blob = await this.gitService.lfs.smudge(
+            pathTo.project(props.projectId),
+            blob,
+            assetPath
+          );
+        }
         await Fs.writeFile(
           pathTo.tmpAsset(assetFile.id, props.commitHash, assetFile.extension),
           blob,

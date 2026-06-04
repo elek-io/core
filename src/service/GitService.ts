@@ -95,6 +95,7 @@ export class GitService {
 
     await this.git(path, args);
     await this.setLocalConfig(path);
+    await this.lfs.install(path);
   }
 
   /**
@@ -134,6 +135,17 @@ export class GitService {
 
     await this.git('', [...args, url, path]);
     await this.setLocalConfig(path);
+
+    // A bare clone has no working tree, so LFS materialization does not apply
+    // (and would error). A bare repository is a remote, not a working Project.
+    if (options?.bare !== true) {
+      // `git clone` only fetches LFS objects for the checked-out ref (if any).
+      // Install LFS, then fetch the whole history into the local store and
+      // materialize the working tree, so all Assets are available offline.
+      await this.lfs.install(path);
+      await this.lfs.fetchAll(path);
+      await this.lfs.checkout(path);
+    }
   }
 
   /**
@@ -292,6 +304,26 @@ export class GitService {
       return remotes.includes('origin');
     },
     /**
+     * Returns true if the `origin` remote is reachable, otherwise false
+     *
+     * Uses plain `git ls-remote` (git ref advertisement, no Git LFS involved),
+     * so it succeeds against any reachable repository, even an empty one. Used
+     * to tell a down or unauthorized host apart from a reachable host whose
+     * Git LFS endpoint is broken or absent.
+     *
+     * @see https://git-scm.com/docs/git-ls-remote
+     *
+     * @param path  Path to the repository
+     */
+    isOriginReachable: async (path: string): Promise<boolean> => {
+      try {
+        await this.git(path, ['ls-remote', '--quiet', 'origin']);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    /**
      * Adds the `origin` remote with given URL
      *
      * Throws if `origin` remote is added already.
@@ -331,6 +363,153 @@ export class GitService {
     setOriginUrl: async (path: string, url: string): Promise<void> => {
       const args = ['remote', 'set-url', 'origin', url.trim()];
       await this.git(path, args);
+    },
+  };
+
+  /**
+   * Git LFS (Large File Storage) functionality
+   *
+   * Asset binaries live in the `lfs/` folder and are tracked with Git LFS so
+   * they are stored as pointers in history while the bytes are offloaded.
+   * git-lfs ships with dugite, so no external binary is required.
+   *
+   * @see https://git-lfs.com
+   */
+  public lfs = {
+    /**
+     * Installs Git LFS for the given repository
+     *
+     * Configures the clean/smudge filter in the local git config and installs
+     * the pre-push hook. Must run before any `lfs/` file is added so it gets
+     * cleaned to a pointer automatically.
+     *
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-install.adoc
+     *
+     * @param path  Path to the repository
+     */
+    install: async (path: string): Promise<void> => {
+      await this.git(path, ['lfs', 'install', '--local']);
+    },
+    /**
+     * Downloads every LFS object across all refs into the local store
+     *
+     * This keeps the whole history available offline. No-op for repositories
+     * without LFS objects, so it is safe to call unconditionally.
+     *
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-fetch.adoc
+     *
+     * @param path  Path to the repository
+     */
+    fetchAll: async (path: string): Promise<void> => {
+      await this.git(path, ['lfs', 'fetch', '--all']);
+    },
+    /**
+     * Materializes (smudges) working-tree files from the local LFS store
+     *
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-checkout.adoc
+     *
+     * @param path  Path to the repository
+     */
+    checkout: async (path: string): Promise<void> => {
+      await this.git(path, ['lfs', 'checkout']);
+    },
+    /**
+     * Returns true if given content is a Git LFS pointer
+     *
+     * LFS pointers always start with this version line. Used to decide whether
+     * a blob read from history needs to be resolved to its real bytes via
+     * `smudge`.
+     *
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/spec.md
+     *
+     * @param content  The content to check
+     */
+    isPointer: (content: string): boolean => {
+      return content.startsWith('version https://git-lfs.github.com/spec/v1');
+    },
+    /**
+     * Converts an LFS pointer into the real file content
+     *
+     * Reads a pointer on stdin and writes the bytes to stdout. With the
+     * fetch-all guarantee the object is always present locally, so this does
+     * not reach the network. Used to resolve a binary asset read from history.
+     *
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-smudge.adoc
+     *
+     * @param path      Path to the repository
+     * @param pointer   The LFS pointer content to resolve
+     * @param filePath  Path of the file the pointer belongs to (used for the progress bar)
+     */
+    smudge: async (
+      path: string,
+      pointer: string,
+      filePath: string
+    ): Promise<string> => {
+      const relativePathFromRepositoryRoot = filePath.replace(
+        `${path}${Path.sep}`,
+        ''
+      );
+      const normalizedPath = relativePathFromRepositoryRoot
+        .split('\\')
+        .join('/');
+      const setEncoding: (process: ChildProcess) => void = (cb) => {
+        if (cb.stdout) {
+          cb.stdout.setEncoding('binary');
+        }
+      };
+
+      const result = await this.git(
+        path,
+        ['lfs', 'smudge', '--', normalizedPath],
+        {
+          stdin: pointer,
+          processCallback: setEncoding,
+        }
+      );
+      return result.stdout;
+    },
+    /**
+     * Uploads the LFS objects to the `origin` remote
+     *
+     * Run before the ref push so an upload failure is attributable. If the
+     * remote does not support Git LFS, has it disabled, or its LFS endpoint is
+     * unreachable, throws a descriptive `PreconditionFailed`. A genuine host or
+     * auth outage - where plain git transport also fails - is surfaced
+     * unchanged.
+     *
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-push.adoc
+     *
+     * @param path    Path to the repository
+     * @param options Options specific to the push operation
+     */
+    push: async (
+      path: string,
+      options?: Partial<{ all: boolean }>
+    ): Promise<void> => {
+      const branch = await this.branches.current(path); // '' in detached HEAD
+
+      // Synopsis: `git lfs push [options] <remote> [<ref>...]` - so `--all` is
+      // an option and must precede the remote; the branch form is positional.
+      const args =
+        options?.all === true || branch === ''
+          ? ['lfs', 'push', '--all', 'origin']
+          : ['lfs', 'push', 'origin', branch];
+
+      try {
+        await this.git(path, args);
+      } catch (error) {
+        // git-lfs emits Go HTTP errors that git's own error parsing does not
+        // recognize. Tell a down or unauthorized host apart from a reachable
+        // host with a broken LFS endpoint with a plain git reachability probe.
+        if ((await this.remotes.isOriginReachable(path)) === false) {
+          throw error; // host, repository or auth problem for git itself
+        }
+        const url = await this.remotes.getOriginUrl(path).catch(() => null);
+        throw CoreError.preconditionFailed(
+          `Git LFS upload to the remote${url ? ` "${url}"` : ''} failed. The remote does not support Git LFS, has it disabled, or its LFS endpoint is unreachable. elek.io stores Asset binaries with Git LFS, please use a Git provider with LFS enabled.`,
+          error
+        );
+      }
     },
   };
 
@@ -401,15 +580,26 @@ export class GitService {
   /**
    * Update remote refs along with associated objects to remote `origin`
    *
+   * The LFS objects are uploaded first in an explicit `git lfs push`, so that
+   * an upload failure is attributable and can be turned into a descriptive
+   * error. The ordinary ref push then runs with `--no-verify` to skip the
+   * now-redundant pre-push hook.
+   *
    * @see https://git-scm.com/docs/git-push
    *
-   * @param path Path to the repository
+   * @param path    Path to the repository
+   * @param options Options specific to the push operation
    */
   public async push(
     path: string,
     options?: Partial<{ all: boolean; force: boolean }>
   ): Promise<void> {
-    let args = ['push', 'origin'];
+    // 1. Upload the LFS objects first so an upload failure is attributable.
+    await this.lfs.push(path, { all: options?.all === true });
+
+    // 2. Push the refs. The objects are already uploaded, so skip the pre-push
+    // hook with `--no-verify` to avoid a redundant LFS verification round-trip.
+    let args = ['push', 'origin', '--no-verify'];
 
     if (options?.all === true) {
       args = [...args, '--all'];
