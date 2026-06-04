@@ -90,10 +90,10 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **No slug / UID field type** - slugs are plain `text` fields you keep correct by hand (and, per above, `isUnique` does not guard them).
 - **No conditional fields** - a field's visibility cannot depend on another field's value.
 - **`synchronize()` has no conflict handling** - it pulls then pushes with no guard for uncommitted changes. A conflicting rebase surfaces as a generic `Internal` error and can leave the repository mid-rebase.
-- **Git LFS requires an LFS-capable remote** - asset binaries are tracked with Git LFS, so the remote you push to must support it. A remote without LFS (for example a self-hosted server with it disabled) fails the push with a descriptive `PreconditionFailed` error. See [`git-and-sync.md`](./git-and-sync.md#git-lfs).
 
 ### Intentional constraints
 
+- **Git LFS requires an LFS-capable remote** - Asset binaries are tracked with Git LFS, so the remote you push to must support it. A remote without LFS (for example a self-hosted server with it disabled) fails the push with a descriptive `PreconditionFailed` error. See [`git-and-sync.md`](./git-and-sync.md#git-lfs).
 - **One-way references only** - no many-to-many, back-references, or reverse / virtual joins. The inverse of a reference is not maintained.
 - **No computed or virtual fields** - field values are static, with no derive-from-other-fields mechanism.
 - **Limited specialized field types** - no arbitrary JSON, color picker, geospatial, code-editor, or password / hash field types.
