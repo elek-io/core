@@ -100,6 +100,11 @@ export class CollectionService
 
   /**
    * Creates a new Collection
+   *
+   * Core generates the Collection's `id`, but field-definition `id`s are
+   * caller-supplied (pass a UUID per field definition, for example via
+   * `uuid()`). They become the stable identity used to match field definitions
+   * on later updates, see `update`.
    */
   public async create<T extends Collection = Collection>(
     props: CreateCollectionProps
@@ -241,6 +246,14 @@ export class CollectionService
 
   /**
    * Updates given Collection
+   *
+   * Field definitions are matched by `id`. Send back the `id` of every field
+   * definition you want to keep so Core matches it to the existing one and
+   * preserves the entry data stored under it, even across slug renames or type
+   * changes. A field definition with no `id` (or a changed `id`) is treated as
+   * new, so the old field and the entry data keyed to it is removed. Ids are
+   * caller-supplied (Core does not generate them), so always round-trip the
+   * ids you read.
    *
    * Handles fieldDefinition change cascade:
    * - Slug renames, field additions (with defaults), field removals, and

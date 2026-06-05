@@ -86,7 +86,6 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **No full-text search** - a `searchProjectSchema` is defined, but there is no `search()` service method or API route behind it.
 - **No cloud authentication** - the `cloud` user type exists, but `UserService.set()` does not actually log a cloud user in (the login branch is a stub).
 - **Delete does not protect Assets or Entries** - deleting a referenced Component is blocked, but deleting a referenced Asset or Entry is not, so dangling references can result. Renderers should handle missing references gracefully.
-- **Field-definition `id`s are caller-supplied** - Core does not generate the UUID for a field definition. You pass it in (for example via `uuid()`).
 - **No slug / UID field type** - slugs are plain `text` fields you keep correct by hand (and, per above, `isUnique` does not guard them).
 - **No conditional fields** - a field's visibility cannot depend on another field's value.
 - **`synchronize()` has no conflict handling** - it pulls then pushes with no guard for uncommitted changes. A conflicting rebase surfaces as a generic `Internal` error and can leave the repository mid-rebase.
@@ -94,6 +93,7 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 ### Intentional constraints
 
 - **Git LFS requires an LFS-capable remote** - Asset binaries are tracked with Git LFS, so the remote you push to must support it. A remote without LFS (for example a self-hosted server with it disabled) fails the push with a descriptive `PreconditionFailed` error. See [`git-and-sync.md`](./git-and-sync.md#git-lfs).
+- **Field-definition `id`s are caller-supplied** - Core generates ids for entities (Collections, Components, Entries, Assets) but deliberately not for the field definitions inside them. You pass a UUID per field definition (for example via `uuid()`) on both create and update. Generating them in Core was considered and rejected: it would require maintaining parallel id-less schema variants and only partly helps, since update must still identify existing field definitions by id, so the convenience does not justify the added machinery. The practical contract on update is that field definitions are matched by `id`: send back the `id` of every field definition you want to keep and Core preserves the entry data stored under it across slug renames or type changes. A field definition whose `id` is missing or changed is treated as new, so the old one, and the entry data keyed to it, is removed. Always round-trip the ids you read.
 - **One-way references only** - no many-to-many, back-references, or reverse / virtual joins. The inverse of a reference is not maintained.
 - **No computed or virtual fields** - field values are static, with no derive-from-other-fields mechanism.
 - **Limited specialized field types** - no arbitrary JSON, color picker, geospatial, code-editor, or password / hash field types.
