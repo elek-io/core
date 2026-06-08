@@ -2056,3 +2056,82 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
     });
   });
 });
+
+describe('slug Field definition value schema', () => {
+  const baseSlugFieldDef = {
+    id: uuid(),
+    slug: 'slug',
+    valueType: 'string' as const,
+    fieldType: 'slug' as const,
+    label: { en: 'Slug' },
+    description: null,
+    isRequired: true,
+    isDisabled: false,
+    isUnique: true as const,
+    inputWidth: '12' as const,
+    defaultValue: null,
+    separator: '-',
+    lowercase: true,
+    decamelize: true,
+    ofFieldDefinitions: [],
+  };
+
+  it('accepts a canonical slug value', () => {
+    const schema = getValueSchemaFromFieldDefinition(baseSlugFieldDef, ['en']);
+    expect(
+      schema.safeParse({
+        objectType: 'value',
+        valueType: 'string',
+        content: { en: 'foo-bar' },
+      }).success
+    ).toBe(true);
+  });
+
+  it('rejects a non-canonical slug value', () => {
+    const schema = getValueSchemaFromFieldDefinition(baseSlugFieldDef, ['en']);
+    for (const value of ['Foo Bar', 'foo bar', 'foo_bar', 'FOO']) {
+      expect(
+        schema.safeParse({
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: value },
+        }).success
+      ).toBe(false);
+    }
+  });
+
+  it('honours a custom separator', () => {
+    const schema = getValueSchemaFromFieldDefinition(
+      { ...baseSlugFieldDef, separator: '_' },
+      ['en']
+    );
+    expect(
+      schema.safeParse({
+        objectType: 'value',
+        valueType: 'string',
+        content: { en: 'foo_bar' },
+      }).success
+    ).toBe(true);
+    expect(
+      schema.safeParse({
+        objectType: 'value',
+        valueType: 'string',
+        content: { en: 'foo-bar' },
+      }).success
+    ).toBe(false);
+  });
+
+  it('honours lowercase: false (case-sensitive slugs)', () => {
+    const schema = getValueSchemaFromFieldDefinition(
+      { ...baseSlugFieldDef, lowercase: false },
+      ['en']
+    );
+    expect(
+      schema.safeParse({
+        objectType: 'value',
+        valueType: 'string',
+        content: { en: 'Foo-Bar' },
+      }).success
+    ).toBe(true);
+  });
+});

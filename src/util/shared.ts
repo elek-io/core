@@ -35,13 +35,29 @@ export function datetime(value?: number | string | Date) {
 }
 
 /**
- * Returns the slug of given string
+ * Options controlling how a string is slugified.
+ * A subset of @sindresorhus/slugify's options, defaulting to Core's
+ * conventional slug format.
  */
-export function slug(string: string): string {
+export interface SlugOptions {
+  separator?: string;
+  lowercase?: boolean;
+  decamelize?: boolean;
+}
+
+/**
+ * Returns the slug of given string.
+ *
+ * Without options the conventional format is used (separator "-",
+ * lowercase, decamelize). A `slug` field passes its configured options so
+ * its values can be validated as already-canonical via idempotency.
+ */
+export function slug(string: string, options?: SlugOptions): string {
   return slugify(string, {
-    separator: '-',
-    lowercase: true,
-    decamelize: true,
+    // An empty separator is valid (no separator), so we keep it via ??
+    separator: options?.separator ?? '-',
+    lowercase: options?.lowercase ?? true,
+    decamelize: options?.decamelize ?? true,
   });
 }
 

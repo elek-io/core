@@ -201,7 +201,7 @@ export async function createCollection(projectId: string) {
         inputWidth: '12',
         isDisabled: false,
         isRequired: true,
-        isUnique: true,
+        isUnique: false,
         min: null,
         defaultValue: null,
         max: 70,

@@ -6,6 +6,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
+import { slug } from '../util/shared.js';
 import { slugSchema, uuidSchema, type Uuid } from './baseSchema.js';
 import type { ProjectLanguages } from './projectSchema.js';
 import type {
@@ -80,6 +81,28 @@ function getNumberValueContentSchemaFromFieldDefinition(
 function getStringValueContentSchemaFromFieldDefinition(
   fieldDefinition: StringFieldDefinition
 ) {
+  // Slug values are validated as already-canonical via idempotency, adapting
+  // to the field's configured separator/lowercase/decamelize. Has no min/max.
+  if (fieldDefinition.fieldType === fieldTypeSchema.enum.slug) {
+    const slugSchemaForField = z
+      .string()
+      .trim()
+      .min(1)
+      .refine(
+        (value) =>
+          value ===
+          slug(value, {
+            separator: fieldDefinition.separator,
+            lowercase: fieldDefinition.lowercase,
+            decamelize: fieldDefinition.decamelize,
+          }),
+        { message: 'Value must be a canonical slug for this field' }
+      );
+    return fieldDefinition.isRequired === false
+      ? slugSchemaForField.nullable()
+      : slugSchemaForField;
+  }
+
   let schema = null;
 
   switch (fieldDefinition.fieldType) {

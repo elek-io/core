@@ -133,3 +133,20 @@ export interface AssetMimeMismatchIssue extends EntryReferenceIssueLocation {
 export type EntryReferenceIssue =
   | EntryReferenceNotFoundIssue
   | AssetMimeMismatchIssue;
+
+/**
+ * A value written to a unique field (or slug field) collides with the same
+ * value already held by another Entry in the same Collection, for the same
+ * language. Collected and reported together on Entry create/update.
+ */
+export interface UniqueValueConflict {
+  collectionId: Uuid;
+  fieldDefinitionId: Uuid;
+  fieldSlug: string;
+  language: SupportedLanguage;
+  value: string;
+  /**
+   * The id of the Entry that already holds this value.
+   */
+  conflictingEntryId: Uuid;
+}

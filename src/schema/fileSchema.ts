@@ -37,9 +37,10 @@ export const fileReferenceSchema = z.object({
 export type FileReference = z.infer<typeof fileReferenceSchema>;
 
 /**
- * Schema for entity index files (e.g. collections/index.json, components/index.json).
+ * Schema for entity slug index files
+ * (e.g. collections/slug.index.json, components/slug.index.json).
  * Maps entity UUIDs to their slug values.
  * This is a local performance cache, not git-tracked.
  */
-export const indexFileSchema = z.record(uuidSchema, z.string());
-export type IndexFile = z.infer<typeof indexFileSchema>;
+export const slugIndexFileSchema = z.record(uuidSchema, z.string());
+export type SlugIndexFile = z.infer<typeof slugIndexFileSchema>;

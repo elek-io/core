@@ -1,6 +1,6 @@
 export * from './AbstractService.js';
 export * from './AbstractEntityService.js';
-export * from './AbstractIndexedEntityService.js';
+export * from './AbstractSlugIndexedEntityService.js';
 export * from './AssetService.js';
 export * from './CollectionService.js';
 export * from './ComponentService.js';

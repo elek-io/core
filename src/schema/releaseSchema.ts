@@ -23,6 +23,8 @@ export const fieldChangeTypeSchema = z.enum([
   'inputWidthChanged',
   'isDisabledChanged',
   'minMaxLoosened',
+  'slugFormatChanged',
+  'ofFieldDefinitionsChanged',
 ]);
 export type FieldChangeType = z.infer<typeof fieldChangeTypeSchema>;
 

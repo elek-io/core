@@ -9,6 +9,7 @@ import { valueSchema } from './valueSchema.js';
 import {
   fieldDefinitionSchema,
   fieldDefinitionSlugUniquenessSuperRefinement,
+  forbidUniqueAndSlugInComponentSuperRefinement,
 } from './fieldSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 
@@ -19,7 +20,8 @@ export const componentFileSchema = baseFileSchema.extend({
   description: partialTranslatableStringSchema.nullable(),
   fieldDefinitions: z
     .array(fieldDefinitionSchema)
-    .superRefine(fieldDefinitionSlugUniquenessSuperRefinement),
+    .superRefine(fieldDefinitionSlugUniquenessSuperRefinement)
+    .superRefine(forbidUniqueAndSlugInComponentSuperRefinement),
 });
 export type ComponentFile = z.infer<typeof componentFileSchema>;
 

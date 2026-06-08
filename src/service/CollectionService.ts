@@ -32,7 +32,10 @@ import {
   type GitCommit,
   collectionHistorySchema,
   flattenFieldDefinitions,
+  type Uuid,
+  type Value,
 } from '../schema/index.js';
+import { detectUniqueValueCollisions } from '../util/uniqueFieldValues.js';
 import { diffFieldDefinitions } from '../util/fieldDefinitionDiff.js';
 import {
   transformEntryValues,
@@ -42,7 +45,7 @@ import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefi
 import { applyMigrations, collectionMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
-import { AbstractIndexedEntityService } from './AbstractIndexedEntityService.js';
+import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -51,7 +54,7 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for Collection files on disk
  */
 export class CollectionService
-  extends AbstractIndexedEntityService<CollectionFile>
+  extends AbstractSlugIndexedEntityService<CollectionFile>
   implements CrudServiceWithListCount<Collection>
 {
   private coreVersion: string;
@@ -131,7 +134,7 @@ export class CollectionService
 
         const slugPlural = slug(validatedProps.slug.plural);
 
-        const index = await this.getIndex(validatedProps.projectId);
+        const index = await this.getSlugIndex(validatedProps.projectId);
 
         // Enforce collection slug uniqueness via index
         if (Object.values(index).includes(slugPlural)) {
@@ -170,7 +173,7 @@ export class CollectionService
 
         // Update the index (not git-tracked, self-heals on failure)
         index[id] = slugPlural;
-        await this.safeWriteIndex(validatedProps.projectId, index);
+        await this.safeWriteSlugIndex(validatedProps.projectId, index);
         return this.toCollection(collectionFile) as T;
       }
     );
@@ -312,7 +315,7 @@ export class CollectionService
 
         // If collection slug.plural changed, enforce uniqueness before mutating
         if (prevCollectionFile.slug.plural !== newSlugPlural) {
-          const index = await this.getIndex(validatedProps.projectId);
+          const index = await this.getSlugIndex(validatedProps.projectId);
           const existingUuid = Object.entries(index).find(
             ([, slugPlural]) => slugPlural === newSlugPlural
           );
@@ -334,17 +337,21 @@ export class CollectionService
             const exists = await Fs.pathExists(entriesPath);
 
             if (exists) {
-              const dirEntries = await Fs.readdir(entriesPath);
-              const entryFiles = dirEntries.filter(
-                (dirEntry) =>
-                  dirEntry.endsWith('.json') && dirEntry !== 'collection.json'
+              const entryReferences = await this.listReferences(
+                'entry',
+                validatedProps.projectId,
+                validatedProps.id
               );
 
-              if (entryFiles.length > 0) {
+              if (entryReferences.length > 0) {
                 const allIssues: EntryIssue[] = [];
+                const entriesFinalValues: Array<{
+                  entryId: Uuid;
+                  values: Record<string, Value>;
+                }> = [];
 
-                for (const entryFileName of entryFiles) {
-                  const entryId = entryFileName.replace('.json', '');
+                for (const entryReference of entryReferences) {
+                  const entryId = entryReference.id;
                   const entryFilePath = pathTo.entryFile(
                     validatedProps.projectId,
                     validatedProps.id,
@@ -368,73 +375,91 @@ export class CollectionService
 
                   allIssues.push(...result.issues);
 
-                  if (result.changed || result.issues.length > 0) {
-                    // Apply resolutions if provided
-                    const finalValues = result.values;
-                    if (resolutions && result.issues.length > 0) {
-                      const entryResolutions = resolutions[entryFile.id];
-                      if (entryResolutions) {
-                        // Validate and apply each resolution
-                        for (const [fieldSlug, resolvedValue] of Object.entries(
-                          entryResolutions
-                        )) {
-                          const fieldDef = newFieldDefs.find(
-                            (fieldDef) => fieldDef.slug === fieldSlug
+                  // Apply any provided resolutions. Not gated on transform
+                  // issues, since a unique_collision has no transform issue.
+                  const finalValues = result.values;
+                  const entryResolutions = resolutions?.[entryFile.id];
+                  if (entryResolutions) {
+                    for (const [fieldSlug, resolvedValue] of Object.entries(
+                      entryResolutions
+                    )) {
+                      const fieldDef = newFieldDefs.find(
+                        (fieldDef) => fieldDef.slug === fieldSlug
+                      );
+                      if (fieldDef) {
+                        const schema = getValueSchemaFromFieldDefinition(
+                          fieldDef,
+                          languages
+                        );
+                        const parseResult = schema.safeParse(resolvedValue);
+                        if (!parseResult.success) {
+                          throw CoreError.badRequest(
+                            'Resolution validation failed',
+                            parseResult.error
                           );
-                          if (fieldDef) {
-                            const schema = getValueSchemaFromFieldDefinition(
-                              fieldDef,
-                              languages
-                            );
-                            const parseResult = schema.safeParse(resolvedValue);
-                            if (!parseResult.success) {
-                              throw CoreError.badRequest(
-                                'Resolution validation failed',
-                                parseResult.error
-                              );
-                            }
-                          }
-                          finalValues[fieldSlug] = resolvedValue;
                         }
                       }
+                      finalValues[fieldSlug] = resolvedValue;
                     }
+                  }
 
-                    if (
-                      isDeepStrictEqual(entryFile.values, finalValues) === false
-                    ) {
-                      const updatedEntryFile = {
-                        ...entryFile,
-                        values: finalValues,
-                      };
-                      await this.jsonFileService.update(
-                        updatedEntryFile,
-                        entryFilePath,
-                        entryFileSchema
-                      );
-                      filesToGitAdd.push(entryFilePath);
-                    }
+                  entriesFinalValues.push({
+                    entryId: entryFile.id,
+                    values: finalValues,
+                  });
+
+                  if (
+                    isDeepStrictEqual(entryFile.values, finalValues) === false
+                  ) {
+                    const updatedEntryFile = {
+                      ...entryFile,
+                      values: finalValues,
+                    };
+                    await this.jsonFileService.update(
+                      updatedEntryFile,
+                      entryFilePath,
+                      entryFileSchema
+                    );
+                    filesToGitAdd.push(entryFilePath);
                   }
                 }
 
-                // After processing all entries, check for unresolved issues
-                if (allIssues.length > 0) {
-                  // Remove issues that have matching resolutions
-                  const unresolvedIssues = resolutions
-                    ? allIssues.filter((issue) => {
-                        const entryResolutions = resolutions[issue.entryId];
-                        return !(
-                          entryResolutions &&
-                          issue.fieldSlug in entryResolutions
-                        );
-                      })
-                    : allIssues;
+                // Transform issues the caller did not resolve
+                const unresolvedIssues = resolutions
+                  ? allIssues.filter((issue) => {
+                      const entryResolutions = resolutions[issue.entryId];
+                      return !(
+                        entryResolutions && issue.fieldSlug in entryResolutions
+                      );
+                    })
+                  : allIssues;
 
-                  if (unresolvedIssues.length > 0) {
-                    throw CoreError.conflict(
-                      'Field definition changes require entry resolutions',
-                      unresolvedIssues
-                    );
-                  }
+                // Cross-entry uniqueness collisions, on the post-resolution
+                // values. Keep the first holder, flag the rest as resolvable.
+                const collisionIssues: EntryIssue[] =
+                  detectUniqueValueCollisions(
+                    newFieldDefs,
+                    entriesFinalValues
+                  ).flatMap((collision) =>
+                    collision.entryIds.slice(1).map((entryId) => ({
+                      entryId,
+                      collectionId: validatedProps.id,
+                      fieldDefinitionId: collision.fieldDefinitionId,
+                      fieldSlug: collision.fieldSlug,
+                      issue: 'unique_collision' as const,
+                      transformedValues: {},
+                    }))
+                  );
+
+                const blockingIssues = [
+                  ...unresolvedIssues,
+                  ...collisionIssues,
+                ];
+                if (blockingIssues.length > 0) {
+                  throw CoreError.conflict(
+                    'Field definition changes or uniqueness collisions require entry resolutions',
+                    blockingIssues
+                  );
                 }
               }
             }
@@ -457,9 +482,9 @@ export class CollectionService
 
         // Update index after successful commit
         if (prevCollectionFile.slug.plural !== newSlugPlural) {
-          const index = await this.getIndex(validatedProps.projectId);
+          const index = await this.getSlugIndex(validatedProps.projectId);
           index[validatedProps.id] = newSlugPlural;
-          await this.safeWriteIndex(validatedProps.projectId, index);
+          await this.safeWriteSlugIndex(validatedProps.projectId, index);
         }
 
         return this.toCollection(collectionFile) as T;
@@ -494,9 +519,9 @@ export class CollectionService
         });
 
         // Remove from index (not git-tracked, self-heals on failure)
-        const index = await this.getIndex(validatedProps.projectId);
+        const index = await this.getSlugIndex(validatedProps.projectId);
         delete index[validatedProps.id];
-        await this.safeWriteIndex(validatedProps.projectId, index);
+        await this.safeWriteSlugIndex(validatedProps.projectId, index);
       }
     );
   }

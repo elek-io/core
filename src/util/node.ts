@@ -52,7 +52,7 @@ export const pathTo = {
     return Path.join(pathTo.component(projectId, id), 'component.json');
   },
   componentIndex: (projectId: string) => {
-    return Path.join(pathTo.components(projectId), 'index.json');
+    return Path.join(pathTo.components(projectId), 'slug.index.json');
   },
 
   collections: (projectId: string): string => {
@@ -68,7 +68,7 @@ export const pathTo = {
     return Path.join(pathTo.collection(projectId, id), 'collection.json');
   },
   collectionIndex: (projectId: string) => {
-    return Path.join(pathTo.collections(projectId), 'index.json');
+    return Path.join(pathTo.collections(projectId), 'slug.index.json');
   },
 
   entries: (projectId: string, collectionId: string): string => {

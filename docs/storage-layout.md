@@ -29,12 +29,12 @@ Each Project is a self-contained git repository:
 |-- assets/
 |   |-- {assetId}.json                asset metadata (name, description, extension, mimeType, size)
 |-- collections/
-|   |-- index.json                    UUID -> slug cache (not committed)
+|   |-- slug.index.json               UUID -> slug cache (not committed)
 |   |-- {collectionId}/
 |   |   |-- collection.json           collection metadata: name, slug, icon, field definitions
 |   |   |-- {entryId}.json            an Entry: its values keyed by field slug
 |-- components/
-|   |-- index.json                    UUID -> slug cache (not committed)
+|   |-- slug.index.json               UUID -> slug cache (not committed)
 |   |-- {componentId}/
 |   |   |-- component.json            component metadata: name, slug, field definitions
 |-- lfs/
@@ -73,11 +73,13 @@ The `coreVersion` stamp on each file is what the migration chain reads when upgr
 
 ## Index files
 
-`collections/index.json` and `components/index.json` are UUID-to-slug lookup caches that let Core resolve a slug to an id without scanning every folder. They are **performance caches, not source of truth**: they are listed in the Project's `.gitignore`, never committed, and rebuilt from disk if missing or stale. A failed index write is swallowed and the cache self-heals on next access (see [`error-handling.md`](./error-handling.md#safewriteindex-swallows-errors)).
+`collections/slug.index.json` and `components/slug.index.json` are UUID-to-slug lookup caches that let Core resolve a slug to an id without scanning every folder, and back the uniqueness of Collection and Component slugs. They are **performance caches, not source of truth**: they are listed in the Project's `.gitignore`, never committed, and rebuilt from disk if missing or stale. A failed index write is swallowed and the cache self-heals on next access (see [`error-handling.md`](./error-handling.md#safewriteindex-swallows-errors)).
+
+Note that field-value uniqueness (`isUnique` and the `slug` field type) is **not** backed by an index file. It is enforced by scanning a Collection's Entries on each write (see [`fields.md`](./fields.md#uniqueness)), which keeps it correct for Entries brought in by a pull or merge that never passed through Core's write path.
 
 ## What is and isn't committed
 
-The generated `.gitignore` ignores all hidden files (`.*`) except `.gitignore`, `.gitattributes` and `.gitkeep` files, and additionally ignores the two `index.json` caches. Everything else - `project.json`, every `collection.json` / `component.json`, every Entry, asset metadata, and the binaries under `lfs/` - is committed.
+The generated `.gitignore` ignores all hidden files (`.*`) except `.gitignore`, `.gitattributes` and `.gitkeep` files, and additionally ignores the `slug.index.json` caches. Everything else - `project.json`, every `collection.json` / `component.json`, every Entry, asset metadata, and the binaries under `lfs/` - is committed.
 
 ## The `lfs` folder
 

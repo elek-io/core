@@ -1119,6 +1119,22 @@ export class ReleaseService extends AbstractService {
       }
     }
 
+    if (current.fieldType === 'slug' && production.fieldType === 'slug') {
+      // Changing the slug format re-canonicalises every value, breaking any
+      // consumer relying on the slugs.
+      if (
+        current.separator !== production.separator ||
+        current.lowercase !== production.lowercase ||
+        current.decamelize !== production.decamelize
+      ) {
+        changes.push({
+          ...base,
+          changeType: 'slugFormatChanged',
+          bump: 'major',
+        });
+      }
+    }
+
     // MINOR changes
 
     if (production.isRequired === false && current.isRequired === true) {
@@ -1185,6 +1201,23 @@ export class ReleaseService extends AbstractService {
       changes.push({
         ...base,
         changeType: 'isDisabledChanged',
+        bump: 'patch',
+      });
+    }
+
+    // A slug's source fields are only a soft generation hint, they never change
+    // stored data, so unlike ofCollectionsChanged this is non-breaking.
+    if (
+      current.fieldType === 'slug' &&
+      production.fieldType === 'slug' &&
+      isDeepStrictEqual(
+        [...current.ofFieldDefinitions].sort(),
+        [...production.ofFieldDefinitions].sort()
+      ) === false
+    ) {
+      changes.push({
+        ...base,
+        changeType: 'ofFieldDefinitionsChanged',
         bump: 'patch',
       });
     }

@@ -39,9 +39,14 @@ import {
   type FieldDefinition,
   type ComponentResolver,
   type Value,
+  type UniqueValueConflict,
 } from '../schema/index.js';
 import { applyMigrations, entryMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
+import {
+  detectUniqueValueCollisions,
+  getUniqueFieldDefinitions,
+} from '../util/uniqueFieldValues.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { CollectionService } from './CollectionService.js';
@@ -141,6 +146,21 @@ export class EntryService
           created: datetime(),
           updated: null,
         };
+
+        // Enforce unique field values before writing anything
+        const conflicts = await this.findUniqueValueConflicts(
+          validatedProps.projectId,
+          validatedProps.collectionId,
+          fieldDefinitions,
+          id,
+          validatedProps.values
+        );
+        if (conflicts.length > 0) {
+          throw CoreError.conflict(
+            'Entry contains values that must be unique',
+            conflicts
+          );
+        }
 
         return this.withGitRollback(projectPath, async () => {
           await this.jsonFileService.create(
@@ -264,6 +284,21 @@ export class EntryService
           updated: datetime(),
         };
 
+        // Enforce unique field values, ignoring this Entry's own values
+        const conflicts = await this.findUniqueValueConflicts(
+          validatedProps.projectId,
+          validatedProps.collectionId,
+          fieldDefinitions,
+          validatedProps.id,
+          validatedProps.values
+        );
+        if (conflicts.length > 0) {
+          throw CoreError.conflict(
+            'Entry contains values that must be unique',
+            conflicts
+          );
+        }
+
         return this.withGitRollback(projectPath, async () => {
           await this.jsonFileService.update(
             entryFile,
@@ -381,6 +416,85 @@ export class EntryService
     return {
       ...entryFile,
     };
+  }
+
+  /**
+   * Finds the unique-value conflicts a write of `values` (for `entryId`) would
+   * cause within its Collection. Uniqueness is enforced by scanning the
+   * Collection's Entries on each write rather than via a persisted index, so the
+   * check is always correct for whatever is currently on disk (including Entries
+   * brought in by a pull or merge, which never passed through this service).
+   *
+   * Returns one conflict per (field, language, value) the candidate shares with
+   * another Entry. Empty when the write is allowed.
+   */
+  private async findUniqueValueConflicts(
+    projectId: string,
+    collectionId: string,
+    fieldDefinitions: FieldDefinition[],
+    entryId: string,
+    values: Record<string, Value>
+  ): Promise<UniqueValueConflict[]> {
+    // Nothing to enforce if the Collection has no unique fields
+    if (getUniqueFieldDefinitions(fieldDefinitions).length === 0) {
+      return [];
+    }
+
+    const entries: Array<{ entryId: string; values: Record<string, Value> }> = [
+      { entryId, values },
+    ];
+
+    for (const entryReference of await this.listReferences(
+      'entry',
+      projectId,
+      collectionId
+    )) {
+      const otherId = entryReference.id;
+      if (otherId === entryId) {
+        continue;
+      }
+      const otherEntryPath = pathTo.entryFile(projectId, collectionId, otherId);
+      let otherEntry: EntryFile;
+      try {
+        // Fast path: a current-version file parses directly (and is cached)
+        otherEntry = await this.jsonFileService.read(
+          otherEntryPath,
+          entryFileSchema
+        );
+      } catch {
+        // Older Entries (for example brought in by a pull or merge) may predate
+        // the current schema. Upgrade them through the migration chain so the
+        // scan reads their values instead of throwing on an outdated file.
+        otherEntry = this.migrate(
+          await this.jsonFileService.unsafeRead(otherEntryPath)
+        );
+      }
+      entries.push({ entryId: otherId, values: otherEntry.values });
+    }
+
+    const conflicts: UniqueValueConflict[] = [];
+    for (const collision of detectUniqueValueCollisions(
+      fieldDefinitions,
+      entries
+    )) {
+      if (!collision.entryIds.includes(entryId)) {
+        continue;
+      }
+      const conflictingEntryId = collision.entryIds.find(
+        (id) => id !== entryId
+      );
+      if (conflictingEntryId !== undefined) {
+        conflicts.push({
+          collectionId,
+          fieldDefinitionId: collision.fieldDefinitionId,
+          fieldSlug: collision.fieldSlug,
+          language: collision.language,
+          value: collision.value,
+          conflictingEntryId,
+        });
+      }
+    }
+    return conflicts;
   }
 
   /**

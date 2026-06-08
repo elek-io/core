@@ -721,8 +721,8 @@ export class ProjectService
       '!/**/.gitkeep',
       '',
       '# elek.io related ignores',
-      'collections/index.json',
-      'components/index.json',
+      'collections/slug.index.json',
+      'components/slug.index.json',
     ];
     await Fs.writeFile(Path.join(path, '.gitignore'), lines.join(Os.EOL));
   }

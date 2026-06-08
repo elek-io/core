@@ -3,7 +3,7 @@ import Path from 'node:path';
 import type { z } from '@hono/zod-openapi';
 import { CoreError } from '../util/shared.js';
 import {
-  indexFileSchema,
+  slugIndexFileSchema,
   uuidSchema,
   type ElekIoCoreOptions,
   type ServiceType,
@@ -18,10 +18,10 @@ import type { LogService } from './LogService.js';
  * A service for entities that support UUID-to-slug indexing.
  * Subclasses must implement abstract methods to define entity paths and slug extraction.
  */
-export abstract class AbstractIndexedEntityService<
+export abstract class AbstractSlugIndexedEntityService<
   TFile = unknown,
 > extends AbstractEntityService {
-  private cachedIndex: Map<string, Record<string, string>> = new Map();
+  private cachedSlugIndex: Map<string, Record<string, string>> = new Map();
   private rebuildPromise: Map<string, Promise<Record<string, string>>> =
     new Map();
 
@@ -47,22 +47,24 @@ export abstract class AbstractIndexedEntityService<
   protected abstract entityFileSchema: z.ZodTypeAny;
 
   /**
-   * Returns the cached index or rebuilds it from disk.
+   * Returns the cached slug index or rebuilds it from disk.
    * Deduplicates concurrent rebuild calls for the same project.
    */
-  protected async getIndex(projectId: string): Promise<Record<string, string>> {
-    const cached = this.cachedIndex.get(projectId);
+  protected async getSlugIndex(
+    projectId: string
+  ): Promise<Record<string, string>> {
+    const cached = this.cachedSlugIndex.get(projectId);
     if (cached) return cached;
 
     const pending = this.rebuildPromise.get(projectId);
     if (pending) return pending;
 
-    const promise = this.rebuildIndexInternal(projectId);
+    const promise = this.rebuildSlugIndexInternal(projectId);
     this.rebuildPromise.set(projectId, promise);
 
     try {
       const result = await promise;
-      this.cachedIndex.set(projectId, result);
+      this.cachedSlugIndex.set(projectId, result);
       return result;
     } finally {
       this.rebuildPromise.delete(projectId);
@@ -72,40 +74,43 @@ export abstract class AbstractIndexedEntityService<
   /**
    * Writes the index file to disk and updates the in-memory cache.
    */
-  protected async writeIndex(
+  protected async writeSlugIndex(
     projectId: string,
     index: Record<string, string>
   ): Promise<void> {
-    const indexPath = Path.join(this.entitiesPath(projectId), 'index.json');
-    await this.jsonFileService.update(index, indexPath, indexFileSchema);
-    this.cachedIndex.set(projectId, index);
+    const indexPath = Path.join(
+      this.entitiesPath(projectId),
+      'slug.index.json'
+    );
+    await this.jsonFileService.update(index, indexPath, slugIndexFileSchema);
+    this.cachedSlugIndex.set(projectId, index);
   }
 
   /**
    * Invalidates the cached index for a project, forcing a rebuild on next access.
    */
-  protected invalidateIndex(projectId: string): void {
-    this.cachedIndex.delete(projectId);
+  protected invalidateSlugIndex(projectId: string): void {
+    this.cachedSlugIndex.delete(projectId);
   }
 
   /**
-   * Writes the index file with automatic cache invalidation on failure.
+   * Writes the slug index file with automatic cache invalidation on failure.
    *
    * If the write fails, the in-memory cache is invalidated so the index
    * rebuilds from disk on next access. The error is logged but not re-thrown,
    * since the entity data was already successfully committed to git.
    */
-  protected async safeWriteIndex(
+  protected async safeWriteSlugIndex(
     projectId: string,
     index: Record<string, string>
   ): Promise<void> {
     try {
-      await this.writeIndex(projectId, index);
+      await this.writeSlugIndex(projectId, index);
     } catch (error) {
-      this.invalidateIndex(projectId);
+      this.invalidateSlugIndex(projectId);
       this.logService.warn({
         source: 'core',
-        message: `Failed to write ${this.type} index for project "${projectId}", cache invalidated: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to write ${this.type} slug index for project "${projectId}", cache invalidated: ${error instanceof Error ? error.message : String(error)}`,
       });
     }
   }
@@ -130,7 +135,7 @@ export abstract class AbstractIndexedEntityService<
   }
 
   private async lookupBySlug(projectId: string, slug: string): Promise<string> {
-    const index = await this.getIndex(projectId);
+    const index = await this.getSlugIndex(projectId);
     for (const [uuid, slugValue] of Object.entries(index)) {
       if (slugValue === slug) {
         return uuid;
@@ -138,8 +143,8 @@ export abstract class AbstractIndexedEntityService<
     }
 
     // Rebuild and retry once (handles stale cache)
-    this.cachedIndex.delete(projectId);
-    const freshIndex = await this.getIndex(projectId);
+    this.cachedSlugIndex.delete(projectId);
+    const freshIndex = await this.getSlugIndex(projectId);
     for (const [uuid, slugValue] of Object.entries(freshIndex)) {
       if (slugValue === slug) {
         return uuid;
@@ -152,14 +157,14 @@ export abstract class AbstractIndexedEntityService<
   }
 
   /**
-   * Rebuilds the index by scanning all entity folders on disk.
+   * Rebuilds the slug index by scanning all entity folders on disk.
    */
-  private async rebuildIndexInternal(
+  private async rebuildSlugIndexInternal(
     projectId: string
   ): Promise<Record<string, string>> {
     this.logService.info({
       source: 'core',
-      message: `Rebuilding ${this.type} index for Project "${projectId}"`,
+      message: `Rebuilding ${this.type} slug index for Project "${projectId}"`,
     });
 
     const index: Record<string, string> = {};
@@ -177,17 +182,17 @@ export abstract class AbstractIndexedEntityService<
       } catch (error) {
         this.logService.warn({
           source: 'core',
-          message: `Skipping ${this.type} folder "${folder.name}" during index rebuild: ${error instanceof Error ? error.message : String(error)}`,
+          message: `Skipping ${this.type} folder "${folder.name}" during slug index rebuild: ${error instanceof Error ? error.message : String(error)}`,
         });
       }
     }
 
     try {
-      await this.writeIndex(projectId, index);
+      await this.writeSlugIndex(projectId, index);
     } catch (error) {
       this.logService.warn({
         source: 'core',
-        message: `Failed to write index during rebuild: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to write slug index during rebuild: ${error instanceof Error ? error.message : String(error)}`,
       });
     }
     return index;

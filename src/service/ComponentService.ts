@@ -40,9 +40,9 @@ import { transformComponentValues } from '../util/componentTransform.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
 import type { EntryIssue } from '../util/entryTransform.js';
 import { applyMigrations, componentMigrations } from './migrations/index.js';
-import { folders, pathTo } from '../util/node.js';
+import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
-import { AbstractIndexedEntityService } from './AbstractIndexedEntityService.js';
+import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -51,7 +51,7 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for Component files on disk
  */
 export class ComponentService
-  extends AbstractIndexedEntityService<ComponentFile>
+  extends AbstractSlugIndexedEntityService<ComponentFile>
   implements CrudServiceWithListCount<Component>
 {
   private coreVersion: string;
@@ -136,7 +136,7 @@ export class ComponentService
         );
         const componentSlug = slug(validatedProps.slug);
 
-        const index = await this.getIndex(validatedProps.projectId);
+        const index = await this.getSlugIndex(validatedProps.projectId);
 
         if (Object.values(index).includes(componentSlug)) {
           throw CoreError.conflict(
@@ -170,7 +170,7 @@ export class ComponentService
         }, [componentPath]);
 
         index[id] = componentSlug;
-        await this.safeWriteIndex(validatedProps.projectId, index);
+        await this.safeWriteSlugIndex(validatedProps.projectId, index);
         return this.toComponent(componentFile) as T;
       }
     );
@@ -302,7 +302,7 @@ export class ComponentService
 
         // If component slug changed, enforce uniqueness before mutating
         if (prevComponentFile.slug !== newSlug) {
-          const index = await this.getIndex(validatedProps.projectId);
+          const index = await this.getSlugIndex(validatedProps.projectId);
           const existingUuid = Object.entries(index).find(
             ([, slug]) => slug === newSlug
           );
@@ -330,17 +330,15 @@ export class ComponentService
             const collectionsExist = await Fs.pathExists(collectionsPath);
 
             if (collectionsExist) {
-              const collectionFolders = await folders(collectionsPath);
-              const validFolders = collectionFolders.filter(
-                (f) => uuidSchema.safeParse(f.name).success
+              const collectionReferences = await this.listReferences(
+                'collection',
+                validatedProps.projectId
               );
 
-              for (const collectionFolder of validFolders) {
+              for (const collectionReference of collectionReferences) {
+                const collectionId = collectionReference.id;
                 const collectionFile = await this.jsonFileService.read(
-                  pathTo.collectionFile(
-                    validatedProps.projectId,
-                    collectionFolder.name
-                  ),
+                  pathTo.collectionFile(validatedProps.projectId, collectionId),
                   collectionFileSchema
                 );
 
@@ -359,21 +357,22 @@ export class ComponentService
 
                 const entriesPath = pathTo.entries(
                   validatedProps.projectId,
-                  collectionFolder.name
+                  collectionId
                 );
                 const entriesExist = await Fs.pathExists(entriesPath);
                 if (!entriesExist) continue;
 
-                const allEntryFiles = await Fs.readdir(entriesPath);
-                const entryFileNames = allEntryFiles.filter(
-                  (f) => f.endsWith('.json') && f !== 'collection.json'
+                const entryReferences = await this.listReferences(
+                  'entry',
+                  validatedProps.projectId,
+                  collectionId
                 );
 
-                for (const entryFileName of entryFileNames) {
-                  const entryId = entryFileName.replace('.json', '');
+                for (const entryReference of entryReferences) {
+                  const entryId = entryReference.id;
                   const entryFilePath = pathTo.entryFile(
                     validatedProps.projectId,
-                    collectionFolder.name,
+                    collectionId,
                     entryId
                   );
 
@@ -384,7 +383,7 @@ export class ComponentService
 
                   const result = transformComponentValues(
                     entryFile.id,
-                    collectionFolder.name,
+                    collectionId,
                     entryFile.values,
                     validatedProps.id,
                     oldFieldDefs,
@@ -482,9 +481,9 @@ export class ComponentService
 
         // Update index after successful commit
         if (prevComponentFile.slug !== newSlug) {
-          const index = await this.getIndex(validatedProps.projectId);
+          const index = await this.getSlugIndex(validatedProps.projectId);
           index[validatedProps.id] = newSlug;
-          await this.safeWriteIndex(validatedProps.projectId, index);
+          await this.safeWriteSlugIndex(validatedProps.projectId, index);
         }
 
         return this.toComponent(componentFile) as T;
@@ -525,9 +524,9 @@ export class ComponentService
         });
       });
 
-      const index = await this.getIndex(props.projectId);
+      const index = await this.getSlugIndex(props.projectId);
       delete index[props.id];
-      await this.safeWriteIndex(props.projectId, index);
+      await this.safeWriteSlugIndex(props.projectId, index);
     });
   }
 
@@ -587,7 +586,7 @@ export class ComponentService
    * Returns all Component UUIDs for a given project
    */
   public async listAllIds(projectId: string): Promise<string[]> {
-    const index = await this.getIndex(projectId);
+    const index = await this.getSlugIndex(projectId);
     return Object.keys(index);
   }
 
@@ -648,7 +647,7 @@ export class ComponentService
       ) {
         componentIds = fieldDefinition.ofComponents;
       } else {
-        const index = await this.getIndex(projectId);
+        const index = await this.getSlugIndex(projectId);
         componentIds = Object.keys(index);
       }
 
@@ -725,7 +724,7 @@ export class ComponentService
   ): Promise<Array<{ type: 'collection' | 'component'; id: string }>> {
     const results: Array<{ type: 'collection' | 'component'; id: string }> = [];
 
-    const componentIndex = await this.getIndex(projectId);
+    const componentIndex = await this.getSlugIndex(projectId);
     const otherIds = Object.keys(componentIndex).filter(
       (id) => id !== componentId
     );
@@ -746,14 +745,14 @@ export class ComponentService
     const exists = await Fs.pathExists(collectionsPath);
     if (!exists) return results;
 
-    const collectionFolders = await folders(collectionsPath);
-    const validFolders = collectionFolders.filter(
-      (f) => uuidSchema.safeParse(f.name).success
+    const collectionReferences = await this.listReferences(
+      'collection',
+      projectId
     );
 
-    for (const folder of validFolders) {
+    for (const collectionReference of collectionReferences) {
       const collectionFile = await this.jsonFileService.read(
-        pathTo.collectionFile(projectId, folder.name),
+        pathTo.collectionFile(projectId, collectionReference.id),
         collectionFileSchema
       );
       const fieldDefinitions = flattenFieldDefinitions(
@@ -765,7 +764,7 @@ export class ComponentService
           componentId
         )
       ) {
-        results.push({ type: 'collection', id: folder.name });
+        results.push({ type: 'collection', id: collectionReference.id });
       }
     }
 

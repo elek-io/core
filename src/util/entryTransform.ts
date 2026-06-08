@@ -13,7 +13,8 @@ import { isDeepStrictEqual } from 'node:util';
 export type EntryIssueType =
   | 'missing_required'
   | 'type_mismatch'
-  | 'constraint_violation';
+  | 'constraint_violation'
+  | 'unique_collision';
 
 export interface EntryIssue {
   entryId: Uuid;

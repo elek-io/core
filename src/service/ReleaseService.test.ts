@@ -690,3 +690,112 @@ describe('ReleaseService', function () {
     expect(result.version).toEqual('9.0.0');
   });
 });
+
+describe('ReleaseService - slug field changes', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  const titleFieldId = uuid();
+  const slugFieldId = uuid();
+  let collection: Collection;
+
+  function titleDef() {
+    return {
+      id: titleFieldId,
+      slug: 'title',
+      valueType: 'string' as const,
+      fieldType: 'text' as const,
+      label: { en: 'Title', de: 'Title' },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: false,
+      inputWidth: '12' as const,
+      defaultValue: null,
+      min: null,
+      max: null,
+    };
+  }
+
+  function slugDef(opts: {
+    separator?: string;
+    ofFieldDefinitions?: string[];
+  }) {
+    return {
+      id: slugFieldId,
+      slug: 'slug',
+      valueType: 'string' as const,
+      fieldType: 'slug' as const,
+      label: { en: 'Slug', de: 'Slug' },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: true as const,
+      inputWidth: '12' as const,
+      defaultValue: null,
+      separator: opts.separator ?? '-',
+      lowercase: true,
+      decamelize: true,
+      ofFieldDefinitions: opts.ofFieldDefinitions ?? [titleFieldId],
+    };
+  }
+
+  beforeAll(async function () {
+    project = await createProject();
+    collection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Page', de: 'Page' },
+        plural: { en: 'Pages', de: 'Pages' },
+      },
+      slug: { singular: 'page', plural: 'pages' },
+      description: { en: 'Pages', de: 'Pages' },
+      fieldDefinitions: [titleDef(), slugDef({})],
+    });
+    // Establish a production baseline to diff against
+    await core.releases.create({ projectId: project.id });
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('detects a MAJOR slugFormatChanged when the separator changes', async function () {
+    await core.collections.update({
+      projectId: project.id,
+      ...collection,
+      fieldDefinitions: [titleDef(), slugDef({ separator: '_' })],
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(
+      diff.fieldChanges.some(
+        (c) => c.changeType === 'slugFormatChanged' && c.bump === 'major'
+      )
+    ).toBe(true);
+  });
+
+  it('detects a PATCH ofFieldDefinitionsChanged when the source fields change', async function () {
+    await core.collections.update({
+      projectId: project.id,
+      ...collection,
+      fieldDefinitions: [titleDef(), slugDef({ ofFieldDefinitions: [] })],
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(
+      diff.fieldChanges.some(
+        (c) =>
+          c.changeType === 'ofFieldDefinitionsChanged' && c.bump === 'patch'
+      )
+    ).toBe(true);
+    expect(
+      diff.fieldChanges.some((c) => c.changeType === 'slugFormatChanged')
+    ).toBe(false);
+  });
+});

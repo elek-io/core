@@ -9,7 +9,7 @@ For a cross-CMS comparison against Strapi, Directus, Payload, and TinaCMS, see [
 Two type axes describe every field:
 
 - **Value type** (`string` | `number` | `boolean` | `reference` | `component` | `mdast`) - how data is stored at runtime in the Entry JSON file.
-- **Field type** (17 in total) - layered on top of the value type to add validation, constraints, and editor semantics.
+- **Field type** (18 in total) - layered on top of the value type to add validation, constraints, and editor semantics.
 
 A `select` field, for example, stores either a `string` or `number` value depending on its variant. A `dynamic` field stores a `component` value (an array of Component instances).
 
@@ -31,24 +31,24 @@ Every field definition extends `fieldDefinitionBaseSchema`:
   description: { [lang]: string } | null, // optional translatable help text
   isRequired: boolean,    // forced true for `toggle` and `range`
   isDisabled: boolean,    // editor read-only
-  isUnique: boolean,      // string/number only; forced false for boolean/reference/dynamic
+  isUnique: boolean,      // string value types only; forced false elsewhere, always true for slug
   inputWidth: '12' | '6' | '4' | '3',     // 12-column grid (full / half / third / quarter)
 }
 ```
 
-| Property      | Constraints                                                                                                                                                                                                                                                                               |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | UUID. Caller-supplied (you pass one, for example via `uuid()`) - Core does not generate it. It is the stable identity used to match field definitions on update, so keep it constant. See [`schema-changes.md`](./schema-changes.md#the-golden-rule-field-definitions-are-matched-by-id). |
-| `slug`        | 1–128 chars, lowercase with hyphens, no reserved values. Must be unique within its parent Collection or Component.                                                                                                                                                                        |
-| `label`       | Translatable. Must contain a non-empty string for every project-supported language at validation time.                                                                                                                                                                                    |
-| `description` | Translatable or `null`.                                                                                                                                                                                                                                                                   |
-| `isRequired`  | Forced `true` on `toggle` and `range` (those types always carry a value).                                                                                                                                                                                                                 |
-| `isUnique`    | Only meaningful on `string` / `number` value types. The schema forces `false` on `boolean`, `reference`, `dynamic`, and `mdast`.                                                                                                                                                          |
-| `inputWidth`  | Layout hint for the editor's 12-column grid. `'12'` = full row, `'6'` = half, `'4'` = third, `'3'` = quarter.                                                                                                                                                                             |
+| Property      | Constraints                                                                                                                                                                                                                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | UUID. Caller-supplied (you pass one, for example via `uuid()`) - Core does not generate it. It is the stable identity used to match field definitions on update, so keep it constant. See [`schema-changes.md`](./schema-changes.md#the-golden-rule-field-definitions-are-matched-by-id).       |
+| `slug`        | 1–128 chars, lowercase with hyphens, no reserved values. Must be unique within its parent Collection or Component.                                                                                                                                                                              |
+| `label`       | Translatable. Must contain a non-empty string for every project-supported language at validation time.                                                                                                                                                                                          |
+| `description` | Translatable or `null`.                                                                                                                                                                                                                                                                         |
+| `isRequired`  | Forced `true` on `toggle` and `range` (those types always carry a value).                                                                                                                                                                                                                       |
+| `isUnique`    | Only meaningful on `string` value types; the schema forces `false` on `number`, `boolean`, `reference`, `dynamic`, and `mdast`, and forces `true` on `slug`. Enforced per language within a Collection (see [Uniqueness](#uniqueness)). A unique field may not carry a non-null `defaultValue`. |
+| `inputWidth`  | Layout hint for the editor's 12-column grid. `'12'` = full row, `'6'` = half, `'4'` = third, `'3'` = quarter.                                                                                                                                                                                   |
 
 ## Field Type Catalogue
 
-The 17 field types are grouped by purpose. Each entry below shows the field-definition shape (in addition to the common properties above), the validation applied to the value, and a usage hint.
+The 18 field types are grouped by purpose. Each entry below shows the field-definition shape (in addition to the common properties above), the validation applied to the value, and a usage hint.
 
 ### Text & Input (value type: `string`)
 
@@ -113,6 +113,28 @@ Dropdown over a fixed set of string options. Each option's `label` is translatab
 ```
 
 Validation: at least one option. `defaultValue` must be `null` or match one option's `value`.
+
+#### `slug`
+
+A URL-friendly string that is always unique within its Collection (`isUnique` is forced `true`). Its value is validated as _already canonical_ rather than transformed: a value is accepted only when it equals its own slugified form for the field's configuration (`value === slug(value, config)`). `defaultValue` is always `null`.
+
+```typescript
+{
+  fieldType: 'slug',
+  valueType: 'string',
+  isUnique: true,            // forced
+  separator: '-',            // '' or one of the URL-safe marks - _ . ~
+  lowercase: true,
+  decamelize: true,
+  ofFieldDefinitions: [],    // source field ids for soft auto-generation
+  defaultValue: null,        // forced
+  // ... common properties
+}
+```
+
+- **Configuration** - `separator`, `lowercase` and `decamelize` mirror [`@sindresorhus/slugify`](https://github.com/sindresorhus/slugify) and shape what counts as canonical. `separator` must be empty or one of the URL-safe marks `-` `_` `.` `~` (RFC 3986 unreserved). Changing any of these is a major change ([`releases.md`](./releases.md)).
+- **`ofFieldDefinitions`** - an ordered list of sibling field-definition ids the editor uses to auto-generate the slug (for example a `title` field). It is a _soft hint_: Core never derives or binds the value, so the stored slug stays static and user-editable. Each id must reference a non-slug string field in the same Collection, not the slug field itself. An empty array means the slug is entered directly.
+- Because the stored value is exact-match unique, normalization (lowercasing, separators) is what makes uniqueness meaningful for slugs. The caller (for example Desktop) slugifies input with the shared `slug()` helper before saving; a non-canonical value is rejected.
 
 ### Date & Time (value type: `string`)
 
@@ -314,6 +336,20 @@ Validation:
 Per-language value shape: `content: Record<ProjectLanguage, MdAstRoot | null>`. Empty markdown values are canonically `null` per language - the schema rejects empty trees and Milkdown-style empty-paragraph wrappers, forcing Desktop to normalize "effectively empty" editor state to `null` before saving.
 
 > For details on how to render markdown values, convert to a markdown string, and handle entry/asset references in tree nodes, see [`markdown-content.md`](./markdown-content.md).
+
+## Uniqueness
+
+A string field with `isUnique: true` (and the always-unique `slug` type) is enforced on every Entry create and update within its Collection.
+
+- **Per language, exact match.** A value must be unique within its own language slot. The same value in two different languages does not collide, and comparison is byte-for-byte (values are trimmed by the schema). For case-insensitive uniqueness, use a `slug` field with `lowercase: true`.
+- **Nulls never collide.** Unset / `null` language slots are not indexed, so any number of Entries may leave a unique field empty.
+- **On collision,** create / update throws a `Conflict` `CoreError` whose `cause` is an array of `UniqueValueConflict` objects (`collectionId`, `fieldDefinitionId`, `fieldSlug`, `language`, `value`, `conflictingEntryId`), collecting every violation at once.
+- **Turning a field unique** over a Collection that already has duplicates is rejected: the Collection update surfaces `unique_collision` entry issues you resolve the same way as other field-definition changes (see [`schema-changes.md`](./schema-changes.md)).
+- **Scope.** Uniqueness is single-field and Collection-scoped. There is no compound / multi-field uniqueness, and `isUnique` / `slug` are not allowed inside Components (see [`features.md`](./features.md#intentional-constraints)).
+
+Enforcement scans the Collection's Entries on each write rather than relying on a persisted index, so it stays correct for Entries brought in by a pull or merge that never passed through Core's write path.
+
+The check is a scan-then-write rather than an atomic transaction, so it assumes a single serialized writer (the same assumption Core's Collection and Component slug uniqueness already makes). Two writes racing in parallel for the same value could both pass the scan, so a caller that issues concurrent writes to one Collection must serialize them itself.
 
 ## Field Grouping
 

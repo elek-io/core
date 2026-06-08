@@ -15,10 +15,10 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 
 - **Collections** - typed schemas (field definitions) every Entry must follow.
 - **Components** - reusable, named bundles of field definitions shared across Collections. Updating a Component propagates to every Collection that references it.
-- **17 field types across 6 value types** (`string`, `number`, `boolean`, `reference`, `component`, `mdast`) - including dedicated validated string types (`email`, `url`, `ipv4`, `telephone`), separate `date` / `time` / `datetime`, `range`, and `select` (string or number). See [`fields.md`](./fields.md).
+- **18 field types across 6 value types** (`string`, `number`, `boolean`, `reference`, `component`, `mdast`) - including dedicated validated string types (`email`, `url`, `ipv4`, `telephone`), separate `date` / `time` / `datetime`, `range`, `select` (string or number), and a `slug` type that stores an always-unique, URL-friendly value. See [`fields.md`](./fields.md).
 - **References** - `asset` and `entry` reference fields, polymorphic via `ofCollections`, with cardinality controlled by `min` / `max`.
 - **Polymorphic blocks** - the `dynamic` field composes Components into page-builder-style content, restricted by `ofComponents` or fully open.
-- **Layout & constraints** - presentational field grouping, a 12-column `inputWidth` grid hint, and per-field `isRequired` / `isUnique` / `isDisabled` / `defaultValue`.
+- **Layout & constraints** - presentational field grouping, a 12-column `inputWidth` grid hint, and per-field `isRequired` / `isUnique` / `isDisabled` / `defaultValue`. `isUnique` is enforced per language within a Collection on every write (see [`fields.md`](./fields.md#uniqueness)).
 
 ## Internationalization
 
@@ -82,11 +82,9 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 
 ### Not yet implemented
 
-- **`isUnique` is not enforced** - fields accept `isUnique: true`, but no service checks it on write, so duplicate values are not rejected.
 - **No full-text search** - a `searchProjectSchema` is defined, but there is no `search()` service method or API route behind it.
 - **No cloud authentication** - the `cloud` user type exists, but `UserService.set()` does not actually log a cloud user in (the login branch is a stub).
 - **Delete does not protect Assets or Entries** - deleting a referenced Component is blocked, but deleting a referenced Asset or Entry is not, so dangling references can result. Renderers should handle missing references gracefully.
-- **No slug / UID field type** - slugs are plain `text` fields you keep correct by hand (and, per above, `isUnique` does not guard them).
 - **No conditional fields** - a field's visibility cannot depend on another field's value.
 - **`synchronize()` has no conflict handling** - it pulls then pushes with no guard for uncommitted changes. A conflicting rebase surfaces as a generic `Internal` error and can leave the repository mid-rebase.
 
@@ -95,7 +93,9 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **Git LFS requires an LFS-capable remote** - Asset binaries are tracked with Git LFS, so the remote you push to must support it. A remote without LFS (for example a self-hosted server with it disabled) fails the push with a descriptive `PreconditionFailed` error. See [`git-and-sync.md`](./git-and-sync.md#git-lfs).
 - **Field-definition `id`s are caller-supplied** - Core generates ids for entities (Collections, Components, Entries, Assets) but deliberately not for the field definitions inside them. You pass a UUID per field definition (for example via `uuid()`) on both create and update. Generating them in Core was considered and rejected: it would require maintaining parallel id-less schema variants and only partly helps, since update must still identify existing field definitions by id, so the convenience does not justify the added machinery. The practical contract on update is that field definitions are matched by `id`: send back the `id` of every field definition you want to keep and Core preserves the entry data stored under it across slug renames or type changes. A field definition whose `id` is missing or changed is treated as new, so the old one, and the entry data keyed to it, is removed. Always round-trip the ids you read.
 - **One-way references only** - no many-to-many, back-references, or reverse / virtual joins. The inverse of a reference is not maintained.
-- **No computed or virtual fields** - field values are static, with no derive-from-other-fields mechanism.
+- **No computed or virtual fields** - field values are static, with no derive-from-other-fields mechanism. The `slug` field's `ofFieldDefinitions` is the one nuance: it is a soft generation hint the editor uses to pre-fill the slug from other fields, but the stored value stays static and user-editable, so Core never derives or binds it.
+- **Uniqueness is single-field and Collection-scoped** - `isUnique` (and the always-unique `slug` type) enforce that one field's value is unique within a Collection, per language. There is no compound / multi-field uniqueness (for example "unique slug per category"). The per-language pairing is the only built-in composite.
+- **No uniqueness inside Components** - `isUnique` and the `slug` type are rejected on Component field definitions. A Component is reused across Collections and can repeat within an Entry, so the scope of "unique" there is ambiguous; it is deliberately deferred rather than shipped with surprising semantics.
 - **Limited specialized field types** - no arbitrary JSON, color picker, geospatial, code-editor, or password / hash field types.
 - **No plugin or marketplace system** - extending the field catalogue means changing code, not installing a package.
 - **No nested composition** - groups cannot nest groups, and `dynamic` fields cannot nest `dynamic` fields. Components are the flat, predictable reuse mechanism.
