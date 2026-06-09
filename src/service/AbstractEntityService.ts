@@ -88,16 +88,18 @@ export abstract class AbstractEntityService extends AbstractService {
         );
       }
       try {
+        // A hard reset restores files on disk and clears the JSON file cache
+        // (handled centrally in GitService), so cached contents stay in sync
         await this.gitService.reset(projectPath, 'hard', 'HEAD');
       } catch (resetError) {
         this.logService.error({
           source: 'core',
           message: `Failed to reset working tree during rollback, manual git reset may be needed: ${resetError instanceof Error ? resetError.message : String(resetError)}`,
         });
+        // The reset did not run to completion, so it could not clear the cache
+        // itself. Drop it defensively since disk state is now uncertain
+        this.jsonFileService.clearCache();
       }
-      // Clear the JSON file cache since git reset restored files on disk
-      // that may differ from what the cache holds
-      this.jsonFileService.clearCache();
       throw error;
     }
   }

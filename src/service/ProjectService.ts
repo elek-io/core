@@ -302,8 +302,26 @@ export class ProjectService
           collectionReferences
         );
 
-        const migratedProjectFile = this.migrate(currentProjectFile);
-        await this.update(migratedProjectFile);
+        // Persist the migrated Project file directly. update() intentionally
+        // omits coreVersion (not a user-updatable field), so routing through it
+        // would re-write the previous version and never bump it
+        const migratedProjectFile: ProjectFile = {
+          ...this.migrate(currentProjectFile),
+          updated: datetime(),
+        };
+        await this.jsonFileService.update(
+          migratedProjectFile,
+          projectFilePath,
+          projectFileSchema
+        );
+        await this.gitService.add(projectPath, [projectFilePath]);
+        await this.gitService.commit(projectPath, {
+          method: 'update',
+          reference: {
+            objectType: 'project',
+            id: migratedProjectFile.id,
+          },
+        });
         await this.gitService.branches.switch(
           projectPath,
           projectBranchSchema.enum.work

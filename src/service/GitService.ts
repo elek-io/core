@@ -18,6 +18,7 @@ import {
 } from '../schema/index.js';
 import { datetime } from '../util/shared.js';
 import { GitTagService } from './GitTagService.js';
+import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { UserService } from './UserService.js';
 import type { LogProps } from '../schema/index.js';
@@ -45,11 +46,13 @@ export class GitService {
   private logService: LogService;
   private gitTagService: GitTagService;
   private userService: UserService;
+  private jsonFileService: JsonFileService;
 
   public constructor(
     options: ElekIoCoreOptions,
     logService: LogService,
-    userService: UserService
+    userService: UserService,
+    jsonFileService: JsonFileService
   ) {
     this.version = null;
     this.gitPath = null;
@@ -63,6 +66,7 @@ export class GitService {
     );
     this.logService = logService;
     this.userService = userService;
+    this.jsonFileService = jsonFileService;
 
     void this.updateVersion();
     void this.updateGitPath();
@@ -146,6 +150,10 @@ export class GitService {
       await this.lfs.fetchAll(path);
       await this.lfs.checkout(path);
     }
+
+    // A clone materializes a fresh working tree, so drop any cache for paths a
+    // previous repository at this location may have populated
+    this.jsonFileService.clearCache();
   }
 
   /**
@@ -255,6 +263,9 @@ export class GitService {
       }
 
       await this.git(path, args);
+      // Switching branches rewrites the working tree, so cached file contents
+      // may no longer match disk
+      this.jsonFileService.clearCache();
     },
     /**
      * Delete a branch
@@ -532,6 +543,9 @@ export class GitService {
     args = [...args, branch];
 
     await this.git(path, args);
+    // Merging rewrites the working tree, so cached file contents may no longer
+    // match disk
+    this.jsonFileService.clearCache();
   }
 
   /**
@@ -551,6 +565,11 @@ export class GitService {
   ): Promise<void> {
     const args = ['reset', `--${mode}`, commit];
     await this.git(path, args);
+    // A hard reset restores files on disk, so cached file contents may no longer
+    // match disk. A soft reset only moves HEAD and leaves the working tree alone
+    if (mode === 'hard') {
+      this.jsonFileService.clearCache();
+    }
   }
 
   /**
@@ -575,6 +594,9 @@ export class GitService {
   public async pull(path: string): Promise<void> {
     const args = ['pull'];
     await this.git(path, args);
+    // Pulling integrates remote changes into the working tree, so cached file
+    // contents may no longer match disk
+    this.jsonFileService.clearCache();
   }
 
   /**

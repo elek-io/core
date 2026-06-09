@@ -294,6 +294,54 @@ describe('Unique field enforcement', function () {
     // Clean up the directly-written file so afterEach sees a clean git status
     await Fs.remove(core.util.pathTo.entryFile(project.id, collection.id, id));
   });
+
+  it('re-reads a sibling from disk after a git working-tree change (e.g. a branch switch)', async function () {
+    const projectPath = core.util.pathTo.project(project.id);
+    const workBranch = await core.git.branches.current(projectPath);
+    const tmpBranch = `tmp-${uuid()}`;
+
+    // Create an Entry on the working branch. Its value is now cached.
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: collection.id,
+      values: values({ sku: { en: 'v1' } }),
+    });
+
+    // On a throwaway branch, change the Entry's unique value. The cache now holds 'v2'.
+    await core.git.branches.switch(projectPath, tmpBranch, { isNew: true });
+    await core.entries.update({
+      projectId: project.id,
+      collectionId: collection.id,
+      id: entry.id,
+      values: values({ sku: { en: 'v2' } }),
+    });
+
+    // Switching back restores 'v1' on disk. The switch must clear the cache, or
+    // the scan would still see the stale 'v2'.
+    await core.git.branches.switch(projectPath, workBranch);
+
+    // The scan must see the on-disk 'v1' and reject a duplicate of it ...
+    await expect(
+      core.entries.create({
+        projectId: project.id,
+        collectionId: collection.id,
+        values: values({ sku: { en: 'v1' } }),
+      })
+    ).rejects.toThrow(CoreError);
+
+    // ... and must not raise a false conflict for 'v2', which no Entry holds on
+    // this branch anymore (a stale cache would wrongly reject it).
+    await expect(
+      core.entries.create({
+        projectId: project.id,
+        collectionId: collection.id,
+        values: values({ sku: { en: 'v2' } }),
+      })
+    ).resolves.toBeDefined();
+
+    // Remove the throwaway branch (force, since its commit is not on workBranch)
+    await core.git.branches.delete(projectPath, tmpBranch, true);
+  });
 });
 
 /**

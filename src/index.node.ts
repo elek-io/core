@@ -66,7 +66,8 @@ export default class ElekIoCore {
     this.gitService = new GitService(
       this.options,
       this.logService,
-      this.userService
+      this.userService,
+      this.jsonFileService
     );
     this.assetService = new AssetService(
       this.coreVersion,

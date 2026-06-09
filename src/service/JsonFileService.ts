@@ -127,11 +127,17 @@ export class JsonFileService extends AbstractService {
    * Clears the in-memory file cache.
    *
    * Should be called after operations that modify files outside
-   * of JsonFileService (e.g. git reset --hard HEAD), since the
-   * cache may hold stale data that no longer matches disk.
+   * of JsonFileService (e.g. git pull, merge, branch switch or
+   * reset --hard), since the cache may hold stale data that no
+   * longer matches disk.
    */
   public clearCache(): void {
+    const cleared = this.cache.size;
     this.cache.clear();
+    this.logService.debug({
+      source: 'core',
+      message: `Cleared JSON file cache (${cleared} elements)`,
+    });
   }
 
   private serialize(data: unknown): string {
