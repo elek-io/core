@@ -1059,14 +1059,28 @@ export class ReleaseService extends AbstractService {
     current: FieldDefinition,
     production: FieldDefinition
   ): FieldChange[] {
-    const changes: FieldChange[] = [];
     const base = {
       collectionId,
       fieldId: current.id,
       fieldSlug: current.slug,
     };
 
-    // MAJOR changes
+    return [
+      ...this.collectMajorFieldChanges(base, current, production),
+      ...this.collectMinorFieldChanges(base, current, production),
+      ...this.collectPatchFieldChanges(base, current, production),
+    ];
+  }
+
+  /**
+   * Collects breaking (major) changes between two versions of a field.
+   */
+  private collectMajorFieldChanges(
+    base: Pick<FieldChange, 'collectionId' | 'fieldId' | 'fieldSlug'>,
+    current: FieldDefinition,
+    production: FieldDefinition
+  ): FieldChange[] {
+    const changes: FieldChange[] = [];
 
     if (current.valueType !== production.valueType) {
       changes.push({ ...base, changeType: 'valueTypeChanged', bump: 'major' });
@@ -1135,7 +1149,18 @@ export class ReleaseService extends AbstractService {
       }
     }
 
-    // MINOR changes
+    return changes;
+  }
+
+  /**
+   * Collects backwards-compatible (minor) changes between two versions of a field.
+   */
+  private collectMinorFieldChanges(
+    base: Pick<FieldChange, 'collectionId' | 'fieldId' | 'fieldSlug'>,
+    current: FieldDefinition,
+    production: FieldDefinition
+  ): FieldChange[] {
+    const changes: FieldChange[] = [];
 
     if (production.isRequired === false && current.isRequired === true) {
       changes.push({
@@ -1153,7 +1178,18 @@ export class ReleaseService extends AbstractService {
       });
     }
 
-    // PATCH changes
+    return changes;
+  }
+
+  /**
+   * Collects non-breaking (patch) changes between two versions of a field.
+   */
+  private collectPatchFieldChanges(
+    base: Pick<FieldChange, 'collectionId' | 'fieldId' | 'fieldSlug'>,
+    current: FieldDefinition,
+    production: FieldDefinition
+  ): FieldChange[] {
+    const changes: FieldChange[] = [];
 
     if (this.isMinMaxLoosened(current, production)) {
       changes.push({

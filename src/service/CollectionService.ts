@@ -32,11 +32,16 @@ import {
   type GitCommit,
   collectionHistorySchema,
   flattenFieldDefinitions,
+  type FieldDefinition,
+  type ProjectLanguages,
   type Uuid,
   type Value,
 } from '../schema/index.js';
 import { detectUniqueValueCollisions } from '../util/uniqueFieldValues.js';
-import { diffFieldDefinitions } from '../util/fieldDefinitionDiff.js';
+import {
+  diffFieldDefinitions,
+  type FieldChange,
+} from '../util/fieldDefinitionDiff.js';
 import {
   transformEntryValues,
   type EntryIssue,
@@ -315,15 +320,11 @@ export class CollectionService
 
         // If collection slug.plural changed, enforce uniqueness before mutating
         if (prevCollectionFile.slug.plural !== newSlugPlural) {
-          const index = await this.getSlugIndex(validatedProps.projectId);
-          const existingUuid = Object.entries(index).find(
-            ([, slugPlural]) => slugPlural === newSlugPlural
+          await this.assertCollectionSlugIsAvailable(
+            validatedProps.projectId,
+            newSlugPlural,
+            validatedProps.id
           );
-          if (existingUuid && existingUuid[0] !== validatedProps.id) {
-            throw CoreError.conflict(
-              `Collection slug "${newSlugPlural}" is already in use by another collection`
-            );
-          }
         }
 
         await this.withGitRollback(projectPath, async () => {
@@ -351,110 +352,34 @@ export class CollectionService
                 }> = [];
 
                 for (const entryReference of entryReferences) {
-                  const entryId = entryReference.id;
-                  const entryFilePath = pathTo.entryFile(
-                    validatedProps.projectId,
-                    validatedProps.id,
-                    entryId
-                  );
-
-                  const entryFile = await this.jsonFileService.read(
-                    entryFilePath,
-                    entryFileSchema
-                  );
-
-                  const result = transformEntryValues(
-                    entryFile.id,
-                    validatedProps.id,
-                    entryFile.values,
+                  const entryResult = await this.transformAndWriteEntry({
+                    projectId: validatedProps.projectId,
+                    collectionId: validatedProps.id,
+                    entryId: entryReference.id,
                     oldFieldDefs,
                     newFieldDefs,
                     changes,
-                    languages
-                  );
-
-                  allIssues.push(...result.issues);
-
-                  // Apply any provided resolutions. Not gated on transform
-                  // issues, since a unique_collision has no transform issue.
-                  const finalValues = result.values;
-                  const entryResolutions = resolutions?.[entryFile.id];
-                  if (entryResolutions) {
-                    for (const [fieldSlug, resolvedValue] of Object.entries(
-                      entryResolutions
-                    )) {
-                      const fieldDef = newFieldDefs.find(
-                        (fieldDef) => fieldDef.slug === fieldSlug
-                      );
-                      if (fieldDef) {
-                        const schema = getValueSchemaFromFieldDefinition(
-                          fieldDef,
-                          languages
-                        );
-                        const parseResult = schema.safeParse(resolvedValue);
-                        if (!parseResult.success) {
-                          throw CoreError.badRequest(
-                            'Resolution validation failed',
-                            parseResult.error
-                          );
-                        }
-                      }
-                      finalValues[fieldSlug] = resolvedValue;
-                    }
-                  }
-
-                  entriesFinalValues.push({
-                    entryId: entryFile.id,
-                    values: finalValues,
+                    languages,
+                    resolutions,
                   });
 
-                  if (
-                    isDeepStrictEqual(entryFile.values, finalValues) === false
-                  ) {
-                    const updatedEntryFile = {
-                      ...entryFile,
-                      values: finalValues,
-                    };
-                    await this.jsonFileService.update(
-                      updatedEntryFile,
-                      entryFilePath,
-                      entryFileSchema
-                    );
-                    filesToGitAdd.push(entryFilePath);
+                  allIssues.push(...entryResult.issues);
+                  entriesFinalValues.push({
+                    entryId: entryResult.entryId,
+                    values: entryResult.finalValues,
+                  });
+                  if (entryResult.wrote) {
+                    filesToGitAdd.push(entryResult.entryFilePath);
                   }
                 }
 
-                // Transform issues the caller did not resolve
-                const unresolvedIssues = resolutions
-                  ? allIssues.filter((issue) => {
-                      const entryResolutions = resolutions[issue.entryId];
-                      return !(
-                        entryResolutions && issue.fieldSlug in entryResolutions
-                      );
-                    })
-                  : allIssues;
-
-                // Cross-entry uniqueness collisions, on the post-resolution
-                // values. Keep the first holder, flag the rest as resolvable.
-                const collisionIssues: EntryIssue[] =
-                  detectUniqueValueCollisions(
-                    newFieldDefs,
-                    entriesFinalValues
-                  ).flatMap((collision) =>
-                    collision.entryIds.slice(1).map((entryId) => ({
-                      entryId,
-                      collectionId: validatedProps.id,
-                      fieldDefinitionId: collision.fieldDefinitionId,
-                      fieldSlug: collision.fieldSlug,
-                      issue: 'unique_collision' as const,
-                      transformedValues: {},
-                    }))
-                  );
-
-                const blockingIssues = [
-                  ...unresolvedIssues,
-                  ...collisionIssues,
-                ];
+                const blockingIssues = this.computeBlockingIssues({
+                  allIssues,
+                  resolutions,
+                  newFieldDefs,
+                  entriesFinalValues,
+                  collectionId: validatedProps.id,
+                });
                 if (blockingIssues.length > 0) {
                   throw CoreError.conflict(
                     'Field definition changes or uniqueness collisions require entry resolutions',
@@ -490,6 +415,174 @@ export class CollectionService
         return this.toCollection(collectionFile) as T;
       }
     );
+  }
+
+  /**
+   * Throws when another Collection already uses the given plural slug.
+   *
+   * The current Collection is excluded so re-saving with an unchanged slug is
+   * allowed.
+   */
+  private async assertCollectionSlugIsAvailable(
+    projectId: Uuid,
+    newSlugPlural: string,
+    currentId: Uuid
+  ): Promise<void> {
+    const index = await this.getSlugIndex(projectId);
+    const existingUuid = Object.entries(index).find(
+      ([, slugPlural]) => slugPlural === newSlugPlural
+    );
+    if (existingUuid && existingUuid[0] !== currentId) {
+      throw CoreError.conflict(
+        `Collection slug "${newSlugPlural}" is already in use by another collection`
+      );
+    }
+  }
+
+  /**
+   * Transforms a single Entry's values to the new field definitions, applies any
+   * caller-provided resolutions and writes the Entry file if its values changed.
+   *
+   * Returns the transform issues, the final values (for cross-entry collision
+   * detection) and whether the file was written (so the caller can stage it).
+   */
+  private async transformAndWriteEntry(params: {
+    projectId: Uuid;
+    collectionId: Uuid;
+    entryId: Uuid;
+    oldFieldDefs: FieldDefinition[];
+    newFieldDefs: FieldDefinition[];
+    changes: FieldChange[];
+    languages: ProjectLanguages;
+    resolutions: UpdateCollectionProps['resolutions'];
+  }): Promise<{
+    issues: EntryIssue[];
+    entryId: Uuid;
+    finalValues: Record<string, Value>;
+    entryFilePath: string;
+    wrote: boolean;
+  }> {
+    const {
+      projectId,
+      collectionId,
+      entryId,
+      oldFieldDefs,
+      newFieldDefs,
+      changes,
+      languages,
+      resolutions,
+    } = params;
+
+    const entryFilePath = pathTo.entryFile(projectId, collectionId, entryId);
+
+    const entryFile = await this.jsonFileService.read(
+      entryFilePath,
+      entryFileSchema
+    );
+
+    const result = transformEntryValues(
+      entryFile.id,
+      collectionId,
+      entryFile.values,
+      oldFieldDefs,
+      newFieldDefs,
+      changes,
+      languages
+    );
+
+    // Apply any provided resolutions. Not gated on transform
+    // issues, since a unique_collision has no transform issue.
+    const finalValues = result.values;
+    const entryResolutions = resolutions?.[entryFile.id];
+    if (entryResolutions) {
+      for (const [fieldSlug, resolvedValue] of Object.entries(
+        entryResolutions
+      )) {
+        const fieldDef = newFieldDefs.find(
+          (fieldDef) => fieldDef.slug === fieldSlug
+        );
+        if (fieldDef) {
+          const schema = getValueSchemaFromFieldDefinition(fieldDef, languages);
+          const parseResult = schema.safeParse(resolvedValue);
+          if (!parseResult.success) {
+            throw CoreError.badRequest(
+              'Resolution validation failed',
+              parseResult.error
+            );
+          }
+        }
+        finalValues[fieldSlug] = resolvedValue;
+      }
+    }
+
+    const wrote = isDeepStrictEqual(entryFile.values, finalValues) === false;
+    if (wrote) {
+      const updatedEntryFile = {
+        ...entryFile,
+        values: finalValues,
+      };
+      await this.jsonFileService.update(
+        updatedEntryFile,
+        entryFilePath,
+        entryFileSchema
+      );
+    }
+
+    return {
+      issues: result.issues,
+      entryId: entryFile.id,
+      finalValues,
+      entryFilePath,
+      wrote,
+    };
+  }
+
+  /**
+   * Builds the list of issues that must block the update.
+   *
+   * Combines transform issues the caller did not resolve with cross-entry
+   * uniqueness collisions on the post-resolution values.
+   */
+  private computeBlockingIssues(params: {
+    allIssues: EntryIssue[];
+    resolutions: UpdateCollectionProps['resolutions'];
+    newFieldDefs: FieldDefinition[];
+    entriesFinalValues: Array<{ entryId: Uuid; values: Record<string, Value> }>;
+    collectionId: Uuid;
+  }): EntryIssue[] {
+    const {
+      allIssues,
+      resolutions,
+      newFieldDefs,
+      entriesFinalValues,
+      collectionId,
+    } = params;
+
+    // Transform issues the caller did not resolve
+    const unresolvedIssues = resolutions
+      ? allIssues.filter((issue) => {
+          const entryResolutions = resolutions[issue.entryId];
+          return !(entryResolutions && issue.fieldSlug in entryResolutions);
+        })
+      : allIssues;
+
+    // Cross-entry uniqueness collisions, on the post-resolution
+    // values. Keep the first holder, flag the rest as resolvable.
+    const collisionIssues: EntryIssue[] = detectUniqueValueCollisions(
+      newFieldDefs,
+      entriesFinalValues
+    ).flatMap((collision) =>
+      collision.entryIds.slice(1).map((entryId) => ({
+        entryId,
+        collectionId,
+        fieldDefinitionId: collision.fieldDefinitionId,
+        fieldSlug: collision.fieldSlug,
+        issue: 'unique_collision' as const,
+        transformedValues: {},
+      }))
+    );
+
+    return [...unresolvedIssues, ...collisionIssues];
   }
 
   /**

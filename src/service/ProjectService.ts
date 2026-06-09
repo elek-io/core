@@ -267,32 +267,11 @@ export class ProjectService
       const projectPath = pathTo.project(props.id);
       const projectFilePath = pathTo.projectFile(props.id);
 
-      const currentBranch = await this.gitService.branches.current(projectPath);
-      if (currentBranch !== projectBranchSchema.enum.work) {
-        await this.gitService.branches.switch(
-          projectPath,
-          projectBranchSchema.enum.work
-        );
-      }
-
-      const currentProjectFile = (await this.jsonFileService.unsafeRead(
-        projectFilePath
-      )) as Record<string, unknown> & { coreVersion: string };
-
-      if (Semver.gt(currentProjectFile.coreVersion, this.coreVersion)) {
-        throw CoreError.upgradeFailed(
-          `The Projects Core version "${currentProjectFile.coreVersion}" is higher than the current Core version "${this.coreVersion}".`
-        );
-      }
-
-      if (
-        Semver.eq(currentProjectFile.coreVersion, this.coreVersion) &&
-        props.force !== true
-      ) {
-        throw CoreError.upgradeFailed(
-          `The Projects Core version "${currentProjectFile.coreVersion}" is already up to date.`
-        );
-      }
+      const currentProjectFile = await this.ensureProjectIsUpgradeable(
+        projectPath,
+        projectFilePath,
+        props.force
+      );
 
       const assetReferences = await this.listReferences('asset', props.id);
       const componentReferences = await this.listReferences(
@@ -316,33 +295,12 @@ export class ProjectService
           isNew: true,
         });
 
-        for (const reference of assetReferences) {
-          await this.upgradeObjectFile(props.id, 'asset', reference);
-        }
-
-        for (const reference of componentReferences) {
-          await this.upgradeObjectFile(props.id, 'component', reference);
-        }
-
-        for (const reference of collectionReferences) {
-          await this.upgradeObjectFile(props.id, 'collection', reference);
-        }
-
-        for (const collectionReference of collectionReferences) {
-          const entryReferences = await this.listReferences(
-            'entry',
-            props.id,
-            collectionReference.id
-          );
-          for (const reference of entryReferences) {
-            await this.upgradeObjectFile(
-              props.id,
-              'entry',
-              reference,
-              collectionReference.id
-            );
-          }
-        }
+        await this.upgradeAllObjectFiles(
+          props.id,
+          assetReferences,
+          componentReferences,
+          collectionReferences
+        );
 
         const migratedProjectFile = this.migrate(currentProjectFile);
         await this.update(migratedProjectFile);
@@ -382,22 +340,118 @@ export class ProjectService
           },
         });
       } catch (error) {
-        try {
-          await this.gitService.branches.switch(
-            projectPath,
-            projectBranchSchema.enum.work
-          );
-          await this.gitService.branches.delete(
-            projectPath,
-            upgradeBranchName,
-            true
-          );
-        } catch {
-          // Best-effort cleanup
-        }
+        await this.cleanupFailedUpgrade(projectPath, upgradeBranchName);
         throw error;
       }
     });
+  }
+
+  /**
+   * Switches to the work branch and verifies the Project can be upgraded.
+   *
+   * Throws when the Projects Core version is ahead of the current Core version,
+   * or when it is already up to date and the upgrade was not forced.
+   * Returns the current Project file so the caller can migrate it.
+   */
+  private async ensureProjectIsUpgradeable(
+    projectPath: string,
+    projectFilePath: string,
+    force: boolean | undefined
+  ): Promise<Record<string, unknown> & { coreVersion: string }> {
+    const currentBranch = await this.gitService.branches.current(projectPath);
+    if (currentBranch !== projectBranchSchema.enum.work) {
+      await this.gitService.branches.switch(
+        projectPath,
+        projectBranchSchema.enum.work
+      );
+    }
+
+    const currentProjectFile = (await this.jsonFileService.unsafeRead(
+      projectFilePath
+    )) as Record<string, unknown> & { coreVersion: string };
+
+    if (Semver.gt(currentProjectFile.coreVersion, this.coreVersion)) {
+      throw CoreError.upgradeFailed(
+        `The Projects Core version "${currentProjectFile.coreVersion}" is higher than the current Core version "${this.coreVersion}".`
+      );
+    }
+
+    if (
+      Semver.eq(currentProjectFile.coreVersion, this.coreVersion) &&
+      force !== true
+    ) {
+      throw CoreError.upgradeFailed(
+        `The Projects Core version "${currentProjectFile.coreVersion}" is already up to date.`
+      );
+    }
+
+    return currentProjectFile;
+  }
+
+  /**
+   * Migrates and updates every object file referenced by the Project.
+   *
+   * Upgrades assets, components and collections, then walks each collection to
+   * upgrade its entries.
+   */
+  private async upgradeAllObjectFiles(
+    projectId: string,
+    assetReferences: FileReference[],
+    componentReferences: FileReference[],
+    collectionReferences: FileReference[]
+  ): Promise<void> {
+    for (const reference of assetReferences) {
+      await this.upgradeObjectFile(projectId, 'asset', reference);
+    }
+
+    for (const reference of componentReferences) {
+      await this.upgradeObjectFile(projectId, 'component', reference);
+    }
+
+    for (const reference of collectionReferences) {
+      await this.upgradeObjectFile(projectId, 'collection', reference);
+    }
+
+    for (const collectionReference of collectionReferences) {
+      const entryReferences = await this.listReferences(
+        'entry',
+        projectId,
+        collectionReference.id
+      );
+      for (const reference of entryReferences) {
+        await this.upgradeObjectFile(
+          projectId,
+          'entry',
+          reference,
+          collectionReference.id
+        );
+      }
+    }
+  }
+
+  /**
+   * Best-effort cleanup after a failed upgrade.
+   *
+   * Switches back to the work branch and removes the upgrade branch, swallowing
+   * any error so the original upgrade failure is the one that surfaces.
+   */
+  private async cleanupFailedUpgrade(
+    projectPath: string,
+    upgradeBranchName: string
+  ): Promise<void> {
+    try {
+      await this.gitService.branches.switch(
+        projectPath,
+        projectBranchSchema.enum.work
+      );
+      await this.gitService.branches.delete(
+        projectPath,
+        upgradeBranchName,
+        true
+      );
+    } catch {
+      // Best-effort cleanup
+    }
   }
 
   public branches = {
