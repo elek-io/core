@@ -571,16 +571,25 @@ export class CollectionService
     const collisionIssues: EntryIssue[] = detectUniqueValueCollisions(
       newFieldDefs,
       entriesFinalValues
-    ).flatMap((collision) =>
-      collision.entryIds.slice(1).map((entryId) => ({
+    ).flatMap((collision) => {
+      // The first holder is kept, the rest are flagged as resolvable.
+      // A collision always has at least two holders, so this guard is defensive.
+      const [conflictingEntryId, ...flaggedEntryIds] = collision.entryIds;
+      if (conflictingEntryId === undefined) {
+        return [];
+      }
+      return flaggedEntryIds.map((entryId) => ({
         entryId,
         collectionId,
         fieldDefinitionId: collision.fieldDefinitionId,
         fieldSlug: collision.fieldSlug,
         issue: 'unique_collision' as const,
         transformedValues: {},
-      }))
-    );
+        value: collision.value,
+        language: collision.language,
+        conflictingEntryId,
+      }));
+    });
 
     return [...unresolvedIssues, ...collisionIssues];
   }

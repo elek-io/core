@@ -435,6 +435,47 @@ describe('Making a field unique via Collection update', function () {
     ).rejects.toThrow(CoreError);
   });
 
+  it('surfaces the colliding value, language and conflicting Entry on the unique_collision issue', async function () {
+    const codeId = uuid();
+    const collection = await createCodeCollection(project.id, {
+      unique: false,
+      fieldId: codeId,
+    });
+    await core.entries.create({
+      projectId: project.id,
+      collectionId: collection.id,
+      values: codeValues('X'),
+    });
+    await core.entries.create({
+      projectId: project.id,
+      collectionId: collection.id,
+      values: codeValues('X'),
+    });
+
+    // The thrown Conflict carries the uniqueness detail an editor needs to
+    // render the clash. Which holder is kept vs flagged is on-disk-order
+    // dependent, so assert both ids are present rather than pinning each.
+    await expect(
+      core.collections.update({
+        ...collection,
+        projectId: project.id,
+        fieldDefinitions: [codeFieldDef(codeId, true)],
+      })
+    ).rejects.toMatchObject({
+      type: 'Conflict',
+      cause: expect.arrayContaining([
+        expect.objectContaining({
+          issue: 'unique_collision',
+          fieldSlug: 'code',
+          value: 'X',
+          language: 'en',
+          entryId: expect.any(String),
+          conflictingEntryId: expect.any(String),
+        }),
+      ]),
+    });
+  });
+
   it('allows the flip when there are no collisions, and enforces afterwards', async function () {
     const codeId = uuid();
     const collection = await createCodeCollection(project.id, {

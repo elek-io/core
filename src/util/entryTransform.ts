@@ -1,4 +1,4 @@
-import type { Uuid } from '../schema/baseSchema.js';
+import type { SupportedLanguage, Uuid } from '../schema/baseSchema.js';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
 import type { ProjectLanguages } from '../schema/projectSchema.js';
 import {
@@ -25,6 +25,16 @@ export interface EntryIssue {
   currentValue?: Value;
   componentItemId?: Uuid;
   transformedValues: Record<string, Value>;
+  /**
+   * Set only for `unique_collision`. Mirrors UniqueValueConflict so an editor
+   * can render the clash: the colliding scalar `value` in `language`, and
+   * `conflictingEntryId`, the Entry that already holds it (kept). `value` is the
+   * offending string, distinct from `currentValue` (a full Value object carried
+   * by transform issues).
+   */
+  value?: string;
+  language?: SupportedLanguage;
+  conflictingEntryId?: Uuid;
 }
 
 export interface TransformResult {

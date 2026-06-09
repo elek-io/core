@@ -30,6 +30,7 @@ Core diffs old vs new definitions into three categories - `added`, `removed`, `u
 | **Remove** a field                          | Value is dropped from every Entry                                                | **Yes, permanent**    | No (silent)                                                    |
 | **Rename** a field's `slug` (same `id`)     | Value is moved to the new slug, content preserved                                | No                    | No                                                             |
 | **Change** a field's type / constraints     | Old value re-validated against the new schema, kept if it passes                 | Only if it can't pass | **Yes** if it fails (`type_mismatch` / `constraint_violation`) |
+| **Turn** a field unique (`isUnique` on, or add a `slug` field) | Existing values scanned for cross-Entry duplicates per language | No | **Yes** if duplicates exist (`unique_collision`) |
 | **Narrow** `ofComponents` / `ofCollections` | Component items / Entry references no longer allowed are stripped (per language) | **Yes, permanent**    | No (silent)                                                    |
 
 ### Deterministic transforms are applied automatically
@@ -52,11 +53,12 @@ A newly added field's value is built per its type:
 
 ## Resolving non-deterministic changes
 
-Some changes can't be resolved automatically - Core can't guess what a value should become. These raise **issues** and the update fails with a `CoreError` of type `Conflict` until you supply resolutions. The three issue types:
+Some changes can't be resolved automatically - Core can't guess what a value should become. These raise **issues** and the update fails with a `CoreError` of type `Conflict` until you supply resolutions. The four issue types:
 
 - `missing_required` - a required field was added with no default.
 - `type_mismatch` - a field's `valueType` changed and an existing value doesn't fit the new type.
 - `constraint_violation` - a constraint tightened (e.g. `min`/`max`, or `isRequired` toggled on) and an existing value no longer satisfies it.
+- `unique_collision` - a field was made unique (or a `slug` field was added) over a Collection that already holds the same value in more than one Entry for the same language. The first holder is kept and every other Entry is flagged.
 
 The unresolved issues are attached as the **`cause`** of the thrown `Conflict` error - an array where each entry describes one problem:
 
@@ -73,9 +75,11 @@ The unresolved issues are attached as the **`cause`** of the thrown `Conflict` e
 }
 ```
 
+A `unique_collision` issue is shaped a little differently. It sets `transformedValues` to `{}` and has no `currentValue`. Instead it carries `value` (the colliding string), `language` (the slot it collides in), and `conflictingEntryId` (the kept Entry that already holds the value). These are the same fields as the `UniqueValueConflict` thrown on a per-Entry create or update, so an editor renders both the same way.
+
 ### The resolution workflow
 
-Retry the update with a `resolutions` map keyed by Entry id, then field slug, to the corrected `Value`. Resolutions are type-checked against the new field's schema, and an invalid one throws `BadRequest`.
+Retry the update with a `resolutions` map keyed by Entry id, then field slug, to the corrected `Value`. Resolutions are type-checked against the new field's schema, and an invalid one throws `BadRequest`. For a `unique_collision` the corrected `Value` must be unique within the Collection for that `language`, since reusing the colliding value just fails the scan again.
 
 ```typescript
 import { CoreError } from '@elek-io/core';
