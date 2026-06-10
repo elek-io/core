@@ -461,7 +461,13 @@ export class EntryService
           otherEntryPath,
           entryFileSchema
         );
-      } catch {
+      } catch (error) {
+        // Only a schema-shape mismatch means an outdated file. A corrupt file,
+        // a permission error or an ENOENT race is a real failure, so surface it
+        // instead of masking it behind a migrate of unsafely-read content.
+        if (!(error instanceof z.ZodError)) {
+          throw error;
+        }
         // Older Entries (for example brought in by a pull or merge) may predate
         // the current schema. Upgrade them through the migration chain so the
         // scan reads their values instead of throwing on an outdated file.

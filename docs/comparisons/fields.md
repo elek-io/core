@@ -8,7 +8,7 @@ For elek.io Core's full field reference and code examples, see [`../fields.md`](
 
 ## Summary at a glance
 
-- **elek.io Core** - Git-backed JSON storage with first-class i18n. 6 value types × 17 field types. Strong on validated string types (`url`/`ipv4`/`telephone`), grid layout control (`inputWidth`), reusable Components composed via the polymorphic `dynamic` field, and structured (mdast) rich text via the `markdown` field. No M2M. Nested groups and nested `dynamic` fields are intentionally disallowed.
+- **elek.io Core** - Git-backed JSON storage with first-class i18n. 6 value types × 18 field types. Strong on validated string types (`url`/`ipv4`/`telephone`), grid layout control (`inputWidth`), reusable Components composed via the polymorphic `dynamic` field, and structured (mdast) rich text via the `markdown` field. No M2M. Nested groups and nested `dynamic` fields are intentionally disallowed.
 - **Strapi** - Simplest field model. Good basics but fewest UI-layer options. Unique UID field for slug generation. Components + Dynamic Zones for composition.
 - **Directus** - Most granular. Clean separation of data types from UI interfaces gives maximum flexibility. Strongest in presentation/layout fields, geospatial, and selection widgets. Best for database-first projects.
 - **Payload CMS** - Developer-centric with code-first config. Strongest typed relationship model (polymorphic + virtual joins). Monaco code editor built-in. Best React integration for custom fields.
@@ -96,7 +96,7 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 | **Schema validation**       | Zod schemas generated from field definitions                  | Config-based                | Database introspection                                 | Config-based                               | Config-based                                        |
 | **Extensibility model**     | Code-level schema definitions (no plugin system)              | Marketplace plugins         | Extension SDK (interfaces, displays, layouts, modules) | Custom React components via config         | Custom React components via `ui.component`          |
 | **Virtual/computed fields** | --                                                            | --                          | --                                                     | Any field with `virtual: true`, Join field | --                                                  |
-| **Field count**             | 17 field types across 6 value types                           | ~14 built-in                | 40+ interfaces on 28 data types                        | ~18 data fields + presentational + Join    | 8 documented core types (10 in source) + UI plugins |
+| **Field count**             | 18 field types across 6 value types                           | ~14 built-in                | 40+ interfaces on 28 data types                        | ~18 data fields + presentational + Join    | 8 documented core types (10 in source) + UI plugins |
 
 ## Per-CMS Reference
 

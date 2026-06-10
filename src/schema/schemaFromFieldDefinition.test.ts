@@ -2134,4 +2134,39 @@ describe('slug Field definition value schema', () => {
       }).success
     ).toBe(true);
   });
+
+  it('rejects an unslugifiable value with a slug-specific message', () => {
+    const schema = getValueSchemaFromFieldDefinition(baseSlugFieldDef, ['en']);
+    for (const value of ['', '   ', '!!!', '日本語']) {
+      const result = schema.safeParse({
+        objectType: 'value',
+        valueType: 'string',
+        content: { en: value },
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const messages = result.error.issues
+          .map((issue) => issue.message)
+          .join(' ')
+          .toLowerCase();
+        expect(messages).toContain('slug');
+      }
+    }
+  });
+
+  it('suggests the canonical form when rejecting a near-miss', () => {
+    const schema = getValueSchemaFromFieldDefinition(baseSlugFieldDef, ['en']);
+    const result = schema.safeParse({
+      objectType: 'value',
+      valueType: 'string',
+      content: { en: 'Foo Bar' },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues
+        .map((issue) => issue.message)
+        .join(' ');
+      expect(messages).toContain('foo-bar');
+    }
+  });
 });

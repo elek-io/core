@@ -254,6 +254,38 @@ describe('Unique field enforcement', function () {
     ).rejects.toThrow(CoreError);
   });
 
+  it('reports a conflict per field when a write collides on two unique fields at once', async function () {
+    await core.entries.create({
+      projectId: project.id,
+      collectionId: collection.id,
+      values: values({ sku: { en: 'dup' }, slug: { en: 'dup-slug' } }),
+    });
+
+    // Both unique fields collide. A regression that returned after the first
+    // conflict would miss one of these arrayContaining members.
+    await expect(
+      core.entries.create({
+        projectId: project.id,
+        collectionId: collection.id,
+        values: values({ sku: { en: 'dup' }, slug: { en: 'dup-slug' } }),
+      })
+    ).rejects.toMatchObject({
+      type: 'Conflict',
+      cause: expect.arrayContaining([
+        expect.objectContaining({
+          fieldSlug: 'sku',
+          value: 'dup',
+          language: 'en',
+        }),
+        expect.objectContaining({
+          fieldSlug: 'page-slug',
+          value: 'dup-slug',
+          language: 'en',
+        }),
+      ]),
+    });
+  });
+
   it('rejects a non-canonical slug value', async function () {
     await expect(
       core.entries.create({

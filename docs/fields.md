@@ -134,7 +134,9 @@ A URL-friendly string that is always unique within its Collection (`isUnique` is
 
 - **Configuration** - `separator`, `lowercase` and `decamelize` mirror [`@sindresorhus/slugify`](https://github.com/sindresorhus/slugify) and shape what counts as canonical. `separator` must be empty or one of the URL-safe marks `-` `_` `.` `~` (RFC 3986 unreserved). Changing any of these is a major change ([`releases.md`](./releases.md)).
 - **`ofFieldDefinitions`** - an ordered list of sibling field-definition ids the editor uses to auto-generate the slug (for example a `title` field). It is a _soft hint_: Core never derives or binds the value, so the stored slug stays static and user-editable. Each id must reference a non-slug string field in the same Collection, not the slug field itself. An empty array means the slug is entered directly.
-- Because the stored value is exact-match unique, normalization (lowercasing, separators) is what makes uniqueness meaningful for slugs. The caller (for example Desktop) slugifies input with the shared `slug()` helper before saving; a non-canonical value is rejected.
+- **`decamelize`** splits camelCase before slugifying, so `myProduct` becomes `my-product` and a hand-entered camelCase value is rejected as non-canonical. Run input through the shared `slug()` helper rather than typing the slug by hand.
+- **Stability.** Because Core never recomputes the slug, editing a source field (for example renaming the `title`) does not change an existing slug. This keeps permalinks stable, so keeping a slug in sync with its sources is the editor's job, not Core's.
+- Because the stored value is exact-match unique, normalization (lowercasing, separators) is what makes uniqueness meaningful for slugs. The caller (for example Desktop) slugifies input with the shared `slug()` helper before saving; a non-canonical value is rejected. An input that produces an empty slug (only whitespace, punctuation, or a non-Latin script) is rejected with a message that says so.
 
 ### Date & Time (value type: `string`)
 
@@ -341,9 +343,10 @@ Per-language value shape: `content: Record<ProjectLanguage, MdAstRoot | null>`. 
 
 A string field with `isUnique: true` (and the always-unique `slug` type) is enforced on every Entry create and update within its Collection.
 
-- **Per language, exact match.** A value must be unique within its own language slot. The same value in two different languages does not collide, and comparison is byte-for-byte (values are trimmed by the schema). For case-insensitive uniqueness, use a `slug` field with `lowercase: true`.
+- **Per language, exact match.** A value must be unique within its own language slot. The same value in two different languages does not collide, and comparison is byte-for-byte (values are trimmed by the schema, but not Unicode-normalized, so two visually identical strings in different normal forms such as NFC and NFD count as distinct). For case-insensitive uniqueness, or to collapse look-alikes, use a `slug` field with `lowercase: true`.
 - **Nulls never collide.** Unset / `null` language slots are not indexed, so any number of Entries may leave a unique field empty.
 - **On collision,** create / update throws a `Conflict` `CoreError` whose `cause` is an array of `UniqueValueConflict` objects (`collectionId`, `fieldDefinitionId`, `fieldSlug`, `language`, `value`, `conflictingEntryId`), collecting every violation at once.
+- **No auto-resolution.** Core does not suffix a colliding value (there is no `-2` fallback). Because slug and unique values are author-supplied, the caller retries with a different value, using the `value` and `conflictingEntryId` on the returned conflict to decide what to change.
 - **Turning a field unique** over a Collection that already has duplicates is rejected: the Collection update surfaces `unique_collision` entry issues you resolve the same way as other field-definition changes (see [`schema-changes.md`](./schema-changes.md)). Each issue carries `value`, `language` and `conflictingEntryId`, mirroring `UniqueValueConflict`, so an editor can show what clashed.
 - **Scope.** Uniqueness is single-field and Collection-scoped. There is no compound / multi-field uniqueness, and `isUnique` / `slug` are not allowed inside Components (see [`features.md`](./features.md#intentional-constraints)).
 

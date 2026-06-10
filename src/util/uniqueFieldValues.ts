@@ -1,3 +1,4 @@
+import { supportedLanguageSchema } from '../schema/baseSchema.js';
 import type { SupportedLanguage, Uuid } from '../schema/baseSchema.js';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
 import type { Value } from '../schema/valueSchema.js';
@@ -71,7 +72,10 @@ export function extractUniqueFieldValues(
         result.push({
           fieldDefinitionId: fieldDefinition.id,
           fieldSlug: fieldDefinition.slug,
-          language: language as SupportedLanguage,
+          // Object.entries widens the key to string. The content is keyed by
+          // SupportedLanguage and was validated upstream, so parse narrows it
+          // back without a cast.
+          language: supportedLanguageSchema.parse(language),
           value: content,
         });
       }
@@ -82,7 +86,9 @@ export function extractUniqueFieldValues(
 
 /**
  * Separator for the composite collision key. A NUL (U+0000) can never appear
- * in a field slug or language code, so it keeps the key unambiguous. Built
+ * in a field slug or language code, so the first two segments stay unambiguous.
+ * An arbitrary isUnique text value may contain a NUL, but the value is the
+ * trailing segment of the key, so the key stays injective regardless. Built
  * with String.fromCharCode so this source file stays plain text rather than
  * containing a raw NUL byte.
  */
