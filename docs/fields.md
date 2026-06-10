@@ -231,6 +231,8 @@ The only boolean field type. Always required and always has a default value (boo
 
 Reference fields store an array of `{ id, objectType }` references per language. Both reference field types use `min` / `max` (nullable, ≥1) to control the count: `min: 1, max: 1` for a single reference. `null`/`null` for "any number, including none". `isUnique` is forced `false`.
 
+For how references behave beyond field configuration (the three carriers, write-time validation, and delete protection), see [`references.md`](./references.md).
+
 #### `asset`
 
 References Assets (files in the project's media library).

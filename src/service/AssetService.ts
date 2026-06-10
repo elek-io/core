@@ -32,6 +32,7 @@ import { applyMigrations, assetMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid, CoreError } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
+import type { EntryService } from './EntryService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -41,13 +42,15 @@ import type { LogService } from './LogService.js';
  */
 export class AssetService extends AbstractEntityService {
   private readonly coreVersion: string;
+  private readonly entryService: EntryService;
 
   constructor(
     coreVersion: string,
     options: ElekIoCoreOptions,
     logService: LogService,
     jsonFileService: JsonFileService,
-    gitService: GitService
+    gitService: GitService,
+    entryService: EntryService
   ) {
     super(
       serviceTypeSchema.enum.Asset,
@@ -58,6 +61,7 @@ export class AssetService extends AbstractEntityService {
     );
 
     this.coreVersion = coreVersion;
+    this.entryService = entryService;
   }
 
   /**
@@ -276,6 +280,19 @@ export class AssetService extends AbstractEntityService {
    */
   public delete(props: DeleteAssetProps): Promise<void> {
     return this.validated('delete', deleteAssetSchema, props, async () => {
+      const referencingEntries = await this.entryService.findEntriesReferencing(
+        { projectId: props.projectId, assetId: props.id }
+      );
+      if (referencingEntries.length > 0) {
+        const list = referencingEntries
+          .map((r) => `Entry "${r.entryId}" (Collection "${r.collectionId}")`)
+          .join(', ');
+        throw CoreError.conflict(
+          `Cannot delete Asset "${props.id}": it is still referenced by ${list}`,
+          referencingEntries
+        );
+      }
+
       const projectPath = pathTo.project(props.projectId);
       const assetFilePath = pathTo.assetFile(props.projectId, props.id);
       const assetPath = pathTo.asset(

@@ -61,7 +61,7 @@ Core derives the `mimeType` and `extension` from the file using the `mime` packa
 `delete({ projectId, id, extension })` removes both the binary and the metadata file and commits the deletion. Two things to know:
 
 - You must pass the `extension` (Core needs it to locate the binary under `lfs/`).
-- **Delete does not check for inbound references.** Unlike Components, a referenced Asset can be deleted, leaving dangling references in Entries. This is listed under [`features.md`](./features.md#limitations). Handle missing references gracefully when rendering.
+- **Delete is blocked while the Asset is still referenced.** Deleting an Asset that an Entry still points at fails with a `Conflict` that lists the referring Entries, so you remove or repoint those references first. See [`references.md`](./references.md) for the full model.
 
 ## Restricting Asset types on a field
 

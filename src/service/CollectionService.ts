@@ -51,6 +51,7 @@ import { applyMigrations, collectionMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
+import type { EntryService } from './EntryService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -63,6 +64,7 @@ export class CollectionService
   implements CrudServiceWithListCount<Collection>
 {
   private coreVersion: string;
+  private entryService: EntryService | undefined;
 
   protected entityFileSchema = collectionFileSchema;
 
@@ -95,6 +97,17 @@ export class CollectionService
     );
 
     this.coreVersion = coreVersion;
+  }
+
+  /**
+   * Injects the EntryService used by delete protection.
+   *
+   * CollectionService is constructed before EntryService (which depends on it),
+   * so this dependency is wired in after construction instead of via the
+   * constructor to avoid a circular dependency. See `delete`.
+   */
+  public setEntryService(entryService: EntryService): void {
+    this.entryService = entryService;
   }
 
   /**
@@ -597,6 +610,13 @@ export class CollectionService
   /**
    * Deletes given Collection (folder), including it's Entries
    *
+   * Blocks deletion if a surviving Entry outside this Collection still
+   * references into it (a flat reference field, an mdast node, or a reference
+   * nested in a `dynamic`/component block), which would otherwise leave a
+   * dangling reference behind. References between Entries that are all being
+   * deleted together do not block. The thrown `Conflict` carries the list of
+   * referring Entries, mirroring Asset and Entry delete protection.
+   *
    * The Fields that Collection used are not deleted.
    */
   public async delete(props: DeleteCollectionProps): Promise<void> {
@@ -605,6 +625,27 @@ export class CollectionService
       deleteCollectionSchema,
       props,
       async (validatedProps) => {
+        if (this.entryService === undefined) {
+          throw CoreError.internal(
+            'CollectionService.delete requires an EntryService. Call setEntryService during setup.'
+          );
+        }
+
+        const referencingEntries =
+          await this.entryService.findEntriesReferencing({
+            projectId: validatedProps.projectId,
+            collectionId: validatedProps.id,
+          });
+        if (referencingEntries.length > 0) {
+          const list = referencingEntries
+            .map((r) => `Entry "${r.entryId}" (Collection "${r.collectionId}")`)
+            .join(', ');
+          throw CoreError.conflict(
+            `Cannot delete Collection "${validatedProps.id}": it is still referenced by ${list}`,
+            referencingEntries
+          );
+        }
+
         const projectPath = pathTo.project(validatedProps.projectId);
         const collectionPath = pathTo.collection(
           validatedProps.projectId,
