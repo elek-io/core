@@ -5,14 +5,17 @@ import core, {
   uuid,
   type Collection,
   type Component,
-  type MarkdownFeatures,
   type Project,
   type ReferencingEntry,
   type Value,
 } from '../test/setup.js';
 import {
   createAsset,
+  createMarkdownCollection,
+  createMediaComponent,
+  createPagesCollection,
   createProject,
+  createRefCollection,
   ensureCleanGitStatus,
 } from '../test/util.js';
 
@@ -24,193 +27,6 @@ function getReferencingEntries(error: unknown): ReferencingEntry[] | null {
   if (!(error instanceof CoreError) || error.type !== 'Conflict') return null;
   if (!Array.isArray(error.cause)) return null;
   return error.cause as ReferencingEntry[];
-}
-
-/** Markdown features all off — these tests opt in to references only. */
-const offMarkdownFeatures: MarkdownFeatures = {
-  headings: [],
-  blockquotes: false,
-  lists: false,
-  codeBlocks: false,
-  thematicBreak: false,
-  rawHtml: false,
-  tables: false,
-  taskListItems: false,
-  footnotes: false,
-  emphasis: false,
-  strong: false,
-  inlineCode: false,
-  externalLinks: false,
-  entryReferences: false,
-  externalImages: false,
-  assetReferences: false,
-  strikethrough: false,
-  hardLineBreaks: false,
-};
-
-/** Collection with optional flat `image` (asset) and `related` (entry) refs. */
-async function createRefCollection(projectId: string): Promise<Collection> {
-  const suffix = uuid();
-  return core.collections.create({
-    projectId,
-    icon: 'home',
-    name: {
-      singular: { en: 'Ref', de: 'Ref' },
-      plural: { en: 'Refs', de: 'Refs' },
-    },
-    slug: { singular: `ref-${suffix}`, plural: `refs-${suffix}` },
-    description: { en: 'Refs', de: 'Refs' },
-    fieldDefinitions: [
-      {
-        id: uuid(),
-        slug: 'image',
-        valueType: 'reference',
-        fieldType: 'asset',
-        label: { en: 'Image', de: 'Image' },
-        description: null,
-        isRequired: false,
-        isDisabled: false,
-        isUnique: false,
-        inputWidth: '12',
-        min: null,
-        max: null,
-        ofAssetMimeTypes: [],
-      },
-      {
-        id: uuid(),
-        slug: 'related',
-        valueType: 'reference',
-        fieldType: 'entry',
-        label: { en: 'Related', de: 'Related' },
-        description: null,
-        isRequired: false,
-        isDisabled: false,
-        isUnique: false,
-        inputWidth: '12',
-        min: null,
-        max: null,
-        ofCollections: [],
-      },
-    ],
-  });
-}
-
-/** Collection with an optional markdown `body` allowing asset + entry refs. */
-async function createMarkdownCollection(
-  projectId: string
-): Promise<Collection> {
-  const suffix = uuid();
-  return core.collections.create({
-    projectId,
-    icon: 'home',
-    name: {
-      singular: { en: 'Article', de: 'Article' },
-      plural: { en: 'Articles', de: 'Articles' },
-    },
-    slug: { singular: `article-${suffix}`, plural: `articles-${suffix}` },
-    description: { en: 'Articles', de: 'Articles' },
-    fieldDefinitions: [
-      {
-        id: uuid(),
-        slug: 'body',
-        valueType: 'mdast',
-        fieldType: 'markdown',
-        label: { en: 'Body', de: 'Body' },
-        description: null,
-        isRequired: false,
-        isDisabled: false,
-        isUnique: false,
-        inputWidth: '12',
-        min: null,
-        max: null,
-        features: {
-          ...offMarkdownFeatures,
-          entryReferences: true,
-          assetReferences: true,
-        },
-        ofCollections: [],
-        ofAssetMimeTypes: [],
-        defaultValue: null,
-      },
-    ],
-  });
-}
-
-/** Component with optional `image` (asset) and `link` (entry) reference fields. */
-async function createMediaComponent(projectId: string): Promise<Component> {
-  return core.components.create({
-    projectId,
-    name: { en: 'Media', de: 'Media' },
-    slug: `media-${uuid()}`,
-    description: null,
-    fieldDefinitions: [
-      {
-        id: uuid(),
-        slug: 'image',
-        valueType: 'reference',
-        fieldType: 'asset',
-        label: { en: 'Image', de: 'Image' },
-        description: null,
-        isRequired: false,
-        isDisabled: false,
-        isUnique: false,
-        inputWidth: '12',
-        min: null,
-        max: null,
-        ofAssetMimeTypes: [],
-      },
-      {
-        id: uuid(),
-        slug: 'link',
-        valueType: 'reference',
-        fieldType: 'entry',
-        label: { en: 'Link', de: 'Link' },
-        description: null,
-        isRequired: false,
-        isDisabled: false,
-        isUnique: false,
-        inputWidth: '12',
-        min: null,
-        max: null,
-        ofCollections: [],
-      },
-    ],
-  });
-}
-
-/** Collection with a `blocks` dynamic field composing the given component. */
-async function createPagesCollection(
-  projectId: string,
-  componentId: string
-): Promise<Collection> {
-  const suffix = uuid();
-  return core.collections.create({
-    projectId,
-    icon: 'home',
-    name: {
-      singular: { en: 'Page', de: 'Page' },
-      plural: { en: 'Pages', de: 'Pages' },
-    },
-    slug: { singular: `page-${suffix}`, plural: `pages-${suffix}` },
-    description: { en: 'Pages', de: 'Pages' },
-    fieldDefinitions: [
-      {
-        id: uuid(),
-        slug: 'blocks',
-        valueType: 'component',
-        fieldType: 'dynamic',
-        label: { en: 'Blocks', de: 'Blocks' },
-        description: null,
-        isRequired: false,
-        isDisabled: false,
-        isUnique: false,
-        inputWidth: '12',
-        ofComponents: [componentId],
-        min: null,
-        max: null,
-      },
-    ],
-  });
 }
 
 describe('Delete reference protection', function () {

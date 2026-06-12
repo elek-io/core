@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import type { IGitExecutionOptions, IGitStringResult } from 'dugite';
-import { exec as gitExec } from 'dugite';
+import { exec as gitExec, GitError, parseError } from 'dugite';
 import PQueue from 'p-queue';
 import Path from 'node:path';
 import { CoreError } from '../util/shared.js';
@@ -39,6 +39,15 @@ import type { LogProps } from '../schema/index.js';
  *
  * @todo All public methods should recieve only a single object as parameter and the type should be defined through the shared library to be accessible in Core and Client
  */
+
+/**
+ * Options for the internal `git` runner: dugite's execution options plus
+ * `tolerateNonZero`, which returns the result on a non-zero exit instead of
+ * throwing, so the caller can classify the failure itself (used by `rebase`
+ * and `push`). `tolerateNonZero` is stripped before the options reach dugite.
+ */
+type GitCommandOptions = IGitExecutionOptions & { tolerateNonZero?: boolean };
+
 export class GitService {
   private version: string | null;
   private gitPath: string | null;
@@ -549,6 +558,73 @@ export class GitService {
   }
 
   /**
+   * Rebase the current branch onto `onto` (for example `origin/work`).
+   *
+   * A controlled rebase that tells three outcomes apart from the raw result:
+   *   - clean success: the working tree now holds the integrated state.
+   *   - textual conflict: aborts the rebase so the tree is left clean, never
+   *     mid-rebase, then throws `PreconditionFailed`.
+   *   - any other failure: throws `Internal`, so an unrecognised failure stays
+   *     loud rather than silently leaving a half-applied rebase.
+   *
+   * Conflicts are classified with dugite's own `parseError` + `GitError`, the
+   * maintained mapping of git output to error codes that GitHub Desktop relies
+   * on, rather than bespoke regexes.
+   *
+   * @see https://git-scm.com/docs/git-rebase
+   *
+   * @param path Path to the repository
+   * @param onto The ref to rebase the current branch onto
+   */
+  public async rebase(path: string, onto: string): Promise<void> {
+    const result = await this.git(path, ['rebase', onto], {
+      tolerateNonZero: true,
+    });
+
+    if (result.exitCode === 0) {
+      // Rebasing rewrites the working tree, so cached file contents may no
+      // longer match disk
+      this.jsonFileService.clearCache();
+      return;
+    }
+
+    const gitError = parseError(result.stderr);
+    if (
+      gitError === GitError.RebaseConflicts ||
+      gitError === GitError.MergeConflicts
+    ) {
+      // Leave a clean tree instead of a half-applied rebase the caller would
+      // otherwise have to unwind by hand.
+      await this.rebaseAbort(path);
+      throw CoreError.preconditionFailed(
+        'Rebase stopped on a textual conflict. Your local changes conflict with the remote and were not integrated. Resolve them and synchronize again.',
+        `${result.stdout}\n${result.stderr}`.trim()
+      );
+    }
+
+    throw CoreError.internal(
+      `Git rebase onto "${onto}" failed with exit code "${
+        result.exitCode
+      }" and message "${`${result.stderr}\n${result.stdout}`.trim()}"`
+    );
+  }
+
+  /**
+   * Abort an in-progress rebase, restoring the pre-rebase HEAD and a clean
+   * working tree.
+   *
+   * @see https://git-scm.com/docs/git-rebase#Documentation/git-rebase.txt---abort
+   *
+   * @param path Path to the repository
+   */
+  public async rebaseAbort(path: string): Promise<void> {
+    await this.git(path, ['rebase', '--abort']);
+    // Aborting restores files on disk, so cached file contents may no longer
+    // match disk
+    this.jsonFileService.clearCache();
+  }
+
+  /**
    * Reset current HEAD to the specified state
    *
    * @todo maybe add more options
@@ -631,7 +707,24 @@ export class GitService {
       args = [...args, '--force'];
     }
 
-    await this.git(path, args);
+    const result = await this.git(path, args, {
+      tolerateNonZero: true,
+    });
+    if (result.exitCode !== 0) {
+      const message = `${result.stderr}\n${result.stdout}`.trim();
+      // A non-fast-forward rejection is recoverable by re-integrating the
+      // remote and pushing again, so it is surfaced distinctly from a genuine
+      // push failure (which stays `Internal`).
+      if (parseError(result.stderr) === GitError.PushNotFastForward) {
+        throw CoreError.preconditionFailed(
+          'Push rejected because the remote advanced. Re-integrate the remote changes and try again.',
+          message
+        );
+      }
+      throw CoreError.internal(
+        `Git push to origin failed with exit code "${result.exitCode}" and message "${message}"`
+      );
+    }
   }
 
   /**
@@ -946,11 +1039,12 @@ export class GitService {
   private async git(
     path: string,
     args: string[],
-    options?: IGitExecutionOptions
+    options: GitCommandOptions = {}
   ): Promise<IGitStringResult> {
+    const { tolerateNonZero, ...execOptions } = options;
     const result = await this.queue.add(async () => {
       const start = Date.now();
-      const gitResult = await gitExec(args, path, options);
+      const gitResult = await gitExec(args, path, execOptions);
       const durationMs = Date.now() - start;
       return { gitResult, durationMs };
     });
@@ -974,7 +1068,7 @@ export class GitService {
       this.logService.debug(gitLog);
     }
 
-    if (result.gitResult.exitCode !== 0) {
+    if (result.gitResult.exitCode !== 0 && tolerateNonZero !== true) {
       throw CoreError.internal(
         `Git ${this.version} (${this.gitPath}) command "git ${args.join(
           ' '

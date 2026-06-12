@@ -5,7 +5,12 @@ import Path from 'node:path';
 import ts from 'typescript';
 import type { RunnerTestCase } from 'vitest';
 import { expect } from 'vitest';
-import type { EntryFieldDefinition } from './setup.js';
+import type {
+  Collection,
+  Component,
+  EntryFieldDefinition,
+  MarkdownFeatures,
+} from './setup.js';
 import core, {
   flattenFieldDefinitions,
   uuid,
@@ -330,4 +335,195 @@ export async function createEntry(
   });
 
   return entry;
+}
+
+/** Markdown features all off - opt in to references only. */
+export const offMarkdownFeatures: MarkdownFeatures = {
+  headings: [],
+  blockquotes: false,
+  lists: false,
+  codeBlocks: false,
+  thematicBreak: false,
+  rawHtml: false,
+  tables: false,
+  taskListItems: false,
+  footnotes: false,
+  emphasis: false,
+  strong: false,
+  inlineCode: false,
+  externalLinks: false,
+  entryReferences: false,
+  externalImages: false,
+  assetReferences: false,
+  strikethrough: false,
+  hardLineBreaks: false,
+};
+
+/** Collection with optional flat `image` (asset) and `related` (entry) refs. */
+export async function createRefCollection(
+  projectId: string
+): Promise<Collection> {
+  const suffix = uuid();
+  return core.collections.create({
+    projectId,
+    icon: 'home',
+    name: {
+      singular: { en: 'Ref', de: 'Ref' },
+      plural: { en: 'Refs', de: 'Refs' },
+    },
+    slug: { singular: `ref-${suffix}`, plural: `refs-${suffix}` },
+    description: { en: 'Refs', de: 'Refs' },
+    fieldDefinitions: [
+      {
+        id: uuid(),
+        slug: 'image',
+        valueType: 'reference',
+        fieldType: 'asset',
+        label: { en: 'Image', de: 'Image' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        min: null,
+        max: null,
+        ofAssetMimeTypes: [],
+      },
+      {
+        id: uuid(),
+        slug: 'related',
+        valueType: 'reference',
+        fieldType: 'entry',
+        label: { en: 'Related', de: 'Related' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        min: null,
+        max: null,
+        ofCollections: [],
+      },
+    ],
+  });
+}
+
+/** Collection with an optional markdown `body` allowing asset + entry refs. */
+export async function createMarkdownCollection(
+  projectId: string
+): Promise<Collection> {
+  const suffix = uuid();
+  return core.collections.create({
+    projectId,
+    icon: 'home',
+    name: {
+      singular: { en: 'Article', de: 'Article' },
+      plural: { en: 'Articles', de: 'Articles' },
+    },
+    slug: { singular: `article-${suffix}`, plural: `articles-${suffix}` },
+    description: { en: 'Articles', de: 'Articles' },
+    fieldDefinitions: [
+      {
+        id: uuid(),
+        slug: 'body',
+        valueType: 'mdast',
+        fieldType: 'markdown',
+        label: { en: 'Body', de: 'Body' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        min: null,
+        max: null,
+        features: {
+          ...offMarkdownFeatures,
+          entryReferences: true,
+          assetReferences: true,
+        },
+        ofCollections: [],
+        ofAssetMimeTypes: [],
+        defaultValue: null,
+      },
+    ],
+  });
+}
+
+/** Component with optional `image` (asset) and `link` (entry) reference fields. */
+export async function createMediaComponent(
+  projectId: string
+): Promise<Component> {
+  return core.components.create({
+    projectId,
+    name: { en: 'Media', de: 'Media' },
+    slug: `media-${uuid()}`,
+    description: null,
+    fieldDefinitions: [
+      {
+        id: uuid(),
+        slug: 'image',
+        valueType: 'reference',
+        fieldType: 'asset',
+        label: { en: 'Image', de: 'Image' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        min: null,
+        max: null,
+        ofAssetMimeTypes: [],
+      },
+      {
+        id: uuid(),
+        slug: 'link',
+        valueType: 'reference',
+        fieldType: 'entry',
+        label: { en: 'Link', de: 'Link' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        min: null,
+        max: null,
+        ofCollections: [],
+      },
+    ],
+  });
+}
+
+/** Collection with a `blocks` dynamic field composing the given component. */
+export async function createPagesCollection(
+  projectId: string,
+  componentId: string
+): Promise<Collection> {
+  const suffix = uuid();
+  return core.collections.create({
+    projectId,
+    icon: 'home',
+    name: {
+      singular: { en: 'Page', de: 'Page' },
+      plural: { en: 'Pages', de: 'Pages' },
+    },
+    slug: { singular: `page-${suffix}`, plural: `pages-${suffix}` },
+    description: { en: 'Pages', de: 'Pages' },
+    fieldDefinitions: [
+      {
+        id: uuid(),
+        slug: 'blocks',
+        valueType: 'component',
+        fieldType: 'dynamic',
+        label: { en: 'Blocks', de: 'Blocks' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        ofComponents: [componentId],
+        min: null,
+        max: null,
+      },
+    ],
+  });
 }

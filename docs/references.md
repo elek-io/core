@@ -3,7 +3,7 @@
 A reference is a typed pointer from one piece of content to another. Instead of copying
 data or hard-coding a URL, an Entry stores the id of the thing it points at, and Core keeps
 those pointers honest. This page explains what a reference is, where references can live,
-how Core stops them from breaking, and the one case it cannot fully prevent.
+and how Core stops them from breaking across writes, deletes, and sync.
 
 elek.io Projects are managed only through Core, either directly or through elek.io Desktop
 (which uses Core). Editing a Project's files by hand or running git commands against it
@@ -202,18 +202,27 @@ referrer (the surviving Entry to edit), not the thing being deleted.
   released (`production`) history. A `work` delete does not touch the `production` copies, so
   a reference that lives only in a past release is not affected by it.
 
-### The one case Core cannot fully prevent
+### The third gate: sync
 
 Every change made through Core goes through the two gates above, so no single create, update,
-or delete leaves a dangling reference behind. The exception is a sync that merges concurrent
-changes.
+or delete leaves a dangling reference behind. A sync is the third place content combines.
 
-Core (and Desktop) sync a Project by pulling and merging, which is what lets people work
-offline and across machines. A merge reconciles two independently valid histories, so it can
+Core (and Desktop) sync a Project by pulling and rebasing, which is what lets people work
+offline and across machines. A rebase reconciles two independently valid histories, so it can
 combine a delete made on one side with a new reference added on the other into a result that
 neither change produced alone. No per-operation check can catch this, because each side was
-valid on its own. It is inherent to a distributed, git-backed model and is the reason
-detection is an on-demand scan rather than a stored index. In practice it stays rare.
+valid on its own.
+
+Core closes this at sync time. `synchronize` integrates the remote (fetch then a controlled
+rebase) and, before pushing, scans the whole integrated `work` tree for any reference whose
+target is now absent (`EntryService.findDanglingReferences`, the forward analogue of the
+delete-time scan). If it finds one, the sync stops with a `Conflict` and does not push, leaving
+the integrated commits in the local tree to repair through Core's own (integrity-gated) delete
+or update before syncing again, so the shared remote never receives a dangling state. This
+guarantee holds because Projects are reconciled only through Core's `synchronize`, run locally,
+never through a server-side or pull-request merge or a raw `git push`. The day a merge bypasses
+Core, the remote can hold a state no local gate saw. See
+`docs/design/sync-dangling-reference-prevention.md`.
 
 One smaller nuance: a field `defaultValue` is not counted as a reference. A reference embedded
 in a Collection or Component field's `defaultValue` only becomes live once it is stamped into

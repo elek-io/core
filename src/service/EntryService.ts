@@ -23,6 +23,7 @@ import {
   type CrudServiceWithListCount,
   type DeleteEntryProps,
   type ElekIoCoreOptions,
+  type DanglingReference,
   type Entry,
   type EntryFile,
   type EntryReferenceIssue,
@@ -435,22 +436,7 @@ export class EntryService
           collectionId,
           entryId
         );
-        let entryFile: EntryFile;
-        try {
-          entryFile = await this.jsonFileService.read(
-            entryFilePath,
-            entryFileSchema
-          );
-        } catch (error) {
-          // Only a schema-shape mismatch means an outdated file. A corrupt
-          // file, a permission error or an ENOENT race is a real failure.
-          if (!(error instanceof z.ZodError)) {
-            throw error;
-          }
-          entryFile = this.migrate(
-            await this.jsonFileService.unsafeRead(entryFilePath)
-          );
-        }
+        const entryFile = await this.readEntryFileMigrating(entryFilePath);
 
         const match = this.findMatchingReference(entryFile.values, target);
         if (match) {
@@ -510,6 +496,87 @@ export class EntryService
       }
     }
     return undefined;
+  }
+
+  /**
+   * Forward whole-tree integrity scan used by sync before pushing. Walks every
+   * Entry in every Collection, enumerates every reference it holds across the
+   * three carriers (flat, mdast, nested component) via `collectReferencesInValue`,
+   * and records each reference whose target file is absent on disk.
+   *
+   * Pure existence only: no field definitions, no `ComponentResolver`, and no
+   * MIME or `ofCollections` checks (those are write-time concerns). Outdated
+   * Entry files brought in by a pull or rebase are upgraded through
+   * `readEntryFileMigrating`. Unlike `findEntriesReferencing` (reverse,
+   * first-match-per-Entry) this reports EVERY dangling reference, since each
+   * broken reference is a separate thing to repair.
+   */
+  public async findDanglingReferences(
+    projectId: string
+  ): Promise<DanglingReference[]> {
+    const results: DanglingReference[] = [];
+
+    for (const collectionReference of await this.listReferences(
+      objectTypeSchema.enum.collection,
+      projectId
+    )) {
+      const collectionId = collectionReference.id;
+
+      for (const entryReference of await this.listReferences(
+        objectTypeSchema.enum.entry,
+        projectId,
+        collectionId
+      )) {
+        const entryId = entryReference.id;
+        const entryFile = await this.readEntryFileMigrating(
+          pathTo.entryFile(projectId, collectionId, entryId)
+        );
+
+        for (const [fieldSlug, value] of Object.entries(entryFile.values)) {
+          for (const ref of collectReferencesInValue(value, fieldSlug, [])) {
+            if (await this.referenceTargetExists(projectId, ref)) {
+              continue;
+            }
+            results.push({
+              collectionId,
+              entryId,
+              fieldSlug: ref.fieldSlug,
+              via: ref.via,
+              componentPath: ref.componentPath,
+              targetKind: ref.refKind,
+              targetId: ref.id,
+              targetCollectionId:
+                ref.refKind === 'entry' ? (ref.collectionId ?? null) : null,
+            });
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Pure existence test for a single found reference's target. An Asset or
+   * Entry target is a JSON file; a whole-Collection target is the Collection
+   * folder. Entry references always carry their target's `collectionId`; the
+   * unresolvable fallback never flags as dangling so a malformed ref cannot
+   * block a sync on its own.
+   */
+  private async referenceTargetExists(
+    projectId: string,
+    ref: FoundReference
+  ): Promise<boolean> {
+    if (ref.refKind === 'asset') {
+      return Fs.pathExists(pathTo.assetFile(projectId, ref.id));
+    }
+    if (ref.refKind === 'collection') {
+      return Fs.pathExists(pathTo.collection(projectId, ref.id));
+    }
+    if (ref.collectionId === undefined) {
+      return true;
+    }
+    return Fs.pathExists(pathTo.entryFile(projectId, ref.collectionId, ref.id));
   }
 
   public list<T extends Entry = Entry>(
@@ -575,6 +642,31 @@ export class EntryService
   }
 
   /**
+   * Reads an Entry file, fast-pathing a current-version file (which also
+   * populates the cache) and falling back to `migrate(unsafeRead)` only on a
+   * Zod shape mismatch. Older Entries (for example brought in by a pull or
+   * merge) may predate the current schema, so they are upgraded through the
+   * migration chain instead of throwing. Any other read error (a corrupt file,
+   * a permission error or an ENOENT race) is a real failure and propagates.
+   *
+   * Shared by every on-demand reference scan: the reverse delete gates
+   * (`findEntriesReferencing`, `findUniqueValueConflicts`) and the forward sync
+   * gate (`findDanglingReferences`).
+   */
+  private async readEntryFileMigrating(
+    entryFilePath: string
+  ): Promise<EntryFile> {
+    try {
+      return await this.jsonFileService.read(entryFilePath, entryFileSchema);
+    } catch (error) {
+      if (!(error instanceof z.ZodError)) {
+        throw error;
+      }
+      return this.migrate(await this.jsonFileService.unsafeRead(entryFilePath));
+    }
+  }
+
+  /**
    * Creates an Entry from given EntryFile by resolving it's Values
    */
   private toEntry(entryFile: EntryFile): Entry {
@@ -619,27 +711,7 @@ export class EntryService
         continue;
       }
       const otherEntryPath = pathTo.entryFile(projectId, collectionId, otherId);
-      let otherEntry: EntryFile;
-      try {
-        // Fast path: a current-version file parses directly (and is cached)
-        otherEntry = await this.jsonFileService.read(
-          otherEntryPath,
-          entryFileSchema
-        );
-      } catch (error) {
-        // Only a schema-shape mismatch means an outdated file. A corrupt file,
-        // a permission error or an ENOENT race is a real failure, so surface it
-        // instead of masking it behind a migrate of unsafely-read content.
-        if (!(error instanceof z.ZodError)) {
-          throw error;
-        }
-        // Older Entries (for example brought in by a pull or merge) may predate
-        // the current schema. Upgrade them through the migration chain so the
-        // scan reads their values instead of throwing on an outdated file.
-        otherEntry = this.migrate(
-          await this.jsonFileService.unsafeRead(otherEntryPath)
-        );
-      }
+      const otherEntry = await this.readEntryFileMigrating(otherEntryPath);
       entries.push({ entryId: otherId, values: otherEntry.values });
     }
 

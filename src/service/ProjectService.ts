@@ -596,8 +596,26 @@ export class ProjectService
   }
 
   /**
-   * Pulls remote changes of `origin` down to the local repository
-   * and then pushes local commits to the upstream branch
+   * Integrates remote changes of `origin` and pushes local commits, refusing to
+   * push a state that would strand a dangling reference.
+   *
+   * A rebase can integrate two individually valid changes (one client deletes a
+   * target after the last reference to it is removed, another adds a reference
+   * to that same target) into a tree with a dangling reference and no textual
+   * conflict. To stop that state ever reaching the shared remote, the integrated
+   * tree is scanned for dangling references BEFORE the push and the push is
+   * blocked if any are found (`EntryService.findDanglingReferences`). The
+   * integrated commits stay local so the user can repair them through Core's own
+   * (integrity-gated) delete/update and synchronize again.
+   *
+   * The transaction is: refuse on a dirty tree, then fetch, controlled rebase
+   * (a textual conflict aborts cleanly rather than leaving the repository
+   * mid-rebase), top up LFS, scan, and push inside a bounded non-fast-forward
+   * retry loop. A blocked sync performs no remote mutation, since every gate
+   * throws before the push.
+   *
+   * Scope is the current `work` tree only; released `production` history is not
+   * reconciled here.
    */
   public synchronize(props: SynchronizeProjectProps): Promise<void> {
     return this.validated(
@@ -606,13 +624,61 @@ export class ProjectService
       props,
       async () => {
         const projectPath = pathTo.project(props.id);
-        // `pull` already smudges the current branch's LFS files into the working
-        // tree. `fetchAll` (not `git lfs pull`) then tops up the local store with
-        // every OTHER ref's objects, so switching branches works offline. `git lfs
-        // pull` would re-checkout the current ref and is scoped to it only.
-        await this.gitService.pull(projectPath);
-        await this.gitService.lfs.fetchAll(projectPath);
-        await this.gitService.push(projectPath);
+
+        // A rebase against uncommitted changes fails and could cost the user
+        // work, so refuse a sync on a dirty tree before touching the remote.
+        const uncommitted = await this.gitService.status(projectPath);
+        if (uncommitted.length > 0) {
+          throw CoreError.preconditionFailed(
+            `Project "${props.id}" has uncommitted changes. Commit or discard them before synchronizing.`,
+            uncommitted
+          );
+        }
+
+        const branch = await this.gitService.branches.current(projectPath);
+
+        // Bounded so a remote that keeps advancing cannot spin this forever.
+        const maxAttempts = 5;
+        for (let attempt = 1; ; attempt += 1) {
+          // Integrate the remote into the working tree without pushing yet.
+          // `lfs.fetchAll` (not `git lfs pull`) tops up every ref's objects so
+          // switching branches works offline. A textual conflict aborts cleanly
+          // inside `rebase` and surfaces a `PreconditionFailed`, leaving the
+          // repository in a recoverable, non-mid-rebase state.
+          await this.gitService.fetch(projectPath);
+          await this.gitService.rebase(projectPath, `origin/${branch}`);
+          await this.gitService.lfs.fetchAll(projectPath);
+
+          // Validate the integrated tree BEFORE pushing, so a dangling state
+          // never reaches the shared remote.
+          const danglingReferences =
+            await this.entryService.findDanglingReferences(props.id);
+          if (danglingReferences.length > 0) {
+            throw CoreError.conflict(
+              'Synchronize would integrate dangling references',
+              danglingReferences
+            );
+          }
+
+          try {
+            await this.gitService.push(projectPath);
+            return;
+          } catch (error) {
+            // A non-fast-forward rejection means the remote advanced between the
+            // fetch and the push. Re-integrate and try again, up to the cap.
+            // Matched on the message `push` sets for that specific case, so an
+            // unrelated `PreconditionFailed` (for example a broken LFS endpoint)
+            // is not mistaken for a retryable race.
+            const isNonFastForward =
+              error instanceof CoreError &&
+              error.type === 'PreconditionFailed' &&
+              error.message.startsWith('Push rejected because the remote');
+            if (isNonFastForward && attempt < maxAttempts) {
+              continue;
+            }
+            throw error;
+          }
+        }
       }
     );
   }

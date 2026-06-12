@@ -209,3 +209,51 @@ export interface ReferencingEntry {
    */
   componentPath: ReferenceComponentPathSegment[];
 }
+
+/**
+ * A reference found in the integrated tree whose target file is absent. The
+ * forward analogue of `ReferencingEntry`: it names both the referring Entry
+ * (where the broken reference lives) and the missing target. Collected by
+ * `EntryService.findDanglingReferences` and attached as the `cause` of the
+ * `Conflict` thrown when a sync would integrate a dangling reference. One
+ * record per dangling reference (every broken reference is reported, not just
+ * the first within an Entry).
+ */
+export interface DanglingReference {
+  /**
+   * Collection the referring Entry belongs to.
+   */
+  collectionId: Uuid;
+  /**
+   * The referring Entry's id.
+   */
+  entryId: Uuid;
+  /**
+   * Slug of the leaf field holding the reference (the innermost field when
+   * the reference is nested inside `dynamic`/component blocks).
+   */
+  fieldSlug: string;
+  /**
+   * Which carrier the reference id was stored in. Nesting inside a component
+   * is signalled by a non-empty `componentPath`, not by this field.
+   */
+  via: 'reference' | 'mdast';
+  /**
+   * Chain of `dynamic`/component hops down to `fieldSlug`. Empty when the
+   * reference sits in a top-level field.
+   */
+  componentPath: ReferenceComponentPathSegment[];
+  /**
+   * What the missing target is: an Asset, an Entry, or a whole Collection.
+   */
+  targetKind: 'asset' | 'entry' | 'collection';
+  /**
+   * Id of the missing target (the Asset, Entry or Collection id).
+   */
+  targetId: Uuid;
+  /**
+   * Collection the missing target Entry lives in. Set only for entry targets,
+   * `null` for asset and collection targets.
+   */
+  targetCollectionId: Uuid | null;
+}
