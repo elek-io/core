@@ -53,6 +53,7 @@ import type { AssetService } from './AssetService.js';
 import type { CollectionService } from './CollectionService.js';
 import type { ComponentService } from './ComponentService.js';
 import type { EntryService } from './EntryService.js';
+import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -69,6 +70,7 @@ export class ProjectService
   private collectionService: CollectionService;
   private componentService: ComponentService;
   private entryService: EntryService;
+  private referenceService: ReferenceService;
 
   constructor(
     coreVersion: Version,
@@ -79,7 +81,8 @@ export class ProjectService
     assetService: AssetService,
     collectionService: CollectionService,
     componentService: ComponentService,
-    entryService: EntryService
+    entryService: EntryService,
+    referenceService: ReferenceService
   ) {
     super(
       serviceTypeSchema.enum.Project,
@@ -94,6 +97,7 @@ export class ProjectService
     this.collectionService = collectionService;
     this.componentService = componentService;
     this.entryService = entryService;
+    this.referenceService = referenceService;
   }
 
   /**
@@ -123,6 +127,7 @@ export class ProjectService
           await Fs.ensureDir(projectPath);
           await this.createFolderStructure(projectPath);
           await this.createGitignore(projectPath);
+          await this.createGitattributes(projectPath);
           await this.gitService.init(projectPath, {
             initialBranch: projectBranchSchema.enum.production,
           });
@@ -266,32 +271,11 @@ export class ProjectService
       const projectPath = pathTo.project(props.id);
       const projectFilePath = pathTo.projectFile(props.id);
 
-      const currentBranch = await this.gitService.branches.current(projectPath);
-      if (currentBranch !== projectBranchSchema.enum.work) {
-        await this.gitService.branches.switch(
-          projectPath,
-          projectBranchSchema.enum.work
-        );
-      }
-
-      const currentProjectFile = (await this.jsonFileService.unsafeRead(
-        projectFilePath
-      )) as Record<string, unknown> & { coreVersion: string };
-
-      if (Semver.gt(currentProjectFile.coreVersion, this.coreVersion)) {
-        throw CoreError.upgradeFailed(
-          `The Projects Core version "${currentProjectFile.coreVersion}" is higher than the current Core version "${this.coreVersion}".`
-        );
-      }
-
-      if (
-        Semver.eq(currentProjectFile.coreVersion, this.coreVersion) &&
-        props.force !== true
-      ) {
-        throw CoreError.upgradeFailed(
-          `The Projects Core version "${currentProjectFile.coreVersion}" is already up to date.`
-        );
-      }
+      const currentProjectFile = await this.ensureProjectIsUpgradeable(
+        projectPath,
+        projectFilePath,
+        props.force
+      );
 
       const assetReferences = await this.listReferences('asset', props.id);
       const componentReferences = await this.listReferences(
@@ -315,36 +299,33 @@ export class ProjectService
           isNew: true,
         });
 
-        for (const reference of assetReferences) {
-          await this.upgradeObjectFile(props.id, 'asset', reference);
-        }
+        await this.upgradeAllObjectFiles(
+          props.id,
+          assetReferences,
+          componentReferences,
+          collectionReferences
+        );
 
-        for (const reference of componentReferences) {
-          await this.upgradeObjectFile(props.id, 'component', reference);
-        }
-
-        for (const reference of collectionReferences) {
-          await this.upgradeObjectFile(props.id, 'collection', reference);
-        }
-
-        for (const collectionReference of collectionReferences) {
-          const entryReferences = await this.listReferences(
-            'entry',
-            props.id,
-            collectionReference.id
-          );
-          for (const reference of entryReferences) {
-            await this.upgradeObjectFile(
-              props.id,
-              'entry',
-              reference,
-              collectionReference.id
-            );
-          }
-        }
-
-        const migratedProjectFile = this.migrate(currentProjectFile);
-        await this.update(migratedProjectFile);
+        // Persist the migrated Project file directly. update() intentionally
+        // omits coreVersion (not a user-updatable field), so routing through it
+        // would re-write the previous version and never bump it
+        const migratedProjectFile: ProjectFile = {
+          ...this.migrate(currentProjectFile),
+          updated: datetime(),
+        };
+        await this.jsonFileService.update(
+          migratedProjectFile,
+          projectFilePath,
+          projectFileSchema
+        );
+        await this.gitService.add(projectPath, [projectFilePath]);
+        await this.gitService.commit(projectPath, {
+          method: 'update',
+          reference: {
+            objectType: 'project',
+            id: migratedProjectFile.id,
+          },
+        });
         await this.gitService.branches.switch(
           projectPath,
           projectBranchSchema.enum.work
@@ -381,22 +362,118 @@ export class ProjectService
           },
         });
       } catch (error) {
-        try {
-          await this.gitService.branches.switch(
-            projectPath,
-            projectBranchSchema.enum.work
-          );
-          await this.gitService.branches.delete(
-            projectPath,
-            upgradeBranchName,
-            true
-          );
-        } catch {
-          // Best-effort cleanup
-        }
+        await this.cleanupFailedUpgrade(projectPath, upgradeBranchName);
         throw error;
       }
     });
+  }
+
+  /**
+   * Switches to the work branch and verifies the Project can be upgraded.
+   *
+   * Throws when the Projects Core version is ahead of the current Core version,
+   * or when it is already up to date and the upgrade was not forced.
+   * Returns the current Project file so the caller can migrate it.
+   */
+  private async ensureProjectIsUpgradeable(
+    projectPath: string,
+    projectFilePath: string,
+    force: boolean | undefined
+  ): Promise<Record<string, unknown> & { coreVersion: string }> {
+    const currentBranch = await this.gitService.branches.current(projectPath);
+    if (currentBranch !== projectBranchSchema.enum.work) {
+      await this.gitService.branches.switch(
+        projectPath,
+        projectBranchSchema.enum.work
+      );
+    }
+
+    const currentProjectFile = (await this.jsonFileService.unsafeRead(
+      projectFilePath
+    )) as Record<string, unknown> & { coreVersion: string };
+
+    if (Semver.gt(currentProjectFile.coreVersion, this.coreVersion)) {
+      throw CoreError.upgradeFailed(
+        `The Projects Core version "${currentProjectFile.coreVersion}" is higher than the current Core version "${this.coreVersion}".`
+      );
+    }
+
+    if (
+      Semver.eq(currentProjectFile.coreVersion, this.coreVersion) &&
+      force !== true
+    ) {
+      throw CoreError.upgradeFailed(
+        `The Projects Core version "${currentProjectFile.coreVersion}" is already up to date.`
+      );
+    }
+
+    return currentProjectFile;
+  }
+
+  /**
+   * Migrates and updates every object file referenced by the Project.
+   *
+   * Upgrades assets, components and collections, then walks each collection to
+   * upgrade its entries.
+   */
+  private async upgradeAllObjectFiles(
+    projectId: string,
+    assetReferences: FileReference[],
+    componentReferences: FileReference[],
+    collectionReferences: FileReference[]
+  ): Promise<void> {
+    for (const reference of assetReferences) {
+      await this.upgradeObjectFile(projectId, 'asset', reference);
+    }
+
+    for (const reference of componentReferences) {
+      await this.upgradeObjectFile(projectId, 'component', reference);
+    }
+
+    for (const reference of collectionReferences) {
+      await this.upgradeObjectFile(projectId, 'collection', reference);
+    }
+
+    for (const collectionReference of collectionReferences) {
+      const entryReferences = await this.listReferences(
+        'entry',
+        projectId,
+        collectionReference.id
+      );
+      for (const reference of entryReferences) {
+        await this.upgradeObjectFile(
+          projectId,
+          'entry',
+          reference,
+          collectionReference.id
+        );
+      }
+    }
+  }
+
+  /**
+   * Best-effort cleanup after a failed upgrade.
+   *
+   * Switches back to the work branch and removes the upgrade branch, swallowing
+   * any error so the original upgrade failure is the one that surfaces.
+   */
+  private async cleanupFailedUpgrade(
+    projectPath: string,
+    upgradeBranchName: string
+  ): Promise<void> {
+    try {
+      await this.gitService.branches.switch(
+        projectPath,
+        projectBranchSchema.enum.work
+      );
+      await this.gitService.branches.delete(
+        projectPath,
+        upgradeBranchName,
+        true
+      );
+    } catch {
+      // Best-effort cleanup
+    }
   }
 
   public branches = {
@@ -523,8 +600,26 @@ export class ProjectService
   }
 
   /**
-   * Pulls remote changes of `origin` down to the local repository
-   * and then pushes local commits to the upstream branch
+   * Integrates remote changes of `origin` and pushes local commits, refusing to
+   * push a state that would strand a dangling reference.
+   *
+   * A rebase can integrate two individually valid changes (one client deletes a
+   * target after the last reference to it is removed, another adds a reference
+   * to that same target) into a tree with a dangling reference and no textual
+   * conflict. To stop that state ever reaching the shared remote, the integrated
+   * tree is scanned for dangling references BEFORE the push and the push is
+   * blocked if any are found (`ReferenceService.findDanglingReferences`). The
+   * integrated commits stay local so the user can repair them through Core's own
+   * (integrity-gated) delete/update and synchronize again.
+   *
+   * The transaction is: refuse on a dirty tree, then fetch, controlled rebase
+   * (a textual conflict aborts cleanly rather than leaving the repository
+   * mid-rebase), top up LFS, scan, and push inside a bounded non-fast-forward
+   * retry loop. A blocked sync performs no remote mutation, since every gate
+   * throws before the push.
+   *
+   * Scope is the current `work` tree only; released `production` history is not
+   * reconciled here.
    */
   public synchronize(props: SynchronizeProjectProps): Promise<void> {
     return this.validated(
@@ -533,8 +628,61 @@ export class ProjectService
       props,
       async () => {
         const projectPath = pathTo.project(props.id);
-        await this.gitService.pull(projectPath);
-        await this.gitService.push(projectPath);
+
+        // A rebase against uncommitted changes fails and could cost the user
+        // work, so refuse a sync on a dirty tree before touching the remote.
+        const uncommitted = await this.gitService.status(projectPath);
+        if (uncommitted.length > 0) {
+          throw CoreError.preconditionFailed(
+            `Project "${props.id}" has uncommitted changes. Commit or discard them before synchronizing.`,
+            uncommitted
+          );
+        }
+
+        const branch = await this.gitService.branches.current(projectPath);
+
+        // Bounded so a remote that keeps advancing cannot spin this forever.
+        const maxAttempts = 5;
+        for (let attempt = 1; ; attempt += 1) {
+          // Integrate the remote into the working tree without pushing yet.
+          // `lfs.fetchAll` (not `git lfs pull`) tops up every ref's objects so
+          // switching branches works offline. A textual conflict aborts cleanly
+          // inside `rebase` and surfaces a `PreconditionFailed`, leaving the
+          // repository in a recoverable, non-mid-rebase state.
+          await this.gitService.fetch(projectPath);
+          await this.gitService.rebase(projectPath, `origin/${branch}`);
+          await this.gitService.lfs.fetchAll(projectPath);
+
+          // Validate the integrated tree BEFORE pushing, so a dangling state
+          // never reaches the shared remote.
+          const danglingReferences =
+            await this.referenceService.findDanglingReferences(props.id);
+          if (danglingReferences.length > 0) {
+            throw CoreError.conflict(
+              'Synchronize would integrate dangling references',
+              danglingReferences
+            );
+          }
+
+          try {
+            await this.gitService.push(projectPath);
+            return;
+          } catch (error) {
+            // A non-fast-forward rejection means the remote advanced between the
+            // fetch and the push. Re-integrate and try again, up to the cap.
+            // Matched on the message `push` sets for that specific case, so an
+            // unrelated `PreconditionFailed` (for example a broken LFS endpoint)
+            // is not mistaken for a retryable race.
+            const isNonFastForward =
+              error instanceof CoreError &&
+              error.type === 'PreconditionFailed' &&
+              error.message.startsWith('Push rejected because the remote');
+            if (isNonFastForward && attempt < maxAttempts) {
+              continue;
+            }
+            throw error;
+          }
+        }
       }
     );
   }
@@ -715,10 +863,27 @@ export class ProjectService
       '!/**/.gitkeep',
       '',
       '# elek.io related ignores',
-      'collections/index.json',
-      'components/index.json',
+      'collections/slug.index.json',
+      'components/slug.index.json',
     ];
     await Fs.writeFile(Path.join(path, '.gitignore'), lines.join(Os.EOL));
+  }
+
+  /**
+   * Writes the Projects .gitattributes file to disk
+   *
+   * Tracks every binary Asset under `lfs/` with Git LFS so they are stored as
+   * pointers in history while the bytes are offloaded. The `.gitkeep`
+   * placeholder is kept out of LFS (last matching pattern wins).
+   *
+   * @see https://git-lfs.com
+   */
+  private async createGitattributes(path: string): Promise<void> {
+    const lines = [
+      'lfs/** filter=lfs diff=lfs merge=lfs -text',
+      'lfs/.gitkeep -filter -diff -merge text',
+    ];
+    await Fs.writeFile(Path.join(path, '.gitattributes'), lines.join(Os.EOL));
   }
 
   private async upgradeObjectFile(

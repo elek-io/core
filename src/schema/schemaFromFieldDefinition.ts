@@ -6,6 +6,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
+import { slug } from '../util/shared.js';
 import { slugSchema, uuidSchema, type Uuid } from './baseSchema.js';
 import type { ProjectLanguages } from './projectSchema.js';
 import type {
@@ -80,6 +81,42 @@ function getNumberValueContentSchemaFromFieldDefinition(
 function getStringValueContentSchemaFromFieldDefinition(
   fieldDefinition: StringFieldDefinition
 ) {
+  // Slug values are validated as already-canonical via idempotency, adapting
+  // to the field's configured separator/lowercase/decamelize. Has no min/max.
+  // An input that slugifies to the empty string (whitespace, punctuation, a
+  // non-Latin script) is unusable, so it is rejected with its own message
+  // rather than a generic length error.
+  if (fieldDefinition.fieldType === fieldTypeSchema.enum.slug) {
+    const slugConfig = {
+      separator: fieldDefinition.separator,
+      lowercase: fieldDefinition.lowercase,
+      decamelize: fieldDefinition.decamelize,
+    };
+    const slugSchemaForField = z
+      .string()
+      .trim()
+      .superRefine((value, ctx) => {
+        const canonical = slug(value, slugConfig);
+        if (canonical === '') {
+          ctx.addIssue({
+            code: 'custom',
+            message:
+              'This value cannot be turned into a slug. Use one with URL-safe characters',
+          });
+          return;
+        }
+        if (value !== canonical) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `Value must be a canonical slug for this field (expected "${canonical}")`,
+          });
+        }
+      });
+    return fieldDefinition.isRequired === false
+      ? slugSchemaForField.nullable()
+      : slugSchemaForField;
+  }
+
   let schema = null;
 
   switch (fieldDefinition.fieldType) {

@@ -248,11 +248,11 @@ describe('Error handling and rollback', function () {
     it('should still work when index write fails (safeWriteIndex)', async function () {
       const indexPath = Path.join(
         core.util.pathTo.collections(project.id),
-        'index.json'
+        'slug.index.json'
       );
 
       try {
-        // Make index.json read-only so safeWriteIndex fails with EACCES
+        // Make slug.index.json read-only so safeWriteIndex fails with EACCES
         await Fs.chmod(indexPath, 0o444);
 
         // Create should succeed - git commit works, safeWriteIndex swallows the error

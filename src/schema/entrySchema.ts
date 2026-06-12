@@ -79,6 +79,27 @@ export const countEntriesSchema = z.object({
 export type CountEntriesProps = z.infer<typeof countEntriesSchema>;
 
 /**
+ * A single hop through a `dynamic`/component block on the way to a nested
+ * field. A reference can live inside a component item's values, which can
+ * themselves nest further component items, so the path to a reference is a
+ * chain of these segments (empty when the reference sits in a top-level field).
+ */
+export interface ReferenceComponentPathSegment {
+  /**
+   * Slug of the `dynamic` field whose item holds the (nested) value.
+   */
+  fieldSlug: string;
+  /**
+   * Id of the component item within that field's `content` array.
+   */
+  itemId: Uuid;
+  /**
+   * The item's Component, for resolving its inner field definitions.
+   */
+  componentId: Uuid;
+}
+
+/**
  * Location of a problematic reference within an Entry's `values`.
  */
 export interface EntryReferenceIssueLocation {
@@ -100,6 +121,12 @@ export interface EntryReferenceIssueLocation {
    * `null` for mdast refs (use `treePath`).
    */
   index: number | null;
+  /**
+   * Chain of `dynamic`/component hops from the Entry's top-level field down
+   * to the field holding the reference. Empty when the reference sits in a
+   * top-level field; `fieldSlug` above is always the leaf (innermost) field.
+   */
+  componentPath: ReferenceComponentPathSegment[];
 }
 
 /**
@@ -133,3 +160,100 @@ export interface AssetMimeMismatchIssue extends EntryReferenceIssueLocation {
 export type EntryReferenceIssue =
   | EntryReferenceNotFoundIssue
   | AssetMimeMismatchIssue;
+
+/**
+ * A value written to a unique field (or slug field) collides with the same
+ * value already held by another Entry in the same Collection, for the same
+ * language. Collected and reported together on Entry create/update.
+ */
+export interface UniqueValueConflict {
+  collectionId: Uuid;
+  fieldDefinitionId: Uuid;
+  fieldSlug: string;
+  language: SupportedLanguage;
+  value: string;
+  /**
+   * The id of the Entry that already holds this value.
+   */
+  conflictingEntryId: Uuid;
+}
+
+/**
+ * An Entry that still references a delete target (an Asset or another Entry).
+ * Collected by `EntryService.findEntriesReferencing` and attached as the
+ * `cause` of the `Conflict` error thrown when a referenced Asset/Entry delete
+ * is blocked. One record per referring Entry (first match within that Entry).
+ */
+export interface ReferencingEntry {
+  /**
+   * Collection the referring Entry belongs to.
+   */
+  collectionId: Uuid;
+  /**
+   * The referring Entry's id.
+   */
+  entryId: Uuid;
+  /**
+   * Slug of the leaf field holding the reference (the innermost field when
+   * the reference is nested inside `dynamic`/component blocks).
+   */
+  fieldSlug: string;
+  /**
+   * Which carrier the reference id was stored in. Nesting inside a component
+   * is signalled by a non-empty `componentPath`, not by this field.
+   */
+  via: 'reference' | 'mdast';
+  /**
+   * Chain of `dynamic`/component hops down to `fieldSlug`. Empty when the
+   * reference sits in a top-level field.
+   */
+  componentPath: ReferenceComponentPathSegment[];
+}
+
+/**
+ * A reference found in the integrated tree whose target file is absent. The
+ * forward analogue of `ReferencingEntry`: it names both the referring Entry
+ * (where the broken reference lives) and the missing target. Collected by
+ * `EntryService.findDanglingReferences` and attached as the `cause` of the
+ * `Conflict` thrown when a sync would integrate a dangling reference. One
+ * record per dangling reference (every broken reference is reported, not just
+ * the first within an Entry).
+ */
+export interface DanglingReference {
+  /**
+   * Collection the referring Entry belongs to.
+   */
+  collectionId: Uuid;
+  /**
+   * The referring Entry's id.
+   */
+  entryId: Uuid;
+  /**
+   * Slug of the leaf field holding the reference (the innermost field when
+   * the reference is nested inside `dynamic`/component blocks).
+   */
+  fieldSlug: string;
+  /**
+   * Which carrier the reference id was stored in. Nesting inside a component
+   * is signalled by a non-empty `componentPath`, not by this field.
+   */
+  via: 'reference' | 'mdast';
+  /**
+   * Chain of `dynamic`/component hops down to `fieldSlug`. Empty when the
+   * reference sits in a top-level field.
+   */
+  componentPath: ReferenceComponentPathSegment[];
+  /**
+   * What the missing target is: an Asset, an Entry, or a whole Collection.
+   */
+  targetKind: 'asset' | 'entry' | 'collection';
+  /**
+   * Id of the missing target (the Asset, Entry or Collection id).
+   */
+  targetId: Uuid;
+  /**
+   * Collection the missing target Entry lives in. Set only for entry targets,
+   * `null` for asset and collection targets.
+   */
+  targetCollectionId: Uuid | null;
+}

@@ -4,7 +4,7 @@ This document describes how Projects are upgraded to a new Core version and how 
 
 ## Migration Chain
 
-Every service (Asset, Collection, Entry, Project) has a `migrate()` method that transforms a potentially outdated JSON file into the current schema. The migration follows three stages:
+Every service (Asset, Collection, Component, Entry, Project) has a `migrate()` method that transforms a potentially outdated JSON file into the current schema. The migration follows three stages:
 
 1. **Loose parse** - validate with `migrateXSchema` (relaxed schema that accepts any `coreVersion`)
 2. **Apply migration chain** - walk through registered `Migration` steps from the file's `coreVersion` to the target version
@@ -42,6 +42,7 @@ Each service has its own migration array under `src/service/migrations/`:
 | ------------------------- | ----------------- |
 | `assetMigrations.ts`      | AssetService      |
 | `collectionMigrations.ts` | CollectionService |
+| `componentMigrations.ts`  | ComponentService  |
 | `entryMigrations.ts`      | EntryService      |
 | `projectMigrations.ts`    | ProjectService    |
 
@@ -81,19 +82,22 @@ Version checks:
   - Project coreVersion === Core version and !force? --> Error (already up to date)
   |
   v
-List all Asset and Collection references
+List all Asset, Component and Collection references
   |
   v
 Create upgrade branch: upgrade/core-{from}-to-{to}
   |
   v
-  +-- Upgrade all Assets (parallel)
+  +-- Upgrade all Assets (sequential)
   |     For each: unsafeRead -> service.migrate() -> service.update()
   |
-  +-- Upgrade all Collections (parallel)
+  +-- Upgrade all Components (sequential)
   |     For each: unsafeRead -> service.migrate() -> service.update()
   |
-  +-- Upgrade all Entries (parallel per Collection)
+  +-- Upgrade all Collections (sequential)
+  |     For each: unsafeRead -> service.migrate() -> service.update()
+  |
+  +-- Upgrade all Entries (sequential per Collection)
   |     For each: unsafeRead -> service.migrate() -> service.update()
   |
   v
@@ -165,7 +169,9 @@ read({ projectId, id, commitHash })
 Get asset JSON at commit -> JSON.parse -> migrate()
   |
   v
-Get binary asset content at commit -> write to temp path
+Get binary asset content at commit
+  -> if it is an LFS pointer, resolve it to the real bytes from the local store
+  -> write to temp path
   |
   v
 toAsset(projectId, assetFile, commitHash)  -- uses temp path
@@ -174,6 +180,8 @@ toAsset(projectId, assetFile, commitHash)  -- uses temp path
 Return Asset
 ```
 
+Because Assets are tracked with Git LFS, the content at a commit is a pointer rather than the binary. Core resolves it to the real bytes from the local LFS store, which is always complete (see [`git-and-sync.md`](./git-and-sync.md#git-lfs)), so historical reads work offline.
+
 ### Collection and Entry history reads
 
 Follow the same `getFileContentAtCommit -> JSON.parse -> migrate() -> toX()` pattern without additional file handling.
@@ -181,3 +189,11 @@ Follow the same `getFileContentAtCommit -> JSON.parse -> migrate() -> toX()` pat
 ### Why migrate on history reads?
 
 A file stored at commit `abc123` may have been written by Core v1.0.0 with a different schema shape. By running `migrate()`, the historical data is transformed through the migration chain to match the current schema, allowing callers to use a single consistent type regardless of when the data was written.
+
+## See Also
+
+- [`releases.md`](./releases.md) - the related `upgrade` tag and versioned snapshots
+- [`schema-changes.md`](./schema-changes.md) - a separate mechanism: editing field definitions cascades into existing content
+- [`storage-layout.md`](./storage-layout.md) - the `coreVersion` stamp on each file that drives migrations
+- [`git-and-sync.md`](./git-and-sync.md) - the branches and history reads this builds on
+- [`error-handling.md`](./error-handling.md) - `UpgradeFailed` and the other error types

@@ -32,8 +32,16 @@ import {
   type GitCommit,
   collectionHistorySchema,
   flattenFieldDefinitions,
+  type FieldDefinition,
+  type ProjectLanguages,
+  type Uuid,
+  type Value,
 } from '../schema/index.js';
-import { diffFieldDefinitions } from '../util/fieldDefinitionDiff.js';
+import { detectUniqueValueCollisions } from '../util/uniqueFieldValues.js';
+import {
+  diffFieldDefinitions,
+  type FieldChange,
+} from '../util/fieldDefinitionDiff.js';
 import {
   transformEntryValues,
   type EntryIssue,
@@ -42,7 +50,8 @@ import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefi
 import { applyMigrations, collectionMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
-import { AbstractIndexedEntityService } from './AbstractIndexedEntityService.js';
+import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
+import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -51,10 +60,11 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for Collection files on disk
  */
 export class CollectionService
-  extends AbstractIndexedEntityService<CollectionFile>
+  extends AbstractSlugIndexedEntityService<CollectionFile>
   implements CrudServiceWithListCount<Collection>
 {
   private coreVersion: string;
+  private referenceService: ReferenceService;
 
   protected entityFileSchema = collectionFileSchema;
 
@@ -76,7 +86,8 @@ export class CollectionService
     options: ElekIoCoreOptions,
     logService: LogService,
     jsonFileService: JsonFileService,
-    gitService: GitService
+    gitService: GitService,
+    referenceService: ReferenceService
   ) {
     super(
       serviceTypeSchema.enum.Collection,
@@ -87,6 +98,7 @@ export class CollectionService
     );
 
     this.coreVersion = coreVersion;
+    this.referenceService = referenceService;
   }
 
   /**
@@ -100,6 +112,11 @@ export class CollectionService
 
   /**
    * Creates a new Collection
+   *
+   * Core generates the Collection's `id`, but field-definition `id`s are
+   * caller-supplied (pass a UUID per field definition, for example via
+   * `uuid()`). They become the stable identity used to match field definitions
+   * on later updates, see `update`.
    */
   public async create<T extends Collection = Collection>(
     props: CreateCollectionProps
@@ -126,7 +143,7 @@ export class CollectionService
 
         const slugPlural = slug(validatedProps.slug.plural);
 
-        const index = await this.getIndex(validatedProps.projectId);
+        const index = await this.getSlugIndex(validatedProps.projectId);
 
         // Enforce collection slug uniqueness via index
         if (Object.values(index).includes(slugPlural)) {
@@ -165,7 +182,7 @@ export class CollectionService
 
         // Update the index (not git-tracked, self-heals on failure)
         index[id] = slugPlural;
-        await this.safeWriteIndex(validatedProps.projectId, index);
+        await this.safeWriteSlugIndex(validatedProps.projectId, index);
         return this.toCollection(collectionFile) as T;
       }
     );
@@ -242,6 +259,14 @@ export class CollectionService
   /**
    * Updates given Collection
    *
+   * Field definitions are matched by `id`. Send back the `id` of every field
+   * definition you want to keep so Core matches it to the existing one and
+   * preserves the entry data stored under it, even across slug renames or type
+   * changes. A field definition with no `id` (or a changed `id`) is treated as
+   * new, so the old field and the entry data keyed to it is removed. Ids are
+   * caller-supplied (Core does not generate them), so always round-trip the
+   * ids you read.
+   *
    * Handles fieldDefinition change cascade:
    * - Slug renames, field additions (with defaults), field removals, and
    *   disallowed component/reference stripping are applied automatically.
@@ -299,15 +324,11 @@ export class CollectionService
 
         // If collection slug.plural changed, enforce uniqueness before mutating
         if (prevCollectionFile.slug.plural !== newSlugPlural) {
-          const index = await this.getIndex(validatedProps.projectId);
-          const existingUuid = Object.entries(index).find(
-            ([, slugPlural]) => slugPlural === newSlugPlural
+          await this.assertCollectionSlugIsAvailable(
+            validatedProps.projectId,
+            newSlugPlural,
+            validatedProps.id
           );
-          if (existingUuid && existingUuid[0] !== validatedProps.id) {
-            throw CoreError.conflict(
-              `Collection slug "${newSlugPlural}" is already in use by another collection`
-            );
-          }
         }
 
         await this.withGitRollback(projectPath, async () => {
@@ -321,107 +342,53 @@ export class CollectionService
             const exists = await Fs.pathExists(entriesPath);
 
             if (exists) {
-              const dirEntries = await Fs.readdir(entriesPath);
-              const entryFiles = dirEntries.filter(
-                (dirEntry) =>
-                  dirEntry.endsWith('.json') && dirEntry !== 'collection.json'
+              const entryReferences = await this.listReferences(
+                'entry',
+                validatedProps.projectId,
+                validatedProps.id
               );
 
-              if (entryFiles.length > 0) {
+              if (entryReferences.length > 0) {
                 const allIssues: EntryIssue[] = [];
+                const entriesFinalValues: Array<{
+                  entryId: Uuid;
+                  values: Record<string, Value>;
+                }> = [];
 
-                for (const entryFileName of entryFiles) {
-                  const entryId = entryFileName.replace('.json', '');
-                  const entryFilePath = pathTo.entryFile(
-                    validatedProps.projectId,
-                    validatedProps.id,
-                    entryId
-                  );
-
-                  const entryFile = await this.jsonFileService.read(
-                    entryFilePath,
-                    entryFileSchema
-                  );
-
-                  const result = transformEntryValues(
-                    entryFile.id,
-                    validatedProps.id,
-                    entryFile.values,
+                for (const entryReference of entryReferences) {
+                  const entryResult = await this.transformAndWriteEntry({
+                    projectId: validatedProps.projectId,
+                    collectionId: validatedProps.id,
+                    entryId: entryReference.id,
                     oldFieldDefs,
                     newFieldDefs,
                     changes,
-                    languages
-                  );
+                    languages,
+                    resolutions,
+                  });
 
-                  allIssues.push(...result.issues);
-
-                  if (result.changed || result.issues.length > 0) {
-                    // Apply resolutions if provided
-                    const finalValues = result.values;
-                    if (resolutions && result.issues.length > 0) {
-                      const entryResolutions = resolutions[entryFile.id];
-                      if (entryResolutions) {
-                        // Validate and apply each resolution
-                        for (const [fieldSlug, resolvedValue] of Object.entries(
-                          entryResolutions
-                        )) {
-                          const fieldDef = newFieldDefs.find(
-                            (fieldDef) => fieldDef.slug === fieldSlug
-                          );
-                          if (fieldDef) {
-                            const schema = getValueSchemaFromFieldDefinition(
-                              fieldDef,
-                              languages
-                            );
-                            const parseResult = schema.safeParse(resolvedValue);
-                            if (!parseResult.success) {
-                              throw CoreError.badRequest(
-                                'Resolution validation failed',
-                                parseResult.error
-                              );
-                            }
-                          }
-                          finalValues[fieldSlug] = resolvedValue;
-                        }
-                      }
-                    }
-
-                    if (
-                      isDeepStrictEqual(entryFile.values, finalValues) === false
-                    ) {
-                      const updatedEntryFile = {
-                        ...entryFile,
-                        values: finalValues,
-                      };
-                      await this.jsonFileService.update(
-                        updatedEntryFile,
-                        entryFilePath,
-                        entryFileSchema
-                      );
-                      filesToGitAdd.push(entryFilePath);
-                    }
+                  allIssues.push(...entryResult.issues);
+                  entriesFinalValues.push({
+                    entryId: entryResult.entryId,
+                    values: entryResult.finalValues,
+                  });
+                  if (entryResult.wrote) {
+                    filesToGitAdd.push(entryResult.entryFilePath);
                   }
                 }
 
-                // After processing all entries, check for unresolved issues
-                if (allIssues.length > 0) {
-                  // Remove issues that have matching resolutions
-                  const unresolvedIssues = resolutions
-                    ? allIssues.filter((issue) => {
-                        const entryResolutions = resolutions[issue.entryId];
-                        return !(
-                          entryResolutions &&
-                          issue.fieldSlug in entryResolutions
-                        );
-                      })
-                    : allIssues;
-
-                  if (unresolvedIssues.length > 0) {
-                    throw CoreError.conflict(
-                      'Field definition changes require entry resolutions',
-                      unresolvedIssues
-                    );
-                  }
+                const blockingIssues = this.computeBlockingIssues({
+                  allIssues,
+                  resolutions,
+                  newFieldDefs,
+                  entriesFinalValues,
+                  collectionId: validatedProps.id,
+                });
+                if (blockingIssues.length > 0) {
+                  throw CoreError.conflict(
+                    'Field definition changes or uniqueness collisions require entry resolutions',
+                    blockingIssues
+                  );
                 }
               }
             }
@@ -444,9 +411,9 @@ export class CollectionService
 
         // Update index after successful commit
         if (prevCollectionFile.slug.plural !== newSlugPlural) {
-          const index = await this.getIndex(validatedProps.projectId);
+          const index = await this.getSlugIndex(validatedProps.projectId);
           index[validatedProps.id] = newSlugPlural;
-          await this.safeWriteIndex(validatedProps.projectId, index);
+          await this.safeWriteSlugIndex(validatedProps.projectId, index);
         }
 
         return this.toCollection(collectionFile) as T;
@@ -455,7 +422,191 @@ export class CollectionService
   }
 
   /**
+   * Throws when another Collection already uses the given plural slug.
+   *
+   * The current Collection is excluded so re-saving with an unchanged slug is
+   * allowed.
+   */
+  private async assertCollectionSlugIsAvailable(
+    projectId: Uuid,
+    newSlugPlural: string,
+    currentId: Uuid
+  ): Promise<void> {
+    const index = await this.getSlugIndex(projectId);
+    const existingUuid = Object.entries(index).find(
+      ([, slugPlural]) => slugPlural === newSlugPlural
+    );
+    if (existingUuid && existingUuid[0] !== currentId) {
+      throw CoreError.conflict(
+        `Collection slug "${newSlugPlural}" is already in use by another collection`
+      );
+    }
+  }
+
+  /**
+   * Transforms a single Entry's values to the new field definitions, applies any
+   * caller-provided resolutions and writes the Entry file if its values changed.
+   *
+   * Returns the transform issues, the final values (for cross-entry collision
+   * detection) and whether the file was written (so the caller can stage it).
+   */
+  private async transformAndWriteEntry(params: {
+    projectId: Uuid;
+    collectionId: Uuid;
+    entryId: Uuid;
+    oldFieldDefs: FieldDefinition[];
+    newFieldDefs: FieldDefinition[];
+    changes: FieldChange[];
+    languages: ProjectLanguages;
+    resolutions: UpdateCollectionProps['resolutions'];
+  }): Promise<{
+    issues: EntryIssue[];
+    entryId: Uuid;
+    finalValues: Record<string, Value>;
+    entryFilePath: string;
+    wrote: boolean;
+  }> {
+    const {
+      projectId,
+      collectionId,
+      entryId,
+      oldFieldDefs,
+      newFieldDefs,
+      changes,
+      languages,
+      resolutions,
+    } = params;
+
+    const entryFilePath = pathTo.entryFile(projectId, collectionId, entryId);
+
+    const entryFile = await this.jsonFileService.read(
+      entryFilePath,
+      entryFileSchema
+    );
+
+    const result = transformEntryValues(
+      entryFile.id,
+      collectionId,
+      entryFile.values,
+      oldFieldDefs,
+      newFieldDefs,
+      changes,
+      languages
+    );
+
+    // Apply any provided resolutions. Not gated on transform
+    // issues, since a unique_collision has no transform issue.
+    const finalValues = result.values;
+    const entryResolutions = resolutions?.[entryFile.id];
+    if (entryResolutions) {
+      for (const [fieldSlug, resolvedValue] of Object.entries(
+        entryResolutions
+      )) {
+        const fieldDef = newFieldDefs.find(
+          (fieldDef) => fieldDef.slug === fieldSlug
+        );
+        if (fieldDef) {
+          const schema = getValueSchemaFromFieldDefinition(fieldDef, languages);
+          const parseResult = schema.safeParse(resolvedValue);
+          if (!parseResult.success) {
+            throw CoreError.badRequest(
+              'Resolution validation failed',
+              parseResult.error
+            );
+          }
+        }
+        finalValues[fieldSlug] = resolvedValue;
+      }
+    }
+
+    const wrote = isDeepStrictEqual(entryFile.values, finalValues) === false;
+    if (wrote) {
+      const updatedEntryFile = {
+        ...entryFile,
+        values: finalValues,
+      };
+      await this.jsonFileService.update(
+        updatedEntryFile,
+        entryFilePath,
+        entryFileSchema
+      );
+    }
+
+    return {
+      issues: result.issues,
+      entryId: entryFile.id,
+      finalValues,
+      entryFilePath,
+      wrote,
+    };
+  }
+
+  /**
+   * Builds the list of issues that must block the update.
+   *
+   * Combines transform issues the caller did not resolve with cross-entry
+   * uniqueness collisions on the post-resolution values.
+   */
+  private computeBlockingIssues(params: {
+    allIssues: EntryIssue[];
+    resolutions: UpdateCollectionProps['resolutions'];
+    newFieldDefs: FieldDefinition[];
+    entriesFinalValues: Array<{ entryId: Uuid; values: Record<string, Value> }>;
+    collectionId: Uuid;
+  }): EntryIssue[] {
+    const {
+      allIssues,
+      resolutions,
+      newFieldDefs,
+      entriesFinalValues,
+      collectionId,
+    } = params;
+
+    // Transform issues the caller did not resolve
+    const unresolvedIssues = resolutions
+      ? allIssues.filter((issue) => {
+          const entryResolutions = resolutions[issue.entryId];
+          return !(entryResolutions && issue.fieldSlug in entryResolutions);
+        })
+      : allIssues;
+
+    // Cross-entry uniqueness collisions, on the post-resolution
+    // values. Keep the first holder, flag the rest as resolvable.
+    const collisionIssues: EntryIssue[] = detectUniqueValueCollisions(
+      newFieldDefs,
+      entriesFinalValues
+    ).flatMap((collision) => {
+      // The first holder is kept, the rest are flagged as resolvable.
+      // A collision always has at least two holders, so this guard is defensive.
+      const [conflictingEntryId, ...flaggedEntryIds] = collision.entryIds;
+      if (conflictingEntryId === undefined) {
+        return [];
+      }
+      return flaggedEntryIds.map((entryId) => ({
+        entryId,
+        collectionId,
+        fieldDefinitionId: collision.fieldDefinitionId,
+        fieldSlug: collision.fieldSlug,
+        issue: 'unique_collision' as const,
+        transformedValues: {},
+        value: collision.value,
+        language: collision.language,
+        conflictingEntryId,
+      }));
+    });
+
+    return [...unresolvedIssues, ...collisionIssues];
+  }
+
+  /**
    * Deletes given Collection (folder), including it's Entries
+   *
+   * Blocks deletion if a surviving Entry outside this Collection still
+   * references into it (a flat reference field, an mdast node, or a reference
+   * nested in a `dynamic`/component block), which would otherwise leave a
+   * dangling reference behind. References between Entries that are all being
+   * deleted together do not block. The thrown `Conflict` carries the list of
+   * referring Entries, mirroring Asset and Entry delete protection.
    *
    * The Fields that Collection used are not deleted.
    */
@@ -465,6 +616,21 @@ export class CollectionService
       deleteCollectionSchema,
       props,
       async (validatedProps) => {
+        const referencingEntries =
+          await this.referenceService.findEntriesReferencing({
+            projectId: validatedProps.projectId,
+            collectionId: validatedProps.id,
+          });
+        if (referencingEntries.length > 0) {
+          const list = referencingEntries
+            .map((r) => `Entry "${r.entryId}" (Collection "${r.collectionId}")`)
+            .join(', ');
+          throw CoreError.conflict(
+            `Cannot delete Collection "${validatedProps.id}": it is still referenced by ${list}`,
+            referencingEntries
+          );
+        }
+
         const projectPath = pathTo.project(validatedProps.projectId);
         const collectionPath = pathTo.collection(
           validatedProps.projectId,
@@ -481,9 +647,9 @@ export class CollectionService
         });
 
         // Remove from index (not git-tracked, self-heals on failure)
-        const index = await this.getIndex(validatedProps.projectId);
+        const index = await this.getSlugIndex(validatedProps.projectId);
         delete index[validatedProps.id];
-        await this.safeWriteIndex(validatedProps.projectId, index);
+        await this.safeWriteSlugIndex(validatedProps.projectId, index);
       }
     );
   }

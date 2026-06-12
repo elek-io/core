@@ -22,6 +22,7 @@ export const fieldTypeSchema = z.enum([
   'time',
   'datetime',
   'telephone',
+  'slug',
   // Number Values
   'number',
   'range',
@@ -71,6 +72,42 @@ const minMustBeLessOrEqualMaxRefinement: [
   (data) => data.max === null || data.min === null || data.min <= data.max,
   { message: 'min must be less than or equal to max', path: ['min'] },
 ];
+
+/**
+ * A unique field may not carry a non-null default value: a shared default
+ * could only ever be valid for a single Entry, and adding such a field to a
+ * populated Collection would stamp the same value into every Entry at once.
+ * Slug fields enforce this structurally (defaultValue is always null).
+ */
+const uniqueFieldCannotHaveDefaultRefinement: [
+  (data: { isUnique: boolean; defaultValue: unknown }) => boolean,
+  { message: string; path: string[] },
+] = [
+  (data) => data.isUnique !== true || data.defaultValue === null,
+  {
+    message: 'A unique field cannot have a default value',
+    path: ['defaultValue'],
+  },
+];
+
+/**
+ * A slug field's separator must be empty (no separator) or one of the RFC 3986
+ * unreserved punctuation marks. We use a closed allowlist rather than blocking
+ * the characters slugify rewrites or strips, which is an open-ended set (its
+ * transliteration table alone has well over a thousand entries). The allowed
+ * marks are URL-safe and survive slugify unchanged, so slug values stay
+ * canonical and idempotent.
+ */
+const urlSafeSeparators = ['-', '_', '.', '~'];
+
+export const slugSeparatorSchema = z
+  .string()
+  .refine(
+    (separator) => separator === '' || urlSafeSeparators.includes(separator),
+    {
+      message: 'Separator must be empty or one of: - _ . ~',
+    }
+  );
 
 /**
  * Validates that fieldDefinition slugs are unique within their parent fieldDefinitions array.
@@ -230,18 +267,37 @@ export type StringSelectFieldDefinition = z.infer<
   typeof stringSelectFieldDefinitionSchema
 >;
 
-export const stringFieldDefinitionSchema = z.union([
-  textFieldDefinitionSchema,
-  textareaFieldDefinitionSchema,
-  emailFieldDefinitionSchema,
-  urlFieldDefinitionSchema,
-  ipv4FieldDefinitionSchema,
-  dateFieldDefinitionSchema,
-  timeFieldDefinitionSchema,
-  datetimeFieldDefinitionSchema,
-  telephoneFieldDefinitionSchema,
-  stringSelectFieldDefinitionSchema,
-]);
+export const slugFieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend(
+  {
+    fieldType: z.literal(fieldTypeSchema.enum.slug),
+    // Slugs are always unique within their Collection
+    isUnique: z.literal(true),
+    // A fixed default slug could only ever be valid for one Entry
+    defaultValue: z.null(),
+    separator: slugSeparatorSchema,
+    lowercase: z.boolean(),
+    decamelize: z.boolean(),
+    // Source field definition ids to soft-generate from (empty = standalone)
+    ofFieldDefinitions: z.array(uuidSchema),
+  }
+);
+export type SlugFieldDefinition = z.infer<typeof slugFieldDefinitionSchema>;
+
+export const stringFieldDefinitionSchema = z
+  .union([
+    textFieldDefinitionSchema,
+    textareaFieldDefinitionSchema,
+    emailFieldDefinitionSchema,
+    urlFieldDefinitionSchema,
+    ipv4FieldDefinitionSchema,
+    dateFieldDefinitionSchema,
+    timeFieldDefinitionSchema,
+    datetimeFieldDefinitionSchema,
+    telephoneFieldDefinitionSchema,
+    stringSelectFieldDefinitionSchema,
+    slugFieldDefinitionSchema,
+  ])
+  .refine(...uniqueFieldCannotHaveDefaultRefinement);
 export type StringFieldDefinition = z.infer<typeof stringFieldDefinitionSchema>;
 
 //
@@ -515,6 +571,121 @@ export function flattenFieldDefinitions(
       : [fieldDefinitionOrGroup]
   );
 }
+
+/**
+ * Validates each slug field's `ofFieldDefinitions` source references against
+ * the sibling field definitions of the same Collection. Each source must:
+ * exist in the Collection, point to a non-slug string field, not be the slug
+ * field itself, and not be duplicated.
+ *
+ * Use via superRefine at the Collection level, where all definitions are visible.
+ */
+export const slugSourceReferencesSuperRefinement = (
+  fieldDefinitionsOrGroups: FieldDefinitionOrGroup[],
+  ctx: z.RefinementCtx
+) => {
+  const byId = new Map(
+    flattenFieldDefinitions(fieldDefinitionsOrGroups).map((fieldDefinition) => [
+      fieldDefinition.id,
+      fieldDefinition,
+    ])
+  );
+
+  const validateSlugField = (
+    fieldDefinition: FieldDefinition,
+    path: (string | number)[]
+  ) => {
+    if (fieldDefinition.fieldType !== 'slug') {
+      return;
+    }
+    const seen = new Set<string>();
+    fieldDefinition.ofFieldDefinitions.forEach((sourceId, sourceIndex) => {
+      const issuePath = [...path, 'ofFieldDefinitions', sourceIndex];
+      if (sourceId === fieldDefinition.id) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'A slug field cannot reference itself as a source',
+          path: issuePath,
+        });
+        return;
+      }
+      if (seen.has(sourceId)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Duplicate slug source field definition',
+          path: issuePath,
+        });
+        return;
+      }
+      seen.add(sourceId);
+      const target = byId.get(sourceId);
+      if (!target) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'Slug source field definition does not exist in this Collection',
+          path: issuePath,
+        });
+        return;
+      }
+      if (target.valueType !== 'string' || target.fieldType === 'slug') {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'A slug source must be a non-slug string field',
+          path: issuePath,
+        });
+      }
+    });
+  };
+
+  fieldDefinitionsOrGroups.forEach((fieldDefinitionOrGroup, parentIndex) => {
+    if ('isGroup' in fieldDefinitionOrGroup) {
+      fieldDefinitionOrGroup.fieldDefinitions.forEach(
+        (fieldDefinition, childIndex) => {
+          validateSlugField(fieldDefinition, [
+            parentIndex,
+            'fieldDefinitions',
+            childIndex,
+          ]);
+        }
+      );
+    } else {
+      validateSlugField(fieldDefinitionOrGroup, [parentIndex]);
+    }
+  });
+};
+
+/**
+ * Uniqueness is enforced only on top-level Collection fields, so slug fields
+ * and `isUnique: true` are not allowed inside Component field definitions.
+ * Nested-component uniqueness has an ambiguous scope (within-item vs
+ * within-entry vs collection vs project) and Components are reused across
+ * Collections, so we deliberately defer it rather than advertise an unenforced
+ * flag. See docs/features.md.
+ *
+ * Use via superRefine on a Component's `fieldDefinitions` array.
+ */
+export const forbidUniqueAndSlugInComponentSuperRefinement = (
+  fieldDefinitions: FieldDefinition[],
+  ctx: z.RefinementCtx
+) => {
+  fieldDefinitions.forEach((fieldDefinition, index) => {
+    if (fieldDefinition.fieldType === 'slug') {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Slug fields are not supported inside Components',
+        path: [index, 'fieldType'],
+      });
+    }
+    if (fieldDefinition.isUnique === true) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Unique fields are not supported inside Components',
+        path: [index, 'isUnique'],
+      });
+    }
+  });
+};
 
 /**
  * Resolves the effective list of Component IDs a dynamic field references.

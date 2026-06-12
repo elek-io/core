@@ -1022,3 +1022,124 @@ describe('EntryService - dynamic field with open ofComponents', function () {
     }
   );
 });
+
+describe('EntryService - reference validation inside dynamic components', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let mediaComponent: Component;
+  let pages: Collection;
+
+  beforeAll(async function () {
+    project = await createProject('EntryService Nested Ref Validation');
+
+    mediaComponent = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Media', de: 'Media' },
+      slug: 'media',
+      description: null,
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'image',
+          valueType: 'reference',
+          fieldType: 'asset',
+          label: { en: 'Image', de: 'Image' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+          ofAssetMimeTypes: [],
+        },
+      ],
+    });
+
+    pages = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Page', de: 'Page' },
+        plural: { en: 'Pages', de: 'Pages' },
+      },
+      description: { en: 'Pages', de: 'Pages' },
+      slug: { singular: 'page', plural: 'pages' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'blocks',
+          valueType: 'component',
+          fieldType: 'dynamic',
+          label: { en: 'Blocks', de: 'Blocks' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          ofComponents: [mediaComponent.id],
+          min: null,
+          max: null,
+        },
+      ],
+    });
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('rejects a reference nested inside a dynamic component item that points to a non-existent asset', async function () {
+    const ghostAssetId = uuid();
+    const itemId = uuid();
+    try {
+      await core.entries.create({
+        projectId: project.id,
+        collectionId: pages.id,
+        values: {
+          blocks: {
+            objectType: 'value',
+            valueType: 'component',
+            content: [
+              {
+                id: itemId,
+                componentId: mediaComponent.id,
+                values: {
+                  image: {
+                    objectType: 'value',
+                    valueType: 'reference',
+                    content: {
+                      en: [{ objectType: 'asset', id: ghostAssetId }],
+                      de: [],
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+      throw new Error('expected create to throw');
+    } catch (error) {
+      const issues = getReferenceIssues(error);
+      expect(issues).not.toBeNull();
+      expect(issues).toHaveLength(1);
+      expect(issues![0]).toMatchObject({
+        kind: 'reference_not_found',
+        refKind: 'asset',
+        refId: ghostAssetId,
+        fieldSlug: 'image',
+      });
+      expect(issues![0]!.componentPath).toEqual([
+        expect.objectContaining({
+          fieldSlug: 'blocks',
+          itemId,
+          componentId: mediaComponent.id,
+        }),
+      ]);
+    }
+  });
+});

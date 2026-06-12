@@ -1059,14 +1059,28 @@ export class ReleaseService extends AbstractService {
     current: FieldDefinition,
     production: FieldDefinition
   ): FieldChange[] {
-    const changes: FieldChange[] = [];
     const base = {
       collectionId,
       fieldId: current.id,
       fieldSlug: current.slug,
     };
 
-    // MAJOR changes
+    return [
+      ...this.collectMajorFieldChanges(base, current, production),
+      ...this.collectMinorFieldChanges(base, current, production),
+      ...this.collectPatchFieldChanges(base, current, production),
+    ];
+  }
+
+  /**
+   * Collects breaking (major) changes between two versions of a field.
+   */
+  private collectMajorFieldChanges(
+    base: Pick<FieldChange, 'collectionId' | 'fieldId' | 'fieldSlug'>,
+    current: FieldDefinition,
+    production: FieldDefinition
+  ): FieldChange[] {
+    const changes: FieldChange[] = [];
 
     if (current.valueType !== production.valueType) {
       changes.push({ ...base, changeType: 'valueTypeChanged', bump: 'major' });
@@ -1119,7 +1133,34 @@ export class ReleaseService extends AbstractService {
       }
     }
 
-    // MINOR changes
+    if (current.fieldType === 'slug' && production.fieldType === 'slug') {
+      // Changing the slug format re-canonicalises every value, breaking any
+      // consumer relying on the slugs.
+      if (
+        current.separator !== production.separator ||
+        current.lowercase !== production.lowercase ||
+        current.decamelize !== production.decamelize
+      ) {
+        changes.push({
+          ...base,
+          changeType: 'slugFormatChanged',
+          bump: 'major',
+        });
+      }
+    }
+
+    return changes;
+  }
+
+  /**
+   * Collects backwards-compatible (minor) changes between two versions of a field.
+   */
+  private collectMinorFieldChanges(
+    base: Pick<FieldChange, 'collectionId' | 'fieldId' | 'fieldSlug'>,
+    current: FieldDefinition,
+    production: FieldDefinition
+  ): FieldChange[] {
+    const changes: FieldChange[] = [];
 
     if (production.isRequired === false && current.isRequired === true) {
       changes.push({
@@ -1137,7 +1178,18 @@ export class ReleaseService extends AbstractService {
       });
     }
 
-    // PATCH changes
+    return changes;
+  }
+
+  /**
+   * Collects non-breaking (patch) changes between two versions of a field.
+   */
+  private collectPatchFieldChanges(
+    base: Pick<FieldChange, 'collectionId' | 'fieldId' | 'fieldSlug'>,
+    current: FieldDefinition,
+    production: FieldDefinition
+  ): FieldChange[] {
+    const changes: FieldChange[] = [];
 
     if (this.isMinMaxLoosened(current, production)) {
       changes.push({
@@ -1185,6 +1237,23 @@ export class ReleaseService extends AbstractService {
       changes.push({
         ...base,
         changeType: 'isDisabledChanged',
+        bump: 'patch',
+      });
+    }
+
+    // A slug's source fields are only a soft generation hint, they never change
+    // stored data, so unlike ofCollectionsChanged this is non-breaking.
+    if (
+      current.fieldType === 'slug' &&
+      production.fieldType === 'slug' &&
+      isDeepStrictEqual(
+        [...current.ofFieldDefinitions].sort(),
+        [...production.ofFieldDefinitions].sort()
+      ) === false
+    ) {
+      changes.push({
+        ...base,
+        changeType: 'ofFieldDefinitionsChanged',
         bump: 'patch',
       });
     }

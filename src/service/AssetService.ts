@@ -32,6 +32,7 @@ import { applyMigrations, assetMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid, CoreError } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
+import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -41,13 +42,15 @@ import type { LogService } from './LogService.js';
  */
 export class AssetService extends AbstractEntityService {
   private readonly coreVersion: string;
+  private readonly referenceService: ReferenceService;
 
   constructor(
     coreVersion: string,
     options: ElekIoCoreOptions,
     logService: LogService,
     jsonFileService: JsonFileService,
-    gitService: GitService
+    gitService: GitService,
+    referenceService: ReferenceService
   ) {
     super(
       serviceTypeSchema.enum.Asset,
@@ -58,6 +61,7 @@ export class AssetService extends AbstractEntityService {
     );
 
     this.coreVersion = coreVersion;
+    this.referenceService = referenceService;
   }
 
   /**
@@ -138,12 +142,26 @@ export class AssetService extends AbstractEntityService {
           props.commitHash
         );
         const assetFile = this.migrate(JSON.parse(content));
-        const blob = await this.gitService.getFileContentAtCommit(
+        const assetPath = pathTo.asset(
+          props.projectId,
+          props.id,
+          assetFile.extension
+        );
+        let blob = await this.gitService.getFileContentAtCommit(
           pathTo.project(props.projectId),
-          pathTo.asset(props.projectId, props.id, assetFile.extension),
+          assetPath,
           props.commitHash,
           'binary'
         );
+        // LFS-tracked binaries are stored as pointers, so `getFileContentAtCommit` (`git show`) returns the
+        // pointer text. Resolve it to the real bytes from the local LFS store.
+        if (this.gitService.lfs.isPointer(blob)) {
+          blob = await this.gitService.lfs.smudge(
+            pathTo.project(props.projectId),
+            blob,
+            assetPath
+          );
+        }
         await Fs.writeFile(
           pathTo.tmpAsset(assetFile.id, props.commitHash, assetFile.extension),
           blob,
@@ -262,6 +280,21 @@ export class AssetService extends AbstractEntityService {
    */
   public delete(props: DeleteAssetProps): Promise<void> {
     return this.validated('delete', deleteAssetSchema, props, async () => {
+      const referencingEntries =
+        await this.referenceService.findEntriesReferencing({
+          projectId: props.projectId,
+          assetId: props.id,
+        });
+      if (referencingEntries.length > 0) {
+        const list = referencingEntries
+          .map((r) => `Entry "${r.entryId}" (Collection "${r.collectionId}")`)
+          .join(', ');
+        throw CoreError.conflict(
+          `Cannot delete Asset "${props.id}": it is still referenced by ${list}`,
+          referencingEntries
+        );
+      }
+
       const projectPath = pathTo.project(props.projectId);
       const assetFilePath = pathTo.assetFile(props.projectId, props.id);
       const assetPath = pathTo.asset(

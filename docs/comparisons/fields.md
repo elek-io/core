@@ -8,11 +8,11 @@ For elek.io Core's full field reference and code examples, see [`../fields.md`](
 
 ## Summary at a glance
 
-- **elek.io Core** - Git-backed JSON storage with first-class i18n. 5 value types × 17 field types. Strong on validated string types (`url`/`ipv4`/`telephone`), grid layout control (`inputWidth`), and reusable Components composed via the polymorphic `dynamic` field. No rich text or M2M; nested groups and nested `dynamic` fields are intentionally disallowed.
+- **elek.io Core** - Git-backed JSON storage with first-class i18n. 6 value types × 18 field types. Strong on validated string types (`url`/`ipv4`/`telephone`), grid layout control (`inputWidth`), reusable Components composed via the polymorphic `dynamic` field, and structured (mdast) rich text via the `markdown` field. No M2M. Nested groups and nested `dynamic` fields are intentionally disallowed.
 - **Strapi** - Simplest field model. Good basics but fewest UI-layer options. Unique UID field for slug generation. Components + Dynamic Zones for composition.
 - **Directus** - Most granular. Clean separation of data types from UI interfaces gives maximum flexibility. Strongest in presentation/layout fields, geospatial, and selection widgets. Best for database-first projects.
 - **Payload CMS** - Developer-centric with code-first config. Strongest typed relationship model (polymorphic + virtual joins). Monaco code editor built-in. Best React integration for custom fields.
-- **TinaCMS** - Minimalist core (8 types) extended via UI plugins. Git-backed Markdown storage makes it unique. Best for static sites and content stored in repos. Weakest relationship support (reference only, no back-references).
+- **TinaCMS** - Minimalist core (8 documented types) extended via UI plugins. Git-backed Markdown storage makes it unique. Best for static sites and content stored in repos. Weakest relationship support (reference only, no back-references).
 
 ## Comparison
 
@@ -24,7 +24,7 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 | ----------------- | --------------------------------------------- | --------------------------------- | ---------------------------------------- | ------------------------------- | ------------------------- |
 | **Text (short)**  | `text`                                        | Text                              | Input                                    | Text                            | String                    |
 | **Text (long)**   | `textarea`                                    | Text (long)                       | Textarea                                 | Textarea                        | String + `textarea` UI    |
-| **Rich Text**     | --                                            | Blocks + Markdown                 | WYSIWYG (HTML) + Markdown + Block Editor | Rich Text (Lexical/Slate, JSON) | Rich Text (Markdown AST)  |
+| **Rich Text**     | `markdown` (mdast tree)                       | Blocks + Markdown                 | WYSIWYG (HTML) + Markdown + Block Editor | Rich Text (Lexical/Slate, JSON) | Rich Text (Markdown AST)  |
 | **Number**        | `number`                                      | Number (int/float/decimal/bigint) | Input (int/float/decimal/bigint)         | Number                          | Number                    |
 | **Boolean**       | `toggle`                                      | Boolean                           | Toggle                                   | Checkbox                        | Boolean                   |
 | **Date/Time**     | `date` / `time` / `datetime` (separate types) | Date (date/time/datetime)         | Datetime                                 | Date                            | Datetime (ISO 8601 UTC)   |
@@ -32,13 +32,13 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 | **URL**           | `url`                                         | --                                | --                                       | --                              | --                        |
 | **Telephone**     | `telephone`                                   | --                                | --                                       | --                              | --                        |
 | **IPv4**          | `ipv4`                                        | --                                | --                                       | --                              | --                        |
-| **Password/Hash** | --                                            | Password (encrypted)              | Hash (one-way)                           | --                              | --                        |
+| **Password/Hash** | --                                            | Password (hashed, bcrypt)         | Hash (one-way)                           | --                              | Password (type)           |
 | **Select/Enum**   | `select` (string & number)                    | Enumeration                       | Dropdown / Radio / Checkboxes            | Select / Radio                  | String/Number + `options` |
 | **Range/Slider**  | `range`                                       | --                                | Slider                                   | --                              | --                        |
 | **Color**         | --                                            | --                                | Color picker                             | --                              | String + `color` UI       |
 | **Icon**          | --                                            | --                                | Icon picker                              | --                              | --                        |
 | **Code**          | --                                            | --                                | Code editor                              | Code (Monaco)                   | --                        |
-| **JSON**          | --                                            | JSON                              | -- (via Code)                            | JSON                            | --                        |
+| **JSON**          | --                                            | JSON                              | `json` type (Code/List interfaces)       | JSON                            | --                        |
 | **UID/Slug**      | --                                            | UID                               | --                                       | --                              | --                        |
 | **Media/Image**   | `asset` (reference)                           | Media (single/multi)              | File / Image / Files                     | Upload                          | Image                     |
 | **Geospatial**    | --                                            | --                                | Map (7 geometry types)                   | Point (GeoJSON)                 | --                        |
@@ -50,7 +50,7 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 | ----------------------------- | --------------------------------------------------- | ----------------------- | ---------------------- | ------------------------ | ---------------------------------- |
 | **Asset references**          | `asset` field (min/max)                             | Media                   | File / Image / Files   | Upload                   | Image                              |
 | **Entry references**          | `entry` field (`ofCollections` + min/max)           | Relation                | M2O / O2M / M2M        | Relationship             | Reference                          |
-| **Polymorphic (Many-to-Any)** | `ofCollections` (entry); `ofComponents` (dynamic)   | --                      | Yes (M2A)              | Yes (`relationTo` array) | Yes (multi-collection `reference`) |
+| **Polymorphic (Many-to-Any)** | `ofCollections` (entry), `ofComponents` (dynamic)   | --                      | Yes (M2A)              | Yes (`relationTo` array) | Yes (multi-collection `reference`) |
 | **One-to-One**                | Yes (via `min: 1`, `max: 1`)                        | Yes                     | Yes (M2O)              | Yes                      | --                                 |
 | **One-to-Many**               | Yes (via `min`/`max`)                               | Yes                     | Yes (O2M)              | Yes                      | --                                 |
 | **Many-to-One**               | -- (one-way refs only)                              | Yes                     | Yes (M2O)              | Yes                      | --                                 |
@@ -67,7 +67,7 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 | **Repeatable groups**  | `dynamic` field referencing one Component                                               | Component (repeatable)   | Repeater (JSON array) | Array                | Object + `list: true`    |
 | **Polymorphic blocks** | `dynamic` field (`ofComponents`)                                                        | Dynamic Zone             | Builder (M2A)         | Blocks               | Object + `templates`     |
 | **Tabs**               | --                                                                                      | --                       | --                    | Tabs (Named)         | --                       |
-| **Nesting**            | Components reusable across Collections; groups cannot nest; dynamic cannot nest dynamic | Components in components | --                    | Groups in groups     | Objects in objects       |
+| **Nesting**            | Components reusable across Collections, groups cannot nest, dynamic cannot nest dynamic | Components in components | --                    | Groups in groups     | Objects in objects       |
 
 ### Presentation / Layout-Only Fields
 
@@ -87,20 +87,20 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 
 ### Architectural Differences
 
-| Aspect                      | elek.io Core                                                  | Strapi                      | Directus                                               | Payload CMS                                | TinaCMS                                    |
-| --------------------------- | ------------------------------------------------------------- | --------------------------- | ------------------------------------------------------ | ------------------------------------------ | ------------------------------------------ |
-| **Data storage**            | JSON files (Git-backed)                                       | Database                    | Database (wraps existing DB)                           | Database                                   | Markdown/MDX files (Git-backed)            |
-| **Rich text output**        | --                                                            | HTML or structured blocks   | HTML or JSON blocks                                    | Structured JSON (Lexical/Slate)            | Markdown AST                               |
-| **UI/data separation**      | Partially decoupled (`valueType` vs `fieldType`)              | Coupled (field = UI + data) | Decoupled (25 data types, 40 interfaces)               | Coupled with component overrides           | Decoupled (8 core types, UI plugins)       |
-| **i18n approach**           | Built into every direct value; narrowed to `ProjectLanguages` | Plugin / relation           | Specialized M2M                                        | Locale config                              | --                                         |
-| **Schema validation**       | Zod schemas generated from field definitions                  | Config-based                | Database introspection                                 | Config-based                               | Config-based                               |
-| **Extensibility model**     | Code-level schema definitions (no plugin system)              | Marketplace plugins         | Extension SDK (interfaces, displays, layouts, modules) | Custom React components via config         | Custom React components via `ui.component` |
-| **Virtual/computed fields** | --                                                            | --                          | --                                                     | Any field with `virtual: true`, Join field | --                                         |
-| **Field count**             | 17 field types across 5 value types                           | ~14 built-in                | ~40 interfaces on 25 data types                        | ~17 field types                            | 8 core types + UI plugins                  |
+| Aspect                      | elek.io Core                                                  | Strapi                      | Directus                                               | Payload CMS                                | TinaCMS                                             |
+| --------------------------- | ------------------------------------------------------------- | --------------------------- | ------------------------------------------------------ | ------------------------------------------ | --------------------------------------------------- |
+| **Data storage**            | JSON files (Git-backed)                                       | Database                    | Database (wraps existing DB)                           | Database                                   | Markdown/MDX files (Git-backed)                     |
+| **Rich text output**        | Structured mdast tree (JSON)                                  | HTML or structured blocks   | HTML or JSON blocks                                    | Structured JSON (Lexical/Slate)            | Markdown AST                                        |
+| **UI/data separation**      | Partially decoupled (`valueType` vs `fieldType`)              | Coupled (field = UI + data) | Decoupled (28 data types, 40+ interfaces)              | Coupled with component overrides           | Decoupled (8 core types, UI plugins)                |
+| **i18n approach**           | Built into every direct value, narrowed to `ProjectLanguages` | Built-in core, locale-based | Specialized M2M                                        | Locale config                              | --                                                  |
+| **Schema validation**       | Zod schemas generated from field definitions                  | Config-based                | Database introspection                                 | Config-based                               | Config-based                                        |
+| **Extensibility model**     | Code-level schema definitions (no plugin system)              | Marketplace plugins         | Extension SDK (interfaces, displays, layouts, modules) | Custom React components via config         | Custom React components via `ui.component`          |
+| **Virtual/computed fields** | --                                                            | --                          | --                                                     | Any field with `virtual: true`, Join field | --                                                  |
+| **Field count**             | 18 field types across 6 value types                           | ~14 built-in                | 40+ interfaces on 28 data types                        | ~18 data fields + presentational + Join    | 8 documented core types (10 in source) + UI plugins |
 
 ## Per-CMS Reference
 
-Full per-platform field-type detail. Use this section to look up one CMS in depth — the [comparison tables](#comparison) above are the right starting point for cross-platform comparison.
+Full per-platform field-type detail. Use this section to look up one CMS in depth - the [comparison tables](#comparison) above are the right starting point for cross-platform comparison.
 
 ### Strapi
 
@@ -114,7 +114,7 @@ Full per-platform field-type detail. Use this section to look up one CMS in dept
 | Number               | Supports integer, big integer, decimal, and float formats. Configurable min/max values.                                                                       | Quantities, prices, measurements, ratings, or any numeric value.                                                        |
 | Date                 | Three modes: date (year/month/day), time (hour/minute/second), or datetime (both).                                                                            | Scheduling, timestamps, publication dates, event times.                                                                 |
 | Email                | Text input with built-in email format validation.                                                                                                             | Contact info, user emails, newsletter signups - anywhere a validated email address is needed.                           |
-| Password             | Encrypted text field. Data is encrypted at rest.                                                                                                              | Storing sensitive credentials securely.                                                                                 |
+| Password             | Hashed text field (bcrypt, one-way). Stored as a hash, not retrievable in plaintext.                                                                          | Storing sensitive credentials securely.                                                                                 |
 | Boolean              | Toggle for true/false values. Default can be true, false, or null.                                                                                            | Feature flags, published/draft status, yes/no toggles, visibility switches.                                             |
 | Enumeration          | Predefined list of values shown as a dropdown. Values must start with alphabetical characters for GraphQL compatibility.                                      | Status fields, categories, fixed option sets (e.g. "draft/published/archived").                                         |
 | JSON                 | Stores arbitrary JSON objects or arrays.                                                                                                                      | Flexible/unstructured data, metadata, configuration objects, or complex nested data that doesn't fit other field types. |
@@ -153,23 +153,23 @@ Supported relation types:
 
 ### Directus
 
-Directus has a layered system: **data types** (how values are stored in the database) and **interfaces** (how users interact with fields in the UI). A single data type can be presented through different interfaces. There are 25 underlying data types and 40 interfaces in total.
+Directus has a layered system: **data types** (how values are stored in the database) and **interfaces** (how users interact with fields in the UI). A single data type can be presented through different interfaces. There are 28 underlying data types (`TYPES` in `@directus/constants`, of which 6 are `geometry.*` subtypes) and over 40 interfaces in total.
 
 #### Regular Fields
 
 ##### Text & Input
 
-| Field Type         | Interface ID             | Description                                                                                         | When to Use                                                                                            |
-| ------------------ | ------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Input              | `input`                  | Standard single-line input. Works with string, integer, float, decimal, bigInteger, and UUID types. | Default choice for most scalar fields - general-purpose text, numbers, or UUIDs.                       |
-| Textarea           | `input-multiline`        | Plain multi-line text input without formatting.                                                     | Longer text that doesn't need rich formatting (descriptions, notes, plain paragraphs).                 |
-| WYSIWYG            | `input-rich-text-html`   | Rich text editor with toolbar, producing HTML output.                                               | Formatted content with bold, italic, headings, links, embedded media - article bodies, marketing copy. |
-| Markdown           | `input-rich-text-md`     | Markdown editor with edit/preview modes.                                                            | Technical documentation or developer-facing text where Markdown is preferred over HTML.                |
-| Block Editor       | `input-block-editor`     | Block-based editor (Notion/Gutenberg-style). Content stored as JSON blocks.                         | Flexible page/content composition with reusable, rearrangeable content blocks.                         |
-| Code               | `input-code`             | Code editor with syntax highlighting (JSON, JS, HTML, CSS, etc.).                                   | Programming code, raw JSON, configuration snippets, any pre-formatted text.                            |
-| Autocomplete (API) | `input-autocomplete-api` | Text input with dropdown populated from an external API endpoint.                                   | Dynamic suggestions from third-party services (address lookup, product search).                        |
-| Hash               | `input-hash`             | Text input that one-way hashes the value on save. Original value cannot be retrieved.               | Passwords, API keys, secrets - any sensitive data that should not be stored in plaintext.              |
-| Tags               | `tags`                   | Input for adding multiple free-form tags. Stored as CSV or JSON.                                    | Keywords, categories, labels, or multiple short text values on a single field.                         |
+| Field Type         | Interface ID             | Description                                                                                               | When to Use                                                                                            |
+| ------------------ | ------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Input              | `input`                  | Standard single-line input. Works with string, text, integer, float, decimal, bigInteger, and UUID types. | Default choice for most scalar fields - general-purpose text, numbers, or UUIDs.                       |
+| Textarea           | `input-multiline`        | Plain multi-line text input without formatting.                                                           | Longer text that doesn't need rich formatting (descriptions, notes, plain paragraphs).                 |
+| WYSIWYG            | `input-rich-text-html`   | Rich text editor with toolbar, producing HTML output.                                                     | Formatted content with bold, italic, headings, links, embedded media - article bodies, marketing copy. |
+| Markdown           | `input-rich-text-md`     | Markdown editor with edit/preview modes.                                                                  | Technical documentation or developer-facing text where Markdown is preferred over HTML.                |
+| Block Editor       | `input-block-editor`     | Block-based editor (Notion/Gutenberg-style). Content stored as JSON blocks.                               | Flexible page/content composition with reusable, rearrangeable content blocks.                         |
+| Code               | `input-code`             | Code editor with syntax highlighting (JSON, JS, HTML, CSS, etc.).                                         | Programming code, raw JSON, configuration snippets, any pre-formatted text.                            |
+| Autocomplete (API) | `input-autocomplete-api` | Text input with dropdown populated from an external API endpoint.                                         | Dynamic suggestions from third-party services (address lookup, product search).                        |
+| Hash               | `input-hash`             | Text input that one-way hashes the value on save. Original value cannot be retrieved.                     | Passwords, API keys, secrets - any sensitive data that should not be stored in plaintext.              |
+| Tags               | `tags`                   | Input for adding multiple free-form tags. Stored as CSV or JSON.                                          | Keywords, categories, labels, or multiple short text values on a single field.                         |
 
 ##### Selection & Choice
 
@@ -243,9 +243,10 @@ Alias fields that visually group other fields together.
 
 | Field Type   | Interface ID      | Description                                                    | When to Use                                                                                     |
 | ------------ | ----------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Accordion    | `group-accordion` | Expandable/collapsible group; only one section open at a time. | Space-efficient organization with many fields that don't all need to be visible simultaneously. |
+| Accordion    | `group-accordion` | Expandable/collapsible group, only one section open at a time. | Space-efficient organization with many fields that don't all need to be visible simultaneously. |
 | Detail Group | `group-detail`    | Show/hide a sub-group by clicking the header.                  | Conditional or secondary fields editors may not always need (advanced settings, SEO fields).    |
 | Raw Group    | `group-raw`       | Groups fields with no visible border or styling.               | Logical organization for layout purposes without visual chrome.                                 |
+| Tab Group    | `group-tabs`      | Groups fields into selectable tabs (core since v11.17.1).      | Splitting a long form into tabbed sections within a single item.                                |
 
 #### System
 
@@ -284,16 +285,16 @@ Payload has three field categories: **data fields** (store data in the database,
 
 ##### Date & Location
 
-| Field Type | Description                                                                                   | When to Use                                              |
-| ---------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Date       | Date picker. Saves a timestamp.                                                               | Publish dates, event dates, deadlines, scheduling.       |
-| Point      | Saves geographic coordinates in GeoJSON format. Supports geo-queries with automatic indexing. | Location data, maps, store locators, geospatial queries. |
+| Field Type | Description                                                                                                             | When to Use                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Date       | Date picker. Saves a timestamp.                                                                                         | Publish dates, event dates, deadlines, scheduling.       |
+| Point      | Saves geographic coordinates in GeoJSON format. Supports geo-queries with automatic indexing (not supported on SQLite). | Location data, maps, store locators, geospatial queries. |
 
 ##### Rich Content
 
-| Field Type | Description                                                                           | When to Use                                                                      |
-| ---------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Rich Text  | Fully extensible rich text editor (Lexical or Slate adapters). Saves structured JSON. | Long-form formatted content - blog posts, articles, documentation, page content. |
+| Field Type | Description                                                                                                                  | When to Use                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Rich Text  | Fully extensible rich text editor (Lexical default; Slate adapter deprecated in 3.x, removed in 4.0). Saves structured JSON. | Long-form formatted content - blog posts, articles, documentation, page content. |
 
 #### Relational Fields
 
@@ -336,7 +337,7 @@ Payload supports fully custom field types through its component-based architectu
 
 ### TinaCMS
 
-TinaCMS has a layered system: **8 core schema field types** (set via the `type` property) define how data is stored, while **UI component plugins** (set via `ui.component`) control how those types render in the editor without changing the underlying data type. All content is stored as Markdown/MDX files with frontmatter.
+TinaCMS has a layered system: **8 documented core schema field types** (set via the `type` property) define how data is stored, while **UI component plugins** (set via `ui.component`) control how those types render in the editor without changing the underlying data type. (The schema source actually defines 10 `type` literals - the 8 documented ones plus `password` and `displayOnly`.) All content is stored as Markdown/MDX files with frontmatter.
 
 #### Data Fields
 
@@ -351,9 +352,9 @@ TinaCMS has a layered system: **8 core schema field types** (set via the `type` 
 
 ##### Rich Content
 
-| Field Type | Description                                                                                                                                                                                                                                                                                                                                                                                                  | When to Use                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| Rich Text  | Full Markdown/MDX editor with formatting toolbar. Stores content as a Markdown AST. Supports `isBody: true` to save content to the Markdown body section (below frontmatter). `templates` enables embedding custom React/MDX components. Toolbar buttons can be controlled via `overrides.toolbarOverride` (heading, link, image, quote, ul, ol, bold, italic, code, codeBlock, mermaid, table, raw, embed). | Blog post bodies, long-form content, documentation - any content that needs formatting. |
+| Field Type | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                               | When to Use                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Rich Text  | Full Markdown/MDX editor with formatting toolbar. Stores content as a Markdown AST. Supports `isBody: true` to save content to the Markdown body section (below frontmatter). `templates` enables embedding custom React/MDX components. Toolbar buttons can be controlled via `overrides.toolbar` (heading, link, image, quote, ul, ol, bold, italic, code, codeBlock, mermaid, table, raw, embed); related overrides include `showFloatingToolbar` and `headingLevels`. | Blog post bodies, long-form content, documentation - any content that needs formatting. |
 
 ##### Media
 
@@ -371,7 +372,7 @@ TinaCMS has a layered system: **8 core schema field types** (set via the `type` 
 
 | Field Type | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | When to Use                                                                                                        |
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Object     | Groups multiple fields into a nested structure. Two modes: **fields** (static shape - all instances have the same sub-fields) and **templates** (polymorphic blocks where the user picks from different shapes; stores a `_template` discriminator key). Supports `list: true`, `ui.visualSelector` for visual block picking with preview images, `ui.itemProps` for custom list item labels, `ui.defaultItem` for presets, and `ui.min`/`ui.max` constraints on list item count. | Grouping related fields (SEO metadata, address blocks), creating repeatable content blocks, page builder sections. |
+| Object     | Groups multiple fields into a nested structure. Two modes: **fields** (static shape - all instances have the same sub-fields) and **templates** (polymorphic blocks where the user picks from different shapes, stores a `_template` discriminator key). Supports `list: true`, `ui.visualSelector` for visual block picking with preview images, `ui.itemProps` for custom list item labels, `ui.defaultItem` for presets, and `ui.min`/`ui.max` constraints on list item count. | Grouping related fields (SEO metadata, address blocks), creating repeatable content blocks, page builder sections. |
 
 #### UI Component Plugins
 
@@ -419,7 +420,7 @@ These properties are available on every field definition:
 
 #### Notable Absences
 
-TinaCMS has no dedicated email, password, URL, or generic file (non-image) field type. For those use cases, use String with a custom `ui.component`.
+TinaCMS has no dedicated email, URL, or generic file (non-image) field type. For those use cases, use String with a custom `ui.component`. It does have a `password` field type and a read-only `displayOnly` field type in source, though both are lightly documented.
 
 #### Extensibility
 
@@ -429,24 +430,30 @@ TinaCMS supports custom field components by passing a React component directly t
 
 ### Strengths
 
-- **Built-in i18n** - Every direct value is multilingual by default via `TranslatableString`. No plugins, junction tables, or special configuration needed. Validation is narrowed to project-configured languages via `ProjectLanguages`.
+- **Built-in i18n** - Every direct value is multilingual by default via `TranslatableString`, translated per field inline. This differs architecturally from Strapi (whole entry duplicated per locale, even though i18n is now core in v5) and Directus (a translations junction collection): no junction tables or per-locale entry copies, just the value carrying every language. Validation is narrowed to project-configured languages via `ProjectLanguages`.
 - **Dedicated validated types** - `url`, `telephone`, `ipv4` are standalone field types with built-in validation, where other CMS platforms rely on generic text + custom validation.
 - **Polymorphic blocks via shared Components** - The `dynamic` field with `ofComponents` lets editors compose flexible page layouts from a curated catalog of reusable Components, avoiding the inline-block-schema duplication that other platforms require.
 - **Grid layout control** - `inputWidth` (12/6/4/3) provides a simple but effective 12-column grid for field layout, comparable to Payload's Row field but more granular.
 - **Strong type safety** - Zod-based schema generation from field definitions provides rigorous runtime validation, comparable to Payload's approach and more rigorous than Strapi/Directus.
 - **Git-backed storage** - Similar to TinaCMS's approach but using structured JSON instead of Markdown, combining version-control benefits with structured data.
+- **Structured rich text** - The `markdown` field stores a typed mdast tree rather than an HTML or markdown string, making Asset and Entry references first-class typed nodes and letting any framework render content its own way.
 
 ### Gaps
 
-| Gap                         | Who Has It                | Priority                                                        |
-| --------------------------- | ------------------------- | --------------------------------------------------------------- |
-| **Rich Text**               | All 4 CMS                 | High - Essential for long-form content (articles, docs, pages). |
-| **Back-references / Joins** | Strapi, Directus, Payload | Medium - Limits complex relational modeling.                    |
-| **Many-to-Many**            | Strapi, Directus, Payload | Medium - No formal junction table support.                      |
-| **JSON / Arbitrary data**   | Strapi, Payload           | Medium - Useful for metadata, config, unstructured data.        |
-| **Code editor**             | Directus, Payload         | Low - Niche, mainly for developer-facing content.               |
-| **Color picker**            | Directus, TinaCMS         | Low - Nice-to-have for theming/branding fields.                 |
-| **Password/Hash**           | Strapi, Directus          | Low - Typically handled at auth layer, not content layer.       |
-| **Geospatial**              | Directus, Payload         | Low - Specialized use case.                                     |
+| Gap                         | Who Has It                               | Priority                                                  |
+| --------------------------- | ---------------------------------------- | --------------------------------------------------------- |
+| **Back-references / Joins** | Strapi, Directus, Payload                | Medium - Limits complex relational modeling.              |
+| **Many-to-Many**            | Strapi, Directus, Payload                | Medium - No formal junction table support.                |
+| **JSON / Arbitrary data**   | Strapi, Directus, Payload                | Medium - Useful for metadata, config, unstructured data.  |
+| **Code editor**             | Directus, Payload                        | Low - Niche, mainly for developer-facing content.         |
+| **Color picker**            | Directus, TinaCMS, Strapi (custom field) | Low - Nice-to-have for theming/branding fields.           |
+| **Password/Hash**           | Strapi, Directus, TinaCMS                | Low - Typically handled at auth layer, not content layer. |
+| **Geospatial**              | Directus, Payload                        | Low - Specialized use case.                               |
 
-The lack of nested composition (no nested groups, no nested `dynamic` fields) is **intentional design** — Components are the reuse mechanism, kept flat to keep the data and editor model predictable — not an unmet need.
+The lack of nested composition (no nested groups, no nested `dynamic` fields) is **intentional design** - Components are the reuse mechanism, kept flat to keep the data and editor model predictable - not an unmet need.
+
+## See Also
+
+- [`../fields.md`](../fields.md) - elek.io Core's full field reference and code examples
+- [`../features.md`](../features.md) - Core's capabilities and current limitations
+- [`../concepts.md`](../concepts.md) - the data model the field system describes

@@ -34,15 +34,21 @@ import {
   entryFileSchema,
   flattenFieldDefinitions,
   type FieldDefinition,
+  type ProjectLanguages,
+  type Uuid,
+  type Value,
 } from '../schema/index.js';
-import { diffFieldDefinitions } from '../util/fieldDefinitionDiff.js';
+import {
+  diffFieldDefinitions,
+  type FieldChange,
+} from '../util/fieldDefinitionDiff.js';
 import { transformComponentValues } from '../util/componentTransform.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
 import type { EntryIssue } from '../util/entryTransform.js';
 import { applyMigrations, componentMigrations } from './migrations/index.js';
-import { folders, pathTo } from '../util/node.js';
+import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
-import { AbstractIndexedEntityService } from './AbstractIndexedEntityService.js';
+import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -51,7 +57,7 @@ import type { LogService } from './LogService.js';
  * Service that manages CRUD functionality for Component files on disk
  */
 export class ComponentService
-  extends AbstractIndexedEntityService<ComponentFile>
+  extends AbstractSlugIndexedEntityService<ComponentFile>
   implements CrudServiceWithListCount<Component>
 {
   private coreVersion: string;
@@ -100,6 +106,11 @@ export class ComponentService
 
   /**
    * Creates a new Component
+   *
+   * Core generates the Component's `id`, but field-definition `id`s are
+   * caller-supplied (pass a UUID per field definition, for example via
+   * `uuid()`). They become the stable identity used to match field definitions
+   * on later updates, see `update`.
    */
   public async create<T extends Component = Component>(
     props: CreateComponentProps
@@ -131,7 +142,7 @@ export class ComponentService
         );
         const componentSlug = slug(validatedProps.slug);
 
-        const index = await this.getIndex(validatedProps.projectId);
+        const index = await this.getSlugIndex(validatedProps.projectId);
 
         if (Object.values(index).includes(componentSlug)) {
           throw CoreError.conflict(
@@ -165,7 +176,7 @@ export class ComponentService
         }, [componentPath]);
 
         index[id] = componentSlug;
-        await this.safeWriteIndex(validatedProps.projectId, index);
+        await this.safeWriteSlugIndex(validatedProps.projectId, index);
         return this.toComponent(componentFile) as T;
       }
     );
@@ -240,6 +251,14 @@ export class ComponentService
   /**
    * Updates given Component
    *
+   * Field definitions are matched by `id`. Send back the `id` of every field
+   * definition you want to keep so Core matches it to the existing one and
+   * preserves the entry data stored under it, even across slug renames or type
+   * changes. A field definition with no `id` (or a changed `id`) is treated as
+   * new, so the old field and the entry data keyed to it is removed. Ids are
+   * caller-supplied (Core does not generate them), so always round-trip the
+   * ids you read.
+   *
    * Handles fieldDefinition change cascade across all entries that reference
    * this Component. Deterministic changes (slug renames, field removals,
    * additions with defaults) are applied automatically. Ambiguous changes
@@ -289,15 +308,11 @@ export class ComponentService
 
         // If component slug changed, enforce uniqueness before mutating
         if (prevComponentFile.slug !== newSlug) {
-          const index = await this.getIndex(validatedProps.projectId);
-          const existingUuid = Object.entries(index).find(
-            ([, slug]) => slug === newSlug
+          await this.enforceComponentSlugIsUnique(
+            validatedProps.projectId,
+            newSlug,
+            validatedProps.id
           );
-          if (existingUuid && existingUuid[0] !== validatedProps.id) {
-            throw CoreError.conflict(
-              `Component slug "${newSlug}" is already in use by another component`
-            );
-          }
         }
 
         const oldFieldDefs = prevComponentFile.fieldDefinitions;
@@ -308,148 +323,17 @@ export class ComponentService
           const filesToGitAdd: string[] = [componentFilePath];
 
           if (changes.length > 0) {
-            const allIssues: EntryIssue[] = [];
-
-            // Find all collections that reference this component
-            const collectionsPath = pathTo.collections(
-              validatedProps.projectId
+            filesToGitAdd.push(
+              ...(await this.cascadeFieldDefinitionChanges({
+                projectId: validatedProps.projectId,
+                componentId: validatedProps.id,
+                oldFieldDefs,
+                newFieldDefs,
+                changes,
+                resolutions,
+                languages,
+              }))
             );
-            const collectionsExist = await Fs.pathExists(collectionsPath);
-
-            if (collectionsExist) {
-              const collectionFolders = await folders(collectionsPath);
-              const validFolders = collectionFolders.filter(
-                (f) => uuidSchema.safeParse(f.name).success
-              );
-
-              for (const collectionFolder of validFolders) {
-                const collectionFile = await this.jsonFileService.read(
-                  pathTo.collectionFile(
-                    validatedProps.projectId,
-                    collectionFolder.name
-                  ),
-                  collectionFileSchema
-                );
-
-                const fieldDefs = flattenFieldDefinitions(
-                  collectionFile.fieldDefinitions
-                );
-
-                const referencingDynamicFields =
-                  await this.findDynamicFieldsReferencingComponent(
-                    fieldDefs,
-                    validatedProps.id,
-                    validatedProps.projectId
-                  );
-
-                if (referencingDynamicFields.length === 0) continue;
-
-                const entriesPath = pathTo.entries(
-                  validatedProps.projectId,
-                  collectionFolder.name
-                );
-                const entriesExist = await Fs.pathExists(entriesPath);
-                if (!entriesExist) continue;
-
-                const allEntryFiles = await Fs.readdir(entriesPath);
-                const entryFileNames = allEntryFiles.filter(
-                  (f) => f.endsWith('.json') && f !== 'collection.json'
-                );
-
-                for (const entryFileName of entryFileNames) {
-                  const entryId = entryFileName.replace('.json', '');
-                  const entryFilePath = pathTo.entryFile(
-                    validatedProps.projectId,
-                    collectionFolder.name,
-                    entryId
-                  );
-
-                  const entryFile = await this.jsonFileService.read(
-                    entryFilePath,
-                    entryFileSchema
-                  );
-
-                  const result = transformComponentValues(
-                    entryFile.id,
-                    collectionFolder.name,
-                    entryFile.values,
-                    validatedProps.id,
-                    oldFieldDefs,
-                    newFieldDefs,
-                    changes,
-                    referencingDynamicFields,
-                    languages
-                  );
-
-                  allIssues.push(...result.issues);
-
-                  if (result.changed || result.issues.length > 0) {
-                    // Apply resolutions if provided
-                    const finalValues = result.values;
-                    if (resolutions && result.issues.length > 0) {
-                      const entryResolutions = resolutions[entryFile.id];
-                      if (entryResolutions) {
-                        for (const [fieldSlug, resolvedValue] of Object.entries(
-                          entryResolutions
-                        )) {
-                          const fieldDef = newFieldDefs.find(
-                            (fd) => fd.slug === fieldSlug
-                          );
-                          if (fieldDef) {
-                            const schema = getValueSchemaFromFieldDefinition(
-                              fieldDef,
-                              languages
-                            );
-                            const parseResult = schema.safeParse(resolvedValue);
-                            if (!parseResult.success) {
-                              throw CoreError.badRequest(
-                                'Resolution validation failed',
-                                parseResult.error
-                              );
-                            }
-                          }
-                          finalValues[fieldSlug] = resolvedValue;
-                        }
-                      }
-                    }
-
-                    if (
-                      isDeepStrictEqual(entryFile.values, finalValues) === false
-                    ) {
-                      const updatedEntryFile = {
-                        ...entryFile,
-                        values: finalValues,
-                      };
-                      await this.jsonFileService.update(
-                        updatedEntryFile,
-                        entryFilePath,
-                        entryFileSchema
-                      );
-                      filesToGitAdd.push(entryFilePath);
-                    }
-                  }
-                }
-              }
-            }
-
-            // Check for unresolved issues
-            if (allIssues.length > 0) {
-              const unresolvedIssues = resolutions
-                ? allIssues.filter((issue) => {
-                    const entryResolutions = resolutions[issue.entryId];
-                    return !(
-                      entryResolutions && issue.fieldSlug in entryResolutions
-                    );
-                  })
-                : allIssues;
-
-              if (unresolvedIssues.length > 0) {
-                throw CoreError.conflict(
-                  'Component field definition changes require entry resolutions',
-                  unresolvedIssues
-                );
-              }
-            }
           }
 
           await this.jsonFileService.update(
@@ -469,14 +353,216 @@ export class ComponentService
 
         // Update index after successful commit
         if (prevComponentFile.slug !== newSlug) {
-          const index = await this.getIndex(validatedProps.projectId);
+          const index = await this.getSlugIndex(validatedProps.projectId);
           index[validatedProps.id] = newSlug;
-          await this.safeWriteIndex(validatedProps.projectId, index);
+          await this.safeWriteSlugIndex(validatedProps.projectId, index);
         }
 
         return this.toComponent(componentFile) as T;
       }
     );
+  }
+
+  /**
+   * Throws when another Component already uses the given slug.
+   *
+   * The current Component is excluded so re-saving with an unchanged slug is
+   * allowed.
+   */
+  private async enforceComponentSlugIsUnique(
+    projectId: Uuid,
+    newSlug: string,
+    componentId: Uuid
+  ): Promise<void> {
+    const index = await this.getSlugIndex(projectId);
+    const existingUuid = Object.entries(index).find(
+      ([, slug]) => slug === newSlug
+    );
+    if (existingUuid && existingUuid[0] !== componentId) {
+      throw CoreError.conflict(
+        `Component slug "${newSlug}" is already in use by another component`
+      );
+    }
+  }
+
+  /**
+   * Cascades field definition changes to every Entry that references this
+   * Component through a dynamic field.
+   *
+   * Transforms each affected Entry's values, applies caller-provided resolutions
+   * and writes the changed Entry files. Throws when transform issues remain
+   * unresolved, so the caller's git rollback reverts any writes. Returns the
+   * paths of the written Entry files so the caller can stage them.
+   */
+  private async cascadeFieldDefinitionChanges(params: {
+    projectId: Uuid;
+    componentId: Uuid;
+    oldFieldDefs: FieldDefinition[];
+    newFieldDefs: FieldDefinition[];
+    changes: FieldChange[];
+    resolutions: UpdateComponentProps['resolutions'];
+    languages: ProjectLanguages;
+  }): Promise<string[]> {
+    const {
+      projectId,
+      componentId,
+      oldFieldDefs,
+      newFieldDefs,
+      changes,
+      resolutions,
+      languages,
+    } = params;
+
+    const filesToGitAdd: string[] = [];
+    const allIssues: EntryIssue[] = [];
+
+    // Find all collections that reference this component
+    const collectionsPath = pathTo.collections(projectId);
+    const collectionsExist = await Fs.pathExists(collectionsPath);
+
+    if (collectionsExist) {
+      const collectionReferences = await this.listReferences(
+        'collection',
+        projectId
+      );
+
+      for (const collectionReference of collectionReferences) {
+        const collectionId = collectionReference.id;
+        const collectionFile = await this.jsonFileService.read(
+          pathTo.collectionFile(projectId, collectionId),
+          collectionFileSchema
+        );
+
+        const fieldDefs = flattenFieldDefinitions(
+          collectionFile.fieldDefinitions
+        );
+
+        const referencingDynamicFields =
+          await this.findDynamicFieldsReferencingComponent(
+            fieldDefs,
+            componentId,
+            projectId
+          );
+
+        if (referencingDynamicFields.length === 0) continue;
+
+        const entriesPath = pathTo.entries(projectId, collectionId);
+        const entriesExist = await Fs.pathExists(entriesPath);
+        if (!entriesExist) continue;
+
+        const entryReferences = await this.listReferences(
+          'entry',
+          projectId,
+          collectionId
+        );
+
+        for (const entryReference of entryReferences) {
+          const entryId = entryReference.id;
+          const entryFilePath = pathTo.entryFile(
+            projectId,
+            collectionId,
+            entryId
+          );
+
+          const entryFile = await this.jsonFileService.read(
+            entryFilePath,
+            entryFileSchema
+          );
+
+          const result = transformComponentValues(
+            entryFile.id,
+            collectionId,
+            entryFile.values,
+            componentId,
+            oldFieldDefs,
+            newFieldDefs,
+            changes,
+            referencingDynamicFields,
+            languages
+          );
+
+          allIssues.push(...result.issues);
+
+          if (result.changed || result.issues.length > 0) {
+            // Apply resolutions if provided
+            const finalValues = result.values;
+            if (resolutions && result.issues.length > 0) {
+              this.applyEntryResolutions(
+                finalValues,
+                resolutions,
+                entryFile.id,
+                newFieldDefs,
+                languages
+              );
+            }
+
+            if (isDeepStrictEqual(entryFile.values, finalValues) === false) {
+              const updatedEntryFile = {
+                ...entryFile,
+                values: finalValues,
+              };
+              await this.jsonFileService.update(
+                updatedEntryFile,
+                entryFilePath,
+                entryFileSchema
+              );
+              filesToGitAdd.push(entryFilePath);
+            }
+          }
+        }
+      }
+    }
+
+    // Check for unresolved issues
+    if (allIssues.length > 0) {
+      const unresolvedIssues = resolutions
+        ? allIssues.filter((issue) => {
+            const entryResolutions = resolutions[issue.entryId];
+            return !(entryResolutions && issue.fieldSlug in entryResolutions);
+          })
+        : allIssues;
+
+      if (unresolvedIssues.length > 0) {
+        throw CoreError.conflict(
+          'Component field definition changes require entry resolutions',
+          unresolvedIssues
+        );
+      }
+    }
+
+    return filesToGitAdd;
+  }
+
+  /**
+   * Applies a single Entry's resolutions onto its final values in place.
+   *
+   * Each resolved value is validated against its field definition schema before
+   * being written, throwing on a validation failure.
+   */
+  private applyEntryResolutions(
+    finalValues: Record<string, Value>,
+    resolutions: NonNullable<UpdateComponentProps['resolutions']>,
+    entryId: Uuid,
+    newFieldDefs: FieldDefinition[],
+    languages: ProjectLanguages
+  ): void {
+    const entryResolutions = resolutions[entryId];
+    if (!entryResolutions) return;
+
+    for (const [fieldSlug, resolvedValue] of Object.entries(entryResolutions)) {
+      const fieldDef = newFieldDefs.find((fd) => fd.slug === fieldSlug);
+      if (fieldDef) {
+        const schema = getValueSchemaFromFieldDefinition(fieldDef, languages);
+        const parseResult = schema.safeParse(resolvedValue);
+        if (!parseResult.success) {
+          throw CoreError.badRequest(
+            'Resolution validation failed',
+            parseResult.error
+          );
+        }
+      }
+      finalValues[fieldSlug] = resolvedValue;
+    }
   }
 
   /**
@@ -512,9 +598,9 @@ export class ComponentService
         });
       });
 
-      const index = await this.getIndex(props.projectId);
+      const index = await this.getSlugIndex(props.projectId);
       delete index[props.id];
-      await this.safeWriteIndex(props.projectId, index);
+      await this.safeWriteSlugIndex(props.projectId, index);
     });
   }
 
@@ -574,7 +660,7 @@ export class ComponentService
    * Returns all Component UUIDs for a given project
    */
   public async listAllIds(projectId: string): Promise<string[]> {
-    const index = await this.getIndex(projectId);
+    const index = await this.getSlugIndex(projectId);
     return Object.keys(index);
   }
 
@@ -635,7 +721,7 @@ export class ComponentService
       ) {
         componentIds = fieldDefinition.ofComponents;
       } else {
-        const index = await this.getIndex(projectId);
+        const index = await this.getSlugIndex(projectId);
         componentIds = Object.keys(index);
       }
 
@@ -712,7 +798,7 @@ export class ComponentService
   ): Promise<Array<{ type: 'collection' | 'component'; id: string }>> {
     const results: Array<{ type: 'collection' | 'component'; id: string }> = [];
 
-    const componentIndex = await this.getIndex(projectId);
+    const componentIndex = await this.getSlugIndex(projectId);
     const otherIds = Object.keys(componentIndex).filter(
       (id) => id !== componentId
     );
@@ -733,14 +819,14 @@ export class ComponentService
     const exists = await Fs.pathExists(collectionsPath);
     if (!exists) return results;
 
-    const collectionFolders = await folders(collectionsPath);
-    const validFolders = collectionFolders.filter(
-      (f) => uuidSchema.safeParse(f.name).success
+    const collectionReferences = await this.listReferences(
+      'collection',
+      projectId
     );
 
-    for (const folder of validFolders) {
+    for (const collectionReference of collectionReferences) {
       const collectionFile = await this.jsonFileService.read(
-        pathTo.collectionFile(projectId, folder.name),
+        pathTo.collectionFile(projectId, collectionReference.id),
         collectionFileSchema
       );
       const fieldDefinitions = flattenFieldDefinitions(
@@ -752,7 +838,7 @@ export class ComponentService
           componentId
         )
       ) {
-        results.push({ type: 'collection', id: folder.name });
+        results.push({ type: 'collection', id: collectionReference.id });
       }
     }
 

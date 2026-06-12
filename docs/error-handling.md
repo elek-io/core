@@ -147,3 +147,11 @@ A missing user file is the normal state for a fresh installation. Callers expect
 ### Stack Traces in API Error Responses
 
 Error responses include `error.cause.stack` because the local API is used by developers integrating elek.io content into their own apps. The API is never exposed to the internet, and stack traces aid debugging during integration development.
+
+## See Also
+
+- [`usage.md`](./usage.md) - catching `CoreError` in application code
+- [`git-and-sync.md`](./git-and-sync.md) - the errors git operations and synchronizing raise
+- [`schema-changes.md`](./schema-changes.md) - the `Conflict` error and the resolutions workflow
+- [`local-api.md`](./local-api.md) - how `CoreError` maps to HTTP responses
+- [`concepts.md`](./concepts.md) - the objects these errors are raised about

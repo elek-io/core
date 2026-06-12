@@ -11,6 +11,7 @@ import { entryExportSchema } from './entrySchema.js';
 import {
   fieldDefinitionOrGroupSchema,
   fieldDefinitionSlugUniquenessSuperRefinement,
+  slugSourceReferencesSuperRefinement,
 } from './fieldSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 
@@ -28,7 +29,8 @@ export const collectionFileSchema = baseFileSchema.extend({
   icon: supportedIconSchema,
   fieldDefinitions: z
     .array(fieldDefinitionOrGroupSchema)
-    .superRefine(fieldDefinitionSlugUniquenessSuperRefinement),
+    .superRefine(fieldDefinitionSlugUniquenessSuperRefinement)
+    .superRefine(slugSourceReferencesSuperRefinement),
 });
 export type CollectionFile = z.infer<typeof collectionFileSchema>;
 

@@ -96,6 +96,8 @@ function getFieldDefinitionTypeName(fieldDefinition: FieldDefinition): string {
       return 'DatetimeFieldDefinition';
     case 'telephone':
       return 'TelephoneFieldDefinition';
+    case 'slug':
+      return 'SlugFieldDefinition';
     case 'number':
       return 'NumberFieldDefinition';
     case 'range':
