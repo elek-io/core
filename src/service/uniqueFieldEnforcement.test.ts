@@ -271,6 +271,7 @@ describe('Unique field enforcement', function () {
       })
     ).rejects.toMatchObject({
       type: 'Conflict',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- vitest matchers are typed as any
       cause: expect.arrayContaining([
         expect.objectContaining({
           fieldSlug: 'sku',
@@ -495,6 +496,7 @@ describe('Making a field unique via Collection update', function () {
       })
     ).rejects.toMatchObject({
       type: 'Conflict',
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment -- vitest matchers are typed as any */
       cause: expect.arrayContaining([
         expect.objectContaining({
           issue: 'unique_collision',
@@ -505,6 +507,7 @@ describe('Making a field unique via Collection update', function () {
           conflictingEntryId: expect.any(String),
         }),
       ]),
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment */
     });
   });
 
