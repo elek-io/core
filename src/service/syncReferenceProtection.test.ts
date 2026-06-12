@@ -119,7 +119,7 @@ describe('findDanglingReferences (forward scan)', function () {
       core.util.pathTo.entryFile(project.id, collection.id, target.id)
     );
 
-    const danglers = await core.entries.findDanglingReferences(project.id);
+    const danglers = await core.references.findDanglingReferences(project.id);
     expect(danglers).toEqual([
       {
         collectionId: collection.id,
@@ -144,7 +144,7 @@ describe('findDanglingReferences (forward scan)', function () {
     });
     await Fs.remove(core.util.pathTo.assetFile(project.id, asset.id));
 
-    const danglers = await core.entries.findDanglingReferences(project.id);
+    const danglers = await core.references.findDanglingReferences(project.id);
     expect(danglers).toEqual([
       {
         collectionId: collection.id,
@@ -200,7 +200,7 @@ describe('findDanglingReferences (forward scan)', function () {
       core.util.pathTo.entryFile(project.id, refCollection.id, target.id)
     );
 
-    const danglers = await core.entries.findDanglingReferences(project.id);
+    const danglers = await core.references.findDanglingReferences(project.id);
     expect(danglers).toEqual([
       {
         collectionId: markdownCollection.id,
@@ -252,7 +252,7 @@ describe('findDanglingReferences (forward scan)', function () {
       core.util.pathTo.entryFile(project.id, refCollection.id, target.id)
     );
 
-    const danglers = await core.entries.findDanglingReferences(project.id);
+    const danglers = await core.references.findDanglingReferences(project.id);
     expect(danglers).toEqual([
       {
         collectionId: pagesCollection.id,
@@ -294,7 +294,7 @@ describe('findDanglingReferences (forward scan)', function () {
       core.util.pathTo.entryFile(project.id, collection.id, target.id)
     );
 
-    const danglers = await core.entries.findDanglingReferences(project.id);
+    const danglers = await core.references.findDanglingReferences(project.id);
     expect(danglers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -331,7 +331,7 @@ describe('findDanglingReferences (forward scan)', function () {
       },
     });
 
-    const danglers = await core.entries.findDanglingReferences(project.id);
+    const danglers = await core.references.findDanglingReferences(project.id);
     expect(danglers).toEqual([]);
   });
 
@@ -363,7 +363,7 @@ describe('findDanglingReferences (forward scan)', function () {
       }
     );
 
-    const danglers = await core.entries.findDanglingReferences(project.id);
+    const danglers = await core.references.findDanglingReferences(project.id);
     expect(danglers).toEqual([
       {
         collectionId: collection.id,

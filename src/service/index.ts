@@ -10,5 +10,6 @@ export * from './GitTagService.js';
 export * from './JsonFileService.js';
 export * from './LogService.js';
 export * from './ProjectService.js';
+export * from './ReferenceService.js';
 export * from './ReleaseService.js';
 export * from './UserService.js';

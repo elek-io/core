@@ -15,6 +15,7 @@ import {
   GitService,
   JsonFileService,
   ProjectService,
+  ReferenceService,
   ReleaseService,
   UserService,
 } from './service/index.js';
@@ -43,6 +44,7 @@ export default class ElekIoCore {
   private readonly collectionService: CollectionService;
   private readonly componentService: ComponentService;
   private readonly entryService: EntryService;
+  private readonly referenceService: ReferenceService;
   private readonly releaseService: ReleaseService;
   private readonly localApi: LocalApi;
 
@@ -69,12 +71,20 @@ export default class ElekIoCore {
       this.userService,
       this.jsonFileService
     );
+    this.referenceService = new ReferenceService(
+      this.coreVersion,
+      this.options,
+      this.logService,
+      this.gitService,
+      this.jsonFileService
+    );
     this.collectionService = new CollectionService(
       this.coreVersion,
       this.options,
       this.logService,
       this.jsonFileService,
-      this.gitService
+      this.gitService,
+      this.referenceService
     );
     this.componentService = new ComponentService(
       this.coreVersion,
@@ -90,16 +100,16 @@ export default class ElekIoCore {
       this.jsonFileService,
       this.gitService,
       this.collectionService,
-      this.componentService
+      this.componentService,
+      this.referenceService
     );
-    this.collectionService.setEntryService(this.entryService);
     this.assetService = new AssetService(
       this.coreVersion,
       this.options,
       this.logService,
       this.jsonFileService,
       this.gitService,
-      this.entryService
+      this.referenceService
     );
     this.projectService = new ProjectService(
       this.coreVersion,
@@ -110,7 +120,8 @@ export default class ElekIoCore {
       this.assetService,
       this.collectionService,
       this.componentService,
-      this.entryService
+      this.entryService,
+      this.referenceService
     );
     this.releaseService = new ReleaseService(
       this.options,
@@ -200,6 +211,13 @@ export default class ElekIoCore {
    */
   public get entries(): EntryService {
     return this.entryService;
+  }
+
+  /**
+   * Scans Entry references (reverse delete gates, forward write and sync gates)
+   */
+  public get references(): ReferenceService {
+    return this.referenceService;
   }
 
   /**

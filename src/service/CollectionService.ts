@@ -51,7 +51,7 @@ import { applyMigrations, collectionMigrations } from './migrations/index.js';
 import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
-import type { EntryService } from './EntryService.js';
+import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -64,7 +64,7 @@ export class CollectionService
   implements CrudServiceWithListCount<Collection>
 {
   private coreVersion: string;
-  private entryService: EntryService | undefined;
+  private referenceService: ReferenceService;
 
   protected entityFileSchema = collectionFileSchema;
 
@@ -86,7 +86,8 @@ export class CollectionService
     options: ElekIoCoreOptions,
     logService: LogService,
     jsonFileService: JsonFileService,
-    gitService: GitService
+    gitService: GitService,
+    referenceService: ReferenceService
   ) {
     super(
       serviceTypeSchema.enum.Collection,
@@ -97,17 +98,7 @@ export class CollectionService
     );
 
     this.coreVersion = coreVersion;
-  }
-
-  /**
-   * Injects the EntryService used by delete protection.
-   *
-   * CollectionService is constructed before EntryService (which depends on it),
-   * so this dependency is wired in after construction instead of via the
-   * constructor to avoid a circular dependency. See `delete`.
-   */
-  public setEntryService(entryService: EntryService): void {
-    this.entryService = entryService;
+    this.referenceService = referenceService;
   }
 
   /**
@@ -625,14 +616,8 @@ export class CollectionService
       deleteCollectionSchema,
       props,
       async (validatedProps) => {
-        if (this.entryService === undefined) {
-          throw CoreError.internal(
-            'CollectionService.delete requires an EntryService. Call setEntryService during setup.'
-          );
-        }
-
         const referencingEntries =
-          await this.entryService.findEntriesReferencing({
+          await this.referenceService.findEntriesReferencing({
             projectId: validatedProps.projectId,
             collectionId: validatedProps.id,
           });

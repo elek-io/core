@@ -53,6 +53,7 @@ import type { AssetService } from './AssetService.js';
 import type { CollectionService } from './CollectionService.js';
 import type { ComponentService } from './ComponentService.js';
 import type { EntryService } from './EntryService.js';
+import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -69,6 +70,7 @@ export class ProjectService
   private collectionService: CollectionService;
   private componentService: ComponentService;
   private entryService: EntryService;
+  private referenceService: ReferenceService;
 
   constructor(
     coreVersion: Version,
@@ -79,7 +81,8 @@ export class ProjectService
     assetService: AssetService,
     collectionService: CollectionService,
     componentService: ComponentService,
-    entryService: EntryService
+    entryService: EntryService,
+    referenceService: ReferenceService
   ) {
     super(
       serviceTypeSchema.enum.Project,
@@ -94,6 +97,7 @@ export class ProjectService
     this.collectionService = collectionService;
     this.componentService = componentService;
     this.entryService = entryService;
+    this.referenceService = referenceService;
   }
 
   /**
@@ -604,7 +608,7 @@ export class ProjectService
    * to that same target) into a tree with a dangling reference and no textual
    * conflict. To stop that state ever reaching the shared remote, the integrated
    * tree is scanned for dangling references BEFORE the push and the push is
-   * blocked if any are found (`EntryService.findDanglingReferences`). The
+   * blocked if any are found (`ReferenceService.findDanglingReferences`). The
    * integrated commits stay local so the user can repair them through Core's own
    * (integrity-gated) delete/update and synchronize again.
    *
@@ -652,7 +656,7 @@ export class ProjectService
           // Validate the integrated tree BEFORE pushing, so a dangling state
           // never reaches the shared remote.
           const danglingReferences =
-            await this.entryService.findDanglingReferences(props.id);
+            await this.referenceService.findDanglingReferences(props.id);
           if (danglingReferences.length > 0) {
             throw CoreError.conflict(
               'Synchronize would integrate dangling references',
