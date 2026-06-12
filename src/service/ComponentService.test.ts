@@ -267,118 +267,110 @@ describe('ComponentService', function () {
     }
   );
 
-  it(
-    'should detect circular component references',
-    { timeout: 15000 },
-    async function () {
-      const compA = await core.components.create({
+  it('should detect circular component references', async function () {
+    const compA = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Component A', de: 'Component A' },
+      slug: 'comp-a',
+      description: null,
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'label',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Label', de: 'Label' },
+          description: null,
+          defaultValue: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+        },
+      ],
+    });
+
+    // Create Component B that references A - this is fine
+    const compB = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Component B', de: 'Component B' },
+      slug: 'comp-b',
+      description: null,
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'nested-a',
+          valueType: 'component',
+          fieldType: 'dynamic',
+          label: { en: 'Nested A', de: 'Nested A' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          ofComponents: [compA.id],
+          min: null,
+          max: null,
+        },
+      ],
+    });
+
+    // Now try to update A to reference B - creating a cycle A->B->A
+    await expect(
+      core.components.update({
         projectId: project.id,
+        id: compA.id,
         name: { en: 'Component A', de: 'Component A' },
         slug: 'comp-a',
         description: null,
         fieldDefinitions: [
           {
             id: uuid(),
-            slug: 'label',
-            valueType: 'string',
-            fieldType: 'text',
-            label: { en: 'Label', de: 'Label' },
-            description: null,
-            defaultValue: null,
-            isRequired: false,
-            isDisabled: false,
-            isUnique: false,
-            inputWidth: '12',
-            min: null,
-            max: null,
-          },
-        ],
-      });
-
-      // Create Component B that references A - this is fine
-      const compB = await core.components.create({
-        projectId: project.id,
-        name: { en: 'Component B', de: 'Component B' },
-        slug: 'comp-b',
-        description: null,
-        fieldDefinitions: [
-          {
-            id: uuid(),
-            slug: 'nested-a',
+            slug: 'nested-b',
             valueType: 'component',
             fieldType: 'dynamic',
-            label: { en: 'Nested A', de: 'Nested A' },
+            label: { en: 'Nested B', de: 'Nested B' },
             description: null,
             isRequired: false,
             isDisabled: false,
             isUnique: false,
             inputWidth: '12',
-            ofComponents: [compA.id],
+            ofComponents: [compB.id],
             min: null,
             max: null,
           },
         ],
-      });
+      })
+    ).rejects.toThrow();
 
-      // Now try to update A to reference B - creating a cycle A->B->A
-      await expect(
-        core.components.update({
-          projectId: project.id,
-          id: compA.id,
-          name: { en: 'Component A', de: 'Component A' },
-          slug: 'comp-a',
-          description: null,
-          fieldDefinitions: [
-            {
-              id: uuid(),
-              slug: 'nested-b',
-              valueType: 'component',
-              fieldType: 'dynamic',
-              label: { en: 'Nested B', de: 'Nested B' },
-              description: null,
-              isRequired: false,
-              isDisabled: false,
-              isUnique: false,
-              inputWidth: '12',
-              ofComponents: [compB.id],
-              min: null,
-              max: null,
-            },
-          ],
-        })
-      ).rejects.toThrow();
+    // Clean up
+    await core.components.delete({ projectId: project.id, id: compB.id });
+    await core.components.delete({ projectId: project.id, id: compA.id });
+  });
 
-      // Clean up
-      await core.components.delete({ projectId: project.id, id: compB.id });
-      await core.components.delete({ projectId: project.id, id: compA.id });
-    }
-  );
+  it('should reject duplicate component slugs', async function () {
+    const comp = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Unique', de: 'Unique' },
+      slug: 'unique-slug',
+      description: null,
+      fieldDefinitions: [],
+    });
 
-  it(
-    'should reject duplicate component slugs',
-    { timeout: 15000 },
-    async function () {
-      const comp = await core.components.create({
+    await expect(
+      core.components.create({
         projectId: project.id,
-        name: { en: 'Unique', de: 'Unique' },
+        name: { en: 'Duplicate', de: 'Duplicate' },
         slug: 'unique-slug',
         description: null,
         fieldDefinitions: [],
-      });
+      })
+    ).rejects.toThrow();
 
-      await expect(
-        core.components.create({
-          projectId: project.id,
-          name: { en: 'Duplicate', de: 'Duplicate' },
-          slug: 'unique-slug',
-          description: null,
-          fieldDefinitions: [],
-        })
-      ).rejects.toThrow();
-
-      await core.components.delete({ projectId: project.id, id: comp.id });
-    }
-  );
+    await core.components.delete({ projectId: project.id, id: comp.id });
+  });
 
   it(
     'should cascade slug renames through entry data for nested components',

@@ -60,7 +60,7 @@ describe('API', function () {
         }
       },
       {
-        timeout: 500,
+        timeout: 10000,
         interval: 20,
       }
     );
@@ -374,7 +374,7 @@ describe('API', function () {
         }
       },
       {
-        timeout: 500,
+        timeout: 10000,
         interval: 20,
       }
     );

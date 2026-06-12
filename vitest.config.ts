@@ -6,6 +6,9 @@ export default defineConfig({
     // are getting the total number of Projects, Assets etc.
     // which fails depending on the timing they are run (race condition).
     fileParallelism: false,
+    // Git-heavy tests need ~3s on fast runners but 7s+ on the slow
+    // Windows and Intel macOS runners, see docs/testing.md
+    testTimeout: 15000,
     globalSetup: './src/test/globalSetup.ts',
     coverage: {
       reporter: ['text', 'lcov'],
