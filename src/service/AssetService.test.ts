@@ -2,7 +2,7 @@ import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import core, { type Asset, type Project } from '../test/setup.js';
+import core, { type Asset, type Project, uuid } from '../test/setup.js';
 import {
   createAsset,
   createProject,
@@ -275,5 +275,80 @@ describe('AssetService', function () {
     expect(
       await Fs.pathExists(core.util.pathTo.assetFile(project.id, asset.id))
     ).toBe(false);
+  });
+});
+
+describe('AssetService robustness', function () {
+  let project: Project & { destroy: () => Promise<void> };
+
+  beforeAll(async function () {
+    project = await createProject();
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('keeps the binary when replacing a file with one of the same extension', async function () {
+    const asset = await createAsset(project.id);
+
+    // Build a distinct PNG so the replacement is genuinely a new file. The MIME
+    // type is resolved from the extension, so the bytes need not decode as an
+    // image. Appending to a copy keeps it deterministic for CI.
+    const newFilePath = Path.join(Os.tmpdir(), `${uuid()}.png`);
+    await Fs.copyFile(Path.resolve('src/test/data/150x150.png'), newFilePath);
+    await Fs.appendFile(newFilePath, Buffer.from('elek.io distinct bytes'));
+
+    try {
+      const updated = await core.assets.update({
+        projectId: project.id,
+        ...asset,
+        newFilePath,
+      });
+
+      // Same canonical extension, so the binary path does not change. The
+      // replacement must not delete the file it just wrote.
+      expect(updated.extension).toEqual('png');
+      expect(
+        await Fs.pathExists(
+          core.util.pathTo.asset(project.id, asset.id, 'png')
+        ),
+        'the replaced binary to still exist on disk'
+      ).toBe(true);
+      expect(
+        await getFileHash(updated.absolutePath),
+        'the on-disk binary to hold the new bytes'
+      ).toEqual(await getFileHash(newFilePath));
+      expect(
+        (await core.assets.list({ projectId: project.id })).total,
+        'the Asset to still be listed'
+      ).toEqual(1);
+    } finally {
+      await Fs.remove(newFilePath);
+    }
+  });
+
+  it('still lists an Asset whose binary is missing from lfs', async function () {
+    const asset = await createAsset(project.id);
+
+    // Simulate a Project whose binary was lost (a bad merge, a partial
+    // checkout) while its metadata sidecar survived. Listing must reflect the
+    // metadata, so the Asset stays visible and recoverable instead of vanishing.
+    await Fs.remove(
+      core.util.pathTo.asset(project.id, asset.id, asset.extension)
+    );
+
+    try {
+      const list = await core.assets.list({ projectId: project.id });
+      expect(list.list.some((a) => a.id === asset.id)).toBe(true);
+    } finally {
+      // Restore the working tree so the clean-status check in afterEach passes,
+      // even if the assertion above fails.
+      await core.git.reset(core.util.pathTo.project(project.id), 'hard', 'HEAD');
+    }
   });
 });
