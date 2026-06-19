@@ -244,8 +244,16 @@ export class AssetService extends AbstractEntityService {
             assetFile.size = size;
 
             await Fs.copyFile(validatedProps.newFilePath, assetPath);
-            await Fs.remove(prevAssetPath);
-            await this.gitService.add(projectPath, [prevAssetPath, assetPath]);
+            // Only remove the previous binary when the extension changed, so its
+            // path differs from the one just written. A same-extension
+            // replacement reuses the same path, so removing it here would delete
+            // the file we just copied in.
+            const pathsToStage = [assetPath];
+            if (prevAssetPath !== assetPath) {
+              await Fs.remove(prevAssetPath);
+              pathsToStage.push(prevAssetPath);
+            }
+            await this.gitService.add(projectPath, pathsToStage);
             await this.jsonFileService.update(
               assetFile,
               assetFilePath,

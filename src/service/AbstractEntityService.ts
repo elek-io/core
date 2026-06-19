@@ -144,7 +144,7 @@ export abstract class AbstractEntityService extends AbstractService {
         if (!projectId) {
           throw CoreError.badRequest('Missing required parameter "projectId"');
         }
-        return this.getFileReferences(pathTo.lfs(projectId));
+        return this.getFileReferences(pathTo.assets(projectId));
 
       case objectTypeSchema.enum.project:
         return this.getFolderReferences(pathTo.projects);

@@ -50,11 +50,11 @@ Core derives the `mimeType` and `extension` from the file using the `mime` packa
 - `read({ projectId, id })` returns the `Asset` with its `absolutePath`. Pass a `commitHash` to read the Asset as it existed at that commit - the historical binary is written to a temp file and `absolutePath` points there. See [`migration-and-history-flow.md`](./migration-and-history-flow.md).
 - `history({ projectId, id })` returns the Asset's commit history.
 - `save({ projectId, id, filePath })` copies the Asset's binary out to a path you choose (optionally `commitHash` for a historical version). This is how you export a file back to disk.
-- `list({ projectId, limit, offset })` and `count({ projectId })` page through a Project's Assets.
+- `list({ projectId, limit, offset })` and `count({ projectId })` page through a Project's Assets. Both are driven by the JSON metadata sidecars in `assets/`, not the binaries in `lfs/`, so the metadata is the source of truth for which Assets exist. An Asset whose binary is missing or not yet fetched still appears in the list (its `absolutePath` then points at a file that is not on disk, surfacing only when you actually read the bytes via `save` or export).
 
 ## Updating
 
-`update({ projectId, id, name, description, newFilePath? })` changes the metadata and, if `newFilePath` is given, replaces the binary. Replacing the binary re-derives `extension`, `mimeType` and `size`, copies in the new file, and removes the old binary (handling the case where the extension changed).
+`update({ projectId, id, name, description, newFilePath? })` changes the metadata and, if `newFilePath` is given, replaces the binary. Replacing the binary re-derives `extension`, `mimeType` and `size` and copies in the new file. The previous binary is removed only when the new file's extension differs, since a same-extension replacement reuses the same path and removing it would delete the file just written.
 
 ## Deleting
 
