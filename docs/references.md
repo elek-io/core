@@ -215,14 +215,13 @@ valid on its own.
 
 Core closes this at sync time. `synchronize` integrates the remote (fetch then a controlled
 rebase) and, before pushing, scans the whole integrated `work` tree for any reference whose
-target is now absent (`EntryService.findDanglingReferences`, the forward analogue of the
+target is now absent (the forward analogue of the
 delete-time scan). If it finds one, the sync stops with a `Conflict` and does not push, leaving
 the integrated commits in the local tree to repair through Core's own (integrity-gated) delete
 or update before syncing again, so the shared remote never receives a dangling state. This
 guarantee holds because Projects are reconciled only through Core's `synchronize`, run locally,
 never through a server-side or pull-request merge or a raw `git push`. The day a merge bypasses
-Core, the remote can hold a state no local gate saw. See
-`docs/design/sync-dangling-reference-prevention.md`.
+Core, the remote can hold a state no local gate saw.
 
 One smaller nuance: a field `defaultValue` is not counted as a reference. A reference embedded
 in a Collection or Component field's `defaultValue` only becomes live once it is stamped into

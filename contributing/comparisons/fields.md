@@ -4,7 +4,7 @@ Comparison of content field types across CMS platforms, with elek.io Core's desi
 
 The doc is structured for quick comparison: the [comparison tables](#comparison) put all five platforms side-by-side, the [per-CMS reference](#per-cms-reference) holds full per-platform detail, and [strengths and gaps](#elekio-core-strengths-and-gaps) closes with where elek.io Core leads and what it lacks.
 
-For elek.io Core's full field reference and code examples, see [`../fields.md`](../fields.md).
+For elek.io Core's full field reference and code examples, see [`../fields.md`](../../docs/fields.md).
 
 ## Summary at a glance
 
@@ -454,6 +454,6 @@ The lack of nested composition (no nested groups, no nested `dynamic` fields) is
 
 ## See Also
 
-- [`../fields.md`](../fields.md) - elek.io Core's full field reference and code examples
-- [`../features.md`](../features.md) - Core's capabilities and current limitations
-- [`../concepts.md`](../concepts.md) - the data model the field system describes
+- [`../fields.md`](../../docs/fields.md) - elek.io Core's full field reference and code examples
+- [`features.md`](../../docs/features.md) - Core's capabilities and current limitations
+- [`../concepts.md`](../../docs/concepts.md) - the data model the field system describes

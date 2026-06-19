@@ -2,7 +2,7 @@
 
 How Core guarantees that translatable content - admin metadata and Entry values - carries exactly the languages a Project supports, both at runtime and in generated code. This is a design-level reference for the two-layer schema approach behind that guarantee.
 
-For the field system this validates, see [`fields.md`](./fields.md). For the Projects whose languages drive it, see [`concepts.md`](./concepts.md).
+For the field system this validates, see [`fields.md`](../docs/fields.md). For the Projects whose languages drive it, see [`concepts.md`](../docs/concepts.md).
 
 ## Problem
 
@@ -208,7 +208,7 @@ If you add a new translatable field to a schema (e.g., a new `subtitle` on Colle
 
 ## See Also
 
-- [`fields.md`](./fields.md) - the field system and translatable Value shapes
-- [`concepts.md`](./concepts.md) - Projects and their supported languages
-- [`api-clients.md`](./api-clients.md) - the narrowed types and clients this enables
-- [`error-handling.md`](./error-handling.md) - how validation failures surface as `CoreError`
+- [`fields.md`](../docs/fields.md) - the field system and translatable Value shapes
+- [`concepts.md`](../docs/concepts.md) - Projects and their supported languages
+- [`api-clients.md`](../docs/api-clients.md) - the narrowed types and clients this enables
+- [`error-handling.md`](../docs/error-handling.md) - how validation failures surface as `CoreError`

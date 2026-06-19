@@ -14,7 +14,7 @@ Handles core functionality of elek.io Projects like file IO and version control 
 - **Never lose a change** - full git history, read any version of any object, transactional writes with automatic rollback, and tagged Releases.
 - **Integrate anywhere** - a local REST API, JSON export, an Astro integration, and structured (mdast) rich text you can render in any framework.
 
-See [`docs/features.md`](./docs/features.md) for the full capability reference, including current limitations.
+See [`features.md`](./docs/features.md) for the full capability reference, including current limitations.
 
 ## Installation
 
@@ -147,25 +147,22 @@ The package includes a CLI accessible via the `elek` command:
 
 ## Documentation
 
-The `docs/` folder contains in-depth documentation. New to elek.io Core? Start with [`concepts.md`](./docs/concepts.md) for the data model and [`usage.md`](./docs/usage.md) for a runnable walkthrough, then reach for the reference docs below as needed.
+The [`docs/`](./docs/) folder is the consumer documentation and ships inside the published package, see [Using Core with AI agents](#using-core-with-ai-agents). New to elek.io Core? Start with [`concepts.md`](./docs/concepts.md) for the data model and [`usage.md`](./docs/usage.md) for a runnable walkthrough, then reach for the reference docs below. [`docs/index.md`](./docs/index.md) indexes them all.
 
-- [`concepts.md`](./docs/concepts.md) - the data model: Projects, Collections, Components, Entries, Values, Assets and Releases
-- [`features.md`](./docs/features.md) - capability reference grouped by evaluation concern, including current limitations
-- [`usage.md`](./docs/usage.md) - programmatic usage, the local API, the CLI and the Astro integration
-- [`local-api.md`](./docs/local-api.md) - the read-only REST API: endpoints, pagination and the OpenAPI docs
-- [`api-clients.md`](./docs/api-clients.md) - generating typed JS/TS clients and TypeScript types
-- [`export.md`](./docs/export.md) - exporting Projects to JSON (nested or separate templates)
-- [`fields.md`](./docs/fields.md) - full field type reference and the Value structure
-- [`schema-changes.md`](./docs/schema-changes.md) - how editing field definitions cascades into existing content
-- [`asset-management.md`](./docs/asset-management.md) - the two-file Asset model, creating, reading and deleting Assets
-- [`markdown-content.md`](./docs/markdown-content.md) - storing and rendering rich `markdown` Values
-- [`git-and-sync.md`](./docs/git-and-sync.md) - the branch model, commits and synchronizing with a remote
-- [`releases.md`](./docs/releases.md) - tagged snapshots, the semver bump and promoting work to production
-- [`storage-layout.md`](./docs/storage-layout.md) - where Projects and their files live on disk
-- [`language-scoped-validation.md`](./docs/language-scoped-validation.md) - how Project languages narrow validation
-- [`migration-and-history-flow.md`](./docs/migration-and-history-flow.md) - upgrades and reading from git history
-- [`error-handling.md`](./docs/error-handling.md) - `CoreError` and error patterns
-- [`comparisons/fields.md`](./docs/comparisons/fields.md) - cross-CMS field comparison
+Docs for working on Core itself live in [`contributing/`](./contributing/) and are not published: testing, design references (language-scoped validation, migration and history flow), how to add a field type, error-handling internals, and a cross-CMS field comparison.
+
+### Using Core with AI agents
+
+Core ships its consumer documentation inside the package at `node_modules/@elek-io/core/docs/`, so an AI coding agent works from references matched to the installed version rather than stale training data, with no network lookup. Point your agent at it by adding the following to your project's `AGENTS.md` (Claude Code, Cursor, GitHub Copilot and others read that file automatically):
+
+```md
+## elek.io Core
+
+When working with `@elek-io/core`, read the relevant doc under
+`node_modules/@elek-io/core/docs/` before writing code, starting from
+`docs/index.md`. These docs are matched to the installed version and are
+the source of truth.
+```
 
 ## Source structure
 

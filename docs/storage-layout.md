@@ -69,11 +69,11 @@ On top of that envelope:
 - An Entry file adds `values`, keyed by field-definition slug.
 - An asset metadata file adds `extension`, `mimeType` and `size`.
 
-The `coreVersion` stamp on each file is what the migration chain reads when upgrading a Project. See [`migration-and-history-flow.md`](./migration-and-history-flow.md).
+The `coreVersion` stamp on each file is what the migration chain reads when upgrading a Project.
 
 ## Index files
 
-`collections/slug.index.json` and `components/slug.index.json` are UUID-to-slug lookup caches that let Core resolve a slug to an id without scanning every folder, and back the uniqueness of Collection and Component slugs. They are **performance caches, not source of truth**: they are listed in the Project's `.gitignore`, never committed, and rebuilt from disk if missing or stale. A failed index write is swallowed and the cache self-heals on next access (see [`error-handling.md`](./error-handling.md#safewriteindex-swallows-errors)).
+`collections/slug.index.json` and `components/slug.index.json` are UUID-to-slug lookup caches that let Core resolve a slug to an id without scanning every folder, and back the uniqueness of Collection and Component slugs. They are **performance caches, not source of truth**: they are listed in the Project's `.gitignore`, never committed, and rebuilt from disk if missing or stale. A failed index write is swallowed and the cache self-heals on next access.
 
 Note that field-value uniqueness (`isUnique` and the `slug` field type) is **not** backed by an index file. It is enforced by scanning a Collection's Entries on each write (see [`fields.md`](./fields.md#uniqueness)), which keeps it correct for Entries brought in by a pull or merge that never passed through Core's write path.
 
@@ -88,6 +88,4 @@ Binary assets are stored under `lfs/` rather than alongside their metadata, and 
 ## See Also
 
 - [`concepts.md`](./concepts.md) - what these files represent
-- [`asset-management.md`](./asset-management.md) - the two-file Asset model in detail
-- [`migration-and-history-flow.md`](./migration-and-history-flow.md) - how `coreVersion` drives upgrades
-- [`git-and-sync.md`](./git-and-sync.md) - the git repository each Project lives in
+- [`asset-management.md`](./asset-management.md) - the two-file Asset model in detail- [`git-and-sync.md`](./git-and-sync.md) - the git repository each Project lives in

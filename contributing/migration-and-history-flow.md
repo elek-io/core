@@ -180,7 +180,7 @@ toAsset(projectId, assetFile, commitHash)  -- uses temp path
 Return Asset
 ```
 
-Because Assets are tracked with Git LFS, the content at a commit is a pointer rather than the binary. Core resolves it to the real bytes from the local LFS store, which is always complete (see [`git-and-sync.md`](./git-and-sync.md#git-lfs)), so historical reads work offline.
+Because Assets are tracked with Git LFS, the content at a commit is a pointer rather than the binary. Core resolves it to the real bytes from the local LFS store, which is always complete (see [`git-and-sync.md`](../docs/git-and-sync.md#git-lfs)), so historical reads work offline.
 
 ### Collection and Entry history reads
 
@@ -192,8 +192,8 @@ A file stored at commit `abc123` may have been written by Core v1.0.0 with a dif
 
 ## See Also
 
-- [`releases.md`](./releases.md) - the related `upgrade` tag and versioned snapshots
-- [`schema-changes.md`](./schema-changes.md) - a separate mechanism: editing field definitions cascades into existing content
-- [`storage-layout.md`](./storage-layout.md) - the `coreVersion` stamp on each file that drives migrations
-- [`git-and-sync.md`](./git-and-sync.md) - the branches and history reads this builds on
-- [`error-handling.md`](./error-handling.md) - `UpgradeFailed` and the other error types
+- [`releases.md`](../docs/releases.md) - the related `upgrade` tag and versioned snapshots
+- [`schema-changes.md`](../docs/schema-changes.md) - a separate mechanism: editing field definitions cascades into existing content
+- [`storage-layout.md`](../docs/storage-layout.md) - the `coreVersion` stamp on each file that drives migrations
+- [`git-and-sync.md`](../docs/git-and-sync.md) - the branches and history reads this builds on
+- [`error-handling.md`](../docs/error-handling.md) - `UpgradeFailed` and the other error types
