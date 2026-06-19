@@ -1,5 +1,23 @@
 # @elek-io/core
 
+## 0.19.1
+
+### Patch Changes
+
+- b02e71a: Ship the consumer documentation inside the published package
+
+  The package now includes its consumer documentation under `docs/`, available offline and matched to the installed version at `node_modules/@elek-io/core/docs/` with no network lookup. This lets developers and AI coding agents work from accurate, version-matched references. Start at `docs/index.md`, and see the README's "Using Core with AI agents" section for how to point an agent at them.
+
+  Documentation is now split by audience. Consumer docs live in `docs/` and ship with the package. Contributor and design docs live in `contributing/` and are not published, so a few docs moved there (testing, language-scoped validation, migration and history flow, how to add a field type, error-handling internals, and the cross-CMS comparison).
+
+- 76ab883: Fix Asset binary loss when replacing a file with one of the same extension
+
+  Replacing an Asset's file through `update` with a `newFilePath` of the same extension deleted the binary it had just written, because the previous and new paths in `lfs/` were identical. The previous binary is now removed only when the extension actually changes. Listing and counting Assets also enumerate the JSON metadata in `assets/` instead of the `lfs/` binaries, so an Asset whose binary is missing or not yet fetched stays listed and recoverable rather than disappearing.
+
+- 1ffe2d2: Update dependencies to their latest versions
+
+  All runtime and development dependencies are updated to their latest published versions and pinned to exact versions. `@types/node` stays on the Node 24 LTS line (24.13.2) to match the supported runtime rather than moving to a non-LTS release. The `dugite` peer dependency moves to 3.2.2.
+
 ## 0.19.0
 
 ### Minor Changes
