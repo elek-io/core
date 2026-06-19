@@ -85,7 +85,7 @@ Each `GitTag` carries an `id`, an `author`, a `datetime`, and a discriminated `m
 
 - `{ type: 'release', version }`
 - `{ type: 'preview', version }`
-- `{ type: 'upgrade', coreVersion }` (created by the [Project upgrade flow](./migration-and-history-flow.md), not by `core.releases`)
+- `{ type: 'upgrade', coreVersion }` (created by the Project upgrade flow, not by `core.releases`)
 
 `core.git.tags` also exposes `read({ ... })` and `count({ ... })`.
 
@@ -96,6 +96,4 @@ The Project's `version` field follows [Semantic Versioning](https://semver.org/)
 ## See Also
 
 - [`git-and-sync.md`](./git-and-sync.md) - the `work` / `production` branch model and tags
-- [`schema-changes.md`](./schema-changes.md) - how the field-definition changes a release reports actually transform content
-- [`migration-and-history-flow.md`](./migration-and-history-flow.md) - the related `upgrade` tag and version migrations
-- [`concepts.md`](./concepts.md) - Releases in the overall data model
+- [`schema-changes.md`](./schema-changes.md) - how the field-definition changes a release reports actually transform content- [`concepts.md`](./concepts.md) - Releases in the overall data model

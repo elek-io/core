@@ -2,7 +2,7 @@
 
 Core's CLI can generate typed artifacts from your Project content models: a runtime **API client** (`elek generate:client`) and standalone **TypeScript types** (`elek generate:types`). Both narrow translatable content to each Project's languages, so you get `Record<ProjectLanguage, T>` instead of the broad superset Core's own types expose.
 
-For why the narrowing exists, see [`language-scoped-validation.md`](./language-scoped-validation.md). For the API the client talks to, see [`local-api.md`](./local-api.md).
+For why the narrowing exists, see [`fields.md`](./fields.md#generated-client-types). For the API the client talks to, see [`local-api.md`](./local-api.md).
 
 ## generate:client
 
@@ -66,7 +66,5 @@ Both commands default to `./.elek.io`. That directory is also the CLI's default 
 
 ## See Also
 
-- [`local-api.md`](./local-api.md) - the REST API the generated client reads from
-- [`language-scoped-validation.md`](./language-scoped-validation.md) - how and why generated code narrows to `ProjectLanguage`
-- [`usage.md`](./usage.md) - the CLI and the Astro integration in context
+- [`local-api.md`](./local-api.md) - the REST API the generated client reads from- [`usage.md`](./usage.md) - the CLI and the Astro integration in context
 - [`export.md`](./export.md) - exporting content to plain JSON instead

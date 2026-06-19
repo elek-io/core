@@ -120,7 +120,7 @@ try {
 
 ## Atomicity
 
-The whole cascade is transactional. The Collection (or Component) file and every affected Entry are written, then committed once. The operation is wrapped in Core's git rollback (see [`error-handling.md`](./error-handling.md#withgitrollback---transactional-git-operations)) - if anything fails, including an unresolved issue, the working tree is restored and nothing is committed. Every transformed and resolved value is re-validated against the new schema before it is written.
+The whole cascade is transactional. The Collection (or Component) file and every affected Entry are written, then committed once. The operation is wrapped in Core's git rollback - if anything fails, including an unresolved issue, the working tree is restored and nothing is committed. Every transformed and resolved value is re-validated against the new schema before it is written.
 
 ## Guardrails
 
@@ -130,7 +130,5 @@ The whole cascade is transactional. The Collection (or Component) file and every
 
 ## See Also
 
-- [`fields.md`](./fields.md) - field definition shapes and constraints
-- [`migration-and-history-flow.md`](./migration-and-history-flow.md) - version-driven migrations (a different mechanism: upgrading old files to a new Core schema)
-- [`error-handling.md`](./error-handling.md) - `CoreError`, `Conflict`, and `withGitRollback`
+- [`fields.md`](./fields.md) - field definition shapes and constraints- [`error-handling.md`](./error-handling.md) - `CoreError`, `Conflict`, and `withGitRollback`
 - [`usage.md`](./usage.md) - creating and updating Collections, Components and Entries

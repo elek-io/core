@@ -82,7 +82,7 @@ Single-resource and count endpoints return the raw object or number. Thrown `Cor
 }
 ```
 
-The stack trace is included deliberately - the API is a local developer tool, never public. See [`error-handling.md`](./error-handling.md#stack-traces-in-api-error-responses).
+The stack trace is included deliberately - the API is a local developer tool, never public.
 
 ## Built-in documentation
 

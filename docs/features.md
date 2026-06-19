@@ -2,7 +2,7 @@
 
 A capability reference for elek.io Core - what the content engine does, grouped by the questions a developer evaluating a CMS tends to ask. Each entry links to the deep-dive doc where relevant.
 
-For the data model these features operate on, see [`concepts.md`](./concepts.md). For a cross-CMS comparison against Strapi, Directus, Payload and TinaCMS, see [`comparisons/fields.md`](./comparisons/fields.md).
+For the data model these features operate on, see [`concepts.md`](./concepts.md). For a cross-CMS comparison against Strapi, Directus, Payload and TinaCMS, see [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md).
 
 ## Storage & data ownership
 
@@ -24,7 +24,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 
 - **Translatable by default** - every direct value is multilingual out of the box. No plugin, junction table or special configuration.
 - **Project-scoped languages** - each Project declares its supported languages, chosen from 24 supported language codes.
-- **Language-aware validation** - content must carry a value for every language the Project supports. Missing translations fail validation. See [`language-scoped-validation.md`](./language-scoped-validation.md).
+- **Language-aware validation** - content must carry a value for every language the Project supports. Missing translations fail validation.
 - **Narrowed generated types** - generated clients and types narrow translatable content to the Project's languages (`Record<ProjectLanguage, T>`) rather than the broad superset.
 
 ## Type safety & validation
@@ -37,7 +37,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 ## Versioning & history
 
 - **Full git history** - read any object as it existed at any commit, not just the latest version.
-- **Migration on read** - historical data is run through the migration chain on read, so it always comes back in the current schema shape. See [`migration-and-history-flow.md`](./migration-and-history-flow.md).
+- **Migration on read** - historical data is run through the migration chain on read, so it always comes back in the current schema shape. See [`usage.md`](./usage.md#reading-from-history).
 - **Transactional writes** - create / update / delete operations are wrapped in an automatic git rollback that restores the working tree on failure. See [`error-handling.md`](./error-handling.md).
 - **Releases** - tagged snapshots of a Project at a point in time, managed through git tags.
 - **Branching** - content work happens on a `work` branch, with `production` reserved for released content.
@@ -45,7 +45,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 ## Schema evolution
 
 - **Version-aware migrations** - each entity type (Project, Asset, Collection, Component, Entry) has its own migration chain that transforms outdated files to the current schema.
-- **Project upgrade flow** - `ProjectService.upgrade()` migrates an entire Project and all its objects across Core versions on an isolated branch, then squash-merges the result. See [`migration-and-history-flow.md`](./migration-and-history-flow.md).
+- **Project upgrade flow** - `ProjectService.upgrade()` migrates an entire Project and all its objects across Core versions on an isolated branch, then squash-merges the result.
 
 ## Consuming content
 
@@ -66,25 +66,20 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 
 ## Collaboration & sync
 
-- **Any git provider** - synchronize content by pushing and pulling against GitHub, GitLab, Bitbucket or any git remote.
+- **Any git provider** - synchronize content by pushing and pulling against GitHub, GitLab, Bitbucket or any git remote that supports LFS.
 - **Remote management** - set the remote origin, inspect commits ahead/behind, and synchronize through Core's git service.
 - **Offline-first collaboration** - work locally and sync when you choose. There is no always-on server in the loop.
 
-## Extensibility & licensing
-
-- **Code-level extension** - field types and behavior are defined in code (Zod schemas), giving full control without a runtime plugin layer.
-- **Source-available and free** - Core is free to use and its source is available on GitHub.
-- **Optional Cloud delivery** - pairs with elek.io Cloud for globally distributed content delivery, but Core itself requires no hosted service.
-
 ## Limitations
 
-Core tries to keep a relatively small, predictable surface. Some of the items below are deliberate design choices and some are simply not built yet, so they are split accordingly. Note that several not-yet-implemented items are still surfaced in the API (a field option or schema exists) without the behavior behind them, so do not rely on them.
+Core tries to keep a relatively small, predictable surface. Some of the items below are deliberate design choices and some are simply not built yet, so they are split accordingly.
 
 ### Not yet implemented
 
 - **No full-text search** - a `searchProjectSchema` is defined, but there is no `search()` service method or API route behind it.
 - **No cloud authentication** - the `cloud` user type exists, but `UserService.set()` does not actually log a cloud user in (the login branch is a stub).
 - **No conditional fields** - a field's visibility cannot depend on another field's value.
+- **Limited specialized field types** - no arbitrary JSON, color picker, geospatial, code-editor, or password / hash field types.
 
 ### Intentional constraints
 
@@ -95,11 +90,10 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **No computed or virtual fields** - field values are static, with no derive-from-other-fields mechanism. The `slug` field's `ofFieldDefinitions` is the one nuance: it is a soft generation hint the editor uses to pre-fill the slug from other fields, but the stored value stays static and user-editable, so Core never derives or binds it.
 - **Uniqueness is single-field and Collection-scoped** - `isUnique` (and the always-unique `slug` type) enforce that one field's value is unique within a Collection, per language. There is no compound / multi-field uniqueness (for example "unique slug per category"). The per-language pairing is the only built-in composite. Enforcement scans the Collection's Entries on each write rather than using a persisted index, which keeps it correct against Entries brought in by a pull or merge but costs one read per existing Entry per write, so it scales poorly for very large Collections.
 - **No uniqueness inside Components** - `isUnique` and the `slug` type are rejected on Component field definitions. A Component is reused across Collections and can repeat within an Entry, so the scope of "unique" there is ambiguous; it is deliberately deferred rather than shipped with surprising semantics.
-- **Limited specialized field types** - no arbitrary JSON, color picker, geospatial, code-editor, or password / hash field types.
 - **No plugin or marketplace system** - extending the field catalogue means changing code, not installing a package.
 - **No nested composition** - groups cannot nest groups, and `dynamic` fields cannot nest `dynamic` fields. Components are the flat, predictable reuse mechanism.
 
-For how these compare to other CMS platforms and where Core leads, see [`comparisons/fields.md`](./comparisons/fields.md).
+For how these compare to other CMS platforms and where Core leads, see [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md).
 
 ## See Also
 
@@ -116,7 +110,5 @@ For how these compare to other CMS platforms and where Core leads, see [`compari
 - [`api-clients.md`](./api-clients.md) - generating typed clients and TypeScript types
 - [`export.md`](./export.md) - exporting Projects to JSON
 - [`markdown-content.md`](./markdown-content.md) - rich `markdown` content storage and rendering
-- [`language-scoped-validation.md`](./language-scoped-validation.md) - how Project languages narrow validation
-- [`migration-and-history-flow.md`](./migration-and-history-flow.md) - upgrades and reading from git history
 - [`error-handling.md`](./error-handling.md) - `CoreError` and error patterns
-- [`comparisons/fields.md`](./comparisons/fields.md) - cross-CMS field comparison
+- [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md) - cross-CMS field comparison

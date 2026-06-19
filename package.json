@@ -15,7 +15,8 @@
     "dist/node",
     "dist/browser",
     "dist/astro",
-    "dist/cli"
+    "dist/cli",
+    "docs"
   ],
   "exports": {
     ".": {

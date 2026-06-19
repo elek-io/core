@@ -2,7 +2,7 @@
 
 Every elek.io Project is a git repository, and Core drives git directly for every change. This document covers the branch model, how commits are authored, and how to synchronize a Project with a remote.
 
-For the data model, see [`concepts.md`](./concepts.md). For how history is read and Projects are upgraded, see [`migration-and-history-flow.md`](./migration-and-history-flow.md).
+For the data model, see [`concepts.md`](./concepts.md). For how history is read, see [`usage.md`](./usage.md#reading-from-history).
 
 ## The git backend
 
@@ -134,7 +134,7 @@ Releases, preview releases and Core upgrades are recorded as annotated git tags 
 - `Type: release` / `Type: preview` with a `Version:` trailer
 - `Type: upgrade` with a `Core-Version:` trailer
 
-This is how `core.releases` and the Project upgrade flow ([`migration-and-history-flow.md`](./migration-and-history-flow.md)) mark points in history.
+This is how `core.releases` and the Project upgrade flow mark points in history.
 
 ## Errors during git operations
 
@@ -150,7 +150,5 @@ See [`error-handling.md`](./error-handling.md) for the full error model.
 ## See Also
 
 - [`usage.md`](./usage.md) - setting the User, creating and reading content
-- [`releases.md`](./releases.md) - promoting `work` to `production` as tagged, versioned snapshots
-- [`migration-and-history-flow.md`](./migration-and-history-flow.md) - reading from history and Project upgrades
-- [`concepts.md`](./concepts.md) - Projects, Releases and the rest of the data model
+- [`releases.md`](./releases.md) - promoting `work` to `production` as tagged, versioned snapshots- [`concepts.md`](./concepts.md) - Projects, Releases and the rest of the data model
 - [`error-handling.md`](./error-handling.md) - `CoreError` types and patterns

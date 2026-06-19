@@ -47,7 +47,7 @@ Core derives the `mimeType` and `extension` from the file using the `mime` packa
 
 ## Reading and extracting
 
-- `read({ projectId, id })` returns the `Asset` with its `absolutePath`. Pass a `commitHash` to read the Asset as it existed at that commit - the historical binary is written to a temp file and `absolutePath` points there. See [`migration-and-history-flow.md`](./migration-and-history-flow.md).
+- `read({ projectId, id })` returns the `Asset` with its `absolutePath`. Pass a `commitHash` to read the Asset as it existed at that commit - the historical binary is written to a temp file and `absolutePath` points there. See [`usage.md`](./usage.md#reading-from-history).
 - `history({ projectId, id })` returns the Asset's commit history.
 - `save({ projectId, id, filePath })` copies the Asset's binary out to a path you choose (optionally `commitHash` for a historical version). This is how you export a file back to disk.
 - `list({ projectId, limit, offset })` and `count({ projectId })` page through a Project's Assets. Both are driven by the JSON metadata sidecars in `assets/`, not the binaries in `lfs/`, so the metadata is the source of truth for which Assets exist. An Asset whose binary is missing or not yet fetched still appears in the list (its `absolutePath` then points at a file that is not on disk, surfacing only when you actually read the bytes via `save` or export).

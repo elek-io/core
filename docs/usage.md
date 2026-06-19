@@ -197,7 +197,7 @@ const count = await core.entries.count({
 
 ### Reading from history
 
-Pass a `commitHash` to `read()` to retrieve an object as it existed at that commit. The historical data is run through the migration chain so it always comes back in the current schema shape. See [`migration-and-history-flow.md`](./migration-and-history-flow.md).
+Pass a `commitHash` to `read()` to retrieve an object as it existed at that commit. The historical data is run through the migration chain so it always comes back in the current schema shape.
 
 ```typescript
 const history = await core.entries.history({
@@ -263,7 +263,7 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
 
-Generated clients and types narrow translatable content to the Project's languages (`Record<ProjectLanguage, T>`) rather than Core's broad exported types. See [`language-scoped-validation.md`](./language-scoped-validation.md).
+Generated clients and types narrow translatable content to the Project's languages (`Record<ProjectLanguage, T>`) rather than Core's broad exported types.
 
 ## Astro integration
 
@@ -306,5 +306,3 @@ For rendering `markdown` field Values (including the required `html`, `assetRefe
 - [`export.md`](./export.md) - exporting Projects to JSON
 - [`error-handling.md`](./error-handling.md) - `CoreError` and error patterns
 - [`markdown-content.md`](./markdown-content.md) - rendering rich `markdown` Values
-- [`language-scoped-validation.md`](./language-scoped-validation.md) - how Project languages narrow validation
-- [`migration-and-history-flow.md`](./migration-and-history-flow.md) - upgrades and reading from git history

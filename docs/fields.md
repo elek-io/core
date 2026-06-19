@@ -2,8 +2,6 @@
 
 Reference for elek.io Core's field system: how field definitions are shaped, what each field type does, and how the resulting Entry values are stored. Field definitions describe the shape of Entry data. Collections and Components own these definitions, and the `dynamic` field type composes Components into reusable, polymorphic blocks.
 
-For a cross-CMS comparison against Strapi, Directus, Payload, and TinaCMS, see [`comparisons/fields.md`](./comparisons/fields.md).
-
 ## Layered Model
 
 Two type axes describe every field:
@@ -474,8 +472,6 @@ The full Entry shape and the `Value` union live in `src/schema/valueSchema.ts`.
 
 Each Project declares its supported languages in `ProjectSettings['language']['supported']`, exposed as a non-empty `ProjectLanguages` tuple. Translatable values are validated against the project's languages - not the full universe of 24 supported language codes.
 
-For the runtime/static schema layering and how `ProjectLanguages` flows through validation, see [`language-scoped-validation.md`](./language-scoped-validation.md).
-
 Supported language universe: `bg, cs, da, de, el, en, es, et, fi, fr, hu, it, ja, lt, lv, nl, pl, pt, ro, ru, sk, sl, sv, zh`.
 
 ## Generated Client Types
@@ -485,24 +481,10 @@ Two generators consume Project metadata and emit typed API client code:
 - **CLI** - `elek generate:client` produces a TypeScript client whose translatable values are typed as `Record<ProjectLanguage, T>`.
 - **Astro** - `@elek-io/core/astro` exports content loaders (`elekAssets()`, `elekEntries()`) that produce typed Astro collections from elek.io Entries and Assets.
 
-Both emit the narrow `Record<ProjectLanguage, T>` type for translatable content rather than the broad `Partial<Record<SupportedLanguage, T>>` exposed by Core's static types. See the [README's Exports section](../README.md#exports) for the package's entry points.
-
-## Adding a Field Type
-
-Field types are declared in code - there is no plugin or marketplace system. To add one:
-
-1. Add the identifier to the `fieldTypeSchema` enum in `src/schema/fieldSchema.ts`.
-2. Define the field's Zod schema, extending the appropriate base (`stringFieldDefinitionBaseSchema`, `numberFieldDefinitionBaseSchema`, `referenceFieldDefinitionBaseSchema`, or `fieldDefinitionBaseSchema` directly).
-3. Add the new schema to the relevant union (`stringFieldDefinitionSchema` / `directFieldDefinitionSchema` / `referenceFieldDefinitionSchema`) and to `fieldDefinitionSchema` if it introduces a new top-level branch.
-4. Update `src/schema/schemaFromFieldDefinition.ts` to handle the new field type when generating runtime value validation.
-5. Add a migration step if existing Projects need their field definitions transformed (see [`migration-and-history-flow.md`](./migration-and-history-flow.md)).
-6. Update CLI/Astro generators if the new field type changes the emitted client types.
+Both emit the narrow `Record<ProjectLanguage, T>` type for translatable content rather than the broad `Partial<Record<SupportedLanguage, T>>` exposed by Core's static types. See the [README's Exports section](https://github.com/elek-io/core#exports) for the package's entry points.
 
 ## See Also
 
-- [`comparisons/fields.md`](./comparisons/fields.md) - cross-CMS comparison against Strapi, Directus, Payload, TinaCMS
-- [`language-scoped-validation.md`](./language-scoped-validation.md) - runtime/static schema layering for translatable values
 - [`markdown-content.md`](./markdown-content.md) - rendering, serialization, and security for `markdown` field values
 - [`schema-changes.md`](./schema-changes.md) - how editing field definitions cascades into existing Entries
-- [`migration-and-history-flow.md`](./migration-and-history-flow.md) - version-driven migrations and reading from git history
 - [`error-handling.md`](./error-handling.md) - `CoreError` and validation error patterns
