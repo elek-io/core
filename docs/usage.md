@@ -7,8 +7,12 @@ For the data model these examples build on (Projects, Collections, Entries, Valu
 ## Installing and instantiating
 
 ```bash
-npm install @elek-io/core
+npm install @elek-io/core zod dugite
 ```
+
+Core declares `zod` and `dugite` as required peer dependencies, so you install them alongside Core. `dugite` is the git binding the Node entry point runs every Project operation through, see [git and sync](./git-and-sync.md). `zod` is what Core authors its schemas with: a compatible version (`zod@^4.3.6`) that resolves to a single copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage. The Astro integration adds one more optional peer, see [Astro integration](#astro-integration).
+
+You still install zod as above. As a convenience, Core also re-exports `z`, so in your own code you can import it from `@elek-io/core` instead of from `zod` directly. It is the same `z` plus `@hono/zod-openapi`'s `.openapi()` extension.
 
 `ElekIoCore` is the Node entry point. It wires up all services and creates the directories it works in on construction.
 
@@ -267,7 +271,7 @@ Generated clients and types narrow translatable content to the Project's languag
 
 ## Astro integration
 
-`@elek-io/core/astro` exports content loaders that pull Project data into Astro's content collections, plus `mdastRender` for rendering `markdown` Values.
+`@elek-io/core/astro` exports content loaders that pull Project data into Astro's content collections, plus `mdastRender` for rendering `markdown` Values. It adds `astro` (`^6.0.0`) as an optional peer dependency, which your Astro project already provides.
 
 ```typescript
 // src/content.config.ts
