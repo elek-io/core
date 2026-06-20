@@ -19,6 +19,10 @@ export {
   type MdastAstroRenderers,
 } from './astro/mdastRender.js';
 
+// Re-export `z` here too so it is available from the @elek-io/core/astro entry.
+// See the note in schema/index.ts. zod is a required peer dependency.
+export { z } from '@hono/zod-openapi';
+
 interface ElekAssetsProps {
   projectId: string;
   outDir: string;

@@ -19,7 +19,28 @@ See [`features.md`](./docs/features.md) for the full capability reference, inclu
 ## Installation
 
 ```bash
-npm install @elek-io/core
+npm install @elek-io/core zod dugite
+```
+
+Core declares three peer dependencies, so you install them yourself:
+
+- **`zod`** (`^4.3.6`, required) - Core authors its schemas with zod v4. Core and your app
+  must resolve to a single zod copy, otherwise zod's per-version branding makes Core's
+  schemas incompatible with your own zod usage (for example `@hookform/resolvers`'
+  `zodResolver`).
+- **`dugite`** (`^3.0.0`, required) - the git bindings Core runs every Project operation
+  through. Used by the Node entry point, see [git and sync](./docs/git-and-sync.md).
+- **`astro`** (`^6.0.0`, optional) - only needed for the Astro integration
+  (`@elek-io/core/astro`), where your project already provides it.
+
+As a convenience, Core also re-exports `z`, so in your own code you can import it from
+`@elek-io/core` instead of from `zod` directly. It is the same `z` plus
+`@hono/zod-openapi`'s `.openapi()` extension:
+
+```ts
+import { z } from '@elek-io/core';
+
+const mySchema = z.object({ title: z.string() }).openapi('MySchema');
 ```
 
 ## Exports
@@ -30,6 +51,10 @@ The package provides multiple entry points for different environments:
 - **Browser** (`@elek-io/core`) - All schemas and types but without the `ElekIoCore` class, since it is not usable in a browser environment.
 - **Astro** (`@elek-io/core/astro`) - Astro content loaders `elekAssets()` and `elekEntries()` for loading Project data into Astro.
 - **CLI** (`elek`) - A command-line interface with commands for generating API clients, generating TypeScript types, starting a local API and exporting Projects.
+
+The Node, Browser and Astro entry points re-export zod's `z`, so in your own code you
+can import `z` from Core instead of from `zod` directly. You still install zod as the
+peer dependency described under [Installation](#installation).
 
 ## Concepts
 

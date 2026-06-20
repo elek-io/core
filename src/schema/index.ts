@@ -1,3 +1,7 @@
+// Re-export zod's `z` (with @hono/zod-openapi's `.openapi()` extension) so
+// consumers can author schemas that brand-match Core's. zod is a required peer
+// dependency, so a consumer that imports this `z` shares Core's single zod copy.
+export { z } from '@hono/zod-openapi';
 export * from './apiClientSchema.js';
 export * from './assetSchema.js';
 export * from './baseSchema.js';
