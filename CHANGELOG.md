@@ -1,5 +1,56 @@
 # @elek-io/core
 
+## 0.20.0
+
+### Minor Changes
+
+- 8470556: **Breaking:** `zod` is now a peer dependency instead of a bundled runtime dependency.
+
+  Core authors all of its schemas with zod v4, and zod v4 brands every schema with its
+  exact version. When Core shipped its own copy of zod, a consumer that installed a
+  different (even another 4.x) zod ended up with two physical copies, so a schema built
+  with Core's zod was not assignable to anything typed against the consumer's zod. This
+  broke downstream type-checking, for example feeding Core schemas into
+  `@hookform/resolvers`' `zodResolver`.
+
+  Declaring `zod` as a peer dependency means the consumer supplies the single shared
+  copy, so Core and the consumer always brand-match.
+
+  Migration: install a compatible zod alongside `@elek-io/core` and make sure it resolves
+  to a single copy.
+
+  ```bash
+  npm install zod@^4.3.6
+  ```
+
+  You still install zod yourself. As a convenience, Core also re-exports `z`, so in your
+  own code you can import it from `@elek-io/core` instead of from `zod` directly. It is the
+  same `z` with `@hono/zod-openapi`'s `.openapi()` extension:
+
+  ```ts
+  import { z } from '@elek-io/core';
+
+  const mySchema = z.object({ title: z.string() }).openapi('MySchema');
+  ```
+
+### Patch Changes
+
+- 8470556: Narrow the optional `astro` peer dependency from `>=6.0.0` to `^6.0.0`.
+
+  The `/astro` entry requires astro 6: it uses the `Loader.createSchema` method (added in
+  astro 6.0.0) and astro 6's zod v4 Loader schema typing, both of which are absent in astro
+  5.x. The Content Layer `Loader` API changes across astro majors, so `>=6.0.0` would
+  optimistically (and untested) allow a future astro 7. Capping at `^6.0.0` keeps the range
+  to the verified major. No current consumer is affected, since the latest astro is 6.x.
+
+- 8470556: Widen the `dugite` peer dependency from the exact `3.2.2` to `^3.0.0`.
+
+  Core only uses dugite's functional `exec` API (with `IGitStringResult`, `parseError` and
+  `GitError`), which has existed since dugite 3.0.0. Pinning the exact version forced every
+  consumer onto one dugite release and risked a peer conflict. The wider range lets a
+  consumer satisfy Core's peer with any dugite 3.x they already have, so they keep a single
+  copy. This is not a breaking change. Consumers on dugite 3.2.2 are unaffected.
+
 ## 0.19.1
 
 ### Patch Changes
