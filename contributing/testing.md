@@ -6,15 +6,18 @@ The suite is integration heavy. Most service tests create real Projects, which m
 
 ## CI runner performance
 
-CI runs the suite on four platforms. They differ a lot in speed for this git-bound workload. Measured from CI logs (June 2026), average duration per git invocation and the total vitest duration. The full suite durations predate parallel test files (`fileParallelism: false` was still set) and are expected to drop, re-measure after the parallelism change is merged:
+CI runs the suite on four platforms. They differ a lot in speed for this git-bound workload. The per-git-command latencies are averages from serial CI logs (June 2026) and describe what each platform charges per operation, they inflate under parallel contention. The full suite rows are the vitest durations of one serial and one parallel CI run of the same code (July 2026, when parallel test files landed):
 
-| git command      | ubuntu 24.04 | macOS arm | macOS Intel | Windows |
-| ---------------- | ------------ | --------- | ----------- | ------- |
-| trivial (`show`) | ~3ms         | ~6ms      | ~14ms       | ~29ms   |
-| `clone`          | ~27ms        | ~57ms     | ~190ms      | ~288ms  |
-| `merge`          | ~25ms        | ~115ms    | ~262ms      | ~330ms  |
-| `lfs` operations | ~28ms        | ~126ms    | ~335ms      | ~601ms  |
-| full suite       | 68s          | 151s      | 342s        | 408s    |
+| git command          | ubuntu 24.04 | macOS arm | macOS Intel | Windows |
+| -------------------- | ------------ | --------- | ----------- | ------- |
+| trivial (`show`)     | ~3ms         | ~6ms      | ~14ms       | ~29ms   |
+| `clone`              | ~27ms        | ~57ms     | ~190ms      | ~288ms  |
+| `merge`              | ~25ms        | ~115ms    | ~262ms      | ~330ms  |
+| `lfs` operations     | ~28ms        | ~126ms    | ~335ms      | ~601ms  |
+| full suite, serial   | 83s          | 176s      | 419s        | 470s    |
+| full suite, parallel | 46s          | 66s       | 99s         | 218s    |
+
+Parallel test files sped the suite up 1.8x on ubuntu, 2.7x on macOS arm, 4.2x on macOS Intel and 2.2x on Windows. These are single runs, so expect variance. On ubuntu fixed overhead (startup, imports) dominates, which caps the gain. The Intel number flatters parallelism, that parallel run also landed on a faster machine (the summed per-test time dropped by a third between the two runs, effective concurrency was ~2.4x). Windows shows the contention cost most clearly, the summed per-test time rose 36% while wall clock time halved.
 
 Findings from researching these gaps:
 
@@ -50,4 +53,6 @@ The one case for intervening: if CI data from the slow runners shows git-heavy t
 
 ### Measurements
 
-Measured locally (Linux, 12 cores, 3 runs each): parallel 17.5s to 18.3s, serial via `--no-file-parallelism` 65.7s to 66.6s, a 3.7x speedup. Capped to `VITEST_MAX_WORKERS=4` the suite still finishes in 19.2s and at 2 workers in 34.4s, so the 4 core CI runners should see most of the gain. Contention roughly doubled the slowest individual test durations (1.5s to 2.7s worst case), which stays far below the 15s timeout here but is worth re-checking on the slow runners.
+Measured locally (Linux, 12 cores, 3 runs each): parallel 17.5s to 18.3s, serial via `--no-file-parallelism` 65.7s to 66.6s, a 3.7x speedup. Capped to `VITEST_MAX_WORKERS=4` the suite still finishes in 19.2s and at 2 workers in 34.4s, so the suite saturates early. Contention roughly doubled the slowest individual test durations (1.5s to 2.7s worst case).
+
+The CI gains are in the runner performance table above. The timeout held up on the slow runners: on Windows, the most contended platform, the summed per-test time rose 36% under parallelism and no test came near the 15s limit.
