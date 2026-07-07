@@ -7,7 +7,10 @@ import {
   workerDirPrefix,
 } from './worker.js';
 
-const homedir = Path.join(Path.sep, 'home', 'someone');
+// Fully resolved so it gets a drive letter on Windows, like a real
+// Os.homedir() value. A drive-relative fake would gain the current
+// drive inside testDataDirBase and break the comparisons.
+const homedir = Path.resolve('/home/someone');
 
 describe('testDataDirBase', () => {
   it('defaults to elek.io-test inside the home directory', () => {
