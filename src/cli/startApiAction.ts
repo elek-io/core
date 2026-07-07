@@ -1,6 +1,6 @@
 import type { ApiStartProps } from '../schema/cliSchema.js';
-import { core } from './index.js';
+import { getCore } from './index.js';
 
 export const startApiAction = ({ port }: ApiStartProps) => {
-  return core.api.start(port);
+  return getCore().api.start(port);
 };

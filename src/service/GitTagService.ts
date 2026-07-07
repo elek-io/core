@@ -19,6 +19,7 @@ import {
   type PaginatedList,
   type ReadGitTagProps,
 } from '../schema/index.js';
+import type { PathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractService } from './AbstractService.js';
 import type { GitService } from './GitService.js';
@@ -35,10 +36,11 @@ export class GitTagService
 
   public constructor(
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     git: GitService['git'],
     logService: LogService
   ) {
-    super(serviceTypeSchema.enum.GitTag, options, logService);
+    super(serviceTypeSchema.enum.GitTag, options, pathTo, logService);
 
     this.git = git;
   }

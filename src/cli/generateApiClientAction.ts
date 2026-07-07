@@ -7,7 +7,7 @@ import {
   type Project,
 } from '../index.node.js';
 import {
-  core,
+  getCore,
   watchProjects,
   AUTO_GENERATED_HEADER,
   toPascalCase,
@@ -51,6 +51,7 @@ async function generateApiClient(
   outFile: string,
   typesMap: Map<string, string>
 ) {
+  const core = getCore();
   const startedAt = Date.now();
   const writer = new CodeBlockWriter({
     newLine: '\n',
@@ -153,7 +154,7 @@ async function generateApiClient(
 }
 
 async function writeProjectsObject(writer: CodeBlockWriter) {
-  const projects = await core.projects.list({ limit: 0 });
+  const projects = await getCore().projects.list({ limit: 0 });
 
   for (let index = 0; index < projects.list.length; index++) {
     const project = projects.list[index];
@@ -171,7 +172,7 @@ async function writeCollectionsObject(
   writer: CodeBlockWriter,
   project: Project
 ) {
-  const collections = await core.collections.list({
+  const collections = await getCore().collections.list({
     projectId: project.id,
     limit: 0,
   });
@@ -269,6 +270,7 @@ async function generateApiClientAs({
   format,
   target,
 }: GenerateApiClientProps) {
+  const core = getCore();
   const resolvedOutDir = Path.resolve(outDir);
   await Fs.ensureDir(resolvedOutDir);
 
@@ -331,6 +333,7 @@ export const generateApiClientAction = async ({
     await generateApiClientAs({ outDir, language, format, target, options });
 
     if (options.watch === true) {
+      const core = getCore();
       core.logger.info({
         source: 'core',
         message: 'Watching for changes to regenerate the API Client',

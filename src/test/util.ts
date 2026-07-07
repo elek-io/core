@@ -1,13 +1,16 @@
 import { faker } from '@faker-js/faker';
 import crypto from 'node:crypto';
 import Fs from 'fs-extra';
+import Os from 'node:os';
 import Path from 'node:path';
 import ts from 'typescript';
 import type { RunnerTestCase } from 'vitest';
-import { expect } from 'vitest';
+import { expect, onTestFinished } from 'vitest';
+import ElekIoCore from '../index.node.js';
 import type {
   Collection,
   Component,
+  ConstructorElekIoCoreProps,
   EntryFieldDefinition,
   MarkdownFeatures,
 } from './setup.js';
@@ -16,6 +19,40 @@ import core, {
   uuid,
   type ProjectSettings,
 } from './setup.js';
+
+function uniqueTmpPath(): string {
+  return Path.join(Os.tmpdir(), `elek-io-core-test-${uuid()}`);
+}
+
+/**
+ * Returns a unique directory path under the OS temp dir and registers its
+ * removal with vitest, so a failing test cannot leak it. These directories
+ * live outside the data directory that globalSetup cleans up.
+ */
+export function tmpDirPath(): string {
+  const dir = uniqueTmpPath();
+  onTestFinished(async () => {
+    await Fs.remove(dir);
+  });
+  return dir;
+}
+
+/**
+ * Creates a Core instance on its own temporary data directory.
+ * Disposal and directory removal are registered with vitest, so a failing
+ * assertion cannot leak the directory or the logger's process handlers.
+ */
+export function createTmpCore(
+  props?: Omit<NonNullable<ConstructorElekIoCoreProps>, 'dataDir'>
+): { core: ElekIoCore; dataDir: string } {
+  const dataDir = uniqueTmpPath();
+  const tmpCore = new ElekIoCore({ ...props, dataDir });
+  onTestFinished(async () => {
+    await tmpCore.dispose();
+    await Fs.remove(dataDir);
+  });
+  return { core: tmpCore, dataDir };
+}
 
 /**
  * Asserts that a string of generated TypeScript transpiles without syntax

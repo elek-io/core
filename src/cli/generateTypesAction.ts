@@ -16,7 +16,7 @@ import {
   type ValueType,
 } from '../index.node.js';
 import {
-  core,
+  getCore,
   watchProjects,
   AUTO_GENERATED_HEADER,
   toPascalCase,
@@ -449,6 +449,7 @@ function writeValuesProperty(
 export async function generateTypesForProject(
   project: Project
 ): Promise<string> {
+  const core = getCore();
   const writer = new CodeBlockWriter({
     newLine: '\n',
     indentNumberOfSpaces: 2,
@@ -697,6 +698,7 @@ export async function generateTypes({
 }: Omit<GenerateTypesProps, 'options' | 'language'>): Promise<
   Map<string, string>
 > {
+  const core = getCore();
   const resolvedOutDir = Path.resolve(outDir);
   await Fs.ensureDir(resolvedOutDir);
 
@@ -739,6 +741,7 @@ async function generateTypesAs({
   language,
   projects,
 }: Omit<GenerateTypesProps, 'options'>) {
+  const core = getCore();
   const typesMap = await generateTypes({ outDir, projects });
 
   if (language === 'js') {
@@ -788,6 +791,7 @@ export const generateTypesAction = async ({
     await generateTypesAs({ outDir, language, projects });
 
     if (options.watch === true) {
+      const core = getCore();
       core.logger.info({
         source: 'core',
         message: 'Watching for changes to regenerate types',

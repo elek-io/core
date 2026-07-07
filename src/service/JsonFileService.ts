@@ -4,6 +4,7 @@ import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
 import { AbstractService } from './AbstractService.js';
 import type { LogService } from './LogService.js';
+import type { PathTo } from '../util/node.js';
 
 /**
  * Service that manages CRUD functionality for JSON files on disk
@@ -11,8 +12,12 @@ import type { LogService } from './LogService.js';
 export class JsonFileService extends AbstractService {
   private cache: Map<string, unknown> = new Map();
 
-  constructor(options: ElekIoCoreOptions, logService: LogService) {
-    super(serviceTypeSchema.enum.JsonFile, options, logService);
+  constructor(
+    options: ElekIoCoreOptions,
+    pathTo: PathTo,
+    logService: LogService
+  ) {
+    super(serviceTypeSchema.enum.JsonFile, options, pathTo, logService);
   }
 
   /**

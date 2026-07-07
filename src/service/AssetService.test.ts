@@ -348,7 +348,11 @@ describe('AssetService robustness', function () {
     } finally {
       // Restore the working tree so the clean-status check in afterEach passes,
       // even if the assertion above fails.
-      await core.git.reset(core.util.pathTo.project(project.id), 'hard', 'HEAD');
+      await core.git.reset(
+        core.util.pathTo.project(project.id),
+        'hard',
+        'HEAD'
+      );
     }
   });
 });

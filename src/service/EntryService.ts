@@ -32,8 +32,8 @@ import {
   type Value,
   type UniqueValueConflict,
 } from '../schema/index.js';
+import type { PathTo } from '../util/node.js';
 import { migrateEntryFile } from './migrations/index.js';
-import { pathTo } from '../util/node.js';
 import {
   detectUniqueValueCollisions,
   getUniqueFieldDefinitions,
@@ -62,6 +62,7 @@ export class EntryService
   constructor(
     coreVersion: string,
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
     gitService: GitService,
@@ -72,6 +73,7 @@ export class EntryService
     super(
       serviceTypeSchema.enum.Entry,
       options,
+      pathTo,
       logService,
       gitService,
       jsonFileService
@@ -127,8 +129,8 @@ export class EntryService
         }
 
         const id = uuid();
-        const projectPath = pathTo.project(validatedProps.projectId);
-        const entryFilePath = pathTo.entryFile(
+        const projectPath = this.pathTo.project(validatedProps.projectId);
+        const entryFilePath = this.pathTo.entryFile(
           validatedProps.projectId,
           validatedProps.collectionId,
           id
@@ -188,14 +190,14 @@ export class EntryService
     return this.validated('read', readEntrySchema, props, async () => {
       if (!props.commitHash) {
         const entryFile = await this.jsonFileService.read(
-          pathTo.entryFile(props.projectId, props.collectionId, props.id),
+          this.pathTo.entryFile(props.projectId, props.collectionId, props.id),
           entryFileSchema
         );
         return this.toEntry(entryFile) as T;
       } else {
         const content = await this.gitService.getFileContentAtCommit(
-          pathTo.project(props.projectId),
-          pathTo.entryFile(props.projectId, props.collectionId, props.id),
+          this.pathTo.project(props.projectId),
+          this.pathTo.entryFile(props.projectId, props.collectionId, props.id),
           props.commitHash
         );
         const entryFile = this.migrate(JSON.parse(content));
@@ -209,8 +211,8 @@ export class EntryService
    */
   public history(props: EntryHistoryProps): Promise<GitCommit[]> {
     return this.validated('history', entryHistorySchema, props, async () => {
-      return this.gitService.log(pathTo.project(props.projectId), {
-        filePath: pathTo.entryFile(
+      return this.gitService.log(this.pathTo.project(props.projectId), {
+        filePath: this.pathTo.entryFile(
           props.projectId,
           props.collectionId,
           props.id
@@ -262,8 +264,8 @@ export class EntryService
           });
         }
 
-        const projectPath = pathTo.project(validatedProps.projectId);
-        const entryFilePath = pathTo.entryFile(
+        const projectPath = this.pathTo.project(validatedProps.projectId);
+        const entryFilePath = this.pathTo.entryFile(
           validatedProps.projectId,
           validatedProps.collectionId,
           validatedProps.id
@@ -342,8 +344,8 @@ export class EntryService
         );
       }
 
-      const projectPath = pathTo.project(props.projectId);
-      const entryFilePath = pathTo.entryFile(
+      const projectPath = this.pathTo.project(props.projectId);
+      const entryFilePath = this.pathTo.entryFile(
         props.projectId,
         props.collectionId,
         props.id
@@ -468,7 +470,11 @@ export class EntryService
       if (otherId === entryId) {
         continue;
       }
-      const otherEntryPath = pathTo.entryFile(projectId, collectionId, otherId);
+      const otherEntryPath = this.pathTo.entryFile(
+        projectId,
+        collectionId,
+        otherId
+      );
       const otherEntry =
         await this.referenceService.readEntryFileMigrating(otherEntryPath);
       entries.push({ entryId: otherId, values: otherEntry.values });

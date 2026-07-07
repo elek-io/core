@@ -8,7 +8,7 @@ import {
   type ElekIoCoreOptions,
   type ServiceType,
 } from '../schema/index.js';
-import { folders } from '../util/node.js';
+import { folders, type PathTo } from '../util/node.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
@@ -28,11 +28,12 @@ export abstract class AbstractSlugIndexedEntityService<
   protected constructor(
     type: ServiceType,
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
     gitService: GitService
   ) {
-    super(type, options, logService, gitService, jsonFileService);
+    super(type, options, pathTo, logService, gitService, jsonFileService);
   }
 
   /** Path to the folder containing all entities of this type */

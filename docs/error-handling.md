@@ -1,6 +1,6 @@
 # Error Handling
 
-All services throw `CoreError` on failure. `CoreError` extends `Error` with `type` and `statusCode` fields.
+All services throw `CoreError` on failure. `CoreError` extends `Error` with `type` and `statusCode` fields. The `ElekIoCore` constructor throws a `CoreError` of type `BadRequest` for invalid options too.
 
 ## CoreError
 

@@ -1,5 +1,6 @@
 import Fs from 'fs-extra';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import ElekIoCore from '../index.node.js';
 import core, {
   flattenFieldDefinitions,
   type Asset,
@@ -15,10 +16,6 @@ import {
   createProject,
   ensureCleanGitStatus,
 } from '../test/util.js';
-// A second, independent Core instance (the CLI singleton) that shares the same
-// on-disk data directory — used to simulate another actor mutating disk behind
-// the test instance's cached index.
-import { core as cliCore } from '../cli/util.js';
 
 describe('CollectionService', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -1092,6 +1089,10 @@ describe('CollectionService - update entry resolutions', function () {
 
 describe('AbstractIndexedEntityService - stale index cache', function () {
   let project: Project & { destroy: () => Promise<void> };
+  // A second, independent Core instance that shares the same on-disk data
+  // directory. Used to simulate another actor mutating disk behind the test
+  // instance's cached index.
+  let secondCore: ElekIoCore;
 
   const makeCollection = (
     core_: typeof core,
@@ -1112,10 +1113,12 @@ describe('AbstractIndexedEntityService - stale index cache', function () {
 
   beforeAll(async function () {
     project = await createProject('IndexedEntity Stale Cache Test');
+    secondCore = new ElekIoCore({ log: { level: 'debug' } });
   });
 
   afterAll(async function () {
     await project.destroy();
+    await secondCore.dispose();
   });
 
   it(
@@ -1127,7 +1130,7 @@ describe('AbstractIndexedEntityService - stale index cache', function () {
 
       // A second Core instance writes another Collection to the same data dir.
       // The test instance's cached index does not know about it yet.
-      const second = await makeCollection(cliCore, 'seconds', 'second');
+      const second = await makeCollection(secondCore, 'seconds', 'second');
 
       // Resolving by slug misses the stale cache, then rebuilds from disk and
       // finds the Collection on the retry pass.

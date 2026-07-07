@@ -37,6 +37,7 @@ import {
   type Uuid,
   type Value,
 } from '../schema/index.js';
+import type { PathTo } from '../util/node.js';
 import { detectUniqueValueCollisions } from '../util/uniqueFieldValues.js';
 import {
   diffFieldDefinitions,
@@ -48,7 +49,6 @@ import {
 } from '../util/entryTransform.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
 import { applyMigrations, collectionMigrations } from './migrations/index.js';
-import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { ReferenceService } from './ReferenceService.js';
@@ -69,13 +69,13 @@ export class CollectionService
   protected entityFileSchema = collectionFileSchema;
 
   protected entitiesPath(projectId: string): string {
-    return pathTo.collections(projectId);
+    return this.pathTo.collections(projectId);
   }
   protected entityPath(projectId: string, id: string): string {
-    return pathTo.collection(projectId, id);
+    return this.pathTo.collection(projectId, id);
   }
   protected entityFilePath(projectId: string, id: string): string {
-    return pathTo.collectionFile(projectId, id);
+    return this.pathTo.collectionFile(projectId, id);
   }
   protected extractSlug(file: CollectionFile): string {
     return file.slug.plural;
@@ -84,6 +84,7 @@ export class CollectionService
   constructor(
     coreVersion: string,
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
     gitService: GitService,
@@ -92,6 +93,7 @@ export class CollectionService
     super(
       serviceTypeSchema.enum.Collection,
       options,
+      pathTo,
       logService,
       jsonFileService,
       gitService
@@ -134,9 +136,12 @@ export class CollectionService
       props,
       async (validatedProps) => {
         const id = uuid();
-        const projectPath = pathTo.project(validatedProps.projectId);
-        const collectionPath = pathTo.collection(validatedProps.projectId, id);
-        const collectionFilePath = pathTo.collectionFile(
+        const projectPath = this.pathTo.project(validatedProps.projectId);
+        const collectionPath = this.pathTo.collection(
+          validatedProps.projectId,
+          id
+        );
+        const collectionFilePath = this.pathTo.collectionFile(
           validatedProps.projectId,
           id
         );
@@ -203,14 +208,20 @@ export class CollectionService
       async (validatedProps) => {
         if (!validatedProps.commitHash) {
           const collectionFile = await this.jsonFileService.read(
-            pathTo.collectionFile(validatedProps.projectId, validatedProps.id),
+            this.pathTo.collectionFile(
+              validatedProps.projectId,
+              validatedProps.id
+            ),
             collectionFileSchema
           );
           return this.toCollection(collectionFile) as T;
         } else {
           const content = await this.gitService.getFileContentAtCommit(
-            pathTo.project(validatedProps.projectId),
-            pathTo.collectionFile(validatedProps.projectId, validatedProps.id),
+            this.pathTo.project(validatedProps.projectId),
+            this.pathTo.collectionFile(
+              validatedProps.projectId,
+              validatedProps.id
+            ),
             validatedProps.commitHash
           );
           const collectionFile = this.migrate(JSON.parse(content));
@@ -246,12 +257,15 @@ export class CollectionService
       collectionHistorySchema,
       props,
       async (validatedProps) => {
-        return this.gitService.log(pathTo.project(validatedProps.projectId), {
-          filePath: pathTo.collectionFile(
-            validatedProps.projectId,
-            validatedProps.id
-          ),
-        });
+        return this.gitService.log(
+          this.pathTo.project(validatedProps.projectId),
+          {
+            filePath: this.pathTo.collectionFile(
+              validatedProps.projectId,
+              validatedProps.id
+            ),
+          }
+        );
       }
     );
   }
@@ -292,8 +306,8 @@ export class CollectionService
       getUpdateCollectionSchemaFromLanguages(languages),
       props,
       async (validatedProps) => {
-        const projectPath = pathTo.project(validatedProps.projectId);
-        const collectionFilePath = pathTo.collectionFile(
+        const projectPath = this.pathTo.project(validatedProps.projectId);
+        const collectionFilePath = this.pathTo.collectionFile(
           validatedProps.projectId,
           validatedProps.id
         );
@@ -335,7 +349,7 @@ export class CollectionService
           const filesToGitAdd: string[] = [collectionFilePath];
 
           if (changes.length > 0) {
-            const entriesPath = pathTo.entries(
+            const entriesPath = this.pathTo.entries(
               validatedProps.projectId,
               validatedProps.id
             );
@@ -477,7 +491,11 @@ export class CollectionService
       resolutions,
     } = params;
 
-    const entryFilePath = pathTo.entryFile(projectId, collectionId, entryId);
+    const entryFilePath = this.pathTo.entryFile(
+      projectId,
+      collectionId,
+      entryId
+    );
 
     const entryFile = await this.jsonFileService.read(
       entryFilePath,
@@ -631,8 +649,8 @@ export class CollectionService
           );
         }
 
-        const projectPath = pathTo.project(validatedProps.projectId);
-        const collectionPath = pathTo.collection(
+        const projectPath = this.pathTo.project(validatedProps.projectId);
+        const collectionPath = this.pathTo.collection(
           validatedProps.projectId,
           validatedProps.id
         );

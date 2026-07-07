@@ -2,7 +2,7 @@
 
 Run the suite with `pnpm test`, watch mode with `pnpm dev`, coverage with `pnpm coverage`.
 
-The suite is integration heavy. Most service tests create real Projects, which means real git repositories. A full run spawns several thousand git subprocesses and writes tens of thousands of small files. All test data is written to the regular Core working directory `~/elek.io`, see [`storage-layout.md`](../docs/storage-layout.md). This profile dominates how fast the suite runs on a given machine and explains the CI choices below.
+The suite is integration heavy. Most service tests create real Projects, which means real git repositories. A full run spawns several thousand git subprocesses and writes tens of thousands of small files. All test data is written to the resolved Core data directory, `~/elek.io` unless `ELEK_IO_DATA_DIR` is set, see [`storage-layout.md`](../docs/storage-layout.md). This profile dominates how fast the suite runs on a given machine and explains the CI choices below.
 
 ## CI runner performance
 
@@ -33,4 +33,4 @@ The vitest `testTimeout` is raised to 15s in [`vitest.config.ts`](../vitest.conf
 
 ## Known limitations
 
-Test files run sequentially (`fileParallelism: false`) because all files share one working directory and some tests assert global counts. Giving each vitest worker its own working directory would allow parallel files and roughly halve suite duration on all runners.
+Test files run sequentially (`fileParallelism: false`) because all files share one data directory and some tests assert global counts. Since the data directory became configurable, the remaining work for parallel files is giving each vitest worker its own `ELEK_IO_DATA_DIR`, which would roughly halve suite duration on all runners.

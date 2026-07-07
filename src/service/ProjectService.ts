@@ -46,7 +46,7 @@ import {
   type UpgradeProjectProps,
 } from '../schema/index.js';
 import { applyMigrations, projectMigrations } from './migrations/index.js';
-import { isNotEmpty, pathTo } from '../util/node.js';
+import { isNotEmpty } from '../util/node.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { AssetService } from './AssetService.js';
@@ -57,6 +57,7 @@ import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
+import type { PathTo } from '../util/node.js';
 
 /**
  * Service that manages CRUD functionality for Project files on disk
@@ -75,6 +76,7 @@ export class ProjectService
   constructor(
     coreVersion: Version,
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
     gitService: GitService,
@@ -87,6 +89,7 @@ export class ProjectService
     super(
       serviceTypeSchema.enum.Project,
       options,
+      pathTo,
       logService,
       gitService,
       jsonFileService
@@ -121,7 +124,7 @@ export class ProjectService
           version: '0.0.1',
         };
 
-        const projectPath = pathTo.project(id);
+        const projectPath = this.pathTo.project(id);
 
         try {
           await Fs.ensureDir(projectPath);
@@ -133,7 +136,7 @@ export class ProjectService
           });
           await this.jsonFileService.create(
             projectFile,
-            pathTo.projectFile(id),
+            this.pathTo.projectFile(id),
             projectFileSchema
           );
           await this.gitService.add(projectPath, ['.']);
@@ -163,7 +166,7 @@ export class ProjectService
   public clone(props: CloneProjectProps): Promise<Project> {
     return this.validated('clone', cloneProjectSchema, props, async () => {
       const tmpId = uuid();
-      const tmpProjectPath = Path.join(pathTo.tmp, tmpId);
+      const tmpProjectPath = Path.join(this.pathTo.tmp, tmpId);
 
       await this.gitService.clone(props.url, tmpProjectPath);
       const projectFile = await this.jsonFileService.read(
@@ -171,7 +174,7 @@ export class ProjectService
         projectFileSchema
       );
 
-      const projectPath = pathTo.project(projectFile.id);
+      const projectPath = this.pathTo.project(projectFile.id);
       const alreadyExists = await Fs.pathExists(projectPath);
 
       if (alreadyExists) {
@@ -195,14 +198,14 @@ export class ProjectService
     return this.validated('read', readProjectSchema, props, async () => {
       if (!props.commitHash) {
         const projectFile = await this.jsonFileService.read(
-          pathTo.projectFile(props.id),
+          this.pathTo.projectFile(props.id),
           projectFileSchema
         );
         return await this.toProject(projectFile);
       } else {
         const content = await this.gitService.getFileContentAtCommit(
-          pathTo.project(props.id),
-          pathTo.projectFile(props.id),
+          this.pathTo.project(props.id),
+          this.pathTo.projectFile(props.id),
           props.commitHash
         );
         const projectFile = this.migrate(JSON.parse(content));
@@ -216,11 +219,11 @@ export class ProjectService
    */
   public history(props: ProjectHistoryProps): Promise<ProjectHistoryResult> {
     return this.validated('history', projectHistorySchema, props, async () => {
-      const projectPath = pathTo.project(props.id);
+      const projectPath = this.pathTo.project(props.id);
 
       const fullHistory = await this.gitService.log(projectPath);
       const history = await this.gitService.log(projectPath, {
-        filePath: pathTo.projectFile(props.id),
+        filePath: this.pathTo.projectFile(props.id),
       });
       return { history, fullHistory };
     });
@@ -235,8 +238,8 @@ export class ProjectService
       updateProjectSchema,
       props,
       async (validatedProps) => {
-        const projectPath = pathTo.project(validatedProps.id);
-        const filePath = pathTo.projectFile(validatedProps.id);
+        const projectPath = this.pathTo.project(validatedProps.id);
+        const filePath = this.pathTo.projectFile(validatedProps.id);
 
         const prevProjectFile = await this.read(validatedProps);
 
@@ -268,8 +271,8 @@ export class ProjectService
    */
   public upgrade(props: UpgradeProjectProps): Promise<void> {
     return this.validated('upgrade', upgradeProjectSchema, props, async () => {
-      const projectPath = pathTo.project(props.id);
-      const projectFilePath = pathTo.projectFile(props.id);
+      const projectPath = this.pathTo.project(props.id);
+      const projectFilePath = this.pathTo.projectFile(props.id);
 
       const currentProjectFile = await this.ensureProjectIsUpgradeable(
         projectPath,
@@ -485,7 +488,7 @@ export class ProjectService
         listBranchesProjectSchema,
         props,
         async () => {
-          const projectPath = pathTo.project(props.id);
+          const projectPath = this.pathTo.project(props.id);
           const hasOrigin =
             await this.gitService.remotes.hasOrigin(projectPath);
           if (hasOrigin) {
@@ -501,7 +504,7 @@ export class ProjectService
         currentBranchProjectSchema,
         props,
         async () => {
-          const projectPath = pathTo.project(props.id);
+          const projectPath = this.pathTo.project(props.id);
           return await this.gitService.branches.current(projectPath);
         }
       );
@@ -512,7 +515,7 @@ export class ProjectService
         switchBranchProjectSchema,
         props,
         async () => {
-          const projectPath = pathTo.project(props.id);
+          const projectPath = this.pathTo.project(props.id);
           return await this.gitService.branches.switch(
             projectPath,
             props.branch,
@@ -536,7 +539,7 @@ export class ProjectService
       setRemoteOriginUrlProjectSchema,
       props,
       async () => {
-        const projectPath = pathTo.project(props.id);
+        const projectPath = this.pathTo.project(props.id);
         const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
         if (!hasOrigin) {
           return await this.gitService.remotes.addOrigin(
@@ -567,7 +570,7 @@ export class ProjectService
       getChangesProjectSchema,
       props,
       async () => {
-        const projectPath = pathTo.project(props.id);
+        const projectPath = this.pathTo.project(props.id);
         const hasRemoteOrigin =
           await this.gitService.remotes.hasOrigin(projectPath);
 
@@ -627,7 +630,7 @@ export class ProjectService
       synchronizeProjectSchema,
       props,
       async () => {
-        const projectPath = pathTo.project(props.id);
+        const projectPath = this.pathTo.project(props.id);
 
         // A rebase against uncommitted changes fails and could cost the user
         // work, so refuse a sync on a dirty tree before touching the remote.
@@ -697,7 +700,7 @@ export class ProjectService
   public delete(props: DeleteProjectProps): Promise<void> {
     return this.validated('delete', deleteProjectSchema, props, async () => {
       const hasRemoteOrigin = await this.gitService.remotes.hasOrigin(
-        pathTo.project(props.id)
+        this.pathTo.project(props.id)
       );
 
       if (hasRemoteOrigin === false && props.force !== true) {
@@ -715,7 +718,7 @@ export class ProjectService
         }
       }
 
-      await Fs.remove(pathTo.project(props.id));
+      await Fs.remove(this.pathTo.project(props.id));
     });
   }
 
@@ -731,7 +734,7 @@ export class ProjectService
       projectReferences.map(async (reference) => {
         try {
           const json = await this.jsonFileService.unsafeRead(
-            pathTo.projectFile(reference.id)
+            this.pathTo.projectFile(reference.id)
           );
           const projectFile = migrateProjectSchema.parse(json);
 
@@ -814,7 +817,7 @@ export class ProjectService
    * Creates a Project from given ProjectFile
    */
   private async toProject(projectFile: ProjectFile): Promise<Project> {
-    const projectPath = pathTo.project(projectFile.id);
+    const projectPath = this.pathTo.project(projectFile.id);
 
     const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
     if (hasOrigin) {
@@ -894,7 +897,7 @@ export class ProjectService
   ): Promise<void> {
     switch (objectType) {
       case 'asset': {
-        const assetFilePath = pathTo.assetFile(projectId, reference.id);
+        const assetFilePath = this.pathTo.assetFile(projectId, reference.id);
         const prevAssetFile =
           await this.jsonFileService.unsafeRead(assetFilePath);
         const migratedAssetFile = this.assetService.migrate(prevAssetFile);
@@ -910,7 +913,10 @@ export class ProjectService
         return;
       }
       case 'component': {
-        const componentFilePath = pathTo.componentFile(projectId, reference.id);
+        const componentFilePath = this.pathTo.componentFile(
+          projectId,
+          reference.id
+        );
         const prevComponentFile =
           await this.jsonFileService.unsafeRead(componentFilePath);
         const migratedComponentFile =
@@ -930,7 +936,7 @@ export class ProjectService
         return;
       }
       case 'collection': {
-        const collectionFilePath = pathTo.collectionFile(
+        const collectionFilePath = this.pathTo.collectionFile(
           projectId,
           reference.id
         );
@@ -958,7 +964,7 @@ export class ProjectService
             'Missing required parameter "collectionId"'
           );
         }
-        const entryFilePath = pathTo.entryFile(
+        const entryFilePath = this.pathTo.entryFile(
           projectId,
           collectionId,
           reference.id

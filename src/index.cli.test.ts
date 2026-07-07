@@ -257,4 +257,59 @@ describe('CLI', function () {
     expect(entries.length).toEqual(1);
     expect(entries[0].id).toEqual(entry.id);
   });
+
+  it('should isolate the data directory via the --data-dir option', async function () {
+    // The isolated directory holds no Projects, so the export is empty
+    // even though this suite created Projects in the shared data directory
+    await execCommand({
+      command: 'node ./dist/cli/index.cli.mjs',
+      args: [
+        '--data-dir',
+        './.elek.io/data-dir-flag',
+        'export',
+        './.elek.io/data-dir-flag-out',
+      ],
+      logger: core.logger,
+    });
+
+    const projectsContent = await fs.readFile(
+      './.elek.io/data-dir-flag-out/projects.json',
+      'utf-8'
+    );
+    expect(JSON.parse(projectsContent)).toEqual({});
+    expect(await fs.exists('./.elek.io/data-dir-flag/projects')).toBe(true);
+  });
+
+  it('should fail loudly for an empty --data-dir instead of falling back', async function () {
+    // The quotes survive execCommand's shell concatenation, so commander
+    // receives an empty string. It must throw, not silently use another
+    // directory, e.g. when a script passes an unset variable.
+    await expect(
+      execCommand({
+        command: 'node ./dist/cli/index.cli.mjs',
+        args: ['--data-dir', '""', 'export', './.elek.io/data-dir-empty-out'],
+        logger: core.logger,
+      })
+    ).rejects.toThrow();
+
+    expect(await fs.exists('./.elek.io/data-dir-empty-out')).toBe(false);
+  });
+
+  it('should isolate the data directory via the ELEK_IO_DATA_DIR environment variable', async function () {
+    await execCommand({
+      command: 'node ./dist/cli/index.cli.mjs',
+      args: ['export', './.elek.io/data-dir-env-out'],
+      options: {
+        env: { ...process.env, ELEK_IO_DATA_DIR: './.elek.io/data-dir-env' },
+      },
+      logger: core.logger,
+    });
+
+    const projectsContent = await fs.readFile(
+      './.elek.io/data-dir-env-out/projects.json',
+      'utf-8'
+    );
+    expect(JSON.parse(projectsContent)).toEqual({});
+    expect(await fs.exists('./.elek.io/data-dir-env/projects')).toBe(true);
+  });
 });

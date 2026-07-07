@@ -22,6 +22,7 @@ import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { UserService } from './UserService.js';
 import type { LogProps } from '../schema/index.js';
+import type { PathTo } from '../util/node.js';
 
 /**
  * Service that manages Git functionality
@@ -59,6 +60,7 @@ export class GitService {
 
   public constructor(
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     logService: LogService,
     userService: UserService,
     jsonFileService: JsonFileService
@@ -70,6 +72,7 @@ export class GitService {
     });
     this.gitTagService = new GitTagService(
       options,
+      pathTo,
       this.git.bind(this),
       logService
     );

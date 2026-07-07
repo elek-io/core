@@ -2,7 +2,7 @@ import type { Logger } from 'winston';
 import { createLogger, format, transports } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import { type ElekIoCoreOptions } from '../schema/index.js';
-import { pathTo } from '../util/node.js';
+import type { PathTo } from '../util/node.js';
 import type { LogProps } from '../schema/logSchema.js';
 import { logConsoleTransportSchema, logSchema } from '../schema/logSchema.js';
 
@@ -12,7 +12,7 @@ import { logConsoleTransportSchema, logSchema } from '../schema/logSchema.js';
 export class LogService {
   private readonly logger: Logger;
 
-  constructor(options: ElekIoCoreOptions) {
+  constructor(options: ElekIoCoreOptions, pathTo: PathTo) {
     const rotatingFileTransport = new DailyRotateFile({
       dirname: pathTo.logs,
       filename: '%DATE%.log',

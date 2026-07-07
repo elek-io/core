@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod';
 import type { ElekIoCoreOptions, ServiceType } from '../schema/index.js';
+import type { PathTo } from '../util/node.js';
 import { CoreError } from '../util/shared.js';
 import type { LogService } from './LogService.js';
 
@@ -9,15 +10,18 @@ import type { LogService } from './LogService.js';
 export abstract class AbstractService {
   public readonly type: ServiceType;
   public readonly options: ElekIoCoreOptions;
+  protected readonly pathTo: PathTo;
   protected readonly logService: LogService;
 
   protected constructor(
     type: ServiceType,
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     logService: LogService
   ) {
     this.type = type;
     this.options = options;
+    this.pathTo = pathTo;
     this.logService = logService;
   }
 

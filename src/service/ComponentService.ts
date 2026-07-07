@@ -38,6 +38,7 @@ import {
   type Uuid,
   type Value,
 } from '../schema/index.js';
+import type { PathTo } from '../util/node.js';
 import {
   diffFieldDefinitions,
   type FieldChange,
@@ -46,7 +47,6 @@ import { transformComponentValues } from '../util/componentTransform.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
 import type { EntryIssue } from '../util/entryTransform.js';
 import { applyMigrations, componentMigrations } from './migrations/index.js';
-import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { GitService } from './GitService.js';
@@ -65,13 +65,13 @@ export class ComponentService
   protected entityFileSchema = componentFileSchema;
 
   protected entitiesPath(projectId: string): string {
-    return pathTo.components(projectId);
+    return this.pathTo.components(projectId);
   }
   protected entityPath(projectId: string, id: string): string {
-    return pathTo.component(projectId, id);
+    return this.pathTo.component(projectId, id);
   }
   protected entityFilePath(projectId: string, id: string): string {
-    return pathTo.componentFile(projectId, id);
+    return this.pathTo.componentFile(projectId, id);
   }
   protected extractSlug(file: ComponentFile): string {
     return file.slug;
@@ -80,6 +80,7 @@ export class ComponentService
   constructor(
     coreVersion: string,
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
     gitService: GitService
@@ -87,6 +88,7 @@ export class ComponentService
     super(
       serviceTypeSchema.enum.Component,
       options,
+      pathTo,
       logService,
       jsonFileService,
       gitService
@@ -134,9 +136,12 @@ export class ComponentService
         );
 
         const id = uuid();
-        const projectPath = pathTo.project(validatedProps.projectId);
-        const componentPath = pathTo.component(validatedProps.projectId, id);
-        const componentFilePath = pathTo.componentFile(
+        const projectPath = this.pathTo.project(validatedProps.projectId);
+        const componentPath = this.pathTo.component(
+          validatedProps.projectId,
+          id
+        );
+        const componentFilePath = this.pathTo.componentFile(
           validatedProps.projectId,
           id
         );
@@ -195,14 +200,20 @@ export class ComponentService
       async (validatedProps) => {
         if (!validatedProps.commitHash) {
           const componentFile = await this.jsonFileService.read(
-            pathTo.componentFile(validatedProps.projectId, validatedProps.id),
+            this.pathTo.componentFile(
+              validatedProps.projectId,
+              validatedProps.id
+            ),
             componentFileSchema
           );
           return this.toComponent(componentFile) as T;
         } else {
           const content = await this.gitService.getFileContentAtCommit(
-            pathTo.project(validatedProps.projectId),
-            pathTo.componentFile(validatedProps.projectId, validatedProps.id),
+            this.pathTo.project(validatedProps.projectId),
+            this.pathTo.componentFile(
+              validatedProps.projectId,
+              validatedProps.id
+            ),
             validatedProps.commitHash
           );
           const componentFile = this.migrate(JSON.parse(content));
@@ -238,12 +249,15 @@ export class ComponentService
       componentHistorySchema,
       props,
       async (validatedProps) => {
-        return this.gitService.log(pathTo.project(validatedProps.projectId), {
-          filePath: pathTo.componentFile(
-            validatedProps.projectId,
-            validatedProps.id
-          ),
-        });
+        return this.gitService.log(
+          this.pathTo.project(validatedProps.projectId),
+          {
+            filePath: this.pathTo.componentFile(
+              validatedProps.projectId,
+              validatedProps.id
+            ),
+          }
+        );
       }
     );
   }
@@ -285,8 +299,8 @@ export class ComponentService
           validatedProps.projectId
         );
 
-        const projectPath = pathTo.project(validatedProps.projectId);
-        const componentFilePath = pathTo.componentFile(
+        const projectPath = this.pathTo.project(validatedProps.projectId);
+        const componentFilePath = this.pathTo.componentFile(
           validatedProps.projectId,
           validatedProps.id
         );
@@ -417,7 +431,7 @@ export class ComponentService
     const allIssues: EntryIssue[] = [];
 
     // Find all collections that reference this component
-    const collectionsPath = pathTo.collections(projectId);
+    const collectionsPath = this.pathTo.collections(projectId);
     const collectionsExist = await Fs.pathExists(collectionsPath);
 
     if (collectionsExist) {
@@ -429,7 +443,7 @@ export class ComponentService
       for (const collectionReference of collectionReferences) {
         const collectionId = collectionReference.id;
         const collectionFile = await this.jsonFileService.read(
-          pathTo.collectionFile(projectId, collectionId),
+          this.pathTo.collectionFile(projectId, collectionId),
           collectionFileSchema
         );
 
@@ -446,7 +460,7 @@ export class ComponentService
 
         if (referencingDynamicFields.length === 0) continue;
 
-        const entriesPath = pathTo.entries(projectId, collectionId);
+        const entriesPath = this.pathTo.entries(projectId, collectionId);
         const entriesExist = await Fs.pathExists(entriesPath);
         if (!entriesExist) continue;
 
@@ -458,7 +472,7 @@ export class ComponentService
 
         for (const entryReference of entryReferences) {
           const entryId = entryReference.id;
-          const entryFilePath = pathTo.entryFile(
+          const entryFilePath = this.pathTo.entryFile(
             projectId,
             collectionId,
             entryId
@@ -586,8 +600,8 @@ export class ComponentService
         );
       }
 
-      const projectPath = pathTo.project(props.projectId);
-      const componentPath = pathTo.component(props.projectId, props.id);
+      const projectPath = this.pathTo.project(props.projectId);
+      const componentPath = this.pathTo.component(props.projectId, props.id);
 
       await this.withGitRollback(projectPath, async () => {
         await Fs.remove(componentPath);
@@ -815,7 +829,7 @@ export class ComponentService
       }
     }
 
-    const collectionsPath = pathTo.collections(projectId);
+    const collectionsPath = this.pathTo.collections(projectId);
     const exists = await Fs.pathExists(collectionsPath);
     if (!exists) return results;
 
@@ -826,7 +840,7 @@ export class ComponentService
 
     for (const collectionReference of collectionReferences) {
       const collectionFile = await this.jsonFileService.read(
-        pathTo.collectionFile(projectId, collectionReference.id),
+        this.pathTo.collectionFile(projectId, collectionReference.id),
         collectionFileSchema
       );
       const fieldDefinitions = flattenFieldDefinitions(

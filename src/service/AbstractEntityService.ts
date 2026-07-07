@@ -12,7 +12,7 @@ import {
   type ServiceType,
   type Uuid,
 } from '../schema/index.js';
-import { files, folders, isNotEmpty, pathTo } from '../util/node.js';
+import { files, folders, isNotEmpty, type PathTo } from '../util/node.js';
 import { AbstractService } from './AbstractService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
@@ -29,11 +29,12 @@ export abstract class AbstractEntityService extends AbstractService {
   protected constructor(
     type: ServiceType,
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     logService: LogService,
     gitService: GitService,
     jsonFileService: JsonFileService
   ) {
-    super(type, options, logService);
+    super(type, options, pathTo, logService);
     this.gitService = gitService;
     this.jsonFileService = jsonFileService;
   }
@@ -43,7 +44,7 @@ export abstract class AbstractEntityService extends AbstractService {
    */
   protected async readProjectFile(projectId: Uuid): Promise<ProjectFile> {
     return this.jsonFileService.read(
-      pathTo.projectFile(projectId),
+      this.pathTo.projectFile(projectId),
       projectFileSchema
     );
   }
@@ -144,22 +145,22 @@ export abstract class AbstractEntityService extends AbstractService {
         if (!projectId) {
           throw CoreError.badRequest('Missing required parameter "projectId"');
         }
-        return this.getFileReferences(pathTo.assets(projectId));
+        return this.getFileReferences(this.pathTo.assets(projectId));
 
       case objectTypeSchema.enum.project:
-        return this.getFolderReferences(pathTo.projects);
+        return this.getFolderReferences(this.pathTo.projects);
 
       case objectTypeSchema.enum.collection:
         if (!projectId) {
           throw CoreError.badRequest('Missing required parameter "projectId"');
         }
-        return this.getFolderReferences(pathTo.collections(projectId));
+        return this.getFolderReferences(this.pathTo.collections(projectId));
 
       case objectTypeSchema.enum.component:
         if (!projectId) {
           throw CoreError.badRequest('Missing required parameter "projectId"');
         }
-        return this.getFolderReferences(pathTo.components(projectId));
+        return this.getFolderReferences(this.pathTo.components(projectId));
 
       case objectTypeSchema.enum.entry:
         if (!projectId) {
@@ -171,7 +172,7 @@ export abstract class AbstractEntityService extends AbstractService {
           );
         }
         return this.getFileReferences(
-          pathTo.collection(projectId, collectionId)
+          this.pathTo.collection(projectId, collectionId)
         );
 
       default:

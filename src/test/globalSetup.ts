@@ -1,6 +1,6 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
-import { pathTo } from '../util/node.js';
+import { createPathTo, resolveDataDir } from '../util/node.js';
 
 /**
  * Runs once before the entire test suite.
@@ -8,6 +8,6 @@ import { pathTo } from '../util/node.js';
  * that may have failed before their cleanup code could execute.
  */
 export default async function globalSetup() {
-  await Fs.emptyDir(pathTo.projects);
+  await Fs.emptyDir(createPathTo(resolveDataDir()).projects);
   await Fs.emptyDir(Path.resolve('.elek.io'));
 }

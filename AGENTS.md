@@ -34,8 +34,9 @@ Two rules follow:
 - Avoid type casts. Shape the types so a cast is not needed.
 - Keep comments short and put deeper detail in the docs. Avoid em-dashes and semicolons, use simple sentences for readability.
 - Core has three peer dependencies (`zod`, `dugite`, `astro`). Before bumping any of them, or a dependency that pulls `zod` (`@scalar/*`, `@hono/zod-openapi`), read [`contributing/peer-dependencies.md`](./contributing/peer-dependencies.md) for why each version range was chosen and how to re-check it. The `pnpm test` suite guards zod's single-copy invariant through [`src/zod-single-copy.test.ts`](./src/zod-single-copy.test.ts).
+- Core environment variables use the `ELEK_IO_` prefix, are read once at Core construction (never at module import) and are documented in the environment variables section of [`docs/usage.md`](./docs/usage.md).
 
 ## Testing notes
 
-- The suite creates real Projects (real git repositories) under `~/elek.io`, so it is slow by design. See [`contributing/testing.md`](./contributing/testing.md) for the CI timeout rationale.
+- The suite creates real Projects (real git repositories) under the resolved data directory, `~/elek.io` unless `ELEK_IO_DATA_DIR` is set, so it is slow by design. See [`contributing/testing.md`](./contributing/testing.md) for the CI timeout rationale.
 - When running the suite inside a sandboxed git environment, unset the `GIT_CONFIG_*` variables first, or the bare-repository tests break.
