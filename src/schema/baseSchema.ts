@@ -85,6 +85,9 @@ export function partialTranslatableRecordOf<T extends z.ZodTypeAny>(schema: T) {
 export const partialTranslatableStringSchema = partialTranslatableRecordOf(
   z.string().trim().min(1)
 );
+export type TranslatableString = z.infer<
+  typeof partialTranslatableStringSchema
+>;
 
 export const reservedSlugs = new Set([
   'index',

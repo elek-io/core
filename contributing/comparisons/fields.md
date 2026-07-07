@@ -454,6 +454,7 @@ The lack of nested composition (no nested groups, no nested `dynamic` fields) is
 
 ## See Also
 
+- [`data-specifications.md`](./data-specifications.md) - how Core's schemas compare to recognized data specifications, and why none replaces the home-brewed foundation
 - [`../fields.md`](../../docs/fields.md) - elek.io Core's full field reference and code examples
 - [`features.md`](../../docs/features.md) - Core's capabilities and current limitations
 - [`../concepts.md`](../../docs/concepts.md) - the data model the field system describes
