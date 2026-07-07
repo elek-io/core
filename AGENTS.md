@@ -38,5 +38,5 @@ Two rules follow:
 
 ## Testing notes
 
-- The suite creates real Projects (real git repositories) under the resolved data directory, `~/elek.io` unless `ELEK_IO_DATA_DIR` is set, so it is slow by design. See [`contributing/testing.md`](./contributing/testing.md) for the CI timeout rationale.
+- The suite creates real Projects (real git repositories), so it is slow by design. Test files run in parallel, each in its own data directory under `~/elek.io-test`, nested beneath `ELEK_IO_DATA_DIR` if set. See [`contributing/testing.md`](./contributing/testing.md) for how that works and the CI timeout rationale.
 - When running the suite inside a sandboxed git environment, unset the `GIT_CONFIG_*` variables first, or the bare-repository tests break.

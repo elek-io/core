@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sync } from 'astro';
 import Path from 'node:path';
-import Os from 'node:os';
 import Fs from 'fs-extra';
 import {
   createProject,
   createAsset,
   createCollection,
   createEntry,
+  tmpDirPath,
 } from './test/util.js';
 import type { Asset, Collection, Project } from './index.node.js';
 
@@ -28,7 +28,7 @@ describe('Astro Loaders', function () {
   });
 
   it('should sync Assets and Entries using astro sync', async function () {
-    const tmpDir = Path.join(Os.tmpdir(), `elek-astro-test-${Date.now()}`);
+    const tmpDir = tmpDirPath();
     const srcDir = Path.join(tmpDir, 'src');
     await Fs.ensureDir(srcDir);
 

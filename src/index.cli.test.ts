@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 
-import { beforeAll, afterAll, expect } from 'vitest';
+import { beforeAll, afterAll, expect, vi } from 'vitest';
 import { it } from 'vitest';
 import { describe } from 'vitest';
 import type { Asset, Collection, Entry, Project } from './index.node.js';
@@ -14,7 +14,7 @@ import {
   createEntry,
   createProject,
 } from './test/util.js';
-import core from './test/setup.js';
+import core, { testApiPort } from './test/setup.js';
 import { execCommand } from './util/node.js';
 
 describe('CLI', function () {
@@ -33,6 +33,7 @@ describe('CLI', function () {
   }, 60000);
 
   afterAll(async function () {
+    core.api.stop();
     await project1.destroy();
     await project2.destroy();
 
@@ -64,14 +65,25 @@ describe('CLI', function () {
   }, 10000);
 
   it('should be able to request a list of entries', async function () {
-    core.api.start(31310);
+    core.api.start(testApiPort);
+    await vi.waitFor(
+      () => {
+        if (core.api.isRunning() === false) {
+          throw new Error('Server not started yet');
+        }
+      },
+      {
+        timeout: 10000,
+        interval: 20,
+      }
+    );
 
     // Dynamically import the generated client because it is generated
     // during this files execution and not available at the start
     // @ts-expect-error The API Client is generated dynamically, so TS cannot know about the module
     const { apiClient } = await import('../.elek.io/client.js');
     const client = apiClient({
-      baseUrl: 'http://localhost:31310',
+      baseUrl: `http://localhost:${testApiPort}`,
       apiKey: 'abc123',
     });
 

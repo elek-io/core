@@ -16,7 +16,7 @@ import {
   createComponent,
   createEntry,
 } from '../test/util.js';
-import core from '../test/setup.js';
+import core, { testApiPort } from '../test/setup.js';
 
 const app = createTestApi(
   router,
@@ -50,7 +50,7 @@ describe('API', function () {
 
   it('should be able to start the API and verify it is running', async function () {
     const isRunningBefore = core.api.isRunning();
-    core.api.start(31310);
+    core.api.start(testApiPort);
 
     await vi.waitFor(
       () => {

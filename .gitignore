@@ -1,6 +1,9 @@
 # CLI generated files
 .elek.io
 
+# Test-owned relative data directory, see src/index.node.test.ts
+.elek.io-node-test
+
 # Logs
 logs
 *.log

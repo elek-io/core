@@ -117,7 +117,9 @@ describe('Node.js', function () {
   });
 
   it('should resolve a relative dataDir against the current working directory', function () {
-    const relativeDataDir = './.elek.io/relative-data-dir-test';
+    // Owned by this test alone. The CLI test owns ./.elek.io, and sharing
+    // it would collide when both files run in parallel.
+    const relativeDataDir = './.elek.io-node-test';
     const customCore = new ElekIoCore({ dataDir: relativeDataDir });
     onTestFinished(async () => {
       await customCore.dispose();
