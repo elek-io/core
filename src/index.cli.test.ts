@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 
-import { beforeAll, afterAll, expect } from 'vitest';
+import { beforeAll, afterAll, expect, vi } from 'vitest';
 import { it } from 'vitest';
 import { describe } from 'vitest';
 import type { Asset, Collection, Entry, Project } from './index.node.js';
@@ -14,7 +14,7 @@ import {
   createEntry,
   createProject,
 } from './test/util.js';
-import core from './test/setup.js';
+import core, { testApiPort } from './test/setup.js';
 import { execCommand } from './util/node.js';
 
 describe('CLI', function () {
@@ -33,6 +33,7 @@ describe('CLI', function () {
   }, 60000);
 
   afterAll(async function () {
+    core.api.stop();
     await project1.destroy();
     await project2.destroy();
 
@@ -64,14 +65,25 @@ describe('CLI', function () {
   }, 10000);
 
   it('should be able to request a list of entries', async function () {
-    core.api.start(31310);
+    core.api.start(testApiPort);
+    await vi.waitFor(
+      () => {
+        if (core.api.isRunning() === false) {
+          throw new Error('Server not started yet');
+        }
+      },
+      {
+        timeout: 10000,
+        interval: 20,
+      }
+    );
 
     // Dynamically import the generated client because it is generated
     // during this files execution and not available at the start
     // @ts-expect-error The API Client is generated dynamically, so TS cannot know about the module
     const { apiClient } = await import('../.elek.io/client.js');
     const client = apiClient({
-      baseUrl: 'http://localhost:31310',
+      baseUrl: `http://localhost:${testApiPort}`,
       apiKey: 'abc123',
     });
 
@@ -256,5 +268,60 @@ describe('CLI', function () {
     expect(Array.isArray(entries)).toBe(true);
     expect(entries.length).toEqual(1);
     expect(entries[0].id).toEqual(entry.id);
+  });
+
+  it('should isolate the data directory via the --data-dir option', async function () {
+    // The isolated directory holds no Projects, so the export is empty
+    // even though this suite created Projects in the shared data directory
+    await execCommand({
+      command: 'node ./dist/cli/index.cli.mjs',
+      args: [
+        '--data-dir',
+        './.elek.io/data-dir-flag',
+        'export',
+        './.elek.io/data-dir-flag-out',
+      ],
+      logger: core.logger,
+    });
+
+    const projectsContent = await fs.readFile(
+      './.elek.io/data-dir-flag-out/projects.json',
+      'utf-8'
+    );
+    expect(JSON.parse(projectsContent)).toEqual({});
+    expect(await fs.exists('./.elek.io/data-dir-flag/projects')).toBe(true);
+  });
+
+  it('should fail loudly for an empty --data-dir instead of falling back', async function () {
+    // The quotes survive execCommand's shell concatenation, so commander
+    // receives an empty string. It must throw, not silently use another
+    // directory, e.g. when a script passes an unset variable.
+    await expect(
+      execCommand({
+        command: 'node ./dist/cli/index.cli.mjs',
+        args: ['--data-dir', '""', 'export', './.elek.io/data-dir-empty-out'],
+        logger: core.logger,
+      })
+    ).rejects.toThrow();
+
+    expect(await fs.exists('./.elek.io/data-dir-empty-out')).toBe(false);
+  });
+
+  it('should isolate the data directory via the ELEK_IO_DATA_DIR environment variable', async function () {
+    await execCommand({
+      command: 'node ./dist/cli/index.cli.mjs',
+      args: ['export', './.elek.io/data-dir-env-out'],
+      options: {
+        env: { ...process.env, ELEK_IO_DATA_DIR: './.elek.io/data-dir-env' },
+      },
+      logger: core.logger,
+    });
+
+    const projectsContent = await fs.readFile(
+      './.elek.io/data-dir-env-out/projects.json',
+      'utf-8'
+    );
+    expect(JSON.parse(projectsContent)).toEqual({});
+    expect(await fs.exists('./.elek.io/data-dir-env/projects')).toBe(true);
   });
 });

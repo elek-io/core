@@ -1,11 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { v4 as uuid } from 'uuid';
-import ElekIoCore from './index.node.js';
-import core from './test/setup.js';
+import Fs from 'fs-extra';
+import Os from 'node:os';
+import ElekIoCore, { CoreError } from './index.node.js';
+import core, { testUserProps } from './test/setup.js';
+import { createTmpCore, tmpDirPath } from './test/util.js';
 import Path from 'node:path';
 
 describe('Node.js', function () {
-  it('should be able to create a new ElekIoCore instance', function () {
+  afterEach(function () {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('should be able to create a new ElekIoCore instance', async function () {
+    // Fake the home directory so the default resolution is proven
+    // without creating or emptying anything in the real ~/elek.io
+    const fakeHome = tmpDirPath();
+    vi.stubEnv('ELEK_IO_DATA_DIR', undefined);
+    vi.spyOn(Os, 'homedir').mockReturnValue(fakeHome);
+    const defaultDataDir = Path.join(fakeHome, 'elek.io');
+
     const defaultCore = new ElekIoCore();
     const coreWithLogLevel = new ElekIoCore({
       log: {
@@ -17,6 +32,11 @@ describe('Node.js', function () {
         cache: false,
       },
     });
+    onTestFinished(async () => {
+      await defaultCore.dispose();
+      await coreWithLogLevel.dispose();
+      await coreWithoutCache.dispose();
+    });
 
     expect(defaultCore).to.be.instanceOf(ElekIoCore);
     expect(defaultCore.options).to.deep.equal({
@@ -26,6 +46,7 @@ describe('Node.js', function () {
       file: {
         cache: true,
       },
+      dataDir: defaultDataDir,
     });
 
     expect(coreWithLogLevel).to.be.instanceOf(ElekIoCore);
@@ -36,6 +57,7 @@ describe('Node.js', function () {
       file: {
         cache: true,
       },
+      dataDir: defaultDataDir,
     });
 
     expect(coreWithoutCache).to.be.instanceOf(ElekIoCore);
@@ -46,8 +68,126 @@ describe('Node.js', function () {
       file: {
         cache: false,
       },
+      dataDir: defaultDataDir,
     });
+
+    expect(await Fs.pathExists(Path.join(defaultDataDir, 'projects'))).to.equal(
+      true
+    );
   });
+
+  it('should respect the dataDir option', async function () {
+    const { core: customCore, dataDir } = createTmpCore();
+
+    expect(customCore.options.dataDir).to.equal(dataDir);
+    expect(customCore.util.pathTo.projects).to.equal(
+      Path.join(dataDir, 'projects')
+    );
+    expect(customCore.util.pathTo.tmp).to.equal(Path.join(dataDir, 'tmp'));
+    expect(await Fs.pathExists(Path.join(dataDir, 'projects'))).to.equal(true);
+    expect(await Fs.pathExists(Path.join(dataDir, 'tmp'))).to.equal(true);
+  });
+
+  it('should respect the ELEK_IO_DATA_DIR environment variable', function () {
+    const dataDir = tmpDirPath();
+    vi.stubEnv('ELEK_IO_DATA_DIR', dataDir);
+    const envCore = new ElekIoCore();
+    onTestFinished(async () => {
+      await envCore.dispose();
+    });
+
+    expect(envCore.options.dataDir).to.equal(dataDir);
+    expect(envCore.util.pathTo.userFile).to.equal(
+      Path.join(dataDir, 'user.json')
+    );
+  });
+
+  it('should prefer the dataDir option over the environment variable', async function () {
+    const envDataDir = tmpDirPath();
+    vi.stubEnv('ELEK_IO_DATA_DIR', envDataDir);
+    const { core: customCore, dataDir: optionDataDir } = createTmpCore();
+
+    expect(customCore.options.dataDir).to.equal(optionDataDir);
+    expect(await Fs.pathExists(envDataDir)).to.equal(false);
+  });
+
+  it('should throw a CoreError for an empty dataDir option', function () {
+    expect(() => new ElekIoCore({ dataDir: '' })).to.throw(CoreError);
+    expect(() => new ElekIoCore({ dataDir: '   ' })).to.throw(CoreError);
+  });
+
+  it('should resolve a relative dataDir against the current working directory', function () {
+    // Owned by this test alone. The CLI test owns ./.elek.io, and sharing
+    // it would collide when both files run in parallel.
+    const relativeDataDir = './.elek.io-node-test';
+    const customCore = new ElekIoCore({ dataDir: relativeDataDir });
+    onTestFinished(async () => {
+      await customCore.dispose();
+      await Fs.remove(Path.resolve(relativeDataDir));
+    });
+
+    expect(customCore.options.dataDir).to.equal(Path.resolve(relativeDataDir));
+  });
+
+  it('should write the User file inside the configured dataDir', async function () {
+    const { core: customCore, dataDir } = createTmpCore();
+
+    await customCore.user.set(testUserProps);
+
+    expect(await Fs.pathExists(Path.join(dataDir, 'user.json'))).to.equal(true);
+  });
+
+  it('should only empty the tmp directory of its own dataDir on construction', async function () {
+    const dataDir = tmpDirPath();
+    const customTmpMarker = Path.join(dataDir, 'tmp', 'marker.txt');
+    const sharedTmpMarker = Path.join(core.util.pathTo.tmp, 'marker.txt');
+    await Fs.outputFile(customTmpMarker, 'marker');
+    await Fs.outputFile(sharedTmpMarker, 'marker');
+    onTestFinished(async () => {
+      await Fs.remove(sharedTmpMarker);
+    });
+
+    const customCore = new ElekIoCore({ dataDir });
+    onTestFinished(async () => {
+      await customCore.dispose();
+    });
+
+    expect(await Fs.pathExists(customTmpMarker)).to.equal(false);
+    expect(await Fs.pathExists(sharedTmpMarker)).to.equal(true);
+  });
+
+  it(
+    'should allow two instances with different data directories to coexist',
+    { timeout: 30000 },
+    async function () {
+      const { core: coreA, dataDir: dataDirA } = createTmpCore();
+      const { core: coreB } = createTmpCore();
+
+      expect(coreA.util.pathTo.projects).to.not.equal(
+        coreB.util.pathTo.projects
+      );
+
+      await coreA.user.set(testUserProps);
+      await coreB.user.set(testUserProps);
+
+      const project = await coreA.projects.create({
+        name: 'Instance isolation test',
+        description: 'Created by coreA and invisible to coreB',
+        settings: {
+          language: {
+            supported: ['en'],
+            default: 'en',
+          },
+        },
+      });
+
+      expect(await coreA.projects.count()).to.equal(1);
+      expect(await coreB.projects.count()).to.equal(0);
+      expect(
+        await Fs.pathExists(Path.join(dataDirA, 'projects', project.id))
+      ).to.equal(true);
+    }
+  );
 
   it(
     'should be able to create a complete Project with Assets, Collections and Entries',

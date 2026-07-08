@@ -1,11 +1,16 @@
+import Os from 'node:os';
+import Path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { LogService } from './LogService.js';
 import type { ElekIoCoreOptions } from '../schema/index.js';
+import { createPathTo } from '../util/node.js';
 
 const options: ElekIoCoreOptions = {
   log: { level: 'debug' },
   file: { cache: true },
+  dataDir: Path.join(Os.tmpdir(), 'elek-io-core-logservice-test'),
 };
+const pathTo = createPathTo(options.dataDir);
 
 // Other test files share this worker process, so assert on deltas, not
 // absolute process listener counts.
@@ -14,7 +19,7 @@ describe('LogService teardown', function () {
     const baseUncaught = process.listenerCount('uncaughtException');
     const baseUnhandled = process.listenerCount('unhandledRejection');
 
-    const log = new LogService(options);
+    const log = new LogService(options, pathTo);
     expect(process.listenerCount('uncaughtException')).toBe(baseUncaught + 1);
     expect(process.listenerCount('unhandledRejection')).toBe(baseUnhandled + 1);
 
@@ -28,7 +33,7 @@ describe('LogService teardown', function () {
     const baseUnhandled = process.listenerCount('unhandledRejection');
 
     for (let i = 0; i < 15; i++) {
-      const log = new LogService(options);
+      const log = new LogService(options, pathTo);
       await log.close();
     }
 

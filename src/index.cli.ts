@@ -3,6 +3,7 @@
 import { Command } from '@commander-js/extra-typings';
 import * as packageJson from '../package.json' with { type: 'json' };
 import {
+  configureCore,
   exportAction,
   generateApiClientAction,
   generateTypesAction,
@@ -15,12 +16,22 @@ import {
   generateTypesSchema,
 } from './schema/index.js';
 
-const program = new Command();
-
-program
+const program = new Command()
   .name('elek')
   .description('CLI for elek.io')
-  .version(packageJson.default.version);
+  .version(packageJson.default.version)
+  .option(
+    '--data-dir <path>',
+    'The directory Core reads and writes data in. Overrides the ELEK_IO_DATA_DIR environment variable and defaults to ~/elek.io.'
+  )
+  .hook('preAction', (thisCommand) => {
+    const { dataDir } = thisCommand.opts();
+    // Only skip when the flag is absent. An empty string must reach the
+    // constructor so it throws instead of silently using another directory.
+    if (dataDir !== undefined) {
+      configureCore({ dataDir });
+    }
+  });
 
 program
   .command('generate:client')

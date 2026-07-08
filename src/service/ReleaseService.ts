@@ -33,13 +33,13 @@ import {
   type FieldChange,
   type CollectionChange,
 } from '../schema/index.js';
-import { pathTo } from '../util/node.js';
 import { CoreError, datetime } from '../util/shared.js';
 import { AbstractService } from './AbstractService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { ProjectService } from './ProjectService.js';
+import type { PathTo } from '../util/node.js';
 
 /**
  * Service that manages Release functionality
@@ -54,12 +54,13 @@ export class ReleaseService extends AbstractService {
 
   constructor(
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     logService: LogService,
     gitService: GitService,
     jsonFileService: JsonFileService,
     projectService: ProjectService
   ) {
-    super(serviceTypeSchema.enum.Release, options, logService);
+    super(serviceTypeSchema.enum.Release, options, pathTo, logService);
 
     this.gitService = gitService;
     this.jsonFileService = jsonFileService;
@@ -74,7 +75,7 @@ export class ReleaseService extends AbstractService {
    */
   public prepare(props: PrepareReleaseProps): Promise<ReleaseDiff> {
     return this.validated('prepare', prepareReleaseSchema, props, async () => {
-      const projectPath = pathTo.project(props.projectId);
+      const projectPath = this.pathTo.project(props.projectId);
       const productionRef = projectBranchSchema.enum.production;
 
       const currentBranch = await this.gitService.branches.current(projectPath);
@@ -204,8 +205,8 @@ export class ReleaseService extends AbstractService {
    */
   public create(props: CreateReleaseProps): Promise<ReleaseResult> {
     return this.validated('create', createReleaseSchema, props, async () => {
-      const projectPath = pathTo.project(props.projectId);
-      const projectFilePath = pathTo.projectFile(props.projectId);
+      const projectPath = this.pathTo.project(props.projectId);
+      const projectFilePath = this.pathTo.projectFile(props.projectId);
 
       const diff = await this.prepare(props);
 
@@ -295,8 +296,8 @@ export class ReleaseService extends AbstractService {
       createPreviewReleaseSchema,
       props,
       async () => {
-        const projectPath = pathTo.project(props.projectId);
-        const projectFilePath = pathTo.projectFile(props.projectId);
+        const projectPath = this.pathTo.project(props.projectId);
+        const projectFilePath = this.pathTo.projectFile(props.projectId);
 
         const diff = await this.prepare(props);
 
@@ -370,7 +371,7 @@ export class ReleaseService extends AbstractService {
     try {
       const content = await this.gitService.getFileContentAtCommit(
         projectPath,
-        pathTo.projectFile(projectId),
+        this.pathTo.projectFile(projectId),
         ref
       );
       return projectFileSchema.parse(JSON.parse(content));
@@ -388,7 +389,7 @@ export class ReleaseService extends AbstractService {
     projectPath: string,
     ref: string
   ): Promise<AssetFile[]> {
-    const assetsPath = pathTo.assets(projectId);
+    const assetsPath = this.pathTo.assets(projectId);
     const fileNames = await this.gitService.listTreeAtCommit(
       projectPath,
       assetsPath,
@@ -399,7 +400,7 @@ export class ReleaseService extends AbstractService {
 
     for (const fileName of jsonFiles) {
       const assetId = fileName.replace('.json', '');
-      const assetFilePath = pathTo.assetFile(projectId, assetId);
+      const assetFilePath = this.pathTo.assetFile(projectId, assetId);
 
       try {
         const content = await this.gitService.getFileContentAtCommit(
@@ -431,7 +432,7 @@ export class ReleaseService extends AbstractService {
     collectionId: string,
     ref: string
   ): Promise<EntryFile[]> {
-    const entriesPath = pathTo.entries(projectId, collectionId);
+    const entriesPath = this.pathTo.entries(projectId, collectionId);
     const fileNames = await this.gitService.listTreeAtCommit(
       projectPath,
       entriesPath,
@@ -444,7 +445,11 @@ export class ReleaseService extends AbstractService {
 
     for (const fileName of entryFiles) {
       const entryId = fileName.replace('.json', '');
-      const entryFilePath = pathTo.entryFile(projectId, collectionId, entryId);
+      const entryFilePath = this.pathTo.entryFile(
+        projectId,
+        collectionId,
+        entryId
+      );
 
       try {
         const content = await this.gitService.getFileContentAtCommit(
@@ -475,7 +480,7 @@ export class ReleaseService extends AbstractService {
     projectPath: string,
     ref: string
   ): Promise<CollectionFile[]> {
-    const collectionsPath = pathTo.collections(projectId);
+    const collectionsPath = this.pathTo.collections(projectId);
     const folderNames = await this.gitService.listTreeAtCommit(
       projectPath,
       collectionsPath,
@@ -484,7 +489,10 @@ export class ReleaseService extends AbstractService {
     const collections: CollectionFile[] = [];
 
     for (const folderName of folderNames) {
-      const collectionFilePath = pathTo.collectionFile(projectId, folderName);
+      const collectionFilePath = this.pathTo.collectionFile(
+        projectId,
+        folderName
+      );
 
       try {
         const content = await this.gitService.getFileContentAtCommit(
@@ -515,7 +523,7 @@ export class ReleaseService extends AbstractService {
     projectPath: string,
     ref: string
   ): Promise<ComponentFile[]> {
-    const componentsPath = pathTo.components(projectId);
+    const componentsPath = this.pathTo.components(projectId);
     const folderNames = await this.gitService.listTreeAtCommit(
       projectPath,
       componentsPath,
@@ -524,7 +532,10 @@ export class ReleaseService extends AbstractService {
     const components: ComponentFile[] = [];
 
     for (const folderName of folderNames) {
-      const componentFilePath = pathTo.componentFile(projectId, folderName);
+      const componentFilePath = this.pathTo.componentFile(
+        projectId,
+        folderName
+      );
 
       try {
         const content = await this.gitService.getFileContentAtCommit(

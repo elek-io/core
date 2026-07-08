@@ -1,14 +1,43 @@
 import chokidar from 'chokidar';
 import ElekIoCore from '../index.node.js';
+import type { ConstructorElekIoCoreProps } from '../schema/index.js';
 
-export const core = new ElekIoCore({
+let coreProps: NonNullable<ConstructorElekIoCoreProps> = {
   log: {
     level: 'info',
   },
-});
+};
+let coreInstance: ElekIoCore | undefined;
+
+/**
+ * Overrides the props the CLI creates its Core instance with,
+ * e.g. from the global --data-dir option
+ *
+ * Must be called before the first getCore call.
+ */
+export function configureCore(
+  props: NonNullable<ConstructorElekIoCoreProps>
+): void {
+  if (coreInstance) {
+    throw new Error(
+      'configureCore must be called before the first getCore call'
+    );
+  }
+  coreProps = { ...coreProps, ...props };
+}
+
+/**
+ * Returns the Core instance shared by all CLI actions, creating it on first use
+ *
+ * Lazy so that importing the CLI has no filesystem side effects.
+ */
+export function getCore(): ElekIoCore {
+  coreInstance ??= new ElekIoCore(coreProps);
+  return coreInstance;
+}
 
 export function watchProjects() {
-  return chokidar.watch(core.util.pathTo.projects, {
+  return chokidar.watch(getCore().util.pathTo.projects, {
     ignoreInitial: true, // Do not regenerate Client while chokidar first discovers all directories and files
     ignored: (path) => path.includes('/.git/'), // Exclude all files inside .git directory of Project repositories
   });

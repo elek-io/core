@@ -9,7 +9,7 @@ import type {
   Project,
 } from '../schema/index.js';
 import { CoreError } from '../index.node.js';
-import { core, watchProjects } from './index.js';
+import { getCore, watchProjects } from './index.js';
 
 async function exportFile({
   resolvedOutDir,
@@ -45,6 +45,7 @@ async function exportProjectNested({
     >;
   }
 > {
+  const core = getCore();
   const { list: assets } = await core.assets.list({
     projectId: projectToExport.id,
     limit: 0,
@@ -156,6 +157,7 @@ async function exportProjectsSeparate({
   projectsToExport: Project[];
   options: ExportProps['options'];
 }) {
+  const core = getCore();
   for (const project of projectsToExport) {
     const projectOutDir = Path.join(resolvedOutDir, `project-${project.id}`);
     await Fs.ensureDir(projectOutDir);
@@ -260,6 +262,7 @@ async function exportProjects({
   template,
   options,
 }: ExportProps) {
+  const core = getCore();
   const projectsToExport: Project[] = [];
   const resolvedOutDir = Path.resolve(outDir);
   await Fs.ensureDir(resolvedOutDir);
@@ -302,6 +305,7 @@ export const exportAction = async ({
     await exportProjects({ outDir, projects, template, options });
 
     if (options.watch === true) {
+      const core = getCore();
       core.logger.info({
         source: 'core',
         message: 'Watching for changes to export Projects',

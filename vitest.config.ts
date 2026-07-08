@@ -2,13 +2,13 @@ import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    // Tests currently can not run in parallel, since some tests
-    // are getting the total number of Projects, Assets etc.
-    // which fails depending on the timing they are run (race condition).
-    fileParallelism: false,
     // Git-heavy tests need ~3s on fast runners but 7s+ on the slow
-    // Windows and Intel macOS runners, see docs/testing.md
+    // Windows and Intel macOS runners, and parallel test files add CPU
+    // contention on top, see contributing/testing.md
     testTimeout: 15000,
+    // Gives each test file its own data directory, which is what allows
+    // files to run in parallel, see contributing/testing.md
+    setupFiles: ['./src/test/workerSetup.ts'],
     globalSetup: './src/test/globalSetup.ts',
     coverage: {
       reporter: ['text', 'lcov'],

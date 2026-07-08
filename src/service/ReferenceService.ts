@@ -23,13 +23,13 @@ import {
   type Uuid,
   type Value,
 } from '../schema/index.js';
-import { pathTo } from '../util/node.js';
 import { CoreError } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import { migrateEntryFile } from './migrations/index.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
+import type { PathTo } from '../util/node.js';
 
 /**
  * Scans Entry references across a Project. It owns the three reference gates so
@@ -51,6 +51,7 @@ export class ReferenceService extends AbstractEntityService {
   constructor(
     coreVersion: string,
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     logService: LogService,
     gitService: GitService,
     jsonFileService: JsonFileService
@@ -58,6 +59,7 @@ export class ReferenceService extends AbstractEntityService {
     super(
       serviceTypeSchema.enum.Reference,
       options,
+      pathTo,
       logService,
       gitService,
       jsonFileService
@@ -151,7 +153,7 @@ export class ReferenceService extends AbstractEntityService {
           continue;
         }
 
-        const entryFilePath = pathTo.entryFile(
+        const entryFilePath = this.pathTo.entryFile(
           target.projectId,
           collectionId,
           entryId
@@ -249,7 +251,7 @@ export class ReferenceService extends AbstractEntityService {
       )) {
         const entryId = entryReference.id;
         const entryFile = await this.readEntryFileMigrating(
-          pathTo.entryFile(projectId, collectionId, entryId)
+          this.pathTo.entryFile(projectId, collectionId, entryId)
         );
 
         for (const [fieldSlug, value] of Object.entries(entryFile.values)) {
@@ -288,15 +290,17 @@ export class ReferenceService extends AbstractEntityService {
     ref: FoundReference
   ): Promise<boolean> {
     if (ref.refKind === 'asset') {
-      return Fs.pathExists(pathTo.assetFile(projectId, ref.id));
+      return Fs.pathExists(this.pathTo.assetFile(projectId, ref.id));
     }
     if (ref.refKind === 'collection') {
-      return Fs.pathExists(pathTo.collection(projectId, ref.id));
+      return Fs.pathExists(this.pathTo.collection(projectId, ref.id));
     }
     if (ref.collectionId === undefined) {
       return true;
     }
-    return Fs.pathExists(pathTo.entryFile(projectId, ref.collectionId, ref.id));
+    return Fs.pathExists(
+      this.pathTo.entryFile(projectId, ref.collectionId, ref.id)
+    );
   }
 
   /**
@@ -522,7 +526,7 @@ export class ReferenceService extends AbstractEntityService {
     const { projectId, assetId, allowedMimeTypes, location, issues } = params;
     try {
       const assetFile = await this.jsonFileService.read(
-        pathTo.assetFile(projectId, assetId),
+        this.pathTo.assetFile(projectId, assetId),
         assetFileSchema
       );
       if (
@@ -568,7 +572,7 @@ export class ReferenceService extends AbstractEntityService {
     const { projectId, collectionId, entryId, location, issues } = params;
     try {
       await this.jsonFileService.read(
-        pathTo.entryFile(projectId, collectionId, entryId),
+        this.pathTo.entryFile(projectId, collectionId, entryId),
         entryFileSchema
       );
     } catch (error) {

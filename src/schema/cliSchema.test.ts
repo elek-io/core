@@ -62,6 +62,14 @@ describe('exportSchema projectsSchema', () => {
   });
 });
 
+describe('exportSchema outDir', () => {
+  it('defaults to "./.elek.io" when no value is provided', () => {
+    const result = exportSchema.parse(baseInput);
+
+    expect(result.outDir).toBe('./.elek.io');
+  });
+});
+
 describe('exportSchema template', () => {
   it('defaults to "nested" when no value is provided', () => {
     const result = exportSchema.parse(baseInput);

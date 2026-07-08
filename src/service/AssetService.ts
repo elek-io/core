@@ -28,8 +28,8 @@ import {
   type GitCommit,
   assetHistorySchema,
 } from '../schema/index.js';
+import type { PathTo } from '../util/node.js';
 import { applyMigrations, assetMigrations } from './migrations/index.js';
-import { pathTo } from '../util/node.js';
 import { datetime, slug, uuid, CoreError } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { ReferenceService } from './ReferenceService.js';
@@ -47,6 +47,7 @@ export class AssetService extends AbstractEntityService {
   constructor(
     coreVersion: string,
     options: ElekIoCoreOptions,
+    pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
     gitService: GitService,
@@ -55,6 +56,7 @@ export class AssetService extends AbstractEntityService {
     super(
       serviceTypeSchema.enum.Asset,
       options,
+      pathTo,
       logService,
       gitService,
       jsonFileService
@@ -74,15 +76,18 @@ export class AssetService extends AbstractEntityService {
       props,
       async (validatedProps) => {
         const id = uuid();
-        const projectPath = pathTo.project(validatedProps.projectId);
+        const projectPath = this.pathTo.project(validatedProps.projectId);
         const fileType = this.getFileType(validatedProps.filePath);
 
-        const assetPath = pathTo.asset(
+        const assetPath = this.pathTo.asset(
           validatedProps.projectId,
           id,
           fileType.extension
         );
-        const assetFilePath = pathTo.assetFile(validatedProps.projectId, id);
+        const assetFilePath = this.pathTo.assetFile(
+          validatedProps.projectId,
+          id
+        );
 
         const {
           projectId: _,
@@ -131,24 +136,24 @@ export class AssetService extends AbstractEntityService {
     return this.validated('read', readAssetSchema, props, async () => {
       if (!props.commitHash) {
         const assetFile = await this.jsonFileService.read(
-          pathTo.assetFile(props.projectId, props.id),
+          this.pathTo.assetFile(props.projectId, props.id),
           assetFileSchema
         );
         return this.toAsset(props.projectId, assetFile);
       } else {
         const content = await this.gitService.getFileContentAtCommit(
-          pathTo.project(props.projectId),
-          pathTo.assetFile(props.projectId, props.id),
+          this.pathTo.project(props.projectId),
+          this.pathTo.assetFile(props.projectId, props.id),
           props.commitHash
         );
         const assetFile = this.migrate(JSON.parse(content));
-        const assetPath = pathTo.asset(
+        const assetPath = this.pathTo.asset(
           props.projectId,
           props.id,
           assetFile.extension
         );
         let blob = await this.gitService.getFileContentAtCommit(
-          pathTo.project(props.projectId),
+          this.pathTo.project(props.projectId),
           assetPath,
           props.commitHash,
           'binary'
@@ -157,13 +162,17 @@ export class AssetService extends AbstractEntityService {
         // pointer text. Resolve it to the real bytes from the local LFS store.
         if (this.gitService.lfs.isPointer(blob)) {
           blob = await this.gitService.lfs.smudge(
-            pathTo.project(props.projectId),
+            this.pathTo.project(props.projectId),
             blob,
             assetPath
           );
         }
         await Fs.writeFile(
-          pathTo.tmpAsset(assetFile.id, props.commitHash, assetFile.extension),
+          this.pathTo.tmpAsset(
+            assetFile.id,
+            props.commitHash,
+            assetFile.extension
+          ),
           blob,
           'binary'
         );
@@ -177,8 +186,8 @@ export class AssetService extends AbstractEntityService {
    */
   public history(props: AssetHistoryProps): Promise<GitCommit[]> {
     return this.validated('history', assetHistorySchema, props, async () => {
-      return this.gitService.log(pathTo.project(props.projectId), {
-        filePath: pathTo.assetFile(props.projectId, props.id),
+      return this.gitService.log(this.pathTo.project(props.projectId), {
+        filePath: this.pathTo.assetFile(props.projectId, props.id),
       });
     });
   }
@@ -204,8 +213,8 @@ export class AssetService extends AbstractEntityService {
       updateAssetSchema,
       props,
       async (validatedProps) => {
-        const projectPath = pathTo.project(validatedProps.projectId);
-        const assetFilePath = pathTo.assetFile(
+        const projectPath = this.pathTo.project(validatedProps.projectId);
+        const assetFilePath = this.pathTo.assetFile(
           validatedProps.projectId,
           validatedProps.id
         );
@@ -227,12 +236,12 @@ export class AssetService extends AbstractEntityService {
           if (validatedProps.newFilePath) {
             const fileType = this.getFileType(validatedProps.newFilePath);
 
-            const prevAssetPath = pathTo.asset(
+            const prevAssetPath = this.pathTo.asset(
               validatedProps.projectId,
               validatedProps.id,
               prevAsset.extension
             );
-            const assetPath = pathTo.asset(
+            const assetPath = this.pathTo.asset(
               validatedProps.projectId,
               validatedProps.id,
               fileType.extension
@@ -303,9 +312,9 @@ export class AssetService extends AbstractEntityService {
         );
       }
 
-      const projectPath = pathTo.project(props.projectId);
-      const assetFilePath = pathTo.assetFile(props.projectId, props.id);
-      const assetPath = pathTo.asset(
+      const projectPath = this.pathTo.project(props.projectId);
+      const assetFilePath = this.pathTo.assetFile(props.projectId, props.id);
+      const assetPath = this.pathTo.asset(
         props.projectId,
         props.id,
         props.extension
@@ -393,8 +402,8 @@ export class AssetService extends AbstractEntityService {
     commitHash?: string
   ): Asset {
     const assetPath = commitHash
-      ? pathTo.tmpAsset(assetFile.id, commitHash, assetFile.extension)
-      : pathTo.asset(projectId, assetFile.id, assetFile.extension);
+      ? this.pathTo.tmpAsset(assetFile.id, commitHash, assetFile.extension)
+      : this.pathTo.asset(projectId, assetFile.id, assetFile.extension);
 
     return {
       ...assetFile,

@@ -8,6 +8,7 @@ import {
   createProject,
   ensureCleanGitStatus,
   getFileHash,
+  tmpDirPath,
 } from '../test/util.js';
 
 describe('AssetService', function () {
@@ -201,7 +202,10 @@ describe('AssetService', function () {
   });
 
   it('should be able to save the current Asset version on disk', async function () {
-    const filePathToSaveTo = Path.join(Os.homedir(), `saved-asset.jpg`);
+    // assets.save copies without creating parent directories
+    const saveDir = tmpDirPath();
+    await Fs.ensureDir(saveDir);
+    const filePathToSaveTo = Path.join(saveDir, 'saved-asset.jpg');
 
     await core.assets.save({
       projectId: project.id,
@@ -220,9 +224,11 @@ describe('AssetService', function () {
   });
 
   it('should be able to save an Asset from history on disk', async function () {
+    const saveDir = tmpDirPath();
+    await Fs.ensureDir(saveDir);
     const filePathToSaveToFromHistory = Path.join(
-      Os.homedir(),
-      `saved-asset-from-history.png`
+      saveDir,
+      'saved-asset-from-history.png'
     );
 
     const history = await core.assets.history({
@@ -348,7 +354,11 @@ describe('AssetService robustness', function () {
     } finally {
       // Restore the working tree so the clean-status check in afterEach passes,
       // even if the assertion above fails.
-      await core.git.reset(core.util.pathTo.project(project.id), 'hard', 'HEAD');
+      await core.git.reset(
+        core.util.pathTo.project(project.id),
+        'hard',
+        'HEAD'
+      );
     }
   });
 });

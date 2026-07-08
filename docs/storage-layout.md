@@ -6,7 +6,7 @@ For the data model these files represent, see [`concepts.md`](./concepts.md).
 
 ## Root locations
 
-Core works under a single directory in the user's home folder, `~/elek.io`. The `pathTo` helper (`src/util/node.ts`, exposed as `core.util.pathTo`) builds every path from there:
+Core works under a single data directory, `~/elek.io` by default. The root is configurable with the `dataDir` constructor option or the `ELEK_IO_DATA_DIR` environment variable, see [`usage.md`](./usage.md#options). The `pathTo` helper (`src/util/node.ts`, exposed as `core.util.pathTo`) builds every path from the resolved root. With the default root:
 
 | Path                 | Resolves to                      | Holds                                      |
 | -------------------- | -------------------------------- | ------------------------------------------ |
@@ -15,7 +15,7 @@ Core works under a single directory in the user's home folder, `~/elek.io`. The 
 | `pathTo.userFile`    | `~/elek.io/user.json`            | The current User set via `core.user.set()` |
 | `pathTo.tmp`         | `~/elek.io/tmp`                  | Scratch space (emptied on Core startup)    |
 
-The User file is global, not per-Project. There is one `user.json` for the machine.
+The User file is global, not per-Project. There is one `user.json` per data directory.
 
 ## A Project on disk
 

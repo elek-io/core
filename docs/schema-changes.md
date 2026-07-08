@@ -22,16 +22,16 @@ When you call `core.collections.update()` or `core.components.update()`, always 
 
 Core diffs old vs new definitions into three categories - `added`, `removed`, `updated` (any property differs) - and transforms each affected Entry accordingly.
 
-| Change                                      | Effect on existing Entries                                                       | Data loss?            | Needs resolution?                                              |
-| ------------------------------------------- | -------------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------------- |
-| **Add** an optional field                   | Value populated with the default (or `null` / empty per language)                | No                    | No                                                             |
-| **Add** a required field with a default     | Value populated with the default, replicated to every language                   | No                    | No                                                             |
-| **Add** a required field, no default        | -                                                                                | No                    | **Yes** (`missing_required`)                                   |
-| **Remove** a field                          | Value is dropped from every Entry                                                | **Yes, permanent**    | No (silent)                                                    |
-| **Rename** a field's `slug` (same `id`)     | Value is moved to the new slug, content preserved                                | No                    | No                                                             |
-| **Change** a field's type / constraints     | Old value re-validated against the new schema, kept if it passes                 | Only if it can't pass | **Yes** if it fails (`type_mismatch` / `constraint_violation`) |
-| **Turn** a field unique (`isUnique` on, or add a `slug` field) | Existing values scanned for cross-Entry duplicates per language | No | **Yes** if duplicates exist (`unique_collision`) |
-| **Narrow** `ofComponents` / `ofCollections` | Component items / Entry references no longer allowed are stripped (per language) | **Yes, permanent**    | No (silent)                                                    |
+| Change                                                         | Effect on existing Entries                                                       | Data loss?            | Needs resolution?                                              |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------------- |
+| **Add** an optional field                                      | Value populated with the default (or `null` / empty per language)                | No                    | No                                                             |
+| **Add** a required field with a default                        | Value populated with the default, replicated to every language                   | No                    | No                                                             |
+| **Add** a required field, no default                           | -                                                                                | No                    | **Yes** (`missing_required`)                                   |
+| **Remove** a field                                             | Value is dropped from every Entry                                                | **Yes, permanent**    | No (silent)                                                    |
+| **Rename** a field's `slug` (same `id`)                        | Value is moved to the new slug, content preserved                                | No                    | No                                                             |
+| **Change** a field's type / constraints                        | Old value re-validated against the new schema, kept if it passes                 | Only if it can't pass | **Yes** if it fails (`type_mismatch` / `constraint_violation`) |
+| **Turn** a field unique (`isUnique` on, or add a `slug` field) | Existing values scanned for cross-Entry duplicates per language                  | No                    | **Yes** if duplicates exist (`unique_collision`)               |
+| **Narrow** `ofComponents` / `ofCollections`                    | Component items / Entry references no longer allowed are stripped (per language) | **Yes, permanent**    | No (silent)                                                    |
 
 ### Deterministic transforms are applied automatically
 

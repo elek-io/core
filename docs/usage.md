@@ -24,7 +24,7 @@ const core = new ElekIoCore();
 
 ### Options
 
-The constructor accepts an optional options object. Both fields are optional and default as shown.
+The constructor accepts an optional options object. All fields are optional and default as shown.
 
 ```typescript
 const core = new ElekIoCore({
@@ -34,10 +34,23 @@ const core = new ElekIoCore({
   file: {
     cache: true, // cache files in memory to speed up access - default true
   },
+  dataDir: '/path/to/data', // directory Core reads and writes data in - default ~/elek.io
 });
 ```
 
 The resolved options are exposed on `core.options`, and the running Core version on `core.coreVersion`.
+
+`dataDir` sets the data directory everything lives in, see [`storage-layout.md`](./storage-layout.md). It takes precedence over the `ELEK_IO_DATA_DIR` environment variable, which takes precedence over the default `~/elek.io`. Relative paths are resolved against the current working directory once at construction. `~` is not expanded, that is a shell feature, so pass an absolute path or let the shell expand it. The directory does not need to exist, Core creates it. An empty or whitespace-only value throws a `CoreError`. The resolved absolute path is exposed as `core.options.dataDir`, and `core.util.pathTo` builds every path from it.
+
+### Environment variables
+
+Core reads its environment variables once at construction, never at import. All of them use the `ELEK_IO_` prefix with SCREAMING_SNAKE_CASE names. An empty or whitespace-only value counts as unset. When a constructor option covers the same setting, the option wins over the environment.
+
+| Variable           | Purpose                                     | Default     |
+| ------------------ | ------------------------------------------- | ----------- |
+| `ELEK_IO_DATA_DIR` | The directory Core reads and writes data in | `~/elek.io` |
+
+The environment variable is what makes a packaged app configurable from the outside. For example, an end to end test can point a packaged Electron app at a disposable data directory by injecting `ELEK_IO_DATA_DIR` at launch, without redirecting `HOME` or adding test-only code paths.
 
 ## Setting the User (required before writing)
 
@@ -267,6 +280,8 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
 
+The global `--data-dir <path>` option sets the data directory for any command, e.g. `elek --data-dir /path/to/data export`. It overrides the `ELEK_IO_DATA_DIR` environment variable and defaults to `~/elek.io`, see [Options](#options).
+
 Generated clients and types narrow translatable content to the Project's languages (`Record<ProjectLanguage, T>`) rather than Core's broad exported types.
 
 ## Astro integration
@@ -293,6 +308,8 @@ export const collections = {
   }),
 };
 ```
+
+Both loaders accept a `core` property with the same options as the `ElekIoCore` constructor, so `elekEntries({ ..., core: { dataDir: '/path/to/data' } })` reads from a custom data directory. Note that all loaders share one Core instance, created by whichever loader runs first. Later `core` options are silently ignored, so pass identical `core` options to every loader or leave them off entirely. To change the data directory, prefer setting `ELEK_IO_DATA_DIR` in the build environment, which applies no matter which loader runs first.
 
 For rendering `markdown` field Values (including the required `html`, `assetReference` and `entryReference` handlers), see [`markdown-content.md`](./markdown-content.md).
 

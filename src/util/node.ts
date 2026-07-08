@@ -6,94 +6,99 @@ import { projectFolderSchema } from '../schema/projectSchema.js';
 import type { LogService } from '../service/LogService.js';
 
 /**
- * The directory in which everything is stored and will be worked in
+ * Resolves the data directory Core reads and writes data in
  *
- * @todo make the workingDirectory an elek option to be set via app.getPath('home') (electron instead of node)?
+ * Precedence: the given directory wins over the ELEK_IO_DATA_DIR
+ * environment variable, which wins over the default `~/elek.io`.
+ * An empty or whitespace-only value counts as unset, for the
+ * argument and the environment variable alike.
+ * Relative paths are resolved against the current working directory.
  */
-export const workingDirectory = Path.join(Os.homedir(), 'elek.io');
+export function resolveDataDir(dataDir?: string): string {
+  const fromArg = dataDir?.trim();
+  const fromEnv = process.env['ELEK_IO_DATA_DIR']?.trim();
+  return Path.resolve(fromArg || fromEnv || Path.join(Os.homedir(), 'elek.io'));
+}
 
 /**
- * A collection of often used paths
+ * Creates a collection of often used paths, rooted at the given data directory
  */
-export const pathTo = {
-  tmp: Path.join(workingDirectory, 'tmp'),
-  userFile: Path.join(workingDirectory, 'user.json'),
-  logs: Path.join(workingDirectory, 'logs'),
+export function createPathTo(dataDir: string) {
+  const pathTo = {
+    tmp: Path.join(dataDir, 'tmp'),
+    userFile: Path.join(dataDir, 'user.json'),
+    logs: Path.join(dataDir, 'logs'),
 
-  projects: Path.join(workingDirectory, 'projects'),
-  project: (projectId: string): string => {
-    return Path.join(pathTo.projects, projectId);
-  },
-  projectFile: (projectId: string): string => {
-    return Path.join(pathTo.project(projectId), 'project.json');
-  },
-  // projectLogs: (projectId: string): string => {
-  //   return Path.join(pathTo.project(projectId), projectFolderSchema.enum.logs);
-  // },
+    projects: Path.join(dataDir, 'projects'),
+    project: (projectId: string): string => {
+      return Path.join(pathTo.projects, projectId);
+    },
+    projectFile: (projectId: string): string => {
+      return Path.join(pathTo.project(projectId), 'project.json');
+    },
 
-  // public: (projectId: string): string => {
-  //   return Path.join(pathTo.project(projectId), 'public');
-  // },
+    lfs: (projectId: string): string => {
+      return Path.join(pathTo.project(projectId), projectFolderSchema.enum.lfs);
+    },
 
-  lfs: (projectId: string): string => {
-    return Path.join(pathTo.project(projectId), projectFolderSchema.enum.lfs);
-  },
+    components: (projectId: string): string => {
+      return Path.join(
+        pathTo.project(projectId),
+        projectFolderSchema.enum.components
+      );
+    },
+    component: (projectId: string, id: string) => {
+      return Path.join(pathTo.components(projectId), id);
+    },
+    componentFile: (projectId: string, id: string) => {
+      return Path.join(pathTo.component(projectId, id), 'component.json');
+    },
+    componentIndex: (projectId: string) => {
+      return Path.join(pathTo.components(projectId), 'slug.index.json');
+    },
 
-  components: (projectId: string): string => {
-    return Path.join(
-      pathTo.project(projectId),
-      projectFolderSchema.enum.components
-    );
-  },
-  component: (projectId: string, id: string) => {
-    return Path.join(pathTo.components(projectId), id);
-  },
-  componentFile: (projectId: string, id: string) => {
-    return Path.join(pathTo.component(projectId, id), 'component.json');
-  },
-  componentIndex: (projectId: string) => {
-    return Path.join(pathTo.components(projectId), 'slug.index.json');
-  },
+    collections: (projectId: string): string => {
+      return Path.join(
+        pathTo.project(projectId),
+        projectFolderSchema.enum.collections
+      );
+    },
+    collection: (projectId: string, id: string) => {
+      return Path.join(pathTo.collections(projectId), id);
+    },
+    collectionFile: (projectId: string, id: string) => {
+      return Path.join(pathTo.collection(projectId, id), 'collection.json');
+    },
+    collectionIndex: (projectId: string) => {
+      return Path.join(pathTo.collections(projectId), 'slug.index.json');
+    },
 
-  collections: (projectId: string): string => {
-    return Path.join(
-      pathTo.project(projectId),
-      projectFolderSchema.enum.collections
-    );
-  },
-  collection: (projectId: string, id: string) => {
-    return Path.join(pathTo.collections(projectId), id);
-  },
-  collectionFile: (projectId: string, id: string) => {
-    return Path.join(pathTo.collection(projectId, id), 'collection.json');
-  },
-  collectionIndex: (projectId: string) => {
-    return Path.join(pathTo.collections(projectId), 'slug.index.json');
-  },
+    entries: (projectId: string, collectionId: string): string => {
+      return Path.join(pathTo.collection(projectId, collectionId));
+    },
+    entryFile: (projectId: string, collectionId: string, id: string) => {
+      return Path.join(pathTo.entries(projectId, collectionId), `${id}.json`);
+    },
 
-  entries: (projectId: string, collectionId: string): string => {
-    return Path.join(pathTo.collection(projectId, collectionId));
-  },
-  entryFile: (projectId: string, collectionId: string, id: string) => {
-    return Path.join(pathTo.entries(projectId, collectionId), `${id}.json`);
-  },
-
-  assets: (projectId: string): string => {
-    return Path.join(
-      pathTo.project(projectId),
-      projectFolderSchema.enum.assets
-    );
-  },
-  assetFile: (projectId: string, id: string): string => {
-    return Path.join(pathTo.assets(projectId), `${id}.json`);
-  },
-  asset: (projectId: string, id: string, extension: string): string => {
-    return Path.join(pathTo.lfs(projectId), `${id}.${extension}`);
-  },
-  tmpAsset: (id: string, commitHash: string, extension: string) => {
-    return Path.join(pathTo.tmp, `${id}.${commitHash}.${extension}`);
-  },
-};
+    assets: (projectId: string): string => {
+      return Path.join(
+        pathTo.project(projectId),
+        projectFolderSchema.enum.assets
+      );
+    },
+    assetFile: (projectId: string, id: string): string => {
+      return Path.join(pathTo.assets(projectId), `${id}.json`);
+    },
+    asset: (projectId: string, id: string, extension: string): string => {
+      return Path.join(pathTo.lfs(projectId), `${id}.${extension}`);
+    },
+    tmpAsset: (id: string, commitHash: string, extension: string) => {
+      return Path.join(pathTo.tmp, `${id}.${commitHash}.${extension}`);
+    },
+  };
+  return pathTo;
+}
+export type PathTo = ReturnType<typeof createPathTo>;
 
 /**
  * Used as parameter for filter() methods to assure,

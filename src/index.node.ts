@@ -20,7 +20,8 @@ import {
   UserService,
 } from './service/index.js';
 import { LogService } from './service/LogService.js';
-import * as Util from './util/node.js';
+import { createPathTo, resolveDataDir, type PathTo } from './util/node.js';
+import { CoreError } from './util/shared.js';
 
 // Export all schemas and shared code that works inside node environments,
 // including code that requires filesystem access / git integration etc.
@@ -35,6 +36,8 @@ export * from './util/shared.js';
 export default class ElekIoCore {
   public readonly coreVersion: Version;
   public readonly options: ElekIoCoreOptions;
+  private readonly pathTo: PathTo;
+  private readonly utilities: { pathTo: PathTo };
   private readonly logService: LogService;
   private readonly userService: UserService;
   private readonly gitService: GitService;
@@ -50,23 +53,33 @@ export default class ElekIoCore {
 
   constructor(props?: ConstructorElekIoCoreProps) {
     this.coreVersion = packageJson.default.version;
-    const parsedProps = constructorElekIoCoreSchema.parse(props);
+    const parsedProps = constructorElekIoCoreSchema.safeParse(props);
+    if (parsedProps.success === false) {
+      throw CoreError.badRequest(parsedProps.error.message, parsedProps.error);
+    }
 
-    const defaults: ElekIoCoreOptions = {
-      log: {
-        level: 'info',
-      },
-      file: {
-        cache: true,
-      },
+    this.options = {
+      log: parsedProps.data?.log ?? { level: 'info' },
+      file: parsedProps.data?.file ?? { cache: true },
+      dataDir: resolveDataDir(parsedProps.data?.dataDir),
     };
-    this.options = Object.assign({}, defaults, parsedProps);
+    this.pathTo = createPathTo(this.options.dataDir);
+    this.utilities = { pathTo: this.pathTo };
 
-    this.logService = new LogService(this.options);
-    this.jsonFileService = new JsonFileService(this.options, this.logService);
-    this.userService = new UserService(this.logService, this.jsonFileService);
+    this.logService = new LogService(this.options, this.pathTo);
+    this.jsonFileService = new JsonFileService(
+      this.options,
+      this.pathTo,
+      this.logService
+    );
+    this.userService = new UserService(
+      this.pathTo,
+      this.logService,
+      this.jsonFileService
+    );
     this.gitService = new GitService(
       this.options,
+      this.pathTo,
       this.logService,
       this.userService,
       this.jsonFileService
@@ -74,6 +87,7 @@ export default class ElekIoCore {
     this.referenceService = new ReferenceService(
       this.coreVersion,
       this.options,
+      this.pathTo,
       this.logService,
       this.gitService,
       this.jsonFileService
@@ -81,6 +95,7 @@ export default class ElekIoCore {
     this.collectionService = new CollectionService(
       this.coreVersion,
       this.options,
+      this.pathTo,
       this.logService,
       this.jsonFileService,
       this.gitService,
@@ -89,6 +104,7 @@ export default class ElekIoCore {
     this.componentService = new ComponentService(
       this.coreVersion,
       this.options,
+      this.pathTo,
       this.logService,
       this.jsonFileService,
       this.gitService
@@ -96,6 +112,7 @@ export default class ElekIoCore {
     this.entryService = new EntryService(
       this.coreVersion,
       this.options,
+      this.pathTo,
       this.logService,
       this.jsonFileService,
       this.gitService,
@@ -106,6 +123,7 @@ export default class ElekIoCore {
     this.assetService = new AssetService(
       this.coreVersion,
       this.options,
+      this.pathTo,
       this.logService,
       this.jsonFileService,
       this.gitService,
@@ -114,6 +132,7 @@ export default class ElekIoCore {
     this.projectService = new ProjectService(
       this.coreVersion,
       this.options,
+      this.pathTo,
       this.logService,
       this.jsonFileService,
       this.gitService,
@@ -125,6 +144,7 @@ export default class ElekIoCore {
     );
     this.releaseService = new ReleaseService(
       this.options,
+      this.pathTo,
       this.logService,
       this.gitService,
       this.jsonFileService,
@@ -145,9 +165,9 @@ export default class ElekIoCore {
       meta: { options: this.options },
     });
 
-    Fs.mkdirpSync(Util.pathTo.projects);
-    Fs.mkdirpSync(Util.pathTo.tmp);
-    Fs.emptyDirSync(Util.pathTo.tmp);
+    Fs.mkdirpSync(this.pathTo.projects);
+    Fs.mkdirpSync(this.pathTo.tmp);
+    Fs.emptyDirSync(this.pathTo.tmp);
   }
 
   /**
@@ -159,9 +179,11 @@ export default class ElekIoCore {
 
   /**
    * Utility / helper functions
+   *
+   * The exposed pathTo is rooted at this instances resolved dataDir
    */
   public get util() {
-    return Util;
+    return this.utilities;
   }
 
   /**
