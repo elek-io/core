@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { uuid } from '../test/setup.js';
 import {
+  emailFieldDefinitionSchema,
   markdownFieldDefinitionSchema,
   numberFieldDefinitionSchema,
   rangeFieldDefinitionSchema,
@@ -484,5 +485,85 @@ describe('rangeFieldDefinitionSchema defaultValue range refinement', () => {
         makeRangeFieldDef({ min: 0, max: 10, defaultValue: 999 })
       )
     ).toThrow();
+  });
+});
+
+describe('unique string fields cannot carry a default (per field type)', () => {
+  // The Add Field editor validates against the per-type leaf schema, so the
+  // unique/default rule has to live there, not only on the string union.
+  const makeUniqueTextFieldDef = (overrides: {
+    isUnique?: boolean;
+    defaultValue?: string | null;
+  }) => ({
+    id: uuid(),
+    slug: 'sku',
+    valueType: 'string' as const,
+    fieldType: 'text' as const,
+    label: { en: 'SKU' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: overrides.isUnique ?? false,
+    inputWidth: '12' as const,
+    min: null,
+    max: null,
+    defaultValue: overrides.defaultValue ?? null,
+  });
+
+  const makeUniqueEmailFieldDef = (overrides: {
+    isUnique?: boolean;
+    defaultValue?: string | null;
+  }) => ({
+    id: uuid(),
+    slug: 'contact',
+    valueType: 'string' as const,
+    fieldType: 'email' as const,
+    label: { en: 'Contact' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: overrides.isUnique ?? false,
+    inputWidth: '12' as const,
+    defaultValue: overrides.defaultValue ?? null,
+  });
+
+  it('rejects a unique text field with a non-null default at the leaf schema', () => {
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeUniqueTextFieldDef({ isUnique: true, defaultValue: 'foo' })
+      )
+    ).toThrow(/unique field cannot have a default/i);
+  });
+
+  it('accepts a unique text field with a null default', () => {
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeUniqueTextFieldDef({ isUnique: true, defaultValue: null })
+      )
+    ).not.toThrow();
+  });
+
+  it('accepts a non-unique text field with a default', () => {
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeUniqueTextFieldDef({ isUnique: false, defaultValue: 'foo' })
+      )
+    ).not.toThrow();
+  });
+
+  it('rejects a unique email field with a non-null default at the leaf schema', () => {
+    expect(() =>
+      emailFieldDefinitionSchema.parse(
+        makeUniqueEmailFieldDef({ isUnique: true, defaultValue: 'a@b.com' })
+      )
+    ).toThrow(/unique field cannot have a default/i);
+  });
+
+  it('accepts a non-unique email field with a valid default', () => {
+    expect(() =>
+      emailFieldDefinitionSchema.parse(
+        makeUniqueEmailFieldDef({ isUnique: false, defaultValue: 'a@b.com' })
+      )
+    ).not.toThrow();
   });
 });
