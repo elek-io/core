@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { uuid } from '../test/setup.js';
 import {
   markdownFieldDefinitionSchema,
+  numberFieldDefinitionSchema,
+  rangeFieldDefinitionSchema,
   resolveOfComponents,
   stringSelectFieldDefinitionSchema,
+  textFieldDefinitionSchema,
   type DynamicFieldDefinition,
 } from './fieldSchema.js';
 import type { MarkdownFeatures } from './buildMdAstSchema.js';
@@ -271,6 +274,215 @@ describe('stringSelectFieldDefinitionSchema defaultValue refinement', () => {
   it('rejects a non-null defaultValue that is not among the options', () => {
     expect(() =>
       stringSelectFieldDefinitionSchema.parse(makeSelectFieldDef('c'))
+    ).toThrow();
+  });
+});
+
+describe('textFieldDefinitionSchema defaultValue length refinement', () => {
+  const makeTextFieldDef = (overrides: {
+    min?: number | null;
+    max?: number | null;
+    defaultValue?: string | null;
+  }) => ({
+    id: uuid(),
+    slug: 'title',
+    valueType: 'string' as const,
+    fieldType: 'text' as const,
+    label: { en: 'Title' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12' as const,
+    min: overrides.min ?? null,
+    max: overrides.max ?? null,
+    defaultValue: overrides.defaultValue ?? null,
+  });
+
+  it('accepts a null defaultValue even when min and max are set', () => {
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeTextFieldDef({ min: 2, max: 5, defaultValue: null })
+      )
+    ).not.toThrow();
+  });
+
+  it('accepts a defaultValue whose length is within the range', () => {
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeTextFieldDef({ min: 2, max: 5, defaultValue: 'abc' })
+      )
+    ).not.toThrow();
+  });
+
+  it('accepts a defaultValue length equal to min or max', () => {
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeTextFieldDef({ min: 2, max: 5, defaultValue: 'ab' })
+      )
+    ).not.toThrow();
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeTextFieldDef({ min: 2, max: 5, defaultValue: 'abcde' })
+      )
+    ).not.toThrow();
+  });
+
+  it('accepts any defaultValue when min and max are null', () => {
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeTextFieldDef({ defaultValue: 'anything at all' })
+      )
+    ).not.toThrow();
+  });
+
+  it('rejects a defaultValue shorter than min', () => {
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeTextFieldDef({ min: 3, defaultValue: 'ab' })
+      )
+    ).toThrow();
+  });
+
+  it('rejects a defaultValue longer than max', () => {
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeTextFieldDef({ max: 3, defaultValue: 'abcd' })
+      )
+    ).toThrow();
+  });
+});
+
+describe('numberFieldDefinitionSchema defaultValue range refinement', () => {
+  const makeNumberFieldDef = (overrides: {
+    min?: number | null;
+    max?: number | null;
+    defaultValue?: number | null;
+  }) => ({
+    id: uuid(),
+    slug: 'quantity',
+    valueType: 'number' as const,
+    fieldType: 'number' as const,
+    label: { en: 'Count' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false as const,
+    inputWidth: '12' as const,
+    min: overrides.min ?? null,
+    max: overrides.max ?? null,
+    defaultValue: overrides.defaultValue ?? null,
+  });
+
+  it('accepts a null defaultValue even when min and max are set', () => {
+    expect(() =>
+      numberFieldDefinitionSchema.parse(
+        makeNumberFieldDef({ min: 0, max: 10, defaultValue: null })
+      )
+    ).not.toThrow();
+  });
+
+  it('accepts a defaultValue within the range', () => {
+    expect(() =>
+      numberFieldDefinitionSchema.parse(
+        makeNumberFieldDef({ min: 0, max: 10, defaultValue: 5 })
+      )
+    ).not.toThrow();
+  });
+
+  it('accepts a defaultValue equal to min or max', () => {
+    expect(() =>
+      numberFieldDefinitionSchema.parse(
+        makeNumberFieldDef({ min: 0, max: 10, defaultValue: 0 })
+      )
+    ).not.toThrow();
+    expect(() =>
+      numberFieldDefinitionSchema.parse(
+        makeNumberFieldDef({ min: 0, max: 10, defaultValue: 10 })
+      )
+    ).not.toThrow();
+  });
+
+  it('accepts any defaultValue when min and max are null', () => {
+    expect(() =>
+      numberFieldDefinitionSchema.parse(
+        makeNumberFieldDef({ defaultValue: 9999 })
+      )
+    ).not.toThrow();
+  });
+
+  it('rejects a defaultValue below min', () => {
+    expect(() =>
+      numberFieldDefinitionSchema.parse(
+        makeNumberFieldDef({ min: 0, defaultValue: -1 })
+      )
+    ).toThrow();
+  });
+
+  it('rejects a defaultValue above max', () => {
+    expect(() =>
+      numberFieldDefinitionSchema.parse(
+        makeNumberFieldDef({ max: 10, defaultValue: 11 })
+      )
+    ).toThrow();
+  });
+});
+
+describe('rangeFieldDefinitionSchema defaultValue range refinement', () => {
+  const makeRangeFieldDef = (overrides: {
+    min: number;
+    max: number;
+    defaultValue: number;
+  }) => ({
+    id: uuid(),
+    slug: 'volume',
+    valueType: 'number' as const,
+    fieldType: 'range' as const,
+    label: { en: 'Volume' },
+    description: null,
+    isRequired: true as const,
+    isDisabled: false,
+    isUnique: false as const,
+    inputWidth: '12' as const,
+    min: overrides.min,
+    max: overrides.max,
+    defaultValue: overrides.defaultValue,
+  });
+
+  it('accepts a defaultValue within the range', () => {
+    expect(() =>
+      rangeFieldDefinitionSchema.parse(
+        makeRangeFieldDef({ min: 0, max: 10, defaultValue: 5 })
+      )
+    ).not.toThrow();
+  });
+
+  it('accepts a defaultValue equal to min or max', () => {
+    expect(() =>
+      rangeFieldDefinitionSchema.parse(
+        makeRangeFieldDef({ min: 0, max: 10, defaultValue: 0 })
+      )
+    ).not.toThrow();
+    expect(() =>
+      rangeFieldDefinitionSchema.parse(
+        makeRangeFieldDef({ min: 0, max: 10, defaultValue: 10 })
+      )
+    ).not.toThrow();
+  });
+
+  it('rejects a defaultValue below min', () => {
+    expect(() =>
+      rangeFieldDefinitionSchema.parse(
+        makeRangeFieldDef({ min: 0, max: 10, defaultValue: -1 })
+      )
+    ).toThrow();
+  });
+
+  it('rejects a defaultValue above max', () => {
+    expect(() =>
+      rangeFieldDefinitionSchema.parse(
+        makeRangeFieldDef({ min: 0, max: 10, defaultValue: 999 })
+      )
     ).toThrow();
   });
 });

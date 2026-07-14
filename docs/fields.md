@@ -74,7 +74,7 @@ Single-line text input with optional length bounds.
 }
 ```
 
-Validation: when both `min` and `max` are set, `min` must be ≤ `max`.
+Validation: when both `min` and `max` are set, `min` must be ≤ `max`. A non-null `defaultValue` must itself satisfy the length bounds (`min` ≤ `defaultValue.length` ≤ `max`), so a definition cannot ship a default that its own values would reject.
 
 #### `textarea`
 
@@ -172,6 +172,8 @@ All number fields force `isUnique: false`.
 }
 ```
 
+Validation: when both `min` and `max` are set, `min` must be ≤ `max`. A non-null `defaultValue` must fall within the bounds (`min` ≤ `defaultValue` ≤ `max`).
+
 #### `range`
 
 Slider with a required `min`, `max`, and `defaultValue`. Always required (the field type always carries a value).
@@ -187,6 +189,8 @@ Slider with a required `min`, `max`, and `defaultValue`. Always required (the fi
   // ... common properties
 }
 ```
+
+Validation: `min` must be ≤ `max`, and the required `defaultValue` must fall within the bounds (`min` ≤ `defaultValue` ≤ `max`).
 
 #### `select` (number variant)
 

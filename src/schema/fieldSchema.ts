@@ -74,6 +74,52 @@ const minMustBeLessOrEqualMaxRefinement: [
 ];
 
 /**
+ * A string field's default value must respect the same length bounds the value
+ * itself is validated against. Without this a definition could ship a default
+ * that fails on write. min and max are string lengths here, each optional.
+ */
+const stringDefaultLengthWithinRangeRefinement: [
+  (data: {
+    defaultValue: string | null;
+    min: number | null;
+    max: number | null;
+  }) => boolean,
+  { message: string; path: string[] },
+] = [
+  (data) =>
+    data.defaultValue === null ||
+    ((data.min === null || data.defaultValue.length >= data.min) &&
+      (data.max === null || data.defaultValue.length <= data.max)),
+  {
+    message: 'The default value length must be within the min and max range',
+    path: ['defaultValue'],
+  },
+];
+
+/**
+ * A number field's default value must respect the same bounds the value itself
+ * is validated against. Without this a definition could ship a default that
+ * fails on write. min and max are numeric bounds here, each optional.
+ */
+const numberDefaultWithinRangeRefinement: [
+  (data: {
+    defaultValue: number | null;
+    min: number | null;
+    max: number | null;
+  }) => boolean,
+  { message: string; path: string[] },
+] = [
+  (data) =>
+    data.defaultValue === null ||
+    ((data.min === null || data.defaultValue >= data.min) &&
+      (data.max === null || data.defaultValue <= data.max)),
+  {
+    message: 'The default value must be within the min and max range',
+    path: ['defaultValue'],
+  },
+];
+
+/**
  * A unique field may not carry a non-null default value: a shared default
  * could only ever be valid for a single Entry, and adding such a field to a
  * populated Collection would stamp the same value into every Entry at once.
@@ -188,7 +234,8 @@ export const textFieldDefinitionSchema = stringFieldDefinitionBaseSchema
     min: z.int().min(1).nullable(),
     max: z.int().min(1).nullable(),
   })
-  .refine(...minMustBeLessOrEqualMaxRefinement);
+  .refine(...minMustBeLessOrEqualMaxRefinement)
+  .refine(...stringDefaultLengthWithinRangeRefinement);
 export type TextFieldDefinition = z.infer<typeof textFieldDefinitionSchema>;
 
 export const textareaFieldDefinitionSchema = stringFieldDefinitionBaseSchema
@@ -197,7 +244,8 @@ export const textareaFieldDefinitionSchema = stringFieldDefinitionBaseSchema
     min: z.int().min(1).nullable(),
     max: z.int().min(1).nullable(),
   })
-  .refine(...minMustBeLessOrEqualMaxRefinement);
+  .refine(...minMustBeLessOrEqualMaxRefinement)
+  .refine(...stringDefaultLengthWithinRangeRefinement);
 export type TextareaFieldDefinition = z.infer<
   typeof textareaFieldDefinitionSchema
 >;
@@ -318,7 +366,8 @@ export const numberFieldDefinitionSchema = numberFieldDefinitionBaseSchema
   .extend({
     fieldType: z.literal(fieldTypeSchema.enum.number),
   })
-  .refine(...minMustBeLessOrEqualMaxRefinement);
+  .refine(...minMustBeLessOrEqualMaxRefinement)
+  .refine(...numberDefaultWithinRangeRefinement);
 export type NumberFieldDefinition = z.infer<typeof numberFieldDefinitionSchema>;
 
 export const rangeFieldDefinitionSchema = numberFieldDefinitionBaseSchema
@@ -330,7 +379,8 @@ export const rangeFieldDefinitionSchema = numberFieldDefinitionBaseSchema
     max: z.number(),
     defaultValue: z.number(),
   })
-  .refine(...minMustBeLessOrEqualMaxRefinement);
+  .refine(...minMustBeLessOrEqualMaxRefinement)
+  .refine(...numberDefaultWithinRangeRefinement);
 export type RangeFieldDefinition = z.infer<typeof rangeFieldDefinitionSchema>;
 
 export const numberSelectFieldDefinitionSchema = numberFieldDefinitionBaseSchema
