@@ -1,0 +1,5 @@
+# Check out all text files with LF line endings on every platform.
+# Prettier enforces LF, and without this the default autocrlf setting on
+# Windows (including the GitHub Windows runners) converts files to CRLF at
+# checkout, failing the lint and format checks there.
+* text=auto eol=lf
