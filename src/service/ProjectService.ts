@@ -1,5 +1,4 @@
 import Fs from 'fs-extra';
-import Os from 'node:os';
 import Path from 'node:path';
 import Semver from 'semver';
 import type { FileReference, ObjectType, Version } from '../schema/index.js';
@@ -853,6 +852,9 @@ export class ProjectService
   /**
    * Writes the Projects main .gitignore file to disk
    *
+   * Joined with LF instead of `Os.EOL`, so the file is byte identical no
+   * matter which OS created the Project.
+   *
    * @todo Add general things to ignore
    * @see https://github.com/github/gitignore/tree/master/Global
    */
@@ -869,24 +871,32 @@ export class ProjectService
       'collections/slug.index.json',
       'components/slug.index.json',
     ];
-    await Fs.writeFile(Path.join(path, '.gitignore'), lines.join(Os.EOL));
+    await Fs.writeFile(Path.join(path, '.gitignore'), lines.join('\n'));
   }
 
   /**
    * Writes the Projects .gitattributes file to disk
    *
+   * Checks out every text file with LF on every platform. Core writes LF and
+   * is the only writer inside a Project, but `core.autocrlf` is a per machine
+   * git setting Core does not control, so without this a Windows checkout can
+   * still convert files to CRLF. A Project shared across operating systems
+   * would then conflict on every line of every file.
+   *
    * Tracks every binary Asset under `lfs/` with Git LFS so they are stored as
    * pointers in history while the bytes are offloaded. The `.gitkeep`
-   * placeholder is kept out of LFS (last matching pattern wins).
+   * placeholder is kept out of LFS (last matching pattern wins, so the
+   * catch-all above must stay first).
    *
    * @see https://git-lfs.com
    */
   private async createGitattributes(path: string): Promise<void> {
     const lines = [
+      '* text=auto eol=lf',
       'lfs/** filter=lfs diff=lfs merge=lfs -text',
       'lfs/.gitkeep -filter -diff -merge text',
     ];
-    await Fs.writeFile(Path.join(path, '.gitattributes'), lines.join(Os.EOL));
+    await Fs.writeFile(Path.join(path, '.gitattributes'), lines.join('\n'));
   }
 
   private async upgradeObjectFile(
