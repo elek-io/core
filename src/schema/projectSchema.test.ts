@@ -25,4 +25,29 @@ describe('projectSettingsSchema', () => {
       })
     ).toThrow();
   });
+
+  it('rejects a default language that is not supported', () => {
+    expect(() =>
+      projectSettingsSchema.parse({
+        language: { default: 'de', supported: ['en'] },
+      })
+    ).toThrow('Default language must be one of the supported languages');
+  });
+
+  it('reports an unsupported default language on the default key', () => {
+    const result = projectSettingsSchema.safeParse({
+      language: { default: 'de', supported: ['en'] },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['language', 'default']);
+  });
+
+  it('rejects removing the supported language that is still the default', () => {
+    expect(() =>
+      projectSettingsSchema.parse({
+        language: { default: 'de', supported: ['en', 'fr'] },
+      })
+    ).toThrow('Default language must be one of the supported languages');
+  });
 });

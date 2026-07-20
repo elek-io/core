@@ -20,7 +20,7 @@ The data model behind elek.io Core: Projects, Collections, Components, Entries, 
 
 Are a container for Collections, Components, Entries, Values and Assets. Think of a folder containing all the relevant files. Projects are version controlled with git, so you can roll back to previous versions of files at any time.
 
-Each Project declares its supported languages in its settings. Translatable content (admin metadata and Entry Values) is validated against those languages, not the full universe of supported language codes.
+Each Project declares its supported languages in its settings, along with one of them as the default. Translatable content (admin metadata and Entry Values) is validated against those languages, not the full universe of supported language codes.
 
 ## Collections
 
