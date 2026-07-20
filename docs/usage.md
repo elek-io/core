@@ -50,6 +50,8 @@ Core reads its environment variables once at construction, never at import. All 
 | ------------------ | ------------------------------------------- | ----------- |
 | `ELEK_IO_DATA_DIR` | The directory Core reads and writes data in | `~/elek.io` |
 
+On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room. See the limitation in [`features.md`](./features.md#intentional-constraints). macOS and Linux allow 1024 and 4096 characters and are not affected.
+
 The environment variable is what makes a packaged app configurable from the outside. For example, an end to end test can point a packaged Electron app at a disposable data directory by injecting `ELEK_IO_DATA_DIR` at launch, without redirecting `HOME` or adding test-only code paths.
 
 ## Setting the User (required before writing)

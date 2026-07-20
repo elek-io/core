@@ -866,7 +866,14 @@ export class GitService {
   /**
    * Retrieves the content of a file at a specific commit
    *
-   * @see https://git-scm.com/docs/git-show
+   * Reads the blob through `cat-file` instead of `show`. Revision commands like
+   * `show` stat the `<commit>:<path>` argument against the working directory to
+   * tell revisions and filenames apart. That stat adds the length of the commit
+   * hash on top of an already absolute path, which overflows the 260 char limit
+   * on Windows for deep data directories. `cat-file` reads from the object
+   * database and never touches the working tree, so any path length works.
+   *
+   * @see https://git-scm.com/docs/git-cat-file
    */
   public async getFileContentAtCommit(
     path: string,
@@ -879,7 +886,7 @@ export class GitService {
       ''
     );
     const normalizedPath = relativePathFromRepositoryRoot.split('\\').join('/');
-    const args = ['show', `${commitHash}:${normalizedPath}`];
+    const args = ['cat-file', 'blob', `${commitHash}:${normalizedPath}`];
     const setEncoding: (process: ChildProcess) => void = (cb) => {
       if (cb.stdout) {
         cb.stdout.setEncoding(encoding);

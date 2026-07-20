@@ -158,7 +158,7 @@ export class AssetService extends AbstractEntityService {
           props.commitHash,
           'binary'
         );
-        // LFS-tracked binaries are stored as pointers, so `getFileContentAtCommit` (`git show`) returns the
+        // LFS-tracked binaries are stored as pointers, so `getFileContentAtCommit` returns the
         // pointer text. Resolve it to the real bytes from the local LFS store.
         if (this.gitService.lfs.isPointer(blob)) {
           blob = await this.gitService.lfs.smudge(

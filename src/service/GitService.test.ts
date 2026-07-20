@@ -27,6 +27,37 @@ describe('GitService', function () {
     await Fs.remove(remoteProjectPath);
   });
 
+  // Reading a blob must not let git interpret `<commit>:<path>` as a filename.
+  // git's revision commands stat that argument against the working directory to
+  // tell revisions and filenames apart, which made long Project paths fail on
+  // Windows once the stat exceeded the 260 char limit. Reading through
+  // `git cat-file` avoids the stat entirely.
+  // Skipped on Windows, where a colon cannot be part of a filename, so the
+  // ambiguity this proves cannot be set up there.
+  it.skipIf(process.platform === 'win32')(
+    'should be able to get the content of a file at a commit, even if the working tree holds a file named like the argument',
+    async function () {
+      const commitHash = (await core.git.log(projectPath, { limit: 1 }))[0]
+        ?.hash;
+      if (!commitHash) {
+        throw new Error('No commit hash found');
+      }
+      const decoyPath = Path.join(projectPath, `${commitHash}:project.json`);
+      await Fs.writeFile(decoyPath, 'decoy');
+
+      const content = await core.git.getFileContentAtCommit(
+        projectPath,
+        core.util.pathTo.projectFile(project.id),
+        commitHash
+      );
+
+      const projectFile: unknown = JSON.parse(content);
+      expect(projectFile).toMatchObject({ id: project.id });
+
+      await Fs.remove(decoyPath);
+    }
+  );
+
   it('should be able to get the current Branch name', async function () {
     const currentBranch = await core.git.branches.current(projectPath);
 
