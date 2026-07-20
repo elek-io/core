@@ -10,7 +10,11 @@ import {
   getUpdateComponentSchemaFromLanguages,
   getUpdateEntrySchemaFromFieldDefinitions,
 } from './strictEntitySchema.js';
-import type { FieldDefinition } from './fieldSchema.js';
+import type {
+  FieldDefinition,
+  FieldDefinitionGroup,
+  FieldDefinitionOrGroup,
+} from './fieldSchema.js';
 
 const singleLanguage = ['en'] as const;
 const bilingual = ['en', 'de'] as const;
@@ -19,11 +23,12 @@ type TranslatableString = Record<string, string>;
 
 function titleFieldDef(
   label: TranslatableString,
-  description: TranslatableString | null = null
+  description: TranslatableString | null = null,
+  slug = 'title'
 ): FieldDefinition {
   return {
     id: uuid(),
-    slug: 'title',
+    slug,
     valueType: 'string',
     fieldType: 'text',
     label,
@@ -38,6 +43,20 @@ function titleFieldDef(
   };
 }
 
+function fieldGroup(
+  label: TranslatableString,
+  fieldDefinitions: FieldDefinition[],
+  description: TranslatableString | null = null
+): FieldDefinitionGroup {
+  return {
+    isGroup: true,
+    id: uuid(),
+    label,
+    description,
+    fieldDefinitions,
+  };
+}
+
 function bilingualCollection({
   nameSingular = { en: 'Product', de: 'Produkt' },
   namePlural = { en: 'Products', de: 'Produkte' },
@@ -47,7 +66,7 @@ function bilingualCollection({
   nameSingular?: TranslatableString;
   namePlural?: TranslatableString;
   description?: TranslatableString;
-  fieldDefinitions?: FieldDefinition[];
+  fieldDefinitions?: FieldDefinitionOrGroup[];
 } = {}) {
   return {
     projectId: uuid(),
@@ -75,6 +94,13 @@ function bilingualComponent({
     description,
     fieldDefinitions,
   };
+}
+
+function zodIssuePaths(err: unknown) {
+  if (!(err instanceof ZodError)) {
+    throw new Error(`expected a ZodError, got ${String(err)}`);
+  }
+  return err.issues.map((issue) => issue.path);
 }
 
 function expectZodIssuesAt(err: unknown, paths: (string | number)[][]) {
@@ -153,6 +179,98 @@ describe('getCreateCollectionSchemaFromLanguages', () => {
       schema.parse(
         bilingualCollection({
           fieldDefinitions: [titleFieldDef({ en: 'Title', de: 'Titel' }, null)],
+        })
+      )
+    ).not.toThrow();
+  });
+});
+
+describe('getCreateCollectionSchemaFromLanguages with grouped fields', () => {
+  it('accepts a fully translated group', () => {
+    const schema = getCreateCollectionSchemaFromLanguages([...bilingual]);
+    expect(() =>
+      schema.parse(
+        bilingualCollection({
+          fieldDefinitions: [
+            fieldGroup(
+              { en: 'SEO', de: 'SEO' },
+              [titleFieldDef({ en: 'Meta', de: 'Meta' }, null, 'meta')],
+              { en: 'Metadata', de: 'Metadaten' }
+            ),
+          ],
+        })
+      )
+    ).not.toThrow();
+  });
+
+  it('reports a grouped field definition at its nested path, not its flattened index', () => {
+    const schema = getCreateCollectionSchemaFromLanguages([...bilingual]);
+    const result = schema.safeParse(
+      bilingualCollection({
+        fieldDefinitions: [
+          titleFieldDef({ en: 'Title', de: 'Titel' }),
+          fieldGroup({ en: 'SEO', de: 'SEO' }, [
+            titleFieldDef({ en: 'Meta', de: 'Meta' }, null, 'meta'),
+            titleFieldDef({ en: 'Keywords' }, null, 'keywords'),
+          ]),
+        ],
+      })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      // The flattened index of `keywords` is 2, which is past the end of the
+      // two-element `fieldDefinitions` array.
+      expect(zodIssuePaths(result.error)).toStrictEqual([
+        ['fieldDefinitions', 1, 'fieldDefinitions', 1, 'label', 'de'],
+      ]);
+    }
+  });
+
+  it('rejects a group label missing a language', () => {
+    const schema = getCreateCollectionSchemaFromLanguages([...bilingual]);
+    const result = schema.safeParse(
+      bilingualCollection({
+        fieldDefinitions: [
+          fieldGroup({ en: 'SEO' }, [
+            titleFieldDef({ en: 'Meta', de: 'Meta' }, null, 'meta'),
+          ]),
+        ],
+      })
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expectZodIssuesAt(result.error, [['fieldDefinitions', 0, 'label']]);
+    }
+  });
+
+  it('rejects a group description missing a language but allows null', () => {
+    const schema = getCreateCollectionSchemaFromLanguages([...bilingual]);
+    const withPartial = schema.safeParse(
+      bilingualCollection({
+        fieldDefinitions: [
+          fieldGroup(
+            { en: 'SEO', de: 'SEO' },
+            [titleFieldDef({ en: 'Meta', de: 'Meta' }, null, 'meta')],
+            { en: 'Metadata' }
+          ),
+        ],
+      })
+    );
+    expect(withPartial.success).toBe(false);
+    if (!withPartial.success) {
+      expectZodIssuesAt(withPartial.error, [
+        ['fieldDefinitions', 0, 'description'],
+      ]);
+    }
+
+    expect(() =>
+      schema.parse(
+        bilingualCollection({
+          fieldDefinitions: [
+            fieldGroup({ en: 'SEO', de: 'SEO' }, [
+              titleFieldDef({ en: 'Meta', de: 'Meta' }, null, 'meta'),
+            ]),
+          ],
         })
       )
     ).not.toThrow();

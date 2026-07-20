@@ -1,13 +1,24 @@
 import { describe, expect, it } from 'vitest';
+import type { z } from '@hono/zod-openapi';
 import { uuid } from '../test/setup.js';
 import {
+  dateFieldDefinitionSchema,
+  datetimeFieldDefinitionSchema,
   emailFieldDefinitionSchema,
+  ipv4FieldDefinitionSchema,
   markdownFieldDefinitionSchema,
   numberFieldDefinitionSchema,
+  numberSelectFieldDefinitionSchema,
   rangeFieldDefinitionSchema,
+  flattenFieldDefinitions,
+  flattenFieldDefinitionsWithPaths,
   resolveOfComponents,
   stringSelectFieldDefinitionSchema,
+  telephoneFieldDefinitionSchema,
   textFieldDefinitionSchema,
+  textareaFieldDefinitionSchema,
+  timeFieldDefinitionSchema,
+  urlFieldDefinitionSchema,
   type DynamicFieldDefinition,
 } from './fieldSchema.js';
 import type { MarkdownFeatures } from './buildMdAstSchema.js';
@@ -78,6 +89,48 @@ const baseDynamicField: DynamicFieldDefinition = {
   min: null,
   max: null,
 };
+
+describe('flattenFieldDefinitionsWithPaths', () => {
+  const first = { ...baseDynamicField, id: uuid(), slug: 'first' };
+  const grouped = { ...baseDynamicField, id: uuid(), slug: 'grouped' };
+  const last = { ...baseDynamicField, id: uuid(), slug: 'last' };
+
+  it('pairs each definition with its path, in document order', () => {
+    const result = flattenFieldDefinitionsWithPaths([
+      first,
+      {
+        isGroup: true,
+        id: uuid(),
+        label: { en: 'Group' },
+        description: null,
+        fieldDefinitions: [grouped],
+      },
+      last,
+    ]);
+
+    expect(result).toStrictEqual([
+      { fieldDefinition: first, path: [0] },
+      { fieldDefinition: grouped, path: [1, 'fieldDefinitions', 0] },
+      { fieldDefinition: last, path: [2] },
+    ]);
+  });
+
+  it('returns the same definitions as flattenFieldDefinitions', () => {
+    const input = [
+      first,
+      {
+        isGroup: true as const,
+        id: uuid(),
+        label: { en: 'Group' },
+        description: null,
+        fieldDefinitions: [grouped],
+      },
+    ];
+    expect(
+      flattenFieldDefinitionsWithPaths(input).map((e) => e.fieldDefinition)
+    ).toStrictEqual(flattenFieldDefinitions(input));
+  });
+});
 
 describe('resolveOfComponents', () => {
   it('expands an empty ofComponents to all component ids', () => {
@@ -275,6 +328,48 @@ describe('stringSelectFieldDefinitionSchema defaultValue refinement', () => {
   it('rejects a non-null defaultValue that is not among the options', () => {
     expect(() =>
       stringSelectFieldDefinitionSchema.parse(makeSelectFieldDef('c'))
+    ).toThrow();
+  });
+});
+
+describe('numberSelectFieldDefinitionSchema defaultValue refinement', () => {
+  // A number select forces min and max to null, so the bound rules it inherits
+  // from the number base are vacuous and only the option rule applies.
+  const makeNumberSelectFieldDef = (defaultValue: number | null) => ({
+    id: uuid(),
+    slug: 'choice',
+    valueType: 'number' as const,
+    fieldType: 'select' as const,
+    label: { en: 'Choice' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false as const,
+    inputWidth: '12' as const,
+    min: null,
+    max: null,
+    defaultValue,
+    options: [
+      { value: 1, label: { en: 'One' } },
+      { value: 2, label: { en: 'Two' } },
+    ],
+  });
+
+  it('accepts a non-null defaultValue that is one of the options', () => {
+    expect(() =>
+      numberSelectFieldDefinitionSchema.parse(makeNumberSelectFieldDef(1))
+    ).not.toThrow();
+  });
+
+  it('accepts a null defaultValue', () => {
+    expect(() =>
+      numberSelectFieldDefinitionSchema.parse(makeNumberSelectFieldDef(null))
+    ).not.toThrow();
+  });
+
+  it('rejects a non-null defaultValue that is not among the options', () => {
+    expect(() =>
+      numberSelectFieldDefinitionSchema.parse(makeNumberSelectFieldDef(3))
     ).toThrow();
   });
 });
@@ -489,81 +584,107 @@ describe('rangeFieldDefinitionSchema defaultValue range refinement', () => {
 });
 
 describe('unique string fields cannot carry a default (per field type)', () => {
-  // The Add Field editor validates against the per-type leaf schema, so the
-  // unique/default rule has to live there, not only on the string union.
-  const makeUniqueTextFieldDef = (overrides: {
-    isUnique?: boolean;
-    defaultValue?: string | null;
-  }) => ({
+  // The Add Field editor validates a single field against its per-type leaf
+  // schema, so every string field type has to carry the unique/default rule.
+  // It lives on the shared string base, which is what makes that automatic.
+  const stringFieldTypes: {
+    fieldType: string;
+    schema: z.ZodType;
+    defaultValue: string;
+    extra?: Record<string, unknown>;
+  }[] = [
+    {
+      fieldType: 'text',
+      schema: textFieldDefinitionSchema,
+      defaultValue: 'foo',
+      extra: { min: null, max: null },
+    },
+    {
+      fieldType: 'textarea',
+      schema: textareaFieldDefinitionSchema,
+      defaultValue: 'foo',
+      extra: { min: null, max: null },
+    },
+    {
+      fieldType: 'email',
+      schema: emailFieldDefinitionSchema,
+      defaultValue: 'a@b.com',
+    },
+    {
+      fieldType: 'url',
+      schema: urlFieldDefinitionSchema,
+      defaultValue: 'https://elek.io',
+    },
+    {
+      fieldType: 'ipv4',
+      schema: ipv4FieldDefinitionSchema,
+      defaultValue: '127.0.0.1',
+    },
+    {
+      fieldType: 'date',
+      schema: dateFieldDefinitionSchema,
+      defaultValue: '2024-01-01',
+    },
+    {
+      fieldType: 'time',
+      schema: timeFieldDefinitionSchema,
+      defaultValue: '12:00:00',
+    },
+    {
+      fieldType: 'datetime',
+      schema: datetimeFieldDefinitionSchema,
+      defaultValue: '2024-01-01T00:00:00.000Z',
+    },
+    {
+      fieldType: 'telephone',
+      schema: telephoneFieldDefinitionSchema,
+      defaultValue: '+491234567890',
+    },
+    {
+      fieldType: 'select',
+      schema: stringSelectFieldDefinitionSchema,
+      defaultValue: 'foo',
+      extra: { options: [{ value: 'foo', label: { en: 'Foo' } }] },
+    },
+  ];
+
+  const makeFieldDef = (
+    fieldType: string,
+    isUnique: boolean,
+    defaultValue: string | null,
+    extra: Record<string, unknown> = {}
+  ) => ({
     id: uuid(),
     slug: 'sku',
     valueType: 'string' as const,
-    fieldType: 'text' as const,
+    fieldType,
     label: { en: 'SKU' },
     description: null,
     isRequired: false,
     isDisabled: false,
-    isUnique: overrides.isUnique ?? false,
+    isUnique,
     inputWidth: '12' as const,
-    min: null,
-    max: null,
-    defaultValue: overrides.defaultValue ?? null,
+    defaultValue,
+    ...extra,
   });
 
-  const makeUniqueEmailFieldDef = (overrides: {
-    isUnique?: boolean;
-    defaultValue?: string | null;
-  }) => ({
-    id: uuid(),
-    slug: 'contact',
-    valueType: 'string' as const,
-    fieldType: 'email' as const,
-    label: { en: 'Contact' },
-    description: null,
-    isRequired: false,
-    isDisabled: false,
-    isUnique: overrides.isUnique ?? false,
-    inputWidth: '12' as const,
-    defaultValue: overrides.defaultValue ?? null,
-  });
+  for (const { fieldType, schema, defaultValue, extra } of stringFieldTypes) {
+    it(`rejects a unique ${fieldType} field with a non-null default at the leaf schema`, () => {
+      expect(() =>
+        schema.parse(makeFieldDef(fieldType, true, defaultValue, extra))
+      ).toThrow(/unique field cannot have a default/i);
+    });
 
-  it('rejects a unique text field with a non-null default at the leaf schema', () => {
-    expect(() =>
-      textFieldDefinitionSchema.parse(
-        makeUniqueTextFieldDef({ isUnique: true, defaultValue: 'foo' })
-      )
-    ).toThrow(/unique field cannot have a default/i);
-  });
+    it(`accepts a unique ${fieldType} field with a null default`, () => {
+      expect(() =>
+        schema.parse(makeFieldDef(fieldType, true, null, extra))
+      ).not.toThrow();
+    });
 
-  it('accepts a unique text field with a null default', () => {
-    expect(() =>
-      textFieldDefinitionSchema.parse(
-        makeUniqueTextFieldDef({ isUnique: true, defaultValue: null })
-      )
-    ).not.toThrow();
-  });
-
-  it('accepts a non-unique text field with a default', () => {
-    expect(() =>
-      textFieldDefinitionSchema.parse(
-        makeUniqueTextFieldDef({ isUnique: false, defaultValue: 'foo' })
-      )
-    ).not.toThrow();
-  });
-
-  it('rejects a unique email field with a non-null default at the leaf schema', () => {
-    expect(() =>
-      emailFieldDefinitionSchema.parse(
-        makeUniqueEmailFieldDef({ isUnique: true, defaultValue: 'a@b.com' })
-      )
-    ).toThrow(/unique field cannot have a default/i);
-  });
-
-  it('accepts a non-unique email field with a valid default', () => {
-    expect(() =>
-      emailFieldDefinitionSchema.parse(
-        makeUniqueEmailFieldDef({ isUnique: false, defaultValue: 'a@b.com' })
-      )
-    ).not.toThrow();
-  });
+    it(`accepts a non-unique ${fieldType} field with a default`, () => {
+      expect(() =>
+        schema.parse(makeFieldDef(fieldType, false, defaultValue, extra))
+      ).not.toThrow();
+    });
+  }
 });

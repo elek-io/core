@@ -12,21 +12,32 @@ import { baseFileSchema } from './fileSchema.js';
 import { gitCommitSchema, gitSwitchOptionsSchema } from './gitSchema.js';
 
 export const projectSettingsSchema = z.object({
-  language: z.object({
-    default: supportedLanguageSchema,
-    supported: z
-      .array(supportedLanguageSchema)
-      .nonempty()
-      .check((ctx) => {
-        if (new Set(ctx.value).size !== ctx.value.length) {
-          ctx.issues.push({
-            code: 'custom',
-            message: 'Supported languages must not contain duplicates',
-            input: ctx.value,
-          });
-        }
-      }),
-  }),
+  language: z
+    .object({
+      default: supportedLanguageSchema,
+      supported: z
+        .array(supportedLanguageSchema)
+        .nonempty()
+        .check((ctx) => {
+          if (new Set(ctx.value).size !== ctx.value.length) {
+            ctx.issues.push({
+              code: 'custom',
+              message: 'Supported languages must not contain duplicates',
+              input: ctx.value,
+            });
+          }
+        }),
+    })
+    .check((ctx) => {
+      if (!ctx.value.supported.includes(ctx.value.default)) {
+        ctx.issues.push({
+          code: 'custom',
+          message: 'Default language must be one of the supported languages',
+          input: ctx.value.default,
+          path: ['default'],
+        });
+      }
+    }),
 });
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 

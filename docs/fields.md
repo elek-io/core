@@ -360,7 +360,7 @@ The check is a scan-then-write rather than an atomic transaction, so it assumes 
 
 ## Field Grouping
 
-Inside a Collection, field definitions can be wrapped in a `FieldDefinitionGroup` for visual organization. Groups are presentational only - they have no effect on storage or validation, and they do not appear in the Entry JSON.
+Inside a Collection, field definitions can be wrapped in a `FieldDefinitionGroup` for visual organization. Groups are presentational only - they have no effect on Entry storage or value validation, and they do not appear in the Entry JSON.
 
 ```typescript
 {
@@ -374,12 +374,13 @@ Inside a Collection, field definitions can be wrapped in a `FieldDefinitionGroup
 }
 ```
 
-A Collection's `fieldDefinitions` array can mix groups and ungrouped fields. Flatten them with `flattenFieldDefinitions()` from `src/schema/fieldSchema.ts` when you need a flat list.
+A Collection's `fieldDefinitions` array can mix groups and ungrouped fields. Flatten them with `flattenFieldDefinitions()` when you need a flat list, or `flattenFieldDefinitionsWithPaths()` when you also need each definition's position in the nested array. Use the latter to build error paths: a flattened index does not address a grouped definition, and past the first group it no longer addresses anything at all.
 
 Constraints:
 
 - Groups can contain direct, reference, and dynamic fields - but not other groups.
 - Components hold a flat list of fields and cannot use groups (Collections only).
+- A group's own `label` and `description` are admin metadata, so like a field definition's they must carry every language the Project supports. A `null` description is allowed, a partially translated one is not.
 
 ## Composing with Components
 
