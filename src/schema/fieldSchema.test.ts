@@ -10,6 +10,8 @@ import {
   numberFieldDefinitionSchema,
   numberSelectFieldDefinitionSchema,
   rangeFieldDefinitionSchema,
+  flattenFieldDefinitions,
+  flattenFieldDefinitionsWithPaths,
   resolveOfComponents,
   stringSelectFieldDefinitionSchema,
   telephoneFieldDefinitionSchema,
@@ -87,6 +89,48 @@ const baseDynamicField: DynamicFieldDefinition = {
   min: null,
   max: null,
 };
+
+describe('flattenFieldDefinitionsWithPaths', () => {
+  const first = { ...baseDynamicField, id: uuid(), slug: 'first' };
+  const grouped = { ...baseDynamicField, id: uuid(), slug: 'grouped' };
+  const last = { ...baseDynamicField, id: uuid(), slug: 'last' };
+
+  it('pairs each definition with its path, in document order', () => {
+    const result = flattenFieldDefinitionsWithPaths([
+      first,
+      {
+        isGroup: true,
+        id: uuid(),
+        label: { en: 'Group' },
+        description: null,
+        fieldDefinitions: [grouped],
+      },
+      last,
+    ]);
+
+    expect(result).toStrictEqual([
+      { fieldDefinition: first, path: [0] },
+      { fieldDefinition: grouped, path: [1, 'fieldDefinitions', 0] },
+      { fieldDefinition: last, path: [2] },
+    ]);
+  });
+
+  it('returns the same definitions as flattenFieldDefinitions', () => {
+    const input = [
+      first,
+      {
+        isGroup: true as const,
+        id: uuid(),
+        label: { en: 'Group' },
+        description: null,
+        fieldDefinitions: [grouped],
+      },
+    ];
+    expect(
+      flattenFieldDefinitionsWithPaths(input).map((e) => e.fieldDefinition)
+    ).toStrictEqual(flattenFieldDefinitions(input));
+  });
+});
 
 describe('resolveOfComponents', () => {
   it('expands an empty ofComponents to all component ids', () => {

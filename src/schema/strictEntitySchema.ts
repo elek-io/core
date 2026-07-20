@@ -26,7 +26,6 @@ import {
   updateEntrySchema,
 } from './entrySchema.js';
 import type { FieldDefinition } from './fieldSchema.js';
-import { flattenFieldDefinitions } from './fieldSchema.js';
 import type { ProjectLanguages } from './projectSchema.js';
 import {
   type ComponentResolver,
@@ -71,6 +70,26 @@ function checkStrictTranslatable(
   }
 }
 
+/**
+ * Checks the translatable admin metadata every labelled node carries, be it a
+ * Field definition or a group wrapping them.
+ */
+function checkLabelAndDescription(
+  node: { label: unknown; description: unknown },
+  ts: z.ZodTypeAny,
+  ctx: z.RefinementCtx,
+  path: (string | number)[]
+) {
+  checkStrictTranslatable(node.label, ts, ctx, [...path, 'label']);
+  checkStrictTranslatable(
+    node.description,
+    ts,
+    ctx,
+    [...path, 'description'],
+    true
+  );
+}
+
 function checkCollectionAdminMetadata(
   val: z.infer<typeof createCollectionSchema>,
   ctx: z.RefinementCtx,
@@ -79,21 +98,21 @@ function checkCollectionAdminMetadata(
   checkStrictTranslatable(val.name.singular, ts, ctx, ['name', 'singular']);
   checkStrictTranslatable(val.name.plural, ts, ctx, ['name', 'plural']);
   checkStrictTranslatable(val.description, ts, ctx, ['description']);
-  for (const [i, fd] of flattenFieldDefinitions(
-    val.fieldDefinitions
-  ).entries()) {
-    checkStrictTranslatable(fd.label, ts, ctx, [
-      'fieldDefinitions',
-      i,
-      'label',
-    ]);
-    checkStrictTranslatable(
-      fd.description,
-      ts,
-      ctx,
-      ['fieldDefinitions', i, 'description'],
-      true
-    );
+
+  // Walked rather than flattened, so issues land on the definition the user
+  // edited. A group's own label and description are admin metadata too.
+  for (const [i, fdOrGroup] of val.fieldDefinitions.entries()) {
+    checkLabelAndDescription(fdOrGroup, ts, ctx, ['fieldDefinitions', i]);
+    if ('isGroup' in fdOrGroup) {
+      for (const [j, fd] of fdOrGroup.fieldDefinitions.entries()) {
+        checkLabelAndDescription(fd, ts, ctx, [
+          'fieldDefinitions',
+          i,
+          'fieldDefinitions',
+          j,
+        ]);
+      }
+    }
   }
 }
 
@@ -104,19 +123,9 @@ function checkComponentAdminMetadata(
 ) {
   checkStrictTranslatable(val.name, ts, ctx, ['name']);
   checkStrictTranslatable(val.description, ts, ctx, ['description'], true);
+  // Components hold a flat list, so the index is already the real path.
   for (const [i, fd] of val.fieldDefinitions.entries()) {
-    checkStrictTranslatable(fd.label, ts, ctx, [
-      'fieldDefinitions',
-      i,
-      'label',
-    ]);
-    checkStrictTranslatable(
-      fd.description,
-      ts,
-      ctx,
-      ['fieldDefinitions', i, 'description'],
-      true
-    );
+    checkLabelAndDescription(fd, ts, ctx, ['fieldDefinitions', i]);
   }
 }
 

@@ -173,34 +173,17 @@ export const fieldDefinitionSlugUniquenessSuperRefinement = (
   ctx: z.RefinementCtx
 ) => {
   const seen = new Set<string>();
-  for (const [
-    parentIndex,
-    fieldDefinitionOrGroup,
-  ] of fieldDefinitionsOrGroups.entries()) {
-    if ('isGroup' in fieldDefinitionOrGroup) {
-      for (const [
-        childIndex,
-        fieldDefinition,
-      ] of fieldDefinitionOrGroup.fieldDefinitions.entries()) {
-        if (seen.has(fieldDefinition.slug)) {
-          ctx.addIssue({
-            code: 'custom',
-            message: 'Slug already in use',
-            path: [parentIndex, 'fieldDefinitions', childIndex, 'slug'],
-          });
-        }
-        seen.add(fieldDefinition.slug);
-      }
-    } else {
-      if (seen.has(fieldDefinitionOrGroup.slug)) {
-        ctx.addIssue({
-          code: 'custom',
-          message: 'Slug already in use',
-          path: [parentIndex, 'slug'],
-        });
-      }
-      seen.add(fieldDefinitionOrGroup.slug);
+  for (const { fieldDefinition, path } of flattenFieldDefinitionsWithPaths(
+    fieldDefinitionsOrGroups
+  )) {
+    if (seen.has(fieldDefinition.slug)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Slug already in use',
+        path: [...path, 'slug'],
+      });
     }
+    seen.add(fieldDefinition.slug);
   }
 };
 
@@ -631,6 +614,33 @@ export function flattenFieldDefinitions(
   );
 }
 
+export interface FieldDefinitionWithPath {
+  fieldDefinition: FieldDefinition;
+  /** Path relative to the `fieldDefinitions` array that was passed in. */
+  path: (string | number)[];
+}
+
+/**
+ * Like `flattenFieldDefinitions`, but pairs each definition with its path in
+ * the original nested array. Validation uses this to attach issues to the
+ * definition the user actually edited, since a flattened index does not
+ * address a grouped definition and can even run past the array's end.
+ */
+export function flattenFieldDefinitionsWithPaths(
+  fieldDefinitionsOrGroups: FieldDefinitionOrGroup[]
+): FieldDefinitionWithPath[] {
+  return fieldDefinitionsOrGroups.flatMap((fieldDefinitionOrGroup, index) =>
+    'isGroup' in fieldDefinitionOrGroup
+      ? fieldDefinitionOrGroup.fieldDefinitions.map(
+          (fieldDefinition, childIndex) => ({
+            fieldDefinition,
+            path: [index, 'fieldDefinitions', childIndex],
+          })
+        )
+      : [{ fieldDefinition: fieldDefinitionOrGroup, path: [index] }]
+  );
+}
+
 /**
  * Validates each slug field's `ofFieldDefinitions` source references against
  * the sibling field definitions of the same Collection. Each source must:
@@ -643,8 +653,9 @@ export const slugSourceReferencesSuperRefinement = (
   fieldDefinitionsOrGroups: FieldDefinitionOrGroup[],
   ctx: z.RefinementCtx
 ) => {
+  const withPaths = flattenFieldDefinitionsWithPaths(fieldDefinitionsOrGroups);
   const byId = new Map(
-    flattenFieldDefinitions(fieldDefinitionsOrGroups).map((fieldDefinition) => [
+    withPaths.map(({ fieldDefinition }) => [
       fieldDefinition.id,
       fieldDefinition,
     ])
@@ -697,21 +708,9 @@ export const slugSourceReferencesSuperRefinement = (
     });
   };
 
-  fieldDefinitionsOrGroups.forEach((fieldDefinitionOrGroup, parentIndex) => {
-    if ('isGroup' in fieldDefinitionOrGroup) {
-      fieldDefinitionOrGroup.fieldDefinitions.forEach(
-        (fieldDefinition, childIndex) => {
-          validateSlugField(fieldDefinition, [
-            parentIndex,
-            'fieldDefinitions',
-            childIndex,
-          ]);
-        }
-      );
-    } else {
-      validateSlugField(fieldDefinitionOrGroup, [parentIndex]);
-    }
-  });
+  for (const { fieldDefinition, path } of withPaths) {
+    validateSlugField(fieldDefinition, path);
+  }
 };
 
 /**
