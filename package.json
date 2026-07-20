@@ -41,7 +41,7 @@
   "scripts": {
     "lint": "eslint",
     "check-types": "tsc --noEmit",
-    "check-format": "prettier --check . || exit 0",
+    "check-format": "prettier --check .",
     "format": "prettier --write .",
     "dev": "vitest",
     "test": "vitest run",
