@@ -74,10 +74,61 @@ const minMustBeLessOrEqualMaxRefinement: [
 ];
 
 /**
+ * A string field's default value must respect the same length bounds the value
+ * itself is validated against. Without this a definition could ship a default
+ * that fails on write. min and max are string lengths here, each optional.
+ */
+const stringDefaultLengthWithinRangeRefinement: [
+  (data: {
+    defaultValue: string | null;
+    min: number | null;
+    max: number | null;
+  }) => boolean,
+  { message: string; path: string[] },
+] = [
+  (data) =>
+    data.defaultValue === null ||
+    ((data.min === null || data.defaultValue.length >= data.min) &&
+      (data.max === null || data.defaultValue.length <= data.max)),
+  {
+    message: 'The default value length must be within the min and max range',
+    path: ['defaultValue'],
+  },
+];
+
+/**
+ * A number field's default value must respect the same bounds the value itself
+ * is validated against. Without this a definition could ship a default that
+ * fails on write. min and max are numeric bounds here, each optional.
+ */
+const numberDefaultWithinRangeRefinement: [
+  (data: {
+    defaultValue: number | null;
+    min: number | null;
+    max: number | null;
+  }) => boolean,
+  { message: string; path: string[] },
+] = [
+  (data) =>
+    data.defaultValue === null ||
+    ((data.min === null || data.defaultValue >= data.min) &&
+      (data.max === null || data.defaultValue <= data.max)),
+  {
+    message: 'The default value must be within the min and max range',
+    path: ['defaultValue'],
+  },
+];
+
+/**
  * A unique field may not carry a non-null default value: a shared default
  * could only ever be valid for a single Entry, and adding such a field to a
  * populated Collection would stamp the same value into every Entry at once.
  * Slug fields enforce this structurally (defaultValue is always null).
+ *
+ * This is a per-field rule (it reads only `isUnique` and `defaultValue`), so it
+ * lives on each string leaf schema rather than the string union. An editor that
+ * validates a single field against its per-type schema before saving then
+ * rejects the combination up front, same as the min/max default rules above.
  */
 const uniqueFieldCannotHaveDefaultRefinement: [
   (data: { isUnique: boolean; defaultValue: unknown }) => boolean,
@@ -188,7 +239,9 @@ export const textFieldDefinitionSchema = stringFieldDefinitionBaseSchema
     min: z.int().min(1).nullable(),
     max: z.int().min(1).nullable(),
   })
-  .refine(...minMustBeLessOrEqualMaxRefinement);
+  .refine(...minMustBeLessOrEqualMaxRefinement)
+  .refine(...stringDefaultLengthWithinRangeRefinement)
+  .refine(...uniqueFieldCannotHaveDefaultRefinement);
 export type TextFieldDefinition = z.infer<typeof textFieldDefinitionSchema>;
 
 export const textareaFieldDefinitionSchema = stringFieldDefinitionBaseSchema
@@ -197,62 +250,69 @@ export const textareaFieldDefinitionSchema = stringFieldDefinitionBaseSchema
     min: z.int().min(1).nullable(),
     max: z.int().min(1).nullable(),
   })
-  .refine(...minMustBeLessOrEqualMaxRefinement);
+  .refine(...minMustBeLessOrEqualMaxRefinement)
+  .refine(...stringDefaultLengthWithinRangeRefinement)
+  .refine(...uniqueFieldCannotHaveDefaultRefinement);
 export type TextareaFieldDefinition = z.infer<
   typeof textareaFieldDefinitionSchema
 >;
 
-export const emailFieldDefinitionSchema =
-  stringFieldDefinitionBaseSchema.extend({
+export const emailFieldDefinitionSchema = stringFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.email),
     defaultValue: z.email().nullable(),
-  });
+  })
+  .refine(...uniqueFieldCannotHaveDefaultRefinement);
 export type EmailFieldDefinition = z.infer<typeof emailFieldDefinitionSchema>;
 
-export const urlFieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend({
-  fieldType: z.literal(fieldTypeSchema.enum.url),
-  defaultValue: z.url().nullable(),
-});
+export const urlFieldDefinitionSchema = stringFieldDefinitionBaseSchema
+  .extend({
+    fieldType: z.literal(fieldTypeSchema.enum.url),
+    defaultValue: z.url().nullable(),
+  })
+  .refine(...uniqueFieldCannotHaveDefaultRefinement);
 export type UrlFieldDefinition = z.infer<typeof urlFieldDefinitionSchema>;
 
-export const ipv4FieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend(
-  {
+export const ipv4FieldDefinitionSchema = stringFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.ipv4),
     defaultValue: z.ipv4().nullable(),
-  }
-);
+  })
+  .refine(...uniqueFieldCannotHaveDefaultRefinement);
 export type Ipv4FieldDefinition = z.infer<typeof ipv4FieldDefinitionSchema>;
 
-export const dateFieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend(
-  {
+export const dateFieldDefinitionSchema = stringFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.date),
     defaultValue: z.iso.date().nullable(),
-  }
-);
+  })
+  .refine(...uniqueFieldCannotHaveDefaultRefinement);
 export type DateFieldDefinition = z.infer<typeof dateFieldDefinitionSchema>;
 
-export const timeFieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend(
-  {
+export const timeFieldDefinitionSchema = stringFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.time),
     defaultValue: z.iso.time().nullable(),
-  }
-);
+  })
+  .refine(...uniqueFieldCannotHaveDefaultRefinement);
 export type TimeFieldDefinition = z.infer<typeof timeFieldDefinitionSchema>;
 
-export const datetimeFieldDefinitionSchema =
-  stringFieldDefinitionBaseSchema.extend({
+export const datetimeFieldDefinitionSchema = stringFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.datetime),
     defaultValue: z.iso.datetime().nullable(),
-  });
+  })
+  .refine(...uniqueFieldCannotHaveDefaultRefinement);
 export type DatetimeFieldDefinition = z.infer<
   typeof datetimeFieldDefinitionSchema
 >;
 
-export const telephoneFieldDefinitionSchema =
-  stringFieldDefinitionBaseSchema.extend({
+export const telephoneFieldDefinitionSchema = stringFieldDefinitionBaseSchema
+  .extend({
     fieldType: z.literal(fieldTypeSchema.enum.telephone),
     defaultValue: z.e164().nullable(),
-  });
+  })
+  .refine(...uniqueFieldCannotHaveDefaultRefinement);
 export type TelephoneFieldDefinition = z.infer<
   typeof telephoneFieldDefinitionSchema
 >;
@@ -262,7 +322,8 @@ export const stringSelectFieldDefinitionSchema = stringFieldDefinitionBaseSchema
     fieldType: z.literal(fieldTypeSchema.enum.select),
     options: z.array(selectOptionSchema(z.string())).min(1),
   })
-  .refine(...selectDefaultValueMustBeInOptionsRefinement);
+  .refine(...selectDefaultValueMustBeInOptionsRefinement)
+  .refine(...uniqueFieldCannotHaveDefaultRefinement);
 export type StringSelectFieldDefinition = z.infer<
   typeof stringSelectFieldDefinitionSchema
 >;
@@ -283,21 +344,21 @@ export const slugFieldDefinitionSchema = stringFieldDefinitionBaseSchema.extend(
 );
 export type SlugFieldDefinition = z.infer<typeof slugFieldDefinitionSchema>;
 
-export const stringFieldDefinitionSchema = z
-  .union([
-    textFieldDefinitionSchema,
-    textareaFieldDefinitionSchema,
-    emailFieldDefinitionSchema,
-    urlFieldDefinitionSchema,
-    ipv4FieldDefinitionSchema,
-    dateFieldDefinitionSchema,
-    timeFieldDefinitionSchema,
-    datetimeFieldDefinitionSchema,
-    telephoneFieldDefinitionSchema,
-    stringSelectFieldDefinitionSchema,
-    slugFieldDefinitionSchema,
-  ])
-  .refine(...uniqueFieldCannotHaveDefaultRefinement);
+// The unique/default rule lives on each string leaf above (an editor validates
+// a single field against its per-type schema), so the union needs no refine.
+export const stringFieldDefinitionSchema = z.union([
+  textFieldDefinitionSchema,
+  textareaFieldDefinitionSchema,
+  emailFieldDefinitionSchema,
+  urlFieldDefinitionSchema,
+  ipv4FieldDefinitionSchema,
+  dateFieldDefinitionSchema,
+  timeFieldDefinitionSchema,
+  datetimeFieldDefinitionSchema,
+  telephoneFieldDefinitionSchema,
+  stringSelectFieldDefinitionSchema,
+  slugFieldDefinitionSchema,
+]);
 export type StringFieldDefinition = z.infer<typeof stringFieldDefinitionSchema>;
 
 //
@@ -318,7 +379,8 @@ export const numberFieldDefinitionSchema = numberFieldDefinitionBaseSchema
   .extend({
     fieldType: z.literal(fieldTypeSchema.enum.number),
   })
-  .refine(...minMustBeLessOrEqualMaxRefinement);
+  .refine(...minMustBeLessOrEqualMaxRefinement)
+  .refine(...numberDefaultWithinRangeRefinement);
 export type NumberFieldDefinition = z.infer<typeof numberFieldDefinitionSchema>;
 
 export const rangeFieldDefinitionSchema = numberFieldDefinitionBaseSchema
@@ -330,7 +392,8 @@ export const rangeFieldDefinitionSchema = numberFieldDefinitionBaseSchema
     max: z.number(),
     defaultValue: z.number(),
   })
-  .refine(...minMustBeLessOrEqualMaxRefinement);
+  .refine(...minMustBeLessOrEqualMaxRefinement)
+  .refine(...numberDefaultWithinRangeRefinement);
 export type RangeFieldDefinition = z.infer<typeof rangeFieldDefinitionSchema>;
 
 export const numberSelectFieldDefinitionSchema = numberFieldDefinitionBaseSchema

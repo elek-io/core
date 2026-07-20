@@ -41,7 +41,7 @@ Every field definition extends `fieldDefinitionBaseSchema`:
 | `label`       | Translatable. Must contain a non-empty string for every project-supported language at validation time.                                                                                                                                                                                          |
 | `description` | Translatable or `null`.                                                                                                                                                                                                                                                                         |
 | `isRequired`  | Forced `true` on `toggle` and `range` (those types always carry a value).                                                                                                                                                                                                                       |
-| `isUnique`    | Only meaningful on `string` value types; the schema forces `false` on `number`, `boolean`, `reference`, `dynamic`, and `mdast`, and forces `true` on `slug`. Enforced per language within a Collection (see [Uniqueness](#uniqueness)). A unique field may not carry a non-null `defaultValue`. |
+| `isUnique`    | Only meaningful on `string` value types; the schema forces `false` on `number`, `boolean`, `reference`, `dynamic`, and `mdast`, and forces `true` on `slug`. Enforced per language within a Collection (see [Uniqueness](#uniqueness)). A unique field may not carry a non-null `defaultValue`, and this is checked on each field type's own schema, so a single field definition is rejected on its own rather than only when the Collection is assembled. |
 | `inputWidth`  | Layout hint for the editor's 12-column grid. `'12'` = full row, `'6'` = half, `'4'` = third, `'3'` = quarter.                                                                                                                                                                                   |
 
 ## Field Type Catalogue
@@ -74,7 +74,7 @@ Single-line text input with optional length bounds.
 }
 ```
 
-Validation: when both `min` and `max` are set, `min` must be ≤ `max`.
+Validation: when both `min` and `max` are set, `min` must be ≤ `max`. A non-null `defaultValue` must itself satisfy the length bounds (`min` ≤ `defaultValue.length` ≤ `max`), so a definition cannot ship a default that its own values would reject.
 
 #### `textarea`
 
@@ -172,6 +172,8 @@ All number fields force `isUnique: false`.
 }
 ```
 
+Validation: when both `min` and `max` are set, `min` must be ≤ `max`. A non-null `defaultValue` must fall within the bounds (`min` ≤ `defaultValue` ≤ `max`).
+
 #### `range`
 
 Slider with a required `min`, `max`, and `defaultValue`. Always required (the field type always carries a value).
@@ -187,6 +189,8 @@ Slider with a required `min`, `max`, and `defaultValue`. Always required (the fi
   // ... common properties
 }
 ```
+
+Validation: `min` must be ≤ `max`, and the required `defaultValue` must fall within the bounds (`min` ≤ `defaultValue` ≤ `max`).
 
 #### `select` (number variant)
 
