@@ -1,5 +1,33 @@
 # @elek-io/core
 
+## 0.22.0
+
+### Minor Changes
+
+- ef620e8: A Project's default language must now be one of its supported languages. `settings.language.default` was previously validated only against the universe of language codes Core knows, so a Project could declare `de` as its default while supporting `['en']`. Nothing then produced content in the default language, because translatable content is validated against the supported set. The rule is checked on create and update alike, so a Project also cannot drop a supported language while it is still the default. The issue is reported on `settings.language.default`.
+
+  Existing Projects whose default sits outside their supported languages are rejected on the next update until the settings are corrected, either by adding the default to the supported languages or by choosing a default from among them.
+
+- 730bc3b: Field definitions now validate that a non-null `defaultValue` respects the field's own bounds. For `text` and `textarea` the default's length must sit within `min`/`max`, and for `number` and `range` the default must sit within the numeric `min`/`max`. Previously an out-of-range default was accepted even though the same value would be rejected on write, letting a definition ship a default it could never store.
+
+  The related "a unique field cannot carry a non-null `defaultValue`" rule now lives on the shared string field definition base instead of only the string union, so every string field type inherits it, current and future ones alike. The set of accepted definitions is unchanged, but a single field definition is now rejected on its own, so an editor validating one field against its per-type schema catches the invalid unique + default combination before the Collection is assembled.
+
+- ef620e8: Validation issues on grouped field definitions now carry their nested path instead of a flattened index. Creating or updating a Collection previously flattened its `fieldDefinitions` before checking that every label and description covers each supported language, so an issue on a grouped definition was reported at its position in the flattened list. That index does not address a grouped definition, and past the first group it addresses nothing at all: a Collection holding one field plus a group of two produced an issue at `fieldDefinitions[2]` in a two element array, leaving a consumer with no input to attach the error to. Issues now use the real path, `fieldDefinitions[1].fieldDefinitions[1].label`. Components are unaffected, they hold a flat list of field definitions and cannot use groups.
+
+  A group's own `label` and `description` are now checked too. They are admin metadata like a field definition's, but flattening dropped the group wrapper, so a partially translated group label passed validation. Both must now carry every language the Project supports. A `null` description stays allowed, a partially translated one does not. Collections created before this change that carry a partially translated group label are rejected on the next update until the missing translations are filled in.
+
+  The new `flattenFieldDefinitionsWithPaths()` is exported alongside `flattenFieldDefinitions()` for consumers that walk a Collection's field definitions and need each one's position in the nested array.
+
+### Patch Changes
+
+- ad423de: Projects are now byte identical no matter which OS created them. The generated `.gitignore` and `.gitattributes` were joined with the platform newline, so Windows wrote them with CRLF and every other OS with LF. The same Project opened on a second OS was then rewritten line by line, and a team on mixed operating systems could conflict on every line of every file.
+
+  Both files are now written with LF, and the generated `.gitattributes` starts with `* text=auto eol=lf` so a checkout stays LF even when the machine has `core.autocrlf` enabled, which is a per machine git setting Core does not control. The `lfs/**` rules follow it and keep their `-text` marker, so Asset binaries are still excluded from conversion.
+
+  This applies to newly created Projects.
+
+- 06815ca: Reading a file at a commit no longer fails on Windows when the data directory is deeply nested. Core read those blobs with `git show <commit>:<path>`, and git stats that argument against the working directory to tell revisions from filenames. The stat adds the 40 character commit hash on top of an already absolute path, which overflowed the 260 character limit on Windows and failed history diffs with `fatal: failed to stat: Filename too long`, even though every real file was well within the limit. Core now reads through `git cat-file blob`, which resolves the blob from the object database and never touches the working tree. The returned content is unchanged, including LFS pointers and binary Assets.
+
 ## 0.21.0
 
 ### Minor Changes
