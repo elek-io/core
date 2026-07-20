@@ -151,7 +151,7 @@ Project languages are runtime data (`project.settings.language.supported`). Type
 
 ### Why `.superRefine()` instead of rewriting static schemas
 
-Field definition schemas use `.refine()` / `.superRefine()` internally (min/max, default-in-options, slug uniqueness), producing `ZodEffects` that cannot be `.extend()`-ed. Rewriting the ~15 field definition schemas as language-parameterised factories would be invasive and gains nothing observable. `.superRefine()` appends validation onto any schema - including existing `ZodEffects` - so the strict factories layer language-completeness checks on top without touching the underlying structure.
+Field definition schemas use `.refine()` / `.superRefine()` internally (min/max, default-in-options, unique-has-no-default, slug uniqueness), so they carry refinements that limit how they can be reshaped (`.extend()` cannot overwrite an existing key on them, only `.safeExtend()` can). Rewriting the ~15 field definition schemas as language-parameterised factories would be invasive and gains nothing observable. `.superRefine()` appends validation onto any schema, including refined ones, so the strict factories layer language-completeness checks on top without touching the underlying structure.
 
 ### Why the async preamble lives above `validated()`
 
