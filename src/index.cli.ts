@@ -7,6 +7,7 @@ import {
   exportAction,
   generateApiClientAction,
   generateTypesAction,
+  pullAction,
   startApiAction,
 } from './cli/index.js';
 import {
@@ -14,6 +15,7 @@ import {
   exportSchema,
   generateApiClientSchema,
   generateTypesSchema,
+  pullSchema,
 } from './schema/index.js';
 
 const program = new Command()
@@ -140,6 +142,29 @@ program
     });
 
     await exportAction(props);
+  });
+
+program
+  .command('pull')
+  .description(
+    'Provisions a Project from its remote into the data directory, meant for CI builds'
+  )
+  .requiredOption('-p, --project <id>', 'The ID of the Project to provision')
+  .requiredOption(
+    '-u, --url <url>',
+    'The remote repository URL to provision from'
+  )
+  .option(
+    '-r, --ref <ref>',
+    'The content state to provision: "production", "work" or a Release version. The ELEK_IO_REF environment variable overrides this option. Defaults to "production".'
+  )
+  .action(async (options) => {
+    // Provisioning never mutates the Project or its remote and must
+    // work without a User being set
+    configureCore({ readOnly: true });
+    const props = pullSchema.parse(options);
+
+    await pullAction(props);
   });
 
 await program.parseAsync();

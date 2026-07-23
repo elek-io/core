@@ -55,6 +55,7 @@ Core reads its environment variables once at construction, never at import. All 
 | `ELEK_IO_READ_ONLY`  | Set to `true` to put Core into read-only mode                       | unset            |
 | `ELEK_IO_TOKEN`      | Token for authenticating git operations against a private remote    | unset            |
 | `ELEK_IO_TOKEN_USER` | The username presented alongside `ELEK_IO_TOKEN`                    | `x-access-token` |
+| `ELEK_IO_REF`        | The content state provisioning checks out, overrides configured refs | unset            |
 
 `ELEK_IO_TOKEN` is handed to git per invocation through an askpass helper. It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches. Prompts are disabled, a missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it. While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before.
 
@@ -291,6 +292,7 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 - `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported.
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
+- `elek pull --project <id> --url <url>` - provision a Project from its remote into the data directory, meant for CI builds. `--ref` selects `production` (default), `work` or a Release version, and is overridden by the `ELEK_IO_REF` environment variable. Runs read-only, so no User is required. Authentication against private remotes uses `ELEK_IO_TOKEN`. See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-project-for-builds).
 
 The global `--data-dir <path>` option sets the data directory for any command, e.g. `elek --data-dir /path/to/data export`. It overrides the `ELEK_IO_DATA_DIR` environment variable and defaults to `~/elek.io`, see [Options](#options).
 

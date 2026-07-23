@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exportSchema, apiStartSchema } from './cliSchema.js';
+import { exportSchema, apiStartSchema, pullSchema } from './cliSchema.js';
 import { v4 } from 'uuid';
 
 const baseInput = {
@@ -113,5 +113,46 @@ describe('apiStartSchema', () => {
     const result = apiStartSchema.parse({ port: 'abc' });
 
     expect(result.port).toBeNaN();
+  });
+});
+
+describe('pullSchema', () => {
+  it('parses project, url and ref', () => {
+    const id = v4();
+    const result = pullSchema.parse({
+      project: id,
+      url: 'https://example.com/repo.git',
+      ref: 'work',
+    });
+
+    expect(result).toEqual({
+      project: id,
+      url: 'https://example.com/repo.git',
+      ref: 'work',
+    });
+  });
+
+  it('accepts a Release version as ref and trims the url', () => {
+    const result = pullSchema.parse({
+      project: v4(),
+      url: '  https://example.com/repo.git  ',
+      ref: '1.2.3',
+    });
+
+    expect(result.url).toEqual('https://example.com/repo.git');
+    expect(result.ref).toEqual('1.2.3');
+  });
+
+  it('rejects a missing project id and an invalid ref', () => {
+    expect(() =>
+      pullSchema.parse({ url: 'https://example.com/repo.git' })
+    ).toThrow();
+    expect(() =>
+      pullSchema.parse({
+        project: v4(),
+        url: 'https://example.com/repo.git',
+        ref: 'not a ref',
+      })
+    ).toThrow();
   });
 });

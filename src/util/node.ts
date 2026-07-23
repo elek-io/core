@@ -36,6 +36,20 @@ export function resolveReadOnly(readOnly?: boolean): boolean {
 }
 
 /**
+ * Resolves the content ref to provision
+ *
+ * Precedence: the ELEK_IO_REF environment variable wins over the
+ * given ref, which wins over the default `production`. The
+ * environment variable is the CI override channel, so it beats
+ * configuration checked into a repository. An empty or
+ * whitespace-only value counts as unset.
+ */
+export function resolveContentRef(ref?: string): string {
+  const fromEnv = process.env['ELEK_IO_REF']?.trim();
+  return fromEnv || ref?.trim() || 'production';
+}
+
+/**
  * Creates a collection of often used paths, rooted at the given data directory
  */
 export function createPathTo(dataDir: string) {
