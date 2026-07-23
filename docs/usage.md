@@ -325,6 +325,33 @@ export const collections = {
 
 Both loaders accept a `core` property with the same options as the `ElekIoCore` constructor, so `elekEntries({ ..., core: { dataDir: '/path/to/data' } })` reads from a custom data directory. Note that all loaders share one Core instance, created by whichever loader runs first. Later `core` options are silently ignored, so pass identical `core` options to every loader or leave them off entirely. To change the data directory, prefer setting `ELEK_IO_DATA_DIR` in the build environment, which applies no matter which loader runs first.
 
+### Provisioning in CI with elek()
+
+The loaders read from the local data directory, which is empty on a CI runner. The `elek()` integration fills it: declare each Project with its remote URL and the integration provisions it before Astro's content sync runs.
+
+```javascript
+// astro.config.mjs
+import { defineConfig } from 'astro/config';
+import { elek } from '@elek-io/core/astro';
+
+export default defineConfig({
+  integrations: [
+    elek({
+      projects: [
+        {
+          id: 'abc-123-...',
+          remoteUrl: 'https://github.com/acme/website-content.git',
+        },
+      ],
+    }),
+  ],
+});
+```
+
+Each Project takes an optional `ref` (`production`, `work` or a Release version, default `production`), overridden by the `ELEK_IO_REF` environment variable. Private remotes authenticate through `ELEK_IO_TOKEN`. The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated. A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content. Without the integration, a missing Project fails the build with an error pointing here. The underlying behavior is documented in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-project-for-builds).
+
+Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (production)`.
+
 For rendering `markdown` field Values (including the required `html`, `assetReference` and `entryReference` handlers), see [`markdown-content.md`](./markdown-content.md).
 
 ## See Also

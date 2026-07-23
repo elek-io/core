@@ -1,11 +1,14 @@
+import type { AstroIntegration } from 'astro';
 import type { Loader } from 'astro/loaders';
 import Path from 'node:path';
 import Fs from 'fs-extra';
 import ElekIoCore, {
   assetSchema,
+  CoreError,
   flattenFieldDefinitions,
   type ConstructorElekIoCoreProps,
 } from './index.node.js';
+import { resolveContentRef } from './util/node.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
@@ -58,6 +61,41 @@ function getCore(options?: ConstructorElekIoCoreProps): ElekIoCore {
 }
 
 /**
+ * Throws a typed, actionable error when the Project is not in the
+ * data directory, which on a CI runner usually means the elek()
+ * integration is missing from astro.config
+ */
+async function ensureProjectAvailable(
+  core: ElekIoCore,
+  projectId: string
+): Promise<void> {
+  if (await Fs.pathExists(core.util.pathTo.project(projectId))) {
+    return;
+  }
+  throw CoreError.notFound(
+    `Project "${projectId}" was not found in the data directory "${core.options.dataDir}". Add the elek() integration to astro.config to provision it from its remote, or point ELEK_IO_DATA_DIR at the directory holding the Project. See the ci-builds guide in the docs of @elek-io/core.`
+  );
+}
+
+/**
+ * Logs which content state a loader is about to read, so every build
+ * states its source and ref
+ */
+async function logReadingProject(
+  core: ElekIoCore,
+  projectId: string,
+  log: (message: string) => void
+): Promise<void> {
+  const project = await core.projects.read({ id: projectId });
+  const branch = await core.projects.branches.current({ id: projectId });
+  log(
+    `Reading Project "${project.name}" version ${project.version} (${
+      branch || 'pinned Release'
+    }) from "${core.options.dataDir}"`
+  );
+}
+
+/**
  * Astro content loader for elek.io Assets.
  *
  * Reads and saves Assets from a Project and exposes them through
@@ -85,6 +123,10 @@ export function elekAssets(props: ElekAssetsProps): Loader {
     schema: assetSchema,
     load: async (context) => {
       const core = getCore(props.core);
+      await ensureProjectAvailable(core, props.projectId);
+      await logReadingProject(core, props.projectId, (message) =>
+        context.logger.info(message)
+      );
       context.logger.info(
         `Loading elek.io Assets for Project "${props.projectId}", saving to "${props.outDir}"`
       );
@@ -166,6 +208,7 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
     name: 'elek-entries',
     createSchema: async () => {
       const core = getCore(props.core);
+      await ensureProjectAvailable(core, props.projectId);
       const resolvedId = await core.collections.resolveCollectionId({
         projectId: props.projectId,
         idOrSlug: props.collectionIdOrSlug,
@@ -197,6 +240,10 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
     },
     load: async (context) => {
       const core = getCore(props.core);
+      await ensureProjectAvailable(core, props.projectId);
+      await logReadingProject(core, props.projectId, (message) =>
+        context.logger.info(message)
+      );
       const resolvedCollectionId = await core.collections.resolveCollectionId({
         projectId: props.projectId,
         idOrSlug: props.collectionIdOrSlug,
@@ -236,6 +283,101 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
       }
 
       context.logger.info('Finished loading Entries');
+    },
+  };
+}
+
+interface ElekProjectProps {
+  /**
+   * ID of the Project to provision
+   */
+  id: string;
+  /**
+   * The remote repository URL to provision from
+   */
+  remoteUrl: string;
+  /**
+   * The content state to provision: `production`, `work` or a Release
+   * version. The ELEK_IO_REF environment variable overrides this.
+   *
+   * @default 'production'
+   */
+  ref?: string;
+}
+
+interface ElekIntegrationProps {
+  /**
+   * The Projects this site consumes
+   */
+  projects: ElekProjectProps[];
+  /**
+   * Options for the short-lived Core the integration provisions with.
+   * Prefer the ELEK_IO_* environment variables, which also reach the
+   * loaders' own Core instance.
+   */
+  core?: ConstructorElekIoCoreProps;
+}
+
+/**
+ * Astro integration that provisions the declared Projects from their
+ * remotes before Astro's content sync runs, so the elekAssets and
+ * elekEntries loaders find them in the data directory - also on CI
+ * runners that start with an empty one.
+ *
+ * Runs on its own short-lived read-only Core, so no User is required
+ * and nothing is ever mutated. A locally existing Project managed by
+ * another application (e.g. the Desktop app) is left untouched, so
+ * local development keeps reading the live working copy. Private
+ * remotes authenticate through the ELEK_IO_TOKEN environment variable.
+ *
+ * @example
+ * ```js
+ * // astro.config.mjs
+ * import { defineConfig } from 'astro/config';
+ * import { elek } from '@elek-io/core/astro';
+ *
+ * export default defineConfig({
+ *   integrations: [
+ *     elek({
+ *       projects: [
+ *         {
+ *           id: 'abc-123-...',
+ *           remoteUrl: 'https://github.com/acme/website-content.git',
+ *         },
+ *       ],
+ *     }),
+ *   ],
+ * });
+ * ```
+ */
+export function elek(props: ElekIntegrationProps): AstroIntegration {
+  return {
+    name: 'elek',
+    hooks: {
+      'astro:config:setup': async ({ logger }) => {
+        // An own short-lived Core, disposed after provisioning: the
+        // loaders' shared instance lives in another module graph and
+        // both coordinate through the data directory and env vars only
+        const core = new ElekIoCore({ ...props.core, readOnly: true });
+        try {
+          for (const project of props.projects) {
+            const ref = resolveContentRef(project.ref);
+            logger.info(
+              `Provisioning Project "${project.id}" at "${ref}" from "${project.remoteUrl}"`
+            );
+            const ensured = await core.projects.ensureFromRemote({
+              id: project.id,
+              url: project.remoteUrl,
+              ref,
+            });
+            logger.info(
+              `Project "${ensured.name}" (${ensured.id}) is available at version ${ensured.version}`
+            );
+          }
+        } finally {
+          await core.dispose();
+        }
+      },
     },
   };
 }
