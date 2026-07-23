@@ -142,7 +142,7 @@ When a remote `origin` is set, `core.releases` pushes at creation time: a full R
 
 | Error type                 | When                                                                                                                                |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `Unauthorized` (401)       | A commit (or `init` / `clone` config) is attempted with no User set.                                                                |
+| `Unauthorized` (401)       | A commit (or `init` / `clone` config) is attempted with no User set. In read-only mode, cloning needs no User, see [`usage.md`](./usage.md#options). |
 | `PreconditionFailed` (412) | `getChanges()` or a guarded `delete()` runs without a remote `origin`, or a push fails because the remote does not support Git LFS. |
 | `Conflict` (409)           | `clone()` targets an already-present Project, or a guarded `delete()` has unpushed commits.                                         |
 | `Internal` (500)           | The underlying git command exits non-zero (no upstream, merge conflict, network, ...).                                              |

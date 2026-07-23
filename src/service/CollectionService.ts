@@ -123,6 +123,7 @@ export class CollectionService
   public async create<T extends Collection = Collection>(
     props: CreateCollectionProps
   ): Promise<T> {
+    this.assertNotReadOnly('create');
     const { projectId } = this.parseOrThrow(
       'create',
       z.object({ projectId: uuidSchema }),
@@ -130,7 +131,7 @@ export class CollectionService
     );
     const languages = await this.readProjectLanguages(projectId);
 
-    return this.validated(
+    return this.mutating(
       'create',
       getCreateCollectionSchemaFromLanguages(languages),
       props,
@@ -294,6 +295,7 @@ export class CollectionService
   public async update<T extends Collection = Collection>(
     props: UpdateCollectionProps
   ): Promise<T> {
+    this.assertNotReadOnly('update');
     const { projectId } = this.parseOrThrow(
       'update',
       z.object({ projectId: uuidSchema }),
@@ -301,7 +303,7 @@ export class CollectionService
     );
     const languages = await this.readProjectLanguages(projectId);
 
-    return this.validated(
+    return this.mutating(
       'update',
       getUpdateCollectionSchemaFromLanguages(languages),
       props,
@@ -629,7 +631,7 @@ export class CollectionService
    * The Fields that Collection used are not deleted.
    */
   public async delete(props: DeleteCollectionProps): Promise<void> {
-    return this.validated(
+    return this.mutating(
       'delete',
       deleteCollectionSchema,
       props,

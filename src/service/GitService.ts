@@ -53,6 +53,7 @@ export class GitService {
   private version: string | null;
   private gitPath: string | null;
   private queue: PQueue;
+  private options: ElekIoCoreOptions;
   private logService: LogService;
   private gitTagService: GitTagService;
   private userService: UserService;
@@ -76,6 +77,7 @@ export class GitService {
       this.git.bind(this),
       logService
     );
+    this.options = options;
     this.logService = logService;
     this.userService = userService;
     this.jsonFileService = jsonFileService;
@@ -103,6 +105,12 @@ export class GitService {
     path: string,
     options?: Partial<GitInitOptions>
   ): Promise<void> {
+    if (this.options.readOnly) {
+      throw CoreError.preconditionFailed(
+        'Cannot init a repository because Core is in read-only mode'
+      );
+    }
+
     let args = ['init'];
 
     if (options?.initialBranch) {
@@ -150,7 +158,11 @@ export class GitService {
     }
 
     await this.git('', [...args, url, path]);
-    await this.setLocalConfig(path);
+    // A read-only Core never commits, so no git identity or behavior
+    // config is needed and no User has to be set
+    if (!this.options.readOnly) {
+      await this.setLocalConfig(path);
+    }
 
     // A bare clone has no working tree, so LFS materialization does not apply
     // (and would error). A bare repository is a remote, not a working Project.
@@ -700,6 +712,12 @@ export class GitService {
     path: string,
     options?: Partial<{ all: boolean; force: boolean; refs: string[] }>
   ): Promise<void> {
+    if (this.options.readOnly) {
+      throw CoreError.preconditionFailed(
+        'Cannot push because Core is in read-only mode'
+      );
+    }
+
     if (options?.all === true && options?.refs) {
       throw CoreError.badRequest(
         'The "all" and "refs" push options are mutually exclusive'
@@ -759,6 +777,12 @@ export class GitService {
    * @param message An object describing the changes
    */
   public async commit(path: string, message: GitMessage): Promise<void> {
+    if (this.options.readOnly) {
+      throw CoreError.preconditionFailed(
+        'Cannot commit because Core is in read-only mode'
+      );
+    }
+
     const parsed = gitMessageSchema.safeParse(message);
     if (!parsed.success) {
       throw CoreError.badRequest(parsed.error.message, parsed.error);

@@ -106,7 +106,7 @@ export class ProjectService
    * Creates a new Project
    */
   public create(props: CreateProjectProps): Promise<Project> {
-    return this.validated(
+    return this.mutating(
       'create',
       createProjectSchema,
       props,
@@ -232,7 +232,7 @@ export class ProjectService
    * Updates given Project
    */
   public update(props: UpdateProjectProps): Promise<Project> {
-    return this.validated(
+    return this.mutating(
       'update',
       updateProjectSchema,
       props,
@@ -269,7 +269,7 @@ export class ProjectService
    * Needed when a new Core version is requiring changes to existing files or structure.
    */
   public upgrade(props: UpgradeProjectProps): Promise<void> {
-    return this.validated('upgrade', upgradeProjectSchema, props, async () => {
+    return this.mutating('upgrade', upgradeProjectSchema, props, async () => {
       const projectPath = this.pathTo.project(props.id);
       const projectFilePath = this.pathTo.projectFile(props.id);
 
@@ -533,7 +533,7 @@ export class ProjectService
   public setRemoteOriginUrl(
     props: SetRemoteOriginUrlProjectProps
   ): Promise<void> {
-    return this.validated(
+    return this.mutating(
       'setRemoteOriginUrl',
       setRemoteOriginUrlProjectSchema,
       props,
@@ -624,7 +624,7 @@ export class ProjectService
    * reconciled here.
    */
   public synchronize(props: SynchronizeProjectProps): Promise<void> {
-    return this.validated(
+    return this.mutating(
       'synchronize',
       synchronizeProjectSchema,
       props,
@@ -697,7 +697,7 @@ export class ProjectService
    * or changes are not pushed to a remote yet.
    */
   public delete(props: DeleteProjectProps): Promise<void> {
-    return this.validated('delete', deleteProjectSchema, props, async () => {
+    return this.mutating('delete', deleteProjectSchema, props, async () => {
       const hasRemoteOrigin = await this.gitService.remotes.hasOrigin(
         this.pathTo.project(props.id)
       );
@@ -737,7 +737,9 @@ export class ProjectService
           );
           const projectFile = migrateProjectSchema.parse(json);
 
-          if (projectFile.coreVersion !== this.coreVersion) {
+          // A Project newer than the installed Core is skewed, not outdated,
+          // so it must not be offered for an upgrade
+          if (Semver.lt(projectFile.coreVersion, this.coreVersion)) {
             return this.migrate(projectFile);
           }
 

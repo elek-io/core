@@ -21,6 +21,21 @@ export function resolveDataDir(dataDir?: string): string {
 }
 
 /**
+ * Resolves whether Core runs in read-only mode
+ *
+ * Precedence: the given value wins over the ELEK_IO_READ_ONLY
+ * environment variable, which defaults to false. The environment
+ * variable counts as true only when set to `true`, an empty or
+ * whitespace-only value counts as unset.
+ */
+export function resolveReadOnly(readOnly?: boolean): boolean {
+  if (readOnly !== undefined) {
+    return readOnly;
+  }
+  return process.env['ELEK_IO_READ_ONLY']?.trim() === 'true';
+}
+
+/**
  * Creates a collection of often used paths, rooted at the given data directory
  */
 export function createPathTo(dataDir: string) {

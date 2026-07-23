@@ -22,6 +22,10 @@ Is data.coreVersion === targetVersion? --yes--> return data
   |
   no
   v
+Is data.coreVersion newer than targetVersion (semver)? --yes--> throw VersionSkew
+  |
+  no
+  v
 Find migration where migration.from === data.coreVersion
   |
   +--> Found: run migration, stamp coreVersion = migration.to, loop back
@@ -32,7 +36,8 @@ Find migration where migration.from === data.coreVersion
 - Migrations are exact version matches (`from: '1.0.0'`), not semver ranges
 - Each `Migration.run()` is a pure function - it must not mutate input or set `coreVersion`
 - `applyMigrations` stamps `coreVersion` after each step
-- If no migration exists for a version gap, the data is assumed backward-compatible
+- If no migration exists for an older version gap, the data is assumed backward-compatible
+- Data written by a Core newer than the installed one throws a `CoreError` of type `VersionSkew` naming both versions. It is never silently down-stamped. The comparison uses semver, so build metadata is ignored and a stable version counts as newer than its own pre-releases.
 
 ### Migration files
 

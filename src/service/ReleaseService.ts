@@ -205,7 +205,7 @@ export class ReleaseService extends AbstractService {
    * 7. Pushing `production` and the tag to `origin`, if a remote is set
    */
   public create(props: CreateReleaseProps): Promise<ReleaseResult> {
-    return this.validated('create', createReleaseSchema, props, async () => {
+    return this.mutating('create', createReleaseSchema, props, async () => {
       const projectPath = this.pathTo.project(props.projectId);
       const projectFilePath = this.pathTo.projectFile(props.projectId);
 
@@ -303,7 +303,7 @@ export class ReleaseService extends AbstractService {
   public createPreview(
     props: CreatePreviewReleaseProps
   ): Promise<ReleaseResult> {
-    return this.validated(
+    return this.mutating(
       'createPreview',
       createPreviewReleaseSchema,
       props,

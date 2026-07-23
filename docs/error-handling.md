@@ -12,8 +12,9 @@ A class extending `Error` with 7 typed variants (`src/util/shared.ts`):
 | `BadRequest`         | 400         | Invalid input, bad UUID, unsupported file type |
 | `Unauthorized`       | 401         | No user configured                             |
 | `Conflict`           | 409         | Sync failed, uncommitted changes, slug clash   |
-| `PreconditionFailed` | 412         | Remote origin missing (setup required)         |
+| `PreconditionFailed` | 412         | Remote origin missing (setup required), mutation attempted in read-only mode |
 | `UpgradeFailed`      | 422         | Project version upgrade failed                 |
+| `VersionSkew`        | 422         | Content written by a newer Core than installed |
 | `Internal`           | 500         | Git errors, FS errors, unexpected failures     |
 
 Static factory methods:

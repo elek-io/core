@@ -48,6 +48,42 @@ export abstract class AbstractService {
   }
 
   /**
+   * Throws a logged `CoreError.preconditionFailed` when Core is in
+   * read-only mode. mutating() calls this before validating, methods
+   * that read before they can validate call it directly at their
+   * entry point.
+   */
+  protected assertNotReadOnly(context: string): void {
+    if (this.options.readOnly !== true) {
+      return;
+    }
+    const error = CoreError.preconditionFailed(
+      `Cannot ${context} because Core is in read-only mode`
+    );
+    this.logService.error({
+      source: 'core',
+      message: `[${error.type}] (${this.type}.${context}) ${error.message}`,
+    });
+    throw error;
+  }
+
+  /**
+   * Like validated(), but for methods that mutate a Project or its remote.
+   * Throws a logged `CoreError.preconditionFailed` in read-only mode,
+   * before the input is validated, because the operation is forbidden
+   * regardless of its input.
+   */
+  protected async mutating<TSchema, TResult>(
+    context: string,
+    schema: ZodType<TSchema>,
+    data: unknown,
+    body: (props: TSchema) => Promise<TResult>
+  ): Promise<TResult> {
+    this.assertNotReadOnly(context);
+    return this.validated(context, schema, data, body);
+  }
+
+  /**
    * Validates input with a Zod schema and runs the body if valid.
    * Logs errors at the service boundary and re-throws.
    * Should be used at the entry point of every public service method that needs schema validation.
