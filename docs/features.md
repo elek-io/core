@@ -54,6 +54,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 - **Generated API clients** - typed JavaScript / TypeScript clients (ESM or CJS) via `elek generate:client`.
 - **Generated TypeScript types** - type definitions emitted directly from Project content models via `elek generate:types`.
 - **Astro integration** - `elekAssets()` / `elekEntries()` content loaders plus a `mdastRender` helper, from `@elek-io/core/astro`.
+- **CI provisioning** - the `elek()` Astro integration and `elek pull` provision Projects from their remotes into empty build environments. See [`ci-builds.md`](./ci-builds.md).
 - **JSON export** - export Projects to JSON (nested or separate files) via `elek export`, with a `--watch` mode for automatic re-exports.
 
 ## Rich content

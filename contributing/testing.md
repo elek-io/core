@@ -45,6 +45,10 @@ Test files run in parallel, one file per vitest worker. This works because no st
 - Tests that bind the local API use `testApiPort` from [`src/test/setup.ts`](../src/test/setup.ts), which is `31310 + poolId`, so concurrent workers never contend for a port. 31310 stays the documented product default.
 - All of this relies on the vitest `forks` pool (the default), where each test file gets its own process and env. Switching to the `threads` pool would break the per-file env derivation and the `vi.stubEnv` based tests.
 
+### Limitation: git credentials cannot be integration-tested
+
+The suite's remotes are bare repositories on the local filesystem, and git skips its whole credential machinery for local paths. The `ELEK_IO_TOKEN` askpass flow (`buildCredentialEnv` and the helper scripts in `GitService`) is therefore covered by unit tests on the env it builds, plus a negative integration test asserting the token never lands in `.git/config` or the remote URL. What no test covers: git actually invoking the askpass helper against an HTTP remote, and the Windows `.bat` trampoline in particular, plus LFS object availability for old Release tags on real providers. Verify those manually against a real private HTTPS remote when touching the credential path, and before releasing changes to it. A local HTTP git server fixture would close this gap if it ever becomes worth the setup.
+
 ### Worker count: do not set it
 
 `maxWorkers` is deliberately not configured. Vitest computes it per machine from `os.availableParallelism()`: all cores minus one for `vitest run`, half the cores in watch mode so the machine stays responsive. That call is cgroup aware, so containers and CI runners get their real quota, not the host core count. Measurements below show the suite saturates early (4 workers are within 10% of 11), so raising the count buys nothing and lowering it only slows local runs. Do not add `maxWorkers` to `vitest.config.ts`, it would pin every machine to one value and the `VITEST_MAX_WORKERS` env var overrides the config anyway.
