@@ -49,10 +49,14 @@ The resolved options are exposed on `core.options`, and the running Core version
 
 Core reads its environment variables once at construction, never at import. All of them use the `ELEK_IO_` prefix with SCREAMING_SNAKE_CASE names. An empty or whitespace-only value counts as unset. When a constructor option covers the same setting, the option wins over the environment.
 
-| Variable            | Purpose                                              | Default     |
-| ------------------- | ---------------------------------------------------- | ----------- |
-| `ELEK_IO_DATA_DIR`  | The directory Core reads and writes data in          | `~/elek.io` |
-| `ELEK_IO_READ_ONLY` | Set to `true` to put Core into read-only mode        | unset       |
+| Variable             | Purpose                                                             | Default          |
+| -------------------- | ------------------------------------------------------------------- | ---------------- |
+| `ELEK_IO_DATA_DIR`   | The directory Core reads and writes data in                         | `~/elek.io`      |
+| `ELEK_IO_READ_ONLY`  | Set to `true` to put Core into read-only mode                       | unset            |
+| `ELEK_IO_TOKEN`      | Token for authenticating git operations against a private remote    | unset            |
+| `ELEK_IO_TOKEN_USER` | The username presented alongside `ELEK_IO_TOKEN`                    | `x-access-token` |
+
+`ELEK_IO_TOKEN` is handed to git per invocation through an askpass helper. It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches. Prompts are disabled, a missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it. While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before.
 
 On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room. See the limitation in [`features.md`](./features.md#intentional-constraints). macOS and Linux allow 1024 and 4096 characters and are not affected.
 

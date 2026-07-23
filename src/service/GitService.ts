@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
+import Fs from 'fs-extra';
 import type { IGitExecutionOptions, IGitStringResult } from 'dugite';
 import { exec as gitExec, GitError, parseError } from 'dugite';
 import PQueue from 'p-queue';
@@ -49,11 +50,75 @@ import type { PathTo } from '../util/node.js';
  */
 type GitCommandOptions = IGitExecutionOptions & { tolerateNonZero?: boolean };
 
+/**
+ * Builds the environment for git commands.
+ *
+ * Terminal prompts are always disabled, so a missing or wrong token
+ * fails a command instead of hanging it. With a token, GIT_ASKPASS
+ * points at the askpass helper and the token travels by environment
+ * variable only, never as an argument, a URL or repository config.
+ */
+export function buildCredentialEnv(
+  token: string | null,
+  tokenUser: string,
+  askpassPath: string | null
+): Record<string, string> {
+  const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' };
+  if (token === null || askpassPath === null) {
+    return env;
+  }
+  return {
+    ...env,
+    GIT_ASKPASS: askpassPath,
+    ELEK_IO_ASKPASS_TOKEN: token,
+    ELEK_IO_ASKPASS_TOKEN_USER: tokenUser,
+    // Configured credential helpers would take precedence over the
+    // askpass fallback. An empty helper entry resets the list, so the
+    // token is authoritative while it is set.
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'credential.helper',
+    GIT_CONFIG_VALUE_0: '',
+  };
+}
+
+/**
+ * Classifies an authentication failure from git's stderr, so a bad or
+ * missing token surfaces as a typed `Unauthorized` naming the fix
+ * instead of raw git output. Returns null for everything else.
+ */
+export function classifyAuthError(
+  stderr: string,
+  hasToken: boolean
+): CoreError | null {
+  const parsed = parseError(stderr);
+  const isAuthError =
+    parsed === GitError.HTTPSAuthenticationFailed ||
+    parsed === GitError.SSHAuthenticationFailed ||
+    // Prompts are disabled, so git fails to read credentials it would
+    // otherwise ask for. dugite does not classify this case.
+    /could not read (Username|Password) for/i.test(stderr) ||
+    /terminal prompts disabled/i.test(stderr);
+  if (!isAuthError) {
+    return null;
+  }
+  if (hasToken) {
+    return CoreError.unauthorized(
+      'The remote rejected the provided token. Check ELEK_IO_TOKEN and ELEK_IO_TOKEN_USER.'
+    );
+  }
+  return CoreError.unauthorized(
+    'The remote requires authentication. Set the ELEK_IO_TOKEN environment variable.'
+  );
+}
+
 export class GitService {
   private version: string | null;
   private gitPath: string | null;
   private queue: PQueue;
   private options: ElekIoCoreOptions;
+  private pathTo: PathTo;
+  private token: string | null;
+  private tokenUser: string;
   private logService: LogService;
   private gitTagService: GitTagService;
   private userService: UserService;
@@ -78,6 +143,11 @@ export class GitService {
       logService
     );
     this.options = options;
+    this.pathTo = pathTo;
+    // Read once at construction, never at import
+    this.token = process.env['ELEK_IO_TOKEN']?.trim() || null;
+    this.tokenUser =
+      process.env['ELEK_IO_TOKEN_USER']?.trim() || 'x-access-token';
     this.logService = logService;
     this.userService = userService;
     this.jsonFileService = jsonFileService;
@@ -168,10 +238,16 @@ export class GitService {
     // (and would error). A bare repository is a remote, not a working Project.
     if (options?.bare !== true) {
       // `git clone` only fetches LFS objects for the checked-out ref (if any).
-      // Install LFS, then fetch the whole history into the local store and
-      // materialize the working tree, so all Assets are available offline.
+      // Install LFS, then fetch into the local store and materialize the
+      // working tree. The default fetches the whole history, so all Assets
+      // are available offline. The `current` scope only fetches the
+      // checked-out ref, meant for build-mode clones.
       await this.lfs.install(path);
-      await this.lfs.fetchAll(path);
+      if (options?.lfs === 'current') {
+        await this.lfs.fetch(path);
+      } else {
+        await this.lfs.fetchAll(path);
+      }
       await this.lfs.checkout(path);
     }
 
@@ -280,8 +356,19 @@ export class GitService {
 
       let args = ['switch'];
 
+      if (options?.discardChanges === true) {
+        args = [...args, '--discard-changes'];
+      }
+
       if (options?.isNew === true) {
         args = [...args, '--create', branch];
+      } else if (options?.forceCreate === true) {
+        args = [...args, '--force-create', branch];
+        if (options.startPoint) {
+          args = [...args, options.startPoint];
+        }
+      } else if (options?.detach === true) {
+        args = [...args, '--detach', branch];
       } else {
         args = [...args, branch];
       }
@@ -437,6 +524,17 @@ export class GitService {
      */
     fetchAll: async (path: string): Promise<void> => {
       await this.git(path, ['lfs', 'fetch', '--all']);
+    },
+    /**
+     * Downloads the LFS objects of the currently checked-out ref from
+     * the `origin` remote into the local LFS store
+     *
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-fetch.adoc
+     *
+     * @param path Path to the repository
+     */
+    fetch: async (path: string): Promise<void> => {
+      await this.git(path, ['lfs', 'fetch', 'origin']);
     },
     /**
      * Materializes (smudges) working-tree files from the local LFS store
@@ -668,13 +766,48 @@ export class GitService {
   /**
    * Download objects and refs from remote `origin`
    *
+   * The `ref` option restricts the fetch to a single ref and can be a
+   * branch name or a full refspec. The `depth` option limits the
+   * fetched history.
+   *
    * @see https://www.git-scm.com/docs/git-fetch
    *
-   * @param path Path to the repository
+   * @param path    Path to the repository
+   * @param options Options specific to the fetch operation
    */
-  public async fetch(path: string): Promise<void> {
-    const args = ['fetch'];
+  public async fetch(
+    path: string,
+    options?: Partial<{ ref: string; depth: number }>
+  ): Promise<void> {
+    let args = ['fetch'];
+
+    if (options?.depth) {
+      args = [...args, '--depth', options.depth.toString()];
+    }
+
+    if (options?.ref) {
+      args = [...args, 'origin', options.ref];
+    }
+
     await this.git(path, args);
+  }
+
+  /**
+   * Lists the ref names a remote repository advertises, without cloning
+   *
+   * @see https://git-scm.com/docs/git-ls-remote
+   *
+   * @param url The remote repository URL
+   */
+  public async lsRemote(url: string): Promise<string[]> {
+    const result = await this.git('', ['ls-remote', '--quiet', url]);
+    return result.stdout
+      .split('\n')
+      .map((line) => line.trim().split('\t')[1])
+      .filter(
+        (ref): ref is string =>
+          ref !== undefined && ref !== '' && !ref.endsWith('^{}')
+      );
   }
 
   /**
@@ -752,6 +885,10 @@ export class GitService {
       tolerateNonZero: true,
     });
     if (result.exitCode !== 0) {
+      const authError = classifyAuthError(result.stderr, this.token !== null);
+      if (authError) {
+        throw authError;
+      }
       const message = `${result.stderr}\n${result.stdout}`.trim();
       // A non-fast-forward rejection is recoverable by re-integrating the
       // remote and pushing again, so it is surfaced distinctly from a genuine
@@ -1040,6 +1177,60 @@ export class GitService {
   }
 
   /**
+   * The environment for git commands, built from the ELEK_IO_TOKEN
+   * and ELEK_IO_TOKEN_USER environment variables read at construction
+   */
+  private async credentialEnv(): Promise<Record<string, string>> {
+    if (this.token === null) {
+      return buildCredentialEnv(null, this.tokenUser, null);
+    }
+    return buildCredentialEnv(
+      this.token,
+      this.tokenUser,
+      await this.writeAskpassScript()
+    );
+  }
+
+  /**
+   * Writes the askpass helper into the tmp directory and returns the
+   * path git invokes. The helper answers git's username prompt with
+   * the token user and every other prompt with the token itself, both
+   * read from its environment.
+   */
+  private async writeAskpassScript(): Promise<string> {
+    // Written on every call: cheap, serialized by the queue, and
+    // self-healing against the tmp directory being emptied
+    await Fs.ensureDir(this.pathTo.tmp);
+    const scriptPath = Path.join(this.pathTo.tmp, 'askpass.cjs');
+    const script = [
+      "const prompt = process.argv[2] || '';",
+      "const value = prompt.startsWith('Username')",
+      "  ? process.env['ELEK_IO_ASKPASS_TOKEN_USER']",
+      "  : process.env['ELEK_IO_ASKPASS_TOKEN'];",
+      "process.stdout.write((value || '') + '\\n');",
+      '',
+    ].join('\n');
+    await Fs.writeFile(scriptPath, script);
+
+    if (process.platform === 'win32') {
+      const batPath = Path.join(this.pathTo.tmp, 'askpass.bat');
+      await Fs.writeFile(
+        batPath,
+        `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`
+      );
+      return batPath;
+    }
+
+    const shPath = Path.join(this.pathTo.tmp, 'askpass.sh');
+    await Fs.writeFile(
+      shPath,
+      `#!/bin/sh\nexec "${process.execPath}" "${scriptPath}" "$@"\n`,
+      { mode: 0o700 }
+    );
+    return shPath;
+  }
+
+  /**
    * Sets the git config of given local repository from ElekIoCoreOptions
    *
    * @param path Path to the repository
@@ -1097,6 +1288,11 @@ export class GitService {
   ): Promise<IGitStringResult> {
     const { tolerateNonZero, ...execOptions } = options;
     const result = await this.queue.add(async () => {
+      // Every git invocation gets the credential environment, so remote
+      // operations and on-demand LFS smudges authenticate the same way
+      // and never prompt. Built inside the queue, so the askpass write
+      // is serialized with every other git operation.
+      execOptions.env = { ...(await this.credentialEnv()), ...execOptions.env };
       const start = Date.now();
       const gitResult = await gitExec(args, path, execOptions);
       const durationMs = Date.now() - start;
@@ -1123,6 +1319,13 @@ export class GitService {
     }
 
     if (result.gitResult.exitCode !== 0 && tolerateNonZero !== true) {
+      const authError = classifyAuthError(
+        result.gitResult.stderr.toString(),
+        this.token !== null
+      );
+      if (authError) {
+        throw authError;
+      }
       throw CoreError.internal(
         `Git ${this.version} (${this.gitPath}) command "git ${args.join(
           ' '

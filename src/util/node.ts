@@ -51,6 +51,11 @@ export function createPathTo(dataDir: string) {
     projectFile: (projectId: string): string => {
       return Path.join(pathTo.project(projectId), 'project.json');
     },
+    // A dotfile, so the Project's gitignore covers it. Its presence
+    // marks a copy as provisioned, Desktop copies never have it
+    projectProvisionedMarker: (projectId: string): string => {
+      return Path.join(pathTo.project(projectId), '.elek-provisioned');
+    },
 
     lfs: (projectId: string): string => {
       return Path.join(pathTo.project(projectId), projectFolderSchema.enum.lfs);

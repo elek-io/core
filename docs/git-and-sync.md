@@ -100,13 +100,35 @@ const project = await core.projects.clone({
 
 After cloning, Core fetches the whole LFS history into the local store and materializes the working-tree binaries, so all Assets (including older versions) are available offline. See [Git LFS](#git-lfs).
 
+## Provisioning a Project for builds
+
+`ensureFromRemote()` makes sure a Project is present in the data directory at a given content state, provisioning it from the remote when needed. It is the engine behind CI builds and is meant to run on a read-only Core, which clones and fetches without a User being set.
+
+```typescript
+const project = await core.projects.ensureFromRemote({
+  id: '<project-id>',
+  url: 'https://github.com/acme/website-content.git',
+  ref: 'production', // 'production' | 'work' | a Release version - default 'production'
+});
+```
+
+Three cases, decided by a provisioning marker file inside the Project directory:
+
+- **Missing**: the Project is cloned in build mode - shallow, single ref, LFS objects of the checked-out ref only - and the marker is written.
+- **Present with the marker**: the copy is fetched and hard-reset to the ref, so it always matches the remote.
+- **Present without the marker**: the copy is managed by another application (for example the Desktop app) and is left untouched.
+
+A `ref` naming a Release version checks out that Release's tag with a detached HEAD. An unknown version throws `NotFound` listing the available versions. Provisioning `production` from a remote that has no `production` branch throws `PreconditionFailed`, because no Release has been published yet.
+
+Private remotes authenticate through the `ELEK_IO_TOKEN` environment variable, see [`usage.md`](./usage.md#environment-variables). The token is passed to git per invocation and never written into a URL or the repository config.
+
 ## Git LFS
 
 Asset binaries are tracked with [Git LFS](https://git-lfs.com). It is always on - there is no per-Project toggle. git-lfs ships with dugite, so there is no extra dependency to install.
 
 **What gets configured.** At `create()` Core writes a `.gitattributes` that tracks `lfs/**`, then runs `git lfs install --local` so the clean filter turns every binary added under `lfs/` into a small pointer. The pointer is committed to git history, the actual bytes go to the local LFS store (`.git/lfs/objects`). The working-tree file stays the real binary, so reading an Asset returns its content directly.
 
-**Offline-first guarantee.** Core keeps every LFS object for the whole history present locally, so reading any Asset (current or historical) never needs the network:
+**Offline-first guarantee.** For full clones, Core keeps every LFS object for the whole history present locally, so reading any Asset (current or historical) never needs the network. A build-mode clone made by `ensureFromRemote()` intentionally opts out and only fetches the objects of the checked-out ref:
 
 - Locally created Projects already have their objects (the clean filter writes them on commit).
 - On `clone()`, Core runs `git lfs fetch --all` then `git lfs checkout` to pull every object across all refs and materialize the working tree.

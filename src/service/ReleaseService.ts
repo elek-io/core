@@ -11,6 +11,7 @@ import {
   prepareReleaseSchema,
   createReleaseSchema,
   createPreviewReleaseSchema,
+  listReleasesSchema,
   type AssetChange,
   type AssetFile,
   type CollectionFile,
@@ -25,6 +26,8 @@ import {
   type PrepareReleaseProps,
   type CreateReleaseProps,
   type CreatePreviewReleaseProps,
+  type ListReleasesProps,
+  type ReleaseListItem,
   type ProjectChange,
   type ProjectFile,
   type ReleaseDiff,
@@ -65,6 +68,36 @@ export class ReleaseService extends AbstractService {
     this.gitService = gitService;
     this.jsonFileService = jsonFileService;
     this.projectService = projectService;
+  }
+
+  /**
+   * Lists the Releases and preview Releases of a Project, newest first
+   *
+   * Reads the release and preview git tags. On a provisioned copy this
+   * works once the tag objects are fetched.
+   */
+  public list(
+    props: ListReleasesProps
+  ): Promise<{ list: ReleaseListItem[]; total: number }> {
+    return this.validated('list', listReleasesSchema, props, async () => {
+      const { list: tags } = await this.gitService.tags.list({
+        path: this.pathTo.project(props.projectId),
+      });
+
+      const releases: ReleaseListItem[] = [];
+      for (const tag of tags) {
+        if (tag.message.type === 'release' || tag.message.type === 'preview') {
+          releases.push({
+            tagId: tag.id,
+            type: tag.message.type,
+            version: tag.message.version,
+            datetime: tag.datetime,
+          });
+        }
+      }
+
+      return { list: releases, total: releases.length };
+    });
   }
 
   /**

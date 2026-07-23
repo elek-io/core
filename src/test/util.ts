@@ -142,6 +142,39 @@ export async function createLocalRemoteRepository() {
 }
 
 /**
+ * Creates a local bare remote seeded with a released Project.
+ *
+ * The remote holds a Collection and an Asset, one preview and one
+ * full Release, and a synchronized work branch. The local working
+ * copy is removed again, so the remote is the only place the
+ * Project exists. Used by provisioning tests.
+ */
+export async function seedRemoteWithRelease() {
+  const remoteProject = await createLocalRemoteRepository();
+  const remotePath = Path.join(core.util.pathTo.tmp, remoteProject.id);
+
+  const project = await core.projects.clone({ url: remotePath });
+  const collection = await createCollection(project.id);
+  const asset = await createAsset(project.id);
+  const preview = await core.releases.createPreview({
+    projectId: project.id,
+  });
+  const release = await core.releases.create({ projectId: project.id });
+  await core.projects.synchronize({ id: project.id });
+  await core.projects.delete({ id: project.id, force: true });
+
+  return {
+    projectId: project.id,
+    remotePath,
+    collectionId: collection.id,
+    assetId: asset.id,
+    assetExtension: asset.extension,
+    previewVersion: preview.version,
+    releaseVersion: release.version,
+  };
+}
+
+/**
  * Creates a new Project for testing
  *
  * The Project has a special destroy method, that removes the Project again.

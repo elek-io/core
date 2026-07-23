@@ -77,7 +77,14 @@ Previews are snapshots of the current `work` state for testing or sharing. Only 
 
 ## Reading releases
 
-Releases, previews and Core upgrades are git tags, read through `core.git.tags`:
+`core.releases.list()` returns the Releases and preview Releases of a Project, newest first. Each item carries the `version`, its `type` (`release` or `preview`), the `datetime`, and the `tagId` addressing it in git.
+
+```typescript
+const { list, total } = await core.releases.list({ projectId: project.id });
+// list[0] -> { version: '1.1.0', type: 'release', datetime: '...', tagId: '...' }
+```
+
+Underneath, Releases, previews and Core upgrades are git tags, read through `core.git.tags`:
 
 ```typescript
 const { list } = await core.git.tags.list({
