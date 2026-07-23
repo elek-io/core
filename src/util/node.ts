@@ -21,6 +21,35 @@ export function resolveDataDir(dataDir?: string): string {
 }
 
 /**
+ * Resolves whether Core runs in read-only mode
+ *
+ * Precedence: the given value wins over the ELEK_IO_READ_ONLY
+ * environment variable, which defaults to false. The environment
+ * variable counts as true only when set to `true`, an empty or
+ * whitespace-only value counts as unset.
+ */
+export function resolveReadOnly(readOnly?: boolean): boolean {
+  if (readOnly !== undefined) {
+    return readOnly;
+  }
+  return process.env['ELEK_IO_READ_ONLY']?.trim() === 'true';
+}
+
+/**
+ * Resolves the content ref to provision
+ *
+ * Precedence: the ELEK_IO_REF environment variable wins over the
+ * given ref, which wins over the default `production`. The
+ * environment variable is the CI override channel, so it beats
+ * configuration checked into a repository. An empty or
+ * whitespace-only value counts as unset.
+ */
+export function resolveContentRef(ref?: string): string {
+  const fromEnv = process.env['ELEK_IO_REF']?.trim();
+  return fromEnv || ref?.trim() || 'production';
+}
+
+/**
  * Creates a collection of often used paths, rooted at the given data directory
  */
 export function createPathTo(dataDir: string) {
@@ -35,6 +64,11 @@ export function createPathTo(dataDir: string) {
     },
     projectFile: (projectId: string): string => {
       return Path.join(pathTo.project(projectId), 'project.json');
+    },
+    // A dotfile, so the Project's gitignore covers it. Its presence
+    // marks a copy as provisioned, Desktop copies never have it
+    projectProvisionedMarker: (projectId: string): string => {
+      return Path.join(pathTo.project(projectId), '.elek-provisioned');
     },
 
     lfs: (projectId: string): string => {

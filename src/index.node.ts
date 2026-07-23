@@ -20,7 +20,12 @@ import {
   UserService,
 } from './service/index.js';
 import { LogService } from './service/LogService.js';
-import { createPathTo, resolveDataDir, type PathTo } from './util/node.js';
+import {
+  createPathTo,
+  resolveDataDir,
+  resolveReadOnly,
+  type PathTo,
+} from './util/node.js';
 import { CoreError } from './util/shared.js';
 
 // Export all schemas and shared code that works inside node environments,
@@ -62,6 +67,7 @@ export default class ElekIoCore {
       log: parsedProps.data?.log ?? { level: 'info' },
       file: parsedProps.data?.file ?? { cache: true },
       dataDir: resolveDataDir(parsedProps.data?.dataDir),
+      readOnly: resolveReadOnly(parsedProps.data?.readOnly),
     };
     this.pathTo = createPathTo(this.options.dataDir);
     this.utilities = { pathTo: this.pathTo };

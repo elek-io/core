@@ -13,6 +13,7 @@ import {
   createCollection,
   createEntry,
   createProject,
+  seedRemoteWithRelease,
 } from './test/util.js';
 import core, { testApiPort } from './test/setup.js';
 import { execCommand } from './util/node.js';
@@ -324,4 +325,88 @@ describe('CLI', function () {
     expect(JSON.parse(projectsContent)).toEqual({});
     expect(await fs.exists('./.elek.io/data-dir-env/projects')).toBe(true);
   });
+
+  it('should provision a Project via the pull command', async function () {
+    const seed = await seedRemoteWithRelease();
+
+    await execCommand({
+      command: 'node ./dist/cli/index.cli.mjs',
+      args: [
+        '--data-dir',
+        './.elek.io/pull-data-dir',
+        'pull',
+        '--project',
+        seed.projectId,
+        '--url',
+        seed.remotePath,
+      ],
+      logger: core.logger,
+    });
+
+    const projectFile = JSON.parse(
+      await fs.readFile(
+        `./.elek.io/pull-data-dir/projects/${seed.projectId}/project.json`,
+        'utf-8'
+      )
+    );
+    expect(projectFile.version).toEqual(seed.releaseVersion);
+    expect(
+      await fs.exists(
+        `./.elek.io/pull-data-dir/projects/${seed.projectId}/.elek-provisioned`
+      )
+    ).toBe(true);
+  }, 60000);
+
+  it('should provision the ref given by ELEK_IO_REF via the pull command', async function () {
+    const seed = await seedRemoteWithRelease();
+
+    await execCommand({
+      command: 'node ./dist/cli/index.cli.mjs',
+      args: [
+        '--data-dir',
+        './.elek.io/pull-ref-data-dir',
+        'pull',
+        '--project',
+        seed.projectId,
+        '--url',
+        seed.remotePath,
+        '--ref',
+        'production',
+      ],
+      options: {
+        env: { ...process.env, ELEK_IO_REF: seed.previewVersion },
+      },
+      logger: core.logger,
+    });
+
+    const projectFile = JSON.parse(
+      await fs.readFile(
+        `./.elek.io/pull-ref-data-dir/projects/${seed.projectId}/project.json`,
+        'utf-8'
+      )
+    );
+    expect(projectFile.version).toEqual(seed.previewVersion);
+  }, 60000);
+
+  it('should fail loudly when the pull ref does not exist', async function () {
+    const seed = await seedRemoteWithRelease();
+
+    await expect(
+      execCommand({
+        command: 'node ./dist/cli/index.cli.mjs',
+        args: [
+          '--data-dir',
+          './.elek.io/pull-fail-data-dir',
+          'pull',
+          '--project',
+          seed.projectId,
+          '--url',
+          seed.remotePath,
+          '--ref',
+          '9.9.9',
+        ],
+        logger: core.logger,
+      })
+    ).rejects.toThrow();
+  }, 60000);
 });

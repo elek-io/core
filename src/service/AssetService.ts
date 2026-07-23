@@ -70,7 +70,7 @@ export class AssetService extends AbstractEntityService {
    * Creates a new Asset
    */
   public create(props: CreateAssetProps): Promise<Asset> {
-    return this.validated(
+    return this.mutating(
       'create',
       createAssetSchema,
       props,
@@ -208,7 +208,7 @@ export class AssetService extends AbstractEntityService {
    * Use the optional "newFilePath" prop to update the Asset itself
    */
   public update(props: UpdateAssetProps): Promise<Asset> {
-    return this.validated(
+    return this.mutating(
       'update',
       updateAssetSchema,
       props,
@@ -296,7 +296,7 @@ export class AssetService extends AbstractEntityService {
    * Deletes given Asset
    */
   public delete(props: DeleteAssetProps): Promise<void> {
-    return this.validated('delete', deleteAssetSchema, props, async () => {
+    return this.mutating('delete', deleteAssetSchema, props, async () => {
       const referencingEntries =
         await this.referenceService.findEntriesReferencing({
           projectId: props.projectId,

@@ -9,8 +9,8 @@ For the branch model these build on, see [`git-and-sync.md`](./git-and-sync.md).
 | Method            | What it does                                                                                       | Touches production? |
 | ----------------- | -------------------------------------------------------------------------------------------------- | ------------------- |
 | `prepare()`       | Read-only. Diffs `work` against `production` and returns the computed bump and per-object changes. | No                  |
-| `create()`        | Promotes `work` to `production`, bumps the version, tags it, and merges back into `work`.          | Yes                 |
-| `createPreview()` | Tags a pre-release snapshot on `work` (for example `1.1.0-preview.3`) without promoting.           | No                  |
+| `create()`        | Promotes `work` to `production`, bumps the version, tags it, merges back into `work` and pushes to `origin` if set. | Yes                 |
+| `createPreview()` | Tags a pre-release snapshot on `work` (for example `1.1.0-preview.3`) without promoting, pushes the tag to `origin` if set. | No                  |
 
 All three take `{ projectId }`. `prepare()` returns a `ReleaseDiff`. `create()` and `createPreview()` return a `ReleaseResult` (`{ version, diff }`).
 
@@ -52,7 +52,10 @@ If `work` has commits ahead of `production` but the diff finds no classified cha
 2. merges `work` into `production`,
 3. writes the `nextVersion` into `project.json` and commits it (commit method `release`),
 4. creates an annotated git tag carrying `Type: release` and `Version: <nextVersion>`,
-5. switches back to `work` and merges `production` back in (so both branches share the version commit).
+5. switches back to `work` and merges `production` back in (so both branches share the version commit),
+6. pushes `production` and the new tag to `origin`, if a remote is set.
+
+A Release is the publish moment: the push makes the released content available to consumers that read from the remote, such as CI builds. A Project without a remote releases locally, nothing is pushed. If the push itself fails, the release exists locally and the error surfaces, synchronizing later completes the publish.
 
 ```typescript
 const result = await core.releases.create({ projectId: project.id });
@@ -67,13 +70,21 @@ After a full release, the Project's `version` field is identical on `work` and `
 `createPreview()` also runs `prepare()` and requires changes, but it never touches `production`. It computes a pre-release version by counting the existing `preview` tags for the same target version since the last full release, then:
 
 1. writes the preview version (for example `1.1.0-preview.3`) into `project.json` on `work` and commits it,
-2. creates an annotated tag carrying `Type: preview` and `Version: <previewVersion>`.
+2. creates an annotated tag carrying `Type: preview` and `Version: <previewVersion>`,
+3. pushes the tag to `origin`, if a remote is set.
 
-Previews are snapshots of the current `work` state for testing or sharing. Only `create()` promotes content to `production`.
+Previews are snapshots of the current `work` state for testing or sharing. Only `create()` promotes content to `production`. Pushing the preview tag uploads the commits it points at, but the `work` branch ref itself is only pushed by `synchronize()`.
 
 ## Reading releases
 
-Releases, previews and Core upgrades are git tags, read through `core.git.tags`:
+`core.releases.list()` returns the Releases and preview Releases of a Project, newest first. Each item carries the `version`, its `type` (`release` or `preview`), the `datetime`, and the `tagId` addressing it in git.
+
+```typescript
+const { list, total } = await core.releases.list({ projectId: project.id });
+// list[0] -> { version: '1.1.0', type: 'release', datetime: '...', tagId: '...' }
+```
+
+Underneath, Releases, previews and Core upgrades are git tags, read through `core.git.tags`:
 
 ```typescript
 const { list } = await core.git.tags.list({

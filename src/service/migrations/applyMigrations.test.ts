@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Migration } from '../../schema/migrationSchema.js';
+import { CoreError } from '../../util/shared.js';
 import { applyMigrations } from './applyMigrations.js';
 
 describe('applyMigrations', () => {
@@ -85,6 +86,22 @@ describe('applyMigrations', () => {
     expect((data.nested as Record<string, unknown>)['original']).toBe(true);
     expect((data.nested as Record<string, unknown>)['changed']).toBeUndefined();
     expect((result['nested'] as Record<string, unknown>)['changed']).toBe(true);
+  });
+
+  it('throws a VersionSkew error when data is newer than the target version', () => {
+    const data = { coreVersion: '2.1.0', name: 'test' };
+
+    let error: unknown = null;
+    try {
+      applyMigrations(data, [], '2.0.0');
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeInstanceOf(CoreError);
+    expect(error instanceof CoreError && error.type).toEqual('VersionSkew');
+    expect(error instanceof CoreError && error.message).toContain('2.1.0');
+    expect(error instanceof CoreError && error.message).toContain('2.0.0');
   });
 
   it('returns data unchanged when already at target version', () => {

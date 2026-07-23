@@ -150,6 +150,29 @@ export const cloneProjectSchema = z.object({
 });
 export type CloneProjectProps = z.infer<typeof cloneProjectSchema>;
 
+/**
+ * The content state to provision: a branch or a Release version
+ */
+export const contentRefSchema = z.union([projectBranchSchema, versionSchema]);
+export type ContentRef = z.infer<typeof contentRefSchema>;
+
+export const ensureFromRemoteProjectSchema = z.object({
+  id: uuidSchema,
+  /**
+   * The remote repository URL to provision from
+   */
+  url: z.string().trim().min(1),
+  /**
+   * The content state to provision
+   *
+   * @default 'production'
+   */
+  ref: contentRefSchema.optional(),
+});
+export type EnsureFromRemoteProjectProps = z.infer<
+  typeof ensureFromRemoteProjectSchema
+>;
+
 export const listBranchesProjectSchema = z.object({
   id: uuidSchema.readonly(),
 });

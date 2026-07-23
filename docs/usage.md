@@ -35,6 +35,7 @@ const core = new ElekIoCore({
     cache: true, // cache files in memory to speed up access - default true
   },
   dataDir: '/path/to/data', // directory Core reads and writes data in - default ~/elek.io
+  readOnly: false, // never mutate a Project or its remote - default false
 });
 ```
 
@@ -42,13 +43,21 @@ The resolved options are exposed on `core.options`, and the running Core version
 
 `dataDir` sets the data directory everything lives in, see [`storage-layout.md`](./storage-layout.md). It takes precedence over the `ELEK_IO_DATA_DIR` environment variable, which takes precedence over the default `~/elek.io`. Relative paths are resolved against the current working directory once at construction. `~` is not expanded, that is a shell feature, so pass an absolute path or let the shell expand it. The directory does not need to exist, Core creates it. An empty or whitespace-only value throws a `CoreError`. The resolved absolute path is exposed as `core.options.dataDir`, and `core.util.pathTo` builds every path from it.
 
+`readOnly` puts Core into read-only mode, meant for environments that only consume content, such as CI builds. Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`. In return, cloning and fetching work without a User being set, because nothing is ever committed. The option takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
+
 ### Environment variables
 
 Core reads its environment variables once at construction, never at import. All of them use the `ELEK_IO_` prefix with SCREAMING_SNAKE_CASE names. An empty or whitespace-only value counts as unset. When a constructor option covers the same setting, the option wins over the environment.
 
-| Variable           | Purpose                                     | Default     |
-| ------------------ | ------------------------------------------- | ----------- |
-| `ELEK_IO_DATA_DIR` | The directory Core reads and writes data in | `~/elek.io` |
+| Variable             | Purpose                                                             | Default          |
+| -------------------- | ------------------------------------------------------------------- | ---------------- |
+| `ELEK_IO_DATA_DIR`   | The directory Core reads and writes data in                         | `~/elek.io`      |
+| `ELEK_IO_READ_ONLY`  | Set to `true` to put Core into read-only mode                       | unset            |
+| `ELEK_IO_TOKEN`      | Token for authenticating git operations against a private remote    | unset            |
+| `ELEK_IO_TOKEN_USER` | The username presented alongside `ELEK_IO_TOKEN`                    | `x-access-token` |
+| `ELEK_IO_REF`        | The content state provisioning checks out, overrides configured refs | unset            |
+
+`ELEK_IO_TOKEN` is handed to git per invocation through an askpass helper. It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches. Prompts are disabled, a missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it. While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before.
 
 On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room. See the limitation in [`features.md`](./features.md#intentional-constraints). macOS and Linux allow 1024 and 4096 characters and are not affected.
 
@@ -283,6 +292,7 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 - `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported.
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
+- `elek pull --project <id> --url <url>` - provision a Project from its remote into the data directory, meant for CI builds. `--ref` selects `production` (default), `work` or a Release version, and is overridden by the `ELEK_IO_REF` environment variable. Runs read-only, so no User is required. Authentication against private remotes uses `ELEK_IO_TOKEN`. See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-project-for-builds).
 
 The global `--data-dir <path>` option sets the data directory for any command, e.g. `elek --data-dir /path/to/data export`. It overrides the `ELEK_IO_DATA_DIR` environment variable and defaults to `~/elek.io`, see [Options](#options).
 
@@ -314,6 +324,33 @@ export const collections = {
 ```
 
 Both loaders accept a `core` property with the same options as the `ElekIoCore` constructor, so `elekEntries({ ..., core: { dataDir: '/path/to/data' } })` reads from a custom data directory. Note that all loaders share one Core instance, created by whichever loader runs first. Later `core` options are silently ignored, so pass identical `core` options to every loader or leave them off entirely. To change the data directory, prefer setting `ELEK_IO_DATA_DIR` in the build environment, which applies no matter which loader runs first.
+
+### Provisioning in CI with elek()
+
+The loaders read from the local data directory, which is empty on a CI runner. The `elek()` integration fills it: declare each Project with its remote URL and the integration provisions it before Astro's content sync runs.
+
+```javascript
+// astro.config.mjs
+import { defineConfig } from 'astro/config';
+import { elek } from '@elek-io/core/astro';
+
+export default defineConfig({
+  integrations: [
+    elek({
+      projects: [
+        {
+          id: 'abc-123-...',
+          remoteUrl: 'https://github.com/acme/website-content.git',
+        },
+      ],
+    }),
+  ],
+});
+```
+
+Each Project takes an optional `ref` (`production`, `work` or a Release version, default `production`), overridden by the `ELEK_IO_REF` environment variable. Private remotes authenticate through `ELEK_IO_TOKEN`. The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated. A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content. Without the integration, a missing Project fails the build with an error pointing here. The underlying behavior is documented in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-project-for-builds).
+
+Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (production)`.
 
 For rendering `markdown` field Values (including the required `html`, `assetReference` and `entryReference` handlers), see [`markdown-content.md`](./markdown-content.md).
 

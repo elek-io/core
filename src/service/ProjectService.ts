@@ -5,6 +5,7 @@ import type { FileReference, ObjectType, Version } from '../schema/index.js';
 import {
   cloneProjectSchema,
   createProjectSchema,
+  ensureFromRemoteProjectSchema,
   currentBranchProjectSchema,
   deleteProjectSchema,
   getChangesProjectSchema,
@@ -25,6 +26,8 @@ import {
   upgradeProjectSchema,
   type CloneProjectProps,
   type CreateProjectProps,
+  type EnsureFromRemoteProjectProps,
+  type GitTag,
   type CrudServiceWithListCount,
   type CurrentBranchProjectProps,
   type DeleteProjectProps,
@@ -106,7 +109,7 @@ export class ProjectService
    * Creates a new Project
    */
   public create(props: CreateProjectProps): Promise<Project> {
-    return this.validated(
+    return this.mutating(
       'create',
       createProjectSchema,
       props,
@@ -189,6 +192,254 @@ export class ProjectService
   }
 
   /**
+   * Ensures the Project is present in the data directory at the given
+   * ref, provisioning it from the remote when needed
+   *
+   * Three cases:
+   * - Missing: a build-mode clone (shallow, single ref, LFS objects of
+   *   the checked-out ref only) and a provisioning marker is written.
+   * - Present with the marker: fetched and hard-reset to the ref.
+   * - Present without the marker: managed by another application
+   *   (e.g. Desktop) and left untouched.
+   *
+   * `ref` is `production`, `work` or a Release version and defaults to
+   * `production`. Meant to run on a read-only Core, which clones and
+   * fetches without a User being set.
+   */
+  public ensureFromRemote(
+    props: EnsureFromRemoteProjectProps
+  ): Promise<Project> {
+    return this.validated(
+      'ensureFromRemote',
+      ensureFromRemoteProjectSchema,
+      props,
+      async (validatedProps) => {
+        const ref = validatedProps.ref ?? projectBranchSchema.enum.production;
+        const projectPath = this.pathTo.project(validatedProps.id);
+        const markerPath = this.pathTo.projectProvisionedMarker(
+          validatedProps.id
+        );
+
+        const exists = await Fs.pathExists(projectPath);
+        const hasMarker = await Fs.pathExists(markerPath);
+
+        if (exists && !hasMarker) {
+          this.logService.info({
+            source: 'core',
+            message: `Project "${validatedProps.id}" is managed by another application, leaving it untouched`,
+          });
+        } else if (!exists) {
+          await this.provisionClone(validatedProps.id, validatedProps.url, ref);
+        } else {
+          await this.provisionRefresh(
+            validatedProps.id,
+            validatedProps.url,
+            ref
+          );
+        }
+
+        const projectFile = this.migrate(
+          await this.jsonFileService.unsafeRead(
+            this.pathTo.projectFile(validatedProps.id)
+          )
+        );
+        return await this.toProject(projectFile);
+      }
+    );
+  }
+
+  /**
+   * Throws the typed error for a branch the remote does not have.
+   * A missing `production` means no Release has been published yet.
+   */
+  private async assertRemoteBranch(url: string, branch: string): Promise<void> {
+    const remoteRefs = await this.gitService.lsRemote(url);
+    if (remoteRefs.includes(`refs/heads/${branch}`)) {
+      return;
+    }
+    if (branch === projectBranchSchema.enum.production) {
+      throw CoreError.preconditionFailed(
+        `The remote has no "production" branch, so no Release has been published yet. Publish a Release first, or provision the "work" branch instead.`
+      );
+    }
+    throw CoreError.notFound(`The remote has no "${branch}" branch`);
+  }
+
+  /**
+   * Reads the provisioned project.json loosely and throws when it
+   * belongs to a different Project than requested, or when it was
+   * written by a newer Core than installed
+   */
+  private async verifyProvisioned(
+    id: string,
+    url: string,
+    path: string
+  ): Promise<void> {
+    const projectFile = migrateProjectSchema.parse(
+      await this.jsonFileService.unsafeRead(Path.join(path, 'project.json'))
+    );
+    if (projectFile.id !== id) {
+      throw CoreError.badRequest(
+        `The remote at "${url}" contains Project "${projectFile.id}", not the requested Project "${id}"`
+      );
+    }
+    // Fails fast on version skew, before the copy is used
+    this.migrate(projectFile);
+  }
+
+  /**
+   * Build-mode clone: shallow, single ref, LFS objects of the
+   * checked-out ref only, plus the provisioning marker. Staged in the
+   * tmp directory and moved into place as the single final step, so a
+   * crash can never leave a half-provisioned, marker-less copy behind
+   * that would be mistaken for a Desktop-managed one.
+   */
+  private async provisionClone(
+    id: string,
+    url: string,
+    ref: string
+  ): Promise<void> {
+    const branch = projectBranchSchema.safeParse(ref);
+    if (branch.success) {
+      await this.assertRemoteBranch(url, branch.data);
+    }
+
+    const stagingPath = Path.join(this.pathTo.tmp, uuid());
+    try {
+      if (branch.success) {
+        await this.gitService.clone(url, stagingPath, {
+          branch: branch.data,
+          depth: 1,
+          singleBranch: true,
+          lfs: 'current',
+        });
+      } else {
+        // A version ref lives in a tag, which can only be resolved
+        // once the tag objects are present. Clone the remote HEAD
+        // first, then check the version out.
+        await this.gitService.clone(url, stagingPath, {
+          depth: 1,
+          singleBranch: true,
+          lfs: 'current',
+        });
+        await this.checkoutVersion(stagingPath, ref);
+        // Materialize the LFS objects of the tag's ref
+        await this.gitService.lfs.fetch(stagingPath);
+        await this.gitService.lfs.checkout(stagingPath);
+      }
+
+      await this.verifyProvisioned(id, url, stagingPath);
+
+      await Fs.writeFile(
+        Path.join(stagingPath, '.elek-provisioned'),
+        'Provisioned by @elek-io/core\n'
+      );
+
+      await Fs.move(stagingPath, this.pathTo.project(id));
+      // The staged copy changed location, cached reads must not
+      // serve its staging paths
+      this.jsonFileService.clearCache();
+    } catch (error) {
+      await Fs.remove(stagingPath);
+      throw error;
+    }
+  }
+
+  /**
+   * Refreshes a provisioned copy to the given ref: fetch, then a
+   * discarding switch onto the fetched tip, then the LFS objects of
+   * the checked-out ref
+   */
+  private async provisionRefresh(
+    id: string,
+    url: string,
+    ref: string
+  ): Promise<void> {
+    const projectPath = this.pathTo.project(id);
+    const branch = projectBranchSchema.safeParse(ref);
+
+    const previousOriginUrl =
+      await this.gitService.remotes.getOriginUrl(projectPath);
+    if (previousOriginUrl !== url) {
+      await this.gitService.remotes.setOriginUrl(projectPath, url);
+    }
+
+    try {
+      if (branch.success) {
+        await this.assertRemoteBranch(url, branch.data);
+        // The remote-tracking ref is updated explicitly, because a
+        // single-branch clone tracks no other branches
+        await this.gitService.fetch(projectPath, {
+          ref: `+refs/heads/${branch.data}:refs/remotes/origin/${branch.data}`,
+          depth: 1,
+        });
+        // Force-create resets the branch onto the fetched tip and
+        // switches to it, discarding any local modifications, whether
+        // the branch exists locally or not
+        await this.gitService.branches.switch(projectPath, branch.data, {
+          forceCreate: true,
+          startPoint: `refs/remotes/origin/${branch.data}`,
+          discardChanges: true,
+        });
+      } else {
+        await this.checkoutVersion(projectPath, ref);
+      }
+
+      await this.verifyProvisioned(id, url, projectPath);
+    } catch (error) {
+      // Leave the copy pointing at the remote it was provisioned
+      // from, so a corrected rerun starts clean
+      if (previousOriginUrl !== null && previousOriginUrl !== url) {
+        await this.gitService.remotes.setOriginUrl(
+          projectPath,
+          previousOriginUrl
+        );
+      }
+      throw error;
+    }
+
+    await this.gitService.lfs.fetch(projectPath);
+    await this.gitService.lfs.checkout(projectPath);
+  }
+
+  /**
+   * Resolves a Release version to its tag and checks it out with a
+   * detached HEAD, discarding local modifications. The tag objects are
+   * fetched shallowly first, because Release tags are named by UUID
+   * and carry their version inside the tag message.
+   */
+  private async checkoutVersion(path: string, version: string): Promise<void> {
+    await this.gitService.fetch(path, {
+      ref: '+refs/tags/*:refs/tags/*',
+      depth: 1,
+    });
+
+    const isReleaseTag = (
+      tag: GitTag
+    ): tag is GitTag & {
+      message: { type: 'release' | 'preview'; version: Version };
+    } => tag.message.type === 'release' || tag.message.type === 'preview';
+
+    const { list: tags } = await this.gitService.tags.list({ path });
+    const releaseTags = tags.filter(isReleaseTag);
+    const match = releaseTags.find((tag) => tag.message.version === version);
+
+    if (!match) {
+      const available = releaseTags.map((tag) => tag.message.version);
+      throw CoreError.notFound(
+        `No Release with version "${version}" exists. Available versions: ${
+          available.join(', ') || 'none'
+        }`
+      );
+    }
+
+    await this.gitService.branches.switch(path, match.id, {
+      detach: true,
+      discardChanges: true,
+    });
+  }
+
+  /**
    * Returns a Project by ID
    *
    * If a commit hash is provided, the Project is read from history
@@ -232,7 +483,7 @@ export class ProjectService
    * Updates given Project
    */
   public update(props: UpdateProjectProps): Promise<Project> {
-    return this.validated(
+    return this.mutating(
       'update',
       updateProjectSchema,
       props,
@@ -269,7 +520,7 @@ export class ProjectService
    * Needed when a new Core version is requiring changes to existing files or structure.
    */
   public upgrade(props: UpgradeProjectProps): Promise<void> {
-    return this.validated('upgrade', upgradeProjectSchema, props, async () => {
+    return this.mutating('upgrade', upgradeProjectSchema, props, async () => {
       const projectPath = this.pathTo.project(props.id);
       const projectFilePath = this.pathTo.projectFile(props.id);
 
@@ -533,7 +784,7 @@ export class ProjectService
   public setRemoteOriginUrl(
     props: SetRemoteOriginUrlProjectProps
   ): Promise<void> {
-    return this.validated(
+    return this.mutating(
       'setRemoteOriginUrl',
       setRemoteOriginUrlProjectSchema,
       props,
@@ -624,7 +875,7 @@ export class ProjectService
    * reconciled here.
    */
   public synchronize(props: SynchronizeProjectProps): Promise<void> {
-    return this.validated(
+    return this.mutating(
       'synchronize',
       synchronizeProjectSchema,
       props,
@@ -697,7 +948,7 @@ export class ProjectService
    * or changes are not pushed to a remote yet.
    */
   public delete(props: DeleteProjectProps): Promise<void> {
-    return this.validated('delete', deleteProjectSchema, props, async () => {
+    return this.mutating('delete', deleteProjectSchema, props, async () => {
       const hasRemoteOrigin = await this.gitService.remotes.hasOrigin(
         this.pathTo.project(props.id)
       );
@@ -737,7 +988,9 @@ export class ProjectService
           );
           const projectFile = migrateProjectSchema.parse(json);
 
-          if (projectFile.coreVersion !== this.coreVersion) {
+          // A Project newer than the installed Core is skewed, not outdated,
+          // so it must not be offered for an upgrade
+          if (Semver.lt(projectFile.coreVersion, this.coreVersion)) {
             return this.migrate(projectFile);
           }
 

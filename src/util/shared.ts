@@ -70,6 +70,7 @@ export type CoreErrorType =
   | 'Conflict'
   | 'PreconditionFailed'
   | 'UpgradeFailed'
+  | 'VersionSkew'
   | 'Internal';
 
 const statusCodes: Record<CoreErrorType, number> = {
@@ -79,6 +80,7 @@ const statusCodes: Record<CoreErrorType, number> = {
   Conflict: 409,
   PreconditionFailed: 412,
   UpgradeFailed: 422,
+  VersionSkew: 422,
   Internal: 500,
 };
 
@@ -110,6 +112,9 @@ export class CoreError extends Error {
   }
   static upgradeFailed(message: string, cause?: unknown) {
     return new CoreError('UpgradeFailed', message, cause);
+  }
+  static versionSkew(message: string, cause?: unknown) {
+    return new CoreError('VersionSkew', message, cause);
   }
   static internal(message: string, cause?: unknown) {
     return new CoreError('Internal', message, cause);

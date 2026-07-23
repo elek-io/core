@@ -26,6 +26,7 @@ New to elek.io Core? Read [`concepts.md`](./concepts.md) for the data model, the
 - [`api-clients.md`](./api-clients.md) - generating typed JS/TS clients and standalone TypeScript types
 - [`export.md`](./export.md) - exporting Projects to plain JSON
 - [`releases.md`](./releases.md) - tagged, versioned snapshots and promoting `work` to `production`
+- [`ci-builds.md`](./ci-builds.md) - building sites in CI/CD, where the data directory starts empty
 
 ## Platform
 
