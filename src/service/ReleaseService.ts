@@ -202,6 +202,7 @@ export class ReleaseService extends AbstractService {
    * 4. Tagging on `production`
    * 5. Merging `production` back into `work` (fast-forward to sync the version commit)
    * 6. Switching back to `work`
+   * 7. Pushing `production` and the tag to `origin`, if a remote is set
    */
   public create(props: CreateReleaseProps): Promise<ReleaseResult> {
     return this.validated('create', createReleaseSchema, props, async () => {
@@ -241,7 +242,7 @@ export class ReleaseService extends AbstractService {
           method: 'release',
           reference: { objectType: 'project', id: props.projectId },
         });
-        await this.gitService.tags.create({
+        const releaseTag = await this.gitService.tags.create({
           path: projectPath,
           message: { type: 'release', version: nextVersion },
         });
@@ -253,6 +254,16 @@ export class ReleaseService extends AbstractService {
           projectPath,
           projectBranchSchema.enum.production
         );
+
+        // A Release is the publish moment, so the remote receives
+        // `production` and the tag once the local release is complete
+        const hasOrigin =
+          await this.gitService.remotes.hasOrigin(projectPath);
+        if (hasOrigin) {
+          await this.gitService.push(projectPath, {
+            refs: [projectBranchSchema.enum.production, releaseTag.id],
+          });
+        }
 
         this.logService.info({
           source: 'core',
@@ -284,6 +295,7 @@ export class ReleaseService extends AbstractService {
    * 2. Computing the preview version (e.g. 1.1.0-preview.3)
    * 3. Updating the project version on `work`
    * 4. Tagging on `work` (no merge into production)
+   * 5. Pushing the tag to `origin`, if a remote is set
    *
    * Preview releases are snapshots of the current work state.
    * They don't promote to production - only full releases do.
@@ -330,10 +342,20 @@ export class ReleaseService extends AbstractService {
             method: 'release',
             reference: { objectType: 'project', id: props.projectId },
           });
-          await this.gitService.tags.create({
+          const previewTag = await this.gitService.tags.create({
             path: projectPath,
             message: { type: 'preview', version: previewVersion },
           });
+
+          // Previews are deployable, so the tag is published as well. The
+          // `work` branch ref itself stays local to synchronize()
+          const hasOrigin =
+            await this.gitService.remotes.hasOrigin(projectPath);
+          if (hasOrigin) {
+            await this.gitService.push(projectPath, {
+              refs: [previewTag.id],
+            });
+          }
 
           this.logService.info({
             source: 'core',

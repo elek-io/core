@@ -507,16 +507,18 @@ export class GitService {
      */
     push: async (
       path: string,
-      options?: Partial<{ all: boolean }>
+      options?: Partial<{ all: boolean; refs: string[] }>
     ): Promise<void> => {
       const branch = await this.branches.current(path); // '' in detached HEAD
+      const refs =
+        options?.refs ?? (branch === '' ? null : [branch]);
 
       // Synopsis: `git lfs push [options] <remote> [<ref>...]` - so `--all` is
-      // an option and must precede the remote; the branch form is positional.
+      // an option and must precede the remote; the ref form is positional.
       const args =
-        options?.all === true || branch === ''
+        options?.all === true || refs === null
           ? ['lfs', 'push', '--all', 'origin']
-          : ['lfs', 'push', 'origin', branch];
+          : ['lfs', 'push', 'origin', ...refs];
 
       try {
         await this.git(path, args);
@@ -686,6 +688,9 @@ export class GitService {
    * error. The ordinary ref push then runs with `--no-verify` to skip the
    * now-redundant pre-push hook.
    *
+   * By default the current branch is pushed. The `refs` option pushes the
+   * named branches or tags instead, the `all` option pushes all branches.
+   *
    * @see https://git-scm.com/docs/git-push
    *
    * @param path    Path to the repository
@@ -693,10 +698,21 @@ export class GitService {
    */
   public async push(
     path: string,
-    options?: Partial<{ all: boolean; force: boolean }>
+    options?: Partial<{ all: boolean; force: boolean; refs: string[] }>
   ): Promise<void> {
+    if (options?.all === true && options?.refs) {
+      throw CoreError.badRequest(
+        'The "all" and "refs" push options are mutually exclusive'
+      );
+    }
+
     // 1. Upload the LFS objects first so an upload failure is attributable.
-    await this.lfs.push(path, { all: options?.all === true });
+    await this.lfs.push(
+      path,
+      options?.refs
+        ? { all: false, refs: options.refs }
+        : { all: options?.all === true }
+    );
 
     // 2. Push the refs. The objects are already uploaded, so skip the pre-push
     // hook with `--no-verify` to avoid a redundant LFS verification round-trip.
@@ -704,6 +720,10 @@ export class GitService {
 
     if (options?.all === true) {
       args = [...args, '--all'];
+    }
+
+    if (options?.refs) {
+      args = [...args, ...options.refs];
     }
 
     if (options?.force === true) {

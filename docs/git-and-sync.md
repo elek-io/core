@@ -80,7 +80,7 @@ const { ahead, behind } = await core.projects.getChanges({ id: project.id });
 
 ## Synchronizing
 
-`synchronize()` pulls then pushes the current branch.
+`synchronize()` pulls then pushes the current branch. That is `work` in day to day use. The `production` branch and the Release tags are published by `core.releases` instead, see below.
 
 ```typescript
 await core.projects.synchronize({ id: project.id });
@@ -135,6 +135,8 @@ Releases, preview releases and Core upgrades are recorded as annotated git tags 
 - `Type: upgrade` with a `Core-Version:` trailer
 
 This is how `core.releases` and the Project upgrade flow mark points in history.
+
+When a remote `origin` is set, `core.releases` pushes at creation time: a full Release pushes `production` and its tag, a preview Release pushes its tag. Upgrade tags are not pushed. See [`releases.md`](./releases.md).
 
 ## Errors during git operations
 
