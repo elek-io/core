@@ -4,6 +4,7 @@ import Semver from 'semver';
 import type { FileReference, ObjectType, Version } from '../schema/index.js';
 import {
   cloneProjectSchema,
+  contentChannelSchema,
   createProjectSchema,
   ensureFromRemoteProjectSchema,
   currentBranchProjectSchema,
@@ -202,7 +203,9 @@ export class ProjectService
    * - Present without the marker: managed by another application
    *   (e.g. Desktop) and left untouched.
    *
-   * `ref` is `production`, `work` or a Release version and defaults to
+   * `ref` is a channel (`production` for the latest Release,
+   * `preview` for the latest preview Release, `draft` for the tip of
+   * the work branch) or an exact Release version. It defaults to
    * `production`. Meant to run on a read-only Core, which clones and
    * fetches without a User being set.
    */
@@ -249,20 +252,28 @@ export class ProjectService
   }
 
   /**
-   * Throws the typed error for a branch the remote does not have.
-   * A missing `production` means no Release has been published yet.
+   * Maps a channel ref to the branch it follows, or null for refs
+   * that resolve through tags (`production`, `preview` and exact
+   * versions)
+   */
+  private refToBranch(ref: string): string | null {
+    if (ref === contentChannelSchema.enum.draft) {
+      return projectBranchSchema.enum.work;
+    }
+    return null;
+  }
+
+  /**
+   * Throws the typed error for a branch the remote does not have
    */
   private async assertRemoteBranch(url: string, branch: string): Promise<void> {
     const remoteRefs = await this.gitService.lsRemote(url);
     if (remoteRefs.includes(`refs/heads/${branch}`)) {
       return;
     }
-    if (branch === projectBranchSchema.enum.production) {
-      throw CoreError.preconditionFailed(
-        `The remote has no "production" branch, so no Release has been published yet. Publish a Release first, or provision the "work" branch instead.`
-      );
-    }
-    throw CoreError.notFound(`The remote has no "${branch}" branch`);
+    throw CoreError.notFound(
+      `The remote has no "${branch}" branch, so there are no drafts to provision`
+    );
   }
 
   /**
@@ -299,30 +310,30 @@ export class ProjectService
     url: string,
     ref: string
   ): Promise<void> {
-    const branch = projectBranchSchema.safeParse(ref);
-    if (branch.success) {
-      await this.assertRemoteBranch(url, branch.data);
+    const branch = this.refToBranch(ref);
+    if (branch) {
+      await this.assertRemoteBranch(url, branch);
     }
 
     const stagingPath = Path.join(this.pathTo.tmp, uuid());
     try {
-      if (branch.success) {
+      if (branch) {
         await this.gitService.clone(url, stagingPath, {
-          branch: branch.data,
+          branch,
           depth: 1,
           singleBranch: true,
           lfs: 'current',
         });
       } else {
-        // A version ref lives in a tag, which can only be resolved
-        // once the tag objects are present. Clone the remote HEAD
-        // first, then check the version out.
+        // Channels and versions live in tags, which can only be
+        // resolved once the tag objects are present. Clone the remote
+        // HEAD first, then check the resolved tag out.
         await this.gitService.clone(url, stagingPath, {
           depth: 1,
           singleBranch: true,
           lfs: 'current',
         });
-        await this.checkoutVersion(stagingPath, ref);
+        await this.checkoutTag(stagingPath, ref);
         // Materialize the LFS objects of the tag's ref
         await this.gitService.lfs.fetch(stagingPath);
         await this.gitService.lfs.checkout(stagingPath);
@@ -356,7 +367,7 @@ export class ProjectService
     ref: string
   ): Promise<void> {
     const projectPath = this.pathTo.project(id);
-    const branch = projectBranchSchema.safeParse(ref);
+    const branch = this.refToBranch(ref);
 
     const previousOriginUrl =
       await this.gitService.remotes.getOriginUrl(projectPath);
@@ -365,24 +376,24 @@ export class ProjectService
     }
 
     try {
-      if (branch.success) {
-        await this.assertRemoteBranch(url, branch.data);
+      if (branch) {
+        await this.assertRemoteBranch(url, branch);
         // The remote-tracking ref is updated explicitly, because a
         // single-branch clone tracks no other branches
         await this.gitService.fetch(projectPath, {
-          ref: `+refs/heads/${branch.data}:refs/remotes/origin/${branch.data}`,
+          ref: `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
           depth: 1,
         });
         // Force-create resets the branch onto the fetched tip and
         // switches to it, discarding any local modifications, whether
         // the branch exists locally or not
-        await this.gitService.branches.switch(projectPath, branch.data, {
+        await this.gitService.branches.switch(projectPath, branch, {
           forceCreate: true,
-          startPoint: `refs/remotes/origin/${branch.data}`,
+          startPoint: `refs/remotes/origin/${branch}`,
           discardChanges: true,
         });
       } else {
-        await this.checkoutVersion(projectPath, ref);
+        await this.checkoutTag(projectPath, ref);
       }
 
       await this.verifyProvisioned(id, url, projectPath);
@@ -403,16 +414,31 @@ export class ProjectService
   }
 
   /**
-   * Resolves a Release version to its tag and checks it out with a
-   * detached HEAD, discarding local modifications. The tag objects are
-   * fetched shallowly first, because Release tags are named by UUID
-   * and carry their version inside the tag message.
+   * Resolves a channel or exact version to its tag and checks it out
+   * with a detached HEAD, discarding local modifications
+   *
+   * `production` resolves to the newest Release tag, `preview` to the
+   * newest preview tag, both by semver. The tag objects are fetched
+   * shallowly first, because Release tags are named by UUID and carry
+   * their version inside the tag message.
    */
-  private async checkoutVersion(path: string, version: string): Promise<void> {
-    await this.gitService.fetch(path, {
-      ref: '+refs/tags/*:refs/tags/*',
-      depth: 1,
-    });
+  private async checkoutTag(path: string, ref: string): Promise<void> {
+    // Resolution is strictly against the tags the remote advertises.
+    // This keeps stale local tags of a previously configured remote
+    // out, and skips the fetch entirely for a tagless remote, where
+    // a shallow tag fetch would fail.
+    const url = await this.gitService.remotes.getOriginUrl(path);
+    const remoteTagNames = new Set(
+      (url === null ? [] : await this.gitService.lsRemote(url))
+        .filter((remoteRef) => remoteRef.startsWith('refs/tags/'))
+        .map((remoteRef) => remoteRef.replace('refs/tags/', ''))
+    );
+    if (remoteTagNames.size > 0) {
+      await this.gitService.fetch(path, {
+        ref: '+refs/tags/*:refs/tags/*',
+        depth: 1,
+      });
+    }
 
     const isReleaseTag = (
       tag: GitTag
@@ -421,16 +447,48 @@ export class ProjectService
     } => tag.message.type === 'release' || tag.message.type === 'preview';
 
     const { list: tags } = await this.gitService.tags.list({ path });
-    const releaseTags = tags.filter(isReleaseTag);
-    const match = releaseTags.find((tag) => tag.message.version === version);
+    const releaseTags = tags
+      .filter(isReleaseTag)
+      .filter((tag) => remoteTagNames.has(tag.id));
 
-    if (!match) {
-      const available = releaseTags.map((tag) => tag.message.version);
-      throw CoreError.notFound(
-        `No Release with version "${version}" exists. Available versions: ${
-          available.join(', ') || 'none'
-        }`
-      );
+    let match: (typeof releaseTags)[number] | null = null;
+    if (
+      ref === contentChannelSchema.enum.production ||
+      ref === contentChannelSchema.enum.preview
+    ) {
+      const type =
+        ref === contentChannelSchema.enum.production ? 'release' : 'preview';
+      for (const tag of releaseTags) {
+        if (tag.message.type !== type) {
+          continue;
+        }
+        if (
+          match === null ||
+          Semver.gt(tag.message.version, match.message.version)
+        ) {
+          match = tag;
+        }
+      }
+      if (!match) {
+        if (type === 'release') {
+          throw CoreError.preconditionFailed(
+            'No Release has been published yet. Publish a Release first, or provision the "preview" or "draft" channel instead.'
+          );
+        }
+        throw CoreError.preconditionFailed(
+          'No preview Release has been published yet. Publish a preview first, or provision another channel.'
+        );
+      }
+    } else {
+      match = releaseTags.find((tag) => tag.message.version === ref) ?? null;
+      if (!match) {
+        const available = releaseTags.map((tag) => tag.message.version);
+        throw CoreError.notFound(
+          `No Release with version "${ref}" exists. Available versions: ${
+            available.join(', ') || 'none'
+          }`
+        );
+      }
     }
 
     await this.gitService.branches.switch(path, match.id, {

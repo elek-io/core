@@ -6,11 +6,11 @@ What comes next is up to you. Building an Astro site is the most common case and
 
 ## What a CI environment sees
 
-Provisioning checks out the `production` branch by default, which holds your published Releases. Your local working copy lives on the `work` branch, which holds your drafts. So a CI pipeline consumes Released content, while local development sees drafts. This split is intentional: publishing is an editorial decision, made by creating a Release.
+Provisioning follows the `production` channel by default, which resolves to your latest published Release. Your local working copy lives on the `work` branch, which holds your drafts. So a CI pipeline consumes Released content, while local development sees drafts. This split is intentional: publishing is an editorial decision, made by creating a Release.
 
 Two consequences:
 
-- A brand-new Project with no Release yet fails provisioning with a clear error. Publish a Release first, or consume drafts explicitly, see [Drafts and pinned versions](#drafts-and-pinned-versions).
+- A brand-new Project with no Release yet fails provisioning with a clear error. Publish a Release first, or consume another channel explicitly, see [Channels and pinned versions](#channels-and-pinned-versions).
 - Provisioning logs which content state it fetched, e.g. `version 1.4.0 (production)`. When a pipeline does not produce what you expect, this log line tells you why.
 
 ## Provisioning with elek pull
@@ -23,7 +23,7 @@ elek pull --project abc-123-... --url https://github.com/acme/website-content.gi
 
 Afterwards the Project sits in the data directory like any locally created one. Read it with the [programmatic API](./usage.md), export it with [`elek export`](./export.md), generate [typed clients](./api-clients.md), or start the [local API](./local-api.md) for another tool to consume.
 
-`--ref` selects the content state, see [Drafts and pinned versions](#drafts-and-pinned-versions). The command runs read-only: no User is configured, nothing is committed and nothing is pushed.
+`--ref` selects the content state, see [Channels and pinned versions](#channels-and-pinned-versions). The command runs read-only: no User is configured, nothing is committed and nothing is pushed.
 
 ## Astro: the elek() integration
 
@@ -101,15 +101,24 @@ The cache step is an optimization, not a requirement. Without it, every run perf
 
 ## Vercel, Netlify and Cloudflare Pages
 
-No pipeline file is needed for Astro sites. Set `ELEK_IO_REMOTE_ACCESS_TOKEN` (and optionally `ELEK_IO_REF`) in the provider's environment variable settings, then build as usual with `astro build`. Each build starts on a fresh runner and performs the shallow build-mode clone described above.
+No pipeline file is needed for Astro sites. Set `ELEK_IO_REMOTE_ACCESS_TOKEN` (and optionally `ELEK_IO_CHANNEL`) in the provider's environment variable settings, then build as usual with `astro build`. Each build starts on a fresh runner and performs the shallow build-mode clone described above.
 
-## Drafts and pinned versions
+## Channels and pinned versions
 
-Which content state provisioning fetches is the `ref`: `production` (default), `work` (drafts), or a Release version like `1.4.0` (also preview versions like `1.5.0-preview.2`). Set it per Project in the integration config or via `--ref` on `elek pull`. The `ELEK_IO_REF` environment variable overrides both, so one variable can repoint a whole pipeline.
+Which content state provisioning fetches is the `ref`. It is either a channel, which always follows the newest content of its kind, or an exact version pin:
 
-For a content staging site, create a second deployment (a separate provider project or a dedicated workflow) with `ELEK_IO_REF=work` and protect it from public access. Do not wire drafts into the provider's regular pull request previews, those URLs are shareable and would expose unpublished content alongside every code review.
+| Ref | Meaning |
+| --- | --- |
+| `production` | The latest Release (default) |
+| `preview` | The latest preview Release |
+| `draft` | The current drafts (the work branch) |
+| `1.4.0`, `1.5.0-preview.2` | Exactly that Release or preview Release |
 
-Pinning a Release version gives reproducible pipelines: the same ref always produces the same content. The pipeline then no longer moves when editors publish, until you change the pin.
+Set the ref per Project in the integration config or via `--ref` on `elek pull`. The `ELEK_IO_CHANNEL` environment variable overrides both and applies to every Project of a deployment, so one variable can repoint a whole pipeline. Because it is deployment-wide, it accepts channels only, exact versions are per-Project decisions and belong into the configuration.
+
+For a content staging site, create a second deployment (a separate provider project or a dedicated workflow) with `ELEK_IO_CHANNEL=preview` for the latest published previews, or `ELEK_IO_CHANNEL=draft` for the raw editing state, and protect it from public access. Do not wire drafts into the provider's regular pull request previews, those URLs are shareable and would expose unpublished content alongside every code review.
+
+Pinning a version gives reproducible pipelines: the same ref always produces the same content. The pipeline then no longer moves when editors publish, until you change the pin.
 
 ## Acting on content changes
 
@@ -122,7 +131,7 @@ The first run clones the Project into the data directory and writes a marker fil
 ## Troubleshooting
 
 - **First thing to try: delete the CI cache.** A cached data directory in a broken state is the most common cause of repeated failures, and provisioning rebuilds it from scratch.
-- **"The remote has no production branch"**: no Release has been published yet. Publish one in the Desktop app, or consume drafts with `ELEK_IO_REF=work`.
+- **"No Release has been published yet"**: the Project has never released. Publish a Release in the Desktop app, or consume the `preview` or `draft` channel instead.
 - **`Unauthorized`**: the remote requires authentication or rejected the token. Check `ELEK_IO_REMOTE_ACCESS_TOKEN`, and whether your git host expects a specific `ELEK_IO_REMOTE_ACCESS_TOKEN_USER`.
 - **"No Release with version ..."**: the pinned version does not exist on the remote. The error lists the available versions.
 - **`VersionSkew`**: the content was written by a newer Core than the pipeline uses. Update the `@elek-io/core` dependency to at least the version named in the error.

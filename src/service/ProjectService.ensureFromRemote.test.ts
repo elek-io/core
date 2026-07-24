@@ -6,6 +6,7 @@ import core, { uuid } from '../test/setup.js';
 import { projectFileSchema } from '../schema/index.js';
 import {
   createAsset,
+  createLocalRemoteRepository,
   getFileHash,
   seedRemoteWithRelease,
 } from '../test/util.js';
@@ -49,9 +50,11 @@ describe('ProjectService ensureFromRemote', function () {
         readOnlyCore.util.pathTo.projectProvisionedMarker(seed.projectId)
       )
     ).toBe(true);
+    // The production channel checks out the latest Release tag,
+    // detaching HEAD
     expect(
       await readOnlyCore.projects.branches.current({ id: seed.projectId })
-    ).toEqual('production');
+    ).toEqual('');
 
     const { total } = await readOnlyCore.collections.list({
       projectId: seed.projectId,
@@ -101,20 +104,53 @@ describe('ProjectService ensureFromRemote', function () {
     expect(ensured.version).toEqual(secondReleaseVersion);
   }, 30000);
 
-  it('should provision the work branch when asked', async function () {
+  it('should provision the draft channel when asked', async function () {
     // The remote work branch was synchronized before the second
     // Release, so it still holds the first released version
     const ensured = await readOnlyCore.projects.ensureFromRemote({
       id: seed.projectId,
       url: seed.remotePath,
-      ref: 'work',
+      ref: 'draft',
     });
 
     expect(ensured.version).toEqual(seed.releaseVersion);
+    // The draft channel follows the work branch
     expect(
       await readOnlyCore.projects.branches.current({ id: seed.projectId })
     ).toEqual('work');
   }, 30000);
+
+  it('should provision the newest preview on the preview channel', async function () {
+    // The only preview so far is the one from the seed
+    const ensured = await readOnlyCore.projects.ensureFromRemote({
+      id: seed.projectId,
+      url: seed.remotePath,
+      ref: 'preview',
+    });
+    expect(ensured.version).toEqual(seed.previewVersion);
+
+    // A newer preview supersedes it, while production stays put
+    const project = await core.projects.clone({ url: seed.remotePath });
+    await createAsset(project.id);
+    const newerPreview = await core.releases.createPreview({
+      projectId: project.id,
+    });
+    await core.projects.delete({ id: project.id, force: true });
+
+    const refreshed = await readOnlyCore.projects.ensureFromRemote({
+      id: seed.projectId,
+      url: seed.remotePath,
+      ref: 'preview',
+    });
+    expect(refreshed.version).toEqual(newerPreview.version);
+
+    const production = await readOnlyCore.projects.ensureFromRemote({
+      id: seed.projectId,
+      url: seed.remotePath,
+      ref: 'production',
+    });
+    expect(production.version).toEqual(secondReleaseVersion);
+  }, 60000);
 
   it('should provision a pinned Release version with a detached HEAD', async function () {
     const ensured = await readOnlyCore.projects.ensureFromRemote({
@@ -199,16 +235,16 @@ describe('ProjectService ensureFromRemote', function () {
     await Fs.writeFile(markerPath, 'Provisioned by @elek-io/core\n');
   }, 30000);
 
-  it('should throw PreconditionFailed when the remote has no production branch', async function () {
-    const remoteProject = await seedRemoteWithRelease();
-    // Simulate a remote that never received a Release
-    await core.git.branches.delete(remoteProject.remotePath, 'production');
+  it('should throw PreconditionFailed when the remote holds no Release', async function () {
+    // A remote that never received a Release has no release tags
+    const remoteProject = await createLocalRemoteRepository();
+    const remotePath = Path.join(core.util.pathTo.tmp, remoteProject.id);
 
     let error: unknown = null;
     try {
       await readOnlyCore.projects.ensureFromRemote({
-        id: remoteProject.projectId,
-        url: remoteProject.remotePath,
+        id: remoteProject.id,
+        url: remotePath,
       });
     } catch (e) {
       error = e;
@@ -221,9 +257,7 @@ describe('ProjectService ensureFromRemote', function () {
     expect(error instanceof CoreError && error.message).toContain('Release');
     // A failed fresh provision leaves nothing behind
     expect(
-      await Fs.pathExists(
-        readOnlyCore.util.pathTo.project(remoteProject.projectId)
-      )
+      await Fs.pathExists(readOnlyCore.util.pathTo.project(remoteProject.id))
     ).toBe(false);
   }, 60000);
 

@@ -6,8 +6,9 @@ import { getCore } from './util.js';
 /**
  * Provisions a Project from its remote into the data directory
  *
- * The ref precedence is ELEK_IO_REF over the given ref over
- * `production`. Runs on a read-only Core, so no User is required.
+ * The ref precedence is the ELEK_IO_CHANNEL environment variable
+ * over the given ref over `production`. Runs on a read-only Core, so
+ * no User is required.
  */
 export const pullAction = async ({ project, url, ref }: PullProps) => {
   try {

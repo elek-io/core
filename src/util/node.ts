@@ -2,7 +2,11 @@ import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
 import { execFile, type ExecFileOptions } from 'node:child_process';
-import { projectFolderSchema } from '../schema/projectSchema.js';
+import {
+  contentChannelSchema,
+  projectFolderSchema,
+} from '../schema/projectSchema.js';
+import { CoreError } from './shared.js';
 import type { LogService } from '../service/LogService.js';
 
 /**
@@ -38,15 +42,25 @@ export function resolveReadOnly(readOnly?: boolean): boolean {
 /**
  * Resolves the content ref to provision
  *
- * Precedence: the ELEK_IO_REF environment variable wins over the
+ * Precedence: the ELEK_IO_CHANNEL environment variable wins over the
  * given ref, which wins over the default `production`. The
- * environment variable is the CI override channel, so it beats
- * configuration checked into a repository. An empty or
+ * environment variable applies to every Project of a deployment, so
+ * it only accepts channels, never exact versions. Versions are
+ * per-Project decisions and belong into configuration. An empty or
  * whitespace-only value counts as unset.
  */
 export function resolveContentRef(ref?: string): string {
-  const fromEnv = process.env['ELEK_IO_REF']?.trim();
-  return fromEnv || ref?.trim() || 'production';
+  const fromEnv = process.env['ELEK_IO_CHANNEL']?.trim();
+  if (fromEnv) {
+    const channel = contentChannelSchema.safeParse(fromEnv);
+    if (!channel.success) {
+      throw CoreError.badRequest(
+        `ELEK_IO_CHANNEL must be "production", "preview" or "draft", got "${fromEnv}". Pin exact versions per Project through the ref option instead.`
+      );
+    }
+    return channel.data;
+  }
+  return ref?.trim() || 'production';
 }
 
 /**

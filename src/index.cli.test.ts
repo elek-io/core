@@ -357,7 +357,7 @@ describe('CLI', function () {
     ).toBe(true);
   }, 60000);
 
-  it('should provision the ref given by ELEK_IO_REF via the pull command', async function () {
+  it('should provision the channel given by ELEK_IO_CHANNEL via the pull command', async function () {
     const seed = await seedRemoteWithRelease();
 
     await execCommand({
@@ -374,18 +374,40 @@ describe('CLI', function () {
         'production',
       ],
       options: {
-        env: { ...process.env, ELEK_IO_REF: seed.previewVersion },
+        env: { ...process.env, ELEK_IO_CHANNEL: 'draft' },
       },
       logger: core.logger,
     });
 
-    const projectFile = JSON.parse(
-      await fs.readFile(
-        `./.elek.io/pull-ref-data-dir/projects/${seed.projectId}/project.json`,
-        'utf-8'
-      )
+    // The draft channel follows the work branch
+    const head = await fs.readFile(
+      `./.elek.io/pull-ref-data-dir/projects/${seed.projectId}/.git/HEAD`,
+      'utf-8'
     );
-    expect(projectFile.version).toEqual(seed.previewVersion);
+    expect(head).toContain('refs/heads/work');
+  }, 60000);
+
+  it('should reject an exact version in ELEK_IO_CHANNEL', async function () {
+    const seed = await seedRemoteWithRelease();
+
+    await expect(
+      execCommand({
+        command: 'node ./dist/cli/index.cli.mjs',
+        args: [
+          '--data-dir',
+          './.elek.io/pull-channel-fail-data-dir',
+          'pull',
+          '--project',
+          seed.projectId,
+          '--url',
+          seed.remotePath,
+        ],
+        options: {
+          env: { ...process.env, ELEK_IO_CHANNEL: seed.releaseVersion },
+        },
+        logger: core.logger,
+      })
+    ).rejects.toThrow();
   }, 60000);
 
   it('should fail loudly when the pull ref does not exist', async function () {

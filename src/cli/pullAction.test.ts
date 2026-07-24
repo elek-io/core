@@ -46,8 +46,8 @@ describe('pullAction', function () {
     expect(projectFile.version).toEqual(seed.releaseVersion);
   }, 30000);
 
-  it('prefers ELEK_IO_REF over the given ref', async function () {
-    vi.stubEnv('ELEK_IO_REF', seed.previewVersion);
+  it('prefers the ELEK_IO_CHANNEL environment variable over the given ref', async function () {
+    vi.stubEnv('ELEK_IO_CHANNEL', 'draft');
 
     await pullAction({
       project: seed.projectId,
@@ -55,11 +55,11 @@ describe('pullAction', function () {
       ref: 'production',
     });
 
-    const projectFile = projectFileSchema.parse(
-      await Fs.readJson(
-        Path.join(core.util.pathTo.project(seed.projectId), 'project.json')
+    // The draft channel follows the work branch
+    expect(
+      await core.git.branches.current(
+        core.util.pathTo.project(seed.projectId)
       )
-    );
-    expect(projectFile.version).toEqual(seed.previewVersion);
+    ).toEqual('work');
   }, 30000);
 });

@@ -88,10 +88,9 @@ async function logReadingProject(
 ): Promise<void> {
   const project = await core.projects.read({ id: projectId });
   const branch = await core.projects.branches.current({ id: projectId });
+  const source = branch === 'work' ? 'draft' : branch || 'Release tag';
   log(
-    `Reading Project "${project.name}" version ${project.version} (${
-      branch || 'pinned Release'
-    }) from "${core.options.dataDir}"`
+    `Reading Project "${project.name}" version ${project.version} (${source}) from "${core.options.dataDir}"`
   );
 }
 
@@ -297,8 +296,9 @@ interface ElekProjectProps {
    */
   remoteUrl: string;
   /**
-   * The content state to provision: `production`, `work` or a Release
-   * version. The ELEK_IO_REF environment variable overrides this.
+   * The content state to provision: a channel (`production`,
+   * `preview` or `draft`) or an exact Release version. The
+   * ELEK_IO_CHANNEL environment variable overrides this.
    *
    * @default 'production'
    */

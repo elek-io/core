@@ -105,7 +105,8 @@ export const pullSchema = z.object({
    */
   url: z.string().trim().min(1),
   /**
-   * The content state to provision, overridden by ELEK_IO_REF
+   * The content state to provision: a channel or an exact Release
+   * version, overridden by the ELEK_IO_CHANNEL environment variable
    *
    * @default 'production'
    */

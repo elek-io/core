@@ -108,9 +108,13 @@ After cloning, Core fetches the whole LFS history into the local store and mater
 const project = await core.projects.ensureFromRemote({
   id: '<project-id>',
   url: 'https://github.com/acme/website-content.git',
-  ref: 'production', // 'production' | 'work' | a Release version - default 'production'
+  // A channel ('production' | 'preview' | 'draft') or an exact
+  // Release version - default 'production'
+  ref: 'production',
 });
 ```
+
+The channels resolve against the tags the remote advertises: `production` checks out the newest Release tag, `preview` the newest preview Release tag (both by semver, with a detached HEAD), and `draft` follows the `work` branch. An exact version checks out that Release's tag.
 
 Three cases, decided by a provisioning marker file inside the Project directory:
 
@@ -118,7 +122,7 @@ Three cases, decided by a provisioning marker file inside the Project directory:
 - **Present with the marker**: the copy is fetched and hard-reset to the ref, so it always matches the remote.
 - **Present without the marker**: the copy is managed by another application (for example the Desktop app) and is left untouched.
 
-A `ref` naming a Release version checks out that Release's tag with a detached HEAD. An unknown version throws `NotFound` listing the available versions. Provisioning `production` from a remote that has no `production` branch throws `PreconditionFailed`, because no Release has been published yet.
+An unknown version throws `NotFound` listing the available versions. Provisioning the `production` or `preview` channel of a Project that never published a Release or preview throws `PreconditionFailed` naming the fix.
 
 Private remotes authenticate through the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable, see [`usage.md`](./usage.md#environment-variables). The token is passed to git per invocation and never written into a URL or the repository config.
 

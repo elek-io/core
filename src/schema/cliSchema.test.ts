@@ -122,13 +122,13 @@ describe('pullSchema', () => {
     const result = pullSchema.parse({
       project: id,
       url: 'https://example.com/repo.git',
-      ref: 'work',
+      ref: 'draft',
     });
 
     expect(result).toEqual({
       project: id,
       url: 'https://example.com/repo.git',
-      ref: 'work',
+      ref: 'draft',
     });
   });
 

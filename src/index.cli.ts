@@ -156,7 +156,7 @@ program
   )
   .option(
     '-r, --ref <ref>',
-    'The content state to provision: "production", "work" or a Release version. The ELEK_IO_REF environment variable overrides this option. Defaults to "production".'
+    'The content state to provision: a channel ("production", "preview" or "draft") or an exact Release version. The ELEK_IO_CHANNEL environment variable overrides this option. Defaults to "production".'
   )
   .action(async (options) => {
     // Provisioning never mutates the Project or its remote and must

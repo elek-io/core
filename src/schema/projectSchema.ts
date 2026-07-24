@@ -151,9 +151,19 @@ export const cloneProjectSchema = z.object({
 export type CloneProjectProps = z.infer<typeof cloneProjectSchema>;
 
 /**
- * The content state to provision: a branch or a Release version
+ * The channels provisioning can follow
+ *
+ * `production` is the latest Release, `preview` the latest preview
+ * Release, `draft` the tip of the work branch. Channels exist for
+ * every Project, so they are safe to set deployment-wide.
  */
-export const contentRefSchema = z.union([projectBranchSchema, versionSchema]);
+export const contentChannelSchema = z.enum(['production', 'preview', 'draft']);
+export type ContentChannel = z.infer<typeof contentChannelSchema>;
+
+/**
+ * The content state to provision: a channel or an exact Release version
+ */
+export const contentRefSchema = z.union([contentChannelSchema, versionSchema]);
 export type ContentRef = z.infer<typeof contentRefSchema>;
 
 export const ensureFromRemoteProjectSchema = z.object({
@@ -163,7 +173,8 @@ export const ensureFromRemoteProjectSchema = z.object({
    */
   url: z.string().trim().min(1),
   /**
-   * The content state to provision
+   * The content state to provision: a channel (`production`,
+   * `preview`, `draft`) or an exact Release version
    *
    * @default 'production'
    */
