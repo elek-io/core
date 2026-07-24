@@ -50,7 +50,7 @@
     "release": "changeset publish"
   },
   "dependencies": {
-    "@hono/node-server": "2.0.5",
+    "@hono/node-server": "2.0.10",
     "@hono/zod-openapi": "1.4.0",
     "@scalar/hono-api-reference": "0.11.4",
     "@sindresorhus/slugify": "3.0.0",
