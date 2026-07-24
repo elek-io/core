@@ -328,7 +328,7 @@ interface ElekIntegrationProps {
  * and nothing is ever mutated. A locally existing Project managed by
  * another application (e.g. the Desktop app) is left untouched, so
  * local development keeps reading the live working copy. Private
- * remotes authenticate through the ELEK_IO_TOKEN environment variable.
+ * remotes authenticate through the ELEK_IO_REMOTE_ACCESS_TOKEN environment variable.
  *
  * @example
  * ```js

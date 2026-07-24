@@ -261,7 +261,7 @@ describe('ProjectService ensureFromRemote', function () {
   }, 60000);
 
   it('should never write the token into the clone', async function () {
-    vi.stubEnv('ELEK_IO_TOKEN', 'secret-token-123');
+    vi.stubEnv('ELEK_IO_REMOTE_ACCESS_TOKEN', 'secret-token-123');
     const tokenDataDir = Path.join(Os.tmpdir(), `elek-io-core-test-${uuid()}`);
     const tokenCore = new ElekIoCore({
       readOnly: true,

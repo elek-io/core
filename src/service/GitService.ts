@@ -103,11 +103,11 @@ export function classifyAuthError(
   }
   if (hasToken) {
     return CoreError.unauthorized(
-      'The remote rejected the provided token. Check ELEK_IO_TOKEN and ELEK_IO_TOKEN_USER.'
+      'The remote rejected the provided token. Check ELEK_IO_REMOTE_ACCESS_TOKEN and ELEK_IO_REMOTE_ACCESS_TOKEN_USER.'
     );
   }
   return CoreError.unauthorized(
-    'The remote requires authentication. Set the ELEK_IO_TOKEN environment variable.'
+    'The remote requires authentication. Set the ELEK_IO_REMOTE_ACCESS_TOKEN environment variable.'
   );
 }
 
@@ -145,9 +145,9 @@ export class GitService {
     this.options = options;
     this.pathTo = pathTo;
     // Read once at construction, never at import
-    this.token = process.env['ELEK_IO_TOKEN']?.trim() || null;
+    this.token = process.env['ELEK_IO_REMOTE_ACCESS_TOKEN']?.trim() || null;
     this.tokenUser =
-      process.env['ELEK_IO_TOKEN_USER']?.trim() || 'x-access-token';
+      process.env['ELEK_IO_REMOTE_ACCESS_TOKEN_USER']?.trim() || 'x-access-token';
     this.logService = logService;
     this.userService = userService;
     this.jsonFileService = jsonFileService;
@@ -1177,8 +1177,8 @@ export class GitService {
   }
 
   /**
-   * The environment for git commands, built from the ELEK_IO_TOKEN
-   * and ELEK_IO_TOKEN_USER environment variables read at construction
+   * The environment for git commands, built from the ELEK_IO_REMOTE_ACCESS_TOKEN
+   * and ELEK_IO_REMOTE_ACCESS_TOKEN_USER environment variables read at construction
    */
   private async credentialEnv(): Promise<Record<string, string>> {
     if (this.token === null) {

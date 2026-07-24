@@ -59,7 +59,7 @@ describe('classifyAuthError', function () {
 
     expect(error).toBeInstanceOf(CoreError);
     expect(error?.type).toEqual('Unauthorized');
-    expect(error?.message).toContain('ELEK_IO_TOKEN');
+    expect(error?.message).toContain('ELEK_IO_REMOTE_ACCESS_TOKEN');
   });
 
   it('classifies a disabled prompt without a token as Unauthorized', function () {
@@ -70,6 +70,6 @@ describe('classifyAuthError', function () {
 
     expect(error).toBeInstanceOf(CoreError);
     expect(error?.type).toEqual('Unauthorized');
-    expect(error?.message).toContain('Set the ELEK_IO_TOKEN');
+    expect(error?.message).toContain('Set the ELEK_IO_REMOTE_ACCESS_TOKEN');
   });
 });

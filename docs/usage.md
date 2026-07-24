@@ -49,15 +49,15 @@ The resolved options are exposed on `core.options`, and the running Core version
 
 Core reads its environment variables once at construction, never at import. All of them use the `ELEK_IO_` prefix with SCREAMING_SNAKE_CASE names. An empty or whitespace-only value counts as unset. When a constructor option covers the same setting, the option wins over the environment.
 
-| Variable             | Purpose                                                             | Default          |
-| -------------------- | ------------------------------------------------------------------- | ---------------- |
-| `ELEK_IO_DATA_DIR`   | The directory Core reads and writes data in                         | `~/elek.io`      |
-| `ELEK_IO_READ_ONLY`  | Set to `true` to put Core into read-only mode                       | unset            |
-| `ELEK_IO_TOKEN`      | Token for authenticating git operations against a private remote    | unset            |
-| `ELEK_IO_TOKEN_USER` | The username presented alongside `ELEK_IO_TOKEN`                    | `x-access-token` |
-| `ELEK_IO_REF`        | The content state provisioning checks out, overrides configured refs | unset            |
+| Variable                           | Purpose                                                              | Default          |
+| ---------------------------------- | -------------------------------------------------------------------- | ---------------- |
+| `ELEK_IO_DATA_DIR`                 | The directory Core reads and writes data in                          | `~/elek.io`      |
+| `ELEK_IO_READ_ONLY`                | Set to `true` to put Core into read-only mode                        | unset            |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN`      | Token for authenticating git operations against a private remote     | unset            |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN`       | `x-access-token` |
+| `ELEK_IO_REF`                      | The content state provisioning checks out, overrides configured refs | unset            |
 
-`ELEK_IO_TOKEN` is handed to git per invocation through an askpass helper. It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches. Prompts are disabled, a missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it. While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before.
+`ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git per invocation through an askpass helper. It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches. Prompts are disabled, a missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it. While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before.
 
 On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room. See the limitation in [`features.md`](./features.md#intentional-constraints). macOS and Linux allow 1024 and 4096 characters and are not affected.
 
@@ -292,7 +292,7 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 - `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported.
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
-- `elek pull --project <id> --url <url>` - provision a Project from its remote into the data directory, meant for CI builds. `--ref` selects `production` (default), `work` or a Release version, and is overridden by the `ELEK_IO_REF` environment variable. Runs read-only, so no User is required. Authentication against private remotes uses `ELEK_IO_TOKEN`. See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-project-for-builds).
+- `elek pull --project <id> --url <url>` - provision a Project from its remote into the data directory, meant for CI builds. `--ref` selects `production` (default), `work` or a Release version, and is overridden by the `ELEK_IO_REF` environment variable. Runs read-only, so no User is required. Authentication against private remotes uses `ELEK_IO_REMOTE_ACCESS_TOKEN`. See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-project-for-builds).
 
 The global `--data-dir <path>` option sets the data directory for any command, e.g. `elek --data-dir /path/to/data export`. It overrides the `ELEK_IO_DATA_DIR` environment variable and defaults to `~/elek.io`, see [Options](#options).
 
@@ -348,7 +348,7 @@ export default defineConfig({
 });
 ```
 
-Each Project takes an optional `ref` (`production`, `work` or a Release version, default `production`), overridden by the `ELEK_IO_REF` environment variable. Private remotes authenticate through `ELEK_IO_TOKEN`. The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated. A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content. Without the integration, a missing Project fails the build with an error pointing here. The underlying behavior is documented in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-project-for-builds).
+Each Project takes an optional `ref` (`production`, `work` or a Release version, default `production`), overridden by the `ELEK_IO_REF` environment variable. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`. The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated. A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content. Without the integration, a missing Project fails the build with an error pointing here. The underlying behavior is documented in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-project-for-builds).
 
 Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (production)`.
 
