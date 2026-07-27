@@ -94,8 +94,10 @@ pnpm check-types && pnpm build && pnpm test
 
 astro is an optional peer (`peerDependenciesMeta`), used only by the `/astro` entry. A consumer
 using the Astro integration already provides it, and consumers of the Node or Browser entry never
-install it. The entry uses `astro/loaders` (the Content Layer `Loader` type) and `astro/jsx-runtime`
-(for rendering mdast to Astro JSX).
+install it. The entry uses `astro/loaders` (the Content Layer `Loader` type), `astro/jsx-runtime`
+(for rendering mdast to Astro JSX) and `astro/content/config` (for `defineCollection`, see
+[`astro-entry.md`](./astro-entry.md)). It also depends on two of astro's internals, both recorded
+there: the `__ASTRO_IMAGE_` marker and the resolved shape of `LoaderContext`.
 
 The floor is 6.0.0, verified two ways. astro 6.0.0 added the `Loader.createSchema` method (returning
 `{ schema, types }`) that `elekEntriesLoader` uses (`src/index.astro.ts`), and it switched the Loader's
@@ -118,8 +120,8 @@ astro 7 was verified this way in July 2026 and the range widened from `^6.0.0` t
 It is a speed release: Rust compiler, a Rust markdown pipeline replacing remark and rehype, Vite 8 on
 Rolldown, queued rendering. The content layer itself is untouched, `Loader.createSchema` and
 `LoaderContext` (including `config: AstroConfig` and `DataEntry.filePath`) are unchanged from 6.4.8,
-`astro/loaders`, `astro/jsx-runtime`, `astro/content/config` and `astro/assets/utils/node` all exist
-with the same shapes, and programmatic `sync` is unchanged. The zod dependency stays `^4.3.6`, so the
+`astro/loaders`, `astro/jsx-runtime` and `astro/content/config` all exist with the same shapes,
+the `__ASTRO_IMAGE_` marker is unchanged, and programmatic `sync` is unchanged. The zod dependency stays `^4.3.6`, so the
 zod floor does not move. New in v7 is an optional `@astrojs/markdown-remark` peer for the opt-in
 remark pipeline, which adds no install friction. Engines require Node >= 22.12, and CI runs the
 version in `.node-version`. There is still no integration API for injecting content collections, so

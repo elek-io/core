@@ -16,6 +16,12 @@ Design notes and invariants behind `@elek-io/core/astro`. The consumer-facing do
 
 The split is not cosmetic. `collections.ts` builds its collections from the loaders, so leaving the loaders in the entry would make the entry and `collections.ts` import each other. Keeping `getCore()` in its own module also keeps the "one Core per process" promise honest, a second copy of that module would mean a second Core.
 
+## One Core, configured by the environment
+
+The loaders share one lazily created `ElekIoCore` and take no options of their own. They used to accept a `core` prop, which only the first loader to run actually applied while every later one was silently ignored. The `ELEK_IO_*` variables configure that instance instead, and they reach it wherever it is constructed.
+
+`elek()` keeps its own `core` option because it runs a second, short-lived, read-only Core for provisioning, in a different module graph, before the loaders exist. Nothing about `file.cache` or `log.level` is exposed to the loaders today. If that is ever needed, it is a new `ELEK_IO_` variable read at construction, not a prop.
+
 ## The elek config
 
 `defineElekConfig` returns the very object it was handed, it never returns the parse result. That is what preserves the alias keys as literal types, which the loaders then constrain their `project` against (`keyof T['projects'] & string`). Returning `schema.parse(config)` would widen everything back to `Record<string, ...>` and lose the compile-time alias check, and getting the literal type back would need a cast.
@@ -23,6 +29,10 @@ The split is not cosmetic. `collections.ts` builds its collections from the load
 `assertElekConfig` therefore validates without transforming, and every entry point calls it on the config it receives, so a hand-built config fails the same way a declared one does.
 
 Alias keys are `^[a-z][a-zA-Z0-9]*$` because they are concatenated into collection keys. The schema is strict, since a silently stripped `remotUrl` would surface much later as "this Project was never provisioned".
+
+`ref` stays a plain `string` on the declaration rather than a channel union, because `contentRefSchema` validates it anyway and `ELEK_IO_CHANNEL` can override it at runtime, so a narrower type would promise a precision the value does not have.
+
+The config is found by import, never by discovery. `elek.config.ts` is a convention the docs state, and the imports are what connect `astro.config.mjs` and the content config. That astro.config can import a sibling `.ts` file at all was the design's riskiest assumption and is covered by [`src/index.astro.config.test.ts`](../src/index.astro.config.test.ts).
 
 ## Derived collection keys
 
@@ -34,6 +44,8 @@ Collisions throw rather than overwrite, naming both sources. Two classes are rea
 - **Alias boundary.** An alias may contain uppercase letters after the first character, so alias `web` with a `site-posts` Collection and alias `webSite` with a `posts` Collection both derive `webSitePosts`.
 
 One class that looks reachable is not: a Collection can never take the `${alias}Assets` key, because `assets` is in `reservedSlugs` ([`src/schema/baseSchema.ts`](../src/schema/baseSchema.ts)) and no other plural slug derives `Assets`. If that reservation is ever lifted, this collision becomes real and needs a test.
+
+The keys a consumer autocompletes against come from the types Astro generates after a sync, not from what `elekCollections` returns. Its return type is honestly string-keyed, and making it more precise would not help, Astro reads the collection object at sync time either way.
 
 ## The `astro/content/config` subpath
 

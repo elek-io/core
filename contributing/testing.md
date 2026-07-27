@@ -45,6 +45,17 @@ Test files run in parallel, one file per vitest worker. This works because no st
 - Tests that bind the local API use `testApiPort` from [`src/test/setup.ts`](../src/test/setup.ts), which is `31310 + poolId`, so concurrent workers never contend for a port. 31310 stays the documented product default.
 - All of this relies on the vitest `forks` pool (the default), where each test file gets its own process and env. Switching to the `threads` pool would break the per-file env derivation and the `vi.stubEnv` based tests.
 
+### One Astro suite per test file
+
+Every `sync()` builds a full Astro pipeline inside the worker process, and the memory is not fully reclaimed between calls. Six of them in one file exhausted a 4 GB heap, so each Astro suite lives in its own file ([`src/index.astro.test.ts`](../src/index.astro.test.ts), [`.integration`](../src/index.astro.integration.test.ts), [`.config`](../src/index.astro.config.test.ts), [`.collections`](../src/index.astro.collections.test.ts), [`.assets`](../src/index.astro.assets.test.ts)). Add a new file rather than a sixth sync to an existing one.
+
+Two related limits, both found the hard way:
+
+- **`build()` does not work from a test.** Astro stages its prerender output in `<cwd>/.astro` whenever the site root sits outside the current working directory, then renames it into place. Test roots live under the OS temp directory, so that rename crosses filesystems and fails wherever `/tmp` is a separate mount.
+- **`dev()` does not work from a test either.** A dev server started inside a vitest worker accepts connections but never routes, vite inside vite. It is fine in a standalone script, which is how the Astro assets behavior was verified by hand.
+
+So Astro suites assert what `sync()` produces: the generated types, the files on disk and the content store. Anything that needs a rendered page has to be checked manually and written down instead.
+
 ### Limitation: git credentials cannot be integration-tested
 
 The suite's remotes are bare repositories on the local filesystem, and git skips its whole credential machinery for local paths. The `ELEK_IO_REMOTE_ACCESS_TOKEN` askpass flow (`buildCredentialEnv` and the helper scripts in `GitService`) is therefore covered by unit tests on the env it builds, plus a negative integration test asserting the token never lands in `.git/config` or the remote URL. What no test covers: git actually invoking the askpass helper against an HTTP remote, and the Windows `.bat` trampoline in particular, plus LFS object availability for old Release tags on real providers. Verify those manually against a real private HTTPS remote when touching the credential path, and before releasing changes to it. A local HTTP git server fixture would close this gap if it ever becomes worth the setup. The design rationale behind the askpass approach is in [`git-credentials.md`](./git-credentials.md).

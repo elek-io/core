@@ -1,6 +1,6 @@
 # CMS Astro Integration Comparison
 
-Comparison of how headless CMSs integrate with Astro's content layer, with elek.io Core's `@elek-io/core/astro` entry situated against Storyblok, Hygraph, Sanity and Keystatic. Astro is the first framework Core targets, so this comparison covers Astro integrations. Surveyed July 2026 against Astro 6 (released March 2026) and the then-current official packages.
+Comparison of how headless CMSs integrate with Astro's content layer, with elek.io Core's `@elek-io/core/astro` entry situated against Storyblok, Hygraph, Sanity and Keystatic. Astro is the first framework Core targets, so this comparison covers Astro integrations. Surveyed July 2026 against Astro 6 (released March 2026) and the then-current official packages, and re-checked against Astro 7 when the peer range was widened to it.
 
 The doc is structured like [`fields.md`](./fields.md): the [comparison tables](#comparison) put all five platforms side by side, the [per-platform notes](#per-platform-notes) hold detail and warts, and [strengths and gaps](#elekio-core-strengths-and-gaps) closes with where Core leads, what it lacks and the [decided direction](#decided-direction-july-2026).
 
@@ -63,14 +63,14 @@ No other surveyed provider derives collections or schemas from the CMS content m
 
 ## Astro platform constraints
 
-These Astro 6 facts shape what every integration in this comparison can and cannot do.
+These facts shape what every integration in this comparison can and cannot do. They hold for Astro 6 and 7 alike, the content layer did not change between the two.
 
 - **Integrations cannot inject content collections.** There is no API for it and the roadmap proposal was closed in favor of the content layer without one materializing. Even Starlight, Astro's own docs integration, instructs users to hand-write `src/content.config.ts`. Every provider therefore needs a user-owned content config, and single-declaration DX must come from a shared file or module both sides import.
 - **`astro:config:setup` runs before content sync** in dev and build, so an integration can reliably prepare state (like a provisioned Project) that loaders depend on. It also re-runs on every dev restart and config change.
 - **Loader-supplied schemas and types go through `createSchema()`**, which returns `{ schema, types }` and is new in Astro 6 (schema-as-function was removed). Core already uses it.
 - **Local images reach `astro:assets` through `DataEntry.filePath`** plus a marked path relative to it. `emitImageMetadata()` from `astro/assets/utils/node` is the other route, but it needs a bundler's file emitter, which a loader is never given, so it degrades to dev-server URLs in a build. Absolute path strings do neither and degrade to untransformed public paths. Only Astro's own input formats qualify, everything else has to be served from the public directory instead.
-- **The content layer store persists** at `.astro/data-store.json` in dev and `node_modules/.astro/data-store.json` in build, and loaders own their incrementality via digests.
-- **Live content collections are stable in Astro 6** but SSR-only with no store and no image optimization, a possible future dev-mode drafts story rather than a build-time tool.
+- **The content layer store persists** at `.astro/data-store.json` in dev, and in the configured `cacheDir` (`node_modules/.astro` by default) for every other command, `sync` included. Loaders own their incrementality via digests.
+- **Live content collections are stable since Astro 6** but SSR-only with no store and no image optimization, a possible future dev-mode drafts story rather than a build-time tool. Astro 7 only added SSR route-cache hints to them.
 
 ## Per-platform notes
 
@@ -93,9 +93,13 @@ Where Core leads today:
 
 Where Core lags today:
 
+- **No visual editing.** Storyblok's bridge and live preview, and Sanity's stega-based overlays, have no counterpart. Content is edited in the Desktop app and the site rebuilds.
+- **Public Asset URLs are not content-hashed.** A non-image Asset keeps a stable, predictable URL, which is what makes it linkable at all, but a replaced binary reuses that URL and caches have to be busted some other way. Images do not have the problem, Astro hashes those.
+- **One framework so far.** Astro is the only integration. Everything else consumes a provisioned Project through the programmatic API, the local API or a JSON export.
+
 ## Decided direction (July 2026)
 
-Settled during the Astro DX exploration (branch `astro-dx`). Items marked **shipped** are implemented, the rest is still open:
+Settled during the Astro DX exploration on branch `astro-dx` and since implemented in full. Kept as the record of what was decided and why:
 
 - **Shipped.** A single `elek.config.ts` created with `defineElekConfig()`, explicitly imported by both `astro.config.mjs` and `content.config.ts`. No auto-discovery. Projects are referenced by a consumer-chosen alias, which the loaders accept as a literal type, so a typo is a compile error. `astro.config.mjs` importing a sibling `.ts` file through Astro's own config loading was the riskiest assumption of the design and is covered by a dedicated test.
 - **Shipped.** `elekCollections()` derives all collections of the declared Projects. Keys are always alias-prefixed (`websitePosts`), in single-Project and multi-Project setups alike. The Assets collection is included by default (`websiteAssets`) with an opt-out, and its binaries default to `src/content/elek/<alias>/assets` so `astro:assets` can reach them. Colliding keys throw naming both sides, see [`../astro-entry.md`](../astro-entry.md).
@@ -103,7 +107,7 @@ Settled during the Astro DX exploration (branch `astro-dx`). Items marked **ship
 - **Shipped.** The Astro store keeps one entry per elek.io Entry, keyed by its UUID. Slug values from a `slug` field stay language-keyed data on the entry rather than becoming per-language store entries, so UUID reference lookups keep working. `elekSlugPaths()` builds the `getStaticPaths` result from a named slug field, one path per language, skipping the languages an Entry has no slug in.
 - **Shipped.** The per-loader `core` option is removed. Env vars own the loaders' Core configuration, the integration keeps its own option for the short-lived provisioning instance.
 - **Shipped.** Provisioning gained graceful offline behavior: when the fetch fails and a usable provisioned copy exists, it warns loudly and builds with the existing copy instead of failing. An exact version pin the copy already holds skips the network entirely. A missing copy, an authentication failure and a pin the copy does not hold stay hard failures, so a dead token or a broken pin cannot hide behind a warning.
-- Naming (decided July 2026): the loaders are renamed to `elekAssetsLoader` and `elekEntriesLoader` alongside the config reshape, following the ecosystem's `Loader` suffix convention and separating them from `elekCollections()`. The integration stays product-named `elek()` and exports use the bare brand, never `elekIo*`. Both rules are recorded in [`../naming.md`](../naming.md).
+- **Shipped.** Naming: the loaders are named `elekAssetsLoader` and `elekEntriesLoader` alongside the config reshape, following the ecosystem's `Loader` suffix convention and separating them from `elekCollections()`. The integration stays product-named `elek()` and exports use the bare brand, never `elekIo*`. Both rules are recorded in [`../naming.md`](../naming.md).
 
 ## See Also
 
