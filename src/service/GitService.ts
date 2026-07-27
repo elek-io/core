@@ -57,6 +57,8 @@ type GitCommandOptions = IGitExecutionOptions & { tolerateNonZero?: boolean };
  * fails a command instead of hanging it. With a token, GIT_ASKPASS
  * points at the askpass helper and the token travels by environment
  * variable only, never as an argument, a URL or repository config.
+ *
+ * @see ../../contributing/git-credentials.md for the design rationale and invariants
  */
 export function buildCredentialEnv(
   token: string | null,
