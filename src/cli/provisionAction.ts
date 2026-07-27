@@ -1,6 +1,5 @@
 import type { ProvisionProps } from '../schema/index.js';
 import { resolveContentRef } from '../util/node.js';
-import { CoreError } from '../util/shared.js';
 import { getCore } from './util.js';
 
 /**
@@ -9,28 +8,24 @@ import { getCore } from './util.js';
  *
  * The ref precedence is the ELEK_IO_CHANNEL environment variable
  * over the given ref over `production`. Runs on a read-only Core, so
- * no User is required.
+ * no User is required. Throws on failure, the binary entry presents
+ * the error.
  */
 export const provisionAction = async ({
   project,
   url,
   ref,
 }: ProvisionProps) => {
-  try {
-    const core = getCore();
-    const resolvedRef = resolveContentRef(ref);
-    const provisioned = await core.projects.provision({
-      id: project,
-      url,
-      ref: resolvedRef,
-    });
+  const core = getCore();
+  const resolvedRef = resolveContentRef(ref);
+  const provisioned = await core.projects.provision({
+    id: project,
+    url,
+    ref: resolvedRef,
+  });
 
-    core.logger.info({
-      source: 'core',
-      message: `Provisioned Project "${provisioned.name}" (${provisioned.id}) at "${resolvedRef}", version ${provisioned.version}`,
-    });
-  } catch (error) {
-    console.error(error instanceof CoreError ? error.message : String(error));
-    process.exit(1);
-  }
+  core.logger.info({
+    source: 'core',
+    message: `Provisioned Project "${provisioned.name}" (${provisioned.id}) at "${resolvedRef}", version ${provisioned.version}`,
+  });
 };

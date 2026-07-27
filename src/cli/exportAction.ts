@@ -8,7 +8,6 @@ import type {
   ExportProps,
   Project,
 } from '../schema/index.js';
-import { CoreError } from '../index.node.js';
 import { getCore, watchProjects } from './index.js';
 
 async function exportFile({
@@ -301,26 +300,21 @@ export const exportAction = async ({
   template,
   options,
 }: ExportProps) => {
-  try {
-    await exportProjects({ outDir, projects, template, options });
+  await exportProjects({ outDir, projects, template, options });
 
-    if (options.watch === true) {
-      const core = getCore();
+  if (options.watch === true) {
+    const core = getCore();
+    core.logger.info({
+      source: 'core',
+      message: 'Watching for changes to export Projects',
+    });
+
+    watchProjects().on('all', (event, path) => {
       core.logger.info({
         source: 'core',
-        message: 'Watching for changes to export Projects',
+        message: `Re-Exporting Projects due to ${event} on "${path}"`,
       });
-
-      watchProjects().on('all', (event, path) => {
-        core.logger.info({
-          source: 'core',
-          message: `Re-Exporting Projects due to ${event} on "${path}"`,
-        });
-        void exportProjects({ outDir, projects, template, options });
-      });
-    }
-  } catch (error) {
-    console.error(error instanceof CoreError ? error.message : String(error));
-    process.exit(1);
+      void exportProjects({ outDir, projects, template, options });
+    });
   }
 };

@@ -17,6 +17,7 @@ import {
   generateTypesSchema,
   provisionSchema,
 } from './schema/index.js';
+import { CoreError } from './util/shared.js';
 
 const program = new Command()
   .name('elek')
@@ -167,4 +168,12 @@ program
     await provisionAction(props);
   });
 
-await program.parseAsync();
+// Error presentation for every command in one place: actions throw,
+// the binary prints the actionable message instead of a stack trace
+// and exits non-zero
+try {
+  await program.parseAsync();
+} catch (error) {
+  console.error(error instanceof CoreError ? error.message : String(error));
+  process.exit(1);
+}

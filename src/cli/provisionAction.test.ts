@@ -4,15 +4,16 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import core from '../test/setup.js';
 import { projectFileSchema } from '../schema/index.js';
 import { seedRemoteWithRelease } from '../test/util.js';
+import { CoreError } from '../util/shared.js';
 import { provisionAction } from './provisionAction.js';
 import { configureCore, getCore } from './util.js';
 
 /**
- * Exercises the happy paths of provisionAction in process. The CLI
- * core of this worker resolves its data directory from the worker's
- * ELEK_IO_DATA_DIR, so assertions can use the shared test Core's
- * paths. Failure paths call process.exit and are covered by the
- * subprocess tests in index.cli.test.ts.
+ * Exercises provisionAction in process. The CLI core of this worker
+ * resolves its data directory from the worker's ELEK_IO_DATA_DIR, so
+ * assertions can use the shared test Core's paths. Error presentation
+ * (message and exit code) lives in the binary entry and is covered by
+ * the subprocess tests in index.cli.test.ts.
  */
 describe('provisionAction', function () {
   let seed: Awaited<ReturnType<typeof seedRemoteWithRelease>>;
@@ -61,5 +62,21 @@ describe('provisionAction', function () {
         core.util.pathTo.project(seed.projectId)
       )
     ).toEqual('work');
+  }, 30000);
+
+  it('rejects with the typed error instead of exiting the process', async function () {
+    let error: unknown = null;
+    try {
+      await provisionAction({
+        project: seed.projectId,
+        url: seed.remotePath,
+        ref: '9.9.9',
+      });
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeInstanceOf(CoreError);
+    expect(error instanceof CoreError && error.type).toEqual('NotFound');
   }, 30000);
 });

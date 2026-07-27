@@ -6,7 +6,6 @@ import {
   flattenFieldDefinitions,
   makeComponentsContext,
   resolveOfComponents,
-  CoreError,
   type ComponentsContext,
   type DynamicFieldDefinition,
   type FieldDefinition,
@@ -787,26 +786,21 @@ export const generateTypesAction = async ({
   projects,
   options,
 }: GenerateTypesProps) => {
-  try {
-    await generateTypesAs({ outDir, language, projects });
+  await generateTypesAs({ outDir, language, projects });
 
-    if (options.watch === true) {
-      const core = getCore();
+  if (options.watch === true) {
+    const core = getCore();
+    core.logger.info({
+      source: 'core',
+      message: 'Watching for changes to regenerate types',
+    });
+
+    watchProjects().on('all', (event, path) => {
       core.logger.info({
         source: 'core',
-        message: 'Watching for changes to regenerate types',
+        message: `Regenerating types due to ${event} on "${path}"`,
       });
-
-      watchProjects().on('all', (event, path) => {
-        core.logger.info({
-          source: 'core',
-          message: `Regenerating types due to ${event} on "${path}"`,
-        });
-        void generateTypesAs({ outDir, language, projects });
-      });
-    }
-  } catch (error) {
-    console.error(error instanceof CoreError ? error.message : String(error));
-    process.exit(1);
+      void generateTypesAs({ outDir, language, projects });
+    });
   }
 };
