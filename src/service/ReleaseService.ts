@@ -290,8 +290,7 @@ export class ReleaseService extends AbstractService {
 
         // A Release is the publish moment, so the remote receives
         // `production` and the tag once the local release is complete
-        const hasOrigin =
-          await this.gitService.remotes.hasOrigin(projectPath);
+        const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
         if (hasOrigin) {
           await this.gitService.push(projectPath, {
             refs: [projectBranchSchema.enum.production, releaseTag.id],

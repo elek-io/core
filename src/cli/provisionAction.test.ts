@@ -58,9 +58,7 @@ describe('provisionAction', function () {
 
     // The draft channel follows the work branch
     expect(
-      await core.git.branches.current(
-        core.util.pathTo.project(seed.projectId)
-      )
+      await core.git.branches.current(core.util.pathTo.project(seed.projectId))
     ).toEqual('work');
   }, 30000);
 

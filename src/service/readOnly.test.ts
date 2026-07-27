@@ -101,7 +101,9 @@ describe('Read-only mode', function () {
         url: remotePath,
       })
     );
-    await expectReadOnlyError(readOnlyCore.projects.upgrade({ id: project.id }));
+    await expectReadOnlyError(
+      readOnlyCore.projects.upgrade({ id: project.id })
+    );
   });
 
   it('should reject content mutations', async function () {

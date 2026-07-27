@@ -74,9 +74,9 @@ export const collections = {
     });
 
     // The integration provisioned the Project into the data directory
-    expect(
-      await Fs.pathExists(core.util.pathTo.project(seed.projectId))
-    ).toBe(true);
+    expect(await Fs.pathExists(core.util.pathTo.project(seed.projectId))).toBe(
+      true
+    );
     expect(
       await Fs.pathExists(
         core.util.pathTo.projectProvisionedMarker(seed.projectId)
@@ -122,10 +122,7 @@ export const collections = {
       Path.resolve('node_modules'),
       Path.join(root, 'node_modules')
     );
-    const loaderPath = Path.resolve('src/index.astro.ts').replaceAll(
-      '\\',
-      '/'
-    );
+    const loaderPath = Path.resolve('src/index.astro.ts').replaceAll('\\', '/');
 
     await Fs.writeFile(
       Path.join(srcDir, 'content.config.ts'),

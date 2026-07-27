@@ -1,7 +1,15 @@
 import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import core, { uuid } from '../test/setup.js';
 import { projectFileSchema } from '../schema/index.js';
 import {
@@ -384,9 +392,7 @@ describe('ProjectService provision', function () {
     expect(error).toBeInstanceOf(CoreError);
     expect(error instanceof CoreError && error.type).toEqual('VersionSkew');
     expect(
-      await Fs.pathExists(
-        readOnlyCore.util.pathTo.project(skewSeed.projectId)
-      )
+      await Fs.pathExists(readOnlyCore.util.pathTo.project(skewSeed.projectId))
     ).toBe(false);
   }, 60000);
 });

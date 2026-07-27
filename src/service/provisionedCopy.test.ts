@@ -49,9 +49,7 @@ describe('Provisioned copy', function () {
     expect(read.isProvisioned).toBe(true);
 
     const { list } = await core.projects.list();
-    expect(list.find((p) => p.id === seed.projectId)?.isProvisioned).toBe(
-      true
-    );
+    expect(list.find((p) => p.id === seed.projectId)?.isProvisioned).toBe(true);
     expect(list.find((p) => p.id === workingCopy.id)?.isProvisioned).toBe(
       false
     );
@@ -70,9 +68,7 @@ describe('Provisioned copy', function () {
         url: seed.remotePath,
       })
     );
-    await expectProvisionedError(
-      core.projects.upgrade({ id: seed.projectId })
-    );
+    await expectProvisionedError(core.projects.upgrade({ id: seed.projectId }));
   });
 
   it('should reject content mutations on a provisioned copy', async function () {
@@ -181,8 +177,8 @@ describe('Provisioned copy', function () {
   it('should delete a provisioned copy without force', async function () {
     await core.projects.delete({ id: seed.projectId });
 
-    expect(
-      await Fs.pathExists(core.util.pathTo.project(seed.projectId))
-    ).toBe(false);
+    expect(await Fs.pathExists(core.util.pathTo.project(seed.projectId))).toBe(
+      false
+    );
   }, 30000);
 });

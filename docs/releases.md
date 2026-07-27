@@ -6,10 +6,10 @@ For the branch model these build on, see [`git-and-sync.md`](./git-and-sync.md).
 
 ## The three operations
 
-| Method            | What it does                                                                                       | Touches production? |
-| ----------------- | -------------------------------------------------------------------------------------------------- | ------------------- |
-| `prepare()`       | Read-only. Diffs `work` against `production` and returns the computed bump and per-object changes. | No                  |
-| `create()`        | Promotes `work` to `production`, bumps the version, tags it, merges back into `work` and pushes to `origin` if set. | Yes                 |
+| Method            | What it does                                                                                                                | Touches production? |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `prepare()`       | Read-only. Diffs `work` against `production` and returns the computed bump and per-object changes.                          | No                  |
+| `create()`        | Promotes `work` to `production`, bumps the version, tags it, merges back into `work` and pushes to `origin` if set.         | Yes                 |
 | `createPreview()` | Tags a pre-release snapshot on `work` (for example `1.1.0-preview.3`) without promoting, pushes the tag to `origin` if set. | No                  |
 
 All three take `{ projectId }`. `prepare()` returns a `ReleaseDiff`. `create()` and `createPreview()` return a `ReleaseResult` (`{ version, diff }`).

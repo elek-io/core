@@ -92,11 +92,11 @@ jobs:
 For any other pipeline, provision explicitly and then do whatever consumes the content:
 
 ```yaml
-      - run: pnpm exec elek provision --project abc-123-... --url https://github.com/acme/website-content.git
-        env:
-          ELEK_IO_REMOTE_ACCESS_TOKEN: ${{ secrets.ELEK_IO_REMOTE_ACCESS_TOKEN }}
-      - run: pnpm exec elek export ./content
-      - run: ./your-own-tooling ./content
+- run: pnpm exec elek provision --project abc-123-... --url https://github.com/acme/website-content.git
+  env:
+    ELEK_IO_REMOTE_ACCESS_TOKEN: ${{ secrets.ELEK_IO_REMOTE_ACCESS_TOKEN }}
+- run: pnpm exec elek export ./content
+- run: ./your-own-tooling ./content
 ```
 
 The cache step is an optimization, not a requirement. Without it, every run performs a fresh build-mode clone: shallow, single ref, and only the Asset binaries of the fetched ref. That stays fast for most Projects.
@@ -109,11 +109,11 @@ No pipeline file is needed for Astro sites. Set `ELEK_IO_REMOTE_ACCESS_TOKEN` (a
 
 Which content state provisioning fetches is the `ref`. It is either a channel, which always follows the newest content of its kind, or an exact version pin:
 
-| Ref | Meaning |
-| --- | --- |
-| `production` | The latest Release (default) |
-| `preview` | The latest preview Release |
-| `draft` | The current drafts (the work branch) |
+| Ref                        | Meaning                                 |
+| -------------------------- | --------------------------------------- |
+| `production`               | The latest Release (default)            |
+| `preview`                  | The latest preview Release              |
+| `draft`                    | The current drafts (the work branch)    |
 | `1.4.0`, `1.5.0-preview.2` | Exactly that Release or preview Release |
 
 Set the ref per Project in the integration config or via `--ref` on `elek provision`. The `ELEK_IO_CHANNEL` environment variable overrides both and applies to every Project of a deployment, so one variable can repoint a whole pipeline. Because it is deployment-wide, it accepts channels only, exact versions are per-Project decisions and belong into the configuration.

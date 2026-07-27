@@ -161,7 +161,8 @@ export class GitService {
     // Read once at construction, never at import
     this.token = process.env['ELEK_IO_REMOTE_ACCESS_TOKEN']?.trim() || null;
     this.tokenUser =
-      process.env['ELEK_IO_REMOTE_ACCESS_TOKEN_USER']?.trim() || 'x-access-token';
+      process.env['ELEK_IO_REMOTE_ACCESS_TOKEN_USER']?.trim() ||
+      'x-access-token';
     this.logService = logService;
     this.userService = userService;
     this.jsonFileService = jsonFileService;
@@ -634,8 +635,7 @@ export class GitService {
       options?: Partial<{ all: boolean; refs: string[] }>
     ): Promise<void> => {
       const branch = await this.branches.current(path); // '' in detached HEAD
-      const refs =
-        options?.refs ?? (branch === '' ? null : [branch]);
+      const refs = options?.refs ?? (branch === '' ? null : [branch]);
 
       // Synopsis: `git lfs push [options] <remote> [<ref>...]` - so `--all` is
       // an option and must precede the remote; the ref form is positional.
