@@ -358,7 +358,7 @@ export function elek(props: ElekIntegrationProps): AstroIntegration {
         // An own short-lived Core, disposed after provisioning: the
         // loaders' shared instance lives in another module graph and
         // both coordinate through the data directory and env vars only
-        const core = new ElekIoCore({ ...props.core, readOnly: true });
+        const core = new ElekIoCore({ ...props.core, isReadOnly: true });
         try {
           for (const project of props.projects) {
             const ref = resolveContentRef(project.ref);

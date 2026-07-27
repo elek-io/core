@@ -151,7 +151,7 @@ export class ProjectService
             projectPath,
             projectBranchSchema.enum.work,
             {
-              isNew: true,
+              create: true,
             }
           );
           return await this.toProject(projectFile);
@@ -622,7 +622,7 @@ export class ProjectService
 
       try {
         await this.gitService.branches.switch(projectPath, upgradeBranchName, {
-          isNew: true,
+          create: true,
         });
 
         await this.upgradeAllObjectFiles(

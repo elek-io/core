@@ -162,7 +162,7 @@ program
   .action(async (options) => {
     // Provisioning never mutates the Project or its remote and must
     // work without a User being set
-    configureCore({ readOnly: true });
+    configureCore({ isReadOnly: true });
     const props = provisionSchema.parse(options);
 
     await provisionAction(props);

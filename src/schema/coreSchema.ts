@@ -41,7 +41,7 @@ export const elekIoCoreOptionsSchema = z.object({
    *
    * @default false
    */
-  readOnly: z.boolean(),
+  isReadOnly: z.boolean(),
 });
 export type ElekIoCoreOptions = z.infer<typeof elekIoCoreOptionsSchema>;
 
@@ -50,7 +50,7 @@ export const constructorElekIoCoreSchema = elekIoCoreOptionsSchema
     log: true,
     file: true,
     dataDir: true,
-    readOnly: true,
+    isReadOnly: true,
   })
   .optional();
 export type ConstructorElekIoCoreProps = z.infer<

@@ -9,7 +9,7 @@ const options: ElekIoCoreOptions = {
   log: { level: 'debug' },
   file: { cache: true },
   dataDir: Path.join(Os.tmpdir(), 'elek-io-core-logservice-test'),
-  readOnly: false,
+  isReadOnly: false,
 };
 const pathTo = createPathTo(options.dataDir);
 

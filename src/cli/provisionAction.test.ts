@@ -19,7 +19,7 @@ describe('provisionAction', function () {
   let seed: Awaited<ReturnType<typeof seedRemoteWithRelease>>;
 
   beforeAll(async function () {
-    configureCore({ readOnly: true });
+    configureCore({ isReadOnly: true });
     // Constructing the CLI core empties the shared tmp directory, so
     // it must exist before the bare remote is seeded there
     getCore();

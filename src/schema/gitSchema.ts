@@ -116,7 +116,7 @@ export const gitSwitchOptionsSchema = z.object({
    *
    * @see https://git-scm.com/docs/git-switch#Documentation/git-switch.txt---createltnew-branchgt
    */
-  isNew: z.boolean().optional(),
+  create: z.boolean().optional(),
   /**
    * If true, detaches HEAD at the given ref, which can also be a tag
    *

@@ -55,7 +55,7 @@ export abstract class AbstractService {
    * entry point.
    */
   protected assertNotReadOnly(context: string): void {
-    if (this.options.readOnly !== true) {
+    if (this.options.isReadOnly !== true) {
       return;
     }
     const error = CoreError.preconditionFailed(

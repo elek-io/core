@@ -175,7 +175,7 @@ export class GitService {
     path: string,
     options?: Partial<GitInitOptions>
   ): Promise<void> {
-    if (this.options.readOnly) {
+    if (this.options.isReadOnly) {
       throw CoreError.preconditionFailed(
         'Cannot init a repository because Core is in read-only mode'
       );
@@ -230,7 +230,7 @@ export class GitService {
     await this.git('', [...args, url, path]);
     // A read-only Core never commits, so no git identity or behavior
     // config is needed and no User has to be set
-    if (!this.options.readOnly) {
+    if (!this.options.isReadOnly) {
       await this.setLocalConfig(path);
     }
 
@@ -360,7 +360,7 @@ export class GitService {
         args = [...args, '--discard-changes'];
       }
 
-      if (options?.isNew === true) {
+      if (options?.create === true) {
         args = [...args, '--create', branch];
       } else if (options?.forceCreate === true) {
         args = [...args, '--force-create', branch];
@@ -845,7 +845,7 @@ export class GitService {
     path: string,
     options?: Partial<{ all: boolean; force: boolean; refs: string[] }>
   ): Promise<void> {
-    if (this.options.readOnly) {
+    if (this.options.isReadOnly) {
       throw CoreError.preconditionFailed(
         'Cannot push because Core is in read-only mode'
       );
@@ -914,7 +914,7 @@ export class GitService {
    * @param message An object describing the changes
    */
   public async commit(path: string, message: GitMessage): Promise<void> {
-    if (this.options.readOnly) {
+    if (this.options.isReadOnly) {
       throw CoreError.preconditionFailed(
         'Cannot commit because Core is in read-only mode'
       );

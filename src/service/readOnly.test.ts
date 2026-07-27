@@ -39,7 +39,7 @@ describe('Read-only mode', function () {
 
     readOnlyDataDir = Path.join(Os.tmpdir(), `elek-io-core-test-${uuid()}`);
     readOnlyCore = new ElekIoCore({
-      readOnly: true,
+      isReadOnly: true,
       dataDir: readOnlyDataDir,
     });
   });

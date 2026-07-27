@@ -32,9 +32,9 @@ export function resolveDataDir(dataDir?: string): string {
  * variable counts as true only when set to `true`, an empty or
  * whitespace-only value counts as unset.
  */
-export function resolveReadOnly(readOnly?: boolean): boolean {
-  if (readOnly !== undefined) {
-    return readOnly;
+export function resolveReadOnly(isReadOnly?: boolean): boolean {
+  if (isReadOnly !== undefined) {
+    return isReadOnly;
   }
   return process.env['ELEK_IO_READ_ONLY']?.trim() === 'true';
 }

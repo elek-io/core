@@ -35,7 +35,7 @@ const core = new ElekIoCore({
     cache: true, // cache files in memory to speed up access - default true
   },
   dataDir: '/path/to/data', // directory Core reads and writes data in - default ~/elek.io
-  readOnly: false, // never mutate a Project or its remote - default false
+  isReadOnly: false, // never mutate a Project or its remote - default false
 });
 ```
 
@@ -43,7 +43,7 @@ The resolved options are exposed on `core.options`, and the running Core version
 
 `dataDir` sets the data directory everything lives in, see [`storage-layout.md`](./storage-layout.md). It takes precedence over the `ELEK_IO_DATA_DIR` environment variable, which takes precedence over the default `~/elek.io`. Relative paths are resolved against the current working directory once at construction. `~` is not expanded, that is a shell feature, so pass an absolute path or let the shell expand it. The directory does not need to exist, Core creates it. An empty or whitespace-only value throws a `CoreError`. The resolved absolute path is exposed as `core.options.dataDir`, and `core.util.pathTo` builds every path from it.
 
-`readOnly` puts Core into read-only mode, meant for environments that only consume content, such as CI builds. Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`. In return, cloning and fetching work without a User being set, because nothing is ever committed. The option takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
+`isReadOnly` puts Core into read-only mode, meant for environments that only consume content, such as CI builds. Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`. In return, cloning and fetching work without a User being set, because nothing is ever committed. The option takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
 
 ### Environment variables
 

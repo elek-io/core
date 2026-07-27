@@ -23,7 +23,7 @@ describe('ProjectService provision', function () {
     seed = await seedRemoteWithRelease();
     readOnlyDataDir = Path.join(Os.tmpdir(), `elek-io-core-test-${uuid()}`);
     readOnlyCore = new ElekIoCore({
-      readOnly: true,
+      isReadOnly: true,
       dataDir: readOnlyDataDir,
     });
   }, 60000);
@@ -298,7 +298,7 @@ describe('ProjectService provision', function () {
     vi.stubEnv('ELEK_IO_REMOTE_ACCESS_TOKEN', 'secret-token-123');
     const tokenDataDir = Path.join(Os.tmpdir(), `elek-io-core-test-${uuid()}`);
     const tokenCore = new ElekIoCore({
-      readOnly: true,
+      isReadOnly: true,
       dataDir: tokenDataDir,
     });
 

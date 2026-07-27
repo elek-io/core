@@ -47,7 +47,7 @@ describe('Node.js', function () {
         cache: true,
       },
       dataDir: defaultDataDir,
-      readOnly: false,
+      isReadOnly: false,
     });
 
     expect(coreWithLogLevel).to.be.instanceOf(ElekIoCore);
@@ -59,7 +59,7 @@ describe('Node.js', function () {
         cache: true,
       },
       dataDir: defaultDataDir,
-      readOnly: false,
+      isReadOnly: false,
     });
 
     expect(coreWithoutCache).to.be.instanceOf(ElekIoCore);
@@ -71,7 +71,7 @@ describe('Node.js', function () {
         cache: false,
       },
       dataDir: defaultDataDir,
-      readOnly: false,
+      isReadOnly: false,
     });
 
     expect(await Fs.pathExists(Path.join(defaultDataDir, 'projects'))).to.equal(
@@ -118,21 +118,21 @@ describe('Node.js', function () {
     vi.stubEnv('ELEK_IO_READ_ONLY', 'true');
     const { core: envCore } = createTmpCore();
 
-    expect(envCore.options.readOnly).toEqual(true);
+    expect(envCore.options.isReadOnly).toEqual(true);
   });
 
-  it('should prefer the readOnly option over the environment variable', function () {
+  it('should prefer the isReadOnly option over the environment variable', function () {
     vi.stubEnv('ELEK_IO_READ_ONLY', 'true');
-    const { core: optionCore } = createTmpCore({ readOnly: false });
+    const { core: optionCore } = createTmpCore({ isReadOnly: false });
 
-    expect(optionCore.options.readOnly).toEqual(false);
+    expect(optionCore.options.isReadOnly).toEqual(false);
   });
 
   it('should treat an empty ELEK_IO_READ_ONLY as unset', function () {
     vi.stubEnv('ELEK_IO_READ_ONLY', '   ');
     const { core: envCore } = createTmpCore();
 
-    expect(envCore.options.readOnly).toEqual(false);
+    expect(envCore.options.isReadOnly).toEqual(false);
   });
 
   it('should throw a CoreError for an empty dataDir option', function () {

@@ -67,7 +67,7 @@ export default class ElekIoCore {
       log: parsedProps.data?.log ?? { level: 'info' },
       file: parsedProps.data?.file ?? { cache: true },
       dataDir: resolveDataDir(parsedProps.data?.dataDir),
-      readOnly: resolveReadOnly(parsedProps.data?.readOnly),
+      isReadOnly: resolveReadOnly(parsedProps.data?.isReadOnly),
     };
     this.pathTo = createPathTo(this.options.dataDir);
     this.utilities = { pathTo: this.pathTo };
