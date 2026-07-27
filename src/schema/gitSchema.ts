@@ -50,6 +50,17 @@ export const gitTagSchema = z.object({
 });
 export type GitTag = z.infer<typeof gitTagSchema>;
 
+/**
+ * A tag carrying a Project version. That is a Release or preview
+ * Release tag, as opposed to a Core upgrade tag.
+ */
+export type VersionedGitTag = GitTag & {
+  message: Extract<GitTagMessage, { type: 'release' | 'preview' }>;
+};
+
+export const isVersionedTag = (tag: GitTag): tag is VersionedGitTag =>
+  tag.message.type === 'release' || tag.message.type === 'preview';
+
 export const gitCommitSchema = z.object({
   /**
    * SHA-1 hash of the commit

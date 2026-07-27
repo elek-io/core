@@ -5,6 +5,7 @@ import {
   collectionFileSchema,
   componentFileSchema,
   entryFileSchema,
+  isVersionedTag,
   projectBranchSchema,
   projectFileSchema,
   serviceTypeSchema,
@@ -84,17 +85,14 @@ export class ReleaseService extends AbstractService {
         path: this.pathTo.project(props.projectId),
       });
 
-      const releases: ReleaseListItem[] = [];
-      for (const tag of tags) {
-        if (tag.message.type === 'release' || tag.message.type === 'preview') {
-          releases.push({
-            tagId: tag.id,
-            type: tag.message.type,
-            version: tag.message.version,
-            datetime: tag.datetime,
-          });
-        }
-      }
+      const releases: ReleaseListItem[] = tags
+        .filter(isVersionedTag)
+        .map((tag) => ({
+          tagId: tag.id,
+          type: tag.message.type,
+          version: tag.message.version,
+          datetime: tag.datetime,
+        }));
 
       return { list: releases, total: releases.length };
     });

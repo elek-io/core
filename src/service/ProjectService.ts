@@ -6,6 +6,7 @@ import {
   cloneProjectSchema,
   contentChannelSchema,
   createProjectSchema,
+  isVersionedTag,
   provisionProjectSchema,
   currentBranchProjectSchema,
   deleteProjectSchema,
@@ -28,7 +29,6 @@ import {
   type CloneProjectProps,
   type CreateProjectProps,
   type ProvisionProjectProps,
-  type GitTag,
   type CrudServiceWithListCount,
   type CurrentBranchProjectProps,
   type DeleteProjectProps,
@@ -47,6 +47,7 @@ import {
   type SynchronizeProjectProps,
   type UpdateProjectProps,
   type UpgradeProjectProps,
+  type VersionedGitTag,
 } from '../schema/index.js';
 import { applyMigrations, projectMigrations } from './migrations/index.js';
 import { isNotEmpty, PROVISIONED_MARKER } from '../util/node.js';
@@ -451,25 +452,19 @@ export class ProjectService
       });
     }
 
-    const isReleaseTag = (
-      tag: GitTag
-    ): tag is GitTag & {
-      message: { type: 'release' | 'preview'; version: Version };
-    } => tag.message.type === 'release' || tag.message.type === 'preview';
-
     const { list: tags } = await this.gitService.tags.list({ path });
-    const releaseTags = tags
-      .filter(isReleaseTag)
+    const versionedTags = tags
+      .filter(isVersionedTag)
       .filter((tag) => remoteTagNames.has(tag.id));
 
-    let match: (typeof releaseTags)[number] | null = null;
+    let match: VersionedGitTag | null = null;
     if (
       ref === contentChannelSchema.enum.production ||
       ref === contentChannelSchema.enum.preview
     ) {
       const type =
         ref === contentChannelSchema.enum.production ? 'release' : 'preview';
-      for (const tag of releaseTags) {
+      for (const tag of versionedTags) {
         if (tag.message.type !== type) {
           continue;
         }
@@ -491,9 +486,9 @@ export class ProjectService
         );
       }
     } else {
-      match = releaseTags.find((tag) => tag.message.version === ref) ?? null;
+      match = versionedTags.find((tag) => tag.message.version === ref) ?? null;
       if (!match) {
-        const available = releaseTags.map((tag) => tag.message.version);
+        const available = versionedTags.map((tag) => tag.message.version);
         throw CoreError.notFound(
           `No Release with version "${ref}" exists. Available versions: ${
             available.join(', ') || 'none'
