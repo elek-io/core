@@ -371,6 +371,30 @@ export const collections = {
 
 The `project` of a loader and the aliases in `elekCollections()`'s options accept only the aliases the config declares, so a typo is a TypeScript error rather than a failing build.
 
+### Routing by slug
+
+Entries are keyed by their UUID in Astro's store, which is what `getEntry()` and every reference between Entries uses. For public URLs you usually want a [`slug` field](./fields.md) instead, and `elekSlugPaths()` turns a collection into the paths `getStaticPaths` expects:
+
+```astro
+---
+// src/pages/[language]/[slug].astro
+import { getCollection } from 'astro:content';
+import { elekSlugPaths } from '@elek-io/core/astro';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('websitePosts');
+  return elekSlugPaths(posts, { slugField: 'slug' });
+}
+
+const { entry } = Astro.props;
+---
+<h1>{entry.data.title[Astro.params.language]}</h1>
+```
+
+Each language gets its own path, so `/en/hello-world` and `/de/hallo-welt` both reach the same Entry. Pass `language: 'en'` to route a single one, and the params hold only the slug, for a page at `src/pages/[slug].astro`.
+
+Slugs are unique per language within a Collection, not across languages, and an Entry that has no slug in a language simply gets no path there. A Collection can define several slug fields, which is why the field to route by is named per call.
+
 ### Assets and astro:assets
 
 An Asset that Astro's image pipeline understands (`jpeg`, `jpg`, `png`, `tiff`, `webp`, `gif`, `svg`, `avif`) arrives as a ready-made Astro image on `data.src`, so it optimizes like any local image:

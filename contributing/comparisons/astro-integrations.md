@@ -36,7 +36,7 @@ All tables put **elek.io Core first** so the reader scans rightward to see how e
 | **Schema source**          | Loader-supplied, built from field definitions | None                          | Hand-written zod                     | None                     | Hand-written zod copy of the Keystatic schema |
 | **TypeScript types**       | Generated per Collection via `createSchema`   | None (`ISbStoryData` cast)    | zod inference from the manual schema | Separate TypeGen codegen | `Entry<typeof config>` inference (Reader API) |
 | **Derived from CMS model** | Yes, `elekCollections()` enumerates them      | No                            | No                                   | No                       | No                                            |
-| **Store keys**             | Entry UUID                                    | `full_slug`                   | id                                   | Not applicable           | File slug                                     |
+| **Store keys**             | Entry UUID, `elekSlugPaths()` routes by slug  | `full_slug`                   | id                                   | Not applicable           | File slug                                     |
 
 No other surveyed provider derives collections or schemas from the CMS content model, and none besides Core uses the content layer's ability for a loader to supply the schema itself. Core can occupy that niche because the full content model sits on local disk at load time, while API-based competitors would need an extra introspection round trip.
 
@@ -93,8 +93,6 @@ Where Core leads today:
 
 Where Core lags today:
 
-- **Store keys are UUIDs.** Slug-based routing needs manual mapping in `getStaticPaths`. Most competitors key by slug or path.
-
 ## Decided direction (July 2026)
 
 Settled during the Astro DX exploration (branch `astro-dx`). Items marked **shipped** are implemented, the rest is still open:
@@ -102,7 +100,7 @@ Settled during the Astro DX exploration (branch `astro-dx`). Items marked **ship
 - **Shipped.** A single `elek.config.ts` created with `defineElekConfig()`, explicitly imported by both `astro.config.mjs` and `content.config.ts`. No auto-discovery. Projects are referenced by a consumer-chosen alias, which the loaders accept as a literal type, so a typo is a compile error. `astro.config.mjs` importing a sibling `.ts` file through Astro's own config loading was the riskiest assumption of the design and is covered by a dedicated test.
 - **Shipped.** `elekCollections()` derives all collections of the declared Projects. Keys are always alias-prefixed (`websitePosts`), in single-Project and multi-Project setups alike. The Assets collection is included by default (`websiteAssets`) with an opt-out, and its binaries default to `src/content/elek/<alias>/assets` so `astro:assets` can reach them. Colliding keys throw naming both sides, see [`../astro-entry.md`](../astro-entry.md).
 - **Shipped.** Image Assets are `astro:assets` native: `data.src` is a real Astro image, so `<Image />` optimizes it. Every other Asset is saved below `public/` and carries its URL on `data.href` instead, because Astro serves nothing else. The route runs through Astro's own image marker rather than `emitImageMetadata()`, which needs a bundler file emitter no loader is given, see [`../astro-entry.md`](../astro-entry.md).
-- The Astro store keeps one entry per elek.io Entry, keyed by its UUID. Slug values from a `slug` field stay language-keyed data on the entry rather than becoming per-language store entries, so UUID reference lookups keep working. The `slug` field type itself already exists in Core (see [`docs/fields.md`](../../docs/fields.md)), the open work is the Astro-side routing convenience on top of it.
+- **Shipped.** The Astro store keeps one entry per elek.io Entry, keyed by its UUID. Slug values from a `slug` field stay language-keyed data on the entry rather than becoming per-language store entries, so UUID reference lookups keep working. `elekSlugPaths()` builds the `getStaticPaths` result from a named slug field, one path per language, skipping the languages an Entry has no slug in.
 - **Shipped.** The per-loader `core` option is removed. Env vars own the loaders' Core configuration, the integration keeps its own option for the short-lived provisioning instance.
 - **Shipped.** Provisioning gained graceful offline behavior: when the fetch fails and a usable provisioned copy exists, it warns loudly and builds with the existing copy instead of failing. An exact version pin the copy already holds skips the network entirely. A missing copy, an authentication failure and a pin the copy does not hold stay hard failures, so a dead token or a broken pin cannot hide behind a warning.
 - Naming (decided July 2026): the loaders are renamed to `elekAssetsLoader` and `elekEntriesLoader` alongside the config reshape, following the ecosystem's `Loader` suffix convention and separating them from `elekCollections()`. The integration stays product-named `elek()` and exports use the bare brand, never `elekIo*`. Both rules are recorded in [`../naming.md`](../naming.md).

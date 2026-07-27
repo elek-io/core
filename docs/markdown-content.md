@@ -50,24 +50,31 @@ Three node types require an explicit override (`html`, `assetReference`, `entryR
 
 ```astro
 ---
-// src/pages/posts/[id].astro
+// src/pages/posts/[slug].astro
 import { getCollection } from 'astro:content';
 import { Image } from 'astro:assets';
-import { mdastRender, type MdastAstroRenderers } from '@elek-io/core/astro';
+import {
+  elekSlugPaths,
+  mdastRender,
+  type MdastAstroRenderers,
+} from '@elek-io/core/astro';
 import DOMPurify from 'isomorphic-dompurify';
 
-// Store ids are Entry UUIDs, so the route is keyed by UUID.
 export async function getStaticPaths() {
   const posts = await getCollection('posts');
-  return posts.map((post) => ({ params: { id: post.id }, props: { post } }));
+  return elekSlugPaths(posts, { slugField: 'slug', language: 'en' });
 }
 
-const { post } = Astro.props;
+const { entry: post } = Astro.props;
 
-// Sync lookup map. mdastRender's handlers run synchronously, so build the
-// map once per page from the already-awaited collection.
+// Sync lookup maps. mdastRender's handlers run synchronously, so build
+// them once per page from the already-awaited collections.
 const assets = await getCollection('assets');
+const posts = await getCollection('posts');
 const assetById = new Map(assets.map((a) => [a.id, a.data]));
+// References carry UUIDs, the page URLs are slugs, so the renderer
+// needs the same mapping the routes were built from
+const slugById = new Map(posts.map((p) => [p.id, p.data.slug.en]));
 
 const overrides: MdastAstroRenderers = {
   // Required - sign off on each, even if your fields don't currently use them.
@@ -80,9 +87,11 @@ const overrides: MdastAstroRenderers = {
       ? <Image src={asset.src} alt={node.alt} />
       : <a href={asset?.href ?? '#'}>{node.alt}</a>;
   },
-  entryReference: (node, children) => (
-    <a href={`/posts/${node.entryId}`}>{children}</a>
-  ),
+  entryReference: (node, children) => {
+    const slug = slugById.get(node.entryId);
+    // No slug means the referenced Entry has no page in this language
+    return slug ? <a href={`/posts/${slug}`}>{children}</a> : <>{children}</>;
+  },
 };
 
 const body = post.data.body.en;
@@ -92,7 +101,7 @@ const body = post.data.body.en;
 </article>
 ```
 
-`entryReference` nodes carry the referenced Entry's UUID, which is also its store id, so `getEntry('posts', node.entryId)` resolves a reference anywhere. Routing by something friendlier than a UUID means mapping ids to your own URLs in `getStaticPaths` and reusing that map in the renderer.
+`entryReference` nodes carry the referenced Entry's UUID, which is also its store id, so `getEntry('posts', node.entryId)` resolves a reference from anywhere without a map. The map above exists only to turn that UUID into the same URL the routes were built from. A Collection without a slug field routes by UUID instead, with a `getStaticPaths` that returns `posts.map((post) => ({ params: { id: post.id }, props: { post } }))`.
 
 Consumer code is now ~10 lines for the typical case. Without the helper the equivalent hand-rolled switch (see the [fallback recipe](#fallback-recipe-for-frameworks-without-an-official-wrapper) below) takes ~90.
 

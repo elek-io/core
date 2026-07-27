@@ -31,6 +31,13 @@ export {
   type ElekCollectionsOptions,
 } from './astro/collections.js';
 
+export {
+  elekSlugPaths,
+  type ElekRoutableEntry,
+  type ElekSlugPath,
+  type ElekSlugPathsProps,
+} from './astro/slugPaths.js';
+
 // Re-export `z` here too so it is available from the @elek-io/core/astro entry.
 // See the note in schema/index.ts. zod is a required peer dependency.
 export { z } from '@hono/zod-openapi';
