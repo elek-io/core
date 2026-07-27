@@ -371,18 +371,48 @@ export const collections = {
 
 The `project` of a loader and the aliases in `elekCollections()`'s options accept only the aliases the config declares, so a typo is a TypeScript error rather than a failing build.
 
-### Where Asset binaries are saved
+### Assets and astro:assets
 
-The Assets collection of a Project downloads its binaries to `src/content/elek/<alias>/assets`, below `src/` so Astro can process them. Override it per Project with `elekCollections(config, { assets: { website: { outDir: './public/media' } } })`, or drop the Assets collection entirely with `{ assets: false }` for every Project or `{ assets: { website: false } }` for one. A relative `outDir` resolves against the Astro project root.
+An Asset that Astro's image pipeline understands (`jpeg`, `jpg`, `png`, `tiff`, `webp`, `gif`, `svg`, `avif`) arrives as a ready-made Astro image on `data.src`, so it optimizes like any local image:
+
+```astro
+---
+import { getCollection } from 'astro:content';
+import { Image } from 'astro:assets';
+
+const assets = await getCollection('websiteAssets');
+---
+{assets.map((asset) =>
+  asset.data.src
+    ? <Image src={asset.data.src} alt={asset.data.description} />
+    : <a href={asset.data.href}>{asset.data.name}</a>
+)}
+```
+
+Every other Asset, a PDF or a ZIP for example, is served as it is and carries its URL on `data.href` instead. Each Asset has exactly one of the two, the other is `null`, so the check above is also how you tell them apart.
+
+The two kinds are saved in different places, because that is what makes each work. Images go to `src/content/elek/<alias>/assets`, below `src/` where Astro can process them. Everything else goes to `public/elek/<alias>/assets`, because only the public directory is served. Override either per Project, or drop the Assets collection entirely:
+
+```typescript
+await elekCollections(config, {
+  assets: {
+    website: { outDir: './src/media', publicOutDir: './public/downloads' },
+    shop: false,
+  },
+});
+```
+
+`{ assets: false }` drops it for every Project. Relative paths resolve against the Astro project root. `outDir` has to stay inside the project and `publicOutDir` inside the public directory, otherwise the Asset cannot be processed or served, and the build says so.
 
 These binaries are derived from the Project, so they do not belong in your site's repository:
 
 ```
 # .gitignore
 src/content/elek/
+public/elek/
 ```
 
-This is the only entry the integration needs. Everything else it produces goes through Astro's content store, which lives in `.astro` during development and in `node_modules/.astro` during a build, both of which a standard Astro `.gitignore` already covers.
+Those are the only entries the integration needs. Everything else it produces goes through Astro's content store, which lives in `.astro` during development and in `node_modules/.astro` during a build, both of which a standard Astro `.gitignore` already covers.
 
 All loaders share one Core instance, configured through the `ELEK_IO_*` environment variables of the build. Set `ELEK_IO_DATA_DIR` to read from a data directory other than `~/elek.io`, `ELEK_IO_CHANNEL` to switch the content state deployment-wide and `ELEK_IO_REMOTE_ACCESS_TOKEN` to authenticate against a private remote. See [Environment variables](#environment-variables) for the full list.
 

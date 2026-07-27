@@ -9,9 +9,12 @@ type ElekCollection = ReturnType<typeof defineCollection>;
 
 /**
  * What to do with the Assets collection of one Project: drop it, or
- * keep it and say where its binaries are saved
+ * keep it and say where its binaries are saved. `outDir` takes the
+ * images, `publicOutDir` every other file.
  */
-export type ElekAssetsOption = false | { outDir?: string };
+export type ElekAssetsOption =
+  | false
+  | { outDir?: string; publicOutDir?: string };
 
 export interface ElekCollectionsOptions<T extends ElekConfig> {
   /**
@@ -125,6 +128,9 @@ export async function elekCollections<const T extends ElekConfig>(
             config: declared,
             project: alias,
             ...(assets.outDir ? { outDir: assets.outDir } : {}),
+            ...(assets.publicOutDir
+              ? { publicOutDir: assets.publicOutDir }
+              : {}),
           }),
         })
       );

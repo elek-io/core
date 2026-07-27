@@ -45,13 +45,29 @@ If it ever disappears, the fallback is cheap: `defineCollection` is a validating
 
 ## Asset binaries
 
-`elekAssetsLoader` writes to `src/content/elek/<alias>/assets` unless told otherwise, resolved against `context.config.root` (a `URL`, so it goes through `fileURLToPath`). Two reasons for that location: below `src/` is where Astro can process images, and the per-alias segment keeps two Projects from writing into one directory.
+Assets are split by kind, because a single location cannot serve both. Images go to `src/content/elek/<alias>/assets`, below `src/` where Astro's image pipeline can reach them. Everything else goes to `public/elek/<alias>/assets`, because Astro copies only the public directory into the build verbatim and ignores unrecognized formats under `src/` entirely. Without the split, a Project holding both photos and PDFs would have to choose which half works. The per-alias segment keeps two Projects from writing into one directory.
 
-A relative `outDir` resolves against the Astro root as well, not against `process.cwd()`. In a normal `astro build` the two are the same, but they diverge when the build is started from elsewhere, and the root is the only one the consumer wrote down.
+Both paths resolve against `context.config.root` (a `URL`, so it goes through `fileURLToPath`), not against `process.cwd()`. In a normal `astro build` the two are the same, but they diverge when the build is started from elsewhere, and the root is the only one the consumer wrote down. A path that lands outside the root, or outside the public directory, is warned about and its Asset loses `src` or `href` accordingly rather than silently producing a URL that 404s.
 
 Writing into `src/` during `astro dev` was checked for a watcher loop, since a write under `src/` is exactly what vite watches. It settles: the loader skips an Asset whose digest matches and whose file is still on disk, so a resync writes nothing and no further sync is triggered. Measured as one content sync across 20 seconds of idle dev. Keep that skip intact, dropping it would turn dev into a rebuild loop.
 
-The binaries are derived artifacts and the docs tell consumers to gitignore `src/content/elek/`.
+The binaries are derived artifacts and the docs tell consumers to gitignore `src/content/elek/` and `public/elek/`.
+
+## Handing images to astro:assets
+
+An image Asset gets `data.src` set to `__ASTRO_IMAGE_./<id>.<ext>` and the entry gets a root-relative `filePath`. Astro's content store scans stored data for that prefix, records the hit as an asset import anchored at `filePath`, and its runtime replaces the value with the resolved `ImageMetadata` when a page reads the entry. So `<Image src={asset.data.src} />` works in dev and in build, with Astro doing the emitting and hashing.
+
+This is the same path Astro's own `image()` schema helper takes for content layer collections, but the prefix is an internal constant rather than public API. Three routes were compared before settling on it:
+
+- **`image()` in the schema**, which the docs present as the way. Unavailable to us: astro passes the `SchemaContext` only to a schema that is a _function_, and astro 6 removed function schemas for loaders in favour of `createSchema`. Only a consumer-written schema can use it, which would cost the loader-supplied schema and its generated types.
+- **`filePath` plus the public `assetImports` field**. Fully documented, and it does get the file emitted, but it does not substitute the data value. The consumer is left with a relative string and no way to reach the content-hashed output. Verified, not assumed.
+- **The marker**, which does both. Chosen.
+
+`IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.0.0 and 7.1.3. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro collected the image as an import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
+
+Only extensions in Astro's `VALID_INPUT_FORMATS` may carry the marker. For anything else Astro strips the prefix and hands the consumer an unanchored relative path, which is why `src` is `null` for non-images and they take the `href` route instead. `imageExtensions` in `loaders.ts` mirrors that list and is tied to Astro's public `ImageInputFormat` with `satisfies`, so a format added or removed there is a compile error here.
+
+The parse-time schema declares `src` as a nullable string, because a marker string is what is stored and validated. The type consumers see is declared separately through `createSchema`'s `types`, as `ImageMetadata | null`. That split looks odd but is exactly what Astro does with its own `ImageFunction`, which is typed as returning an object schema while the runtime schema for content layer collections is a string transform.
 
 ## See Also
 

@@ -74,9 +74,11 @@ const overrides: MdastAstroRenderers = {
   html: (node) => <Fragment set:html={DOMPurify.sanitize(node.value)} />,
   assetReference: (node) => {
     const asset = assetById.get(node.assetId);
-    return asset?.mimeType.startsWith('image/')
-      ? <Image src={asset.absolutePath} alt={node.alt} />
-      : <a href={`/assets/${asset?.id}.${asset?.extension}`}>{node.alt}</a>;
+    // src is Astro's own image for image Assets, href the public URL
+    // for every other Asset, and each is null for the other kind
+    return asset?.src
+      ? <Image src={asset.src} alt={node.alt} />
+      : <a href={asset?.href ?? '#'}>{node.alt}</a>;
   },
   entryReference: (node, children) => (
     <a href={`/posts/${node.entryId}`}>{children}</a>

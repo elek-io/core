@@ -1,4 +1,6 @@
+import type { ImageInputFormat } from 'astro';
 import type { Loader } from 'astro/loaders';
+import { z } from '@hono/zod-openapi';
 import Path from 'node:path';
 import Url from 'node:url';
 import Fs from 'fs-extra';
@@ -22,12 +24,21 @@ export interface ElekAssetsLoaderProps<T extends ElekConfig> {
   /** Alias of the Project in config.projects */
   project: keyof T['projects'] & string;
   /**
-   * Where the Asset binaries are saved. A relative path resolves
+   * Where the binaries of image Assets are saved, so Astro can process
+   * them. Has to be inside the Astro project. A relative path resolves
    * against the Astro project root.
    *
    * @default 'src/content/elek/<alias>/assets'
    */
   outDir?: string;
+  /**
+   * Where the binaries of every other Asset are saved. Has to be
+   * inside Astro's public directory, that is what serves them. A
+   * relative path resolves against the Astro project root.
+   *
+   * @default 'public/elek/<alias>/assets'
+   */
+  publicOutDir?: string;
 }
 
 export interface ElekEntriesLoaderProps<T extends ElekConfig> {
@@ -40,12 +51,62 @@ export interface ElekEntriesLoaderProps<T extends ElekConfig> {
 }
 
 /**
- * Where a Project saves its Asset binaries when the loader is left to
+ * Where a Project saves its image binaries when the loader is left to
  * decide. Below `src/` so `astro:assets` can pick them up, and per
  * alias so two Projects never write into the same directory.
  */
 export function defaultAssetsOutDir(alias: string): string {
   return Path.join('src', 'content', 'elek', alias, 'assets');
+}
+
+/**
+ * Where a Project saves every other binary. Below `public/`, which
+ * Astro copies into the build as it is, so they keep a stable URL.
+ */
+export function defaultPublicAssetsOutDir(alias: string): string {
+  return Path.join('public', 'elek', alias, 'assets');
+}
+
+/**
+ * The extensions Astro's image pipeline understands, mirroring its own
+ * VALID_INPUT_FORMATS. `satisfies` ties the list to Astro's public
+ * ImageInputFormat, so adding or removing a format there is a compile
+ * error here instead of a silent behavior change.
+ */
+const imageExtensions = {
+  avif: true,
+  gif: true,
+  jpeg: true,
+  jpg: true,
+  png: true,
+  svg: true,
+  tiff: true,
+  webp: true,
+} satisfies Record<ImageInputFormat, true>;
+
+function hasImageExtension(extension: string): boolean {
+  return Object.hasOwn(imageExtensions, extension.toLowerCase());
+}
+
+/**
+ * Astro's marker for "resolve this string as an image import". Astro's
+ * own image() schema helper emits the same prefix, the content store
+ * picks it up and the runtime replaces the value with the resolved
+ * ImageMetadata. See contributing/astro-entry.md.
+ */
+const IMAGE_IMPORT_PREFIX = '__ASTRO_IMAGE_';
+
+/**
+ * Expresses a path below `from` the way Astro wants it: relative and
+ * with forward slashes on every platform. Null when the path is not
+ * below `from` at all.
+ */
+function toRelativePosix(from: string, path: string): string | null {
+  const relative = Path.relative(from, path);
+  if (relative.startsWith('..') || Path.isAbsolute(relative)) {
+    return null;
+  }
+  return relative.split(Path.sep).join('/');
 }
 
 /**
@@ -77,7 +138,32 @@ export function elekAssetsLoader<const T extends ElekConfig>(
 
   return {
     name: 'elek-assets',
-    schema: assetSchema,
+    // Nothing to await, the Asset shape is the same for every Project.
+    // The signature is Astro's.
+    createSchema: () => {
+      return Promise.resolve({
+        schema: assetSchema.extend({
+          src: z.string().nullable(),
+          href: z.string().nullable(),
+        }),
+        // The schema validates what the loader stores, a marker string.
+        // Astro replaces it with the resolved ImageMetadata before a
+        // consumer ever sees it, so the declared type is the resolved
+        // one. Astro's own image() helper does exactly the same.
+        types: [
+          `import type { Asset } from '@elek-io/core';`,
+          `import type { ImageMetadata } from 'astro';`,
+          ``,
+          `export type Entry = Asset & {`,
+          `  /** The Astro image of an image Asset, null for every other Asset */`,
+          `  src: ImageMetadata | null;`,
+          `  /** The public URL of every other Asset, null for an image Asset */`,
+          `  href: string | null;`,
+          `};`,
+          ``,
+        ].join('\n'),
+      });
+    },
     load: async (context) => {
       const core = getCore();
       await ensureProjectAvailable(core, alias, projectId);
@@ -87,12 +173,18 @@ export function elekAssetsLoader<const T extends ElekConfig>(
 
       // Relative paths belong to the Astro project, not to whatever
       // directory the build was started from
+      const root = Url.fileURLToPath(context.config.root);
+      const publicDir = Url.fileURLToPath(context.config.publicDir);
       const outDir = Path.resolve(
-        Url.fileURLToPath(context.config.root),
+        root,
         props.outDir ?? defaultAssetsOutDir(alias)
       );
+      const publicOutDir = Path.resolve(
+        root,
+        props.publicOutDir ?? defaultPublicAssetsOutDir(alias)
+      );
       context.logger.info(
-        `Loading elek.io Assets of Project "${alias}", saving to "${outDir}"`
+        `Loading elek.io Assets of Project "${alias}", saving images to "${outDir}" and every other file to "${publicOutDir}"`
       );
 
       const { list: assets, total } = await core.assets.list({
@@ -108,15 +200,46 @@ export function elekAssetsLoader<const T extends ElekConfig>(
       const seen = new Set<string>();
       for (const asset of assets) {
         seen.add(asset.id);
+        const isImage = hasImageExtension(asset.extension);
+        const fileName = `${asset.id}.${asset.extension}`;
         const absoluteAssetFilePath = Path.join(
-          outDir,
-          `${asset.id}.${asset.extension}`
+          isImage ? outDir : publicOutDir,
+          fileName
         );
-        const data = { ...asset, absolutePath: absoluteAssetFilePath };
+
+        // Astro resolves an image relative to the entry's filePath, and
+        // serves a public file at its path below the public directory
+        const filePath = toRelativePosix(root, absoluteAssetFilePath);
+        const publicPath = toRelativePosix(publicDir, absoluteAssetFilePath);
+
+        if (isImage && filePath === null) {
+          context.logger.warn(
+            `Asset "${asset.id}" is saved outside the Astro project, so it cannot be processed as an image. Point outDir inside the project to optimize it.`
+          );
+        }
+        if (!isImage && publicPath === null) {
+          context.logger.warn(
+            `Asset "${asset.id}" is saved outside Astro's public directory, so it is not served. Point publicOutDir inside it to link this Asset.`
+          );
+        }
+
+        const data = {
+          ...asset,
+          absolutePath: absoluteAssetFilePath,
+          src:
+            isImage && filePath !== null
+              ? `${IMAGE_IMPORT_PREFIX}./${fileName}`
+              : null,
+          href:
+            !isImage && publicPath !== null
+              ? Path.posix.join(context.config.base, publicPath)
+              : null,
+        };
         const digest = context.generateDigest(data);
 
         // Skip unchanged Assets, but only when the file is still on disk -
-        // outDir may have been cleaned since the digest was last stored.
+        // the output directory may have been cleaned since the digest
+        // was last stored.
         const existing = context.store.get(asset.id);
         if (
           existing?.digest === digest &&
@@ -133,7 +256,12 @@ export function elekAssetsLoader<const T extends ElekConfig>(
         });
 
         const parsed = await context.parseData({ id: asset.id, data });
-        context.store.set({ id: asset.id, data: parsed, digest });
+        context.store.set({
+          id: asset.id,
+          data: parsed,
+          digest,
+          ...(filePath === null ? {} : { filePath }),
+        });
       }
 
       // Remove store entries for Assets that no longer exist in the Project.
