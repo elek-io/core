@@ -18,7 +18,9 @@ export const provisionAction = async ({
 }: ProvisionProps) => {
   const core = getCore();
   const resolvedRef = resolveContentRef(ref);
-  const provisioned = await core.projects.provision({
+  // A fallback warning is already logged by Core itself, which shares
+  // this logger, so it is part of the command output
+  const result = await core.projects.provision({
     id: project,
     url,
     ref: resolvedRef,
@@ -26,6 +28,6 @@ export const provisionAction = async ({
 
   core.logger.info({
     source: 'core',
-    message: `Provisioned Project "${provisioned.name}" (${provisioned.id}) at "${resolvedRef}", version ${provisioned.version}`,
+    message: `Provisioned Project "${result.project.name}" (${result.project.id}) at "${resolvedRef}", version ${result.project.version} (${result.source})`,
   });
 };

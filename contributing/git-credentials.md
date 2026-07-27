@@ -24,6 +24,8 @@ Desktop moved its HTTPS flow from askpass to the credential helper protocol beca
 
 The mechanism covers HTTP(S) remotes. SSH remotes are supported too but authenticate through the ambient SSH setup outside of Core, like keys loaded into ssh-agent. `classifyAuthError` tells the two transports apart (including dugite's `SSHPermissionDenied` for the common `Permission denied (publickey)` case) and names the SSH setup instead of the token for SSH failures.
 
+That SSH branch is deliberately narrow. dugite maps `SSHPermissionDenied` from git's generic `fatal: Could not read from remote repository.`, which git also prints for an unreachable host and for a repository that does not exist, so the classification additionally requires a permission signal in the output. Without that narrowing every offline SSH remote would surface as `Unauthorized`, which is both misleading and, since `provision()` treats `Unauthorized` as unrecoverable, would cost SSH consumers the offline fallback.
+
 ## Alternatives considered
 
 - **Inline credential helper**, a `credential.helper=!f() ...` one-liner injected via `GIT_CONFIG_*`. Would remove the helper files, but embeds a shell script in an env var and depends on cross-platform shell quoting. The askpass helper runs its logic in Node, the one runtime Core is guaranteed to have, and is unit-testable as a plain function.

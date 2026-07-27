@@ -97,9 +97,15 @@ export function classifyAuthError(
 ): CoreError | null {
   const parsed = parseError(stderr);
 
+  // git prints "Could not read from remote repository." for a rejected
+  // key, an unreachable host and a missing repository alike, and dugite
+  // maps all three to SSHPermissionDenied. Only a permission signal in
+  // the ssh output makes it an authentication failure, the rest stays
+  // a plain failure so callers can tell an outage from a bad key.
   if (
     parsed === GitError.SSHAuthenticationFailed ||
-    parsed === GitError.SSHPermissionDenied
+    (parsed === GitError.SSHPermissionDenied &&
+      /permission denied/i.test(stderr))
   ) {
     return CoreError.unauthorized(
       'The remote rejected SSH authentication. Provide a valid SSH key, for example through ssh-agent. ELEK_IO_REMOTE_ACCESS_TOKEN only applies to HTTP(S) remotes.'
@@ -804,6 +810,19 @@ export class GitService {
     }
 
     await this.git(path, args);
+  }
+
+  /**
+   * Resolves a revision to the commit hash it points to
+   *
+   * @see https://git-scm.com/docs/git-rev-parse
+   *
+   * @param path Path to the repository
+   * @param rev  The revision to resolve, e.g. `HEAD` or a tag name
+   */
+  public async revParse(path: string, rev: string): Promise<string> {
+    const result = await this.git(path, ['rev-parse', rev]);
+    return result.stdout.trim();
   }
 
   /**

@@ -85,6 +85,24 @@ describe('classifyAuthError', function () {
     expect(error?.message).not.toContain('Set the ELEK_IO_REMOTE_ACCESS_TOKEN');
   });
 
+  it('does not classify an unreachable remote as an auth failure', function () {
+    // git prints "Could not read from remote repository." for a rejected
+    // key, an unreachable host and a missing repository alike, and dugite
+    // maps all three to its SSH permission error
+    expect(
+      classifyAuthError(
+        'ssh: connect to host example.com port 22: Connection refused\nfatal: Could not read from remote repository.',
+        false
+      )
+    ).toBeNull();
+    expect(
+      classifyAuthError(
+        "fatal: '/tmp/gone' does not appear to be a git repository\nfatal: Could not read from remote repository.",
+        true
+      )
+    ).toBeNull();
+  });
+
   it('does not point an SSH failure at the token even when one is set', function () {
     const error = classifyAuthError('fatal: Authentication failed', true);
 

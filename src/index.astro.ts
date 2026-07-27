@@ -29,33 +29,23 @@ export { z } from '@hono/zod-openapi';
 interface ElekAssetsProps {
   projectId: string;
   outDir: string;
-  /**
-   * Options for the shared ElekIoCore instance. Core is created once on first
-   * loader use, so the first loader to run wins and later options are ignored.
-   */
-  core?: ConstructorElekIoCoreProps;
 }
 
 interface ElekEntriesOptions {
   projectId: string;
   /** Collection UUID or slug */
   collectionIdOrSlug: string;
-  /**
-   * Options for the shared ElekIoCore instance. Core is created once on first
-   * loader use, so the first loader to run wins and later options are ignored.
-   */
-  core?: ConstructorElekIoCoreProps;
 }
 
 /**
  * Lazily-created, process-wide ElekIoCore. Created on first loader use so that
- * importing @elek-io/core/astro has no side effects. The first loader to
- * initialize it wins.
+ * importing @elek-io/core/astro has no side effects. Configured through the
+ * ELEK_IO_* environment variables, which are read once here.
  */
 let coreInstance: ElekIoCore | undefined;
-function getCore(options?: ConstructorElekIoCoreProps): ElekIoCore {
+function getCore(): ElekIoCore {
   if (!coreInstance) {
-    coreInstance = new ElekIoCore(options ?? { log: { level: 'info' } });
+    coreInstance = new ElekIoCore({ log: { level: 'info' } });
   }
   return coreInstance;
 }
@@ -121,7 +111,7 @@ export function elekAssets(props: ElekAssetsProps): Loader {
     name: 'elek-assets',
     schema: assetSchema,
     load: async (context) => {
-      const core = getCore(props.core);
+      const core = getCore();
       await ensureProjectAvailable(core, props.projectId);
       await logReadingProject(core, props.projectId, (message) =>
         context.logger.info(message)
@@ -206,7 +196,7 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
   return {
     name: 'elek-entries',
     createSchema: async () => {
-      const core = getCore(props.core);
+      const core = getCore();
       await ensureProjectAvailable(core, props.projectId);
       const resolvedId = await core.collections.resolveCollectionId({
         projectId: props.projectId,
@@ -238,7 +228,7 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
       };
     },
     load: async (context) => {
-      const core = getCore(props.core);
+      const core = getCore();
       await ensureProjectAvailable(core, props.projectId);
       await logReadingProject(core, props.projectId, (message) =>
         context.logger.info(message)
@@ -365,13 +355,18 @@ export function elek(props: ElekIntegrationProps): AstroIntegration {
             logger.info(
               `Provisioning Project "${project.id}" at "${ref}" from "${project.remoteUrl}"`
             );
-            const provisioned = await core.projects.provision({
+            const result = await core.projects.provision({
               id: project.id,
               url: project.remoteUrl,
               ref,
             });
+            if (result.warning) {
+              logger.warn(result.warning);
+            }
+            const source =
+              result.source === 'remote' ? '' : ` (${result.source})`;
             logger.info(
-              `Project "${provisioned.name}" (${provisioned.id}) is available at version ${provisioned.version}`
+              `Project "${result.project.name}" (${result.project.id}) is available at version ${result.project.version}${source}`
             );
           }
         } finally {

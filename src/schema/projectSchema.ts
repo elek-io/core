@@ -186,6 +186,32 @@ export const provisionProjectSchema = z.object({
 });
 export type ProvisionProjectProps = z.infer<typeof provisionProjectSchema>;
 
+/**
+ * Where the provisioned content of a run came from
+ *
+ * `remote` is the normal path, the copy was fetched. `local-pin` is
+ * an exact version the copy already held, so the network was skipped.
+ * `local-fallback` is an unreachable remote the copy stood in for.
+ * `local-managed` is a working copy of another application, left
+ * untouched.
+ */
+export type ProvisionSource =
+  | 'remote'
+  | 'local-pin'
+  | 'local-fallback'
+  | 'local-managed';
+
+export interface ProvisionResult {
+  project: Project;
+  /** Where the content came from */
+  source: ProvisionSource;
+  /**
+   * Loud warning that the content may be outdated, non-null exactly
+   * when source is `local-fallback`
+   */
+  warning: string | null;
+}
+
 export const listBranchesProjectSchema = z.object({
   id: uuidSchema.readonly(),
 });

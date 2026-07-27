@@ -107,7 +107,7 @@ After cloning, Core fetches the whole LFS history into the local store and mater
 A local copy of a Project is one of two kinds. A **working copy** is created by `clone()` or `create()`, is managed by an application like the Desktop app, and is where editing happens. A **provisioned copy** is created by `provision()`, consumes content, and is disposable: every provision run hard-resets it to match the remote.
 
 ```typescript
-const project = await core.projects.provision({
+const { project, source, warning } = await core.projects.provision({
   id: '<project-id>',
   url: 'https://github.com/acme/website-content.git',
   // A channel ('production' | 'preview' | 'draft') or an exact
@@ -121,10 +121,12 @@ The channels resolve against the tags the remote advertises: `production` checks
 Three cases, decided by a provisioning marker file inside the Project directory:
 
 - **Missing**: the Project is cloned in build mode - shallow, single ref, LFS objects of the checked-out ref only - and the marker is written.
-- **Present with the marker**: the copy is fetched and hard-reset to the ref, so it always matches the remote.
+- **Present with the marker**: the copy is fetched and hard-reset to the ref, so a reachable remote decides what it holds.
 - **Present without the marker**: a working copy managed by another application (for example the Desktop app), left untouched.
 
 An unknown version throws `NotFound` listing the available versions. Provisioning the `production` or `preview` channel of a Project that never published a Release or preview throws `PreconditionFailed` naming the fix.
+
+The returned `source` states where the content came from. A refresh keeps building when the remote cannot be reached: an exact version the copy already holds skips the network (`local-pin`), and a failed fetch falls back to the copy on disk with a `warning` (`local-fallback`). A missing copy, an authentication failure and a pin the copy does not hold stay hard failures. See [Building offline](./provisioning.md#building-offline).
 
 **Provisioned copies are read-only for everyone.** Every `Project` carries a computed `isProvisioned` boolean, so applications like the Desktop app can recognize and label a provisioned copy. Any operation that would mutate one - content create, update or delete, synchronizing, setting a remote, switching branches, releasing, upgrading - throws a `CoreError` of type `PreconditionFailed`, also on a writable Core. Without this guard, edits would be silently destroyed by the next provision run. The git layer backstops callers that bypass the services: a direct `git.commit`, `git.tags.create` or `git.push` against a provisioned copy throws the same error. The escape hatch is `projects.delete()`, which removes a provisioned copy without any unpushed-changes check (it is disposable by definition), after which the Project can be cloned as a working copy.
 

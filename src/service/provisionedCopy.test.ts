@@ -35,10 +35,12 @@ describe('Provisioned copy', function () {
     seed = await seedRemoteWithRelease();
     // Provisioning also works on a writable Core, so the marked copy
     // lands in the shared data directory of this worker
-    provisioned = await core.projects.provision({
-      id: seed.projectId,
-      url: seed.remotePath,
-    });
+    provisioned = (
+      await core.projects.provision({
+        id: seed.projectId,
+        url: seed.remotePath,
+      })
+    ).project;
     workingCopy = await createProject();
   }, 90000);
 

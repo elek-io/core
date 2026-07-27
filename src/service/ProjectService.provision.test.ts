@@ -46,11 +46,13 @@ describe('ProjectService provision', function () {
   });
 
   it('should provision a missing Project from the remote at production', async function () {
-    const project = await readOnlyCore.projects.provision({
+    const { project, source, warning } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
     });
 
+    expect(source).toEqual('remote');
+    expect(warning).toBeNull();
     expect(project.id).toEqual(seed.projectId);
     expect(project.version).toEqual(seed.releaseVersion);
     expect(
@@ -90,11 +92,13 @@ describe('ProjectService provision', function () {
     secondReleaseVersion = secondRelease.version;
     await core.projects.delete({ id: project.id, force: true });
 
-    const provisioned = await readOnlyCore.projects.provision({
-      id: seed.projectId,
-      url: seed.remotePath,
-    });
+    const { project: provisioned, source } =
+      await readOnlyCore.projects.provision({
+        id: seed.projectId,
+        url: seed.remotePath,
+      });
 
+    expect(source).toEqual('remote');
     expect(provisioned.version).toEqual(secondReleaseVersion);
   }, 30000);
 
@@ -104,7 +108,7 @@ describe('ProjectService provision', function () {
     );
     await Fs.writeFile(projectFilePath, 'not json anymore');
 
-    const provisioned = await readOnlyCore.projects.provision({
+    const { project: provisioned } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
     });
@@ -115,7 +119,7 @@ describe('ProjectService provision', function () {
   it('should provision the draft channel when asked', async function () {
     // The remote work branch was synchronized before the second
     // Release, so it still holds the first released version
-    const provisioned = await readOnlyCore.projects.provision({
+    const { project: provisioned } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: 'draft',
@@ -130,7 +134,7 @@ describe('ProjectService provision', function () {
 
   it('should provision the newest preview on the preview channel', async function () {
     // The only preview so far is the one from the seed
-    const provisioned = await readOnlyCore.projects.provision({
+    const { project: provisioned } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: 'preview',
@@ -145,14 +149,14 @@ describe('ProjectService provision', function () {
     });
     await core.projects.delete({ id: project.id, force: true });
 
-    const refreshed = await readOnlyCore.projects.provision({
+    const { project: refreshed } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: 'preview',
     });
     expect(refreshed.version).toEqual(newerPreview.version);
 
-    const production = await readOnlyCore.projects.provision({
+    const { project: production } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: 'production',
@@ -161,7 +165,7 @@ describe('ProjectService provision', function () {
   }, 60000);
 
   it('should provision a pinned Release version with a detached HEAD', async function () {
-    const provisioned = await readOnlyCore.projects.provision({
+    const { project: provisioned } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: seed.releaseVersion,
@@ -175,7 +179,7 @@ describe('ProjectService provision', function () {
   }, 30000);
 
   it('should provision a preview version', async function () {
-    const provisioned = await readOnlyCore.projects.provision({
+    const { project: provisioned } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: seed.previewVersion,
@@ -228,7 +232,7 @@ describe('ProjectService provision', function () {
     // The copy is detached at the preview version from the previous
     // test. Without the marker it belongs to another application, so
     // asking for production must not touch it
-    const provisioned = await readOnlyCore.projects.provision({
+    const { project: provisioned } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
     });
@@ -295,7 +299,7 @@ describe('ProjectService provision', function () {
     ).toEqual(seed.remotePath);
 
     // A corrected rerun heals the copy
-    const healed = await readOnlyCore.projects.provision({
+    const { project: healed } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
     });
@@ -395,4 +399,133 @@ describe('ProjectService provision', function () {
       await Fs.pathExists(readOnlyCore.util.pathTo.project(skewSeed.projectId))
     ).toBe(false);
   }, 60000);
+
+  // Not covered here: the Unauthorized rethrow. Local remotes skip git's
+  // credential machinery entirely, so an auth failure cannot be produced
+  // against them, see the credentials limitation in contributing/testing.md.
+  describe('offline', function () {
+    let offlineSeed: Awaited<ReturnType<typeof seedRemoteWithRelease>>;
+    let hiddenRemotePath: string;
+
+    beforeAll(async function () {
+      offlineSeed = await seedRemoteWithRelease();
+      hiddenRemotePath = `${offlineSeed.remotePath}-hidden`;
+    }, 60000);
+
+    /**
+     * Runs the given function with the remote moved away, so every git
+     * command against it fails like an unreachable remote does
+     */
+    async function whileUnreachable<T>(fn: () => Promise<T>): Promise<T> {
+      await Fs.move(offlineSeed.remotePath, hiddenRemotePath);
+      try {
+        return await fn();
+      } finally {
+        await Fs.move(hiddenRemotePath, offlineSeed.remotePath);
+      }
+    }
+
+    it('should build with the copy on disk when the remote is unreachable', async function () {
+      const online = await readOnlyCore.projects.provision({
+        id: offlineSeed.projectId,
+        url: offlineSeed.remotePath,
+      });
+      expect(online.source).toEqual('remote');
+
+      const { project, source, warning } = await whileUnreachable(() =>
+        readOnlyCore.projects.provision({
+          id: offlineSeed.projectId,
+          url: offlineSeed.remotePath,
+        })
+      );
+
+      expect(source).toEqual('local-fallback');
+      expect(project.version).toEqual(offlineSeed.releaseVersion);
+      expect(warning).toContain(offlineSeed.projectId);
+      expect(warning).toContain('production');
+      expect(warning).toContain(offlineSeed.releaseVersion);
+
+      // The copy is still readable
+      const { total } = await readOnlyCore.collections.list({
+        projectId: offlineSeed.projectId,
+        limit: 0,
+      });
+      expect(total).toEqual(1);
+    }, 60000);
+
+    it('should reject when the remote is unreachable and no copy exists', async function () {
+      let error: unknown = null;
+      try {
+        await whileUnreachable(() =>
+          readOnlyCore.projects.provision({
+            id: uuid(),
+            url: offlineSeed.remotePath,
+          })
+        );
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeInstanceOf(CoreError);
+    }, 60000);
+
+    it('should skip the network for a pinned version that is already checked out', async function () {
+      // Puts the copy on the pinned Release tag
+      const online = await readOnlyCore.projects.provision({
+        id: offlineSeed.projectId,
+        url: offlineSeed.remotePath,
+        ref: offlineSeed.releaseVersion,
+      });
+      expect(online.warning).toBeNull();
+
+      const { project, source, warning } = await whileUnreachable(() =>
+        readOnlyCore.projects.provision({
+          id: offlineSeed.projectId,
+          url: offlineSeed.remotePath,
+          ref: offlineSeed.releaseVersion,
+        })
+      );
+
+      expect(source).toEqual('local-pin');
+      expect(warning).toBeNull();
+      expect(project.version).toEqual(offlineSeed.releaseVersion);
+    }, 60000);
+
+    it('should reject a pinned version the copy on disk does not hold', async function () {
+      let error: unknown = null;
+      try {
+        await whileUnreachable(() =>
+          readOnlyCore.projects.provision({
+            id: offlineSeed.projectId,
+            url: offlineSeed.remotePath,
+            ref: offlineSeed.previewVersion,
+          })
+        );
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeInstanceOf(CoreError);
+    }, 60000);
+
+    it('should build with the copy on disk on the draft channel too', async function () {
+      const online = await readOnlyCore.projects.provision({
+        id: offlineSeed.projectId,
+        url: offlineSeed.remotePath,
+        ref: 'draft',
+      });
+      expect(online.source).toEqual('remote');
+
+      const { source, warning } = await whileUnreachable(() =>
+        readOnlyCore.projects.provision({
+          id: offlineSeed.projectId,
+          url: offlineSeed.remotePath,
+          ref: 'draft',
+        })
+      );
+
+      expect(source).toEqual('local-fallback');
+      expect(warning).toContain('draft');
+    }, 60000);
+  });
 });

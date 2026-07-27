@@ -128,7 +128,24 @@ A Release pushes the published content to the remote, but your pipeline only run
 
 ## How provisioning behaves
 
-The first run clones the Project into the data directory and writes a marker file. Later runs fetch and hard-reset that copy to the requested ref, so it always matches the remote, including a cached copy on a reused runner. A copy without the marker belongs to another application (for example the Desktop app) and is never touched. Details in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
+The first run clones the Project into the data directory and writes a marker file. Later runs fetch and hard-reset that copy to the requested ref, so a reachable remote always decides what the copy holds, including a cached copy on a reused runner. A copy without the marker belongs to another application (for example the Desktop app) and is never touched. Details in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
+
+### Building offline
+
+A pipeline that already has a provisioned copy keeps building when the remote cannot be reached. Two cases:
+
+- **An exact version pin the copy already holds** skips the remote entirely. Release tags never move, so the pin is satisfied by what is on disk. Nothing is fetched and nothing is logged as a problem.
+- **A failed fetch on any other ref** falls back to the copy in the data directory and logs a loud warning naming the Project, the requested ref, the failure and the version the copy actually holds. The build continues on content that may be outdated.
+
+Three failures deliberately stay hard, because building anyway would hide something you need to act on:
+
+- **No copy yet.** There is nothing to fall back to, so a first provision needs the network.
+- **An authentication failure.** A rejected or expired token is a configuration error. Silently building stale content behind a warning would mask it until the token is long dead.
+- **An exact version pin the copy does not hold.** A pin promises reproducibility, and a warned-but-wrong version breaks that promise.
+
+Everything the remote answers stays a hard failure too. "No Release has been published yet", an unknown version, a remote holding a different Project and `VersionSkew` are answers from a reachable remote, not outages.
+
+Programmatically, `provision()` returns `{ project, source, warning }`. The `source` states where the content came from (`remote`, `local-pin`, `local-fallback`, or `local-managed` for a copy another application owns) and `warning` carries the fallback text, non-null exactly when the source is `local-fallback`.
 
 Because every provision run overwrites the copy, a provisioned copy is read-only for everyone: any attempt to edit it, also through the Desktop app, throws a `CoreError` of type `PreconditionFailed` instead of losing the edits to the next build. Applications can recognize a provisioned copy through the `isProvisioned` field on the `Project`. To work on the Project again, delete the provisioned copy and clone it.
 
@@ -139,6 +156,7 @@ Because every provision run overwrites the copy, a provisioned copy is read-only
 - **`Unauthorized`**: the remote requires authentication or rejected the token. Check `ELEK_IO_REMOTE_ACCESS_TOKEN`, and whether your git host expects a specific `ELEK_IO_REMOTE_ACCESS_TOKEN_USER`. For an SSH remote, check the SSH key setup instead, the error message says which of the two applies.
 - **"No Release with version ..."**: the pinned version does not exist on the remote. The error lists the available versions.
 - **`VersionSkew`**: the content was written by a newer Core than the pipeline uses. Update the `@elek-io/core` dependency to at least the version named in the error.
+- **"Could not reach the remote ... building with the copy already in the data directory"**: the fetch failed and the build continued on the cached copy, see [Building offline](#building-offline). The warning names the git failure. The published content did not reach that build, so re-run it once the remote is reachable again.
 - **Project not found, pointing at `elek()`**: the Astro loaders ran without the Project being present. Add the integration, or make sure `ELEK_IO_DATA_DIR` points at the directory that holds it.
 
 ## See Also

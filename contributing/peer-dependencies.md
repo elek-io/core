@@ -116,3 +116,9 @@ untested major works. When a new astro major is verified, widen the range to inc
 Note that astro depends on zod through a caret range, so its zod requirement feeds the zod floor above
 (astro is currently the binding constraint at `^4.3.6`). Bumping astro can raise the zod floor, so
 re-check the zod single-copy invariant whenever you bump astro.
+
+The coupling is also a runtime one. Astro 6 validates content collection schemas with zod 4, and the
+schemas Core's loaders supply are consumed by astro's content layer. A second physical zod copy
+therefore breaks the Astro integration at runtime, not only in type-checking. Astro 6 also removed
+the `z` export from `astro:content`. Consumers author collection schemas with `astro/zod` or with the
+`z` Core re-exports, and with the single-copy invariant intact both resolve to the same physical zod.

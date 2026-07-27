@@ -50,19 +50,24 @@ Three node types require an explicit override (`html`, `assetReference`, `entryR
 
 ```astro
 ---
-import { getEntry, getCollection } from 'astro:content';
+// src/pages/posts/[id].astro
+import { getCollection } from 'astro:content';
 import { Image } from 'astro:assets';
 import { mdastRender, type MdastAstroRenderers } from '@elek-io/core/astro';
 import DOMPurify from 'isomorphic-dompurify';
 
-const post = await getEntry('posts', Astro.params.slug);
+// Store ids are Entry UUIDs, so the route is keyed by UUID.
+export async function getStaticPaths() {
+  const posts = await getCollection('posts');
+  return posts.map((post) => ({ params: { id: post.id }, props: { post } }));
+}
 
-// Sync lookup maps. mdastRender's handlers run synchronously, so build the
-// maps once per request from the already-awaited collections.
+const { post } = Astro.props;
+
+// Sync lookup map. mdastRender's handlers run synchronously, so build the
+// map once per page from the already-awaited collection.
 const assets = await getCollection('assets');
-const posts = await getCollection('posts');
 const assetById = new Map(assets.map((a) => [a.id, a.data]));
-const postById = new Map(posts.map((p) => [p.id, p.data]));
 
 const overrides: MdastAstroRenderers = {
   // Required - sign off on each, even if your fields don't currently use them.
@@ -73,10 +78,9 @@ const overrides: MdastAstroRenderers = {
       ? <Image src={asset.absolutePath} alt={node.alt} />
       : <a href={`/assets/${asset?.id}.${asset?.extension}`}>{node.alt}</a>;
   },
-  entryReference: (node, children) => {
-    const target = postById.get(node.entryId);
-    return <a href={`/posts/${target?.slug ?? '#'}`}>{children}</a>;
-  },
+  entryReference: (node, children) => (
+    <a href={`/posts/${node.entryId}`}>{children}</a>
+  ),
 };
 
 const body = post.data.body.en;
@@ -85,6 +89,8 @@ const body = post.data.body.en;
   {body !== null && mdastRender(body, overrides)}
 </article>
 ```
+
+`entryReference` nodes carry the referenced Entry's UUID, which is also its store id, so `getEntry('posts', node.entryId)` resolves a reference anywhere. Routing by something friendlier than a UUID means mapping ids to your own URLs in `getStaticPaths` and reusing that map in the renderer.
 
 Consumer code is now ~10 lines for the typical case. Without the helper the equivalent hand-rolled switch (see the [fallback recipe](#fallback-recipe-for-frameworks-without-an-official-wrapper) below) takes ~90.
 

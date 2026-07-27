@@ -41,6 +41,8 @@ import {
   type ProjectFile,
   type ProjectHistoryProps,
   type ProjectHistoryResult,
+  type ProvisionResult,
+  type ProvisionSource,
   type ReadProjectProps,
   type SetRemoteOriginUrlProjectProps,
   type SwitchBranchProjectProps,
@@ -62,6 +64,17 @@ import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { PathTo } from '../util/node.js';
+
+/**
+ * What the network phase of a refresh gathered, handed to the
+ * working-tree phase so it needs no second remote round trip
+ */
+interface ProvisionFetch {
+  /** Ref names the remote advertises */
+  remoteRefs: string[];
+  /** Origin URL the copy pointed at before, restored when the refresh fails */
+  previousOriginUrl: string | null;
+}
 
 /**
  * Service that manages CRUD functionality for Project files on disk
@@ -211,7 +224,7 @@ export class ProjectService
    * A provisioned copy consumes content, it is not for editing. It is
    * created as a build-mode clone (shallow, single ref, only the LFS
    * objects of the checked-out ref) and later runs fetch and hard-reset
-   * it, so it always matches the remote. To work on a Project, use
+   * it, so a reachable remote decides what it holds. To work on a Project, use
    * clone() instead: a working copy with full history, every LFS
    * object and a User set for committing. clone() throws if the
    * Project is already present, provision() converges it.
@@ -227,46 +240,161 @@ export class ProjectService
    * the work branch) or an exact Release version, default
    * `production`. Runs on a read-only Core without a User being set.
    *
+   * A refresh keeps building when the remote cannot be reached: an
+   * exact version the copy already holds skips the network entirely,
+   * and a failed fetch falls back to the copy on disk with a loud
+   * warning. The returned `source` states which of the two happened.
+   *
    * @see docs/provisioning.md and docs/git-and-sync.md
    */
-  public provision(props: ProvisionProjectProps): Promise<Project> {
+  public provision(props: ProvisionProjectProps): Promise<ProvisionResult> {
     return this.validated(
       'provision',
       provisionProjectSchema,
       props,
       async (validatedProps) => {
+        const { id, url } = validatedProps;
         const ref = validatedProps.ref ?? contentChannelSchema.enum.production;
-        const projectPath = this.pathTo.project(validatedProps.id);
-        const markerPath = this.pathTo.projectProvisionedMarker(
-          validatedProps.id
-        );
+        const projectPath = this.pathTo.project(id);
+        const markerPath = this.pathTo.projectProvisionedMarker(id);
 
         const exists = await Fs.pathExists(projectPath);
         const hasMarker = await Fs.pathExists(markerPath);
 
+        let source: ProvisionSource = 'remote';
+        let cause: string | null = null;
+
         if (exists && !hasMarker) {
+          source = 'local-managed';
           this.logService.info({
             source: 'core',
-            message: `Project "${validatedProps.id}" is managed by another application, leaving it untouched`,
+            message: `Project "${id}" is managed by another application, leaving it untouched`,
           });
         } else if (!exists) {
-          await this.provisionClone(validatedProps.id, validatedProps.url, ref);
+          await this.provisionClone(id, url, ref);
+        } else if (await this.holdsPinnedVersion(id, ref)) {
+          source = 'local-pin';
+          this.logService.info({
+            source: 'core',
+            message: `Project "${id}" already holds the pinned version ${ref}, skipping the remote`,
+          });
         } else {
-          await this.provisionRefresh(
-            validatedProps.id,
-            validatedProps.url,
-            ref
-          );
+          try {
+            const fetched = await this.provisionFetch(id, url, ref);
+            await this.provisionRefresh(id, url, ref, fetched);
+          } catch (error) {
+            cause = await this.assertFallbackUsable(id, url, ref, error);
+            source = 'local-fallback';
+          }
         }
 
         const projectFile = this.migrate(
-          await this.jsonFileService.unsafeRead(
-            this.pathTo.projectFile(validatedProps.id)
-          )
+          await this.jsonFileService.unsafeRead(this.pathTo.projectFile(id))
         );
-        return await this.toProject(projectFile);
+        const project = await this.toProject(projectFile);
+
+        let warning: string | null = null;
+        if (cause !== null) {
+          warning = await this.composeFallbackWarning(project, ref, cause);
+          this.logService.warn({ source: 'core', message: warning });
+        }
+
+        return { project, source, warning };
       }
     );
+  }
+
+  /**
+   * True when the ref pins an exact Release version instead of
+   * following a channel
+   */
+  private isVersionPin(ref: string): boolean {
+    return !contentChannelSchema.safeParse(ref).success;
+  }
+
+  /**
+   * True when the ref is an exact version and the copy already sits on
+   * that Release tag
+   *
+   * Release tags are immutable by convention, so the pin is already
+   * satisfied and the whole network phase can be skipped. The local
+   * tags are trustworthy here, a provisioned copy is only ever written
+   * by provisioning itself.
+   */
+  private async holdsPinnedVersion(id: string, ref: string): Promise<boolean> {
+    if (!this.isVersionPin(ref)) {
+      return false;
+    }
+
+    const projectPath = this.pathTo.project(id);
+    const { list: tags } = await this.gitService.tags.list({
+      path: projectPath,
+    });
+    const pinned = tags
+      .filter(isVersionedTag)
+      .find((tag) => tag.message.version === ref);
+    if (!pinned) {
+      return false;
+    }
+
+    const [head, tagged] = await Promise.all([
+      this.gitService.revParse(projectPath, 'HEAD'),
+      this.gitService.revParse(projectPath, `${pinned.id}^{commit}`),
+    ]);
+    return head === tagged;
+  }
+
+  /**
+   * Decides whether the copy on disk may stand in for a failed network
+   * phase, returning the cause to name in the warning. Rethrows the
+   * given error when it may not.
+   */
+  private async assertFallbackUsable(
+    id: string,
+    url: string,
+    ref: string,
+    error: unknown
+  ): Promise<string> {
+    // A rejected or expired token is an actionable configuration
+    // error. Building stale content behind a warning would mask it.
+    if (error instanceof CoreError && error.type === 'Unauthorized') {
+      throw error;
+    }
+
+    // A pin promises reproducibility. A copy that holds the pinned
+    // version never reaches this point, it skipped the network above,
+    // so the copy on disk holds another version.
+    if (this.isVersionPin(ref)) {
+      throw error;
+    }
+
+    try {
+      await this.verifyProvisioned(id, url, this.pathTo.project(id));
+    } catch {
+      // The copy is not usable, so the original failure stands
+      throw error;
+    }
+
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  /**
+   * Composes the warning a fallback build prints, naming what the copy
+   * on disk actually holds
+   */
+  private async composeFallbackWarning(
+    project: Project,
+    ref: string,
+    cause: string
+  ): Promise<string> {
+    const branch = await this.gitService.branches.current(
+      this.pathTo.project(project.id)
+    );
+    const state =
+      branch === projectBranchSchema.enum.work
+        ? 'draft'
+        : branch || 'Release tag';
+    return `Could not reach the remote of Project "${project.id}" to provision "${ref}", building with the copy already in the data directory: version ${project.version} (${state}). The content may be outdated. Cause: ${cause}`;
   }
 
   /**
@@ -284,14 +412,44 @@ export class ProjectService
   /**
    * Throws the typed error for a branch the remote does not have
    */
-  private async assertRemoteBranch(url: string, branch: string): Promise<void> {
-    const remoteRefs = await this.gitService.lsRemote(url);
+  private assertRemoteBranch(remoteRefs: string[], branch: string): void {
     if (remoteRefs.includes(`refs/heads/${branch}`)) {
       return;
     }
     throw CoreError.notFound(
       `The remote has no "${branch}" branch, so there are no drafts to provision`
     );
+  }
+
+  /**
+   * Picks the tag names out of the ref names a remote advertises
+   */
+  private toRemoteTagNames(remoteRefs: string[]): Set<string> {
+    return new Set(
+      remoteRefs
+        .filter((remoteRef) => remoteRef.startsWith('refs/tags/'))
+        .map((remoteRef) => remoteRef.replace('refs/tags/', ''))
+    );
+  }
+
+  /**
+   * Fetches the tag objects of the remote into the repository
+   *
+   * Channels and versions live in tags, which can only be resolved
+   * once the tag objects are present. The fetch is skipped for a
+   * tagless remote, where a shallow tag fetch would fail.
+   */
+  private async fetchTags(
+    path: string,
+    remoteTagNames: Set<string>
+  ): Promise<void> {
+    if (remoteTagNames.size === 0) {
+      return;
+    }
+    await this.gitService.fetch(path, {
+      ref: '+refs/tags/*:refs/tags/*',
+      depth: 1,
+    });
   }
 
   /**
@@ -329,8 +487,9 @@ export class ProjectService
     ref: string
   ): Promise<void> {
     const branch = this.refToBranch(ref);
+    const remoteRefs = await this.gitService.lsRemote(url);
     if (branch) {
-      await this.assertRemoteBranch(url, branch);
+      this.assertRemoteBranch(remoteRefs, branch);
     }
 
     const stagingPath = Path.join(this.pathTo.tmp, uuid());
@@ -343,15 +502,15 @@ export class ProjectService
           lfs: 'current',
         });
       } else {
-        // Channels and versions live in tags, which can only be
-        // resolved once the tag objects are present. Clone the remote
-        // HEAD first, then check the resolved tag out.
+        // Clone the remote HEAD first, then check the resolved tag out
         await this.gitService.clone(url, stagingPath, {
           depth: 1,
           singleBranch: true,
           lfs: 'current',
         });
-        await this.checkoutTag(stagingPath, ref);
+        const remoteTagNames = this.toRemoteTagNames(remoteRefs);
+        await this.fetchTags(stagingPath, remoteTagNames);
+        await this.checkoutTag(stagingPath, ref, remoteTagNames);
         // Materialize the LFS objects of the tag's ref
         await this.gitService.lfs.fetch(stagingPath);
         await this.gitService.lfs.checkout(stagingPath);
@@ -375,15 +534,18 @@ export class ProjectService
   }
 
   /**
-   * Refreshes a provisioned copy to the given ref: fetch, then a
-   * discarding switch onto the fetched tip, then the LFS objects of
-   * the checked-out ref
+   * Network phase of a refresh: points the copy at the remote, lists
+   * what the remote advertises and fetches it
+   *
+   * Nothing here moves the working tree, so a failure leaves the
+   * existing copy intact. That is what lets provision() fall back onto
+   * it when the remote cannot be reached.
    */
-  private async provisionRefresh(
+  private async provisionFetch(
     id: string,
     url: string,
     ref: string
-  ): Promise<void> {
+  ): Promise<ProvisionFetch> {
     const projectPath = this.pathTo.project(id);
     const branch = this.refToBranch(ref);
 
@@ -394,14 +556,48 @@ export class ProjectService
     }
 
     try {
+      const remoteRefs = await this.gitService.lsRemote(url);
       if (branch) {
-        await this.assertRemoteBranch(url, branch);
-        // The remote-tracking ref is updated explicitly, because a
-        // single-branch clone tracks no other branches
-        await this.gitService.fetch(projectPath, {
-          ref: `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
-          depth: 1,
-        });
+        // A branch the remote does not have is an answer from a
+        // reachable remote, not a fetch failure, so the working-tree
+        // phase reports it instead of the fallback swallowing it
+        if (remoteRefs.includes(`refs/heads/${branch}`)) {
+          // The remote-tracking ref is updated explicitly, because a
+          // single-branch clone tracks no other branches
+          await this.gitService.fetch(projectPath, {
+            ref: `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+            depth: 1,
+          });
+        }
+      } else {
+        await this.fetchTags(projectPath, this.toRemoteTagNames(remoteRefs));
+      }
+      return { remoteRefs, previousOriginUrl };
+    } catch (error) {
+      await this.restoreOriginUrl(projectPath, url, previousOriginUrl);
+      throw error;
+    }
+  }
+
+  /**
+   * Working-tree phase of a refresh: a discarding switch onto the
+   * fetched tip or Release tag, then the LFS objects of the checked
+   * out ref
+   *
+   * Failures here stay hard, because the copy may be half updated.
+   */
+  private async provisionRefresh(
+    id: string,
+    url: string,
+    ref: string,
+    fetched: ProvisionFetch
+  ): Promise<void> {
+    const projectPath = this.pathTo.project(id);
+    const branch = this.refToBranch(ref);
+
+    try {
+      if (branch) {
+        this.assertRemoteBranch(fetched.remoteRefs, branch);
         // Force-create resets the branch onto the fetched tip and
         // switches to it, discarding any local modifications, whether
         // the branch exists locally or not
@@ -411,19 +607,16 @@ export class ProjectService
           discardChanges: true,
         });
       } else {
-        await this.checkoutTag(projectPath, ref);
+        await this.checkoutTag(
+          projectPath,
+          ref,
+          this.toRemoteTagNames(fetched.remoteRefs)
+        );
       }
 
       await this.verifyProvisioned(id, url, projectPath);
     } catch (error) {
-      // Leave the copy pointing at the remote it was provisioned
-      // from, so a corrected rerun starts clean
-      if (previousOriginUrl !== null && previousOriginUrl !== url) {
-        await this.gitService.remotes.setOriginUrl(
-          projectPath,
-          previousOriginUrl
-        );
-      }
+      await this.restoreOriginUrl(projectPath, url, fetched.previousOriginUrl);
       throw error;
     }
 
@@ -432,32 +625,38 @@ export class ProjectService
   }
 
   /**
+   * Leaves a copy pointing at the remote it was provisioned from, so a
+   * corrected rerun starts clean
+   */
+  private async restoreOriginUrl(
+    projectPath: string,
+    url: string,
+    previousOriginUrl: string | null
+  ): Promise<void> {
+    if (previousOriginUrl !== null && previousOriginUrl !== url) {
+      await this.gitService.remotes.setOriginUrl(
+        projectPath,
+        previousOriginUrl
+      );
+    }
+  }
+
+  /**
    * Resolves a channel or exact version to its tag and checks it out
    * with a detached HEAD, discarding local modifications
    *
    * `production` resolves to the newest Release tag, `preview` to the
-   * newest preview tag, both by semver. The tag objects are fetched
-   * shallowly first, because Release tags are named by UUID and carry
-   * their version inside the tag message.
+   * newest preview tag, both by semver. Resolution is strictly against
+   * the tags the remote advertises, which keeps stale local tags of a
+   * previously configured remote out. Their objects are already
+   * fetched, because Release tags are named by UUID and carry their
+   * version inside the tag message.
    */
-  private async checkoutTag(path: string, ref: string): Promise<void> {
-    // Resolution is strictly against the tags the remote advertises.
-    // This keeps stale local tags of a previously configured remote
-    // out, and skips the fetch entirely for a tagless remote, where
-    // a shallow tag fetch would fail.
-    const url = await this.gitService.remotes.getOriginUrl(path);
-    const remoteTagNames = new Set(
-      (url === null ? [] : await this.gitService.lsRemote(url))
-        .filter((remoteRef) => remoteRef.startsWith('refs/tags/'))
-        .map((remoteRef) => remoteRef.replace('refs/tags/', ''))
-    );
-    if (remoteTagNames.size > 0) {
-      await this.gitService.fetch(path, {
-        ref: '+refs/tags/*:refs/tags/*',
-        depth: 1,
-      });
-    }
-
+  private async checkoutTag(
+    path: string,
+    ref: string,
+    remoteTagNames: Set<string>
+  ): Promise<void> {
     const { list: tags } = await this.gitService.tags.list({ path });
     const versionedTags = tags
       .filter(isVersionedTag)

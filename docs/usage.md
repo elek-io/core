@@ -323,7 +323,7 @@ export const collections = {
 };
 ```
 
-Both loaders accept a `core` property with the same options as the `ElekIoCore` constructor, so `elekEntries({ ..., core: { dataDir: '/path/to/data' } })` reads from a custom data directory. Note that all loaders share one Core instance, created by whichever loader runs first. Later `core` options are silently ignored, so pass identical `core` options to every loader or leave them off entirely. To change the data directory, prefer setting `ELEK_IO_DATA_DIR` in the build environment, which applies no matter which loader runs first.
+All loaders share one Core instance, configured through the `ELEK_IO_*` environment variables of the build. Set `ELEK_IO_DATA_DIR` to read from a data directory other than `~/elek.io`, `ELEK_IO_CHANNEL` to switch the content state deployment-wide and `ELEK_IO_REMOTE_ACCESS_TOKEN` to authenticate against a private remote. See [Environment variables](#environment-variables) for the full list.
 
 ### Provisioning in CI with elek()
 

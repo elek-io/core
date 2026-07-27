@@ -113,6 +113,35 @@ export const collections = {
     ).toBe(true);
   }, 120000);
 
+  it('should sync with the provisioned copy when the remote is unreachable', async function () {
+    const hiddenRemotePath = `${remotePath}-hidden`;
+    await Fs.move(remotePath, hiddenRemotePath);
+
+    try {
+      await sync({
+        root: astroRoot,
+        configFile: false,
+        logLevel: 'info',
+        integrations: [
+          elek({
+            projects: [{ id: seed.projectId, remoteUrl: remotePath }],
+          }),
+        ],
+      });
+    } finally {
+      await Fs.move(hiddenRemotePath, remotePath);
+    }
+
+    expect(await Fs.pathExists(core.util.pathTo.project(seed.projectId))).toBe(
+      true
+    );
+    expect(
+      await Fs.pathExists(
+        Path.join(assetOutDir, `${seed.assetId}.${seed.assetExtension}`)
+      )
+    ).toBe(true);
+  }, 120000);
+
   it('should fail a sync without the integration and point at it', async function () {
     const missingId = uuid();
     const root = tmpDirPath();
