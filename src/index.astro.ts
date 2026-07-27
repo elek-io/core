@@ -14,6 +14,11 @@ import {
   buildEntryValuesTypeString,
 } from './astro/schema.js';
 import { transformEntryValues } from './astro/transform.js';
+import {
+  assertElekConfig,
+  readDeclaration,
+  type ElekConfig,
+} from './astro/elekConfig.js';
 import { toPascalCase } from './cli/util.js';
 
 export {
@@ -22,17 +27,29 @@ export {
   type MdastAstroRenderers,
 } from './astro/mdastRender.js';
 
+export {
+  defineElekConfig,
+  type ElekConfig,
+  type ElekProjectDeclaration,
+} from './astro/elekConfig.js';
+
 // Re-export `z` here too so it is available from the @elek-io/core/astro entry.
 // See the note in schema/index.ts. zod is a required peer dependency.
 export { z } from '@hono/zod-openapi';
 
-interface ElekAssetsProps {
-  projectId: string;
+interface ElekAssetsLoaderProps<T extends ElekConfig> {
+  /** The elek config, also imported by astro.config */
+  config: T;
+  /** Alias of the Project in config.projects */
+  project: keyof T['projects'] & string;
   outDir: string;
 }
 
-interface ElekEntriesOptions {
-  projectId: string;
+interface ElekEntriesLoaderProps<T extends ElekConfig> {
+  /** The elek config, also imported by astro.config */
+  config: T;
+  /** Alias of the Project in config.projects */
+  project: keyof T['projects'] & string;
   /** Collection UUID or slug */
   collectionIdOrSlug: string;
 }
@@ -57,13 +74,14 @@ function getCore(): ElekIoCore {
  */
 async function ensureProjectAvailable(
   core: ElekIoCore,
+  alias: string,
   projectId: string
 ): Promise<void> {
   if (await Fs.pathExists(core.util.pathTo.project(projectId))) {
     return;
   }
   throw CoreError.notFound(
-    `Project "${projectId}" was not found in the data directory "${core.options.dataDir}". Add the elek() integration to astro.config to provision it from its remote, or point ELEK_IO_DATA_DIR at the directory holding the Project. See the provisioning guide in the docs of @elek-io/core.`
+    `Project "${alias}" (${projectId}) was not found in the data directory "${core.options.dataDir}". Add the elek() integration to astro.config to provision it from its remote, or point ELEK_IO_DATA_DIR at the directory holding the Project. See the provisioning guide in the docs of @elek-io/core.`
   );
 }
 
@@ -94,34 +112,42 @@ async function logReadingProject(
  * ```ts
  * // src/content.config.ts
  * import { defineCollection } from 'astro:content';
- * import { elekAssets } from '@elek-io/core/astro';
+ * import { elekAssetsLoader } from '@elek-io/core/astro';
+ * import { config } from '../elek.config';
  *
  * export const collections = {
  *   assets: defineCollection({
- *     loader: elekAssets({
- *       projectId: 'abc-123-...',
- *       outDir: './content/assets',
+ *     loader: elekAssetsLoader({
+ *       config,
+ *       project: 'website',
+ *       outDir: './src/content/assets',
  *     }),
  *   });
  * };
  * ```
  */
-export function elekAssets(props: ElekAssetsProps): Loader {
+export function elekAssetsLoader<const T extends ElekConfig>(
+  props: ElekAssetsLoaderProps<T>
+): Loader {
+  assertElekConfig(props.config);
+  const alias = props.project;
+  const { id: projectId } = readDeclaration(props.config, alias);
+
   return {
     name: 'elek-assets',
     schema: assetSchema,
     load: async (context) => {
       const core = getCore();
-      await ensureProjectAvailable(core, props.projectId);
-      await logReadingProject(core, props.projectId, (message) =>
+      await ensureProjectAvailable(core, alias, projectId);
+      await logReadingProject(core, projectId, (message) =>
         context.logger.info(message)
       );
       context.logger.info(
-        `Loading elek.io Assets for Project "${props.projectId}", saving to "${props.outDir}"`
+        `Loading elek.io Assets of Project "${alias}", saving to "${props.outDir}"`
       );
 
       const { list: assets, total } = await core.assets.list({
-        projectId: props.projectId,
+        projectId,
         limit: 0,
       });
       if (total === 0) {
@@ -151,7 +177,7 @@ export function elekAssets(props: ElekAssetsProps): Loader {
 
         await Fs.ensureDir(Path.dirname(absoluteAssetFilePath));
         await core.assets.save({
-          projectId: props.projectId,
+          projectId,
           id: asset.id,
           filePath: absoluteAssetFilePath,
         });
@@ -180,36 +206,44 @@ export function elekAssets(props: ElekAssetsProps): Loader {
  * ```ts
  * // src/content.config.ts
  * import { defineCollection } from 'astro:content';
- * import { elekEntries } from '@elek-io/core/astro';
+ * import { elekEntriesLoader } from '@elek-io/core/astro';
+ * import { config } from '../elek.config';
  *
  * export const collections = {
- *   entries: defineCollection({
- *     loader: elekEntries({
- *       projectId: 'abc-123-...',
- *       collectionIdOrSlug: 'blog-posts',
+ *   posts: defineCollection({
+ *     loader: elekEntriesLoader({
+ *       config,
+ *       project: 'website',
+ *       collectionIdOrSlug: 'posts',
  *     }),
  *   });
  * };
  * ```
  */
-export function elekEntries(props: ElekEntriesOptions): Loader {
+export function elekEntriesLoader<const T extends ElekConfig>(
+  props: ElekEntriesLoaderProps<T>
+): Loader {
+  assertElekConfig(props.config);
+  const alias = props.project;
+  const { id: projectId } = readDeclaration(props.config, alias);
+
   return {
     name: 'elek-entries',
     createSchema: async () => {
       const core = getCore();
-      await ensureProjectAvailable(core, props.projectId);
+      await ensureProjectAvailable(core, alias, projectId);
       const resolvedId = await core.collections.resolveCollectionId({
-        projectId: props.projectId,
+        projectId,
         idOrSlug: props.collectionIdOrSlug,
       });
       const collection = await core.collections.read({
-        projectId: props.projectId,
+        projectId,
         id: resolvedId,
       });
-      const project = await core.projects.read({ id: props.projectId });
+      const project = await core.projects.read({ id: projectId });
       const languages = project.settings.language.supported;
       const { list: components } = await core.components.list({
-        projectId: props.projectId,
+        projectId,
         limit: 0,
       });
 
@@ -229,20 +263,20 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
     },
     load: async (context) => {
       const core = getCore();
-      await ensureProjectAvailable(core, props.projectId);
-      await logReadingProject(core, props.projectId, (message) =>
+      await ensureProjectAvailable(core, alias, projectId);
+      await logReadingProject(core, projectId, (message) =>
         context.logger.info(message)
       );
       const resolvedCollectionId = await core.collections.resolveCollectionId({
-        projectId: props.projectId,
+        projectId,
         idOrSlug: props.collectionIdOrSlug,
       });
       context.logger.info(
-        `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" and Project "${props.projectId}"`
+        `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" of Project "${alias}"`
       );
 
       const { list: entries, total } = await core.entries.list({
-        projectId: props.projectId,
+        projectId,
         collectionId: resolvedCollectionId,
         limit: 0,
       });
@@ -276,30 +310,11 @@ export function elekEntries(props: ElekEntriesOptions): Loader {
   };
 }
 
-interface ElekProjectProps {
-  /**
-   * ID of the Project to provision
-   */
-  id: string;
-  /**
-   * The remote repository URL to provision from
-   */
-  remoteUrl: string;
-  /**
-   * The content state to provision: a channel (`production`,
-   * `preview` or `draft`) or an exact Release version. The
-   * ELEK_IO_CHANNEL environment variable overrides this.
-   *
-   * @default 'production'
-   */
-  ref?: string;
-}
-
 interface ElekIntegrationProps {
   /**
-   * The Projects this site consumes
+   * The elek config, also imported by the content config
    */
-  projects: ElekProjectProps[];
+  config: ElekConfig;
   /**
    * Options for the short-lived Core the integration provisions with.
    * Prefer the ELEK_IO_* environment variables, which also reach the
@@ -309,10 +324,13 @@ interface ElekIntegrationProps {
 }
 
 /**
- * Astro integration that provisions the declared Projects from their
- * remotes before Astro's content sync runs, so the elekAssets and
- * elekEntries loaders find them in the data directory - also on CI
- * runners that start with an empty one.
+ * Astro integration that provisions every Project of the elek config
+ * from its remote before Astro's content sync runs, so the loaders
+ * find them in the data directory - also on CI runners that start
+ * with an empty one.
+ *
+ * Every declared Project needs a `remoteUrl`, there is nothing to
+ * provision from without one.
  *
  * Runs on its own short-lived read-only Core, so no User is required
  * and nothing is ever mutated. A locally existing Project managed by
@@ -325,22 +343,29 @@ interface ElekIntegrationProps {
  * // astro.config.mjs
  * import { defineConfig } from 'astro/config';
  * import { elek } from '@elek-io/core/astro';
+ * import { config } from './elek.config';
  *
  * export default defineConfig({
- *   integrations: [
- *     elek({
- *       projects: [
- *         {
- *           id: 'abc-123-...',
- *           remoteUrl: 'https://github.com/acme/website-content.git',
- *         },
- *       ],
- *     }),
- *   ],
+ *   integrations: [elek({ config })],
  * });
  * ```
  */
 export function elek(props: ElekIntegrationProps): AstroIntegration {
+  assertElekConfig(props.config);
+
+  // Resolved before the hook runs, so a Project without a remote fails
+  // while astro.config is read instead of midway through a build
+  const projects = Object.entries(props.config.projects).map(
+    ([alias, declaration]) => {
+      if (!declaration.remoteUrl) {
+        throw CoreError.badRequest(
+          `Project "${alias}" has no remoteUrl, which elek() needs to provision it. Add one to the declaration, or drop the Project from the config when it only ever comes from the local data directory.`
+        );
+      }
+      return { alias, ...declaration, remoteUrl: declaration.remoteUrl };
+    }
+  );
+
   return {
     name: 'elek',
     hooks: {
@@ -350,10 +375,10 @@ export function elek(props: ElekIntegrationProps): AstroIntegration {
         // both coordinate through the data directory and env vars only
         const core = new ElekIoCore({ ...props.core, isReadOnly: true });
         try {
-          for (const project of props.projects) {
+          for (const project of projects) {
             const ref = resolveContentRef(project.ref);
             logger.info(
-              `Provisioning Project "${project.id}" at "${ref}" from "${project.remoteUrl}"`
+              `Provisioning "${project.alias}" (Project ${project.id}) at "${ref}" from "${project.remoteUrl}"`
             );
             const result = await core.projects.provision({
               id: project.id,
@@ -366,7 +391,7 @@ export function elek(props: ElekIntegrationProps): AstroIntegration {
             const source =
               result.source === 'remote' ? '' : ` (${result.source})`;
             logger.info(
-              `Project "${result.project.name}" (${result.project.id}) is available at version ${result.project.version}${source}`
+              `Provisioned "${project.alias}": Project "${result.project.name}" (${result.project.id}) at version ${result.project.version}${source}`
             );
           }
         } finally {

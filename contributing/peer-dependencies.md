@@ -98,7 +98,7 @@ install it. The entry uses `astro/loaders` (the Content Layer `Loader` type) and
 (for rendering mdast to Astro JSX).
 
 The floor is 6.0.0, verified two ways. astro 6.0.0 added the `Loader.createSchema` method (returning
-`{ schema, types }`) that `elekEntries` uses (`src/index.astro.ts`), and it switched the Loader's
+`{ schema, types }`) that `elekEntriesLoader` uses (`src/index.astro.ts`), and it switched the Loader's
 schema typing from zod v3 to zod v4. Both are absent in every astro 5.x, so 5.x fails to type-check:
 `createSchema does not exist in type 'Loader'`, plus a zod v3 vs v4 schema mismatch on the `schema`
 field. `devDependencies` pins the latest 7.x for development, so the floor is spot-verified by

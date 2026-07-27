@@ -1,4 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  expectTypeOf,
+  it,
+} from 'vitest';
 import { sync } from 'astro';
 import Path from 'node:path';
 import Fs from 'fs-extra';
@@ -10,6 +17,13 @@ import {
   tmpDirPath,
 } from './test/util.js';
 import type { Asset, Collection, Project } from './index.node.js';
+import { CoreError } from './index.node.js';
+import {
+  defineElekConfig,
+  elekAssetsLoader,
+  elekEntriesLoader,
+  type ElekConfig,
+} from './index.astro.js';
 
 describe('Astro Loaders', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -51,18 +65,26 @@ describe('Astro Loaders', function () {
       Path.join(srcDir, 'content.config.ts'),
       `
 import { defineCollection } from 'astro:content';
-import { elekAssets, elekEntries } from '${loaderPath}';
+import { defineElekConfig, elekAssetsLoader, elekEntriesLoader } from '${loaderPath}';
+
+const config = defineElekConfig({
+  projects: {
+    website: { id: '${project.id}' },
+  },
+});
 
 export const collections = {
   assets: defineCollection({
-    loader: elekAssets({
-      projectId: '${project.id}',
+    loader: elekAssetsLoader({
+      config,
+      project: 'website',
       outDir: '${assetOutDir}',
     }),
   }),
   entries: defineCollection({
-    loader: elekEntries({
-      projectId: '${project.id}',
+    loader: elekEntriesLoader({
+      config,
+      project: 'website',
       collectionIdOrSlug: '${collection.id}',
     }),
   }),
@@ -114,5 +136,52 @@ export const collections = {
       expect(assetsJsonSchema.properties).toHaveProperty('id');
       expect(assetsJsonSchema.properties).toHaveProperty('extension');
     }
+  });
+
+  it('should throw NotFound listing the declared aliases for an unknown one', function () {
+    // The generic makes this a compile error for a config built with
+    // defineElekConfig, so this covers a hand-built one
+    const config: ElekConfig = { projects: { website: { id: project.id } } };
+
+    let error: unknown = null;
+    try {
+      elekEntriesLoader({
+        config,
+        project: 'shop',
+        collectionIdOrSlug: 'posts',
+      });
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeInstanceOf(CoreError);
+    expect(error instanceof CoreError && error.type).toEqual('NotFound');
+    expect(error instanceof CoreError && error.message).toContain('website');
+  });
+
+  it('should reject an invalid config the loaders receive', function () {
+    const config: ElekConfig = { projects: { website: { id: 'not-a-uuid' } } };
+
+    expect(() =>
+      elekAssetsLoader({ config, project: 'website', outDir: '.' })
+    ).toThrow(/invalid/i);
+  });
+
+  it('should accept only the declared aliases as project', function () {
+    const config = defineElekConfig({
+      projects: { website: { id: project.id }, shop: { id: project.id } },
+    });
+
+    expect(Object.keys(config.projects)).toEqual(['website', 'shop']);
+
+    type EntriesAlias = Parameters<
+      typeof elekEntriesLoader<typeof config>
+    >[0]['project'];
+    type AssetsAlias = Parameters<
+      typeof elekAssetsLoader<typeof config>
+    >[0]['project'];
+
+    expectTypeOf<EntriesAlias>().toEqualTypeOf<'website' | 'shop'>();
+    expectTypeOf<AssetsAlias>().toEqualTypeOf<'website' | 'shop'>();
   });
 });

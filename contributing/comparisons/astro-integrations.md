@@ -8,7 +8,7 @@ For the consumer-facing documentation of our integration, see [`docs/usage.md`](
 
 ## Summary at a glance
 
-- **elek.io Core** (`@elek-io/core/astro`) - Git-backed. The `elek()` integration provisions Projects from their remotes before content sync runs, the loaders then read from local disk. The only surveyed loader that supplies both a zod schema and generated TypeScript entry types from the content model. Content state is a real model: channels (`production`, `preview`, `draft`) plus exact version pins. Credentials are env-only. Gaps: configuration is repeated across three surfaces, collections are declared by hand, assets are not yet `astro:assets` native.
+- **elek.io Core** (`@elek-io/core/astro`) - Git-backed. The `elek()` integration provisions Projects from their remotes before content sync runs, the loaders then read from local disk. The only surveyed loader that supplies both a zod schema and generated TypeScript entry types from the content model. Content state is a real model: channels (`production`, `preview`, `draft`) plus exact version pins. Credentials are env-only and one `elek.config.ts` declares every Project the site consumes. Gaps: collections are declared by hand, assets are not yet `astro:assets` native.
 - **Storyblok** (`@storyblok/astro` v7) - API-based. One untyped collection for the whole space, the token appears in two files. Strong delta sync between builds and the richest visual editing story (bridge, live preview).
 - **Hygraph** (`@hygraph/hygraph-astro-loader`, beta) - Pure loader with zero `astro.config` footprint. The model is spelled three times (CMS, `fields` selection, hand-written zod). A neat `richText` option bridges CMS rich text into Astro's native `render()` pipeline.
 - **Sanity** (`@sanity/astro`) - No content-layer loader at all, pages fetch GROQ imperatively. The `sanity:client` virtual module is the cleanest single-declaration config pattern surveyed. Types require a separate codegen toolchain.
@@ -20,13 +20,13 @@ All tables put **elek.io Core first** so the reader scans rightward to see how e
 
 ### Setup and configuration
 
-| Dimension              | elek.io Core                                 | Storyblok                                                | Hygraph                         | Sanity                                           | Keystatic                                                     |
-| ---------------------- | -------------------------------------------- | -------------------------------------------------------- | ------------------------------- | ------------------------------------------------ | ------------------------------------------------------------- |
-| **Config surfaces**    | 3 (astro.config, content config, env)        | 3-4 (astro.config, content config, env, component files) | 2 (content config, env)         | 3-5 (astro.config, env.d.ts, sanity.config, env) | 2-3 (astro.config, keystatic.config, optional content config) |
-| **Integration needed** | For provisioning in CI                       | Yes                                                      | No (loader only)                | Yes                                              | Yes                                                           |
-| **Identity repeated**  | Project UUID in integration and every loader | Token in astro.config and loader                         | Endpoint in every collection    | projectId in astro.config and sanity.config      | Collection schema in two config languages                     |
-| **Credentials**        | Env only, never in a config file             | Token in two files via `loadEnv`                         | Endpoint option, token optional | `loadEnv` into astro.config                      | None locally, GitHub wizard writes `.env`                     |
-| **Content source**     | Local git copy, provisioned from the remote  | REST API                                                 | GraphQL API                     | GROQ API                                         | Files in the consumer's repo                                  |
+| Dimension              | elek.io Core                                      | Storyblok                                                | Hygraph                         | Sanity                                           | Keystatic                                                     |
+| ---------------------- | ------------------------------------------------- | -------------------------------------------------------- | ------------------------------- | ------------------------------------------------ | ------------------------------------------------------------- |
+| **Config surfaces**    | 2 (elek.config, env), imported by the other files | 3-4 (astro.config, content config, env, component files) | 2 (content config, env)         | 3-5 (astro.config, env.d.ts, sanity.config, env) | 2-3 (astro.config, keystatic.config, optional content config) |
+| **Integration needed** | For provisioning in CI                            | Yes                                                      | No (loader only)                | Yes                                              | Yes                                                           |
+| **Identity repeated**  | No, one declaration referenced by alias           | Token in astro.config and loader                         | Endpoint in every collection    | projectId in astro.config and sanity.config      | Collection schema in two config languages                     |
+| **Credentials**        | Env only, never in a config file                  | Token in two files via `loadEnv`                         | Endpoint option, token optional | `loadEnv` into astro.config                      | None locally, GitHub wizard writes `.env`                     |
+| **Content source**     | Local git copy, provisioned from the remote       | REST API                                                 | GraphQL API                     | GROQ API                                         | Files in the consumer's repo                                  |
 
 ### Collections and types
 
@@ -87,12 +87,12 @@ Where Core leads today:
 - **A real content state model.** Channels plus exact version pins, overridable deployment-wide through `ELEK_IO_CHANNEL`. Competitors select drafts with an env-conditional option value, and none can pin a content version for reproducible builds.
 - **Provisioning.** `elek()` fills an empty CI runner before content sync runs, read-only and without a User. A warm copy also survives an unreachable remote: an exact pin skips the network, any other ref warns and builds with what is on disk. API-based competitors do not have the problem, but they also cannot work offline, cannot pin, and pay per API call. Keystatic sidesteps it by living inside the consumer's repo, which couples content to the site repo in return.
 - **Credentials hygiene.** The token exists only as an env var and is handed to git per invocation. Storyblok and Sanity both document pasting tokens into astro.config via `loadEnv`.
+- **One declaration, checked by the compiler.** `elek.config.ts` names each Project once and both the integration and the loaders import it. Referencing a Project by an alias the config does not declare is a TypeScript error. Sanity's virtual module is the closest analog but carries a client rather than a checked identity, and Keystatic's single config file does not reach Astro's collections at all.
 - **Typed, exhaustive rich text rendering.** `mdastRender` makes an unhandled node type a compile error and forces a documented decision on the three unsafe node types. Every competitor's rich text mapping is stringly typed.
 - **Incrementality.** git transfers increments and the loaders skip unchanged entries via digests, structurally equivalent to Storyblok's headline delta sync.
 
 Where Core lags today:
 
-- **Configuration duplication.** The Project UUID appears in the integration and in every loader, and the integration and loaders coordinate only through the data directory and env vars. Sanity's virtual module and Keystatic's single config file both do better.
 - **Hand-written collection declarations.** One `defineCollection` block per Collection, like everyone else, but Core is the only platform positioned to derive them.
 - **Assets are not `astro:assets` native.** `absolutePath` does not optimize. Keystatic is the model here.
 - **Store keys are UUIDs.** Slug-based routing needs manual mapping in `getStaticPaths`. Most competitors key by slug or path.
@@ -101,7 +101,7 @@ Where Core lags today:
 
 Settled during the Astro DX exploration (branch `astro-dx`). Items marked **shipped** are implemented, the rest is still open:
 
-- A single `elek.config.ts` created with `defineElekConfig()`, explicitly imported by both `astro.config.mjs` and `content.config.ts`. No auto-discovery.
+- **Shipped.** A single `elek.config.ts` created with `defineElekConfig()`, explicitly imported by both `astro.config.mjs` and `content.config.ts`. No auto-discovery. Projects are referenced by a consumer-chosen alias, which the loaders accept as a literal type, so a typo is a compile error. `astro.config.mjs` importing a sibling `.ts` file through Astro's own config loading was the riskiest assumption of the design and is covered by a dedicated test.
 - `elekCollections()` derives all collections of the declared Projects. Keys are always alias-prefixed (`websitePosts`), in single-Project and multi-Project setups alike. The Assets collection is included by default (`websiteAssets`) with an opt-out.
 - The Astro store keeps one entry per elek.io Entry, keyed by its UUID. Slug values from a `slug` field stay language-keyed data on the entry rather than becoming per-language store entries, so UUID reference lookups keep working. The `slug` field type itself already exists in Core (see [`docs/fields.md`](../../docs/fields.md)), the open work is the Astro-side routing convenience on top of it.
 - **Shipped.** The per-loader `core` option is removed. Env vars own the loaders' Core configuration, the integration keeps its own option for the short-lived provisioning instance.

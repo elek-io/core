@@ -27,28 +27,34 @@ Afterwards the Project sits in the data directory like any locally created one. 
 
 ## Astro: the elek() integration
 
-For Astro sites, provisioning needs no pipeline step at all. Declare each Project in the `elek()` integration and `astro build` provisions before Astro's content sync runs:
+For Astro sites, provisioning needs no pipeline step at all. Declare each Project in `elek.config.ts`, hand that config to the `elek()` integration, and `astro build` provisions before Astro's content sync runs:
+
+```typescript
+// elek.config.ts
+import { defineElekConfig } from '@elek-io/core/astro';
+
+export const config = defineElekConfig({
+  projects: {
+    website: {
+      id: 'abc-123-...',
+      remoteUrl: 'https://github.com/acme/website-content.git',
+    },
+  },
+});
+```
 
 ```javascript
 // astro.config.mjs
 import { defineConfig } from 'astro/config';
 import { elek } from '@elek-io/core/astro';
+import { config } from './elek.config';
 
 export default defineConfig({
-  integrations: [
-    elek({
-      projects: [
-        {
-          id: 'abc-123-...',
-          remoteUrl: 'https://github.com/acme/website-content.git',
-        },
-      ],
-    }),
-  ],
+  integrations: [elek({ config })],
 });
 ```
 
-Your `content.config.ts` with the `elekAssets` and `elekEntries` loaders stays exactly as it is, see [`usage.md`](./usage.md#astro-integration). On your own machine, where the Project is managed by the Desktop app, the integration detects that and leaves the copy untouched, so `astro dev` keeps reading your live drafts. Without the integration, a build on an empty runner fails with an error pointing here.
+Your `content.config.ts` imports the same config and references each Project by its alias, see [`usage.md`](./usage.md#astro-integration). On your own machine, where the Project is managed by the Desktop app, the integration detects that and leaves the copy untouched, so `astro dev` keeps reading your live drafts. Without the integration, a build on an empty runner fails with an error pointing here.
 
 ## Authentication for private remotes
 

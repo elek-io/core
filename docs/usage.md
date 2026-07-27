@@ -302,53 +302,72 @@ Generated clients and types narrow translatable content to the Project's languag
 
 `@elek-io/core/astro` exports content loaders that pull Project data into Astro's content collections, plus `mdastRender` for rendering `markdown` Values. It adds `astro` (`^6.0.0 || ^7.0.0`) as an optional peer dependency, which your Astro project already provides.
 
+An Astro site declares the Projects it consumes once and imports that declaration wherever it is needed, so a Project id is written a single time.
+
+```typescript
+// elek.config.ts
+import { defineElekConfig } from '@elek-io/core/astro';
+
+export const config = defineElekConfig({
+  projects: {
+    website: {
+      id: 'abc-123-...',
+      remoteUrl: 'https://github.com/acme/website-content.git',
+    },
+  },
+});
+```
+
+Every Project gets an alias you choose (`website` above). The alias is what you reference everywhere else, it must start with a lowercase letter and continue with letters or digits. `defineElekConfig` validates the declaration right away, so a malformed id or a mistyped key fails where you wrote it rather than somewhere in the build.
+
+Both other files import that config:
+
+```javascript
+// astro.config.mjs
+import { defineConfig } from 'astro/config';
+import { elek } from '@elek-io/core/astro';
+import { config } from './elek.config';
+
+export default defineConfig({
+  integrations: [elek({ config })],
+});
+```
+
 ```typescript
 // src/content.config.ts
 import { defineCollection } from 'astro:content';
-import { elekAssets, elekEntries } from '@elek-io/core/astro';
+import { elekAssetsLoader, elekEntriesLoader } from '@elek-io/core/astro';
+import { config } from '../elek.config';
 
 export const collections = {
   assets: defineCollection({
-    loader: elekAssets({
-      projectId: 'abc-123-...',
+    loader: elekAssetsLoader({
+      config,
+      project: 'website',
       outDir: './src/content/assets',
     }),
   }),
   products: defineCollection({
-    loader: elekEntries({
-      projectId: 'abc-123-...',
+    loader: elekEntriesLoader({
+      config,
+      project: 'website',
       collectionIdOrSlug: 'products',
     }),
   }),
 };
 ```
 
+The `project` of a loader accepts only the aliases the config declares, so a typo is a TypeScript error rather than a failing build. Nothing discovers `elek.config.ts` automatically, the filename is a convention and the imports are what connect the three files. Put it wherever you like as long as both sides can import it.
+
 All loaders share one Core instance, configured through the `ELEK_IO_*` environment variables of the build. Set `ELEK_IO_DATA_DIR` to read from a data directory other than `~/elek.io`, `ELEK_IO_CHANNEL` to switch the content state deployment-wide and `ELEK_IO_REMOTE_ACCESS_TOKEN` to authenticate against a private remote. See [Environment variables](#environment-variables) for the full list.
 
 ### Provisioning in CI with elek()
 
-The loaders read from the local data directory, which is empty on a CI runner. The `elek()` integration fills it: declare each Project with its remote URL and the integration provisions it before Astro's content sync runs.
+The loaders read from the local data directory, which is empty on a CI runner. The `elek()` integration fills it: it provisions every Project of the config from its remote before Astro's content sync runs.
 
-```javascript
-// astro.config.mjs
-import { defineConfig } from 'astro/config';
-import { elek } from '@elek-io/core/astro';
+Each declaration takes an optional `ref`: a channel (`production`, `preview` or `draft`, default `production`) or an exact Release version, overridden by the `ELEK_IO_CHANNEL` environment variable, which accepts channels only. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`. The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated. A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content. Without the integration, a missing Project fails the build with an error pointing here. The underlying behavior is documented in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
 
-export default defineConfig({
-  integrations: [
-    elek({
-      projects: [
-        {
-          id: 'abc-123-...',
-          remoteUrl: 'https://github.com/acme/website-content.git',
-        },
-      ],
-    }),
-  ],
-});
-```
-
-Each Project takes an optional `ref`: a channel (`production`, `preview` or `draft`, default `production`) or an exact Release version, overridden by the `ELEK_IO_CHANNEL` environment variable, which accepts channels only. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`. The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated. A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content. Without the integration, a missing Project fails the build with an error pointing here. The underlying behavior is documented in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
+`elek()` needs a `remoteUrl` per declared Project and fails naming the alias when one is missing. A Project that only ever comes from the local data directory, for example one the Desktop app manages, is declared without a `remoteUrl` and read by the loaders alone. Such a site needs no integration at all.
 
 Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (production)`.
 

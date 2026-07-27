@@ -5,13 +5,14 @@ import Path from 'node:path';
 import Fs from 'fs-extra';
 import { seedRemoteWithRelease, tmpDirPath } from './test/util.js';
 import core, { uuid } from './test/setup.js';
-import { elek } from './index.astro.js';
+import { defineElekConfig, elek, type ElekConfig } from './index.astro.js';
 
 describe('Astro elek() integration', function () {
   let seed: Awaited<ReturnType<typeof seedRemoteWithRelease>>;
   let remotePath: string;
   let astroRoot: string;
   let assetOutDir: string;
+  let config: ElekConfig;
 
   beforeAll(async function () {
     seed = await seedRemoteWithRelease();
@@ -32,22 +33,34 @@ describe('Astro elek() integration', function () {
     const loaderPath = Path.resolve('src/index.astro.ts').replaceAll('\\', '/');
     assetOutDir = Path.join(srcDir, 'content', 'assets').replaceAll('\\', '/');
 
+    config = defineElekConfig({
+      projects: { website: { id: seed.projectId, remoteUrl: remotePath } },
+    });
+
     await Fs.writeFile(
       Path.join(srcDir, 'content.config.ts'),
       `
 import { defineCollection } from 'astro:content';
-import { elekAssets, elekEntries } from '${loaderPath}';
+import { defineElekConfig, elekAssetsLoader, elekEntriesLoader } from '${loaderPath}';
+
+const config = defineElekConfig({
+  projects: {
+    website: { id: '${seed.projectId}' },
+  },
+});
 
 export const collections = {
   assets: defineCollection({
-    loader: elekAssets({
-      projectId: '${seed.projectId}',
+    loader: elekAssetsLoader({
+      config,
+      project: 'website',
       outDir: '${assetOutDir}',
     }),
   }),
   entries: defineCollection({
-    loader: elekEntries({
-      projectId: '${seed.projectId}',
+    loader: elekEntriesLoader({
+      config,
+      project: 'website',
       collectionIdOrSlug: '${seed.collectionId}',
     }),
   }),
@@ -66,11 +79,7 @@ export const collections = {
       root: astroRoot,
       configFile: false,
       logLevel: 'info',
-      integrations: [
-        elek({
-          projects: [{ id: seed.projectId, remoteUrl: remotePath }],
-        }),
-      ],
+      integrations: [elek({ config })],
     });
 
     // The integration provisioned the Project into the data directory
@@ -99,11 +108,7 @@ export const collections = {
       root: astroRoot,
       configFile: false,
       logLevel: 'info',
-      integrations: [
-        elek({
-          projects: [{ id: seed.projectId, remoteUrl: remotePath }],
-        }),
-      ],
+      integrations: [elek({ config })],
     });
 
     expect(
@@ -122,11 +127,7 @@ export const collections = {
         root: astroRoot,
         configFile: false,
         logLevel: 'info',
-        integrations: [
-          elek({
-            projects: [{ id: seed.projectId, remoteUrl: remotePath }],
-          }),
-        ],
+        integrations: [elek({ config })],
       });
     } finally {
       await Fs.move(hiddenRemotePath, remotePath);
@@ -157,12 +158,19 @@ export const collections = {
       Path.join(srcDir, 'content.config.ts'),
       `
 import { defineCollection } from 'astro:content';
-import { elekEntries } from '${loaderPath}';
+import { defineElekConfig, elekEntriesLoader } from '${loaderPath}';
+
+const config = defineElekConfig({
+  projects: {
+    website: { id: '${missingId}' },
+  },
+});
 
 export const collections = {
   entries: defineCollection({
-    loader: elekEntries({
-      projectId: '${missingId}',
+    loader: elekEntriesLoader({
+      config,
+      project: 'website',
       collectionIdOrSlug: 'anything',
     }),
   }),
@@ -174,4 +182,12 @@ export const collections = {
       sync({ root, configFile: false, logLevel: 'error' })
     ).rejects.toThrow(/elek\(\)|data directory/);
   }, 120000);
+
+  it('should reject a declared Project without a remoteUrl', function () {
+    const withoutRemote: ElekConfig = {
+      projects: { website: { id: seed.projectId } },
+    };
+
+    expect(() => elek({ config: withoutRemote })).toThrow(/remoteUrl/);
+  });
 });

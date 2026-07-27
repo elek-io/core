@@ -49,7 +49,7 @@ The package provides multiple entry points for different environments:
 
 - **Node** (`@elek-io/core`) - The `ElekIoCore` main class with full access to services, API, schemas and utilities.
 - **Browser** (`@elek-io/core`) - All schemas and types but without the `ElekIoCore` class, since it is not usable in a browser environment.
-- **Astro** (`@elek-io/core/astro`) - Astro content loaders `elekAssets()` and `elekEntries()` for loading Project data into Astro.
+- **Astro** (`@elek-io/core/astro`) - Astro content loaders `elekAssetsLoader()` and `elekEntriesLoader()` for loading Project data into Astro, declared once with `defineElekConfig()`.
 - **CLI** (`elek`) - A command-line interface with commands for generating API clients, generating TypeScript types, starting a local API and exporting Projects.
 
 The Node, Browser and Astro entry points re-export zod's `z`, so in your own code you
