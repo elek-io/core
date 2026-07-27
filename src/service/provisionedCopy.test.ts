@@ -154,6 +154,30 @@ describe('Provisioned copy', function () {
     );
   });
 
+  it('should reject a direct git tag into a provisioned copy', async function () {
+    await expectProvisionedError(
+      core.git.tags.create({
+        path: core.util.pathTo.project(seed.projectId),
+        message: { type: 'release', version: '99.0.0' },
+      })
+    );
+  });
+
+  it('should reject a direct git push from a provisioned copy', async function () {
+    await expectProvisionedError(
+      core.git.push(core.util.pathTo.project(seed.projectId))
+    );
+  });
+
+  it('should reject switching branches on a provisioned copy', async function () {
+    await expectProvisionedError(
+      core.projects.branches.switch({
+        id: seed.projectId,
+        branch: 'work',
+      })
+    );
+  });
+
   it('should delete a provisioned copy without force', async function () {
     await core.projects.delete({ id: seed.projectId });
 

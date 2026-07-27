@@ -153,6 +153,15 @@ describe('Read-only mode', function () {
     );
   });
 
+  it('should reject a direct git tag', async function () {
+    await expectReadOnlyError(
+      readOnlyCore.git.tags.create({
+        path: readOnlyCore.util.pathTo.project(project.id),
+        message: { type: 'release', version: '1.0.0' },
+      })
+    );
+  });
+
   it('should allow read operations', async function () {
     const { total } = await readOnlyCore.collections.list({
       projectId: project.id,

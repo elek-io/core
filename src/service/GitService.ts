@@ -851,6 +851,14 @@ export class GitService {
       );
     }
 
+    // Backstop for callers that bypass the service layer. The services
+    // guard earlier through assertNotProvisioned.
+    if (await Fs.pathExists(Path.join(path, PROVISIONED_MARKER))) {
+      throw CoreError.preconditionFailed(
+        `Cannot push because "${path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+      );
+    }
+
     if (options?.all === true && options?.refs) {
       throw CoreError.badRequest(
         'The "all" and "refs" push options are mutually exclusive'

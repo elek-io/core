@@ -173,27 +173,33 @@ export class ProjectService
    */
   public clone(props: CloneProjectProps): Promise<Project> {
     return this.validated('clone', cloneProjectSchema, props, async () => {
-      const tmpId = uuid();
-      const tmpProjectPath = Path.join(this.pathTo.tmp, tmpId);
+      const tmpProjectPath = Path.join(this.pathTo.tmp, uuid());
 
-      await this.gitService.clone(props.url, tmpProjectPath);
-      const projectFile = await this.jsonFileService.read(
-        Path.join(tmpProjectPath, 'project.json'),
-        projectFileSchema
-      );
-
-      const projectPath = this.pathTo.project(projectFile.id);
-      const alreadyExists = await Fs.pathExists(projectPath);
-
-      if (alreadyExists) {
-        throw CoreError.conflict(
-          `Tried to clone Project "${projectFile.id}" from "${props.url}" - but the Project already exists locally`
+      try {
+        await this.gitService.clone(props.url, tmpProjectPath);
+        const projectFile = await this.jsonFileService.read(
+          Path.join(tmpProjectPath, 'project.json'),
+          projectFileSchema
         );
-      }
 
-      await Fs.copy(tmpProjectPath, projectPath);
-      await Fs.remove(tmpProjectPath);
-      return await this.toProject(projectFile);
+        const projectPath = this.pathTo.project(projectFile.id);
+        const alreadyExists = await Fs.pathExists(projectPath);
+
+        if (alreadyExists) {
+          throw CoreError.conflict(
+            `Tried to clone Project "${projectFile.id}" from "${props.url}" - but the Project already exists locally`
+          );
+        }
+
+        await Fs.move(tmpProjectPath, projectPath);
+        // The clone changed location, cached reads must not serve
+        // its tmp paths
+        this.jsonFileService.clearCache();
+        return await this.toProject(projectFile);
+      } catch (error) {
+        await Fs.remove(tmpProjectPath);
+        throw error;
+      }
     });
   }
 
@@ -833,6 +839,8 @@ export class ProjectService
         switchBranchProjectSchema,
         props,
         async () => {
+          await this.assertNotProvisioned('switch branches', props.id);
+
           const projectPath = this.pathTo.project(props.id);
           return await this.gitService.branches.switch(
             projectPath,

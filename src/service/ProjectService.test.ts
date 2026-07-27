@@ -314,10 +314,14 @@ describe('ProjectService', function () {
     await ensureCleanGitStatus(task, clonedProject.id);
   });
 
-  it('should fail when trying to clone a Project twice', async function () {
+  it('should fail when trying to clone a Project twice and clean up the staged clone', async function () {
+    const tmpEntriesBefore = await Fs.readdir(core.util.pathTo.tmp);
+
     await expect(
       core.projects.clone({ url: remoteProjectPath })
     ).rejects.toThrow();
+
+    expect(await Fs.readdir(core.util.pathTo.tmp)).toEqual(tmpEntriesBefore);
   });
 
   it('should be able to delete the cloned Project locally', async function () {
