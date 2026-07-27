@@ -22,7 +22,7 @@ It is also the established pattern in Core's ecosystem. VS Code's built-in git e
 
 Desktop moved its HTTPS flow from askpass to the credential helper protocol because askpass cannot express "no credentials available". An empty askpass answer makes git authenticate with literal empty strings, while a silent credential helper makes git fail cleanly. That ambiguity matters for an interactive app that must tell a cancelled prompt apart from a wrong password. Core never hits it, the askpass helper is only installed while a token exists, so askpass stays the simpler fit. Desktop's wiring ([`trampoline-environment.ts`](https://github.com/desktop/desktop/blob/development/app/src/lib/trampoline/trampoline-environment.ts)) also confirms two Core decisions independently: it injects git config by environment variable instead of `-c` arguments so that git-lfs filter processes inherit it, and it resets the credential helper list with an empty entry before adding its own.
 
-The mechanism covers HTTPS remotes. SSH remotes authenticate through keys outside of Core.
+The mechanism covers HTTP(S) remotes. SSH remotes are supported too but authenticate through the ambient SSH setup outside of Core, like keys loaded into ssh-agent. `classifyAuthError` tells the two transports apart (including dugite's `SSHPermissionDenied` for the common `Permission denied (publickey)` case) and names the SSH setup instead of the token for SSH failures.
 
 ## Alternatives considered
 

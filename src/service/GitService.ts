@@ -85,17 +85,29 @@ export function buildCredentialEnv(
 
 /**
  * Classifies an authentication failure from git's stderr, so a bad or
- * missing token surfaces as a typed `Unauthorized` naming the fix
+ * missing credential surfaces as a typed `Unauthorized` naming the fix
  * instead of raw git output. Returns null for everything else.
+ *
+ * SSH remotes authenticate through keys, not the token, so their
+ * failures name the SSH setup instead of the token env vars.
  */
 export function classifyAuthError(
   stderr: string,
   hasToken: boolean
 ): CoreError | null {
   const parsed = parseError(stderr);
+
+  if (
+    parsed === GitError.SSHAuthenticationFailed ||
+    parsed === GitError.SSHPermissionDenied
+  ) {
+    return CoreError.unauthorized(
+      'The remote rejected SSH authentication. Provide a valid SSH key, for example through ssh-agent. ELEK_IO_REMOTE_ACCESS_TOKEN only applies to HTTP(S) remotes.'
+    );
+  }
+
   const isAuthError =
     parsed === GitError.HTTPSAuthenticationFailed ||
-    parsed === GitError.SSHAuthenticationFailed ||
     // Prompts are disabled, so git fails to read credentials it would
     // otherwise ask for. dugite does not classify this case.
     /could not read (Username|Password) for/i.test(stderr) ||

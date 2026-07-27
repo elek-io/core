@@ -54,6 +54,8 @@ Your `content.config.ts` with the `elekAssets` and `elekEntries` loaders stays e
 
 Set the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable to a read token for the content repository (for example a GitHub fine-grained PAT with contents read access, or a GitLab project access token). The token is handed to git per invocation and never written into URLs, logs or config. Some providers expect a specific username alongside the token, set `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` then, it defaults to `x-access-token`. A public remote needs no token at all.
 
+SSH remote URLs work as well. They authenticate through the runner's ambient SSH setup, for example a deploy key loaded into ssh-agent, the token does not apply to SSH.
+
 ## GitHub Actions
 
 An Astro site, where the integration provisions on its own:
@@ -134,7 +136,7 @@ Because every provision run overwrites the copy, a provisioned copy is read-only
 
 - **First thing to try: delete the CI cache.** A cached data directory in a broken state is the most common cause of repeated failures, and provisioning rebuilds it from scratch.
 - **"No Release has been published yet"**: the Project has never released. Publish a Release in the Desktop app, or consume the `preview` or `draft` channel instead.
-- **`Unauthorized`**: the remote requires authentication or rejected the token. Check `ELEK_IO_REMOTE_ACCESS_TOKEN`, and whether your git host expects a specific `ELEK_IO_REMOTE_ACCESS_TOKEN_USER`.
+- **`Unauthorized`**: the remote requires authentication or rejected the token. Check `ELEK_IO_REMOTE_ACCESS_TOKEN`, and whether your git host expects a specific `ELEK_IO_REMOTE_ACCESS_TOKEN_USER`. For an SSH remote, check the SSH key setup instead, the error message says which of the two applies.
 - **"No Release with version ..."**: the pinned version does not exist on the remote. The error lists the available versions.
 - **`VersionSkew`**: the content was written by a newer Core than the pipeline uses. Update the `@elek-io/core` dependency to at least the version named in the error.
 - **Project not found, pointing at `elek()`**: the Astro loaders ran without the Project being present. Add the integration, or make sure `ELEK_IO_DATA_DIR` points at the directory that holds it.

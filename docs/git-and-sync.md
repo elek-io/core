@@ -128,7 +128,7 @@ An unknown version throws `NotFound` listing the available versions. Provisionin
 
 **Provisioned copies are read-only for everyone.** Every `Project` carries a computed `isProvisioned` boolean, so applications like the Desktop app can recognize and label a provisioned copy. Any operation that would mutate one - content create, update or delete, synchronizing, setting a remote, switching branches, releasing, upgrading - throws a `CoreError` of type `PreconditionFailed`, also on a writable Core. Without this guard, edits would be silently destroyed by the next provision run. The git layer backstops callers that bypass the services: a direct `git.commit`, `git.tags.create` or `git.push` against a provisioned copy throws the same error. The escape hatch is `projects.delete()`, which removes a provisioned copy without any unpushed-changes check (it is disposable by definition), after which the Project can be cloned as a working copy.
 
-Private remotes authenticate through the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable, see [`usage.md`](./usage.md#environment-variables). The token is passed to git per invocation and never written into a URL or the repository config.
+Private remotes authenticate through the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable, see [`usage.md`](./usage.md#environment-variables). The token is passed to git per invocation and never written into a URL or the repository config. The token applies to HTTP(S) remotes. SSH remotes authenticate through the ambient SSH setup instead, for example keys loaded into ssh-agent, and an SSH failure raises an `Unauthorized` error naming the SSH setup rather than the token.
 
 ## Git LFS
 

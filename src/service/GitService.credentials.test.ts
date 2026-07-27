@@ -72,4 +72,25 @@ describe('classifyAuthError', function () {
     expect(error?.type).toEqual('Unauthorized');
     expect(error?.message).toContain('Set the ELEK_IO_REMOTE_ACCESS_TOKEN');
   });
+
+  it('classifies a rejected SSH key as Unauthorized naming SSH, not the token', function () {
+    const error = classifyAuthError(
+      'git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.',
+      false
+    );
+
+    expect(error).toBeInstanceOf(CoreError);
+    expect(error?.type).toEqual('Unauthorized');
+    expect(error?.message).toContain('SSH');
+    expect(error?.message).not.toContain('Set the ELEK_IO_REMOTE_ACCESS_TOKEN');
+  });
+
+  it('does not point an SSH failure at the token even when one is set', function () {
+    const error = classifyAuthError('fatal: Authentication failed', true);
+
+    expect(error).toBeInstanceOf(CoreError);
+    expect(error?.type).toEqual('Unauthorized');
+    expect(error?.message).toContain('SSH');
+    expect(error?.message).not.toContain('Check ELEK_IO_REMOTE_ACCESS_TOKEN');
+  });
 });
