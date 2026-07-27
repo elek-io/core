@@ -335,29 +335,54 @@ export default defineConfig({
 
 ```typescript
 // src/content.config.ts
-import { defineCollection } from 'astro:content';
-import { elekAssetsLoader, elekEntriesLoader } from '@elek-io/core/astro';
+import { elekCollections } from '@elek-io/core/astro';
 import { config } from '../elek.config';
 
 export const collections = {
-  assets: defineCollection({
-    loader: elekAssetsLoader({
-      config,
-      project: 'website',
-      outDir: './src/content/assets',
-    }),
-  }),
-  products: defineCollection({
+  ...(await elekCollections(config)),
+};
+```
+
+`elekCollections()` reads the content model of every declared Project and derives one Astro collection per elek.io Collection, plus one for the Project's Assets. A Project aliased `website` with a `products` and a `blog-posts` Collection produces `websiteProducts`, `websiteBlogPosts` and `websiteAssets`, which is what `getCollection('websiteProducts')` then expects. Keys are always alias-prefixed, also when a single Project is declared, so adding a second Project later never renames the first one's collections. Two Collections that would derive the same key fail the build naming both sides rather than one silently winning.
+
+Nothing discovers `elek.config.ts` automatically, the filename is a convention and the imports are what connect the three files. Put it wherever you like as long as both sides can import it.
+
+### Declaring collections explicitly
+
+`elekCollections()` returns a plain object, so individual collections can be added next to it, and the loaders behind it are exported for when you want to name a collection yourself or expose only part of a Project:
+
+```typescript
+// src/content.config.ts
+import { defineCollection } from 'astro:content';
+import { elekCollections, elekEntriesLoader } from '@elek-io/core/astro';
+import { config } from '../elek.config';
+
+export const collections = {
+  ...(await elekCollections(config, { assets: false })),
+  posts: defineCollection({
     loader: elekEntriesLoader({
       config,
       project: 'website',
-      collectionIdOrSlug: 'products',
+      collectionIdOrSlug: 'blog-posts',
     }),
   }),
 };
 ```
 
-The `project` of a loader accepts only the aliases the config declares, so a typo is a TypeScript error rather than a failing build. Nothing discovers `elek.config.ts` automatically, the filename is a convention and the imports are what connect the three files. Put it wherever you like as long as both sides can import it.
+The `project` of a loader and the aliases in `elekCollections()`'s options accept only the aliases the config declares, so a typo is a TypeScript error rather than a failing build.
+
+### Where Asset binaries are saved
+
+The Assets collection of a Project downloads its binaries to `src/content/elek/<alias>/assets`, below `src/` so Astro can process them. Override it per Project with `elekCollections(config, { assets: { website: { outDir: './public/media' } } })`, or drop the Assets collection entirely with `{ assets: false }` for every Project or `{ assets: { website: false } }` for one. A relative `outDir` resolves against the Astro project root.
+
+These binaries are derived from the Project, so they do not belong in your site's repository:
+
+```
+# .gitignore
+src/content/elek/
+```
+
+This is the only entry the integration needs. Everything else it produces goes through Astro's content store, which lives in `.astro` during development and in `node_modules/.astro` during a build, both of which a standard Astro `.gitignore` already covers.
 
 All loaders share one Core instance, configured through the `ELEK_IO_*` environment variables of the build. Set `ELEK_IO_DATA_DIR` to read from a data directory other than `~/elek.io`, `ELEK_IO_CHANNEL` to switch the content state deployment-wide and `ELEK_IO_REMOTE_ACCESS_TOKEN` to authenticate against a private remote. See [Environment variables](#environment-variables) for the full list.
 

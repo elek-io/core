@@ -8,7 +8,7 @@ For the consumer-facing documentation of our integration, see [`docs/usage.md`](
 
 ## Summary at a glance
 
-- **elek.io Core** (`@elek-io/core/astro`) - Git-backed. The `elek()` integration provisions Projects from their remotes before content sync runs, the loaders then read from local disk. The only surveyed loader that supplies both a zod schema and generated TypeScript entry types from the content model. Content state is a real model: channels (`production`, `preview`, `draft`) plus exact version pins. Credentials are env-only and one `elek.config.ts` declares every Project the site consumes. Gaps: collections are declared by hand, assets are not yet `astro:assets` native.
+- **elek.io Core** (`@elek-io/core/astro`) - Git-backed. The `elek()` integration provisions Projects from their remotes before content sync runs, the loaders then read from local disk. The only surveyed loader that supplies both a zod schema and generated TypeScript entry types from the content model. Content state is a real model: channels (`production`, `preview`, `draft`) plus exact version pins. Credentials are env-only, one `elek.config.ts` declares every Project the site consumes and the collections are derived from the content model. Gap: assets are not yet `astro:assets` native.
 - **Storyblok** (`@storyblok/astro` v7) - API-based. One untyped collection for the whole space, the token appears in two files. Strong delta sync between builds and the richest visual editing story (bridge, live preview).
 - **Hygraph** (`@hygraph/hygraph-astro-loader`, beta) - Pure loader with zero `astro.config` footprint. The model is spelled three times (CMS, `fields` selection, hand-written zod). A neat `richText` option bridges CMS rich text into Astro's native `render()` pipeline.
 - **Sanity** (`@sanity/astro`) - No content-layer loader at all, pages fetch GROQ imperatively. The `sanity:client` virtual module is the cleanest single-declaration config pattern surveyed. Types require a separate codegen toolchain.
@@ -32,13 +32,13 @@ All tables put **elek.io Core first** so the reader scans rightward to see how e
 
 | Dimension                  | elek.io Core                                  | Storyblok                     | Hygraph                              | Sanity                   | Keystatic                                     |
 | -------------------------- | --------------------------------------------- | ----------------------------- | ------------------------------------ | ------------------------ | --------------------------------------------- |
-| **Collection granularity** | One per elek.io Collection, declared by hand  | Whole space in one collection | One per model, declared by hand      | No collections           | One per Keystatic collection, declared twice  |
+| **Collection granularity** | One per elek.io Collection, derived           | Whole space in one collection | One per model, declared by hand      | No collections           | One per Keystatic collection, declared twice  |
 | **Schema source**          | Loader-supplied, built from field definitions | None                          | Hand-written zod                     | None                     | Hand-written zod copy of the Keystatic schema |
 | **TypeScript types**       | Generated per Collection via `createSchema`   | None (`ISbStoryData` cast)    | zod inference from the manual schema | Separate TypeGen codegen | `Entry<typeof config>` inference (Reader API) |
-| **Derived from CMS model** | Not yet (decided direction, see below)        | No                            | No                                   | No                       | No                                            |
+| **Derived from CMS model** | Yes, `elekCollections()` enumerates them      | No                            | No                                   | No                       | No                                            |
 | **Store keys**             | Entry UUID                                    | `full_slug`                   | id                                   | Not applicable           | File slug                                     |
 
-No surveyed provider derives collections or schemas from the CMS content model, and none besides Core uses the content layer's ability for a loader to supply the schema itself. Core can occupy that niche because the full content model sits on local disk at load time, while API-based competitors would need an extra introspection round trip.
+No other surveyed provider derives collections or schemas from the CMS content model, and none besides Core uses the content layer's ability for a loader to supply the schema itself. Core can occupy that niche because the full content model sits on local disk at load time, while API-based competitors would need an extra introspection round trip.
 
 ### Content state and builds
 
@@ -55,7 +55,7 @@ No surveyed provider derives collections or schemas from the CMS content model, 
 
 | Dimension                | elek.io Core                                             | Storyblok                                        | Hygraph                                  | Sanity                                  | Keystatic                             |
 | ------------------------ | -------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------- | --------------------------------------- | ------------------------------------- |
-| **Binaries**             | Downloaded locally to `outDir`                           | CDN URLs                                         | CDN URLs                                 | CDN URLs plus URL builder               | Stored in the repo                    |
+| **Binaries**             | Downloaded locally, by default below `src/`              | CDN URLs                                         | CDN URLs                                 | CDN URLs plus URL builder               | Stored in the repo                    |
 | **`astro:assets`**       | Not yet, loader exposes `absolutePath`                   | --                                               | --                                       | -- (community package)                  | Yes, `image()` helper composes        |
 | **Rich text shape**      | mdast tree with first-class reference nodes              | Storyblok rich text JSON                         | HTML or AST                              | Portable Text JSON                      | Real Markdoc/MDX files                |
 | **Rendering**            | `mdastRender`, typed and exhaustive, 3 required handlers | `renderRichText` to HTML, or components registry | `richText` option into native `render()` | Community `astro-portabletext` mappings | Native Astro pipeline (`<Content />`) |
@@ -68,7 +68,7 @@ These Astro 6 facts shape what every integration in this comparison can and cann
 - **Integrations cannot inject content collections.** There is no API for it and the roadmap proposal was closed in favor of the content layer without one materializing. Even Starlight, Astro's own docs integration, instructs users to hand-write `src/content.config.ts`. Every provider therefore needs a user-owned content config, and single-declaration DX must come from a shared file or module both sides import.
 - **`astro:config:setup` runs before content sync** in dev and build, so an integration can reliably prepare state (like a provisioned Project) that loaders depend on. It also re-runs on every dev restart and config change.
 - **Loader-supplied schemas and types go through `createSchema()`**, which returns `{ schema, types }` and is new in Astro 6 (schema-as-function was removed). Core already uses it.
-- **Local images reach `astro:assets` through `DataEntry.filePath`** plus paths relative to it, or through `emitImageMetadata()` from `astro/assets/utils`. Absolute path strings do neither, they degrade to untransformed public paths.
+- **Local images reach `astro:assets` through `DataEntry.filePath`** plus paths relative to it, or through `emitImageMetadata()` from `astro/assets/utils/node`. Absolute path strings do neither, they degrade to untransformed public paths.
 - **The content layer store persists** at `.astro/data-store.json` in dev and `node_modules/.astro/data-store.json` in build, and loaders own their incrementality via digests.
 - **Live content collections are stable in Astro 6** but SSR-only with no store and no image optimization, a possible future dev-mode drafts story rather than a build-time tool.
 
@@ -93,7 +93,6 @@ Where Core leads today:
 
 Where Core lags today:
 
-- **Hand-written collection declarations.** One `defineCollection` block per Collection, like everyone else, but Core is the only platform positioned to derive them.
 - **Assets are not `astro:assets` native.** `absolutePath` does not optimize. Keystatic is the model here.
 - **Store keys are UUIDs.** Slug-based routing needs manual mapping in `getStaticPaths`. Most competitors key by slug or path.
 
@@ -102,7 +101,7 @@ Where Core lags today:
 Settled during the Astro DX exploration (branch `astro-dx`). Items marked **shipped** are implemented, the rest is still open:
 
 - **Shipped.** A single `elek.config.ts` created with `defineElekConfig()`, explicitly imported by both `astro.config.mjs` and `content.config.ts`. No auto-discovery. Projects are referenced by a consumer-chosen alias, which the loaders accept as a literal type, so a typo is a compile error. `astro.config.mjs` importing a sibling `.ts` file through Astro's own config loading was the riskiest assumption of the design and is covered by a dedicated test.
-- `elekCollections()` derives all collections of the declared Projects. Keys are always alias-prefixed (`websitePosts`), in single-Project and multi-Project setups alike. The Assets collection is included by default (`websiteAssets`) with an opt-out.
+- **Shipped.** `elekCollections()` derives all collections of the declared Projects. Keys are always alias-prefixed (`websitePosts`), in single-Project and multi-Project setups alike. The Assets collection is included by default (`websiteAssets`) with an opt-out, and its binaries default to `src/content/elek/<alias>/assets` so `astro:assets` can reach them. Colliding keys throw naming both sides, see [`../astro-entry.md`](../astro-entry.md).
 - The Astro store keeps one entry per elek.io Entry, keyed by its UUID. Slug values from a `slug` field stay language-keyed data on the entry rather than becoming per-language store entries, so UUID reference lookups keep working. The `slug` field type itself already exists in Core (see [`docs/fields.md`](../../docs/fields.md)), the open work is the Astro-side routing convenience on top of it.
 - **Shipped.** The per-loader `core` option is removed. Env vars own the loaders' Core configuration, the integration keeps its own option for the short-lived provisioning instance.
 - **Shipped.** Provisioning gained graceful offline behavior: when the fetch fails and a usable provisioned copy exists, it warns loudly and builds with the existing copy instead of failing. An exact version pin the copy already holds skips the network entirely. A missing copy, an authentication failure and a pin the copy does not hold stay hard failures, so a dead token or a broken pin cannot hide behind a warning.
@@ -111,6 +110,7 @@ Settled during the Astro DX exploration (branch `astro-dx`). Items marked **ship
 ## See Also
 
 - [`fields.md`](./fields.md) - the cross-CMS field type comparison
+- [`../astro-entry.md`](../astro-entry.md) - the design and invariants of Core's own Astro entry
 - [`../peer-dependencies.md`](../peer-dependencies.md) - why astro is an optional peer and how its zod requirement feeds the zod floor
 - [`../../docs/usage.md`](../../docs/usage.md#astro-integration) - consumer documentation of the loaders and the integration
 - [`../../docs/provisioning.md`](../../docs/provisioning.md) - the provisioning story the `elek()` integration builds on

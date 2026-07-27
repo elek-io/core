@@ -53,7 +53,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 - **Local REST API** - a read-only Hono + OpenAPI server with an interactive Scalar reference UI, for building static sites and apps against local content.
 - **Generated API clients** - typed JavaScript / TypeScript clients (ESM or CJS) via `elek generate:client`.
 - **Generated TypeScript types** - type definitions emitted directly from Project content models via `elek generate:types`.
-- **Astro integration** - `elekAssetsLoader()` / `elekEntriesLoader()` content loaders plus a `mdastRender` helper, from `@elek-io/core/astro`. One `defineElekConfig()` declaration names every Project the site consumes.
+- **Astro integration** - one `defineElekConfig()` declaration names every Project a site consumes, `elekCollections()` derives an Astro collection per elek.io Collection from it, and `elekAssetsLoader()` / `elekEntriesLoader()` stay available for declaring collections by hand. Plus a `mdastRender` helper, all from `@elek-io/core/astro`.
 - **Provisioning** - the `elek()` Astro integration and `elek provision` provision Projects from their remotes into build environments, e.g. CI runners. See [`provisioning.md`](./provisioning.md).
 - **JSON export** - export Projects to JSON (nested or separate files) via `elek export`, with a `--watch` mode for automatic re-exports.
 
