@@ -220,7 +220,7 @@ export class ProjectService
    * the work branch) or an exact Release version, default
    * `production`. Runs on a read-only Core without a User being set.
    *
-   * @see docs/ci-builds.md and docs/git-and-sync.md
+   * @see docs/provisioning.md and docs/git-and-sync.md
    */
   public provision(props: ProvisionProjectProps): Promise<Project> {
     return this.validated(

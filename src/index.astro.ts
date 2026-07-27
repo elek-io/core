@@ -73,7 +73,7 @@ async function ensureProjectAvailable(
     return;
   }
   throw CoreError.notFound(
-    `Project "${projectId}" was not found in the data directory "${core.options.dataDir}". Add the elek() integration to astro.config to provision it from its remote, or point ELEK_IO_DATA_DIR at the directory holding the Project. See the ci-builds guide in the docs of @elek-io/core.`
+    `Project "${projectId}" was not found in the data directory "${core.options.dataDir}". Add the elek() integration to astro.config to provision it from its remote, or point ELEK_IO_DATA_DIR at the directory holding the Project. See the provisioning guide in the docs of @elek-io/core.`
   );
 }
 
