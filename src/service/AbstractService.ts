@@ -1,3 +1,4 @@
+import Fs from 'fs-extra';
 import type { ZodType } from 'zod';
 import type { ElekIoCoreOptions, ServiceType } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
@@ -59,6 +60,33 @@ export abstract class AbstractService {
     }
     const error = CoreError.preconditionFailed(
       `Cannot ${context} because Core is in read-only mode`
+    );
+    this.logService.error({
+      source: 'core',
+      message: `[${error.type}] (${this.type}.${context}) ${error.message}`,
+    });
+    throw error;
+  }
+
+  /**
+   * Throws a logged `CoreError.preconditionFailed` when the Project is
+   * a provisioned copy, which the next provision run would overwrite.
+   * Called by every method that mutates Project content, at the point
+   * where the Project ID is first known. Project deletion is exempt,
+   * it is the escape hatch that removes a provisioned copy.
+   */
+  protected async assertNotProvisioned(
+    context: string,
+    projectId: string
+  ): Promise<void> {
+    const isProvisioned = await Fs.pathExists(
+      this.pathTo.projectProvisionedMarker(projectId)
+    );
+    if (!isProvisioned) {
+      return;
+    }
+    const error = CoreError.preconditionFailed(
+      `Cannot ${context} because Project "${projectId}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
     );
     this.logService.error({
       source: 'core',

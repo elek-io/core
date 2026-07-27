@@ -13,7 +13,7 @@ import {
 import { CoreError } from '../util/shared.js';
 import ElekIoCore from '../index.node.js';
 
-describe('ProjectService ensureFromRemote', function () {
+describe('ProjectService provision', function () {
   let readOnlyCore: ElekIoCore;
   let readOnlyDataDir: string;
   let seed: Awaited<ReturnType<typeof seedRemoteWithRelease>>;
@@ -38,7 +38,7 @@ describe('ProjectService ensureFromRemote', function () {
   });
 
   it('should provision a missing Project from the remote at production', async function () {
-    const project = await readOnlyCore.projects.ensureFromRemote({
+    const project = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
     });
@@ -72,7 +72,7 @@ describe('ProjectService ensureFromRemote', function () {
     );
   }, 30000);
 
-  it('should refresh a provisioned Project to the newest Release', async function () {
+  it('should refresh a provisioned copy to the newest Release', async function () {
     // Publish a second Release through a writable Core
     const project = await core.projects.clone({ url: seed.remotePath });
     await createAsset(project.id);
@@ -82,12 +82,12 @@ describe('ProjectService ensureFromRemote', function () {
     secondReleaseVersion = secondRelease.version;
     await core.projects.delete({ id: project.id, force: true });
 
-    const ensured = await readOnlyCore.projects.ensureFromRemote({
+    const provisioned = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
     });
 
-    expect(ensured.version).toEqual(secondReleaseVersion);
+    expect(provisioned.version).toEqual(secondReleaseVersion);
   }, 30000);
 
   it('should discard local modifications on refresh', async function () {
@@ -96,24 +96,24 @@ describe('ProjectService ensureFromRemote', function () {
     );
     await Fs.writeFile(projectFilePath, 'not json anymore');
 
-    const ensured = await readOnlyCore.projects.ensureFromRemote({
+    const provisioned = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
     });
 
-    expect(ensured.version).toEqual(secondReleaseVersion);
+    expect(provisioned.version).toEqual(secondReleaseVersion);
   }, 30000);
 
   it('should provision the draft channel when asked', async function () {
     // The remote work branch was synchronized before the second
     // Release, so it still holds the first released version
-    const ensured = await readOnlyCore.projects.ensureFromRemote({
+    const provisioned = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: 'draft',
     });
 
-    expect(ensured.version).toEqual(seed.releaseVersion);
+    expect(provisioned.version).toEqual(seed.releaseVersion);
     // The draft channel follows the work branch
     expect(
       await readOnlyCore.projects.branches.current({ id: seed.projectId })
@@ -122,12 +122,12 @@ describe('ProjectService ensureFromRemote', function () {
 
   it('should provision the newest preview on the preview channel', async function () {
     // The only preview so far is the one from the seed
-    const ensured = await readOnlyCore.projects.ensureFromRemote({
+    const provisioned = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: 'preview',
     });
-    expect(ensured.version).toEqual(seed.previewVersion);
+    expect(provisioned.version).toEqual(seed.previewVersion);
 
     // A newer preview supersedes it, while production stays put
     const project = await core.projects.clone({ url: seed.remotePath });
@@ -137,14 +137,14 @@ describe('ProjectService ensureFromRemote', function () {
     });
     await core.projects.delete({ id: project.id, force: true });
 
-    const refreshed = await readOnlyCore.projects.ensureFromRemote({
+    const refreshed = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: 'preview',
     });
     expect(refreshed.version).toEqual(newerPreview.version);
 
-    const production = await readOnlyCore.projects.ensureFromRemote({
+    const production = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: 'production',
@@ -153,13 +153,13 @@ describe('ProjectService ensureFromRemote', function () {
   }, 60000);
 
   it('should provision a pinned Release version with a detached HEAD', async function () {
-    const ensured = await readOnlyCore.projects.ensureFromRemote({
+    const provisioned = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: seed.releaseVersion,
     });
 
-    expect(ensured.version).toEqual(seed.releaseVersion);
+    expect(provisioned.version).toEqual(seed.releaseVersion);
     // A pinned version checks out the Release tag, detaching HEAD
     expect(
       await readOnlyCore.projects.branches.current({ id: seed.projectId })
@@ -167,19 +167,19 @@ describe('ProjectService ensureFromRemote', function () {
   }, 30000);
 
   it('should provision a preview version', async function () {
-    const ensured = await readOnlyCore.projects.ensureFromRemote({
+    const provisioned = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: seed.previewVersion,
     });
 
-    expect(ensured.version).toEqual(seed.previewVersion);
+    expect(provisioned.version).toEqual(seed.previewVersion);
   }, 30000);
 
   it('should throw NotFound for an unknown version and list the available ones', async function () {
     let error: unknown = null;
     try {
-      await readOnlyCore.projects.ensureFromRemote({
+      await readOnlyCore.projects.provision({
         id: seed.projectId,
         url: seed.remotePath,
         ref: '9.9.9',
@@ -198,7 +198,7 @@ describe('ProjectService ensureFromRemote', function () {
   it('should throw BadRequest for an invalid ref', async function () {
     let error: unknown = null;
     try {
-      await readOnlyCore.projects.ensureFromRemote({
+      await readOnlyCore.projects.provision({
         id: seed.projectId,
         url: seed.remotePath,
         ref: 'not a valid ref',
@@ -220,12 +220,12 @@ describe('ProjectService ensureFromRemote', function () {
     // The copy is detached at the preview version from the previous
     // test. Without the marker it belongs to another application, so
     // asking for production must not touch it
-    const ensured = await readOnlyCore.projects.ensureFromRemote({
+    const provisioned = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
     });
 
-    expect(ensured.version).toEqual(seed.previewVersion);
+    expect(provisioned.version).toEqual(seed.previewVersion);
     expect(
       await readOnlyCore.projects.branches.current({ id: seed.projectId })
     ).toEqual('');
@@ -242,7 +242,7 @@ describe('ProjectService ensureFromRemote', function () {
 
     let error: unknown = null;
     try {
-      await readOnlyCore.projects.ensureFromRemote({
+      await readOnlyCore.projects.provision({
         id: remoteProject.id,
         url: remotePath,
       });
@@ -266,7 +266,7 @@ describe('ProjectService ensureFromRemote', function () {
 
     let error: unknown = null;
     try {
-      await readOnlyCore.projects.ensureFromRemote({
+      await readOnlyCore.projects.provision({
         id: seed.projectId,
         url: otherSeed.remotePath,
       });
@@ -287,7 +287,7 @@ describe('ProjectService ensureFromRemote', function () {
     ).toEqual(seed.remotePath);
 
     // A corrected rerun heals the copy
-    const healed = await readOnlyCore.projects.ensureFromRemote({
+    const healed = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
     });
@@ -303,7 +303,7 @@ describe('ProjectService ensureFromRemote', function () {
     });
 
     try {
-      await tokenCore.projects.ensureFromRemote({
+      await tokenCore.projects.provision({
         id: seed.projectId,
         url: seed.remotePath,
       });
@@ -331,7 +331,7 @@ describe('ProjectService ensureFromRemote', function () {
   it('should throw VersionSkew when the remote Project is newer than Core', async function () {
     // An own remote, so the corrupted state cannot leak into other tests
     const skewSeed = await seedRemoteWithRelease();
-    await readOnlyCore.projects.ensureFromRemote({
+    await readOnlyCore.projects.provision({
       id: skewSeed.projectId,
       url: skewSeed.remotePath,
     });
@@ -359,7 +359,7 @@ describe('ProjectService ensureFromRemote', function () {
 
     let error: unknown = null;
     try {
-      await readOnlyCore.projects.ensureFromRemote({
+      await readOnlyCore.projects.provision({
         id: skewSeed.projectId,
         url: skewSeed.remotePath,
       });
@@ -374,7 +374,7 @@ describe('ProjectService ensureFromRemote', function () {
     await Fs.remove(readOnlyCore.util.pathTo.project(skewSeed.projectId));
     error = null;
     try {
-      await readOnlyCore.projects.ensureFromRemote({
+      await readOnlyCore.projects.provision({
         id: skewSeed.projectId,
         url: skewSeed.remotePath,
       });

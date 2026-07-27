@@ -75,6 +75,8 @@ export class AssetService extends AbstractEntityService {
       createAssetSchema,
       props,
       async (validatedProps) => {
+        await this.assertNotProvisioned('create', validatedProps.projectId);
+
         const id = uuid();
         const projectPath = this.pathTo.project(validatedProps.projectId);
         const fileType = this.getFileType(validatedProps.filePath);
@@ -213,6 +215,8 @@ export class AssetService extends AbstractEntityService {
       updateAssetSchema,
       props,
       async (validatedProps) => {
+        await this.assertNotProvisioned('update', validatedProps.projectId);
+
         const projectPath = this.pathTo.project(validatedProps.projectId);
         const assetFilePath = this.pathTo.assetFile(
           validatedProps.projectId,
@@ -297,6 +301,8 @@ export class AssetService extends AbstractEntityService {
    */
   public delete(props: DeleteAssetProps): Promise<void> {
     return this.mutating('delete', deleteAssetSchema, props, async () => {
+      await this.assertNotProvisioned('delete', props.projectId);
+
       const referencingEntries =
         await this.referenceService.findEntriesReferencing({
           projectId: props.projectId,

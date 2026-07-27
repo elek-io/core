@@ -13,12 +13,12 @@ Two consequences:
 - A brand-new Project with no Release yet fails provisioning with a clear error. Publish a Release first, or consume another channel explicitly, see [Channels and pinned versions](#channels-and-pinned-versions).
 - Provisioning logs which content state it fetched, e.g. `version 1.4.0 (production)`. When a pipeline does not produce what you expect, this log line tells you why.
 
-## Provisioning with elek pull
+## Provisioning with elek provision
 
 The CLI command works in any pipeline, no matter what runs afterwards:
 
 ```bash
-elek pull --project abc-123-... --url https://github.com/acme/website-content.git
+elek provision --project abc-123-... --url https://github.com/acme/website-content.git
 ```
 
 Afterwards the Project sits in the data directory like any locally created one. Read it with the [programmatic API](./usage.md), export it with [`elek export`](./export.md), generate [typed clients](./api-clients.md), or start the [local API](./local-api.md) for another tool to consume.
@@ -90,7 +90,7 @@ jobs:
 For any other pipeline, provision explicitly and then do whatever consumes the content:
 
 ```yaml
-      - run: pnpm exec elek pull --project abc-123-... --url https://github.com/acme/website-content.git
+      - run: pnpm exec elek provision --project abc-123-... --url https://github.com/acme/website-content.git
         env:
           ELEK_IO_REMOTE_ACCESS_TOKEN: ${{ secrets.ELEK_IO_REMOTE_ACCESS_TOKEN }}
       - run: pnpm exec elek export ./content
@@ -114,7 +114,7 @@ Which content state provisioning fetches is the `ref`. It is either a channel, w
 | `draft` | The current drafts (the work branch) |
 | `1.4.0`, `1.5.0-preview.2` | Exactly that Release or preview Release |
 
-Set the ref per Project in the integration config or via `--ref` on `elek pull`. The `ELEK_IO_CHANNEL` environment variable overrides both and applies to every Project of a deployment, so one variable can repoint a whole pipeline. Because it is deployment-wide, it accepts channels only, exact versions are per-Project decisions and belong into the configuration.
+Set the ref per Project in the integration config or via `--ref` on `elek provision`. The `ELEK_IO_CHANNEL` environment variable overrides both and applies to every Project of a deployment, so one variable can repoint a whole pipeline. Because it is deployment-wide, it accepts channels only, exact versions are per-Project decisions and belong into the configuration.
 
 For a content staging site, create a second deployment (a separate provider project or a dedicated workflow) with `ELEK_IO_CHANNEL=preview` for the latest published previews, or `ELEK_IO_CHANNEL=draft` for the raw editing state, and protect it from public access. Do not wire drafts into the provider's regular pull request previews, those URLs are shareable and would expose unpublished content alongside every code review.
 
@@ -126,7 +126,9 @@ A Release pushes the published content to the remote, but your pipeline only run
 
 ## How provisioning behaves
 
-The first run clones the Project into the data directory and writes a marker file. Later runs fetch and hard-reset that copy to the requested ref, so it always matches the remote, including a cached copy on a reused runner. A copy without the marker belongs to another application (for example the Desktop app) and is never touched. Details in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-project-for-builds).
+The first run clones the Project into the data directory and writes a marker file. Later runs fetch and hard-reset that copy to the requested ref, so it always matches the remote, including a cached copy on a reused runner. A copy without the marker belongs to another application (for example the Desktop app) and is never touched. Details in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
+
+Because every provision run overwrites the copy, a provisioned copy is read-only for everyone: any attempt to edit it, also through the Desktop app, throws a `CoreError` of type `PreconditionFailed` instead of losing the edits to the next build. Applications can recognize a provisioned copy through the `isProvisioned` field on the `Project`. To work on the Project again, delete the provisioned copy and clone it.
 
 ## Troubleshooting
 

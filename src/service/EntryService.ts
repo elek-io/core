@@ -97,6 +97,7 @@ export class EntryService
       z.object({ projectId: uuidSchema, collectionId: uuidSchema }),
       props
     );
+    await this.assertNotProvisioned('create', projectId);
     const languages = await this.readProjectLanguages(projectId);
     const collection = await this.collectionService.read({
       projectId,
@@ -234,6 +235,7 @@ export class EntryService
       z.object({ projectId: uuidSchema, collectionId: uuidSchema }),
       props
     );
+    await this.assertNotProvisioned('update', projectId);
     const languages = await this.readProjectLanguages(projectId);
     const collection = await this.collectionService.read({
       projectId,
@@ -330,6 +332,8 @@ export class EntryService
    */
   public delete(props: DeleteEntryProps): Promise<void> {
     return this.mutating('delete', deleteEntrySchema, props, async () => {
+      await this.assertNotProvisioned('delete', props.projectId);
+
       const referencingEntries =
         await this.referenceService.findEntriesReferencing({
           projectId: props.projectId,

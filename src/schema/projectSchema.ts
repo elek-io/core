@@ -78,6 +78,10 @@ export const projectSchema = projectFileSchema
     remoteOriginUrl: z.string().nullable().openapi({
       description: 'URL of the remote Git repository',
     }),
+    isProvisioned: z.boolean().openapi({
+      description:
+        'True if this local copy is a provisioned copy, kept in sync with the remote by provisioning and not meant for editing. False for a working copy.',
+    }),
   })
   .openapi('Project');
 export type Project = z.infer<typeof projectSchema>;
@@ -166,7 +170,7 @@ export type ContentChannel = z.infer<typeof contentChannelSchema>;
 export const contentRefSchema = z.union([contentChannelSchema, versionSchema]);
 export type ContentRef = z.infer<typeof contentRefSchema>;
 
-export const ensureFromRemoteProjectSchema = z.object({
+export const provisionProjectSchema = z.object({
   id: uuidSchema,
   /**
    * The remote repository URL to provision from
@@ -180,9 +184,7 @@ export const ensureFromRemoteProjectSchema = z.object({
    */
   ref: contentRefSchema.optional(),
 });
-export type EnsureFromRemoteProjectProps = z.infer<
-  typeof ensureFromRemoteProjectSchema
->;
+export type ProvisionProjectProps = z.infer<typeof provisionProjectSchema>;
 
 export const listBranchesProjectSchema = z.object({
   id: uuidSchema.readonly(),

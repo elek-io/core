@@ -4,7 +4,7 @@ All services throw `CoreError` on failure. `CoreError` extends `Error` with `typ
 
 ## CoreError
 
-A class extending `Error` with 7 typed variants (`src/util/shared.ts`):
+A class extending `Error` with 8 typed variants (`src/util/shared.ts`):
 
 | Type                 | Status Code | Used For                                       |
 | -------------------- | ----------- | ---------------------------------------------- |
@@ -12,7 +12,7 @@ A class extending `Error` with 7 typed variants (`src/util/shared.ts`):
 | `BadRequest`         | 400         | Invalid input, bad UUID, unsupported file type |
 | `Unauthorized`       | 401         | No user configured                             |
 | `Conflict`           | 409         | Sync failed, uncommitted changes, slug clash   |
-| `PreconditionFailed` | 412         | Remote origin missing (setup required), mutation attempted in read-only mode |
+| `PreconditionFailed` | 412         | Remote origin missing (setup required), mutation attempted in read-only mode or on a provisioned copy |
 | `UpgradeFailed`      | 422         | Project version upgrade failed                 |
 | `VersionSkew`        | 422         | Content written by a newer Core than installed |
 | `Internal`           | 500         | Git errors, FS errors, unexpected failures     |

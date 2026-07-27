@@ -365,13 +365,13 @@ export function elek(props: ElekIntegrationProps): AstroIntegration {
             logger.info(
               `Provisioning Project "${project.id}" at "${ref}" from "${project.remoteUrl}"`
             );
-            const ensured = await core.projects.ensureFromRemote({
+            const provisioned = await core.projects.provision({
               id: project.id,
               url: project.remoteUrl,
               ref,
             });
             logger.info(
-              `Project "${ensured.name}" (${ensured.id}) is available at version ${ensured.version}`
+              `Project "${provisioned.name}" (${provisioned.id}) is available at version ${provisioned.version}`
             );
           }
         } finally {

@@ -292,7 +292,7 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 - `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported.
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
-- `elek pull --project <id> --url <url>` - provision a Project from its remote into the data directory, e.g. in CI. `--ref` selects a channel (`production` for the latest Release, `preview` for the latest preview Release, `draft` for the tip of the work branch) or an exact Release version, and is overridden by the `ELEK_IO_CHANNEL` environment variable. Runs read-only, so no User is required. Authentication against private remotes uses `ELEK_IO_REMOTE_ACCESS_TOKEN`. See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-project-for-builds).
+- `elek provision --project <id> --url <url>` - provision a copy of a Project from its remote into the data directory, e.g. in CI. `--ref` selects a channel (`production` for the latest Release, `preview` for the latest preview Release, `draft` for the tip of the work branch) or an exact Release version, and is overridden by the `ELEK_IO_CHANNEL` environment variable. Runs read-only, so no User is required. Authentication against private remotes uses `ELEK_IO_REMOTE_ACCESS_TOKEN`. See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
 
 The global `--data-dir <path>` option sets the data directory for any command, e.g. `elek --data-dir /path/to/data export`. It overrides the `ELEK_IO_DATA_DIR` environment variable and defaults to `~/elek.io`, see [Options](#options).
 
@@ -348,7 +348,7 @@ export default defineConfig({
 });
 ```
 
-Each Project takes an optional `ref`: a channel (`production`, `preview` or `draft`, default `production`) or an exact Release version, overridden by the `ELEK_IO_CHANNEL` environment variable, which accepts channels only. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`. The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated. A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content. Without the integration, a missing Project fails the build with an error pointing here. The underlying behavior is documented in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-project-for-builds).
+Each Project takes an optional `ref`: a channel (`production`, `preview` or `draft`, default `production`) or an exact Release version, overridden by the `ELEK_IO_CHANNEL` environment variable, which accepts channels only. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`. The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated. A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content. Without the integration, a missing Project fails the build with an error pointing here. The underlying behavior is documented in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
 
 Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (production)`.
 

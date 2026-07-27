@@ -7,7 +7,7 @@ import {
   exportAction,
   generateApiClientAction,
   generateTypesAction,
-  pullAction,
+  provisionAction,
   startApiAction,
 } from './cli/index.js';
 import {
@@ -15,7 +15,7 @@ import {
   exportSchema,
   generateApiClientSchema,
   generateTypesSchema,
-  pullSchema,
+  provisionSchema,
 } from './schema/index.js';
 
 const program = new Command()
@@ -145,9 +145,9 @@ program
   });
 
 program
-  .command('pull')
+  .command('provision')
   .description(
-    'Provisions a Project from its remote into the data directory, meant for CI builds'
+    'Provisions a copy of a Project from its remote into the data directory, meant for CI builds'
   )
   .requiredOption('-p, --project <id>', 'The ID of the Project to provision')
   .requiredOption(
@@ -162,9 +162,9 @@ program
     // Provisioning never mutates the Project or its remote and must
     // work without a User being set
     configureCore({ readOnly: true });
-    const props = pullSchema.parse(options);
+    const props = provisionSchema.parse(options);
 
-    await pullAction(props);
+    await provisionAction(props);
   });
 
 await program.parseAsync();

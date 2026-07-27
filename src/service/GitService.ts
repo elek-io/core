@@ -23,7 +23,7 @@ import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { UserService } from './UserService.js';
 import type { LogProps } from '../schema/index.js';
-import type { PathTo } from '../util/node.js';
+import { PROVISIONED_MARKER, type PathTo } from '../util/node.js';
 
 /**
  * Service that manages Git functionality
@@ -917,6 +917,14 @@ export class GitService {
     if (this.options.readOnly) {
       throw CoreError.preconditionFailed(
         'Cannot commit because Core is in read-only mode'
+      );
+    }
+
+    // Backstop for callers that bypass the service layer. The services
+    // guard earlier through assertNotProvisioned, before writing files.
+    if (await Fs.pathExists(Path.join(path, PROVISIONED_MARKER))) {
+      throw CoreError.preconditionFailed(
+        `Cannot commit because "${path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
       );
     }
 

@@ -90,7 +90,7 @@ Because `pull.rebase` is set, local commits are replayed on top of the fetched r
 
 ## Cloning an existing Project
 
-`clone()` pulls a Project down from a URL into a temporary location, reads its `project.json`, and moves it into place. If a Project with the same id already exists locally, it throws `Conflict`.
+`clone()` pulls a Project down from a URL into a temporary location, reads its `project.json`, and moves it into place. If a Project with the same id already exists locally, it throws `Conflict`. Cloning creates a working copy for editing. To consume content in a build instead, see [Provisioning a copy for builds](#provisioning-a-copy-for-builds).
 
 ```typescript
 const project = await core.projects.clone({
@@ -100,12 +100,14 @@ const project = await core.projects.clone({
 
 After cloning, Core fetches the whole LFS history into the local store and materializes the working-tree binaries, so all Assets (including older versions) are available offline. See [Git LFS](#git-lfs).
 
-## Provisioning a Project for builds
+## Provisioning a copy for builds
 
-`ensureFromRemote()` makes sure a Project is present in the data directory at a given content state, provisioning it from the remote when needed. It is the engine behind CI builds and is meant to run on a read-only Core, which clones and fetches without a User being set.
+`provision()` ensures a provisioned copy of a Project is present in the data directory at a given content state, provisioning it from the remote when needed. It is the engine behind CI builds and is meant to run on a read-only Core, which clones and fetches without a User being set.
+
+A local copy of a Project is one of two kinds. A **working copy** is created by `clone()` or `create()`, is managed by an application like the Desktop app, and is where editing happens. A **provisioned copy** is created by `provision()`, consumes content, and is disposable: every provision run hard-resets it to match the remote.
 
 ```typescript
-const project = await core.projects.ensureFromRemote({
+const project = await core.projects.provision({
   id: '<project-id>',
   url: 'https://github.com/acme/website-content.git',
   // A channel ('production' | 'preview' | 'draft') or an exact
@@ -120,9 +122,11 @@ Three cases, decided by a provisioning marker file inside the Project directory:
 
 - **Missing**: the Project is cloned in build mode - shallow, single ref, LFS objects of the checked-out ref only - and the marker is written.
 - **Present with the marker**: the copy is fetched and hard-reset to the ref, so it always matches the remote.
-- **Present without the marker**: the copy is managed by another application (for example the Desktop app) and is left untouched.
+- **Present without the marker**: a working copy managed by another application (for example the Desktop app), left untouched.
 
 An unknown version throws `NotFound` listing the available versions. Provisioning the `production` or `preview` channel of a Project that never published a Release or preview throws `PreconditionFailed` naming the fix.
+
+**Provisioned copies are read-only for everyone.** Every `Project` carries a computed `isProvisioned` boolean, so applications like the Desktop app can recognize and label a provisioned copy. Any operation that would mutate one - content create, update or delete, synchronizing, setting a remote, releasing, upgrading - throws a `CoreError` of type `PreconditionFailed`, also on a writable Core. Without this guard, edits would be silently destroyed by the next provision run. The escape hatch is `projects.delete()`, which removes a provisioned copy without any unpushed-changes check (it is disposable by definition), after which the Project can be cloned as a working copy.
 
 Private remotes authenticate through the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable, see [`usage.md`](./usage.md#environment-variables). The token is passed to git per invocation and never written into a URL or the repository config.
 
@@ -132,7 +136,7 @@ Asset binaries are tracked with [Git LFS](https://git-lfs.com). It is always on 
 
 **What gets configured.** At `create()` Core writes a `.gitattributes` that tracks `lfs/**`, then runs `git lfs install --local` so the clean filter turns every binary added under `lfs/` into a small pointer. The pointer is committed to git history, the actual bytes go to the local LFS store (`.git/lfs/objects`). The working-tree file stays the real binary, so reading an Asset returns its content directly.
 
-**Offline-first guarantee.** For full clones, Core keeps every LFS object for the whole history present locally, so reading any Asset (current or historical) never needs the network. A build-mode clone made by `ensureFromRemote()` intentionally opts out and only fetches the objects of the checked-out ref:
+**Offline-first guarantee.** For full clones, Core keeps every LFS object for the whole history present locally, so reading any Asset (current or historical) never needs the network. A build-mode clone made by `provision()` intentionally opts out and only fetches the objects of the checked-out ref:
 
 - Locally created Projects already have their objects (the clean filter writes them on commit).
 - On `clone()`, Core runs `git lfs fetch --all` then `git lfs checkout` to pull every object across all refs and materialize the working tree.

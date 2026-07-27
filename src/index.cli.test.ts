@@ -326,15 +326,15 @@ describe('CLI', function () {
     expect(await fs.exists('./.elek.io/data-dir-env/projects')).toBe(true);
   });
 
-  it('should provision a Project via the pull command', async function () {
+  it('should provision a Project via the provision command', async function () {
     const seed = await seedRemoteWithRelease();
 
     await execCommand({
       command: 'node ./dist/cli/index.cli.mjs',
       args: [
         '--data-dir',
-        './.elek.io/pull-data-dir',
-        'pull',
+        './.elek.io/provision-data-dir',
+        'provision',
         '--project',
         seed.projectId,
         '--url',
@@ -345,27 +345,27 @@ describe('CLI', function () {
 
     const projectFile = JSON.parse(
       await fs.readFile(
-        `./.elek.io/pull-data-dir/projects/${seed.projectId}/project.json`,
+        `./.elek.io/provision-data-dir/projects/${seed.projectId}/project.json`,
         'utf-8'
       )
     );
     expect(projectFile.version).toEqual(seed.releaseVersion);
     expect(
       await fs.exists(
-        `./.elek.io/pull-data-dir/projects/${seed.projectId}/.elek-provisioned`
+        `./.elek.io/provision-data-dir/projects/${seed.projectId}/.elek-provisioned`
       )
     ).toBe(true);
   }, 60000);
 
-  it('should provision the channel given by ELEK_IO_CHANNEL via the pull command', async function () {
+  it('should provision the channel given by ELEK_IO_CHANNEL via the provision command', async function () {
     const seed = await seedRemoteWithRelease();
 
     await execCommand({
       command: 'node ./dist/cli/index.cli.mjs',
       args: [
         '--data-dir',
-        './.elek.io/pull-ref-data-dir',
-        'pull',
+        './.elek.io/provision-ref-data-dir',
+        'provision',
         '--project',
         seed.projectId,
         '--url',
@@ -381,7 +381,7 @@ describe('CLI', function () {
 
     // The draft channel follows the work branch
     const head = await fs.readFile(
-      `./.elek.io/pull-ref-data-dir/projects/${seed.projectId}/.git/HEAD`,
+      `./.elek.io/provision-ref-data-dir/projects/${seed.projectId}/.git/HEAD`,
       'utf-8'
     );
     expect(head).toContain('refs/heads/work');
@@ -395,8 +395,8 @@ describe('CLI', function () {
         command: 'node ./dist/cli/index.cli.mjs',
         args: [
           '--data-dir',
-          './.elek.io/pull-channel-fail-data-dir',
-          'pull',
+          './.elek.io/provision-channel-fail-data-dir',
+          'provision',
           '--project',
           seed.projectId,
           '--url',
@@ -410,7 +410,7 @@ describe('CLI', function () {
     ).rejects.toThrow();
   }, 60000);
 
-  it('should fail loudly when the pull ref does not exist', async function () {
+  it('should fail loudly when the provision ref does not exist', async function () {
     const seed = await seedRemoteWithRelease();
 
     await expect(
@@ -418,8 +418,8 @@ describe('CLI', function () {
         command: 'node ./dist/cli/index.cli.mjs',
         args: [
           '--data-dir',
-          './.elek.io/pull-fail-data-dir',
-          'pull',
+          './.elek.io/provision-fail-data-dir',
+          'provision',
           '--project',
           seed.projectId,
           '--url',

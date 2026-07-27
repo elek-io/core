@@ -239,6 +239,8 @@ export class ReleaseService extends AbstractService {
    */
   public create(props: CreateReleaseProps): Promise<ReleaseResult> {
     return this.mutating('create', createReleaseSchema, props, async () => {
+      await this.assertNotProvisioned('create', props.projectId);
+
       const projectPath = this.pathTo.project(props.projectId);
       const projectFilePath = this.pathTo.projectFile(props.projectId);
 
@@ -341,6 +343,8 @@ export class ReleaseService extends AbstractService {
       createPreviewReleaseSchema,
       props,
       async () => {
+        await this.assertNotProvisioned('createPreview', props.projectId);
+
         const projectPath = this.pathTo.project(props.projectId);
         const projectFilePath = this.pathTo.projectFile(props.projectId);
 

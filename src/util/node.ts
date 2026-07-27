@@ -64,6 +64,12 @@ export function resolveContentRef(ref?: string): string {
 }
 
 /**
+ * Name of the marker file whose presence identifies a provisioned copy
+ * of a Project. A dotfile, so the Project's gitignore covers it.
+ */
+export const PROVISIONED_MARKER = '.elek-provisioned';
+
+/**
  * Creates a collection of often used paths, rooted at the given data directory
  */
 export function createPathTo(dataDir: string) {
@@ -79,10 +85,8 @@ export function createPathTo(dataDir: string) {
     projectFile: (projectId: string): string => {
       return Path.join(pathTo.project(projectId), 'project.json');
     },
-    // A dotfile, so the Project's gitignore covers it. Its presence
-    // marks a copy as provisioned, Desktop copies never have it
     projectProvisionedMarker: (projectId: string): string => {
-      return Path.join(pathTo.project(projectId), '.elek-provisioned');
+      return Path.join(pathTo.project(projectId), PROVISIONED_MARKER);
     },
 
     lfs: (projectId: string): string => {

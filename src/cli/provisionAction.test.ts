@@ -4,17 +4,17 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import core from '../test/setup.js';
 import { projectFileSchema } from '../schema/index.js';
 import { seedRemoteWithRelease } from '../test/util.js';
-import { pullAction } from './pullAction.js';
+import { provisionAction } from './provisionAction.js';
 import { configureCore, getCore } from './util.js';
 
 /**
- * Exercises the happy paths of pullAction in process. The CLI core of
- * this worker resolves its data directory from the worker's
+ * Exercises the happy paths of provisionAction in process. The CLI
+ * core of this worker resolves its data directory from the worker's
  * ELEK_IO_DATA_DIR, so assertions can use the shared test Core's
  * paths. Failure paths call process.exit and are covered by the
  * subprocess tests in index.cli.test.ts.
  */
-describe('pullAction', function () {
+describe('provisionAction', function () {
   let seed: Awaited<ReturnType<typeof seedRemoteWithRelease>>;
 
   beforeAll(async function () {
@@ -30,7 +30,7 @@ describe('pullAction', function () {
   });
 
   it('provisions a Project at production by default', async function () {
-    await pullAction({ project: seed.projectId, url: seed.remotePath });
+    await provisionAction({ project: seed.projectId, url: seed.remotePath });
 
     const projectPath = core.util.pathTo.project(seed.projectId);
     expect(await Fs.pathExists(projectPath)).toBe(true);
@@ -49,7 +49,7 @@ describe('pullAction', function () {
   it('prefers the ELEK_IO_CHANNEL environment variable over the given ref', async function () {
     vi.stubEnv('ELEK_IO_CHANNEL', 'draft');
 
-    await pullAction({
+    await provisionAction({
       project: seed.projectId,
       url: seed.remotePath,
       ref: 'production',

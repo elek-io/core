@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exportSchema, apiStartSchema, pullSchema } from './cliSchema.js';
+import { exportSchema, apiStartSchema, provisionSchema } from './cliSchema.js';
 import { v4 } from 'uuid';
 
 const baseInput = {
@@ -116,10 +116,10 @@ describe('apiStartSchema', () => {
   });
 });
 
-describe('pullSchema', () => {
+describe('provisionSchema', () => {
   it('parses project, url and ref', () => {
     const id = v4();
-    const result = pullSchema.parse({
+    const result = provisionSchema.parse({
       project: id,
       url: 'https://example.com/repo.git',
       ref: 'draft',
@@ -133,7 +133,7 @@ describe('pullSchema', () => {
   });
 
   it('accepts a Release version as ref and trims the url', () => {
-    const result = pullSchema.parse({
+    const result = provisionSchema.parse({
       project: v4(),
       url: '  https://example.com/repo.git  ',
       ref: '1.2.3',
@@ -145,10 +145,10 @@ describe('pullSchema', () => {
 
   it('rejects a missing project id and an invalid ref', () => {
     expect(() =>
-      pullSchema.parse({ url: 'https://example.com/repo.git' })
+      provisionSchema.parse({ url: 'https://example.com/repo.git' })
     ).toThrow();
     expect(() =>
-      pullSchema.parse({
+      provisionSchema.parse({
         project: v4(),
         url: 'https://example.com/repo.git',
         ref: 'not a ref',

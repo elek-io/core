@@ -129,6 +129,7 @@ export class CollectionService
       z.object({ projectId: uuidSchema }),
       props
     );
+    await this.assertNotProvisioned('create', projectId);
     const languages = await this.readProjectLanguages(projectId);
 
     return this.mutating(
@@ -301,6 +302,7 @@ export class CollectionService
       z.object({ projectId: uuidSchema }),
       props
     );
+    await this.assertNotProvisioned('update', projectId);
     const languages = await this.readProjectLanguages(projectId);
 
     return this.mutating(
@@ -636,6 +638,8 @@ export class CollectionService
       deleteCollectionSchema,
       props,
       async (validatedProps) => {
+        await this.assertNotProvisioned('delete', validatedProps.projectId);
+
         const referencingEntries =
           await this.referenceService.findEntriesReferencing({
             projectId: validatedProps.projectId,

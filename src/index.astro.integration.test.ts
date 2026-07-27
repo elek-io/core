@@ -94,7 +94,7 @@ export const collections = {
     ).toBe(true);
   }, 120000);
 
-  it('should refresh the provisioned Project on the next sync', async function () {
+  it('should refresh the provisioned copy on the next sync', async function () {
     await sync({
       root: astroRoot,
       configFile: false,

@@ -123,6 +123,7 @@ export class ComponentService
       z.object({ projectId: uuidSchema }),
       props
     );
+    await this.assertNotProvisioned('create', projectId);
     const languages = await this.readProjectLanguages(projectId);
 
     return this.mutating(
@@ -288,6 +289,7 @@ export class ComponentService
       z.object({ projectId: uuidSchema }),
       props
     );
+    await this.assertNotProvisioned('update', projectId);
     const languages = await this.readProjectLanguages(projectId);
 
     return this.mutating(
@@ -588,6 +590,8 @@ export class ComponentService
    */
   public async delete(props: DeleteComponentProps): Promise<void> {
     return this.mutating('delete', deleteComponentSchema, props, async () => {
+      await this.assertNotProvisioned('delete', props.projectId);
+
       const referencingEntities = await this.findReferences(
         props.projectId,
         props.id

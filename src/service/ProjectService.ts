@@ -6,7 +6,7 @@ import {
   cloneProjectSchema,
   contentChannelSchema,
   createProjectSchema,
-  ensureFromRemoteProjectSchema,
+  provisionProjectSchema,
   currentBranchProjectSchema,
   deleteProjectSchema,
   getChangesProjectSchema,
@@ -27,7 +27,7 @@ import {
   upgradeProjectSchema,
   type CloneProjectProps,
   type CreateProjectProps,
-  type EnsureFromRemoteProjectProps,
+  type ProvisionProjectProps,
   type GitTag,
   type CrudServiceWithListCount,
   type CurrentBranchProjectProps,
@@ -49,7 +49,7 @@ import {
   type UpgradeProjectProps,
 } from '../schema/index.js';
 import { applyMigrations, projectMigrations } from './migrations/index.js';
-import { isNotEmpty } from '../util/node.js';
+import { isNotEmpty, PROVISIONED_MARKER } from '../util/node.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { AssetService } from './AssetService.js';
@@ -165,6 +165,10 @@ export class ProjectService
 
   /**
    * Clones a Project by URL
+   *
+   * Creates a full working copy for editing: whole history, every LFS
+   * object and a User set for committing. To consume content in a
+   * build, see provision().
    */
   public clone(props: CloneProjectProps): Promise<Project> {
     return this.validated('clone', cloneProjectSchema, props, async () => {
@@ -193,31 +197,38 @@ export class ProjectService
   }
 
   /**
-   * Ensures the Project is present in the data directory at the given
-   * ref, provisioning it from the remote when needed
+   * Ensures a provisioned copy of the Project exists in the data
+   * directory at the given ref, provisioning it from the remote when
+   * needed. Idempotent, meant to run before every build.
    *
-   * Three cases:
-   * - Missing: a build-mode clone (shallow, single ref, LFS objects of
-   *   the checked-out ref only) and a provisioning marker is written.
+   * A provisioned copy consumes content, it is not for editing. It is
+   * created as a build-mode clone (shallow, single ref, only the LFS
+   * objects of the checked-out ref) and later runs fetch and hard-reset
+   * it, so it always matches the remote. To work on a Project, use
+   * clone() instead: a working copy with full history, every LFS
+   * object and a User set for committing. clone() throws if the
+   * Project is already present, provision() converges it.
+   *
+   * Three cases, decided by the provisioning marker:
+   * - Missing: provisioned as a fresh build-mode clone, marker written.
    * - Present with the marker: fetched and hard-reset to the ref.
-   * - Present without the marker: managed by another application
-   *   (e.g. Desktop) and left untouched.
+   * - Present without the marker: a working copy managed by another
+   *   application (e.g. Desktop), left untouched.
    *
    * `ref` is a channel (`production` for the latest Release,
    * `preview` for the latest preview Release, `draft` for the tip of
-   * the work branch) or an exact Release version. It defaults to
-   * `production`. Meant to run on a read-only Core, which clones and
-   * fetches without a User being set.
+   * the work branch) or an exact Release version, default
+   * `production`. Runs on a read-only Core without a User being set.
+   *
+   * @see docs/ci-builds.md and docs/git-and-sync.md
    */
-  public ensureFromRemote(
-    props: EnsureFromRemoteProjectProps
-  ): Promise<Project> {
+  public provision(props: ProvisionProjectProps): Promise<Project> {
     return this.validated(
-      'ensureFromRemote',
-      ensureFromRemoteProjectSchema,
+      'provision',
+      provisionProjectSchema,
       props,
       async (validatedProps) => {
-        const ref = validatedProps.ref ?? projectBranchSchema.enum.production;
+        const ref = validatedProps.ref ?? contentChannelSchema.enum.production;
         const projectPath = this.pathTo.project(validatedProps.id);
         const markerPath = this.pathTo.projectProvisionedMarker(
           validatedProps.id
@@ -342,7 +353,7 @@ export class ProjectService
       await this.verifyProvisioned(id, url, stagingPath);
 
       await Fs.writeFile(
-        Path.join(stagingPath, '.elek-provisioned'),
+        Path.join(stagingPath, PROVISIONED_MARKER),
         'Provisioned by @elek-io/core\n'
       );
 
@@ -546,6 +557,8 @@ export class ProjectService
       updateProjectSchema,
       props,
       async (validatedProps) => {
+        await this.assertNotProvisioned('update', validatedProps.id);
+
         const projectPath = this.pathTo.project(validatedProps.id);
         const filePath = this.pathTo.projectFile(validatedProps.id);
 
@@ -579,6 +592,8 @@ export class ProjectService
    */
   public upgrade(props: UpgradeProjectProps): Promise<void> {
     return this.mutating('upgrade', upgradeProjectSchema, props, async () => {
+      await this.assertNotProvisioned('upgrade', props.id);
+
       const projectPath = this.pathTo.project(props.id);
       const projectFilePath = this.pathTo.projectFile(props.id);
 
@@ -847,6 +862,8 @@ export class ProjectService
       setRemoteOriginUrlProjectSchema,
       props,
       async () => {
+        await this.assertNotProvisioned('setRemoteOriginUrl', props.id);
+
         const projectPath = this.pathTo.project(props.id);
         const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
         if (!hasOrigin) {
@@ -938,6 +955,8 @@ export class ProjectService
       synchronizeProjectSchema,
       props,
       async () => {
+        await this.assertNotProvisioned('synchronize', props.id);
+
         const projectPath = this.pathTo.project(props.id);
 
         // A rebase against uncommitted changes fails and could cost the user
@@ -1007,6 +1026,18 @@ export class ProjectService
    */
   public delete(props: DeleteProjectProps): Promise<void> {
     return this.mutating('delete', deleteProjectSchema, props, async () => {
+      // A provisioned copy is disposable by definition and its shallow,
+      // often detached state makes getChanges unreliable, so deleting it
+      // needs no guards. Deletion is the escape hatch that turns a
+      // provisioned copy back into a clonable Project.
+      const isProvisioned = await Fs.pathExists(
+        this.pathTo.projectProvisionedMarker(props.id)
+      );
+      if (isProvisioned) {
+        await Fs.remove(this.pathTo.project(props.id));
+        return;
+      }
+
       const hasRemoteOrigin = await this.gitService.remotes.hasOrigin(
         this.pathTo.project(props.id)
       );
@@ -1129,6 +1160,12 @@ export class ProjectService
   private async toProject(projectFile: ProjectFile): Promise<Project> {
     const projectPath = this.pathTo.project(projectFile.id);
 
+    // Computed from the marker on every read, never stored in
+    // project.json, because it is state of this local copy only
+    const isProvisioned = await Fs.pathExists(
+      this.pathTo.projectProvisionedMarker(projectFile.id)
+    );
+
     const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
     if (hasOrigin) {
       const remoteOriginUrl =
@@ -1136,11 +1173,13 @@ export class ProjectService
       return {
         ...projectFile,
         remoteOriginUrl,
+        isProvisioned,
       };
     }
     return {
       ...projectFile,
       remoteOriginUrl: null,
+      isProvisioned,
     };
   }
 

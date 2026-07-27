@@ -95,7 +95,7 @@ export const exportSchema = z.object({
 });
 export type ExportProps = z.infer<typeof exportSchema>;
 
-export const pullSchema = z.object({
+export const provisionSchema = z.object({
   /**
    * The ID of the Project to provision
    */
@@ -112,4 +112,4 @@ export const pullSchema = z.object({
    */
   ref: contentRefSchema.optional(),
 });
-export type PullProps = z.infer<typeof pullSchema>;
+export type ProvisionProps = z.infer<typeof provisionSchema>;
