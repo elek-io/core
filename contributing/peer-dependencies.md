@@ -4,11 +4,11 @@ Core declares three peer dependencies, so the consumer supplies them and Core sh
 consumer's copy instead of bundling its own. This doc records why each version range was
 chosen and how to re-check it when dependencies change.
 
-| Peer     | Range    | Required | Used by                              |
-| -------- | -------- | -------- | ------------------------------------ |
-| `zod`    | `^4.3.6` | yes      | every entry (schemas)                |
-| `dugite` | `^3.0.0` | yes      | the Node entry (git)                 |
-| `astro`  | `^6.0.0` | no       | the `/astro` entry (content loaders) |
+| Peer     | Range                | Required | Used by                              |
+| -------- | -------------------- | -------- | ------------------------------------ |
+| `zod`    | `^4.3.6`             | yes      | every entry (schemas)                |
+| `dugite` | `^3.0.0`             | yes      | the Node entry (git)                 |
+| `astro`  | `^6.0.0 \|\| ^7.0.0` | no       | the `/astro` entry (content loaders) |
 
 The general rule for a floor: it is the lowest version whose API Core actually uses.
 Verify a candidate by installing it and running the suite. `zod` carries an extra
@@ -45,7 +45,7 @@ the tree. As of this writing the contributors are:
 | Core's own schemas  | `>=4.1.0`       | `z.hash('sha1')` in `src/schema/gitSchema.ts` does not exist before 4.1.0 |
 | `@hono/zod-openapi` | `^4.0.0`        | peer dependency                                                           |
 | `@scalar/types`     | `^4.3.5`        | via `@scalar/hono-api-reference`, a runtime dependency                    |
-| `astro`             | `^4.3.6`        | the `/astro` entry's peer, measured against the current dev version 6.4.8 |
+| `astro`             | `^4.3.6`        | the `/astro` entry's peer, measured against the current dev version 7.1.3 |
 
 The maximum is `4.3.6`, so the peer range is `^4.3.6`. `devDependencies` pins the latest 4.x
 (`zod@4.4.3`) so Core develops against the newest patch, while the declared floor stays at the
@@ -90,7 +90,7 @@ pnpm why dugite            # expect one version
 pnpm check-types && pnpm build && pnpm test
 ```
 
-## astro (`^6.0.0`, optional)
+## astro (`^6.0.0 || ^7.0.0`, optional)
 
 astro is an optional peer (`peerDependenciesMeta`), used only by the `/astro` entry. A consumer
 using the Astro integration already provides it, and consumers of the Node or Browser entry never
@@ -101,24 +101,44 @@ The floor is 6.0.0, verified two ways. astro 6.0.0 added the `Loader.createSchem
 `{ schema, types }`) that `elekEntries` uses (`src/index.astro.ts`), and it switched the Loader's
 schema typing from zod v3 to zod v4. Both are absent in every astro 5.x, so 5.x fails to type-check:
 `createSchema does not exist in type 'Loader'`, plus a zod v3 vs v4 schema mismatch on the `schema`
-field. `devDependencies` pins the latest 6.x for development. To re-verify, pin `astro` to a candidate
-version and run `pnpm check-types` and `pnpm test`.
+field. `devDependencies` pins the latest 7.x for development, so the floor is spot-verified by
+pinning rather than by a permanent CI matrix job. To re-verify, pin `astro` to a candidate version
+and run `pnpm check-types` and `pnpm test`.
 
-### Why `^6.0.0` and not `>=6.0.0`
+### Why a range of two majors and not `>=6.0.0`
 
-`^6.0.0` allows any astro 6.x but not a future astro 7. `>=6.0.0` would also allow astro 7, 8 and so
-on the moment they are published. The Content Layer `Loader` API changes across astro majors (the
-`createSchema` method Core depends on did not exist before 6.0, and the schema typing moved from zod v3
-to v4), so a future major is likely to need Core changes and re-verification. Capping at `^6.0.0` makes
-a consumer on astro 7 get a peer warning that prompts that re-check, instead of silently claiming an
-untested major works. When a new astro major is verified, widen the range to include it.
+`>=6.0.0` would allow astro 8, 9 and so on the moment they are published. The Content Layer `Loader`
+API changes across astro majors (the `createSchema` method Core depends on did not exist before 6.0,
+and the schema typing moved from zod v3 to v4), so a future major is likely to need Core changes and
+re-verification. Naming the verified majors explicitly makes a consumer on the next one get a peer
+warning that prompts that re-check, instead of silently claiming an untested major works. When a new
+astro major is verified, widen the range to include it.
+
+astro 7 was verified this way in July 2026 and the range widened from `^6.0.0` to `^6.0.0 || ^7.0.0`.
+It is a speed release: Rust compiler, a Rust markdown pipeline replacing remark and rehype, Vite 8 on
+Rolldown, queued rendering. The content layer itself is untouched, `Loader.createSchema` and
+`LoaderContext` (including `config: AstroConfig` and `DataEntry.filePath`) are unchanged from 6.4.8,
+`astro/loaders`, `astro/jsx-runtime`, `astro/content/config` and `astro/assets/utils/node` all exist
+with the same shapes, and programmatic `sync` is unchanged. The zod dependency stays `^4.3.6`, so the
+zod floor does not move. New in v7 is an optional `@astrojs/markdown-remark` peer for the opt-in
+remark pipeline, which adds no install friction. Engines require Node >= 22.12, and CI runs the
+version in `.node-version`. There is still no integration API for injecting content collections, so
+nothing in v7 changes how the `/astro` entry is designed.
 
 Note that astro depends on zod through a caret range, so its zod requirement feeds the zod floor above
 (astro is currently the binding constraint at `^4.3.6`). Bumping astro can raise the zod floor, so
 re-check the zod single-copy invariant whenever you bump astro.
 
-The coupling is also a runtime one. Astro 6 validates content collection schemas with zod 4, and the
+The coupling is also a runtime one. Astro validates content collection schemas with zod 4, and the
 schemas Core's loaders supply are consumed by astro's content layer. A second physical zod copy
 therefore breaks the Astro integration at runtime, not only in type-checking. Astro 6 also removed
 the `z` export from `astro:content`. Consumers author collection schemas with `astro/zod` or with the
 `z` Core re-exports, and with the single-copy invariant intact both resolve to the same physical zod.
+
+### The dev pin and pnpm's release-age cooldown
+
+pnpm 11 holds freshly published versions back for a cooldown period. `pnpm add -D astro@<version>`
+on a release younger than that writes a `minimumReleaseAgeExclude` entry into `pnpm-workspace.yaml`
+to bypass it. Do not commit that entry: it is a permanent opt-out of a supply chain protection for a
+condition that lasts a day, and it turns into stale cruft at the next bump. Pin the newest version
+that is past the cooldown instead, and pick the newer one up with the next routine bump.
