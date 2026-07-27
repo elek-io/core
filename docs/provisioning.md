@@ -2,7 +2,7 @@
 
 Projects live in the local data directory. On your machine the Desktop app keeps that directory filled. A build environment such as a CI runner starts empty, so any pipeline that consumes your content needs to get it there first. That step is called provisioning: Core fetches a Project from its remote into the data directory, read-only, and leaves it there for whatever your pipeline does next.
 
-What comes next is up to you. Building an Astro site is the most common case and has a zero-step path through the `elek()` integration. But once a Project is provisioned it is a regular local Project, so everything else works too: reading it programmatically with `ElekIoCore`, exporting JSON with `elek export`, generating types and clients, or running your own scripts.
+What comes next is up to you. Building an Astro site has a zero-step path through the `elek()` integration. Astro is the framework we focused on first, integrations for more frameworks will follow. But once a Project is provisioned it is a regular local Project, so everything else works too: reading it programmatically with `ElekIoCore`, exporting JSON with `elek export`, generating types and clients, or running your own scripts.
 
 ## What a CI environment sees
 
