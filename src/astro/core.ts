@@ -6,6 +6,10 @@ import ElekIoCore, { CoreError } from '../index.node.js';
  * importing @elek-io/core/astro has no side effects. Configured through
  * the ELEK_IO_* environment variables, which are read once here.
  *
+ * The log level is left to ELEK_IO_LOG_LEVEL rather than passed, since
+ * an option would win over the variable and there would be no way to
+ * quieten Core inside an Astro build.
+ *
  * The file cache is off on purpose. Core only invalidates it for writes
  * it performs itself, while here another application owns the files:
  * the Desktop app edits a Project while `astro dev` reads it, and a
@@ -16,7 +20,6 @@ let coreInstance: ElekIoCore | undefined;
 export function getCore(): ElekIoCore {
   if (!coreInstance) {
     coreInstance = new ElekIoCore({
-      log: { level: 'info' },
       file: { cache: false },
     });
   }

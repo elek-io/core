@@ -23,6 +23,7 @@ import { LogService } from './service/LogService.js';
 import {
   createPathTo,
   resolveDataDir,
+  resolveLogLevel,
   resolveReadOnly,
   type PathTo,
 } from './util/node.js';
@@ -64,7 +65,7 @@ export default class ElekIoCore {
     }
 
     this.options = {
-      log: parsedProps.data?.log ?? { level: 'info' },
+      log: { level: resolveLogLevel(parsedProps.data?.log?.level) },
       file: parsedProps.data?.file ?? { cache: true },
       dataDir: resolveDataDir(parsedProps.data?.dataDir),
       isReadOnly: resolveReadOnly(parsedProps.data?.isReadOnly),

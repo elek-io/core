@@ -16,7 +16,9 @@ import {
   files,
   folders,
   resolveDataDir,
+  resolveLogLevel,
 } from './node.js';
+import { CoreError } from './shared.js';
 
 describe('isNotEmpty', () => {
   it('returns false for null', () => {
@@ -184,6 +186,47 @@ describe('resolveDataDir', () => {
     const dataDir = Path.join(Os.tmpdir(), 'elek-io-core-trailing-test');
 
     expect(resolveDataDir(dataDir + Path.sep)).toBe(dataDir);
+  });
+});
+
+describe('resolveLogLevel', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('returns the default level when nothing is configured', () => {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', undefined);
+
+    expect(resolveLogLevel()).toBe('info');
+  });
+
+  it('returns the ELEK_IO_LOG_LEVEL environment variable when set', () => {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', 'error');
+
+    expect(resolveLogLevel()).toBe('error');
+  });
+
+  it('prefers the given level over the environment variable', () => {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', 'error');
+
+    expect(resolveLogLevel('debug')).toBe('debug');
+  });
+
+  it('treats an empty or whitespace-only environment variable as unset', () => {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', '');
+    expect(resolveLogLevel()).toBe('info');
+
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', '   ');
+    expect(resolveLogLevel()).toBe('info');
+  });
+
+  it('throws a CoreError naming the levels for a value it does not know', () => {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', 'verbose');
+
+    expect(() => resolveLogLevel()).toThrow(CoreError);
+    expect(() => resolveLogLevel()).toThrow(
+      'ELEK_IO_LOG_LEVEL must be "error", "warn", "info" or "debug", got "verbose"'
+    );
   });
 });
 

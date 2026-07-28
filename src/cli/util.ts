@@ -2,11 +2,11 @@ import chokidar from 'chokidar';
 import ElekIoCore from '../index.node.js';
 import type { ConstructorElekIoCoreProps } from '../schema/index.js';
 
-let coreProps: NonNullable<ConstructorElekIoCoreProps> = {
-  log: {
-    level: 'info',
-  },
-};
+/**
+ * The log level is left out on purpose, so ELEK_IO_LOG_LEVEL reaches
+ * the CLI's Core. An option here would win over the variable.
+ */
+let coreProps: NonNullable<ConstructorElekIoCoreProps> = {};
 let coreInstance: ElekIoCore | undefined;
 
 /**

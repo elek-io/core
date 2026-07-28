@@ -2,6 +2,7 @@ import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
 import { execFile, type ExecFileOptions } from 'node:child_process';
+import { logLevelSchema, type LogLevel } from '../schema/baseSchema.js';
 import {
   contentChannelSchema,
   projectFolderSchema,
@@ -37,6 +38,32 @@ export function resolveReadOnly(isReadOnly?: boolean): boolean {
     return isReadOnly;
   }
   return process.env['ELEK_IO_READ_ONLY']?.trim() === 'true';
+}
+
+/**
+ * Resolves the lowest level Core logs
+ *
+ * Precedence: the given level wins over the ELEK_IO_LOG_LEVEL
+ * environment variable, which wins over the default `info`. An empty
+ * or whitespace-only value counts as unset. A level Core does not
+ * know throws rather than falling back, so a typo turns into a
+ * message instead of silently leaving the logs as they were.
+ */
+export function resolveLogLevel(level?: LogLevel): LogLevel {
+  if (level !== undefined) {
+    return level;
+  }
+  const fromEnv = process.env['ELEK_IO_LOG_LEVEL']?.trim();
+  if (!fromEnv) {
+    return 'info';
+  }
+  const parsed = logLevelSchema.safeParse(fromEnv);
+  if (!parsed.success) {
+    throw CoreError.badRequest(
+      `ELEK_IO_LOG_LEVEL must be "error", "warn", "info" or "debug", got "${fromEnv}"`
+    );
+  }
+  return parsed.data;
 }
 
 /**

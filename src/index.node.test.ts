@@ -18,6 +18,7 @@ describe('Node.js', function () {
     // without creating or emptying anything in the real ~/elek.io
     const fakeHome = tmpDirPath();
     vi.stubEnv('ELEK_IO_DATA_DIR', undefined);
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', undefined);
     vi.spyOn(Os, 'homedir').mockReturnValue(fakeHome);
     const defaultDataDir = Path.join(fakeHome, 'elek.io');
 
@@ -133,6 +134,33 @@ describe('Node.js', function () {
     const { core: envCore } = createTmpCore();
 
     expect(envCore.options.isReadOnly).toEqual(false);
+  });
+
+  it('should respect the ELEK_IO_LOG_LEVEL environment variable', function () {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', 'error');
+    const { core: envCore } = createTmpCore();
+
+    expect(envCore.options.log.level).toEqual('error');
+  });
+
+  it('should prefer the log option over the environment variable', function () {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', 'error');
+    const { core: optionCore } = createTmpCore({ log: { level: 'debug' } });
+
+    expect(optionCore.options.log.level).toEqual('debug');
+  });
+
+  it('should treat an empty ELEK_IO_LOG_LEVEL as unset', function () {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', '   ');
+    const { core: envCore } = createTmpCore();
+
+    expect(envCore.options.log.level).toEqual('info');
+  });
+
+  it('should throw a CoreError for an unknown ELEK_IO_LOG_LEVEL', function () {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', 'verbose');
+
+    expect(() => new ElekIoCore()).to.throw(CoreError);
   });
 
   it('should throw a CoreError for an empty dataDir option', function () {

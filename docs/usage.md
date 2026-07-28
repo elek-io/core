@@ -43,6 +43,8 @@ The resolved options are exposed on `core.options`, and the running Core version
 
 `dataDir` sets the data directory everything lives in, see [`storage-layout.md`](./storage-layout.md). It takes precedence over the `ELEK_IO_DATA_DIR` environment variable, which takes precedence over the default `~/elek.io`. Relative paths are resolved against the current working directory once at construction. `~` is not expanded, that is a shell feature, so pass an absolute path or let the shell expand it. The directory does not need to exist, Core creates it. An empty or whitespace-only value throws a `CoreError`. The resolved absolute path is exposed as `core.options.dataDir`, and `core.util.pathTo` builds every path from it.
 
+`log.level` is the lowest level Core writes, one of `error`, `warn`, `info` and `debug`. It takes precedence over the `ELEK_IO_LOG_LEVEL` environment variable, which takes precedence over the default `info`. A value that is none of the four throws a `CoreError`, so a typo says so instead of quietly leaving the logs as they were. Set it to `error` where Core is a library inside another tool's output, such as an Astro build.
+
 `isReadOnly` puts Core into read-only mode, meant for environments that only consume content, such as CI builds. Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`. In return, cloning and fetching work without a User being set, because nothing is ever committed. The option takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
 
 ### Environment variables
@@ -52,6 +54,7 @@ Core reads its environment variables once at construction, never at import. All 
 | Variable                           | Purpose                                                          | Default          |
 | ---------------------------------- | ---------------------------------------------------------------- | ---------------- |
 | `ELEK_IO_DATA_DIR`                 | The directory Core reads and writes data in                      | `~/elek.io`      |
+| `ELEK_IO_LOG_LEVEL`                | The lowest level Core logs                                       | `info`           |
 | `ELEK_IO_READ_ONLY`                | Set to `true` to put Core into read-only mode                    | unset            |
 | `ELEK_IO_REMOTE_ACCESS_TOKEN`      | Token for authenticating git operations against a private remote | unset            |
 | `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN`   | `x-access-token` |
@@ -457,7 +460,7 @@ public/elek/
 
 Those are the only entries the integration needs. Everything else it produces goes through Astro's content store, which lives in `.astro` during development and in `node_modules/.astro` during a build, both of which a standard Astro `.gitignore` already covers.
 
-All loaders share one Core instance, which the loaders themselves take no options for. What configures it are the `ELEK_IO_*` environment variables of the build: set `ELEK_IO_DATA_DIR` to read from a data directory other than `~/elek.io`, `ELEK_IO_CHANNEL` to switch the content state deployment-wide and `ELEK_IO_REMOTE_ACCESS_TOKEN` to authenticate against a private remote. See [Environment variables](#environment-variables) for the full list, and note that it is the full list: settings without an environment variable, the log level among them, cannot be changed for the loaders' Core today.
+All loaders share one Core instance, which the loaders themselves take no options for. What configures it are the `ELEK_IO_*` environment variables of the build: set `ELEK_IO_DATA_DIR` to read from a data directory other than `~/elek.io`, `ELEK_IO_LOG_LEVEL` to `error` to keep Core out of the build output, `ELEK_IO_CHANNEL` to switch the content state deployment-wide and `ELEK_IO_REMOTE_ACCESS_TOKEN` to authenticate against a private remote. See [Environment variables](#environment-variables) for the full list, and note that it is the full list: a setting without an environment variable cannot be changed for the loaders' Core today.
 
 ### Local development
 

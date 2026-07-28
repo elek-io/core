@@ -20,7 +20,7 @@ The split is not cosmetic. `collections.ts` builds its collections from the load
 
 The loaders share one lazily created `ElekIoCore` and take no options of their own. They used to accept a `core` prop, which only the first loader to run actually applied while every later one was silently ignored. The `ELEK_IO_*` variables configure that instance instead, and they reach it wherever it is constructed.
 
-`elek()` keeps its own `core` option because it runs a second, short-lived, read-only Core for provisioning, in a different module graph, before the loaders exist. Nothing about `file.cache` or `log.level` is exposed to the loaders today. If that is ever needed, it is a new `ELEK_IO_` variable read at construction, not a prop.
+`elek()` keeps its own `core` option because it runs a second, short-lived, read-only Core for provisioning, in a different module graph, before the loaders exist. `log.level` reaches the loaders through `ELEK_IO_LOG_LEVEL`, which is what a consumer silences Core with in a build. `file.cache` is deliberately not exposed, the loaders pin it off (see below). Anything else that is ever needed is a new `ELEK_IO_` variable read at construction, not a prop.
 
 ## Watching content in dev
 
