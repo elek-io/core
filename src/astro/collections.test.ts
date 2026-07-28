@@ -5,12 +5,14 @@ import {
   expect,
   expectTypeOf,
   it,
+  vi,
 } from 'vitest';
-import core from '../test/setup.js';
+import core, { uuid } from '../test/setup.js';
 import { createProject } from '../test/util.js';
 import { CoreError } from '../util/shared.js';
 import { defineElekConfig } from './elekConfig.js';
 import { elekCollections } from './collections.js';
+import { getCore } from './core.js';
 
 /**
  * A Collection with nothing but a slug, the derived keys only depend
@@ -86,48 +88,212 @@ describe('elekCollections', function () {
     ]);
   }, 30000);
 
-  it('should drop every Assets collection when asked', async function () {
+  it('should warn that the bare call is for exploration only', async function () {
+    // It derives everything, which is what gets someone started and
+    // what nobody should ship
     const config = defineElekConfig({
-      projects: { website: { id: project.id }, shop: { id: other.id } },
+      projects: { website: { id: project.id } },
     });
+    const warn = vi.spyOn(getCore().logger, 'warn');
 
-    const collections = await elekCollections(config, { assets: false });
+    await elekCollections(config);
 
-    expect(Object.keys(collections).sort()).toEqual([
-      'shopPages',
-      'websiteBlogPosts',
-      'websiteProducts',
-    ]);
+    const messages = warn.mock.calls.map(([props]) => props.message);
+    expect(
+      messages.some((message) => message.includes('elekCollections'))
+    ).toBe(true);
+    // Names what it derived, so the cost is in front of the developer
+    expect(messages.some((message) => message.includes('3'))).toBe(true);
+    warn.mockRestore();
   }, 30000);
 
-  it('should drop the Assets collection of a single Project', async function () {
+  it('should stay silent once a selection is given', async function () {
+    const config = defineElekConfig({
+      projects: { website: { id: project.id } },
+    });
+    const warn = vi.spyOn(getCore().logger, 'warn');
+
+    await elekCollections(config, {
+      collections: { website: ['products'] },
+      assets: { website: true },
+    });
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  }, 30000);
+
+  it('should derive exactly what the selection names and nothing else', async function () {
     const config = defineElekConfig({
       projects: { website: { id: project.id }, shop: { id: other.id } },
     });
 
     const collections = await elekCollections(config, {
-      assets: { shop: false },
+      collections: { website: ['products'], shop: ['pages'] },
+      assets: { website: true },
     });
 
+    // website's blog-posts and shop's Assets are not named, so they are
+    // not derived
     expect(Object.keys(collections).sort()).toEqual([
       'shopPages',
       'websiteAssets',
-      'websiteBlogPosts',
       'websiteProducts',
     ]);
   }, 30000);
 
-  it('should keep the Assets collection when only its outDir is overridden', async function () {
+  it('should derive no Assets at all when the key is left out', async function () {
     const config = defineElekConfig({
       projects: { website: { id: project.id } },
     });
 
     const collections = await elekCollections(config, {
-      assets: { website: { outDir: './src/media' } },
+      collections: { website: ['products'] },
     });
 
-    expect(Object.keys(collections)).toContain('websiteAssets');
+    expect(Object.keys(collections)).toEqual(['websiteProducts']);
   }, 30000);
+
+  it('should derive no Collections at all when the key is left out', async function () {
+    const config = defineElekConfig({
+      projects: { website: { id: project.id } },
+    });
+
+    const collections = await elekCollections(config, {
+      assets: { website: true },
+    });
+
+    expect(Object.keys(collections)).toEqual(['websiteAssets']);
+  }, 30000);
+
+  it('should take the Assets directories of a named alias', async function () {
+    const config = defineElekConfig({
+      projects: { website: { id: project.id } },
+    });
+
+    const collections = await elekCollections(config, {
+      assets: { website: { imageDir: './src/media' } },
+    });
+
+    expect(Object.keys(collections)).toEqual(['websiteAssets']);
+  }, 30000);
+
+  it('should accept a Collection UUID as well as its slug', async function () {
+    const products = await core.collections.readBySlug({
+      projectId: project.id,
+      slug: 'products',
+    });
+    const config = defineElekConfig({
+      projects: { website: { id: project.id } },
+    });
+
+    const collections = await elekCollections(config, {
+      collections: { website: [products.id] },
+    });
+
+    expect(Object.keys(collections)).toEqual(['websiteProducts']);
+  }, 30000);
+
+  it('should throw naming the alias when a selected Collection does not exist', async function () {
+    // Silently deriving nothing would look exactly like a Collection
+    // that failed to load
+    const config = defineElekConfig({
+      projects: { website: { id: project.id } },
+    });
+
+    let error: unknown = null;
+    try {
+      await elekCollections(config, { collections: { website: ['post'] } });
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeInstanceOf(CoreError);
+    expect(error instanceof CoreError && error.type).toEqual('NotFound');
+    expect(error instanceof CoreError && error.message).toContain('post');
+    expect(error instanceof CoreError && error.message).toContain('website');
+    // Says what the Project does have, so a typo is obvious
+    expect(error instanceof CoreError && error.message).toContain('blog-posts');
+  }, 30000);
+
+  it('should throw when a selection derives nothing at all', async function () {
+    // Same reason as the typo above, an empty result is what a broken
+    // loader looks like
+    const config = defineElekConfig({
+      projects: { website: { id: project.id } },
+    });
+
+    await expect(elekCollections(config, {})).rejects.toThrow(
+      /derives no collections/
+    );
+    await expect(
+      elekCollections(config, { collections: {}, assets: {} })
+    ).rejects.toThrow(/derives no collections/);
+  }, 30000);
+
+  it('should throw when a selected Collection can reference excluded Assets', async function () {
+    // Following the reference is getEntry("<alias>Assets", ref.id), so
+    // excluding the Assets collection breaks it at render time, in a
+    // template far away from the config that caused it
+    const referencing = await createProject('Derived Collections References');
+    try {
+      await core.collections.create({
+        projectId: referencing.id,
+        icon: 'home',
+        name: {
+          singular: { en: 'post', de: 'post' },
+          plural: { en: 'posts', de: 'posts' },
+        },
+        slug: { singular: 'post', plural: 'posts' },
+        description: { en: 'The posts', de: 'The posts' },
+        fieldDefinitions: [
+          {
+            id: uuid(),
+            slug: 'cover',
+            valueType: 'reference',
+            fieldType: 'asset',
+            label: { en: 'Cover', de: 'Cover' },
+            description: null,
+            isRequired: false,
+            isDisabled: false,
+            isUnique: false,
+            inputWidth: '12',
+            min: null,
+            max: null,
+            ofAssetMimeTypes: [],
+          },
+        ],
+      });
+
+      const config = defineElekConfig({
+        projects: { website: { id: referencing.id } },
+      });
+
+      let error: unknown = null;
+      try {
+        await elekCollections(config, { collections: { website: ['posts'] } });
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeInstanceOf(CoreError);
+      // Names the Collection, the field and the fix
+      expect(error instanceof CoreError && error.message).toContain('posts');
+      expect(error instanceof CoreError && error.message).toContain('cover');
+      expect(error instanceof CoreError && error.message).toContain('website');
+
+      // Naming the Assets of that Project is what makes it build
+      const collections = await elekCollections(config, {
+        collections: { website: ['posts'] },
+        assets: { website: true },
+      });
+      expect(Object.keys(collections).sort()).toEqual([
+        'websiteAssets',
+        'websitePosts',
+      ]);
+    } finally {
+      await referencing.destroy();
+    }
+  }, 60000);
 
   it('should throw naming both sides when two derived keys collide', async function () {
     // toPascalCase cannot mark a digit boundary, so "a-1b" and "a1b"
@@ -173,9 +339,11 @@ describe('elekCollections', function () {
         projects: { web: { id: first.id }, webSite: { id: second.id } },
       });
 
-      await expect(elekCollections(config, { assets: false })).rejects.toThrow(
-        /webSitePosts/
-      );
+      await expect(
+        elekCollections(config, {
+          collections: { web: ['site-posts'], webSite: ['posts'] },
+        })
+      ).rejects.toThrow(/webSitePosts/);
     } finally {
       await first.destroy();
       await second.destroy();
@@ -200,7 +368,22 @@ describe('elekCollections', function () {
     type Options = NonNullable<
       Parameters<typeof elekCollections<typeof config>>[1]
     >;
-    type PerAlias = Exclude<Options['assets'], false | undefined>;
+    type PerAlias = NonNullable<Options['assets']>;
+
+    expectTypeOf<keyof PerAlias>().toEqualTypeOf<'website' | 'shop'>();
+  });
+
+  it('should accept only the declared aliases in the collections option', function () {
+    const config = defineElekConfig({
+      projects: { website: { id: project.id }, shop: { id: other.id } },
+    });
+
+    expect(Object.keys(config.projects)).toEqual(['website', 'shop']);
+
+    type Options = NonNullable<
+      Parameters<typeof elekCollections<typeof config>>[1]
+    >;
+    type PerAlias = NonNullable<Options['collections']>;
 
     expectTypeOf<keyof PerAlias>().toEqualTypeOf<'website' | 'shop'>();
   });

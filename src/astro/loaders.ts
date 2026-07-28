@@ -30,17 +30,17 @@ export interface ElekAssetsLoaderProps<T extends ElekConfig> {
    * them. Has to be inside the Astro project. A relative path resolves
    * against the Astro project root.
    *
-   * @default 'src/content/elek/<alias>/assets'
+   * @default 'src/elek/<alias>/images'
    */
-  outDir?: string;
+  imageDir?: string;
   /**
    * Where the binaries of every other Asset are saved. Has to be
-   * inside Astro's public directory, that is what serves them. A
+   * inside Astro's own `publicDir`, that is what serves them. A
    * relative path resolves against the Astro project root.
    *
    * @default 'public/elek/<alias>/assets'
    */
-  publicOutDir?: string;
+  publicDir?: string;
 }
 
 export interface ElekEntriesLoaderProps<T extends ElekConfig> {
@@ -57,15 +57,15 @@ export interface ElekEntriesLoaderProps<T extends ElekConfig> {
  * decide. Below `src/` so `astro:assets` can pick them up, and per
  * alias so two Projects never write into the same directory.
  */
-export function defaultAssetsOutDir(alias: string): string {
-  return Path.join('src', 'content', 'elek', alias, 'assets');
+export function defaultImageDir(alias: string): string {
+  return Path.join('src', 'elek', alias, 'images');
 }
 
 /**
  * Where a Project saves every other binary. Below `public/`, which
  * Astro copies into the build as it is, so they keep a stable URL.
  */
-export function defaultPublicAssetsOutDir(alias: string): string {
+export function defaultPublicDir(alias: string): string {
   return Path.join('public', 'elek', alias, 'assets');
 }
 
@@ -152,17 +152,17 @@ export function elekAssetsLoader<const T extends ElekConfig>(
     // Relative paths belong to the Astro project, not to whatever
     // directory the build was started from
     const root = Url.fileURLToPath(context.config.root);
-    const publicDir = Url.fileURLToPath(context.config.publicDir);
-    const outDir = Path.resolve(
+    const astroPublicDir = Url.fileURLToPath(context.config.publicDir);
+    const imageDir = Path.resolve(
       root,
-      props.outDir ?? defaultAssetsOutDir(alias)
+      props.imageDir ?? defaultImageDir(alias)
     );
-    const publicOutDir = Path.resolve(
+    const publicDir = Path.resolve(
       root,
-      props.publicOutDir ?? defaultPublicAssetsOutDir(alias)
+      props.publicDir ?? defaultPublicDir(alias)
     );
     context.logger.info(
-      `Loading elek.io Assets of Project "${alias}", saving images to "${outDir}" and every other file to "${publicOutDir}"`
+      `Loading elek.io Assets of Project "${alias}", saving images to "${imageDir}" and every other file to "${publicDir}"`
     );
 
     const { list: assets, total } = await core.assets.list({
@@ -181,23 +181,23 @@ export function elekAssetsLoader<const T extends ElekConfig>(
       const isImage = hasImageExtension(asset.extension);
       const fileName = `${asset.id}.${asset.extension}`;
       const absoluteAssetFilePath = Path.join(
-        isImage ? outDir : publicOutDir,
+        isImage ? imageDir : publicDir,
         fileName
       );
 
       // Astro resolves an image relative to the entry's filePath, and
       // serves a public file at its path below the public directory
       const filePath = toRelativePosix(root, absoluteAssetFilePath);
-      const publicPath = toRelativePosix(publicDir, absoluteAssetFilePath);
+      const publicPath = toRelativePosix(astroPublicDir, absoluteAssetFilePath);
 
       if (isImage && filePath === null) {
         context.logger.warn(
-          `Asset "${asset.id}" is saved outside the Astro project, so it cannot be processed as an image. Point outDir inside the project to optimize it.`
+          `Asset "${asset.id}" is saved outside the Astro project, so it cannot be processed as an image. Point imageDir inside the project to optimize it.`
         );
       }
       if (!isImage && publicPath === null) {
         context.logger.warn(
-          `Asset "${asset.id}" is saved outside Astro's public directory, so it is not served. Point publicOutDir inside it to link this Asset.`
+          `Asset "${asset.id}" is saved outside Astro's public directory, so it is not served. Point publicDir inside it to link this Asset.`
         );
       }
 

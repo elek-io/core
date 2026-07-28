@@ -78,7 +78,7 @@ export const collections = {
     loader: elekAssetsLoader({
       config,
       project: 'website',
-      outDir: '${assetOutDir}',
+      imageDir: '${assetOutDir}',
     }),
   }),
   entries: defineCollection({
@@ -163,7 +163,7 @@ export const collections = {
     const config: ElekConfig = { projects: { website: { id: 'not-a-uuid' } } };
 
     expect(() =>
-      elekAssetsLoader({ config, project: 'website', outDir: '.' })
+      elekAssetsLoader({ config, project: 'website', imageDir: '.' })
     ).toThrow(/invalid/i);
   });
 

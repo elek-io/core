@@ -85,7 +85,7 @@ export const collections = {
     loader: elekAssetsLoader({
       config,
       project: 'website',
-      outDir: '${assetOutDir}',
+      imageDir: '${assetOutDir}',
     }),
   }),
   entries: defineCollection({

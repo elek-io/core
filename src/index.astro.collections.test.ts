@@ -85,31 +85,28 @@ export const collections = {
         Path.join(
           root,
           'src',
-          'content',
           'elek',
           'website',
-          'assets',
+          'images',
           `${asset.id}.${asset.extension}`
         )
       )
     ).toBe(true);
   }, 120000);
 
-  it('should save Assets where a per Project outDir points instead', async function () {
+  it('should save Assets where a per Project imageDir points instead', async function () {
     const root = await writeAstroProject(
-      ", { assets: { website: { outDir: 'content/binaries' } } }"
+      ", { assets: { website: { imageDir: 'content/binaries' } } }"
     );
 
     await sync({ root, configFile: false, logLevel: 'info' });
 
-    // Relative outDir resolves against the Astro project root
+    // Relative imageDir resolves against the Astro project root
     expect(
       await Fs.pathExists(
         Path.join(root, 'content', 'binaries', `${asset.id}.${asset.extension}`)
       )
     ).toBe(true);
-    expect(await Fs.pathExists(Path.join(root, 'src', 'content', 'elek'))).toBe(
-      false
-    );
+    expect(await Fs.pathExists(Path.join(root, 'src', 'elek'))).toBe(false);
   }, 120000);
 });

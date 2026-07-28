@@ -350,6 +350,8 @@ export const collections = {
 
 `elekCollections()` reads the content model of every declared Project and derives one Astro collection per elek.io Collection, plus one for the Project's Assets. A Project aliased `website` with a `products` and a `blog-posts` Collection produces `websiteProducts`, `websiteBlogPosts` and `websiteAssets`, which is what `getCollection('websiteProducts')` then expects. Keys are always alias-prefixed, also when a single Project is declared, so adding a second Project later never renames the first one's collections. Two Collections that would derive the same key fail the build naming both sides rather than one silently winning.
 
+Called like that, with no second argument, it derives **everything** and says so in a warning. That is the shape to start with, before you know what a Project holds. Replace it with a selection before you ship, see [Choosing what to derive](#choosing-what-to-derive).
+
 Nothing discovers `elek.config.ts` automatically, the filename is a convention and the imports are what connect the three files. Put it wherever you like as long as both sides can import it.
 
 ### What an Entry looks like
@@ -380,9 +382,37 @@ const post = await getEntry('websitePosts', entry.data.related.en[0].id);
 
 An Entry carries no `body` and no rendered HTML, so Astro's `render()` and `<Content />` produce an empty page rather than an error. A `markdown` field arrives on `entry.data` as a tree, which [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro) renders with `mdastRender`.
 
+### Choosing what to derive
+
+Pass a second argument and it becomes the complete list of what the site reads. This is the shape to ship:
+
+```typescript
+// src/content.config.ts
+export const collections = {
+  ...(await elekCollections(config, {
+    collections: { website: ['pages'], shop: ['products'], blog: ['posts'] },
+    assets: { website: { imageDir: './src/media' }, shop: true },
+  })),
+};
+```
+
+That derives `websitePages`, `shopProducts`, `blogPosts`, `websiteAssets` and `shopAssets`. Nothing else: `blog` is not named under `assets`, so its Assets are not derived, and any Collection not named under `collections` is not either.
+
+One rule covers both keys. **A key you leave out contributes nothing, and so does an alias you leave out of a key.** So `{ collections: { website: ['pages'] } }` derives one collection and no Assets at all.
+
+Name Collections by their plural slug or their id, the same two a loader's `collectionIdOrSlug` takes. Under `assets`, `true` takes the default directories and an object sets `imageDir` for image binaries and `publicDir` for every other file.
+
+Deriving less is worth doing. An unread Collection costs a file read and a schema validation per Entry on every sync, and an unread Assets collection copies every binary of its Project into the site each time.
+
+Three mistakes fail the build rather than passing quietly, because each would otherwise produce exactly what success produces:
+
+- A name that matches no Collection of the Project it is listed under. The error names the alias and lists what that Project does have, so a typo is obvious.
+- A selection that derives nothing at all, including `elekCollections(config, {})`.
+- A derived Collection that can reference Assets, through a reference field or a markdown field with `assetReferences` enabled, while that Project's Assets are left out. Following such a reference is `getEntry('websiteAssets', ref.id)`, so without the collection it would break while a page renders, far from the config that caused it.
+
 ### Declaring collections explicitly
 
-`elekCollections()` returns a plain object, so individual collections can be added next to it, and the loaders behind it are exported for when you want to name a collection yourself or expose only part of a Project:
+`elekCollections()` returns a plain object, so individual collections can be added next to it, and the loaders behind it are exported for when you want to name a collection yourself or give it a key of your own:
 
 ```typescript
 // src/content.config.ts
@@ -391,7 +421,7 @@ import { elekCollections, elekEntriesLoader } from '@elek-io/core/astro';
 import { config } from '../elek.config';
 
 export const collections = {
-  ...(await elekCollections(config, { assets: false })),
+  ...(await elekCollections(config, { collections: { website: ['pages'] } })),
   posts: defineCollection({
     loader: elekEntriesLoader({
       config,
@@ -450,24 +480,24 @@ const assets = await getCollection('websiteAssets');
 
 Every other Asset, a PDF or a ZIP for example, is served as it is and carries its URL on `data.href` instead. Each Asset has exactly one of the two, the other is `null`, so the check above is also how you tell them apart.
 
-The two kinds are saved in different places, because that is what makes each work. Images go to `src/content/elek/<alias>/assets`, below `src/` where Astro can process them. Everything else goes to `public/elek/<alias>/assets`, because only the public directory is served. Override either per Project, or drop the Assets collection entirely:
+The two kinds are saved in different places, because that is what makes each work. Images go to `src/elek/<alias>/images`, below `src/` where Astro can process them. Everything else goes to `public/elek/<alias>/assets`, because only the public directory is served. Override either per Project:
 
 ```typescript
 await elekCollections(config, {
+  collections: { website: ['pages'], shop: ['products'] },
   assets: {
-    website: { outDir: './src/media', publicOutDir: './public/downloads' },
-    shop: false,
+    website: { imageDir: './src/media', publicDir: './public/downloads' },
   },
 });
 ```
 
-`{ assets: false }` drops it for every Project. Relative paths resolve against the Astro project root. `outDir` has to stay inside the project and `publicOutDir` inside the public directory, otherwise the Asset cannot be processed or served, and the build says so.
+`shop` is not named under `assets` there, so its Assets are not derived at all, see [Choosing what to derive](#choosing-what-to-derive). Relative paths resolve against the Astro project root. `imageDir` has to stay inside the project and `publicDir` inside Astro's own `publicDir`, otherwise the Asset cannot be processed or served, and the build says so.
 
 These binaries are derived from the Project, so they do not belong in your site's repository:
 
 ```
 # .gitignore
-src/content/elek/
+src/elek/
 public/elek/
 ```
 

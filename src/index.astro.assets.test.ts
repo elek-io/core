@@ -117,7 +117,7 @@ export const collections = { ...(await elekCollections(config)) };
     expect(store).toContain(`__ASTRO_IMAGE_./${fileName}`);
     // Resolved relative to the entry's own file
     expect(store).toContain(
-      JSON.stringify(`src/content/elek/website/assets/${fileName}`)
+      JSON.stringify(`src/elek/website/images/${fileName}`)
     );
 
     // Astro recognized the marker and collected the image as an import
@@ -143,10 +143,9 @@ export const collections = { ...(await elekCollections(config)) };
         Path.join(
           root,
           'src',
-          'content',
           'elek',
           'website',
-          'assets',
+          'images',
           `${image.id}.${image.extension}`
         )
       )

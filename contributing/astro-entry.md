@@ -72,6 +72,22 @@ Collisions throw rather than overwrite, naming both sources. Two classes are rea
 
 One class that looks reachable is not: a Collection can never take the `${alias}Assets` key, because `assets` is in `reservedSlugs` ([`src/schema/baseSchema.ts`](../src/schema/baseSchema.ts)) and no other plural slug derives `Assets`. If that reservation is ever lifted, this collision becomes real and needs a test.
 
+## Selecting what is derived
+
+One rule governs both options: **no options object derives everything, and an options object is the complete list.** A key left out contributes nothing, and so does an alias left out of a key. Deriving all twenty Collections of a Project to read two means syncing all twenty, and an Assets collection copies every binary of its Project into the site on each sync, so the cost of the permissive default is real.
+
+The bare `elekCollections(config)` survives that argument only as the exploration step: you cannot name Collections you have not seen yet, and with no argument there is no partial specification to misread. It warns every time, naming what it derived, and the warning goes through `core.logger` so `ELEK_IO_LOG_LEVEL` silences it for anyone who means it.
+
+The strict reading is what removes API rather than adding it. `assets: false` and a per-alias `false` both disappear, since leaving the key or the alias out already says none.
+
+Three cases throw, all for one reason: each would otherwise produce exactly what success produces, so the developer would go looking for a broken loader.
+
+- **A name matching no Collection of the Project it is listed under.** Matched against the plural slug and the id, the same two a loader's `collectionIdOrSlug` accepts.
+- **A selection deriving nothing at all**, which `elekCollections(config, {})` does.
+- **A derived Collection that can reference Assets while that Project's Assets are left out.** Following such a reference is `getEntry('<alias>Assets', ref.id)`, which without the collection fails while a page renders, far from the config that caused it. The check reads field definitions only, never Entries, so it needs no ordering between loaders: a reference field, or a markdown field with `assetReferences` enabled, is enough to know.
+
+That last check is the tractable half of "derive only the Assets that are actually referenced". The full version is not available to us: loaders are independent and Astro decides their order, so the Assets loader cannot wait on every Entries loader, and it would silently drop Assets a template uses without any Entry referencing them.
+
 The keys a consumer autocompletes against come from the types Astro generates after a sync, not from what `elekCollections` returns. Its return type is honestly string-keyed, and making it more precise would not help, Astro reads the collection object at sync time either way.
 
 ## What the mdast renderers return
@@ -101,7 +117,7 @@ If it ever disappears, the fallback is cheap: `defineCollection` is a validating
 
 ## Asset binaries
 
-Assets are split by kind, because a single location cannot serve both. Images go to `src/content/elek/<alias>/assets`, below `src/` where Astro's image pipeline can reach them. Everything else goes to `public/elek/<alias>/assets`, because Astro copies only the public directory into the build verbatim and ignores unrecognized formats under `src/` entirely. Without the split, a Project holding both photos and PDFs would have to choose which half works. The per-alias segment keeps two Projects from writing into one directory.
+Assets are split by kind, because a single location cannot serve both. Images go to `src/elek/<alias>/images`, below `src/` where Astro's image pipeline can reach them. Everything else goes to `public/elek/<alias>/assets`, because Astro copies only the public directory into the build verbatim and ignores unrecognized formats under `src/` entirely. Without the split, a Project holding both photos and PDFs would have to choose which half works. The per-alias segment keeps two Projects from writing into one directory.
 
 Both paths resolve against `context.config.root` (a `URL`, so it goes through `fileURLToPath`), not against `process.cwd()`. In a normal `astro build` the two are the same, but they diverge when the build is started from elsewhere, and the root is the only one the consumer wrote down. A path that lands outside the root, or outside the public directory, is warned about and its Asset loses `src` or `href` accordingly rather than silently producing a URL that 404s.
 
@@ -109,7 +125,7 @@ Writing into `src/` during `astro dev` was checked for a watcher loop, since a w
 
 The skip is also what sets the astro peer floor at 6.1.3. An Asset the loader skips registers no image import of its own, so it stays in the build only because astro rebuilds that list from the store it restored, which it does from 6.1.3 on. See [`peer-dependencies.md`](./peer-dependencies.md).
 
-The binaries are derived artifacts and the docs tell consumers to gitignore `src/content/elek/` and `public/elek/`.
+The binaries are derived artifacts and the docs tell consumers to gitignore `src/elek/` and `public/elek/`. Neither sits under `src/content/`, which carries no meaning for Astro outside the `legacy.collectionsBackwardsCompat` flag and by convention holds authored entries rather than generated binaries.
 
 ## Handing images to astro:assets
 
