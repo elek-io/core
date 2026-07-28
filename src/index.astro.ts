@@ -61,8 +61,10 @@ interface ElekIntegrationProps {
  * find them in the data directory - also on CI runners that start
  * with an empty one.
  *
- * Every declared Project needs a `remoteUrl`, there is nothing to
- * provision from without one.
+ * A Project declared without a `remoteUrl` only ever comes from the
+ * local data directory, so it is skipped and left to the loaders. A
+ * config in which no Project has one fails, the integration would have
+ * nothing to do.
  *
  * Runs on its own short-lived read-only Core, so no User is required
  * and nothing is ever mutated. A locally existing Project managed by
@@ -85,23 +87,41 @@ interface ElekIntegrationProps {
 export function elek(props: ElekIntegrationProps): AstroIntegration {
   assertElekConfig(props.config);
 
-  // Resolved before the hook runs, so a Project without a remote fails
-  // while astro.config is read instead of midway through a build
-  const projects = Object.entries(props.config.projects).map(
-    ([alias, declaration]) => {
-      if (!declaration.remoteUrl) {
-        throw CoreError.badRequest(
-          `Project "${alias}" has no remoteUrl, which elek() needs to provision it. Add one to the declaration, or drop the Project from the config when it only ever comes from the local data directory.`
-        );
-      }
-      return { alias, ...declaration, remoteUrl: declaration.remoteUrl };
-    }
+  // Resolved before the hook runs, so a config the integration cannot
+  // act on fails while astro.config is read instead of midway through a
+  // build. A declaration without a remoteUrl is a Project that only
+  // ever comes from the local data directory, which the loaders read on
+  // their own, so it is skipped rather than rejected.
+  const declarations = Object.entries(props.config.projects);
+  const projects = declarations.flatMap(([alias, declaration]) =>
+    declaration.remoteUrl
+      ? [{ alias, ...declaration, remoteUrl: declaration.remoteUrl }]
+      : []
   );
+  const localOnly = declarations
+    .filter(([, declaration]) => !declaration.remoteUrl)
+    .map(([alias]) => alias);
+
+  if (projects.length === 0) {
+    throw CoreError.badRequest(
+      `No declared Project has a remoteUrl, so elek() has nothing to provision: ${localOnly.join(
+        ', '
+      )}. Add one to the Project the build should fetch from its remote, or drop the integration when every Project comes from the local data directory.`
+    );
+  }
 
   return {
     name: 'elek',
     hooks: {
       'astro:config:setup': async ({ logger }) => {
+        if (localOnly.length > 0) {
+          logger.info(
+            `Skipping "${localOnly.join(
+              '", "'
+            )}", declared without a remoteUrl and read from the local data directory`
+          );
+        }
+
         // An own short-lived Core, disposed after provisioning: the
         // loaders' shared instance lives in another module graph and
         // both coordinate through the data directory and env vars only

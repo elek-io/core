@@ -47,7 +47,7 @@ Test files run in parallel, one file per vitest worker. This works because no st
 
 ### One Astro suite per test file
 
-Every `sync()` builds a full Astro pipeline inside the worker process, and the memory is not fully reclaimed between calls. Six of them in one file exhausted a 4 GB heap, so each Astro suite lives in its own file ([`src/index.astro.test.ts`](../src/index.astro.test.ts), [`.integration`](../src/index.astro.integration.test.ts), [`.config`](../src/index.astro.config.test.ts), [`.collections`](../src/index.astro.collections.test.ts), [`.assets`](../src/index.astro.assets.test.ts)). Add a new file rather than a sixth sync to an existing one.
+Every `sync()` builds a full Astro pipeline inside the worker process, and the memory is not fully reclaimed between calls. Six of them in one file exhausted a 4 GB heap, so each Astro suite lives in its own file ([`src/index.astro.test.ts`](../src/index.astro.test.ts), [`.integration`](../src/index.astro.integration.test.ts), [`.mixed`](../src/index.astro.mixed.test.ts), [`.config`](../src/index.astro.config.test.ts), [`.collections`](../src/index.astro.collections.test.ts), [`.assets`](../src/index.astro.assets.test.ts)). Add a new file rather than a sixth sync to an existing one. The `.integration` file sits at four syncs and is the one that hit the wall, a fifth sync in it exhausts the heap again.
 
 Two related limits, both found the hard way:
 

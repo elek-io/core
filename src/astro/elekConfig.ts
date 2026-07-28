@@ -14,9 +14,9 @@ export interface ElekProjectDeclaration {
   /**
    * The remote repository URL to provision from
    *
-   * Only the elek() integration consumes it, and it requires one per
-   * declared Project. A Project that is managed locally by another
-   * application, like the Desktop app, needs none.
+   * Only the elek() integration consumes it, provisioning every
+   * Project that has one. A Project that is managed locally by another
+   * application, like the Desktop app, needs none and is skipped.
    */
   remoteUrl?: string;
   /**

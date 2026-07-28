@@ -183,11 +183,31 @@ export const collections = {
     ).rejects.toThrow(/elek\(\)|data directory/);
   }, 120000);
 
-  it('should reject a declared Project without a remoteUrl', function () {
+  it('should reject a config in which no Project has a remoteUrl', function () {
+    // Nothing to provision, so the integration is in the config by
+    // mistake. The common case is a single Project missing its URL.
     const withoutRemote: ElekConfig = {
       projects: { website: { id: seed.projectId } },
     };
 
     expect(() => elek({ config: withoutRemote })).toThrow(/remoteUrl/);
   });
+
+  it('should accept a config mixing a remote and a local-only Project', function () {
+    // A site consuming a released Project from its remote next to one
+    // the Desktop app manages locally. The local one has no remote to
+    // provision from, which may not cost the other one its provisioning.
+    const mixed: ElekConfig = {
+      projects: {
+        website: { id: seed.projectId, remoteUrl: remotePath },
+        local: { id: uuid() },
+      },
+    };
+
+    expect(() => elek({ config: mixed })).not.toThrow();
+  });
+
+  // What elek() then does with such a config is asserted through a real
+  // sync in src/index.astro.mixed.test.ts, which needs its own file
+  // because every sync() costs the worker a full Astro pipeline
 });
