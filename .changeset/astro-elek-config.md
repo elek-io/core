@@ -11,7 +11,7 @@ Breaking on the loader surface. `elekAssets` is now `elekAssetsLoader` and `elek
 export const config = defineElekConfig({
   projects: {
     website: {
-      id: 'abc-123-...',
+      id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
       remoteUrl: 'https://github.com/acme/content.git',
     },
   },

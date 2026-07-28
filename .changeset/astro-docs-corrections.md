@@ -9,3 +9,5 @@ The `mdastRender` examples had their renderers object in the frontmatter of an `
 The slug routing example indexed a translatable Value with `Astro.params.language`, which Astro types as `string | undefined`, so the example did not type-check. It now names the languages the route was built for. A new "What an Entry looks like" section documents the generated `entry.data` shape, including which fields are nullable.
 
 The environment variable paragraph no longer implies the loaders' Core is fully configurable through `ELEK_IO_*`, and says which settings, the log level among them, have no variable today.
+
+Every example Project id is a real UUID now, in the docs and in `defineElekConfig`'s own reference. The `abc-123-...` placeholder they used to carry is not a valid id, so copying an example out of the documentation failed on the spot. The docs also say where to read the id, and what `remoteUrl` points at.

@@ -14,6 +14,6 @@ export const collections = {
 };
 ```
 
-The Assets collection is included per Project and opts out with `{ assets: false }` for all of them or `{ assets: { website: false } }` for one. `elekAssetsLoader`'s `outDir` is now optional and defaults to `src/content/elek/<alias>/assets`, below `src/` so Astro can process the binaries, overridable per Project with `{ assets: { website: { outDir: './src/media' } } }`. Keep it below `src/`: a directory inside `public/` works, but Astro then also copies the untouched original into the build next to the optimized one. Those binaries are derived artifacts, so add `src/content/elek/` to your `.gitignore`.
+The Assets collection is included per Project and opts out with `{ assets: false }` for all of them or `{ assets: { website: false } }` for one. `elekAssetsLoader`'s `outDir` is now optional and defaults to `src/content/elek/<alias>/assets`, below `src/` so Astro can process the binaries, overridable per Project with `{ assets: { website: { outDir: './src/media' } } }`. Keep it below `src/`: a directory inside `public/` works, but Astro then also copies the untouched original into the build next to the optimized one. Where the binaries of every other Asset go, and what to gitignore, comes with the native `astro:assets` change in this same release.
 
 One behavior change for existing loader usage: a relative `outDir` now resolves against the Astro project root rather than the current working directory. Both are the same in a normal `astro build`, they differ only when the build is started from another directory.
