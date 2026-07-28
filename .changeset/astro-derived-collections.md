@@ -14,6 +14,8 @@ export const collections = {
 };
 ```
 
+That call derives everything and warns that it did, which is the shape to explore a Project with rather than the shape to ship. Naming what the site reads is a second argument away, see the entry on the `elekCollections()` selection.
+
 `elekAssetsLoader`'s directories are now optional, images defaulting to `src/elek/<alias>/images` so Astro can process the binaries. Keep that below `src/`: a directory inside `public/` works, but Astro then also copies the untouched original into the build next to the optimized one. Which Projects contribute Collections and Assets at all is the `elekCollections()` selection, and where the binaries of every other Asset go comes with the native `astro:assets` change, both in this same release.
 
 One behavior change for existing loader usage: a relative directory now resolves against the Astro project root rather than the current working directory. Both are the same in a normal `astro build`, they differ only when the build is started from another directory.
