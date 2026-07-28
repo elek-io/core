@@ -94,10 +94,13 @@ pnpm check-types && pnpm build && pnpm test
 
 astro is an optional peer (`peerDependenciesMeta`), used only by the `/astro` entry. A consumer
 using the Astro integration already provides it, and consumers of the Node or Browser entry never
-install it. The entry uses `astro/loaders` (the Content Layer `Loader` type), `astro/jsx-runtime`
-(for rendering mdast to Astro JSX) and `astro/content/config` (for `defineCollection`, see
-[`astro-entry.md`](./astro-entry.md)). It also depends on two of astro's internals, both recorded
-there: the `__ASTRO_IMAGE_` marker and the resolved shape of `LoaderContext`.
+install it. The entry uses `astro/loaders` (the Content Layer `Loader` type), `astro/astro-jsx` (the
+`astroHTML.JSX.Element` type mdast rendering produces) and `astro/content/config` (for
+`defineCollection`, see [`astro-entry.md`](./astro-entry.md)). It also depends on three of astro's
+internals, all recorded there: the `__ASTRO_IMAGE_` marker, the resolved shape of `LoaderContext`,
+and `renderTemplate` plus `addAttribute` from `astro/runtime/server/index.js`, which the mdast
+defaults are built on. The last is the least fragile of the three, since it is the module every
+compiled `.astro` file imports, but it is an internal path all the same.
 
 The floor is 6.0.0, verified two ways. astro 6.0.0 added the `Loader.createSchema` method (returning
 `{ schema, types }`) that `elekEntriesLoader` uses (`src/index.astro.ts`), and it switched the Loader's

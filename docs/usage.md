@@ -347,6 +347,19 @@ export const collections = {
 
 Nothing discovers `elek.config.ts` automatically, the filename is a convention and the imports are what connect the three files. Put it wherever you like as long as both sides can import it.
 
+### What an Entry looks like
+
+The loaders supply Astro with both a schema and a TypeScript type per Collection, built from its field definitions, so `entry.data` is typed without any codegen step of yours. Every Value is keyed by the Project's languages, and a field the Collection does not require is `null` in a language nobody filled in:
+
+```typescript
+entry.data.title.en; // string, the field is required
+entry.data.subtitle.en; // string | null, the field is optional
+entry.data.body.en; // MdAstRoot | null, an optional markdown field
+entry.data.tags.en; // Array<{ id: string; objectType: string }>, never null
+```
+
+A `reference` field is an array, empty rather than null when nothing is referenced, and each item carries the UUID of the Asset or Entry it points at. That UUID is also the Astro store id, so `getEntry('websiteAssets', item.id)` resolves it.
+
 ### Declaring collections explicitly
 
 `elekCollections()` returns a plain object, so individual collections can be added next to it, and the loaders behind it are exported for when you want to name a collection yourself or expose only part of a Project:
@@ -387,11 +400,15 @@ export async function getStaticPaths() {
 }
 
 const { entry } = Astro.props;
+// Astro types every route param as `string | undefined`, while a
+// translatable Value is keyed by the Project's languages, so name the
+// ones this route was built for
+const language = Astro.params.language as 'en' | 'de';
 ---
-<h1>{entry.data.title[Astro.params.language]}</h1>
+<h1>{entry.data.title[language]}</h1>
 ```
 
-Each language gets its own path, so `/en/hello-world` and `/de/hallo-welt` both reach the same Entry. Pass `language: 'en'` to route a single one, and the params hold only the slug, for a page at `src/pages/[slug].astro`.
+Each language gets its own path, so `/en/hello-world` and `/de/hallo-welt` both reach the same Entry. Pass `language: 'en'` to route a single one, and the params hold only the slug, for a page at `src/pages/[slug].astro`, where the language is a constant instead.
 
 Slugs are unique per language within a Collection, not across languages, and an Entry that has no slug in a language simply gets no path there. A Collection can define several slug fields, which is why the field to route by is named per call.
 
@@ -438,7 +455,7 @@ public/elek/
 
 Those are the only entries the integration needs. Everything else it produces goes through Astro's content store, which lives in `.astro` during development and in `node_modules/.astro` during a build, both of which a standard Astro `.gitignore` already covers.
 
-All loaders share one Core instance, configured through the `ELEK_IO_*` environment variables of the build. Set `ELEK_IO_DATA_DIR` to read from a data directory other than `~/elek.io`, `ELEK_IO_CHANNEL` to switch the content state deployment-wide and `ELEK_IO_REMOTE_ACCESS_TOKEN` to authenticate against a private remote. See [Environment variables](#environment-variables) for the full list.
+All loaders share one Core instance, which the loaders themselves take no options for. What configures it are the `ELEK_IO_*` environment variables of the build: set `ELEK_IO_DATA_DIR` to read from a data directory other than `~/elek.io`, `ELEK_IO_CHANNEL` to switch the content state deployment-wide and `ELEK_IO_REMOTE_ACCESS_TOKEN` to authenticate against a private remote. See [Environment variables](#environment-variables) for the full list, and note that it is the full list: settings without an environment variable, the log level among them, cannot be changed for the loaders' Core today.
 
 ### Provisioning in CI with elek()
 

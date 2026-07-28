@@ -47,6 +47,23 @@ One class that looks reachable is not: a Collection can never take the `${alias}
 
 The keys a consumer autocompletes against come from the types Astro generates after a sync, not from what `elekCollections` returns. Its return type is honestly string-keyed, and making it more precise would not help, Astro reads the collection object at sync time either way.
 
+## What the mdast renderers return
+
+`astroDefaults` builds every default with `renderTemplate` and `addAttribute` from `astro/runtime/server/index.js`, never with `jsx()` from `astro/jsx-runtime`. Keep it that way.
+
+An `astro/jsx-runtime` vnode is only unwrapped by `renderStreaming`, which runs on the top-level result of a page. A nested `.astro` component renders its template through `renderChild`, which handles strings, promises, arrays, functions, `RenderInstance`, `RenderTemplateResult` and iterables, and writes anything else straight to the destination. A vnode therefore renders correctly on a page and stringifies to `[object Object]` one component deep, which is exactly where a site puts its markdown rendering. `renderTemplate` returns a `RenderTemplateResult`, one of the shapes `renderChild` knows, so the same element renders in a page, in a component and through a slot alike.
+
+The two functions are what the Astro compiler emits into every compiled `.astro` file, so this is the compiler's own contract rather than a private constant. It is still an internal import and is recorded as one in [`peer-dependencies.md`](./peer-dependencies.md).
+
+Two consequences for the code:
+
+- A heading tag cannot be interpolated, since the static parts of a tagged template are the markup. The six depths are spelled out in `renderHeading` rather than built as a string.
+- Attributes go through `addAttribute`, which returns an empty string for `null` and `undefined`, so an absent `title` emits no attribute at all.
+
+`src/astro/mdastRender.test.ts` renders every default by interpolating it into a `renderTemplate`, which puts it through the same `renderChild` dispatch an `.astro` file uses. A default that regressed to a vnode would show up as `[object Object]` in those assertions rather than passing and failing in a consumer's component.
+
+A consumer writing handlers as JSX inside an `.astro` template needs none of this: the compiler emits render-safe values for them. It only matters for what Core itself constructs.
+
 ## The `astro/content/config` subpath
 
 `elekCollections` imports `defineCollection` from `astro/content/config`, not from the `astro:content` virtual module, which only exists inside a consumer's build and cannot be imported from package code.

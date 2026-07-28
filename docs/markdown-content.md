@@ -48,16 +48,14 @@ Core ships `mdastRender` from `@elek-io/core/astro`. It walks the mdast tree, di
 
 Three node types require an explicit override (`html`, `assetReference`, `entryReference`). The other 21 have semantic HTML defaults you can keep or override. The required keys are surfaced by the type system because content editors can flip `features.rawHtml` / `features.assetReferences` / `features.entryReferences` (or extend `ofCollections`) on any field at any time - the API forces a documented decision per key so the renderer can't silently no-op when a new node type appears. Choosing `() => null` is a valid decision and documents "render nothing if this ever appears."
 
+One rule of the Astro side decides where the code goes, and it is a property of Astro rather than of `mdastRender`: **JSX belongs in the template, not in the frontmatter.** The `---` fence of an `.astro` file is TypeScript, not TSX, so a handler written as `(node) => <em>{node.alt}</em>` up there is a parse error. Write the renderers object inline at the `mdastRender` call in the template, as below. What `mdastRender` returns is an ordinary Astro template result, so it renders wherever you put it, including inside a component you pass it to.
+
 ```astro
 ---
 // src/pages/posts/[slug].astro
 import { getCollection } from 'astro:content';
 import { Image } from 'astro:assets';
-import {
-  elekSlugPaths,
-  mdastRender,
-  type MdastAstroRenderers,
-} from '@elek-io/core/astro';
+import { elekSlugPaths, mdastRender } from '@elek-io/core/astro';
 import DOMPurify from 'isomorphic-dompurify';
 
 export async function getStaticPaths() {
@@ -76,38 +74,46 @@ const assetById = new Map(assets.map((a) => [a.id, a.data]));
 // needs the same mapping the routes were built from
 const slugById = new Map(posts.map((p) => [p.id, p.data.slug.en]));
 
-const overrides: MdastAstroRenderers = {
-  // Required - sign off on each, even if your fields don't currently use them.
-  html: (node) => <Fragment set:html={DOMPurify.sanitize(node.value)} />,
-  assetReference: (node) => {
-    const asset = assetById.get(node.assetId);
-    // src is Astro's own image for image Assets, href the public URL
-    // for every other Asset, and each is null for the other kind
-    return asset?.src
-      ? <Image src={asset.src} alt={node.alt} />
-      : <a href={asset?.href ?? '#'}>{node.alt}</a>;
-  },
-  entryReference: (node, children) => {
-    const slug = slugById.get(node.entryId);
-    // No slug means the referenced Entry has no page in this language
-    return slug ? <a href={`/posts/${slug}`}>{children}</a> : <>{children}</>;
-  },
-};
-
+// An optional field is null in a language nobody filled in
 const body = post.data.body.en;
 ---
 <article>
-  {body !== null && mdastRender(body, overrides)}
+  {body !== null &&
+    mdastRender(body, {
+      // Required - sign off on each, even if your fields don't currently use them.
+      html: (node) => <Fragment set:html={DOMPurify.sanitize(node.value)} />,
+      assetReference: (node) => {
+        const asset = assetById.get(node.assetId);
+        // src is Astro's own image for image Assets, href the public URL
+        // for every other Asset, and each is null for the other kind
+        return asset?.src ? (
+          <Image src={asset.src} alt={node.alt} />
+        ) : (
+          <a href={asset?.href ?? '#'}>{node.alt}</a>
+        );
+      },
+      entryReference: (node, children) => {
+        const slug = slugById.get(node.entryId);
+        // No slug means the referenced Entry has no page in this language
+        return slug ? (
+          <a href={`/posts/${slug}`}>{children}</a>
+        ) : (
+          <Fragment>{children}</Fragment>
+        );
+      },
+    })}
 </article>
 ```
 
+The object is checked against `MdastAstroRenderers` by the call itself, so a missing required key or a mistyped node property is an error without annotating it.
+
 `entryReference` nodes carry the referenced Entry's UUID, which is also its store id, so `getEntry('posts', node.entryId)` resolves a reference from anywhere without a map. The map above exists only to turn that UUID into the same URL the routes were built from. A Collection without a slug field routes by UUID instead, with a `getStaticPaths` that returns `posts.map((post) => ({ params: { id: post.id }, props: { post } }))`.
 
-Consumer code is now ~10 lines for the typical case. Without the helper the equivalent hand-rolled switch (see the [fallback recipe](#fallback-recipe-for-frameworks-without-an-official-wrapper) below) takes ~90.
+The three required handlers are ~20 lines for the typical case. Without the helper the equivalent hand-rolled switch (see the [fallback recipe](#fallback-recipe-for-frameworks-without-an-official-wrapper) below) takes ~90, and it grows with every node type Core adds.
 
 ### Defaults and what you'll commonly override
 
-The defaults emit plain semantic HTML - no class names, no `rel`/`target`, no slug anchors, no syntax highlighting. The shape is `(node, children) => ...` for parents and `(node) => ...` for leaves. Common override patterns:
+The defaults emit plain semantic HTML - no class names, no `rel`/`target`, no slug anchors, no syntax highlighting. The shape is `(node, children) => ...` for parents and `(node) => ...` for leaves. Each snippet below goes into the renderers object at the `mdastRender` call in the template, next to the three required handlers. Common override patterns:
 
 **Slug-id anchors on headings (table of contents):** `extractText` is exported from `@elek-io/core` and returns the concatenated plain text of an mdast node.
 
@@ -157,22 +163,24 @@ image: (node) => (
 ),
 ```
 
-**Collected footnotes section at the bottom.** The default renders each `footnoteDefinition` inline in tree order (matching mdast structure). Most articles want a single collected footnotes section at the end. Override the handler to accumulate, return `null`, then render your section after `mdastRender`:
+**Collected footnotes section at the bottom.** The default renders each `footnoteDefinition` inline in tree order (matching mdast structure). Most articles want a single collected footnotes section at the end. Declare the accumulator in the frontmatter, override the handler to fill it and return `null`, then render your section after the article. Astro evaluates template expressions in order, so the list is complete by the time the second one is reached:
 
-```ts
-const footnotes: astroHTML.JSX.Element[] = [];
-
-const overrides: MdastAstroRenderers = {
-  // ...
-  footnoteDefinition: (node, children) => {
-    footnotes.push(<li id={`fn-${node.identifier}`}>{children}</li>);
-    return null;
-  },
-};
-
-const rendered = mdastRender(body, overrides);
+```astro
 ---
-<article>{rendered}</article>
+import { mdastRender } from '@elek-io/core/astro';
+
+const footnotes: astroHTML.JSX.Element[] = [];
+---
+<article>
+  {body !== null &&
+    mdastRender(body, {
+      // ...
+      footnoteDefinition: (node, children) => {
+        footnotes.push(<li id={`fn-${node.identifier}`}>{children}</li>);
+        return null;
+      },
+    })}
+</article>
 {footnotes.length > 0 && (
   <section class="footnotes">
     <ol>{footnotes}</ol>
@@ -180,7 +188,7 @@ const rendered = mdastRender(body, overrides);
 )}
 ```
 
-**Custom top-level wrap via `root`.** The default wraps the rendered blocks in a Fragment so `<article>{rendered}</article>` works at the call site. You can override `root` to do the wrapping at the renderer level instead - useful when one component is responsible for the whole article shell:
+**Custom top-level wrap via `root`.** The default wraps the rendered blocks in a Fragment so `<article>{rendered}</article>` works at the call site. You can override `root` to do the wrapping at the renderer level instead - useful when the renderer is responsible for the whole article shell:
 
 ```ts
 root: (_, children) => <article class="prose">{children}</article>,
@@ -188,12 +196,12 @@ root: (_, children) => <article class="prose">{children}</article>,
 
 ### Reusable per-site renderer
 
-For sites that render markdown in multiple places, define the overrides once and wrap them in a tiny Astro component. The per-site rendering policy lives in one file:
+For sites that render markdown in multiple places, write the overrides once in a small Astro component. The per-site rendering policy then lives in one file, and every page passes a tree to it:
 
 ```astro
 ---
 // src/components/MdastContent.astro
-import { mdastRender, type MdastAstroRenderers } from '@elek-io/core/astro';
+import { mdastRender } from '@elek-io/core/astro';
 import type { MdAstRoot } from '@elek-io/core';
 
 interface Props {
@@ -201,15 +209,14 @@ interface Props {
 }
 
 const { root } = Astro.props;
-
-const overrides: MdastAstroRenderers = {
-  html: (node) => /* ... */,
-  assetReference: (node) => /* ... */,
-  entryReference: (node, children) => /* ... */,
-  // any standard-node overrides your site applies everywhere
-};
 ---
-{root !== null && mdastRender(root, overrides)}
+{root !== null &&
+  mdastRender(root, {
+    html: (node) => /* ... */,
+    assetReference: (node) => /* ... */,
+    entryReference: (node, children) => /* ... */,
+    // any standard-node overrides your site applies everywhere
+  })}
 ```
 
 Use it from any page:
@@ -217,6 +224,8 @@ Use it from any page:
 ```astro
 <article><MdastContent root={post.data.body.en} /></article>
 ```
+
+The overrides stay in the component's template, for the same reason as everywhere else: the frontmatter above them is TypeScript. A page that needs one more override for one article can always call `mdastRender` itself instead.
 
 Core does not ship this component itself - it would be a thin one-file wrapper, project-specific (your overrides, your styling), and shipping a generic default would freeze opinions you should own.
 

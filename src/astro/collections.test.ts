@@ -123,7 +123,7 @@ describe('elekCollections', function () {
     });
 
     const collections = await elekCollections(config, {
-      assets: { website: { outDir: './public/elek' } },
+      assets: { website: { outDir: './src/media' } },
     });
 
     expect(Object.keys(collections)).toContain('websiteAssets');

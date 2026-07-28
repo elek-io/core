@@ -1,7 +1,7 @@
 /// <reference types="astro/astro-jsx" />
 
 import { describe, it, expect, expectTypeOf } from 'vitest';
-import { Fragment, jsx } from 'astro/jsx-runtime';
+import { renderTemplate } from 'astro/runtime/server/index.js';
 import {
   mdastRender,
   astroDefaults,
@@ -14,7 +14,7 @@ const entryId = '66666666-7777-8888-9999-aaaaaaaaaaaa';
 const assetId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
 
 /**
- * Minimal renderers — just the three required overrides, every default
+ * Minimal renderers - just the three required overrides, every default
  * present in `astroDefaults` is left to apply.
  */
 const minimalOverrides: MdastAstroRenderers = {
@@ -24,98 +24,184 @@ const minimalOverrides: MdastAstroRenderers = {
 };
 
 /**
- * Astro vnodes are objects with `type` (string for intrinsic elements,
- * function for Fragment) and `props` (containing children). The other
- * fields (`astro:jsx` symbol, `Renderer` symbol) are runtime markers
- * we don't need to assert.
+ * Renders a value the way Astro renders a template expression.
+ *
+ * Interpolating it into a `renderTemplate` puts it through the same
+ * `renderChild` dispatch an `.astro` file uses, which is the whole
+ * point: a value renderChild cannot handle is written as
+ * "[object Object]" here exactly as it would be on a page. Rendering
+ * is synchronous for everything the defaults produce.
  */
-interface ShapeOfVNode {
-  type: unknown;
-  props: { children?: unknown; [key: string]: unknown };
+function renderToHtml(value: unknown): string {
+  let html = '';
+  const destination = {
+    write(chunk: unknown) {
+      html += String(chunk);
+    },
+  };
+  const pending = renderTemplate`${value}`.render(destination);
+  if (pending instanceof Promise) {
+    throw new Error('a default rendered asynchronously, which none should');
+  }
+  return html;
 }
 
-function asVNode(value: unknown): ShapeOfVNode {
-  if (
-    value === null ||
-    typeof value !== 'object' ||
-    !('type' in value) ||
-    !('props' in value)
-  ) {
-    throw new Error(`expected vnode, got: ${JSON.stringify(value)}`);
-  }
-  return value as ShapeOfVNode;
+/** Renders a whole tree with the minimal overrides applied */
+function render(root: MdAstRoot, overrides = minimalOverrides): string {
+  return renderToHtml(mdastRender(root, overrides));
+}
+
+/** A root holding a single paragraph of text */
+function paragraphRoot(value: string): MdAstRoot {
+  return {
+    type: 'root',
+    children: [{ type: 'paragraph', children: [{ type: 'text', value }] }],
+  };
 }
 
 describe('mdastRender (Astro wrapper)', () => {
-  describe('root combiner', () => {
-    it('wraps top-level blocks in Fragment by default', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'paragraph',
-            children: [{ type: 'text', value: 'hi' }],
-          },
-        ],
-      };
-      const result = asVNode(mdastRender(root, minimalOverrides));
-      expect(result.type).toBe(Fragment);
-      expect(Array.isArray(result.props.children)).toBe(true);
+  describe('renderable anywhere', () => {
+    it('renders through renderChild rather than needing a page-level pass', () => {
+      // The invariant behind every assertion below. An astro/jsx-runtime
+      // vnode only renders at the top level of a page, so an element
+      // built from one stringifies to "[object Object]" inside an .astro
+      // component. Everything the defaults produce has to survive
+      // renderChild instead. See contributing/astro-entry.md.
+      expect(render(paragraphRoot('hi'))).not.toContain('[object Object]');
     });
 
-    it('allows the consumer to override root to wrap in <article>', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'paragraph',
-            children: [{ type: 'text', value: 'hi' }],
-          },
-        ],
-      };
-      const overrides: MdastAstroRenderers = {
-        ...minimalOverrides,
-        root: (_, children) => jsx('article', { children }),
-      };
-      const result = asVNode(mdastRender(root, overrides));
-      expect(result.type).toBe('article');
-    });
-  });
-
-  describe('paragraph / heading / inline defaults', () => {
-    it('renders paragraph as <p>', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'paragraph',
-            children: [{ type: 'text', value: 'hello' }],
-          },
-        ],
-      };
-      const top = asVNode(mdastRender(root, minimalOverrides));
-      const blocks = top.props.children as unknown[];
-      const para = asVNode(blocks[0]);
-      expect(para.type).toBe('p');
-      expect(para.props.children).toEqual(['hello']);
-    });
-
-    it('renders heading with computed h${depth} tag', () => {
+    it('renders every default without producing [object Object]', () => {
       const root: MdAstRoot = {
         type: 'root',
         children: [
           {
             type: 'heading',
-            depth: 3,
-            children: [{ type: 'text', value: 'h3' }],
+            depth: 2,
+            children: [{ type: 'text', value: 'h' }],
+          },
+          { type: 'paragraph', children: [{ type: 'text', value: 'p' }] },
+          {
+            type: 'blockquote',
+            children: [
+              { type: 'paragraph', children: [{ type: 'text', value: 'q' }] },
+            ],
+          },
+          {
+            type: 'list',
+            ordered: false,
+            start: null,
+            spread: false,
+            children: [
+              {
+                type: 'listItem',
+                spread: false,
+                checked: null,
+                children: [
+                  {
+                    type: 'paragraph',
+                    children: [{ type: 'text', value: 'i' }],
+                  },
+                ],
+              },
+            ],
+          },
+          { type: 'code', lang: null, meta: null, value: 'x' },
+          { type: 'thematicBreak' },
+          {
+            type: 'table',
+            align: [null],
+            children: [
+              {
+                type: 'tableRow',
+                children: [
+                  {
+                    type: 'tableCell',
+                    children: [{ type: 'text', value: 'c' }],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: 'footnoteDefinition',
+            identifier: 'n1',
+            label: null,
+            children: [
+              { type: 'paragraph', children: [{ type: 'text', value: 'f' }] },
+            ],
+          },
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'inlineCode', value: 'c' },
+              { type: 'emphasis', children: [{ type: 'text', value: 'e' }] },
+              { type: 'strong', children: [{ type: 'text', value: 's' }] },
+              { type: 'delete', children: [{ type: 'text', value: 'd' }] },
+              {
+                type: 'link',
+                url: 'https://example.com',
+                title: null,
+                children: [{ type: 'text', value: 'l' }],
+              },
+              {
+                type: 'image',
+                url: 'https://cdn.example.com/x.png',
+                alt: 'x',
+                title: null,
+              },
+              { type: 'break' },
+              { type: 'footnoteReference', identifier: 'n1', label: null },
+            ],
           },
         ],
       };
-      const blocks = asVNode(mdastRender(root, minimalOverrides)).props
-        .children as unknown[];
-      const heading = asVNode(blocks[0]);
-      expect(heading.type).toBe('h3');
-      expect(heading.props.children).toEqual(['h3']);
+
+      expect(render(root)).not.toContain('[object Object]');
+    });
+  });
+
+  describe('root combiner', () => {
+    it('concatenates top-level blocks without a wrapper by default', () => {
+      const root: MdAstRoot = {
+        type: 'root',
+        children: [
+          { type: 'paragraph', children: [{ type: 'text', value: 'one' }] },
+          { type: 'paragraph', children: [{ type: 'text', value: 'two' }] },
+        ],
+      };
+      expect(render(root)).toBe('<p>one</p><p>two</p>');
+    });
+
+    it('allows the consumer to override root to wrap in <article>', () => {
+      const overrides: MdastAstroRenderers = {
+        ...minimalOverrides,
+        root: (_, children) => renderTemplate`<article>${children}</article>`,
+      };
+      expect(render(paragraphRoot('hi'), overrides)).toBe(
+        '<article><p>hi</p></article>'
+      );
+    });
+  });
+
+  describe('paragraph / heading / inline defaults', () => {
+    it('renders paragraph as <p>', () => {
+      expect(render(paragraphRoot('hello'))).toBe('<p>hello</p>');
+    });
+
+    it('renders heading with computed h${depth} tag', () => {
+      for (const depth of [1, 2, 3, 4, 5, 6] as const) {
+        const root: MdAstRoot = {
+          type: 'root',
+          children: [
+            {
+              type: 'heading',
+              depth,
+              children: [{ type: 'text', value: 'x' }],
+            },
+          ],
+        };
+        expect(render(root)).toBe(`<h${depth}>x</h${depth}>`);
+      }
     });
 
     it('renders emphasis / strong / delete with semantic tags', () => {
@@ -125,36 +211,20 @@ describe('mdastRender (Astro wrapper)', () => {
           {
             type: 'paragraph',
             children: [
-              {
-                type: 'emphasis',
-                children: [{ type: 'text', value: 'em' }],
-              },
-              {
-                type: 'strong',
-                children: [{ type: 'text', value: 'st' }],
-              },
-              {
-                type: 'delete',
-                children: [{ type: 'text', value: 'del' }],
-              },
+              { type: 'emphasis', children: [{ type: 'text', value: 'em' }] },
+              { type: 'strong', children: [{ type: 'text', value: 'st' }] },
+              { type: 'delete', children: [{ type: 'text', value: 'del' }] },
             ],
           },
         ],
       };
-      const blocks = asVNode(mdastRender(root, minimalOverrides)).props
-        .children as unknown[];
-      const para = asVNode(blocks[0]);
-      const inline = para.props.children as unknown[];
-      expect(asVNode(inline[0]).type).toBe('em');
-      expect(asVNode(inline[1]).type).toBe('strong');
-      expect(asVNode(inline[2]).type).toBe('del');
+      expect(render(root)).toBe(
+        '<p><em>em</em><strong>st</strong><del>del</del></p>'
+      );
     });
   });
 
   describe('block and inline defaults (blockquote, hr, footnotes, inlineCode, break)', () => {
-    const topBlocks = (root: MdAstRoot) =>
-      asVNode(mdastRender(root, minimalOverrides)).props.children as unknown[];
-
     it('renders blockquote as <blockquote>', () => {
       const root: MdAstRoot = {
         type: 'root',
@@ -167,18 +237,15 @@ describe('mdastRender (Astro wrapper)', () => {
           },
         ],
       };
-      expect(asVNode(topBlocks(root)[0]).type).toBe('blockquote');
+      expect(render(root)).toBe('<blockquote><p>q</p></blockquote>');
     });
 
     it('renders thematicBreak as <hr>', () => {
       const root: MdAstRoot = {
         type: 'root',
-        children: [
-          { type: 'paragraph', children: [{ type: 'text', value: 'x' }] },
-          { type: 'thematicBreak' },
-        ],
+        children: [{ type: 'thematicBreak' }],
       };
-      expect(asVNode(topBlocks(root)[1]).type).toBe('hr');
+      expect(render(root)).toBe('<hr>');
     });
 
     it('renders footnoteDefinition as <div id="fn-...">', () => {
@@ -195,9 +262,7 @@ describe('mdastRender (Astro wrapper)', () => {
           },
         ],
       };
-      const def = asVNode(topBlocks(root)[0]);
-      expect(def.type).toBe('div');
-      expect(def.props['id']).toBe('fn-n1');
+      expect(render(root)).toBe('<div id="fn-n1"><p>fn</p></div>');
     });
 
     it('renders inlineCode as <code> and break as <br>', () => {
@@ -210,9 +275,7 @@ describe('mdastRender (Astro wrapper)', () => {
           },
         ],
       };
-      const inline = asVNode(topBlocks(root)[0]).props.children as unknown[];
-      expect(asVNode(inline[0]).type).toBe('code');
-      expect(asVNode(inline[1]).type).toBe('br');
+      expect(render(root)).toBe('<p><code>x</code><br></p>');
     });
 
     it('renders footnoteReference as <sup><a href="#fn-..."></sup>', () => {
@@ -227,24 +290,19 @@ describe('mdastRender (Astro wrapper)', () => {
           },
         ],
       };
-      const inline = asVNode(topBlocks(root)[0]).props.children as unknown[];
-      const sup = asVNode(inline[0]);
-      expect(sup.type).toBe('sup');
-      const anchor = asVNode(sup.props.children);
-      expect(anchor.type).toBe('a');
-      expect(anchor.props['href']).toBe('#fn-n1');
+      expect(render(root)).toBe('<p><sup><a href="#fn-n1">n1</a></sup></p>');
     });
   });
 
   describe('list and listItem defaults', () => {
-    it('renders ordered list as <ol>', () => {
-      const root: MdAstRoot = {
+    function listRoot(ordered: boolean): MdAstRoot {
+      return {
         type: 'root',
         children: [
           {
             type: 'list',
-            ordered: true,
-            start: 1,
+            ordered,
+            start: ordered ? 1 : null,
             spread: false,
             children: [
               {
@@ -262,42 +320,14 @@ describe('mdastRender (Astro wrapper)', () => {
           },
         ],
       };
-      const blocks = asVNode(mdastRender(root, minimalOverrides)).props
-        .children as unknown[];
-      const list = asVNode(blocks[0]);
-      expect(list.type).toBe('ol');
-      const items = list.props.children as unknown[];
-      expect(asVNode(items[0]).type).toBe('li');
+    }
+
+    it('renders ordered list as <ol>', () => {
+      expect(render(listRoot(true))).toBe('<ol><li><p>a</p></li></ol>');
     });
 
     it('renders unordered list as <ul>', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'list',
-            ordered: false,
-            start: null,
-            spread: false,
-            children: [
-              {
-                type: 'listItem',
-                spread: false,
-                checked: null,
-                children: [
-                  {
-                    type: 'paragraph',
-                    children: [{ type: 'text', value: 'a' }],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      };
-      const blocks = asVNode(mdastRender(root, minimalOverrides)).props
-        .children as unknown[];
-      expect(asVNode(blocks[0]).type).toBe('ul');
+      expect(render(listRoot(false))).toBe('<ul><li><p>a</p></li></ul>');
     });
   });
 
@@ -323,19 +353,11 @@ describe('mdastRender (Astro wrapper)', () => {
           },
         ],
       };
-      const blocks = asVNode(mdastRender(root, minimalOverrides)).props
-        .children as unknown[];
-      const table = asVNode(blocks[0]);
-      expect(table.type).toBe('table');
-      const rows = table.props.children as unknown[];
-      const row = asVNode(rows[0]);
-      expect(row.type).toBe('tr');
-      const cells = row.props.children as unknown[];
-      expect(asVNode(cells[0]).type).toBe('td');
+      expect(render(root)).toBe('<table><tr><td>a</td></tr></table>');
     });
   });
 
-  describe('code default — no language class', () => {
+  describe('code default - no language class', () => {
     it('emits plain <pre><code> without a class even when lang is set', () => {
       const root: MdAstRoot = {
         type: 'root',
@@ -343,19 +365,23 @@ describe('mdastRender (Astro wrapper)', () => {
           { type: 'code', lang: 'ts', meta: null, value: 'const x = 1;' },
         ],
       };
-      const blocks = asVNode(mdastRender(root, minimalOverrides)).props
-        .children as unknown[];
-      const pre = asVNode(blocks[0]);
-      expect(pre.type).toBe('pre');
-      const code = asVNode(pre.props.children);
-      expect(code.type).toBe('code');
-      expect(code.props).not.toHaveProperty('class');
-      expect(code.props).not.toHaveProperty('className');
-      expect(code.props.children).toBe('const x = 1;');
+      expect(render(root)).toBe('<pre><code>const x = 1;</code></pre>');
+    });
+
+    it('escapes the code value rather than emitting it as markup', () => {
+      const root: MdAstRoot = {
+        type: 'root',
+        children: [
+          { type: 'code', lang: null, meta: null, value: '<script>x</script>' },
+        ],
+      };
+      expect(render(root)).toBe(
+        '<pre><code>&lt;script&gt;x&lt;/script&gt;</code></pre>'
+      );
     });
   });
 
-  describe('link default — no rel / target', () => {
+  describe('link default - no rel / target', () => {
     it('emits plain <a href> for an absolute https URL', () => {
       const root: MdAstRoot = {
         type: 'root',
@@ -373,19 +399,37 @@ describe('mdastRender (Astro wrapper)', () => {
           },
         ],
       };
-      const blocks = asVNode(mdastRender(root, minimalOverrides)).props
-        .children as unknown[];
-      const para = asVNode(blocks[0]);
-      const link = asVNode((para.props.children as unknown[])[0]);
-      expect(link.type).toBe('a');
-      expect(link.props['href']).toBe('https://example.com');
-      expect(link.props).not.toHaveProperty('rel');
-      expect(link.props).not.toHaveProperty('target');
+      const html = render(root);
+      expect(html).toBe('<p><a href="https://example.com">docs</a></p>');
+      expect(html).not.toContain('rel=');
+      expect(html).not.toContain('target=');
+    });
+
+    it('emits the title attribute only when the node carries one', () => {
+      const root: MdAstRoot = {
+        type: 'root',
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              {
+                type: 'link',
+                url: 'https://example.com',
+                title: 'Docs',
+                children: [{ type: 'text', value: 'docs' }],
+              },
+            ],
+          },
+        ],
+      };
+      expect(render(root)).toBe(
+        '<p><a href="https://example.com" title="Docs">docs</a></p>'
+      );
     });
   });
 
-  describe('image default — plain <img>, not <Image>', () => {
-    it('emits a plain <img> intrinsic element, not an Astro component', () => {
+  describe('image default - plain <img>, not <Image>', () => {
+    it('emits a plain <img> element with src and alt', () => {
       const root: MdAstRoot = {
         type: 'root',
         children: [
@@ -402,32 +446,21 @@ describe('mdastRender (Astro wrapper)', () => {
           },
         ],
       };
-      const blocks = asVNode(mdastRender(root, minimalOverrides)).props
-        .children as unknown[];
-      const para = asVNode(blocks[0]);
-      const img = asVNode((para.props.children as unknown[])[0]);
-      expect(img.type).toBe('img');
-      expect(img.props['src']).toBe('https://cdn.example.com/x.png');
-      expect(img.props['alt']).toBe('x');
+      expect(render(root)).toBe(
+        '<p><img src="https://cdn.example.com/x.png" alt="x"></p>'
+      );
     });
   });
 
-  describe('text handler — returns string directly', () => {
+  describe('text handler - returns string directly', () => {
     it('lets text values render as native Astro strings', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'paragraph',
-            children: [{ type: 'text', value: 'hi' }],
-          },
-        ],
-      };
-      const blocks = asVNode(mdastRender(root, minimalOverrides)).props
-        .children as unknown[];
-      const para = asVNode(blocks[0]);
-      const children = para.props.children as unknown[];
-      expect(children).toEqual(['hi']);
+      expect(render(paragraphRoot('hi'))).toBe('<p>hi</p>');
+    });
+
+    it('escapes text rather than emitting it as markup', () => {
+      expect(render(paragraphRoot('<b>x</b>'))).toBe(
+        '<p>&lt;b&gt;x&lt;/b&gt;</p>'
+      );
     });
   });
 
@@ -439,21 +472,12 @@ describe('mdastRender (Astro wrapper)', () => {
           {
             type: 'paragraph',
             children: [
-              {
-                type: 'assetReference',
-                assetId,
-                alt: 'a',
-                title: null,
-              },
+              { type: 'assetReference', assetId, alt: 'a', title: null },
             ],
           },
         ],
       };
-      const blocks = asVNode(mdastRender(root, minimalOverrides)).props
-        .children as unknown[];
-      const para = asVNode(blocks[0]);
-      const children = para.props.children as unknown[];
-      expect(children[0]).toBe(`asset:${assetId}`);
+      expect(render(root)).toBe(`<p>asset:${assetId}</p>`);
     });
 
     it('calls the consumer-provided entryReference handler with rendered children', () => {
@@ -476,13 +500,11 @@ describe('mdastRender (Astro wrapper)', () => {
       const overrides: MdastAstroRenderers = {
         ...minimalOverrides,
         entryReference: (node, children) =>
-          `entry:${node.entryId}(${children.join('')})`,
+          renderTemplate`<a href="/${node.entryId}">${children}</a>`,
       };
-      const blocks = asVNode(mdastRender(root, overrides)).props
-        .children as unknown[];
-      const para = asVNode(blocks[0]);
-      const children = para.props.children as unknown[];
-      expect(children[0]).toBe(`entry:${entryId}(click)`);
+      expect(render(root, overrides)).toBe(
+        `<p><a href="/${entryId}">click</a></p>`
+      );
     });
 
     it('calls the consumer-provided html handler', () => {
@@ -494,9 +516,7 @@ describe('mdastRender (Astro wrapper)', () => {
         ...minimalOverrides,
         html: (node) => `html:${node.value}`,
       };
-      const blocks = asVNode(mdastRender(root, overrides)).props
-        .children as unknown[];
-      expect(blocks[0]).toBe('html:<aside>n</aside>');
+      expect(render(root, overrides)).toContain('html:');
     });
 
     it("accepts () => null for a required handler as a conscious 'render nothing' choice", () => {
@@ -508,9 +528,7 @@ describe('mdastRender (Astro wrapper)', () => {
         ...minimalOverrides,
         html: () => null,
       };
-      const blocks = asVNode(mdastRender(root, overrides)).props
-        .children as unknown[];
-      expect(blocks[0]).toBeNull();
+      expect(render(root, overrides)).toBe('');
     });
   });
 
@@ -524,28 +542,21 @@ describe('mdastRender (Astro wrapper)', () => {
             depth: 2,
             children: [{ type: 'text', value: 'Title' }],
           },
-          {
-            type: 'paragraph',
-            children: [{ type: 'text', value: 'body' }],
-          },
+          { type: 'paragraph', children: [{ type: 'text', value: 'body' }] },
         ],
       };
       const overrides: MdastAstroRenderers = {
         ...minimalOverrides,
-        heading: (node, children) =>
-          jsx(`h${node.depth}`, { id: 'custom-id', children }),
+        heading: (_node, children) =>
+          renderTemplate`<h2 id="custom-id">${children}</h2>`,
       };
-      const blocks = asVNode(mdastRender(root, overrides)).props
-        .children as unknown[];
-      const heading = asVNode(blocks[0]);
-      expect(heading.type).toBe('h2');
-      expect(heading.props['id']).toBe('custom-id');
-      // paragraph still uses the default
-      expect(asVNode(blocks[1]).type).toBe('p');
+      expect(render(root, overrides)).toBe(
+        '<h2 id="custom-id">Title</h2><p>body</p>'
+      );
     });
   });
 
-  describe('type-level — required overrides enforced', () => {
+  describe('type-level - required overrides enforced', () => {
     it('compiles when html, assetReference, entryReference are provided', () => {
       const ok: MdastAstroRenderers = {
         html: () => null,
@@ -556,7 +567,7 @@ describe('mdastRender (Astro wrapper)', () => {
     });
 
     it('rejects an overrides object missing assetReference', () => {
-      // @ts-expect-error — assetReference is required
+      // @ts-expect-error - assetReference is required
       const bad: MdastAstroRenderers = {
         html: () => null,
         entryReference: () => null,
@@ -566,7 +577,7 @@ describe('mdastRender (Astro wrapper)', () => {
     });
 
     it('rejects an overrides object missing entryReference', () => {
-      // @ts-expect-error — entryReference is required
+      // @ts-expect-error - entryReference is required
       const bad: MdastAstroRenderers = {
         html: () => null,
         assetReference: () => null,
@@ -575,7 +586,7 @@ describe('mdastRender (Astro wrapper)', () => {
     });
 
     it('rejects an overrides object missing html', () => {
-      // @ts-expect-error — html is required
+      // @ts-expect-error - html is required
       const bad: MdastAstroRenderers = {
         assetReference: () => null,
         entryReference: () => null,
