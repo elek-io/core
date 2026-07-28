@@ -311,12 +311,14 @@ import { defineElekConfig } from '@elek-io/core/astro';
 export const config = defineElekConfig({
   projects: {
     website: {
-      id: 'abc-123-...',
+      id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
       remoteUrl: 'https://github.com/acme/website-content.git',
     },
   },
 });
 ```
+
+The `id` is the Project's own UUID, which elek.io Desktop shows for every Project. `remoteUrl` is the content repository the Project is synchronized with, the same URL you would clone, and only the [`elek()` integration](#provisioning-in-ci-with-elek) reads it.
 
 Every Project gets an alias you choose (`website` above). The alias is what you reference everywhere else, it must start with a lowercase letter and continue with letters or digits. `defineElekConfig` validates the declaration right away, so a malformed id or a mistyped key fails where you wrote it rather than somewhere in the build.
 

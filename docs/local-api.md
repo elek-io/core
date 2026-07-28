@@ -64,7 +64,7 @@ List endpoints take `limit` and `offset` query parameters. `limit` defaults to *
 ```
 
 ```
-GET /content/v1/projects/abc-123/collections/blog-posts/entries?limit=10&offset=20
+GET /content/v1/projects/3f2504e0-4f89-41d3-9a0c-0305e82c3301/collections/blog-posts/entries?limit=10&offset=20
 ```
 
 ## Responses and errors

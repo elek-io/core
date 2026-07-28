@@ -18,8 +18,10 @@ Two consequences:
 The CLI command works in any pipeline, no matter what runs afterwards:
 
 ```bash
-elek provision --project abc-123-... --url https://github.com/acme/website-content.git
+elek provision --project 3f2504e0-4f89-41d3-9a0c-0305e82c3301 --url https://github.com/acme/website-content.git
 ```
+
+`--project` is the Project's own UUID, which elek.io Desktop shows for every Project, and `--url` is the content repository it is synchronized with.
 
 Afterwards the Project sits in the data directory like any locally created one. Read it with the [programmatic API](./usage.md), export it with [`elek export`](./export.md), generate [typed clients](./api-clients.md), or start the [local API](./local-api.md) for another tool to consume.
 
@@ -36,7 +38,7 @@ import { defineElekConfig } from '@elek-io/core/astro';
 export const config = defineElekConfig({
   projects: {
     website: {
-      id: 'abc-123-...',
+      id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
       remoteUrl: 'https://github.com/acme/website-content.git',
     },
   },
@@ -98,7 +100,7 @@ jobs:
 For any other pipeline, provision explicitly and then do whatever consumes the content:
 
 ```yaml
-- run: pnpm exec elek provision --project abc-123-... --url https://github.com/acme/website-content.git
+- run: pnpm exec elek provision --project 3f2504e0-4f89-41d3-9a0c-0305e82c3301 --url https://github.com/acme/website-content.git
   env:
     ELEK_IO_REMOTE_ACCESS_TOKEN: ${{ secrets.ELEK_IO_REMOTE_ACCESS_TOKEN }}
 - run: pnpm exec elek export ./content
