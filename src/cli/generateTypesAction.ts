@@ -762,8 +762,6 @@ async function generateTypesAs({
   const typesMap = await generateTypes({ outDir, projects });
 
   if (language === 'js') {
-    const compileToJs = await loadCompiler();
-    const startedAt = Date.now();
     const resolvedOutDir = Path.resolve(outDir);
 
     // Convert file paths into POSIX-style (forward slashes - even on Windows),
@@ -774,6 +772,21 @@ async function generateTypesAs({
     const tsFiles = [...typesMap.values()].map((fileName) =>
       Path.join(resolvedOutDir, fileName)
     );
+
+    // No Projects means no types file was written. The compiler rejects an
+    // empty entry list with "No input files", so nothing to compile has to
+    // mean nothing to do. Checked before loading the compiler, so an install
+    // without it is not asked for it when there is no work.
+    if (tsFiles.length === 0) {
+      core.logger.info({
+        source: 'core',
+        message: 'No types to compile to JavaScript, no Projects found',
+      });
+      return;
+    }
+
+    const compileToJs = await loadCompiler();
+    const startedAt = Date.now();
     const normalizedEntries = tsFiles.map(toPosix);
 
     await compileToJs({

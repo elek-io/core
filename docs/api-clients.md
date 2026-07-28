@@ -60,7 +60,7 @@ elek generate:types [outDir] [language] [projects] [--watch]
 
 Unlike `generate:client`, this emits **type definitions only - no runtime code**. For each Project it produces a narrowed `ProjectLanguage` union plus typed interfaces for every Collection, Component and Entry (with their values narrowed to the Project's languages), and id constants. Use these to type content you load yourself (for example through the [Astro integration](./usage.md#astro-integration) or your own fetch layer) without pulling in the client.
 
-A single Project writes `types.ts`. Multiple Projects write one `types-{projectId}.ts` per Project.
+A single Project writes `types.ts`. Multiple Projects write one `types-{projectId}.ts` per Project. With no Projects in the data directory nothing is written and the command exits successfully, for either language.
 
 `language: 'js'` needs the compiler, see [Compiling to JavaScript](#compiling-to-javascript).
 

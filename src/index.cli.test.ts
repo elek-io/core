@@ -84,6 +84,26 @@ describe('CLI', function () {
     expect(await fs.exists('./.elek.io/client.js')).toBe(true);
   }, 10000);
 
+  it('should generate types as JavaScript when there are no Projects', async function () {
+    // An isolated data directory holds no Projects, so no types file is
+    // written and there is nothing to compile. The compiler rejects an empty
+    // entry list with "No input files", so the step has to be skipped rather
+    // than called with nothing, matching how the `ts` language already behaves.
+    await execCommand({
+      command: 'node ./dist/cli/index.cli.mjs',
+      args: [
+        '--data-dir',
+        './.elek.io/no-projects-data-dir',
+        'generate:types',
+        './.elek.io/no-projects-out',
+        'js',
+      ],
+      logger: core.logger,
+    });
+
+    expect(await fs.readdir('./.elek.io/no-projects-out')).toEqual([]);
+  }, 10000);
+
   it('should be able to request a list of entries', async function () {
     core.api.start(testApiPort);
     await vi.waitFor(
