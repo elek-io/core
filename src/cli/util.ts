@@ -1,6 +1,9 @@
 import chokidar from 'chokidar';
+// Type-only, so it is erased at build time and tsdown stays out of the bundle
+import type { build } from 'tsdown';
 import ElekIoCore from '../index.node.js';
 import type { ConstructorElekIoCoreProps } from '../schema/index.js';
+import { CoreError } from '../util/shared.js';
 
 /**
  * The log level is left out on purpose, so ELEK_IO_LOG_LEVEL reaches
@@ -41,6 +44,28 @@ export function watchProjects() {
     ignoreInitial: true, // Do not regenerate Client while chokidar first discovers all directories and files
     ignored: (path) => path.includes('/.git/'), // Exclude all files inside .git directory of Project repositories
   });
+}
+
+/**
+ * Loads tsdown, which compiles the generated TypeScript to JavaScript.
+ *
+ * The import is lazy and tsdown is an optional peer dependency, so the CLI
+ * bundle does not contain it. Bundling it pulls in rolldown, whose native
+ * binding cannot be bundled, and every command dies at startup.
+ *
+ * Only the `js` language needs it, so an install without it keeps working
+ * for every other command.
+ */
+export async function loadCompiler(): Promise<typeof build> {
+  try {
+    const { build } = await import('tsdown');
+    return build;
+  } catch (error) {
+    throw CoreError.preconditionFailed(
+      'Generating JavaScript needs the optional peer dependencies "tsdown" and "typescript". Install both as dev dependencies of your project, or pass "ts" as the language to generate TypeScript instead.',
+      error
+    );
+  }
 }
 
 /**

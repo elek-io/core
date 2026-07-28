@@ -1,4 +1,3 @@
-import { build as compileToJs } from 'tsdown';
 import type { GenerateApiClientProps } from '../schema/index.js';
 import {
   flattenFieldDefinitions,
@@ -7,6 +6,7 @@ import {
 } from '../index.node.js';
 import {
   getCore,
+  loadCompiler,
   watchProjects,
   AUTO_GENERATED_HEADER,
   toPascalCase,
@@ -280,6 +280,7 @@ async function generateApiClientAs({
   await generateApiClient(outFileTs, typesMap);
 
   if (language === 'js') {
+    const compileToJs = await loadCompiler();
     const startedAt = Date.now();
     // Convert file paths into POSIX-style (forward slashes - even on Windows),
     // since tsdown treats these as glob patterns

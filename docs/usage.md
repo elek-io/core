@@ -10,7 +10,7 @@ For the data model these examples build on (Projects, Collections, Entries, Valu
 npm install @elek-io/core zod dugite
 ```
 
-Core declares `zod` and `dugite` as required peer dependencies, so you install them alongside Core. `dugite` is the git binding the Node entry point runs every Project operation through, see [git and sync](./git-and-sync.md). `zod` is what Core authors its schemas with: a compatible version (`zod@^4.3.6`) that resolves to a single copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage. The Astro integration adds one more optional peer, see [Astro integration](#astro-integration).
+Core declares `zod` and `dugite` as required peer dependencies, so you install them alongside Core. `dugite` is the git binding the Node entry point runs every Project operation through, see [git and sync](./git-and-sync.md). `zod` is what Core authors its schemas with: a compatible version (`zod@^4.3.6`) that resolves to a single copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage. Three more peers are optional and only needed by one feature each: `astro` for the [Astro integration](#astro-integration), `tsdown` and `typescript` for [compiling generated clients and types to JavaScript](./api-clients.md#compiling-to-javascript).
 
 You still install zod as above. As a convenience, Core also re-exports `z`, so in your own code you can import it from `@elek-io/core` instead of from `zod` directly. It is the same `z` plus `@hono/zod-openapi`'s `.openapi()` extension.
 
@@ -293,6 +293,7 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 
 - `elek generate:client [outDir] [language] [format] [target]` - generate a JS/TS API client. `--watch` regenerates on content changes.
 - `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported.
+  Both generators emit TypeScript by default. Passing `js` compiles it, which needs `tsdown` and `typescript` installed as dev dependencies of your project, see [compiling to JavaScript](./api-clients.md#compiling-to-javascript).
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
 - `elek provision --project <id> --url <url>` - provision a copy of a Project from its remote into the data directory, e.g. in CI. `--ref` selects a channel (`production` for the latest Release, `preview` for the latest preview Release, `draft` for the tip of the work branch) or an exact Release version, and is overridden by the `ELEK_IO_CHANNEL` environment variable. Runs read-only, so no User is required. Authentication against private remotes uses `ELEK_IO_REMOTE_ACCESS_TOKEN`. See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).

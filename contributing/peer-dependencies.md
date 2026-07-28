@@ -1,14 +1,16 @@
 # Peer dependencies
 
-Core declares three peer dependencies, so the consumer supplies them and Core shares the
+Core declares five peer dependencies, so the consumer supplies them and Core shares the
 consumer's copy instead of bundling its own. This doc records why each version range was
 chosen and how to re-check it when dependencies change.
 
-| Peer     | Range                | Required | Used by                              |
-| -------- | -------------------- | -------- | ------------------------------------ |
-| `zod`    | `^4.3.6`             | yes      | every entry (schemas)                |
-| `dugite` | `^3.0.0`             | yes      | the Node entry (git)                 |
-| `astro`  | `^6.1.3 \|\| ^7.0.0` | no       | the `/astro` entry (content loaders) |
+| Peer         | Range                            | Required | Used by                              |
+| ------------ | -------------------------------- | -------- | ------------------------------------ |
+| `zod`        | `^4.3.6`                         | yes      | every entry (schemas)                |
+| `dugite`     | `^3.0.0`                         | yes      | the Node entry (git)                 |
+| `astro`      | `^6.1.3 \|\| ^7.0.0`             | no       | the `/astro` entry (content loaders) |
+| `tsdown`     | `^0.22.3`                        | no       | the CLI, `generate:* js` only        |
+| `typescript` | `^5.0.0 \|\| ^6.0.0 \|\| ^7.0.0` | no       | the CLI, through tsdown's `dts`      |
 
 The general rule for a floor: it is the lowest version whose API Core actually uses.
 Verify a candidate by installing it and running the suite. `zod` carries an extra
@@ -172,3 +174,80 @@ on a release younger than that writes a `minimumReleaseAgeExclude` entry into `p
 to bypass it. Do not commit that entry: it is a permanent opt-out of a supply chain protection for a
 condition that lasts a day, and it turns into stale cruft at the next bump. Pin the newest version
 that is past the cooldown instead, and pick the newer one up with the next routine bump.
+
+## tsdown (`^0.22.3`, optional) and typescript (`^5.0.0 || ^6.0.0 || ^7.0.0`, optional)
+
+### Why they are peers at all, and why the import must stay lazy
+
+These two are not peers to share a copy. They are peers so the CLI bundle does not contain them.
+
+`generate:client` and `generate:types` compile their generated TypeScript to JavaScript when
+called with `language: 'js'`, and tsdown is what does the compiling. tsdown is also Core's own
+bundler, and tsdown bundles a devDependency it sees imported. A top-level
+`import { build } from 'tsdown'` therefore put tsdown and rolldown into `dist/cli`, which grew it
+to 6.0M. rolldown loads its parser through a native `.node` binding, published as a platform
+specific optionalDependency, and a native binding cannot be bundled. The result was that
+**every** `elek` command died before commander ran, with `Cannot find native binding`.
+
+Two things keep that from coming back:
+
+- `src/cli/util.ts` loads tsdown through `loadCompiler()`, a lazy `await import('tsdown')` reached
+  only on the `js` path. The import must stay lazy. Moving it back to the top of a module bundles
+  tsdown again whether or not it is declared here.
+- Declaring both as peers is what makes tsdown externalize them, since tsdown never bundles a peer.
+  No `tsdown.config.ts` change is needed. `dist/cli` is 1.6M with both in place.
+
+`loadCompiler()` maps a failed resolution to a `CoreError` naming both packages, so an install
+without them gets an actionable message on the `js` path instead of a raw `ERR_MODULE_NOT_FOUND`,
+and every other command keeps working. `src/cli/util.test.ts` covers that message.
+
+The regression guard is in `src/index.cli.test.ts`, which spawns the built binary with `NODE_PATH`
+removed from the environment. That detail is the whole point: vitest hands its forked workers a
+`NODE_PATH` ending in pnpm's hidden hoist store, where the rolldown binding happens to live, so the
+CLI subprocesses the suite already spawned resolved it and passed while every consumer install
+failed. The test needs `dist/` to exist, which the suite already assumes and CI satisfies by
+running `pnpm build` before the tests.
+
+### Why typescript is declared, and why its range must never be narrower than tsdown's
+
+Core does not use the typescript API anywhere. Both actions compile with `dts: true`, and that is
+tsdown's dts generator, which needs typescript. It is declared here so the requirement is visible
+to a consumer of Core rather than only to a reader of tsdown's own peer list, and so
+`loadCompiler()`'s message can name it.
+
+Because Core is not the one using it, Core's range must mirror what tsdown supports and must never
+be narrower. tsdown widens this range within a single minor line: 0.22.3 declares
+`^5.0.0 || ^6.0.0`, 0.22.14 declares `^5.0.0 || ^6.0.0 || ^7.0.0`. A narrower range in Core is not
+a warning, it is a hard `ERESOLVE` failure that stops `npm install @elek-io/core` outright, because
+npm resolves the optional peer to the newest typescript tsdown allows and then finds Core forbidding
+it. Copying the range off the locally installed tsdown rather than off the newest one in range is
+exactly how that happens. When tsdown widens again, widen here in the same change.
+
+The tsdown range is `^0.22.3`, a 0.x line, so it stays inside the verified minor. `devDependencies`
+pins 0.22.3 for development, like the other peers.
+
+### How to re-check
+
+The suite cannot check this. It runs from the repo, where every devDependency resolves. Check it
+the way a consumer sees it, from outside the repo:
+
+```bash
+pnpm build && pnpm pack --pack-destination /tmp
+mkdir /tmp/scratch && cd /tmp/scratch && npm init -y
+npm install /tmp/elek-io-core-<version>.tgz   # must not ERESOLVE
+npx elek --help                               # must print help, not a native binding error
+npx elek generate:types ./out js              # must name tsdown and typescript, and exit 1
+npm install -D tsdown typescript
+npx elek generate:types ./out js              # must now emit .mjs and .d.mts
+```
+
+Installing the tarball with npm is the useful part. npm resolves optional peers even though it does
+not install them, so a range skew surfaces there and not under pnpm.
+
+### Consumers on typescript 7 need a tsconfig
+
+typescript 7 is the Go port, and tsdown's dts generator running on it fails with
+`tsgo generator requires a tsconfig file to be specified` when the consumer's project has no
+`tsconfig.json`. typescript 6 has no such requirement. This is tsdown's behavior rather than
+Core's, it only affects `generate:* js`, and a project asking for `.d.ts` output normally has a
+tsconfig anyway, so it is documented in `docs/api-clients.md` instead of being worked around.

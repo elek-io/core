@@ -20,6 +20,8 @@ elek generate:client [outDir] [language] [format] [target] [--watch]
 
 This produces a typed client plus the supporting types in `outDir`. With `language: 'ts'` you get TypeScript source (`client.ts`) to bundle with your own toolchain. With `language: 'js'` the output is compiled to `.js` / `.mjs` with `.d.ts` declarations, where `format` and `target` control the module system and syntax level.
 
+`language: 'js'` needs the compiler, see [Compiling to JavaScript](#compiling-to-javascript).
+
 ### Using the client
 
 The client is constructed with a `baseUrl` and `apiKey`, and reads content over HTTP. It exposes typed, validated accessors that mirror the [local REST API](./local-api.md) - for example, listing a Collection's Entries:
@@ -59,6 +61,20 @@ elek generate:types [outDir] [language] [projects] [--watch]
 Unlike `generate:client`, this emits **type definitions only - no runtime code**. For each Project it produces a narrowed `ProjectLanguage` union plus typed interfaces for every Collection, Component and Entry (with their values narrowed to the Project's languages), and id constants. Use these to type content you load yourself (for example through the [Astro integration](./usage.md#astro-integration) or your own fetch layer) without pulling in the client.
 
 A single Project writes `types.ts`. Multiple Projects write one `types-{projectId}.ts` per Project.
+
+`language: 'js'` needs the compiler, see [Compiling to JavaScript](#compiling-to-javascript).
+
+## Compiling to JavaScript
+
+Both commands generate TypeScript first. Passing `js` as the language compiles it, which needs two packages Core declares as optional peer dependencies and does not install for you:
+
+```bash
+npm install --save-dev tsdown typescript
+```
+
+Install them as dev dependencies of the project you run `elek` in. Without them the `js` language fails with a message naming both, and every other command, including both generators with the default `ts` language, is unaffected.
+
+On **TypeScript 7** the compiler also needs a `tsconfig.json` in the project, otherwise it fails with `tsgo generator requires a tsconfig file to be specified`. TypeScript 5 and 6 have no such requirement.
 
 ## Output location
 

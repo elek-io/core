@@ -1,4 +1,3 @@
-import { build as compileToJs } from 'tsdown';
 import Path from 'node:path';
 import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
@@ -16,6 +15,7 @@ import {
 } from '../index.node.js';
 import {
   getCore,
+  loadCompiler,
   watchProjects,
   AUTO_GENERATED_HEADER,
   toPascalCase,
@@ -762,6 +762,7 @@ async function generateTypesAs({
   const typesMap = await generateTypes({ outDir, projects });
 
   if (language === 'js') {
+    const compileToJs = await loadCompiler();
     const startedAt = Date.now();
     const resolvedOutDir = Path.resolve(outDir);
 

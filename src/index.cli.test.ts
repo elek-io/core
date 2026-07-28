@@ -45,6 +45,25 @@ describe('CLI', function () {
     await fs.emptyDir('./.elek.io');
   });
 
+  it('should start the built binary the way a consumer install does', async function () {
+    // Every other test here inherits the NODE_PATH vitest gives its workers,
+    // which ends in pnpm's hidden hoist store and resolves packages a consumer
+    // never sees. Stripping it is what `elek` gets from a plain shell, and it
+    // is what catches a bundler leaking into dist/cli: rolldown's native
+    // binding cannot be bundled, so the binary dies before commander runs.
+    const env = { ...process.env };
+    delete env['NODE_PATH'];
+
+    const { stdout } = await execCommand({
+      command: 'node ./dist/cli/index.cli.mjs',
+      args: ['--help'],
+      options: { env },
+      logger: core.logger,
+    });
+
+    expect(stdout).toContain('CLI for elek.io');
+  });
+
   it('should be able to generate the TS API Client with default options', async function () {
     await execCommand({
       command: 'node ./dist/cli/index.cli.mjs',

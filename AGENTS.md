@@ -34,7 +34,7 @@ Two rules follow:
 - Avoid type casts. Shape the types so a cast is not needed.
 - Boolean keys use an `is` or `has` prefix (`isReadOnly`, `hasToken`). Keys that mirror an external tool's name keep that name instead, like git flags (`detach`, `forceCreate`) or slugify options (`lowercase`). See [`contributing/naming.md`](./contributing/naming.md).
 - Keep comments short and put deeper detail in the docs. Avoid em-dashes and semicolons, use simple sentences for readability.
-- Core has three peer dependencies (`zod`, `dugite`, `astro`). Before bumping any of them, or a dependency that pulls `zod` (`@scalar/*`, `@hono/zod-openapi`), read [`contributing/peer-dependencies.md`](./contributing/peer-dependencies.md) for why each version range was chosen and how to re-check it. The `pnpm test` suite guards zod's single-copy invariant through [`src/zod-single-copy.test.ts`](./src/zod-single-copy.test.ts).
+- Core has five peer dependencies (`zod`, `dugite`, `astro`, `tsdown`, `typescript`). Before bumping any of them, or a dependency that pulls `zod` (`@scalar/*`, `@hono/zod-openapi`), read [`contributing/peer-dependencies.md`](./contributing/peer-dependencies.md) for why each version range was chosen and how to re-check it. The `pnpm test` suite guards zod's single-copy invariant through [`src/zod-single-copy.test.ts`](./src/zod-single-copy.test.ts). `tsdown` and `typescript` are peers so the CLI does not bundle them, which is why the CLI must only ever import `tsdown` lazily.
 - Core environment variables use the `ELEK_IO_` prefix, are read once at Core construction (never at module import) and are documented in the environment variables section of [`docs/usage.md`](./docs/usage.md).
 
 ## Testing notes
