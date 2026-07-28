@@ -360,10 +360,23 @@ The loaders supply Astro with both a schema and a TypeScript type per Collection
 entry.data.title.en; // string, the field is required
 entry.data.subtitle.en; // string | null, the field is optional
 entry.data.body.en; // MdAstRoot | null, an optional markdown field
-entry.data.tags.en; // Array<{ id: string; objectType: string }>, never null
+entry.data.cover.en; // Array<{ id: string; objectType: 'asset' }>, never null
+entry.data.related.en; // Array<{ id: string; objectType: 'entry'; collectionId: string }>
 ```
 
-A `reference` field is an array, empty rather than null when nothing is referenced, and each item carries the UUID of the Asset or Entry it points at. That UUID is also the Astro store id, so `getEntry('websiteAssets', item.id)` resolves it.
+A `reference` field is an array, empty rather than null when nothing is referenced. The field definition decides what it points at, so the type does too: an Asset reference carries an id, an Entry reference carries the id and the `collectionId` of the Collection the Entry lives in.
+
+That id is also the Astro store id, so following a reference is a `getEntry` away. An Asset resolves against the Project's Assets collection:
+
+```typescript
+const cover = await getEntry('websiteAssets', entry.data.cover.en[0].id);
+```
+
+An Entry needs the collection key its Collection derives, the alias plus the plural slug in PascalCase described above. `collectionId` is what tells you which Collection a reference landed in, which matters when a field allows more than one:
+
+```typescript
+const post = await getEntry('websitePosts', entry.data.related.en[0].id);
+```
 
 An Entry carries no `body` and no rendered HTML, so Astro's `render()` and `<Content />` produce an empty page rather than an error. A `markdown` field arrives on `entry.data` as a tree, which [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro) renders with `mdastRender`.
 

@@ -67,8 +67,16 @@ function getNarrowedValueType(fieldDefinition: FieldDefinition): string {
       return `Omit<DirectNumberValue, 'content'> & { content: Record<ProjectLanguage, number${orNull}> }`;
     case 'boolean':
       return `Omit<DirectBooleanValue, 'content'> & { content: Record<ProjectLanguage, boolean> }`;
-    case 'reference':
-      return 'ReferencedValue';
+    case 'reference': {
+      // The field definition already says which kind it points at, and
+      // an Entry reference carries the Collection it belongs to, which
+      // is what reading the referenced Entry needs alongside the id
+      const reference =
+        fieldDefinition.fieldType === 'entry'
+          ? `{ id: string; objectType: 'entry'; collectionId: string }`
+          : `{ id: string; objectType: 'asset' }`;
+      return `Omit<ReferencedValue, 'content'> & { content: Record<ProjectLanguage, Array<${reference}>> }`;
+    }
     case 'component':
       return 'ComponentValue';
     case 'mdast':

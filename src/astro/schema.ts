@@ -390,7 +390,12 @@ function fieldDefToTsType(fieldDef: FieldDefinition): string {
     case 'boolean':
       return 'boolean';
     case 'reference':
-      return 'Array<{ id: string; objectType: string }>';
+      // The field definition already says which kind it points at, and
+      // an Entry reference carries the Collection it belongs to, which
+      // is what getEntry() needs alongside the id
+      return fieldDef.fieldType === 'entry'
+        ? `Array<{ id: string; objectType: 'entry'; collectionId: string }>`
+        : `Array<{ id: string; objectType: 'asset' }>`;
     case 'component':
       // Unreachable — component fields are handled inline before calling
       // fieldDefToTsType. Returned value is a safe fallback.

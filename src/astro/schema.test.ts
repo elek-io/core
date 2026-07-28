@@ -812,7 +812,7 @@ describe('buildEntryValuesTypeString', () => {
     expect(types).toContain('string');
     expect(types).toContain('number');
     expect(types).toContain('boolean');
-    expect(types).toContain('Array<{ id: string; objectType: string }>');
+    expect(types).toContain(`Array<{ id: string; objectType: 'asset' }>`);
     expect(types).toContain('ProjectLanguage');
   });
 
@@ -1454,6 +1454,92 @@ function makeAssetFieldDef(slug: string, isRequired: boolean): FieldDefinition {
   };
 }
 
+function makeEntryFieldDef(
+  slug: string,
+  isRequired: boolean,
+  ofCollections: string[] = []
+): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'reference',
+    fieldType: 'entry',
+    label: { en: 'Entry' },
+    description: null,
+    isRequired,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    min: null,
+    max: null,
+    ofCollections,
+  };
+}
+
+describe('buildEntryValuesTypeString reference fields', () => {
+  it('names the kind an Asset reference points at', () => {
+    const types = buildEntryValuesTypeString(
+      [makeAssetFieldDef('image', false)],
+      ['en'],
+      [],
+      'Articles'
+    );
+
+    expect(types).toContain(
+      `"image": Record<ProjectLanguage, Array<{ id: string; objectType: 'asset' }>>`
+    );
+  });
+
+  it('carries collectionId on an Entry reference', () => {
+    // The store is keyed per collection, so following a reference needs
+    // the Collection it belongs to, not only the Entry id
+    const types = buildEntryValuesTypeString(
+      [makeEntryFieldDef('related', false)],
+      ['en'],
+      [],
+      'Articles'
+    );
+
+    expect(types).toContain(
+      `"related": Record<ProjectLanguage, Array<{ id: string; objectType: 'entry'; collectionId: string }>>`
+    );
+  });
+
+  it('emits the shape the schema accepts, per reference kind', () => {
+    // The invariant behind both cases above. Both are generated from
+    // the same field definition, so they may never disagree.
+    const collectionId = uuid();
+    const asset = { id: uuid(), objectType: 'asset' };
+    const entry = { id: uuid(), objectType: 'entry', collectionId };
+
+    const assetSchema = buildEntryValuesSchema(
+      [makeAssetFieldDef('image', false)],
+      ['en'],
+      []
+    );
+    expect(assetSchema.safeParse({ image: { en: [asset] } }).success).toBe(
+      true
+    );
+    expect(assetSchema.safeParse({ image: { en: [entry] } }).success).toBe(
+      false
+    );
+
+    const entrySchema = buildEntryValuesSchema(
+      [makeEntryFieldDef('related', false)],
+      ['en'],
+      []
+    );
+    expect(entrySchema.safeParse({ related: { en: [entry] } }).success).toBe(
+      true
+    );
+    // Without collectionId there is no way to reach the Entry, so the
+    // schema rejects it and the type has to require it
+    expect(
+      entrySchema.safeParse({ related: { en: [{ id: entry.id }] } }).success
+    ).toBe(false);
+  });
+});
+
 describe('buildEntryValuesTypeString nullability', () => {
   it('emits string | null for an optional string field', () => {
     const types = buildEntryValuesTypeString(
@@ -1524,7 +1610,7 @@ describe('buildEntryValuesTypeString nullability', () => {
     );
     expect(types).toContain(`"active": Record<ProjectLanguage, boolean>`);
     expect(types).toContain(
-      `"image": Record<ProjectLanguage, Array<{ id: string; objectType: string }>>`
+      `"image": Record<ProjectLanguage, Array<{ id: string; objectType: 'asset' }>>`
     );
   });
 

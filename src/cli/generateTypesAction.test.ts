@@ -878,6 +878,18 @@ describe('generateTypesForProject - optional and required fields', () => {
           max: null,
           ofAssetMimeTypes: [],
         },
+        {
+          ...base,
+          id: uuid(),
+          slug: 'optional-entry',
+          valueType: 'reference',
+          fieldType: 'entry',
+          label: { en: 'Optional entry' },
+          isRequired: false,
+          min: null,
+          max: null,
+          ofCollections: [],
+        },
       ],
     });
 
@@ -926,7 +938,20 @@ describe('generateTypesForProject - optional and required fields', () => {
     expect(valuesBlock).toContain(
       `toggle: Omit<DirectBooleanValue, 'content'> & { content: Record<ProjectLanguage, boolean> };`
     );
-    expect(valuesBlock).toContain(`'optional-asset': ReferencedValue;`);
+    expect(valuesBlock).toContain(
+      `'optional-asset': Omit<ReferencedValue, 'content'> & { content: Record<ProjectLanguage, Array<{ id: string; objectType: 'asset' }>> };`
+    );
+  });
+
+  it('narrows a reference field to the kind it points at', () => {
+    // The field definition already says which of the two it is, and an
+    // Entry reference carries the Collection it belongs to
+    expect(valuesBlock).toContain(
+      `'optional-asset': Omit<ReferencedValue, 'content'> & { content: Record<ProjectLanguage, Array<{ id: string; objectType: 'asset' }>> };`
+    );
+    expect(valuesBlock).toContain(
+      `'optional-entry': Omit<ReferencedValue, 'content'> & { content: Record<ProjectLanguage, Array<{ id: string; objectType: 'entry'; collectionId: string }>> };`
+    );
   });
 
   it('emits TypeScript that transpiles without syntax errors', async () => {
