@@ -362,6 +362,8 @@ entry.data.tags.en; // Array<{ id: string; objectType: string }>, never null
 
 A `reference` field is an array, empty rather than null when nothing is referenced, and each item carries the UUID of the Asset or Entry it points at. That UUID is also the Astro store id, so `getEntry('websiteAssets', item.id)` resolves it.
 
+An Entry carries no `body` and no rendered HTML, so Astro's `render()` and `<Content />` produce an empty page rather than an error. A `markdown` field arrives on `entry.data` as a tree, which [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro) renders with `mdastRender`.
+
 ### Declaring collections explicitly
 
 `elekCollections()` returns a plain object, so individual collections can be added next to it, and the loaders behind it are exported for when you want to name a collection yourself or expose only part of a Project:
