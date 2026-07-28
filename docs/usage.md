@@ -399,16 +399,14 @@ export async function getStaticPaths() {
   return elekSlugPaths(posts, { slugField: 'slug' });
 }
 
-const { entry } = Astro.props;
-// Astro types every route param as `string | undefined`, while a
-// translatable Value is keyed by the Project's languages, so name the
-// ones this route was built for
-const language = Astro.params.language as 'en' | 'de';
+const { entry, language } = Astro.props;
 ---
 <h1>{entry.data.title[language]}</h1>
 ```
 
-Each language gets its own path, so `/en/hello-world` and `/de/hallo-welt` both reach the same Entry. Pass `language: 'en'` to route a single one, and the params hold only the slug, for a page at `src/pages/[slug].astro`, where the language is a constant instead.
+Every path carries the language it was built for, so a page reads a translatable Value without naming the Project's languages itself. Taking it from `Astro.params` instead would not type-check, since Astro types every route param as `string | undefined` while a Value is keyed by the languages.
+
+Each language gets its own path, so `/en/hello-world` and `/de/hallo-welt` both reach the same Entry. Pass `language: 'en'` to route a single one, and the params hold only the slug, for a page at `src/pages/[slug].astro`. `language` is checked against the Project's languages and `slugField` against the Collection's fields, so a typo in either is a TypeScript error rather than a failing build.
 
 Slugs are unique per language within a Collection, not across languages, and an Entry that has no slug in a language simply gets no path there. A Collection can define several slug fields, which is why the field to route by is named per call.
 

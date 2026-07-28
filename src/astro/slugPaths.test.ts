@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { elekSlugPaths } from './slugPaths.js';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { elekSlugPaths, type ElekRoutableEntry } from './slugPaths.js';
 import { CoreError } from '../util/shared.js';
 
 const posts = [
@@ -71,9 +71,13 @@ describe('elekSlugPaths', function () {
   });
 
   it('should reject a field that is not on the Entry', function () {
+    // A typed Entry makes this a compile error, so the runtime guard is
+    // reached through an Entry whose fields are not statically known
+    const loose: ElekRoutableEntry[] = posts;
+
     let error: unknown = null;
     try {
-      elekSlugPaths(posts, { slugField: 'permalink' });
+      elekSlugPaths(loose, { slugField: 'permalink' });
     } catch (e) {
       error = e;
     }
@@ -84,9 +88,13 @@ describe('elekSlugPaths', function () {
   });
 
   it('should reject a language the Entries do not have', function () {
+    // A typed Entry makes this a compile error, so the runtime guard is
+    // reached through an Entry whose languages are not statically known
+    const loose: ElekRoutableEntry[] = posts;
+
     let error: unknown = null;
     try {
-      elekSlugPaths(posts, { slugField: 'slug', language: 'fr' });
+      elekSlugPaths(loose, { slugField: 'slug', language: 'fr' });
     } catch (e) {
       error = e;
     }
@@ -104,5 +112,76 @@ describe('elekSlugPaths', function () {
         slugField: 'slug',
       })
     ).toThrow(/slug/);
+  });
+});
+
+describe('elekSlugPaths language on props', function () {
+  /** What the loaders generate: every Value keyed by the Project's languages */
+  const typedPosts = [
+    {
+      id: 'aaa',
+      data: {
+        slug: { en: 'hello-world', de: 'hallo-welt' } as Record<
+          'en' | 'de',
+          string | null
+        >,
+        title: { en: 'Hello world', de: 'Hallo Welt' } as Record<
+          'en' | 'de',
+          string
+        >,
+      },
+    },
+  ];
+
+  it('should hand the language of each path to the page', function () {
+    // So a template reads entry.data.title[language] without naming the
+    // languages itself, which Astro.params cannot type
+    const paths = elekSlugPaths(typedPosts, { slugField: 'slug' });
+
+    expect(paths.map((path) => path.props.language)).toEqual(['en', 'de']);
+  });
+
+  it('should hand the routed language over when a single one is asked for', function () {
+    const paths = elekSlugPaths(typedPosts, {
+      slugField: 'slug',
+      language: 'de',
+    });
+
+    expect(paths).toHaveLength(1);
+    expect(paths[0]?.props.language).toEqual('de');
+    expect(paths[0]?.props.entry).toBe(typedPosts[0]);
+  });
+
+  it('should type the language from the Entry it routes', function () {
+    const paths = elekSlugPaths(typedPosts, { slugField: 'slug' });
+
+    expectTypeOf(paths[0]!.props.language).toEqualTypeOf<'en' | 'de'>();
+  });
+
+  it('should type the language option from the Entry too', function () {
+    type Props = Parameters<
+      typeof elekSlugPaths<(typeof typedPosts)[number], 'slug'>
+    >[1];
+
+    expectTypeOf<NonNullable<Props['language']>>().toEqualTypeOf<'en' | 'de'>();
+  });
+
+  it('should accept only field names the Entry has', function () {
+    type Props = Parameters<
+      typeof elekSlugPaths<(typeof typedPosts)[number], 'slug'>
+    >[1];
+
+    expectTypeOf<Props['slugField']>().toEqualTypeOf<'slug'>();
+  });
+
+  it('should fall back to string for an Entry whose languages are not typed', function () {
+    // A hand-built entry, where nothing narrows the languages
+    const loose: ElekRoutableEntry[] = [
+      { id: 'aaa', data: { slug: { en: 'hello-world' } } },
+    ];
+    const paths = elekSlugPaths(loose, { slugField: 'slug' });
+
+    expectTypeOf(paths[0]!.props.language).toEqualTypeOf<string>();
+    expect(paths[0]?.props.language).toEqual('en');
   });
 });

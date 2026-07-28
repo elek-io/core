@@ -63,7 +63,8 @@ export async function getStaticPaths() {
   return elekSlugPaths(posts, { slugField: 'slug', language: 'en' });
 }
 
-const { entry: post } = Astro.props;
+// Every path carries the language it was built for
+const { entry: post, language } = Astro.props;
 
 // Sync lookup maps. mdastRender's handlers run synchronously, so build
 // them once per page from the already-awaited collections.
@@ -72,10 +73,10 @@ const posts = await getCollection('posts');
 const assetById = new Map(assets.map((a) => [a.id, a.data]));
 // References carry UUIDs, the page URLs are slugs, so the renderer
 // needs the same mapping the routes were built from
-const slugById = new Map(posts.map((p) => [p.id, p.data.slug.en]));
+const slugById = new Map(posts.map((p) => [p.id, p.data.slug[language]]));
 
 // An optional field is null in a language nobody filled in
-const body = post.data.body.en;
+const body = post.data.body[language];
 ---
 <article>
   {body !== null &&
