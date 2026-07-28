@@ -37,6 +37,7 @@ const offMarkdownFeatures: MarkdownFeatures = {
 
 function makeMarkdownFieldDef(overrides: {
   slug?: string;
+  isRequired?: boolean;
   features?: Partial<MarkdownFeatures>;
   ofCollections?: string[];
   ofAssetMimeTypes?: string[];
@@ -48,7 +49,7 @@ function makeMarkdownFieldDef(overrides: {
     fieldType: 'markdown' as const,
     label: { en: 'Body' },
     description: null,
-    isRequired: false,
+    isRequired: overrides.isRequired ?? false,
     isDisabled: false,
     isUnique: false as const,
     inputWidth: '12' as const,
@@ -1348,5 +1349,256 @@ describe('buildEntryValuesTypeString with markdown fields', () => {
       'Articles'
     );
     expect(types).toContain(`import type { MdAstRoot } from '@elek-io/core';`);
+  });
+});
+
+/**
+ * A Value of an optional field is `null` in a language the editor left
+ * empty, which the generated schema accepts. The generated type has to
+ * say so, otherwise a consumer reads `entry.data.slug.de` as a string
+ * and gets null at runtime.
+ */
+function makeTextFieldDef(slug: string, isRequired: boolean): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'string',
+    fieldType: 'text',
+    label: { en: 'Text' },
+    description: null,
+    isRequired,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    min: null,
+    max: null,
+    defaultValue: null,
+  };
+}
+
+function makeSlugFieldDef(slug: string, isRequired: boolean): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'string',
+    fieldType: 'slug',
+    label: { en: 'Slug' },
+    description: null,
+    isRequired,
+    isDisabled: false,
+    isUnique: true,
+    inputWidth: '12',
+    defaultValue: null,
+    separator: '-',
+    lowercase: true,
+    decamelize: true,
+    ofFieldDefinitions: [],
+  };
+}
+
+function makeNumberFieldDef(
+  slug: string,
+  isRequired: boolean
+): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'number',
+    fieldType: 'number',
+    label: { en: 'Number' },
+    description: null,
+    isRequired,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    min: null,
+    max: null,
+    defaultValue: null,
+  };
+}
+
+/** A toggle is always required, it is either true or false */
+function makeToggleFieldDef(slug: string): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'boolean',
+    fieldType: 'toggle',
+    label: { en: 'Toggle' },
+    description: null,
+    isRequired: true,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    defaultValue: false,
+  };
+}
+
+function makeAssetFieldDef(slug: string, isRequired: boolean): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'reference',
+    fieldType: 'asset',
+    label: { en: 'Asset' },
+    description: null,
+    isRequired,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    min: null,
+    max: null,
+    ofAssetMimeTypes: [],
+  };
+}
+
+describe('buildEntryValuesTypeString nullability', () => {
+  it('emits string | null for an optional string field', () => {
+    const types = buildEntryValuesTypeString(
+      [makeTextFieldDef('subtitle', false)],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(
+      `"subtitle": Record<ProjectLanguage, string | null>`
+    );
+  });
+
+  it('emits string for a required string field', () => {
+    const types = buildEntryValuesTypeString(
+      [makeTextFieldDef('title', true)],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(`"title": Record<ProjectLanguage, string>`);
+    expect(types).not.toContain(
+      `"title": Record<ProjectLanguage, string | null>`
+    );
+  });
+
+  it('emits string | null for an optional slug field', () => {
+    // The case elekSlugPaths() exists for: an Entry without a slug in
+    // a language simply has no page there
+    const types = buildEntryValuesTypeString(
+      [makeSlugFieldDef('slug', false)],
+      ['en', 'de'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(`"slug": Record<ProjectLanguage, string | null>`);
+  });
+
+  it('emits number | null for an optional number field', () => {
+    const types = buildEntryValuesTypeString(
+      [makeNumberFieldDef('weight', false)],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(`"weight": Record<ProjectLanguage, number | null>`);
+  });
+
+  it('emits MdAstRoot without null for a required markdown field', () => {
+    const types = buildEntryValuesTypeString(
+      [makeMarkdownFieldDef({ slug: 'body', isRequired: true })],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(`"body": Record<ProjectLanguage, MdAstRoot>`);
+    expect(types).not.toContain(`MdAstRoot | null`);
+  });
+
+  it('keeps boolean and reference fields non-nullable', () => {
+    // Neither schema is nullable: a toggle is always true or false and
+    // an empty reference field is an empty array
+    const types = buildEntryValuesTypeString(
+      [makeToggleFieldDef('active'), makeAssetFieldDef('image', false)],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(`"active": Record<ProjectLanguage, boolean>`);
+    expect(types).toContain(
+      `"image": Record<ProjectLanguage, Array<{ id: string; objectType: string }>>`
+    );
+  });
+
+  it('applies the same rule to fields inside a referenced Component', () => {
+    const componentId = uuid();
+    const component = makeComponent({
+      id: componentId,
+      slug: 'hero',
+      fieldDefinitions: [
+        makeTextFieldDef('headline', true),
+        makeTextFieldDef('kicker', false),
+      ],
+    });
+
+    const types = buildEntryValuesTypeString(
+      [
+        {
+          id: uuid(),
+          slug: 'blocks',
+          valueType: 'component',
+          fieldType: 'dynamic',
+          label: { en: 'Blocks' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          ofComponents: [componentId],
+          min: null,
+          max: null,
+        },
+      ],
+      ['en'],
+      [component],
+      'Articles'
+    );
+
+    expect(types).toContain(`"headline": Record<ProjectLanguage, string>`);
+    expect(types).toContain(`"kicker": Record<ProjectLanguage, string | null>`);
+  });
+
+  it('admits null in the type exactly when the schema does', () => {
+    // The invariant behind every case above. Both are generated from
+    // the same field definition, so they may never disagree.
+    const fieldDefs: FieldDefinition[] = [
+      makeTextFieldDef('requiredText', true),
+      makeTextFieldDef('optionalText', false),
+      makeSlugFieldDef('requiredSlug', true),
+      makeSlugFieldDef('optionalSlug', false),
+      makeNumberFieldDef('requiredNumber', true),
+      makeNumberFieldDef('optionalNumber', false),
+      makeToggleFieldDef('toggle'),
+      makeAssetFieldDef('requiredAsset', true),
+      makeAssetFieldDef('optionalAsset', false),
+      makeMarkdownFieldDef({ slug: 'requiredBody', isRequired: true }),
+      makeMarkdownFieldDef({ slug: 'optionalBody', isRequired: false }),
+    ];
+
+    const types = buildEntryValuesTypeString(fieldDefs, ['en'], [], 'Articles');
+
+    for (const fieldDef of fieldDefs) {
+      const schema = buildEntryValuesSchema([fieldDef], ['en'], []);
+      const schemaAdmitsNull = schema.safeParse({
+        [fieldDef.slug]: { en: null },
+      }).success;
+
+      const line = types
+        .split('\n')
+        .find((candidate) => candidate.includes(`"${fieldDef.slug}":`));
+      expect(line, `no emitted line for "${fieldDef.slug}"`).toBeDefined();
+      const typeAdmitsNull = line?.includes('| null') ?? false;
+
+      expect(
+        typeAdmitsNull,
+        `"${fieldDef.slug}" is ${schemaAdmitsNull ? '' : 'not '}nullable in the schema but ${typeAdmitsNull ? '' : 'not '}in the type: ${line}`
+      ).toBe(schemaAdmitsNull);
+    }
   });
 });

@@ -18,7 +18,7 @@ import {
   getTranslatableReferenceValueContentSchemaFromFieldDefinition,
   getTranslatableStringValueContentSchemaFromFieldDefinition,
 } from '../schema/schemaFromFieldDefinition.js';
-import { valueTypeSchema, type ValueType } from '../schema/valueSchema.js';
+import { valueTypeSchema } from '../schema/valueSchema.js';
 
 /**
  * Walks the Component graph reachable from `rootFieldDefinitions`, returning
@@ -281,7 +281,7 @@ export function buildEntryValuesTypeString(
       const itemTypeName = `${collectionPascalName}${toPascalCase(fieldDef.slug)}Item`;
       return `  "${fieldDef.slug}": Array<${itemTypeName}>`;
     }
-    return `  "${fieldDef.slug}": Record<ProjectLanguage, ${valueTypeToTsType(fieldDef.valueType)}>`;
+    return `  "${fieldDef.slug}": Record<ProjectLanguage, ${fieldDefToTsType(fieldDef)}>`;
   });
 
   lines.push(
@@ -322,7 +322,7 @@ function renderComponentValuesType(
       const itemTypeName = `${componentPascal}${toPascalCase(fieldDef.slug)}Item`;
       return `  "${fieldDef.slug}": Array<${itemTypeName}>`;
     }
-    return `  "${fieldDef.slug}": Record<ProjectLanguage, ${valueTypeToTsType(fieldDef.valueType)}>`;
+    return `  "${fieldDef.slug}": Record<ProjectLanguage, ${fieldDefToTsType(fieldDef)}>`;
   });
   return [
     `type ${componentPascal}ComponentValues = {`,
@@ -332,32 +332,43 @@ function renderComponentValuesType(
 }
 
 /**
- * Maps a valueType to its emitted TS leaf type, used inside
+ * Maps a field definition to its emitted TS leaf type, used inside
  * `Record<ProjectLanguage, ...>` in the Astro-generated entry types.
+ *
+ * A language slot an editor left empty holds `null`, which the
+ * generated schema accepts for an optional string, number or markdown
+ * field. The type has to admit it too, otherwise a consumer reads
+ * `entry.data.slug.de` as a string and gets null at runtime. Booleans
+ * and references are never nullable: a toggle is always true or false
+ * and an empty reference field is an empty array. The rule mirrors
+ * `schemaFromFieldDefinition.ts` and `schema.test.ts` asserts the two
+ * agree per field type.
  *
  * The `'component'` case is unreachable because `renderEntryValuesType`
  * and `renderComponentValuesType` special-case it before calling here.
  * Included for exhaustiveness.
  */
-function valueTypeToTsType(valueType: ValueType): string {
-  switch (valueType) {
+function fieldDefToTsType(fieldDef: FieldDefinition): string {
+  const orNull = fieldDef.isRequired ? '' : ' | null';
+
+  switch (fieldDef.valueType) {
     case 'string':
-      return 'string';
+      return `string${orNull}`;
     case 'number':
-      return 'number';
+      return `number${orNull}`;
     case 'boolean':
       return 'boolean';
     case 'reference':
       return 'Array<{ id: string; objectType: string }>';
     case 'component':
       // Unreachable — component fields are handled inline before calling
-      // valueTypeToTsType. Returned value is a safe fallback.
+      // fieldDefToTsType. Returned value is a safe fallback.
       return 'unknown';
     case 'mdast':
-      // Broad narrowing: per-language MdAstRoot | null. The schema layer
-      // enforces per-field feature constraints at write time, so the
-      // tree on disk is always a valid subset; consumers walk with the
-      // broad MdAst* types from @elek-io/core. See docs/markdown-content.md.
-      return 'MdAstRoot | null';
+      // Broad narrowing: the schema layer enforces per-field feature
+      // constraints at write time, so the tree on disk is always a valid
+      // subset; consumers walk with the broad MdAst* types from
+      // @elek-io/core. See docs/markdown-content.md.
+      return `MdAstRoot${orNull}`;
   }
 }
