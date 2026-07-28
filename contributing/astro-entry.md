@@ -95,7 +95,7 @@ A consumer writing handlers as JSX inside an `.astro` template needs none of thi
 
 `elekCollections` imports `defineCollection` from `astro/content/config`, not from the `astro:content` virtual module, which only exists inside a consumer's build and cannot be imported from package code.
 
-That subpath is a real export map entry in astro 6.0.0, 6.4.8 and 7.1.3, but it is not documented public API, so treat it as a pinned assumption. `src/index.astro.collections.test.ts` exercises it through a real `sync()`, which is what would catch its removal.
+That subpath is a real export map entry in astro 6.1.3, 6.4.8 and 7.1.3, but it is not documented public API, so treat it as a pinned assumption. `src/index.astro.collections.test.ts` exercises it through a real `sync()`, which is what would catch its removal.
 
 If it ever disappears, the fallback is cheap: `defineCollection` is a validating passthrough that sets `type` to `content_layer` and returns its argument, so `{ type: 'content_layer', loader }` is equivalent. The only thing lost is astro's own validation of that object.
 
@@ -106,6 +106,8 @@ Assets are split by kind, because a single location cannot serve both. Images go
 Both paths resolve against `context.config.root` (a `URL`, so it goes through `fileURLToPath`), not against `process.cwd()`. In a normal `astro build` the two are the same, but they diverge when the build is started from elsewhere, and the root is the only one the consumer wrote down. A path that lands outside the root, or outside the public directory, is warned about and its Asset loses `src` or `href` accordingly rather than silently producing a URL that 404s.
 
 Writing into `src/` during `astro dev` was checked for a watcher loop, since a write under `src/` is exactly what vite watches. It settles: the loader skips an Asset whose digest matches and whose file is still on disk, so a resync writes nothing and no further sync is triggered. Measured as one content sync across 20 seconds of idle dev. Keep that skip intact, dropping it would turn dev into a rebuild loop.
+
+The skip is also what sets the astro peer floor at 6.1.3. An Asset the loader skips registers no image import of its own, so it stays in the build only because astro rebuilds that list from the store it restored, which it does from 6.1.3 on. See [`peer-dependencies.md`](./peer-dependencies.md).
 
 The binaries are derived artifacts and the docs tell consumers to gitignore `src/content/elek/` and `public/elek/`.
 
@@ -119,7 +121,7 @@ This is the same path Astro's own `image()` schema helper takes for content laye
 - **`filePath` plus the public `assetImports` field**. Fully documented, and it does get the file emitted, but it does not substitute the data value. The consumer is left with a relative string and no way to reach the content-hashed output. Verified, not assumed.
 - **The marker**, which does both. Chosen.
 
-`IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.0.0 and 7.1.3. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro collected the image as an import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
+`IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.1.3 and 7.1.3. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro collected the image as an import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
 
 Only extensions in Astro's `VALID_INPUT_FORMATS` may carry the marker. For anything else Astro strips the prefix and hands the consumer an unanchored relative path, which is why `src` is `null` for non-images and they take the `href` route instead. `imageExtensions` in `loaders.ts` mirrors that list and is tied to Astro's public `ImageInputFormat` with `satisfies`, so a format added or removed there is a compile error here.
 

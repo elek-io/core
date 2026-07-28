@@ -8,7 +8,7 @@ chosen and how to re-check it when dependencies change.
 | -------- | -------------------- | -------- | ------------------------------------ |
 | `zod`    | `^4.3.6`             | yes      | every entry (schemas)                |
 | `dugite` | `^3.0.0`             | yes      | the Node entry (git)                 |
-| `astro`  | `^6.0.0 \|\| ^7.0.0` | no       | the `/astro` entry (content loaders) |
+| `astro`  | `^6.1.3 \|\| ^7.0.0` | no       | the `/astro` entry (content loaders) |
 
 The general rule for a floor: it is the lowest version whose API Core actually uses.
 Verify a candidate by installing it and running the suite. `zod` carries an extra
@@ -90,7 +90,7 @@ pnpm why dugite            # expect one version
 pnpm check-types && pnpm build && pnpm test
 ```
 
-## astro (`^6.0.0 || ^7.0.0`, optional)
+## astro (`^6.1.3 || ^7.0.0`, optional)
 
 astro is an optional peer (`peerDependenciesMeta`), used only by the `/astro` entry. A consumer
 using the Astro integration already provides it, and consumers of the Node or Browser entry never
@@ -100,15 +100,39 @@ install it. The entry uses `astro/loaders` (the Content Layer `Loader` type), `a
 internals, all recorded there: the `__ASTRO_IMAGE_` marker, the resolved shape of `LoaderContext`,
 and `renderTemplate` plus `addAttribute` from `astro/runtime/server/index.js`, which the mdast
 defaults are built on. The last is the least fragile of the three, since it is the module every
-compiled `.astro` file imports, but it is an internal path all the same.
+compiled `.astro` file imports, but it is an internal path all the same. All three hold on 6 as well
+as on 7: `astro/runtime/server/index.js` exports both functions in 6.1.3, `renderTemplate` returns
+the same `RenderTemplateResult` and `addAttribute` still emits nothing for a nullish value, and a
+site built against 6 renders the mdast defaults identically at page level and one component deep.
 
-The floor is 6.0.0, verified two ways. astro 6.0.0 added the `Loader.createSchema` method (returning
+The major floor is 6. astro 6.0.0 added the `Loader.createSchema` method (returning
 `{ schema, types }`) that `elekEntriesLoader` uses (`src/index.astro.ts`), and it switched the Loader's
 schema typing from zod v3 to zod v4. Both are absent in every astro 5.x, so 5.x fails to type-check:
 `createSchema does not exist in type 'Loader'`, plus a zod v3 vs v4 schema mismatch on the `schema`
 field. `devDependencies` pins the latest 7.x for development, so the floor is spot-verified by
 pinning rather than by a permanent CI matrix job. To re-verify, pin `astro` to a candidate version
-and run `pnpm check-types` and `pnpm test`.
+and run `pnpm check-types` and `pnpm test`. The suite alone is not enough, it never renders a page,
+so build and run a real site against the candidate as well.
+
+### Why the patch floor is 6.1.3 and not 6.0.0
+
+The Assets loader skips an Asset whose data has not changed, the same way astro's own `glob` loader
+does, so a second sync writes nothing for it. Astro decides which images to emit from the imports its
+loaders registered while running, and a store restored from disk starts with none of them. astro
+6.1.3 made `writeAssetImports` rebuild that list from the restored entries, so the skip is free. On
+6.0.0 through 6.1.2 it is not: the first `astro build` of a site emits its images, every build after
+it writes an empty import map and fails with `LocalImageUsedWrongly`, naming the relative path the
+loader stored. Deleting `.astro` buys exactly one more good build.
+
+Core cannot close that gap itself. The escape astro's `glob` loader takes on its own skip path,
+calling `store.addAssetImports` with what the entry already recorded, is missing from the public
+`DataStore` type, so reaching for it would mean a cast and a fourth undocumented internal. Raising
+the floor to the release where astro fixed it is the honest fix, and it costs consumers nothing: the
+affected window is three weeks of March 2026 patches, superseded within the month.
+
+`src/index.astro.assets.test.ts` guards the assumption from Core's side. It syncs a second time, when
+every Asset is skipped, and asserts astro still holds the image import. It fails on 6.1.2 with the
+empty map astro wrote, and passes from 6.1.3 on.
 
 ### Why a range of two majors and not `>=6.0.0`
 
@@ -119,7 +143,8 @@ re-verification. Naming the verified majors explicitly makes a consumer on the n
 warning that prompts that re-check, instead of silently claiming an untested major works. When a new
 astro major is verified, widen the range to include it.
 
-astro 7 was verified this way in July 2026 and the range widened from `^6.0.0` to `^6.0.0 || ^7.0.0`.
+astro 7 was verified this way in July 2026 and the range widened to include it (the 6 floor moved to
+6.1.3 afterwards, for the reason above).
 It is a speed release: Rust compiler, a Rust markdown pipeline replacing remark and rehype, Vite 8 on
 Rolldown, queued rendering. The content layer itself is untouched, `Loader.createSchema` and
 `LoaderContext` (including `config: AstroConfig` and `DataEntry.filePath`) are unchanged from 6.4.8,

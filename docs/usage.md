@@ -300,7 +300,7 @@ Generated clients and types narrow translatable content to the Project's languag
 
 ## Astro integration
 
-`@elek-io/core/astro` exports content loaders that pull Project data into Astro's content collections, plus `mdastRender` for rendering `markdown` Values. It adds `astro` (`^6.0.0 || ^7.0.0`) as an optional peer dependency, which your Astro project already provides.
+`@elek-io/core/astro` exports content loaders that pull Project data into Astro's content collections, plus `mdastRender` for rendering `markdown` Values. It adds `astro` (`^6.1.3 || ^7.0.0`) as an optional peer dependency, which your Astro project already provides.
 
 An Astro site declares the Projects it consumes once and imports that declaration wherever it is needed, so a Project id is written a single time.
 

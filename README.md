@@ -30,7 +30,7 @@ Core declares three peer dependencies, so you install them yourself:
   `zodResolver`).
 - **`dugite`** (`^3.0.0`, required) - the git bindings Core runs every Project operation
   through. Used by the Node entry point, see [git and sync](./docs/git-and-sync.md).
-- **`astro`** (`^6.0.0 || ^7.0.0`, optional) - only needed for the Astro integration
+- **`astro`** (`^6.1.3 || ^7.0.0`, optional) - only needed for the Astro integration
   (`@elek-io/core/astro`), where your project already provides it.
 
 As a convenience, Core also re-exports `z`, so in your own code you can import it from

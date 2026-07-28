@@ -96,6 +96,18 @@ export const collections = { ...(await elekCollections(config)) };
     return Fs.readFile(Path.join(cacheDir, 'data-store.json'), 'utf-8');
   }
 
+  /**
+   * The image imports Astro emits for the build, as it wrote them
+   *
+   * Read as text for the same reason as the store above.
+   */
+  function imageImportContents(): Promise<string> {
+    return Fs.readFile(
+      Path.join(root, '.astro', 'content-assets.mjs'),
+      'utf-8'
+    );
+  }
+
   it('should hand an image Asset to Astro as an image to resolve', async function () {
     const store = await storeContents();
     const fileName = `${image.id}.${image.extension}`;
@@ -153,4 +165,21 @@ export const collections = { ...(await elekCollections(config)) };
       )
     ).toBe(true);
   }, 30000);
+
+  /**
+   * Runs last, since it syncs again into the same root.
+   */
+  it('should keep an image importable when a sync changes nothing', async function () {
+    // The loader skips an Asset whose data has not changed, so a
+    // second sync stores nothing for it. What keeps the image in the
+    // build across that is Astro, rebuilding its image imports from
+    // the store it restored. Where it does not, a site builds once
+    // and loses every image on the build after, which is what sets
+    // the peer floor. See contributing/peer-dependencies.md.
+    await sync({ root, configFile: false, logLevel: 'info', cacheDir });
+
+    expect(await imageImportContents()).toContain(
+      `./${image.id}.${image.extension}`
+    );
+  }, 120000);
 });
