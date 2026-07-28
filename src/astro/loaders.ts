@@ -1,5 +1,5 @@
 import type { ImageInputFormat } from 'astro';
-import type { Loader } from 'astro/loaders';
+import type { Loader, LoaderContext } from 'astro/loaders';
 import { z } from '@hono/zod-openapi';
 import Path from 'node:path';
 import Url from 'node:url';
@@ -8,6 +8,7 @@ import { assetSchema, flattenFieldDefinitions } from '../index.node.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
+  buildModelDigest,
 } from './schema.js';
 import { transformEntryValues } from './transform.js';
 import {
@@ -16,6 +17,7 @@ import {
   type ElekConfig,
 } from './elekConfig.js';
 import { getCore, ensureProjectAvailable, logReadingProject } from './core.js';
+import { watchContent } from './watch.js';
 import { toPascalCase } from '../cli/util.js';
 
 export interface ElekAssetsLoaderProps<T extends ElekConfig> {
@@ -136,6 +138,118 @@ export function elekAssetsLoader<const T extends ElekConfig>(
   const alias = props.project;
   const { id: projectId } = readDeclaration(props.config, alias);
 
+  /**
+   * Reads every Asset of the Project into the store, saving the
+   * binaries. Runs on load and again on every change in dev.
+   */
+  const syncAssets = async (context: LoaderContext): Promise<void> => {
+    const core = getCore();
+    await ensureProjectAvailable(core, alias, projectId);
+    await logReadingProject(core, projectId, (message) =>
+      context.logger.info(message)
+    );
+
+    // Relative paths belong to the Astro project, not to whatever
+    // directory the build was started from
+    const root = Url.fileURLToPath(context.config.root);
+    const publicDir = Url.fileURLToPath(context.config.publicDir);
+    const outDir = Path.resolve(
+      root,
+      props.outDir ?? defaultAssetsOutDir(alias)
+    );
+    const publicOutDir = Path.resolve(
+      root,
+      props.publicOutDir ?? defaultPublicAssetsOutDir(alias)
+    );
+    context.logger.info(
+      `Loading elek.io Assets of Project "${alias}", saving images to "${outDir}" and every other file to "${publicOutDir}"`
+    );
+
+    const { list: assets, total } = await core.assets.list({
+      projectId,
+      limit: 0,
+    });
+    if (total === 0) {
+      context.logger.warn('No Assets found');
+    } else {
+      context.logger.info(`Found ${total} Assets`);
+    }
+
+    const seen = new Set<string>();
+    for (const asset of assets) {
+      seen.add(asset.id);
+      const isImage = hasImageExtension(asset.extension);
+      const fileName = `${asset.id}.${asset.extension}`;
+      const absoluteAssetFilePath = Path.join(
+        isImage ? outDir : publicOutDir,
+        fileName
+      );
+
+      // Astro resolves an image relative to the entry's filePath, and
+      // serves a public file at its path below the public directory
+      const filePath = toRelativePosix(root, absoluteAssetFilePath);
+      const publicPath = toRelativePosix(publicDir, absoluteAssetFilePath);
+
+      if (isImage && filePath === null) {
+        context.logger.warn(
+          `Asset "${asset.id}" is saved outside the Astro project, so it cannot be processed as an image. Point outDir inside the project to optimize it.`
+        );
+      }
+      if (!isImage && publicPath === null) {
+        context.logger.warn(
+          `Asset "${asset.id}" is saved outside Astro's public directory, so it is not served. Point publicOutDir inside it to link this Asset.`
+        );
+      }
+
+      const data = {
+        ...asset,
+        absolutePath: absoluteAssetFilePath,
+        src:
+          isImage && filePath !== null
+            ? `${IMAGE_IMPORT_PREFIX}./${fileName}`
+            : null,
+        href:
+          !isImage && publicPath !== null
+            ? Path.posix.join(context.config.base, publicPath)
+            : null,
+      };
+      const digest = context.generateDigest(data);
+
+      // Skip unchanged Assets, but only when the file is still on disk -
+      // the output directory may have been cleaned since the digest
+      // was last stored.
+      const existing = context.store.get(asset.id);
+      if (
+        existing?.digest === digest &&
+        (await Fs.pathExists(absoluteAssetFilePath))
+      ) {
+        continue;
+      }
+
+      await Fs.ensureDir(Path.dirname(absoluteAssetFilePath));
+      await core.assets.save({
+        projectId,
+        id: asset.id,
+        filePath: absoluteAssetFilePath,
+      });
+
+      const parsed = await context.parseData({ id: asset.id, data });
+      context.store.set({
+        id: asset.id,
+        data: parsed,
+        digest,
+        ...(filePath === null ? {} : { filePath }),
+      });
+    }
+
+    // Remove store entries for Assets that no longer exist in the Project.
+    for (const id of [...context.store.keys()]) {
+      if (!seen.has(id)) context.store.delete(id);
+    }
+
+    context.logger.info('Finished loading Assets');
+  };
+
   return {
     name: 'elek-assets',
     // Nothing to await, the Asset shape is the same for every Project.
@@ -165,111 +279,22 @@ export function elekAssetsLoader<const T extends ElekConfig>(
       });
     },
     load: async (context) => {
-      const core = getCore();
-      await ensureProjectAvailable(core, alias, projectId);
-      await logReadingProject(core, projectId, (message) =>
-        context.logger.info(message)
-      );
+      await syncAssets(context);
 
-      // Relative paths belong to the Astro project, not to whatever
-      // directory the build was started from
-      const root = Url.fileURLToPath(context.config.root);
-      const publicDir = Url.fileURLToPath(context.config.publicDir);
-      const outDir = Path.resolve(
-        root,
-        props.outDir ?? defaultAssetsOutDir(alias)
-      );
-      const publicOutDir = Path.resolve(
-        root,
-        props.publicOutDir ?? defaultPublicAssetsOutDir(alias)
-      );
-      context.logger.info(
-        `Loading elek.io Assets of Project "${alias}", saving images to "${outDir}" and every other file to "${publicOutDir}"`
-      );
-
-      const { list: assets, total } = await core.assets.list({
-        projectId,
-        limit: 0,
-      });
-      if (total === 0) {
-        context.logger.warn('No Assets found');
-      } else {
-        context.logger.info(`Found ${total} Assets`);
-      }
-
-      const seen = new Set<string>();
-      for (const asset of assets) {
-        seen.add(asset.id);
-        const isImage = hasImageExtension(asset.extension);
-        const fileName = `${asset.id}.${asset.extension}`;
-        const absoluteAssetFilePath = Path.join(
-          isImage ? outDir : publicOutDir,
-          fileName
-        );
-
-        // Astro resolves an image relative to the entry's filePath, and
-        // serves a public file at its path below the public directory
-        const filePath = toRelativePosix(root, absoluteAssetFilePath);
-        const publicPath = toRelativePosix(publicDir, absoluteAssetFilePath);
-
-        if (isImage && filePath === null) {
-          context.logger.warn(
-            `Asset "${asset.id}" is saved outside the Astro project, so it cannot be processed as an image. Point outDir inside the project to optimize it.`
-          );
-        }
-        if (!isImage && publicPath === null) {
-          context.logger.warn(
-            `Asset "${asset.id}" is saved outside Astro's public directory, so it is not served. Point publicOutDir inside it to link this Asset.`
-          );
-        }
-
-        const data = {
-          ...asset,
-          absolutePath: absoluteAssetFilePath,
-          src:
-            isImage && filePath !== null
-              ? `${IMAGE_IMPORT_PREFIX}./${fileName}`
-              : null,
-          href:
-            !isImage && publicPath !== null
-              ? Path.posix.join(context.config.base, publicPath)
-              : null,
-        };
-        const digest = context.generateDigest(data);
-
-        // Skip unchanged Assets, but only when the file is still on disk -
-        // the output directory may have been cleaned since the digest
-        // was last stored.
-        const existing = context.store.get(asset.id);
-        if (
-          existing?.digest === digest &&
-          (await Fs.pathExists(absoluteAssetFilePath))
-        ) {
-          continue;
-        }
-
-        await Fs.ensureDir(Path.dirname(absoluteAssetFilePath));
-        await core.assets.save({
-          projectId,
-          id: asset.id,
-          filePath: absoluteAssetFilePath,
-        });
-
-        const parsed = await context.parseData({ id: asset.id, data });
-        context.store.set({
-          id: asset.id,
-          data: parsed,
-          digest,
-          ...(filePath === null ? {} : { filePath }),
+      // In dev the Desktop app keeps editing the Project, so reload
+      // when its Assets change instead of waiting for a restart
+      if (context.watcher) {
+        const core = getCore();
+        watchContent({
+          watcher: context.watcher,
+          paths: [core.util.pathTo.assets(projectId)],
+          onChange: () => syncAssets(context),
+          onError: (error) =>
+            context.logger.error(
+              `Reloading the Assets of Project "${alias}" failed: ${String(error)}`
+            ),
         });
       }
-
-      // Remove store entries for Assets that no longer exist in the Project.
-      for (const id of [...context.store.keys()]) {
-        if (!seen.has(id)) context.store.delete(id);
-      }
-
-      context.logger.info('Finished loading Assets');
     },
   };
 }
@@ -305,85 +330,166 @@ export function elekEntriesLoader<const T extends ElekConfig>(
   const alias = props.project;
   const { id: projectId } = readDeclaration(props.config, alias);
 
+  /**
+   * Fingerprint of the content model the schema and types were built
+   * from, taken when Astro asked for them. Undefined until then, and in
+   * a build it never matters, nothing reloads there.
+   */
+  let modelDigest: string | undefined;
+
+  /**
+   * Reads the Collection, the Project's languages and the Components,
+   * which is everything the schema is built from
+   */
+  const readModel = async (core: ReturnType<typeof getCore>) => {
+    const resolvedId = await core.collections.resolveCollectionId({
+      projectId,
+      idOrSlug: props.collectionIdOrSlug,
+    });
+    const collection = await core.collections.read({
+      projectId,
+      id: resolvedId,
+    });
+    const project = await core.projects.read({ id: projectId });
+    const { list: components } = await core.components.list({
+      projectId,
+      limit: 0,
+    });
+    const fieldDefinitions = flattenFieldDefinitions(
+      collection.fieldDefinitions
+    );
+    const languages = project.settings.language.supported;
+
+    return {
+      resolvedId,
+      collection,
+      components,
+      fieldDefinitions,
+      languages,
+      digest: buildModelDigest(fieldDefinitions, languages, components),
+    };
+  };
+
+  /**
+   * Reads every Entry of the Collection into the store, returning the
+   * resolved Collection id. Runs on load and again on every change in
+   * dev.
+   *
+   * Stops short when the content model no longer matches the schema
+   * Astro built at startup. Reloading would validate Entries against a
+   * schema that does not describe them any more, which either strips a
+   * new field silently or fails on a removed one. Neither is worth
+   * doing, and neither is fixable without a restart, so it says so.
+   */
+  const syncEntries = async (context: LoaderContext): Promise<string> => {
+    const core = getCore();
+    await ensureProjectAvailable(core, alias, projectId);
+    await logReadingProject(core, projectId, (message) =>
+      context.logger.info(message)
+    );
+    const resolvedCollectionId = await core.collections.resolveCollectionId({
+      projectId,
+      idOrSlug: props.collectionIdOrSlug,
+    });
+
+    if (modelDigest !== undefined) {
+      const { digest } = await readModel(core);
+      if (digest !== modelDigest) {
+        context.logger.warn(
+          `The content model of Collection "${props.collectionIdOrSlug}" of Project "${alias}" changed. Astro builds a collection's schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.`
+        );
+        return resolvedCollectionId;
+      }
+    }
+
+    context.logger.info(
+      `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" of Project "${alias}"`
+    );
+
+    const { list: entries, total } = await core.entries.list({
+      projectId,
+      collectionId: resolvedCollectionId,
+      limit: 0,
+    });
+    if (total === 0) {
+      context.logger.warn('No Entries found');
+    } else {
+      context.logger.info(`Found ${total} Entries`);
+    }
+
+    const seen = new Set<string>();
+    for (const entry of entries) {
+      seen.add(entry.id);
+      const values = transformEntryValues(entry.values);
+      const digest = context.generateDigest(values);
+
+      // Skip re-validating Entries whose data has not changed.
+      const existing = context.store.get(entry.id);
+      if (existing?.digest === digest) continue;
+
+      const parsed = await context.parseData({ id: entry.id, data: values });
+      context.store.set({ id: entry.id, data: parsed, digest });
+    }
+
+    // Remove store entries for Entries that no longer exist in the Collection.
+    for (const id of [...context.store.keys()]) {
+      if (!seen.has(id)) context.store.delete(id);
+    }
+
+    context.logger.info('Finished loading Entries');
+    return resolvedCollectionId;
+  };
+
   return {
     name: 'elek-entries',
     createSchema: async () => {
       const core = getCore();
       await ensureProjectAvailable(core, alias, projectId);
-      const resolvedId = await core.collections.resolveCollectionId({
-        projectId,
-        idOrSlug: props.collectionIdOrSlug,
-      });
-      const collection = await core.collections.read({
-        projectId,
-        id: resolvedId,
-      });
-      const project = await core.projects.read({ id: projectId });
-      const languages = project.settings.language.supported;
-      const { list: components } = await core.components.list({
-        projectId,
-        limit: 0,
-      });
+      const model = await readModel(core);
+
+      // Remembered so a reload can tell that the model moved on
+      modelDigest = model.digest;
 
       return {
         schema: buildEntryValuesSchema(
-          flattenFieldDefinitions(collection.fieldDefinitions),
-          languages,
-          components
+          model.fieldDefinitions,
+          model.languages,
+          model.components
         ),
         types: buildEntryValuesTypeString(
-          flattenFieldDefinitions(collection.fieldDefinitions),
-          languages,
-          components,
-          toPascalCase(collection.slug.plural)
+          model.fieldDefinitions,
+          model.languages,
+          model.components,
+          toPascalCase(model.collection.slug.plural)
         ),
       };
     },
     load: async (context) => {
-      const core = getCore();
-      await ensureProjectAvailable(core, alias, projectId);
-      await logReadingProject(core, projectId, (message) =>
-        context.logger.info(message)
-      );
-      const resolvedCollectionId = await core.collections.resolveCollectionId({
-        projectId,
-        idOrSlug: props.collectionIdOrSlug,
-      });
-      context.logger.info(
-        `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" of Project "${alias}"`
-      );
+      const resolvedCollectionId = await syncEntries(context);
 
-      const { list: entries, total } = await core.entries.list({
-        projectId,
-        collectionId: resolvedCollectionId,
-        limit: 0,
-      });
-      if (total === 0) {
-        context.logger.warn('No Entries found');
-      } else {
-        context.logger.info(`Found ${total} Entries`);
+      // In dev the Desktop app keeps editing the Project, so reload
+      // when this Collection's Entries change instead of waiting for a
+      // restart. The Components are watched too, not to reload them but
+      // to notice a model change that never touches an Entry, like
+      // renaming a Component field. Neither path covers .git, so a
+      // commit does not trigger a reload by itself.
+      if (context.watcher) {
+        const core = getCore();
+        watchContent({
+          watcher: context.watcher,
+          paths: [
+            core.util.pathTo.entries(projectId, resolvedCollectionId),
+            core.util.pathTo.components(projectId),
+          ],
+          onChange: async () => {
+            await syncEntries(context);
+          },
+          onError: (error) =>
+            context.logger.error(
+              `Reloading the Entries of Collection "${props.collectionIdOrSlug}" of Project "${alias}" failed: ${String(error)}`
+            ),
+        });
       }
-
-      const seen = new Set<string>();
-      for (const entry of entries) {
-        seen.add(entry.id);
-        const values = transformEntryValues(entry.values);
-        const digest = context.generateDigest(values);
-
-        // Skip re-validating Entries whose data has not changed.
-        const existing = context.store.get(entry.id);
-        if (existing?.digest === digest) continue;
-
-        const parsed = await context.parseData({ id: entry.id, data: values });
-        context.store.set({ id: entry.id, data: parsed, digest });
-      }
-
-      // Remove store entries for Entries that no longer exist in the Collection.
-      for (const id of [...context.store.keys()]) {
-        if (!seen.has(id)) context.store.delete(id);
-      }
-
-      context.logger.info('Finished loading Entries');
     },
   };
 }

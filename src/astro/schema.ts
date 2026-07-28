@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import Crypto from 'node:crypto';
 import { toPascalCase } from '../cli/util.js';
 import {
   makeComponentsContext,
@@ -170,6 +171,36 @@ function buildComponentArraySchema(
   else if (fieldDef.isRequired) arr = arr.min(1);
   if (fieldDef.max !== null) arr = arr.max(fieldDef.max);
   return arr;
+}
+
+/**
+ * Fingerprints everything the generated schema and types are built
+ * from: the Collection's field definitions, the Project's languages and
+ * the Components the fields reference.
+ *
+ * Astro builds a collection's schema and types once, when it loads the
+ * content config. In dev the loaders compare this digest on every
+ * reload to notice that the model moved underneath them, which no
+ * amount of reloading can fix, and say so instead of validating content
+ * against a schema that no longer describes it.
+ *
+ * Field definitions keep their order, which the emitted type follows.
+ * Components are sorted by id first, since the order they are listed in
+ * is incidental.
+ */
+export function buildModelDigest(
+  fieldDefinitions: FieldDefinition[],
+  languages: ProjectLanguages,
+  components: readonly Component[]
+): string {
+  const model = {
+    fieldDefinitions,
+    languages,
+    components: [...components].sort((a, b) => a.id.localeCompare(b.id)),
+  };
+  return Crypto.createHash('sha256')
+    .update(JSON.stringify(model))
+    .digest('hex');
 }
 
 /**

@@ -5,11 +5,20 @@ import ElekIoCore, { CoreError } from '../index.node.js';
  * Lazily-created, process-wide ElekIoCore. Created on first use so that
  * importing @elek-io/core/astro has no side effects. Configured through
  * the ELEK_IO_* environment variables, which are read once here.
+ *
+ * The file cache is off on purpose. Core only invalidates it for writes
+ * it performs itself, while here another application owns the files:
+ * the Desktop app edits a Project while `astro dev` reads it, and a
+ * cached Project would keep serving content one edit behind. Every file
+ * is read once per sync either way, so there is nothing to gain.
  */
 let coreInstance: ElekIoCore | undefined;
 export function getCore(): ElekIoCore {
   if (!coreInstance) {
-    coreInstance = new ElekIoCore({ log: { level: 'info' } });
+    coreInstance = new ElekIoCore({
+      log: { level: 'info' },
+      file: { cache: false },
+    });
   }
   return coreInstance;
 }

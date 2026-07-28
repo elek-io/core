@@ -8,9 +8,11 @@ import type {
   FieldDefinition,
 } from '../schema/fieldSchema.js';
 import { assetSchema } from '../schema/assetSchema.js';
+import type { ProjectLanguages } from '../schema/projectSchema.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
+  buildModelDigest,
 } from './schema.js';
 
 /** Markdown features with everything disabled — tests opt in. */
@@ -1600,5 +1602,94 @@ describe('buildEntryValuesTypeString nullability', () => {
         `"${fieldDef.slug}" is ${schemaAdmitsNull ? '' : 'not '}nullable in the schema but ${typeAdmitsNull ? '' : 'not '}in the type: ${line}`
       ).toBe(schemaAdmitsNull);
     }
+  });
+});
+
+describe('buildModelDigest', () => {
+  const languages: ProjectLanguages = ['en'];
+
+  it('is stable for the same model', () => {
+    const fieldDefs = [makeTextFieldDef('title', true)];
+    expect(buildModelDigest(fieldDefs, languages, [])).toBe(
+      buildModelDigest(fieldDefs, languages, [])
+    );
+  });
+
+  it('changes when a field definition is added', () => {
+    const before = buildModelDigest(
+      [makeTextFieldDef('title', true)],
+      languages,
+      []
+    );
+    const after = buildModelDigest(
+      [makeTextFieldDef('title', true), makeTextFieldDef('subtitle', false)],
+      languages,
+      []
+    );
+    expect(after).not.toBe(before);
+  });
+
+  it('changes when a field definition becomes optional', () => {
+    // The schema and the emitted type both depend on isRequired
+    const before = buildModelDigest(
+      [makeTextFieldDef('title', true)],
+      languages,
+      []
+    );
+    const after = buildModelDigest(
+      [makeTextFieldDef('title', false)],
+      languages,
+      []
+    );
+    expect(after).not.toBe(before);
+  });
+
+  it('changes when a referenced Component changes', () => {
+    const componentId = uuid();
+    const withOneField = makeComponent({
+      id: componentId,
+      slug: 'hero',
+      fieldDefinitions: [makeTextFieldDef('headline', true)],
+    });
+    const withTwoFields = makeComponent({
+      id: componentId,
+      slug: 'hero',
+      fieldDefinitions: [
+        makeTextFieldDef('headline', true),
+        makeTextFieldDef('subline', false),
+      ],
+    });
+    const fieldDefs = [makeTextFieldDef('title', true)];
+
+    expect(buildModelDigest(fieldDefs, languages, [withTwoFields])).not.toBe(
+      buildModelDigest(fieldDefs, languages, [withOneField])
+    );
+  });
+
+  it('changes when the Project gains a language', () => {
+    // Every translatable Value is keyed by the supported languages
+    const fieldDefs = [makeTextFieldDef('title', true)];
+    expect(buildModelDigest(fieldDefs, ['en', 'de'], [])).not.toBe(
+      buildModelDigest(fieldDefs, ['en'], [])
+    );
+  });
+
+  it('ignores the order Components happen to be listed in', () => {
+    // Their order is incidental, unlike the order of field definitions
+    const first = makeComponent({
+      id: '11111111-1111-4111-8111-111111111111',
+      slug: 'a',
+      fieldDefinitions: [makeTextFieldDef('x', true)],
+    });
+    const second = makeComponent({
+      id: '22222222-2222-4222-8222-222222222222',
+      slug: 'b',
+      fieldDefinitions: [makeTextFieldDef('y', true)],
+    });
+    const fieldDefs = [makeTextFieldDef('title', true)];
+
+    expect(buildModelDigest(fieldDefs, languages, [first, second])).toBe(
+      buildModelDigest(fieldDefs, languages, [second, first])
+    );
   });
 });

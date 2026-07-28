@@ -22,6 +22,33 @@ The loaders share one lazily created `ElekIoCore` and take no options of their o
 
 `elek()` keeps its own `core` option because it runs a second, short-lived, read-only Core for provisioning, in a different module graph, before the loaders exist. Nothing about `file.cache` or `log.level` is exposed to the loaders today. If that is ever needed, it is a new `ELEK_IO_` variable read at construction, not a prop.
 
+## Watching content in dev
+
+Astro hands a loader a `watcher` in dev and nothing in a build, which is exactly the condition the loaders reload under. There is no `refreshContent` on `LoaderContext`, so a loader cannot ask Astro to re-run it. What it can do is what astro's own `glob` loader does: register handlers on the watcher and write the store again from inside them. `src/astro/watch.ts` holds that wiring, `load()` calls the same sync function the watcher does.
+
+The watcher is vite's and covers the whole Astro project, so every handler fires for every file the site has. Filtering the changed path against the watched directories is what keeps an edit in `src/` from reloading Project content.
+
+What is watched is deliberately narrow:
+
+- The Entries loader watches `pathTo.entries(projectId, collectionId)`, so one Collection's Entries do not reload another's.
+- The Assets loader watches `pathTo.assets(projectId)`.
+
+Watching the Project directory instead would pull in `.git`, which a Desktop app commit rewrites on every save, and every write there would trigger a reload of everything.
+
+Reloads are debounced and never overlap. Saving one Entry writes more than one file, and a reload per file would read the Collection several times for a single edit. A change arriving during a run queues exactly one more run rather than stacking.
+
+## Why a model change stops the reload
+
+A reload writes the store. It cannot rebuild the schema, because `createSchema()` runs only when Astro loads the content config, and it cannot rebuild the generated types at all: astro's type generator caches `createSchema()` results in a module-level map it never invalidates, so the types a dev server writes are the types it dies with. Not even `refreshContent`, which does re-run `createSchema` through `contentLayer.sync()`, gets the types back.
+
+So a model change has no good outcome. Reloading against the previous schema silently drops a field that was added and fails validation on one that was removed, and in both cases the generated types disagree with what the page renders. `buildModelDigest` ([`schema.ts`](../src/astro/schema.ts)) fingerprints exactly the inputs of `buildEntryValuesSchema`, the field definitions, the languages and the Components. `createSchema` records it, every reload compares it, and a mismatch logs the restart and returns without touching the store.
+
+That is also why the Entries loader watches `pathTo.components(projectId)` even though it never reloads a Component. Without it, editing a Component that no Entry embeds yet changes nothing on disk that anyone watches, and the developer gets silence instead of the message. `pathTo.entries()` is the Collection directory itself, so `collection.json` needs no separate watch.
+
+The set of collections is decided before any loader runs, so adding or removing a Collection cannot be detected here at all. The consumer documentation lists it as a restart case alongside the rest.
+
+The loaders' Core runs with `file: { cache: false }` ([`core.ts`](../src/astro/core.ts)) because of this feature. Core invalidates its JSON cache for writes it makes itself, and here another application owns the files, so a cached Project would keep serving content one edit behind and the watcher would look broken. Each file is read once per sync either way. This was found the hard way: the first working version of the watcher reloaded on every edit and still rendered the old content.
+
 ## The elek config
 
 `defineElekConfig` returns the very object it was handed, it never returns the parse result. That is what preserves the alias keys as literal types, which the loaders then constrain their `project` against (`keyof T['projects'] & string`). Returning `schema.parse(config)` would widen everything back to `Record<string, ...>` and lose the compile-time alias check, and getting the literal type back would need a cast.

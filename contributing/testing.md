@@ -56,6 +56,18 @@ Two related limits, both found the hard way:
 
 So Astro suites assert what `sync()` produces: the generated types, the files on disk and the content store. Anything that needs a rendered page has to be checked manually and written down instead.
 
+### What was verified by hand
+
+Dev-mode content watching cannot be integration-tested for the reason above, and `sync()` passes no watcher, so the suite covers the wiring in isolation ([`src/astro/watch.test.ts`](../src/astro/watch.test.ts)) and the reload path through the shared sync function. Verified by hand against a real `astro dev` on a Project with two languages, an image Asset, a PDF Asset and a slug-routed Collection:
+
+- Editing an Entry through the programmatic API, standing in for the Desktop app, updated the open page about a second later, repeatedly, with no restart.
+- Creating an Asset added it to the rendered page and served its binary.
+- 25 seconds of idle produced zero additional syncs, so writing Asset binaries below `src/` does not feed the watcher back into itself.
+- Adding a field definition, removing one, and adding a field to a Component each logged the model-changed warning and left the store alone. Before that check existed, the first silently dropped the field, the second failed with `InvalidContentEntryDataError` and the third did nothing at all.
+- The generated types never changed in any of those runs, which is what makes the restart unavoidable rather than a shortcut.
+
+Re-check these when touching `watch.ts`, the loaders' sync functions or the loaders' Core options.
+
 ### Limitation: git credentials cannot be integration-tested
 
 The suite's remotes are bare repositories on the local filesystem, and git skips its whole credential machinery for local paths. The `ELEK_IO_REMOTE_ACCESS_TOKEN` askpass flow (`buildCredentialEnv` and the helper scripts in `GitService`) is therefore covered by unit tests on the env it builds, plus a negative integration test asserting the token never lands in `.git/config` or the remote URL. What no test covers: git actually invoking the askpass helper against an HTTP remote, and the Windows `.bat` trampoline in particular, plus LFS object availability for old Release tags on real providers. Verify those manually against a real private HTTPS remote when touching the credential path, and before releasing changes to it. A local HTTP git server fixture would close this gap if it ever becomes worth the setup. The design rationale behind the askpass approach is in [`git-credentials.md`](./git-credentials.md).

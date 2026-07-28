@@ -457,6 +457,27 @@ Those are the only entries the integration needs. Everything else it produces go
 
 All loaders share one Core instance, which the loaders themselves take no options for. What configures it are the `ELEK_IO_*` environment variables of the build: set `ELEK_IO_DATA_DIR` to read from a data directory other than `~/elek.io`, `ELEK_IO_CHANNEL` to switch the content state deployment-wide and `ELEK_IO_REMOTE_ACCESS_TOKEN` to authenticate against a private remote. See [Environment variables](#environment-variables) for the full list, and note that it is the full list: settings without an environment variable, the log level among them, cannot be changed for the loaders' Core today.
 
+### Local development
+
+While `astro dev` runs, the loaders watch the Projects they read. Editing an Entry or an Asset in the Desktop app updates the open page a moment later, without restarting the dev server. Each loader watches only what it reads, so a Collection reloads when one of its own Entries changes and Assets reload on their own. The Project's git history is not watched, so committing in the Desktop app does not trigger a reload by itself.
+
+**Content edits are live, model edits need a restart.** Astro builds a collection's schema and its TypeScript types once, when it loads the content config, and offers no way to rebuild them while the server runs. So changing the content model means restarting `astro dev`:
+
+- Adding, removing or editing a **field definition** of a Collection
+- Adding, removing or editing a **Component**, or the fields of one
+- Changing a Project's **supported languages**, which every translatable Value is keyed by
+- Adding or removing a **Collection or Project**, which changes the set of collections `elekCollections()` returns
+
+The loaders notice the first three and stop rather than pretend. Instead of reloading Entries against a schema that no longer describes them, which would silently drop a new field or fail on a removed one, the build log says what happened:
+
+```
+[elek-entries] The content model of Collection "posts" of Project "website" changed.
+Astro builds a collection's schema and types once, when it loads the content config,
+so restart the dev server to pick them up. Entries are not reloaded until then.
+```
+
+Content editing carries on as normal after the restart. Adding or removing a whole Collection is not detected, because the set of collections is decided before any loader runs.
+
 ### Provisioning in CI with elek()
 
 The loaders read from the local data directory, which is empty on a CI runner. The `elek()` integration fills it: it provisions every Project of the config from its remote before Astro's content sync runs.
