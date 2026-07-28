@@ -13,10 +13,10 @@ import {
   createCollection,
   createEntry,
   createProject,
+  execCommand,
   seedRemoteWithRelease,
 } from './test/util.js';
 import core, { testApiPort } from './test/setup.js';
-import { execCommand } from './util/node.js';
 
 describe('CLI', function () {
   let project1: Project & { destroy: () => Promise<void> };
@@ -55,10 +55,9 @@ describe('CLI', function () {
     delete env['NODE_PATH'];
 
     const { stdout } = await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
-      args: ['--help'],
+      command: 'node',
+      args: ['./dist/cli/index.cli.mjs', '--help'],
       options: { env },
-      logger: core.logger,
     });
 
     expect(stdout).toContain('CLI for elek.io');
@@ -66,9 +65,8 @@ describe('CLI', function () {
 
   it('should be able to generate the TS API Client with default options', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
-      args: ['generate:client'],
-      logger: core.logger,
+      command: 'node',
+      args: ['./dist/cli/index.cli.mjs', 'generate:client'],
     });
 
     expect(await fs.exists('./.elek.io/client.ts')).toBe(true);
@@ -76,9 +74,15 @@ describe('CLI', function () {
 
   it('should be able to generate & compile the API Client as JavaScript, ESM and target ES2020', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
-      args: ['generate:client', './.elek.io', 'js', 'esm', 'es2020'],
-      logger: core.logger,
+      command: 'node',
+      args: [
+        './dist/cli/index.cli.mjs',
+        'generate:client',
+        './.elek.io',
+        'js',
+        'esm',
+        'es2020',
+      ],
     });
 
     expect(await fs.exists('./.elek.io/client.js')).toBe(true);
@@ -90,15 +94,15 @@ describe('CLI', function () {
     // entry list with "No input files", so the step has to be skipped rather
     // than called with nothing, matching how the `ts` language already behaves.
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
+      command: 'node',
       args: [
+        './dist/cli/index.cli.mjs',
         '--data-dir',
         './.elek.io/no-projects-data-dir',
         'generate:types',
         './.elek.io/no-projects-out',
         'js',
       ],
-      logger: core.logger,
     });
 
     expect(await fs.readdir('./.elek.io/no-projects-out')).toEqual([]);
@@ -138,9 +142,8 @@ describe('CLI', function () {
 
   it('should be able to export all Projects nested into projects.json', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
-      args: ['export'],
-      logger: core.logger,
+      command: 'node',
+      args: ['./dist/cli/index.cli.mjs', 'export'],
     });
 
     expect(await fs.exists('./.elek.io/projects.json')).toBe(true);
@@ -175,9 +178,8 @@ describe('CLI', function () {
 
   it('should be able to export one Project to project-${id}.json', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
-      args: ['export', './.elek.io', project1.id],
-      logger: core.logger,
+      command: 'node',
+      args: ['./dist/cli/index.cli.mjs', 'export', './.elek.io', project1.id],
     });
 
     expect(await fs.exists(`./.elek.io/project-${project1.id}.json`)).toBe(
@@ -210,14 +212,14 @@ describe('CLI', function () {
 
   it('should be able to export multiple Projects to separate project-${id}/project.json files', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
+      command: 'node',
       args: [
+        './dist/cli/index.cli.mjs',
         'export',
         './.elek.io',
         `${project1.id},${project2.id}`,
         'separate',
       ],
-      logger: core.logger,
     });
 
     expect(
@@ -314,14 +316,14 @@ describe('CLI', function () {
     // The isolated directory holds no Projects, so the export is empty
     // even though this suite created Projects in the shared data directory
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
+      command: 'node',
       args: [
+        './dist/cli/index.cli.mjs',
         '--data-dir',
         './.elek.io/data-dir-flag',
         'export',
         './.elek.io/data-dir-flag-out',
       ],
-      logger: core.logger,
     });
 
     const projectsContent = await fs.readFile(
@@ -333,14 +335,19 @@ describe('CLI', function () {
   });
 
   it('should fail loudly for an empty --data-dir instead of falling back', async function () {
-    // The quotes survive execCommand's shell concatenation, so commander
-    // receives an empty string. It must throw, not silently use another
-    // directory, e.g. when a script passes an unset variable.
+    // The empty argument reaches commander verbatim, the way a script
+    // passing an unset variable would. It must throw, not silently use
+    // another directory.
     await expect(
       execCommand({
-        command: 'node ./dist/cli/index.cli.mjs',
-        args: ['--data-dir', '""', 'export', './.elek.io/data-dir-empty-out'],
-        logger: core.logger,
+        command: 'node',
+        args: [
+          './dist/cli/index.cli.mjs',
+          '--data-dir',
+          '',
+          'export',
+          './.elek.io/data-dir-empty-out',
+        ],
       })
     ).rejects.toThrow();
 
@@ -349,12 +356,15 @@ describe('CLI', function () {
 
   it('should isolate the data directory via the ELEK_IO_DATA_DIR environment variable', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
-      args: ['export', './.elek.io/data-dir-env-out'],
+      command: 'node',
+      args: [
+        './dist/cli/index.cli.mjs',
+        'export',
+        './.elek.io/data-dir-env-out',
+      ],
       options: {
         env: { ...process.env, ELEK_IO_DATA_DIR: './.elek.io/data-dir-env' },
       },
-      logger: core.logger,
     });
 
     const projectsContent = await fs.readFile(
@@ -369,8 +379,9 @@ describe('CLI', function () {
     const seed = await seedRemoteWithRelease();
 
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
+      command: 'node',
       args: [
+        './dist/cli/index.cli.mjs',
         '--data-dir',
         './.elek.io/provision-data-dir',
         'provision',
@@ -379,7 +390,6 @@ describe('CLI', function () {
         '--url',
         seed.remotePath,
       ],
-      logger: core.logger,
     });
 
     const projectFile = JSON.parse(
@@ -400,8 +410,9 @@ describe('CLI', function () {
     const seed = await seedRemoteWithRelease();
 
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
+      command: 'node',
       args: [
+        './dist/cli/index.cli.mjs',
         '--data-dir',
         './.elek.io/provision-ref-data-dir',
         'provision',
@@ -415,7 +426,6 @@ describe('CLI', function () {
       options: {
         env: { ...process.env, ELEK_IO_CHANNEL: 'draft' },
       },
-      logger: core.logger,
     });
 
     // The draft channel follows the work branch
@@ -431,8 +441,9 @@ describe('CLI', function () {
 
     await expect(
       execCommand({
-        command: 'node ./dist/cli/index.cli.mjs',
+        command: 'node',
         args: [
+          './dist/cli/index.cli.mjs',
           '--data-dir',
           './.elek.io/provision-channel-fail-data-dir',
           'provision',
@@ -444,7 +455,6 @@ describe('CLI', function () {
         options: {
           env: { ...process.env, ELEK_IO_CHANNEL: seed.releaseVersion },
         },
-        logger: core.logger,
       })
     ).rejects.toThrow();
   }, 60000);
@@ -454,8 +464,9 @@ describe('CLI', function () {
 
     await expect(
       execCommand({
-        command: 'node ./dist/cli/index.cli.mjs',
+        command: 'node',
         args: [
+          './dist/cli/index.cli.mjs',
           '--data-dir',
           './.elek.io/provision-fail-data-dir',
           'provision',
@@ -466,7 +477,6 @@ describe('CLI', function () {
           '--ref',
           '9.9.9',
         ],
-        logger: core.logger,
       })
     ).rejects.toThrow();
   }, 60000);

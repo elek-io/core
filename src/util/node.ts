@@ -1,14 +1,12 @@
 import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
-import { execFile, type ExecFileOptions } from 'node:child_process';
 import { logLevelSchema, type LogLevel } from '../schema/baseSchema.js';
 import {
   contentChannelSchema,
   projectFolderSchema,
 } from '../schema/projectSchema.js';
 import { CoreError } from './shared.js';
-import type { LogService } from '../service/LogService.js';
 
 /**
  * Resolves the data directory Core reads and writes data in
@@ -224,58 +222,5 @@ export async function files(
       return false;
     }
     return dirent.isFile();
-  });
-}
-
-/**
- * Executes a shell command async and returns the output.
- *
- * When on Windows, it will automatically append `.cmd` to the command if it is in the `commandsToSuffix` list.
- */
-export function execCommand({
-  command,
-  args,
-  options,
-  logger,
-}: {
-  command: string;
-  args: string[];
-  options?: ExecFileOptions;
-  logger: LogService;
-}) {
-  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    const commandsToSuffix = ['pnpm'];
-    const isWindows = Os.platform() === 'win32';
-    const suffixedCommand = isWindows
-      ? command
-          .split(' ')
-          .map((cmd) => (commandsToSuffix.includes(cmd) ? `${cmd}.cmd` : cmd))
-          .join(' ')
-      : command;
-    const fullCommand = `${suffixedCommand} ${args.join(' ')}`;
-    const execOptions: ExecFileOptions = {
-      ...options,
-      shell: true,
-    };
-    const start = Date.now();
-
-    execFile(suffixedCommand, args, execOptions, (error, stdout, stderr) => {
-      const durationMs = Date.now() - start;
-      if (error) {
-        logger.error({
-          source: 'core',
-          message: `Error executing command "${fullCommand}" after ${durationMs}ms: ${error.message}`,
-          meta: { error, stdout: stdout.toString(), stderr: stderr.toString() },
-        });
-        reject(error instanceof Error ? error : new Error(error.message));
-      } else {
-        logger.info({
-          source: 'core',
-          message: `Command "${fullCommand}" executed successfully in ${durationMs}ms.`,
-          meta: { stdout: stdout.toString(), stderr: stderr.toString() },
-        });
-        resolve({ stdout: stdout.toString(), stderr: stderr.toString() });
-      }
-    });
   });
 }

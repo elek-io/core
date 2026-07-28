@@ -1,4 +1,5 @@
 import { faker } from '@faker-js/faker';
+import { execFile, type ExecFileOptions } from 'node:child_process';
 import crypto from 'node:crypto';
 import Fs from 'fs-extra';
 import Os from 'node:os';
@@ -595,5 +596,47 @@ export async function createPagesCollection(
         max: null,
       },
     ],
+  });
+}
+
+/**
+ * Executes a command async and returns the output.
+ *
+ * Runs the executable directly, without a shell, so every argument reaches it
+ * verbatim. Pass the executable as `command` and everything else in `args`.
+ * Only tests spawn processes, Core itself never does.
+ */
+export function execCommand({
+  command,
+  args,
+  options,
+}: {
+  command: string;
+  args: string[];
+  options?: ExecFileOptions;
+}) {
+  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    const fullCommand = `${command} ${args.join(' ')}`;
+    const execOptions: ExecFileOptions = { ...options };
+    const start = Date.now();
+
+    execFile(command, args, execOptions, (error, stdout, stderr) => {
+      const durationMs = Date.now() - start;
+      if (error) {
+        core.logger.error({
+          source: 'core',
+          message: `Error executing command "${fullCommand}" after ${durationMs}ms: ${error.message}`,
+          meta: { error, stdout: stdout.toString(), stderr: stderr.toString() },
+        });
+        reject(error instanceof Error ? error : new Error(error.message));
+      } else {
+        core.logger.info({
+          source: 'core',
+          message: `Command "${fullCommand}" executed successfully in ${durationMs}ms.`,
+          meta: { stdout: stdout.toString(), stderr: stderr.toString() },
+        });
+        resolve({ stdout: stdout.toString(), stderr: stderr.toString() });
+      }
+    });
   });
 }
