@@ -43,18 +43,28 @@ function getValueTypeName(valueType: ValueType): string {
 }
 
 /**
- * Maps a valueType to a narrowed type string with project-scoped language keys.
- * Uses `Omit + &` to override the `content` field with `Record<ProjectLanguage, T>`.
+ * Maps a field definition to a narrowed type string with project-scoped
+ * language keys. Uses `Omit + &` to override the `content` field with
+ * `Record<ProjectLanguage, T>`.
  *
- * Typed parameter (not `string`) so adding a new `valueType` is a
+ * A language slot an editor left empty holds `null`, which the Entry
+ * schema accepts for an optional string, number or markdown field, so
+ * the emitted type admits it too. Booleans and references never do: a
+ * toggle is always true or false and an empty reference field is an
+ * empty array. The rule mirrors `schemaFromFieldDefinition.ts` and the
+ * Astro loaders' `buildEntryValuesTypeString`.
+ *
+ * Switches on `valueType` (not `string`) so adding a new one is a
  * compile-time error here until every case is handled.
  */
-function getNarrowedValueType(valueType: ValueType): string {
-  switch (valueType) {
+function getNarrowedValueType(fieldDefinition: FieldDefinition): string {
+  const orNull = fieldDefinition.isRequired ? '' : ' | null';
+
+  switch (fieldDefinition.valueType) {
     case 'string':
-      return `Omit<DirectStringValue, 'content'> & { content: Record<ProjectLanguage, string> }`;
+      return `Omit<DirectStringValue, 'content'> & { content: Record<ProjectLanguage, string${orNull}> }`;
     case 'number':
-      return `Omit<DirectNumberValue, 'content'> & { content: Record<ProjectLanguage, number> }`;
+      return `Omit<DirectNumberValue, 'content'> & { content: Record<ProjectLanguage, number${orNull}> }`;
     case 'boolean':
       return `Omit<DirectBooleanValue, 'content'> & { content: Record<ProjectLanguage, boolean> }`;
     case 'reference':
@@ -62,13 +72,13 @@ function getNarrowedValueType(valueType: ValueType): string {
     case 'component':
       return 'ComponentValue';
     case 'mdast':
-      // Broad narrowing: content is per-language MdAstRoot | null. The
-      // per-field feature config (which node types are allowed) is
-      // emitted as a literal in the fieldDefinitions tuple instead — see
-      // writeFieldDefinitionNarrowing's markdown branch. Consumer
-      // renderers walk the tree with the broad MdAst* types; the schema
-      // layer guarantees disallowed node types never reach disk.
-      return `Omit<MdAstValue, 'content'> & { content: Record<ProjectLanguage, MdAstRoot | null> }`;
+      // Broad narrowing on the tree itself: the per-field feature config
+      // (which node types are allowed) is emitted as a literal in the
+      // fieldDefinitions tuple instead — see writeFieldDefinitionNarrowing's
+      // markdown branch. Consumer renderers walk the tree with the broad
+      // MdAst* types; the schema layer guarantees disallowed node types
+      // never reach disk.
+      return `Omit<MdAstValue, 'content'> & { content: Record<ProjectLanguage, MdAstRoot${orNull}> }`;
   }
 }
 
@@ -437,7 +447,7 @@ function writeValuesProperty(
   } else {
     writer
       .indent(1)
-      .write(`${propName}: ${getNarrowedValueType(fieldDefinition.valueType)};`)
+      .write(`${propName}: ${getNarrowedValueType(fieldDefinition)};`)
       .newLine();
   }
 }

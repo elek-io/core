@@ -486,7 +486,7 @@ Two generators consume Project metadata and emit typed API client code:
 - **CLI** - `elek generate:client` produces a TypeScript client whose translatable values are typed as `Record<ProjectLanguage, T>`.
 - **Astro** - `@elek-io/core/astro` exports content loaders (`elekAssetsLoader()`, `elekEntriesLoader()`) that produce typed Astro collections from elek.io Entries and Assets.
 
-Both emit the narrow `Record<ProjectLanguage, T>` type for translatable content rather than the broad `Partial<Record<SupportedLanguage, T>>` exposed by Core's static types. See the [README's Exports section](https://github.com/elek-io/core#exports) for the package's entry points.
+Both emit the narrow `Record<ProjectLanguage, T>` type for translatable content rather than the broad `Partial<Record<SupportedLanguage, T>>` exposed by Core's static types, and both admit `null` in that type for a field the Collection does not require, which is what an empty language slot holds. See the [README's Exports section](https://github.com/elek-io/core#exports) for the package's entry points.
 
 ## See Also
 
