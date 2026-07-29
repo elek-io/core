@@ -19,6 +19,10 @@ as eslint stayed.
 The structural one is that Core already builds on oxc. `tsdown` bundles with rolldown, which is
 oxc's bundler, so the parser and resolver oxlint uses are the ones the build already depends on.
 
+For where oxlint sits in the wider stack, why the tools are adopted individually rather than through
+Vite+, and which further swaps were measured and deferred, see
+[`toolchain.md`](./toolchain.md).
+
 ## The rule set
 
 `.oxlintrc.json` has three layers.
