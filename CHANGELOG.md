@@ -1,5 +1,209 @@
 # @elek-io/core
 
+## 0.23.0
+
+### Minor Changes
+
+- 9a72a5e: The `astro` peer dependency floor moved from 6.0.0 to 6.1.3, making the range `^6.1.3 || ^7.0.0`. On Astro 6.0.0 through 6.1.2 only the first `astro build` of a site emits its image Assets. Every build after it fails with `LocalImageUsedWrongly` until `.astro` is deleted, because those versions do not rebuild their image imports from a restored content store and the Assets loader skips Assets that have not changed. Astro fixed it in 6.1.3. Consumers on `^6.0.0` who install today already resolve above the floor, only an exact pin below 6.1.3 has to move.
+- 837fefe: The `astro` peer dependency range now includes Astro 7, so consumers on Astro 7 no longer get a peer warning. Astro 7 leaves the content layer untouched, so the loaders, the `elek()` integration and programmatic `sync` work unchanged, verified by running the full suite against it. Astro 7 requires the same `zod` range as Astro 6, so the `zod` floor does not move.
+- a82448a: Image Assets are now native `astro:assets` images. An Asset in a format Astro's image pipeline understands arrives on `data.src` as a ready Astro image, so `<Image src={asset.data.src} />` optimizes, hashes and sizes it like any local image, in dev and in a build alike.
+
+  Every other Asset, a PDF or a ZIP for example, is served as it is and carries its URL on `data.href`. Each Asset has exactly one of the two and `null` for the other, which is also how a consumer tells the kinds apart:
+
+  ```astro
+  {asset.data.src
+    ? <Image src={asset.data.src} alt={asset.data.description} />
+    : <a href={asset.data.href}>{asset.data.name}</a>}
+  ```
+
+  The two kinds are saved separately, because a single location cannot serve both: Astro only processes recognized image formats below `src/`, and only copies the public directory into a build. Images go to `src/elek/<alias>/images`, everything else to `public/elek/<alias>/assets`. `elekAssetsLoader` and the `assets` option of `elekCollections()` take `imageDir` and `publicDir` to move either. These replace the single required `outDir` of the previous release, which is gone: it named Astro's build output directory while meaning the opposite end of the pipeline, and there was nowhere to put the other kind. Both are derived artifacts, so `.gitignore` wants `src/elek/` and `public/elek/`.
+
+- eaf795d: The new `elekCollections()` derives Astro content collections from the elek.io content model, so a site no longer writes a `defineCollection` block per Collection. It reads every Project the elek config declares and returns one collection per elek.io Collection plus one for the Project's Assets, keyed by the Project alias and the Collection's plural slug in PascalCase (`websitePosts`, `websiteAssets`). Keys are always alias-prefixed, also for a single Project, so declaring a second one never renames the first one's collections. Two Collections that would derive the same key throw naming both sides instead of one silently winning.
+
+  ```ts
+  // src/content.config.ts
+  import { elekCollections } from '@elek-io/core/astro';
+  import { config } from '../elek.config';
+
+  export const collections = {
+    ...(await elekCollections(config)),
+  };
+  ```
+
+  That call derives everything and warns that it did, which is the shape to explore a Project with rather than the shape to ship. Naming what the site reads is a second argument away, see the entry on the `elekCollections()` selection.
+
+  `elekAssetsLoader`'s directories are now optional, images defaulting to `src/elek/<alias>/images` so Astro can process the binaries. Keep that below `src/`: a directory inside `public/` works, but Astro then also copies the untouched original into the build next to the optimized one. Which Projects contribute Collections and Assets at all is the `elekCollections()` selection, and where the binaries of every other Asset go comes with the native `astro:assets` change, both in this same release.
+
+  One behavior change for existing loader usage: a relative directory now resolves against the Astro project root rather than the current working directory. Both are the same in a normal `astro build`, they differ only when the build is started from another directory.
+
+- 9662a7c: The Astro loaders now watch the Projects they read while `astro dev` runs, so editing content in the Desktop app updates the open page instead of needing a dev server restart. Each loader watches only what it reads: a Collection reloads when one of its own Entries changes, Assets reload on their own, and the Project's git history is not watched, so committing does not trigger a reload by itself. Reloads are debounced and never overlap, since saving one Entry writes several files.
+
+  Content edits are live, model edits need a restart. Astro builds a collection's schema and its TypeScript types once, when it loads the content config, and offers no way to rebuild them while the server runs, so editing a field definition, a Component or a Project's supported languages means restarting `astro dev`. The loaders detect exactly that and stop instead of reloading Entries against a schema that no longer describes them, which would silently drop an added field and fail on a removed one. The build log names the Collection and says to restart. Adding or removing a whole Collection is not detected, since the set of collections is decided before any loader runs.
+
+  The loaders' shared `ElekIoCore` now runs with its file cache off. Core only invalidates that cache for writes it performs itself, and an Astro site is a reader of files another application owns, so a cached Project served content one edit behind. Every file is read once per sync either way. Nothing about the build path changes.
+
+- c2d58f7: An Astro site now declares the elek.io Projects it consumes once, in a config created with the new `defineElekConfig()`, and imports that config wherever it is needed. Every Project gets an alias the consumer chooses, and the loaders accept only the declared aliases, so referencing a Project the config does not know is a TypeScript error instead of a failing build. The config validates itself where it is written, so a malformed Project id or a mistyped key fails there rather than somewhere in the build. By convention it lives in `elek.config.ts`, but nothing discovers it automatically, the imports are what connect the files.
+
+  Breaking on the loader surface. `elekAssets` is now `elekAssetsLoader` and `elekEntries` is now `elekEntriesLoader`, matching the `Loader` suffix the Astro ecosystem uses. Both take `{ config, project }` instead of a `projectId`, where `project` is the alias. `elek()` takes `{ config }` instead of its own `projects` array and provisions every declared Project that has a `remoteUrl`. A Project declared without one only ever comes from the local data directory, so the integration skips it, logs that it did and leaves it to the loaders, which is what lets one config mix a remote Project with a Project the Desktop app manages locally. A config in which no Project has a `remoteUrl` fails while `astro.config` is read, naming the aliases, because the integration would have nothing to provision.
+
+  ```ts
+  // elek.config.ts
+  export const config = defineElekConfig({
+    projects: {
+      website: {
+        id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+        remoteUrl: 'https://github.com/acme/content.git',
+      },
+    },
+  });
+
+  // astro.config.mjs
+  export default defineConfig({ integrations: [elek({ config })] });
+
+  // src/content.config.ts
+  export const collections = {
+    posts: defineCollection({
+      loader: elekEntriesLoader({
+        config,
+        project: 'website',
+        collectionIdOrSlug: 'posts',
+      }),
+    }),
+  };
+  ```
+
+- 906a86e: The Astro content loaders no longer accept a `core` property. Their shared `ElekIoCore` instance is configured through the `ELEK_IO_*` environment variables of the build instead, so `ELEK_IO_DATA_DIR` reads from another data directory. This removes the footgun that only the first loader to run decided the options for every loader. The `elek()` integration keeps its own `core` option for the short-lived Core it provisions with.
+- 659d5e7: The TypeScript types the Astro loaders generate now admit `null` for optional fields, matching the schema they are generated from. A language slot an editor left empty holds `null`, which the loader-supplied schema has always accepted, while the generated type declared a plain `string`. So `entry.data.slug.de` read as a string and was `null` at runtime, in exactly the case `elekSlugPaths()` exists for.
+
+  An optional `string` field is now `Record<ProjectLanguage, string | null>` and an optional `number` field `Record<ProjectLanguage, number | null>`. The reverse applies to markdown: a **required** `markdown` field is now `Record<ProjectLanguage, MdAstRoot>` instead of always carrying `| null`. Nullability is unchanged for required string and number fields, `boolean` fields and `reference` fields, none of which is ever null. The shape of a `reference` field does change in this release, separately from nullability.
+
+  Type-checking a site against the new types may surface real null cases that were previously hidden, in templates reading an optional field. Guard them, or mark the field required in the Collection:
+
+  ```astro
+  {post.data.subtitle.en && <p>{post.data.subtitle.en}</p>}
+  ```
+
+  The same rule applies to fields inside a Component.
+
+- e0f8260: The new `elekSlugPaths()` routes Entries by a `slug` field instead of by their UUID. It takes a collection and the field to route by, and returns what `getStaticPaths` expects:
+
+  ```astro
+  ---
+  // src/pages/[language]/[slug].astro
+  export async function getStaticPaths() {
+    const posts = await getCollection('websitePosts');
+    return elekSlugPaths(posts, { slugField: 'slug' });
+  }
+
+  const { entry, language } = Astro.props;
+  ---
+  <h1>{entry.data.title[language]}</h1>
+  ```
+
+  Every language of the Collection gets its own path, so `/en/hello-world` and `/de/hallo-welt` reach the same Entry, and an Entry without a slug in a language simply gets no path there. Pass `language` to route a single one, and the params hold only the slug. A Collection may define several slug fields, which is why the field is named per call.
+
+  Each path carries the language it was built for, typed as the Project's languages, so a page reads a translatable Value without naming them itself. Reaching for `Astro.params.language` instead does not type-check, since Astro types every route param as `string | undefined` while a Value is keyed by the languages. `slugField` and `language` are both checked against the Entry being routed, so a mistyped field name or a language the Project does not support is a TypeScript error rather than a failing build.
+
+  Nothing about the store changes. Entries stay keyed by their UUID, so `getEntry()` and every reference between Entries keeps working as before, and a Collection without a slug field keeps routing by UUID.
+
+- 8271c4a: The `elek` binary starts again. `generate:client` and `generate:types` imported tsdown at module top level, which bundled tsdown and rolldown into `dist/cli`. rolldown loads its parser through a platform specific native binding, and a native binding cannot be bundled, so every `elek` command failed at startup with `Cannot find native binding`. The import is now lazy and reached only when compiling to JavaScript, which also drops `dist/cli` from 6.0M to 1.6M.
+
+  `tsdown` (`^0.22.3`) and `typescript` (`^5.0.0 || ^6.0.0 || ^7.0.0`) are now declared as optional peer dependencies. They are what keeps them out of the bundle, and they are only needed to run `generate:client` or `generate:types` with `js` as the language. Install both as dev dependencies of your project if you use it, otherwise nothing changes: every other command, and both generators with the default `ts` language, work without them. The `js` language now fails with a message naming both packages instead of a raw module resolution error.
+
+- 5033c66: `elek generate:types` and `elek generate:client` now admit `null` for optional fields, matching the schema the types are generated from and the Astro loaders' generated types. A language slot an editor left empty holds `null`, which the Entry schema has always accepted for a field the Collection does not require, while the generated type declared a plain `string`.
+
+  An optional `string` field is now `content: Record<ProjectLanguage, string | null>` and an optional `number` field `content: Record<ProjectLanguage, number | null>`. A **required** `markdown` field loses the `| null` it always carried and becomes `content: Record<ProjectLanguage, MdAstRoot>`. Nullability is unchanged for required string and number fields, `boolean` fields and `reference` fields, none of which is ever null. The shape of a `reference` field does change in this release, separately from nullability.
+
+  Type-checking against regenerated types may surface real null cases that were previously hidden. Guard them, or mark the field required in the Collection.
+
+- b5f117a: `elekCollections()` takes a second argument saying exactly what the site reads, so a Project with twenty Collections no longer syncs twenty to render two. An unread Collection costs a file read and a schema validation per Entry on every sync, and an unread Assets collection copies every binary of its Project into the site each time.
+
+  ```typescript
+  export const collections = {
+    ...(await elekCollections(config, {
+      collections: { website: ['pages'], shop: ['products'], blog: ['posts'] },
+      assets: { website: { imageDir: './src/media' }, shop: true },
+    })),
+  };
+  ```
+
+  That derives `websitePages`, `shopProducts`, `blogPosts`, `websiteAssets` and `shopAssets`, and nothing else. One rule covers both keys: **a key you leave out contributes nothing, and so does an alias you leave out of a key.** So `{ collections: { website: ['pages'] } }` derives one collection and no Assets at all. Name Collections by their plural slug or their id, the same two a loader's `collectionIdOrSlug` takes. Under `assets`, `true` takes the default directories and an object sets `imageDir` and `publicDir`.
+
+  `elekCollections(config)` with no second argument still derives everything, for finding your way around a Project before you know what it holds. It now warns that it did, naming the count, since it is not the shape to ship. `ELEK_IO_LOG_LEVEL=error` silences that for anyone who means it.
+
+  Three mistakes now fail the build instead of passing quietly, because each would otherwise produce exactly what success produces and send you looking for a broken loader: a name matching no Collection of the Project it is listed under, a selection deriving nothing at all, and a derived Collection that can reference Assets from a Project whose Assets were left out. The last one is a content-model check, so it fires while the config is read rather than when a page renders a reference it cannot resolve.
+
+  Because the options are now a complete list, `assets: false` is gone, as is the per-alias `false`. Leaving the key or the alias out says the same thing.
+
+- 7a351f0: The new `ELEK_IO_LOG_LEVEL` environment variable sets the lowest level Core logs, so a build that embeds Core can quieten it from the outside. It accepts `error`, `warn`, `info` and `debug`, defaults to `info` and, like every other variable, loses to the matching constructor option. Anything else throws a `CoreError` naming the four, rather than leaving the logs as they were and looking like the variable did nothing.
+
+  This is what an Astro site needs. Its loaders share one Core that takes no options, so until now nothing could stop Core from writing into the build output. `ELEK_IO_LOG_LEVEL=error astro build` now leaves only Astro's own log. The CLI reads it the same way. Both used to pass `info` explicitly, which would have won over the variable, so neither does any more.
+
+- 0825ba8: Projects can now be provisioned from their remote for builds. `projects.provision()` ensures a read-only copy of a Project is present in the data directory at a chosen content state, cloning it from the remote in build mode when missing (shallow, single ref, only the LFS objects of the checked-out ref) and fetching plus hard-resetting it when already provisioned. The `ref` is either a channel that follows the newest content of its kind, `production` for the latest Release, `preview` for the latest preview Release and `draft` for the tip of the work branch, or an exact Release version for reproducible builds. The `ELEK_IO_CHANNEL` environment variable overrides configured refs deployment-wide and accepts channels only.
+
+  `provision()` returns `{ project, source, warning }`, where `source` states where the content came from. A refresh keeps building when the remote cannot be reached: an exact version the copy already holds skips the network entirely (`local-pin`), and any other ref falls back to the copy in the data directory with a loud warning naming the requested ref and the version on disk (`local-fallback`). A missing copy, an authentication failure and a pin the copy does not hold stay hard failures, and so does every answer a reachable remote gives, like an unknown version or a Project that never published a Release.
+
+  Two consumers ship with the engine. The CLI gains `elek provision --project <id> --url <url> [--ref <ref>]` for any pipeline. Astro sites need no pipeline step at all: the new `elek()` integration from `@elek-io/core/astro` takes the site's elek config and provisions every declared Project that has a `remoteUrl` before Astro's content sync runs, logging which content state the loaders read.
+
+  Provisioned copies are read-only for everyone and disposable by design, the next provision run resets them to the remote. Every `Project` now carries a computed `isProvisioned` flag, and any operation that would mutate a provisioned copy throws a `CoreError` of type `PreconditionFailed`, with the git layer backstopping direct `commit`, `tags.create` and `push` calls. A working copy managed by another application like the Desktop app is never touched, so `astro dev` keeps reading live drafts while CI builds Released content. `projects.delete()` stays the escape hatch and removes a provisioned copy without an unpushed-changes check.
+
+  Core itself can now run read-only through the new `isReadOnly` constructor option, used by `elek provision` and the Astro integration. A read-only Core requires no User and refuses every operation that would init, commit or push. Independent of that, reading content written by a newer Core than the one installed now fails with a typed `VersionSkew` error naming the version to update to, instead of proceeding on data it does not understand.
+
+  Private remotes authenticate through the new `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable, with `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` for providers that expect a specific username (default `x-access-token`). The token is handed to git per invocation through an askpass helper and never becomes part of a command line, a URL or the repository config, so it cannot leak into logs or caches. While set, it bypasses configured credential helpers and is authoritative. Terminal prompts are always disabled, so a missing or wrong credential fails with a typed `Unauthorized` error naming the fix instead of hanging the operation, for HTTPS token failures and SSH key failures alike. An unreachable host or a missing repository is deliberately not classified as an authentication failure, even though git reports all three through the same message on the SSH and local transports. SSH remotes keep authenticating through the ambient SSH setup, like keys loaded into ssh-agent.
+
+  For consumers of the lower-level `core.git` API: `GitSwitchOptions.isNew` is renamed to `create` to mirror git's own `--create` flag, and `switch` additionally supports `forceCreate` with a `startPoint`, `detach` and `discardChanges`. `push` accepts specific `refs`, `fetch` accepts a `ref` and `depth`, and the new `lsRemote` lists the refs a remote advertises without cloning.
+
+- 8e6c949: Generated types now describe what a `reference` field points at. Both generators emitted `Array<{ id: string; objectType: string }>` for every reference field, which said neither what kind of thing was on the other end nor how to reach it. The field definition has always known, so the type now says so too:
+
+  ```typescript
+  entry.data.cover.en; // Array<{ id: string; objectType: 'asset' }>
+  entry.data.related.en; // Array<{ id: string; objectType: 'entry'; collectionId: string }>
+  ```
+
+  `collectionId` is the part that was missing. An Entry reference has always carried it at runtime, and it is what tells you which Collection the referenced Entry lives in when a field allows more than one. Following a reference is then a `getEntry` away, which the Astro section of `usage.md` now shows for both kinds.
+
+  This applies to the Astro loaders and to `elek generate:types` alike. On the CLI side a reference field also gains the per-language narrowing every other field type already had, so it is `Omit<ReferencedValue, 'content'> & { content: Record<ProjectLanguage, ...> }` rather than a bare `ReferencedValue`. Type-checking against the new types can surface code that treated `objectType` as an open string, for example a branch for a kind the field cannot hold.
+
+### Patch Changes
+
+- bdfb287: The Astro documentation now shows code that compiles. `docs/` ships inside the package, so these examples are what a consumer starts from.
+
+  The `mdastRender` examples had their renderers object in the frontmatter of an `.astro` file. That fence is TypeScript, not TSX, so a handler written as JSX there is a parse error. The renderers now sit inline at the `mdastRender` call in the template, in the per-page example, in the collected-footnotes example and in the reusable `MdastContent.astro` component alike.
+
+  The slug routing example indexed a translatable Value with `Astro.params.language`, which Astro types as `string | undefined`, so the example did not type-check. It now names the languages the route was built for. A new "What an Entry looks like" section documents the generated `entry.data` shape, including which fields are nullable.
+
+  The environment variable paragraph no longer implies the loaders' Core is fully configurable through `ELEK_IO_*`, and says plainly that the listed variables are the whole list.
+
+  Every example Project id is a real UUID now, in the docs and in `defineElekConfig`'s own reference. The `abc-123-...` placeholder they used to carry is not a valid id, so copying an example out of the documentation failed on the spot. The docs also say where to read the id, and what `remoteUrl` points at.
+
+- bdfb287: Rendered markdown now renders inside an Astro component, not only directly on a page. `mdastRender`'s built-in defaults were constructed with `jsx()` from `astro/jsx-runtime`, and Astro only unwraps such a value in the render pass it runs on a page's own result. One component deep it was written out as `[object Object]`, so the obvious way to reuse a site's rendering policy, a small `MdastContent.astro` wrapping the call, silently produced broken output.
+
+  The defaults are built with `renderTemplate` and `addAttribute` instead, the same two functions Astro's compiler emits into every `.astro` file, so what `mdastRender` returns is an ordinary Astro template result that renders in a page, in a component and through a slot alike:
+
+  ```astro
+  ---
+  // src/components/MdastContent.astro
+  const { root } = Astro.props;
+  ---
+  {root !== null &&
+    mdastRender(root, {
+      html: (node) => /* ... */,
+      assetReference: (node) => /* ... */,
+      entryReference: (node, children) => /* ... */,
+    })}
+  ```
+
+  The rendered HTML is unchanged, and consumer handlers written as JSX inside an `.astro` template were never affected. Overrides built with `jsx()` in a shared module keep the old constraint, since they still produce a vnode: write them in a template instead.
+
+- 9dbb6b5: The documentation now says that Astro's `render()` does not apply to an elek.io Entry. Coming from a local markdown collection, `const { Content } = await render(entry)` is the obvious move, and on an Entry it is not an error and produces nothing at all: `<Content />` renders empty, `headings` is `[]` and `remarkPluginFrontmatter` is `{}`, with no warning to go on. The loaders leave Astro's rendered slot empty on purpose, because a finished HTML string cannot keep the `entryReference` and `assetReference` nodes a page needs the UUIDs from. Body content arrives on `entry.data` as an mdast tree and `mdastRender` turns it into markup. Written down in the Astro rendering section of `markdown-content.md`, next to the Entry shape in `usage.md` and in the limitations list of `features.md`.
+- 934e664: Runtime dependencies updated to their latest patch and minor releases: `hono` 4.12.32, `@hono/node-server` 2.0.12, `@hono/zod-openapi` 1.5.1, `@scalar/hono-api-reference` 0.11.11, `fs-extra` 11.4.0, `p-queue` 9.3.3, `semver` 7.8.5 and `uuid` 14.0.1. No public API changed.
+
+  The `zod` floor stays at `^4.3.6`. `@hono/zod-openapi`, `@scalar/*` and `astro` are the dependencies that pull `zod`, and none of them raised its requirement, so the single physical copy the peer range exists to guarantee is unaffected.
+
+- 249b685: `elek generate:types <outDir> js` no longer fails when the data directory holds no Projects. There was no types file to compile, and the empty entry list reached the compiler, which rejected it with `No input files`. The compile step is now skipped when there is nothing to compile, so the command writes nothing and exits successfully, the same way it already did for the default `ts` language. Because the check runs before the compiler is loaded, this case also no longer asks for the optional `tsdown` and `typescript` peers.
+- 5ea5594: Listing Assets or Entries no longer warns about the files Core writes itself. Reading a Project printed `Function "getFileReferences" is ignoring file ".gitkeep"` for the marker that keeps an empty Assets folder in git, and the same for the `collection.json` that sits where a Collection's Entries are. Both are part of the documented storage layout, so the warning was Core complaining about its own files. In an Astro site the loaders read a Project on every build and every dev start, which made this the loudest thing in the log. Any other file that does not parse is still warned about by name.
+- 934e664: Upgrading a Project whose Project file carries no `coreVersion` now fails with an `UpgradeFailed` error naming the file, instead of an `Internal` error raised from inside semver. The upgrade path reads that file before any schema applies to it, because a Project written by an older Core may not satisfy the current one, and it now validates that the one field it has to compare is actually there.
+
 ## 0.22.0
 
 ### Minor Changes
