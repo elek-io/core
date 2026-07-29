@@ -23,7 +23,7 @@ Two rules follow:
 - `pnpm test` - run the test suite once
 - `pnpm coverage` - run the suite with coverage
 - `pnpm build` - build all entry points with tsdown
-- `pnpm lint` - run eslint
+- `pnpm lint` - run oxlint, including its type-aware rules
 - `pnpm check-types` - type-check with tsc, no emit
 - `pnpm format` - format with prettier
 
@@ -31,9 +31,11 @@ Two rules follow:
 
 - Write tests first. Core is integration-test heavy and most behavior is proven through real Projects.
 - Prefer a library's built-in feature over hand-rolled code.
-- Avoid type casts. Shape the types so a cast is not needed.
+- Avoid type casts. Shape the types so a cast is not needed. `pnpm lint` enforces this through `no-unsafe-type-assertion` across all of `src` except tests. The few casts that survive are inherent to a public API or a library's shape and each carries an inline disable naming the reason, see [`contributing/linting.md`](./contributing/linting.md).
 - Boolean keys use an `is` or `has` prefix (`isReadOnly`, `hasToken`). Keys that mirror an external tool's name keep that name instead, like git flags (`detach`, `forceCreate`) or slugify options (`lowercase`). See [`contributing/naming.md`](./contributing/naming.md).
 - Keep comments short and put deeper detail in the docs. Avoid em-dashes and semicolons, use simple sentences for readability.
+- Linting is oxlint, configured in [`.oxlintrc.json`](./.oxlintrc.json). Before changing the rule set, read [`contributing/linting.md`](./contributing/linting.md) for what each layer of the config is for, which rules are off on purpose and why the linter is independent of the `typescript` version.
+- [`contributing/toolchain.md`](./contributing/toolchain.md) covers the stack as a whole (tsdown, vitest, oxlint, prettier, tsc), why the tools are adopted one at a time rather than through Vite+, and which swaps were measured and deferred. Read it before proposing a tooling change.
 - Core has five peer dependencies (`zod`, `dugite`, `astro`, `tsdown`, `typescript`). Before bumping any of them, or a dependency that pulls `zod` (`@scalar/*`, `@hono/zod-openapi`), read [`contributing/peer-dependencies.md`](./contributing/peer-dependencies.md) for why each version range was chosen and how to re-check it. The `pnpm test` suite guards zod's single-copy invariant through [`src/zod-single-copy.test.ts`](./src/zod-single-copy.test.ts). `tsdown` and `typescript` are peers so the CLI does not bundle them, which is why the CLI must only ever import `tsdown` lazily.
 - Core environment variables use the `ELEK_IO_` prefix, are read once at Core construction (never at module import) and are documented in the environment variables section of [`docs/usage.md`](./docs/usage.md).
 

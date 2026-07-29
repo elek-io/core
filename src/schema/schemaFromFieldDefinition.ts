@@ -54,9 +54,7 @@ function getBooleanValueContentSchemaFromFieldDefinition() {
  */
 function getNumberValueContentSchemaFromFieldDefinition(
   fieldDefinition:
-    | NumberFieldDefinition
-    | RangeFieldDefinition
-    | NumberSelectFieldDefinition
+    NumberFieldDefinition | RangeFieldDefinition | NumberSelectFieldDefinition
 ) {
   let schema = z.number();
 
@@ -222,9 +220,7 @@ export function getTranslatableStringValueContentSchemaFromFieldDefinition(
 
 export function getTranslatableNumberValueContentSchemaFromFieldDefinition(
   fieldDefinition:
-    | NumberFieldDefinition
-    | RangeFieldDefinition
-    | NumberSelectFieldDefinition,
+    NumberFieldDefinition | RangeFieldDefinition | NumberSelectFieldDefinition,
   languages: ProjectLanguages
 ) {
   return z.record(
@@ -296,9 +292,9 @@ function getComponentValueContentSchemaFromFieldDefinition(
 
     const fieldDefinitions = componentResolver(componentId);
     const shape: Record<string, z.ZodTypeAny> = {};
-    for (const fieldDefinition of fieldDefinitions) {
-      shape[fieldDefinition.slug] = getValueSchemaFromFieldDefinition(
-        fieldDefinition,
+    for (const componentFieldDefinition of fieldDefinitions) {
+      shape[componentFieldDefinition.slug] = getValueSchemaFromFieldDefinition(
+        componentFieldDefinition,
         languages,
         componentResolver,
         branchedVisited

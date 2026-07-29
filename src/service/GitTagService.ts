@@ -90,7 +90,7 @@ export class GitTagService
   public async read(props: ReadGitTagProps): Promise<GitTag> {
     return this.validated('read', readGitTagSchema, props, async () => {
       const tags = await this.list({ path: props.path });
-      const tag = tags.list.find((tag) => tag.id === props.id);
+      const tag = tags.list.find((candidate) => candidate.id === props.id);
 
       if (!tag) {
         throw CoreError.notFound(

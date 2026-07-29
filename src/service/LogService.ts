@@ -46,11 +46,14 @@ export class LogService {
         format.colorize(),
         format.timestamp({ format: 'HH:mm:ss' }),
         format.printf((props) => {
+          // winston stashes the extra arguments of a log call under a symbol
+          // key its TransformableInfo type does not describe, so reaching them
+          // means naming both the key and what it holds
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
           const splatArgs = props[Symbol.for('splat') as unknown as string] as
-            | Record<string, unknown>[]
-            | undefined;
+            Record<string, unknown>[] | undefined;
           const result = logConsoleTransportSchema.safeParse({
-            ...(splatArgs?.[0] ?? {}),
+            ...splatArgs?.[0],
             timestamp: props['timestamp'],
             level: props.level,
             message: props.message,

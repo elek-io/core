@@ -57,7 +57,7 @@ function makeMarkdownFieldDef(overrides: {
     inputWidth: '12' as const,
     min: null,
     max: null,
-    features: { ...offMarkdownFeatures, ...(overrides.features ?? {}) },
+    features: { ...offMarkdownFeatures, ...overrides.features },
     ofCollections: overrides.ofCollections ?? [],
     ofAssetMimeTypes: overrides.ofAssetMimeTypes ?? [],
     defaultValue: null,
@@ -1512,15 +1512,15 @@ describe('buildEntryValuesTypeString reference fields', () => {
     const asset = { id: uuid(), objectType: 'asset' };
     const entry = { id: uuid(), objectType: 'entry', collectionId };
 
-    const assetSchema = buildEntryValuesSchema(
+    const assetFieldSchema = buildEntryValuesSchema(
       [makeAssetFieldDef('image', false)],
       ['en'],
       []
     );
-    expect(assetSchema.safeParse({ image: { en: [asset] } }).success).toBe(
+    expect(assetFieldSchema.safeParse({ image: { en: [asset] } }).success).toBe(
       true
     );
-    expect(assetSchema.safeParse({ image: { en: [entry] } }).success).toBe(
+    expect(assetFieldSchema.safeParse({ image: { en: [entry] } }).success).toBe(
       false
     );
 

@@ -1188,8 +1188,8 @@ export class ReleaseService extends AbstractService {
     if (current.fieldType === 'entry' && production.fieldType === 'entry') {
       if (
         isDeepStrictEqual(
-          [...current.ofCollections].sort(),
-          [...production.ofCollections].sort()
+          current.ofCollections.toSorted(),
+          production.ofCollections.toSorted()
         ) === false
       ) {
         changes.push({
@@ -1314,8 +1314,8 @@ export class ReleaseService extends AbstractService {
       current.fieldType === 'slug' &&
       production.fieldType === 'slug' &&
       isDeepStrictEqual(
-        [...current.ofFieldDefinitions].sort(),
-        [...production.ofFieldDefinitions].sort()
+        current.ofFieldDefinitions.toSorted(),
+        production.ofFieldDefinitions.toSorted()
       ) === false
     ) {
       changes.push({

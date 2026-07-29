@@ -190,6 +190,7 @@ export class CollectionService
         // Update the index (not git-tracked, self-heals on failure)
         index[id] = slugPlural;
         await this.safeWriteSlugIndex(validatedProps.projectId, index);
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toCollection(collectionFile) as T;
       }
     );
@@ -216,6 +217,7 @@ export class CollectionService
             ),
             collectionFileSchema
           );
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
           return this.toCollection(collectionFile) as T;
         } else {
           const content = await this.gitService.getFileContentAtCommit(
@@ -227,6 +229,7 @@ export class CollectionService
             validatedProps.commitHash
           );
           const collectionFile = this.migrate(JSON.parse(content));
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
           return this.toCollection(collectionFile) as T;
         }
       }
@@ -434,6 +437,7 @@ export class CollectionService
           await this.safeWriteSlugIndex(validatedProps.projectId, index);
         }
 
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toCollection(collectionFile) as T;
       }
     );
@@ -525,7 +529,7 @@ export class CollectionService
         entryResolutions
       )) {
         const fieldDef = newFieldDefs.find(
-          (fieldDef) => fieldDef.slug === fieldSlug
+          (candidate) => candidate.slug === fieldSlug
         );
         if (fieldDef) {
           const schema = getValueSchemaFromFieldDefinition(fieldDef, languages);

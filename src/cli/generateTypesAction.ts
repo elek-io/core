@@ -1,6 +1,7 @@
 import Path from 'node:path';
 import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
+import { keysOf } from '../util/typedObject.js';
 import {
   flattenFieldDefinitions,
   makeComponentsContext,
@@ -172,9 +173,9 @@ function collectUsedValueTypes(
  * here until handled — this is the single point that has to change when
  * the feature shape evolves.
  */
-function markdownFeatureLiteral<K extends keyof MarkdownFeatures>(
+function markdownFeatureLiteral(
   features: MarkdownFeatures,
-  key: K
+  key: keyof MarkdownFeatures
 ): string {
   const value = features[key];
   if (Array.isArray(value)) {
@@ -341,11 +342,9 @@ function writeFieldDefinitionNarrowing(
       .indent(baseIndent + 1)
       .write(`features: {`)
       .newLine();
-    // Sort keys for stable output across regenerations. Cast to the typed
-    // key array so adding a new MarkdownFeatures flag is a TS error here.
-    const keys = (
-      Object.keys(features) as Array<keyof MarkdownFeatures>
-    ).sort();
+    // Sort keys for stable output across regenerations. Typed by keysOf so
+    // adding a new MarkdownFeatures flag is a TS error here.
+    const keys = keysOf(features).toSorted();
     for (const key of keys) {
       writer
         .indent(baseIndent + 2)
@@ -370,7 +369,7 @@ function writeFieldDefinitionTupleEntry(
   fieldDefinition: FieldDefinition,
   baseIndent: number
 ): void {
-  writer.write(`${getFieldDefinitionTypeName(fieldDefinition)}`);
+  writer.write(getFieldDefinitionTypeName(fieldDefinition));
   writeFieldDefinitionNarrowing(writer, fieldDefinition, baseIndent);
   writer.write(`,`);
   writer.newLine();

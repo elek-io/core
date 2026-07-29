@@ -255,9 +255,7 @@ Services throw `CoreError` (exported from `@elek-io/core`) with a `type` and `st
 import { CoreError } from '@elek-io/core';
 
 try {
-  await core.projects.create({
-    /* ... */
-  });
+  await core.projects.create({/* ... */});
 } catch (error) {
   if (error instanceof CoreError) {
     console.error(error.type, error.statusCode, error.message);

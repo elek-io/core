@@ -31,7 +31,7 @@ function resolvedZodVersions(lockfile: string): string[] {
   for (const [, version] of lockfile.matchAll(/^ {2}zod@([^\s:(]+):/gm)) {
     if (version) versions.add(version);
   }
-  return [...versions].sort();
+  return [...versions].toSorted();
 }
 
 describe('zod single copy', () => {

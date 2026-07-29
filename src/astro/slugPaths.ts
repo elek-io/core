@@ -1,4 +1,5 @@
 import { CoreError } from '../util/shared.js';
+import { keysOf } from '../util/typedObject.js';
 
 /**
  * The minimum an Astro content entry has to look like to be routed by
@@ -56,16 +57,14 @@ function isTranslatable<Language extends string>(
 /**
  * The languages a translatable Value holds.
  *
- * `Object.keys` is typed as returning `string[]` whatever it is handed,
- * because a JavaScript object may carry keys its type does not mention.
- * A Value read from a Project cannot: the loaders build it from the
- * Project's languages. Asserting that once here keeps the rest of the
- * routing typed without repeating it per call.
+ * A Value read from a Project is keyed by the Project's languages, because
+ * the loaders build it that way, so its own key type is the answer. See
+ * `keysOf` for why reading those keys needs a helper at all.
  */
 function languagesOf<Language extends string>(
   value: Record<Language, unknown>
 ): Language[] {
-  return Object.keys(value) as Language[];
+  return keysOf(value);
 }
 
 /**

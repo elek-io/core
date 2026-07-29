@@ -184,6 +184,7 @@ export class ComponentService
 
         index[id] = componentSlug;
         await this.safeWriteSlugIndex(validatedProps.projectId, index);
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toComponent(componentFile) as T;
       }
     );
@@ -208,6 +209,7 @@ export class ComponentService
             ),
             componentFileSchema
           );
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
           return this.toComponent(componentFile) as T;
         } else {
           const content = await this.gitService.getFileContentAtCommit(
@@ -219,6 +221,7 @@ export class ComponentService
             validatedProps.commitHash
           );
           const componentFile = this.migrate(JSON.parse(content));
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
           return this.toComponent(componentFile) as T;
         }
       }
@@ -376,6 +379,7 @@ export class ComponentService
           await this.safeWriteSlugIndex(validatedProps.projectId, index);
         }
 
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toComponent(componentFile) as T;
       }
     );
@@ -394,7 +398,7 @@ export class ComponentService
   ): Promise<void> {
     const index = await this.getSlugIndex(projectId);
     const existingUuid = Object.entries(index).find(
-      ([, slug]) => slug === newSlug
+      ([, existingSlug]) => existingSlug === newSlug
     );
     if (existingUuid && existingUuid[0] !== componentId) {
       throw CoreError.conflict(

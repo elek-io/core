@@ -243,7 +243,7 @@ export function elekAssetsLoader<const T extends ElekConfig>(
     }
 
     // Remove store entries for Assets that no longer exist in the Project.
-    for (const id of [...context.store.keys()]) {
+    for (const id of context.store.keys()) {
       if (!seen.has(id)) context.store.delete(id);
     }
 
@@ -432,7 +432,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     }
 
     // Remove store entries for Entries that no longer exist in the Collection.
-    for (const id of [...context.store.keys()]) {
+    for (const id of context.store.keys()) {
       if (!seen.has(id)) context.store.delete(id);
     }
 

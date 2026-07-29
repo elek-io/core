@@ -41,11 +41,11 @@ describe('Line endings', function () {
       Path.join(projectPath, '.gitattributes'),
       'utf8'
     );
-    const lines = gitattributes.split('\n').filter((line) => line.trim());
+    const firstLine = gitattributes.split('\n').find((line) => line.trim());
 
     // Last matching pattern wins, so the catch-all has to come first or it
     // would strip the `-text` marker off the LFS tracked binaries
-    expect(lines[0]).toBe('* text=auto eol=lf');
+    expect(firstLine).toBe('* text=auto eol=lf');
     expect(gitattributes).toContain(
       'lfs/** filter=lfs diff=lfs merge=lfs -text'
     );

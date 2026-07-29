@@ -199,8 +199,8 @@ export function isNotEmpty<T>(value: T | null | undefined): value is T {
  * Returns all folders of given path to a directory
  */
 export async function folders(path: string): Promise<Fs.Dirent[]> {
-  const dirent = await Fs.readdir(path, { withFileTypes: true });
-  return dirent.filter((dirent) => {
+  const dirents = await Fs.readdir(path, { withFileTypes: true });
+  return dirents.filter((dirent) => {
     return dirent.isDirectory();
   });
 }
@@ -213,8 +213,8 @@ export async function files(
   path: string,
   extension?: string
 ): Promise<Fs.Dirent[]> {
-  const dirent = await Fs.readdir(path, { withFileTypes: true });
-  return dirent.filter((dirent) => {
+  const dirents = await Fs.readdir(path, { withFileTypes: true });
+  return dirents.filter((dirent) => {
     if (extension && dirent.isFile() === true) {
       if (dirent.name.endsWith(extension)) {
         return true;

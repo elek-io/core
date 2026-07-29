@@ -67,7 +67,7 @@ function makeMarkdownFieldDef(overrides: {
     inputWidth: '12' as const,
     min: overrides.min ?? null,
     max: overrides.max ?? null,
-    features: { ...baseMarkdownFeatures, ...(overrides.features ?? {}) },
+    features: { ...baseMarkdownFeatures, ...overrides.features },
     ofCollections: overrides.ofCollections ?? [],
     ofAssetMimeTypes: overrides.ofAssetMimeTypes ?? [],
     defaultValue: overrides.defaultValue ?? null,

@@ -196,10 +196,7 @@ export type ProvisionProjectProps = z.infer<typeof provisionProjectSchema>;
  * untouched.
  */
 export type ProvisionSource =
-  | 'remote'
-  | 'local-pin'
-  | 'local-fallback'
-  | 'local-managed';
+  'remote' | 'local-pin' | 'local-fallback' | 'local-managed';
 
 export interface ProvisionResult {
   project: Project;

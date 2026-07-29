@@ -151,16 +151,13 @@ const uniqueFieldCannotHaveDefaultRefinement: [
  * marks are URL-safe and survive slugify unchanged, so slug values stay
  * canonical and idempotent.
  */
-const urlSafeSeparators = ['-', '_', '.', '~'];
+const urlSafeSeparators = new Set(['-', '_', '.', '~']);
 
 export const slugSeparatorSchema = z
   .string()
-  .refine(
-    (separator) => separator === '' || urlSafeSeparators.includes(separator),
-    {
-      message: 'Separator must be empty or one of: - _ . ~',
-    }
-  );
+  .refine((separator) => separator === '' || urlSafeSeparators.has(separator), {
+    message: 'Separator must be empty or one of: - _ . ~',
+  });
 
 /**
  * Validates that fieldDefinition slugs are unique within their parent fieldDefinitions array.
