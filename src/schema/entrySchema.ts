@@ -158,8 +158,7 @@ export interface AssetMimeMismatchIssue extends EntryReferenceIssueLocation {
 }
 
 export type EntryReferenceIssue =
-  | EntryReferenceNotFoundIssue
-  | AssetMimeMismatchIssue;
+  EntryReferenceNotFoundIssue | AssetMimeMismatchIssue;
 
 /**
  * A value written to a unique field (or slug field) collides with the same

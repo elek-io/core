@@ -51,8 +51,7 @@ export class LogService {
           // means naming both the key and what it holds
           // oxlint-disable-next-line typescript/no-unsafe-type-assertion
           const splatArgs = props[Symbol.for('splat') as unknown as string] as
-            | Record<string, unknown>[]
-            | undefined;
+            Record<string, unknown>[] | undefined;
           const result = logConsoleTransportSchema.safeParse({
             ...splatArgs?.[0],
             timestamp: props['timestamp'],

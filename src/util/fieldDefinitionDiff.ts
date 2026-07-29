@@ -18,9 +18,7 @@ export interface FieldChangeUpdated {
 }
 
 export type FieldChange =
-  | FieldChangeAdded
-  | FieldChangeRemoved
-  | FieldChangeUpdated;
+  FieldChangeAdded | FieldChangeRemoved | FieldChangeUpdated;
 
 /**
  * Compares old and new field definitions by UUID and classifies each change.

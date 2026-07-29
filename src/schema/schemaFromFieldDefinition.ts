@@ -54,9 +54,7 @@ function getBooleanValueContentSchemaFromFieldDefinition() {
  */
 function getNumberValueContentSchemaFromFieldDefinition(
   fieldDefinition:
-    | NumberFieldDefinition
-    | RangeFieldDefinition
-    | NumberSelectFieldDefinition
+    NumberFieldDefinition | RangeFieldDefinition | NumberSelectFieldDefinition
 ) {
   let schema = z.number();
 
@@ -222,9 +220,7 @@ export function getTranslatableStringValueContentSchemaFromFieldDefinition(
 
 export function getTranslatableNumberValueContentSchemaFromFieldDefinition(
   fieldDefinition:
-    | NumberFieldDefinition
-    | RangeFieldDefinition
-    | NumberSelectFieldDefinition,
+    NumberFieldDefinition | RangeFieldDefinition | NumberSelectFieldDefinition,
   languages: ProjectLanguages
 ) {
   return z.record(

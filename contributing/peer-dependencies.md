@@ -47,7 +47,7 @@ the tree. As of this writing the contributors are:
 | Core's own schemas  | `>=4.1.0`       | `z.hash('sha1')` in `src/schema/gitSchema.ts` does not exist before 4.1.0 |
 | `@hono/zod-openapi` | `^4.0.0`        | peer dependency                                                           |
 | `@scalar/types`     | `^4.3.5`        | via `@scalar/hono-api-reference`, a runtime dependency                    |
-| `astro`             | `^4.3.6`        | the `/astro` entry's peer, measured against the current dev version 7.1.3 |
+| `astro`             | `^4.3.6`        | the `/astro` entry's peer, measured against the current dev version 7.1.4 |
 
 The maximum is `4.3.6`, so the peer range is `^4.3.6`. `devDependencies` pins the latest 4.x
 (`zod@4.4.3`) so Core develops against the newest patch, while the declared floor stays at the
@@ -224,7 +224,11 @@ it. Copying the range off the locally installed tsdown rather than off the newes
 exactly how that happens. When tsdown widens again, widen here in the same change.
 
 The tsdown range is `^0.22.3`, a 0.x line, so it stays inside the verified minor. `devDependencies`
-pins 0.22.3 for development, like the other peers.
+pins the latest 0.22.x for development, like the other peers, currently 0.22.14. Since that is the
+release whose typescript peer widened to include 7, the locally installed tsdown and the newest one
+in range now declare the same range, so the skew described above cannot happen by accident today.
+It can return the next time tsdown widens, so keep checking against the newest in range rather than
+against the installed copy.
 
 ### How to re-check
 
@@ -251,3 +255,26 @@ typescript 7 is the Go port, and tsdown's dts generator running on it fails with
 `tsconfig.json`. typescript 6 has no such requirement. This is tsdown's behavior rather than
 Core's, it only affects `generate:* js`, and a project asking for `.d.ts` output normally has a
 tsconfig anyway, so it is documented in `docs/api-clients.md` instead of being worked around.
+
+### Why the typescript dev pin is still 6.x
+
+The peer range already allows 7, so a consumer on it is supported. The `devDependencies` pin is a
+separate question and stays on the 6 line, because typescript 7 removed the API a test helper uses.
+
+Its package `exports` maps `"."` to `./lib/version.cjs`, which exports `version` and
+`versionMajorMinor` and nothing else. The compiler API moved to `typescript/unstable/*`, and that
+surface is program and checker oriented, so `ts.transpileModule` is gone rather than relocated.
+`expectTranspiles` in `src/test/util.ts` is built on it, for the single-file isolatedModules check
+that proves generated TypeScript is syntactically valid, and five tests across
+`src/cli/generateApiClientAction.test.ts` and `src/cli/generateTypesAction.test.ts` call it. Porting
+that to the new API is a rewrite, not a rename, so it wants its own change rather than riding along
+with a dependency sweep.
+
+Note that linting is not a reason to bump. oxlint's type-aware engine embeds its own typescript-go
+and never resolves the `typescript` package, see [`linting.md`](./linting.md).
+
+### Why `@types/node` stays on the 24 line
+
+`@types/node` majors track Node majors, and Core targets Node 24: `.node-version` says `24` and the
+tsconfig extends `@tsconfig/node24`. Taking `@types/node` 26 would type the source against APIs the
+supported runtime does not have, so the pin follows the 24 line and moves when the runtime does.
