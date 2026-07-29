@@ -50,7 +50,7 @@ export class LogService {
             | Record<string, unknown>[]
             | undefined;
           const result = logConsoleTransportSchema.safeParse({
-            ...(splatArgs?.[0] ?? {}),
+            ...splatArgs?.[0],
             timestamp: props['timestamp'],
             level: props.level,
             message: props.message,

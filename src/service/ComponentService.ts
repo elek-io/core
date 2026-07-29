@@ -394,7 +394,7 @@ export class ComponentService
   ): Promise<void> {
     const index = await this.getSlugIndex(projectId);
     const existingUuid = Object.entries(index).find(
-      ([, slug]) => slug === newSlug
+      ([, existingSlug]) => existingSlug === newSlug
     );
     if (existingUuid && existingUuid[0] !== componentId) {
       throw CoreError.conflict(

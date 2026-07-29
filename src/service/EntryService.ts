@@ -576,13 +576,13 @@ export class EntryService
 
     return {
       resolver: (id: string) => {
-        const fieldDefinitions = componentMap.get(id);
-        if (!fieldDefinitions) {
+        const resolved = componentMap.get(id);
+        if (!resolved) {
           throw new Error(
             `Component "${id}" was not pre-loaded. This is an internal error.`
           );
         }
-        return fieldDefinitions;
+        return resolved;
       },
       fieldDefinitions: resolvedFieldDefinitions,
     };

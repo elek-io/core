@@ -83,7 +83,7 @@ describe('elekCollections', function () {
 
     const collections = await elekCollections(config);
 
-    expect(Object.keys(collections).sort()).toEqual([
+    expect(Object.keys(collections).toSorted()).toEqual([
       'websiteAssets',
       'websiteBlogPosts',
       'websiteProducts',
@@ -101,7 +101,7 @@ describe('elekCollections', function () {
 
     const collections = await elekCollections(config);
 
-    expect(Object.keys(collections).sort()).toEqual([
+    expect(Object.keys(collections).toSorted()).toEqual([
       'shopAssets',
       'shopPages',
       'websiteAssets',
@@ -156,7 +156,7 @@ describe('elekCollections', function () {
 
     // website's blog-posts and shop's Assets are not named, so they are
     // not derived
-    expect(Object.keys(collections).sort()).toEqual([
+    expect(Object.keys(collections).toSorted()).toEqual([
       'shopPages',
       'websiteAssets',
       'websiteProducts',
@@ -308,7 +308,7 @@ describe('elekCollections', function () {
         collections: { website: ['posts'] },
         assets: { website: true },
       });
-      expect(Object.keys(collections).sort()).toEqual([
+      expect(Object.keys(collections).toSorted()).toEqual([
         'websiteAssets',
         'websitePosts',
       ]);

@@ -74,7 +74,7 @@ describe('files', () => {
     const result = await files(testDir);
 
     expect(result).toHaveLength(3);
-    const names = result.map((d) => d.name).sort();
+    const names = result.map((d) => d.name).toSorted();
     expect(names).toEqual(['document.json', 'image.png', 'readme.txt']);
   });
 
@@ -115,7 +115,7 @@ describe('folders', () => {
 
   it('returns only directories', async () => {
     const result = await folders(testDir);
-    const names = result.map((d) => d.name).sort();
+    const names = result.map((d) => d.name).toSorted();
 
     expect(names).toEqual(['subdir1', 'subdir2']);
   });

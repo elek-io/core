@@ -856,7 +856,7 @@ describe('ReleaseService - list', function () {
     const { list } = await core.releases.list({ projectId: project.id });
 
     const datetimes = list.map((release) => release.datetime);
-    expect(datetimes).toEqual([...datetimes].sort().reverse());
+    expect(datetimes).toEqual(datetimes.toSorted().toReversed());
   });
 
   it('should ignore a tag that carries no version', async function () {
@@ -873,7 +873,7 @@ describe('ReleaseService - list', function () {
 
     const { list, total } = await core.releases.list({ projectId: project.id });
     expect(total).toEqual(2);
-    expect(list.map((release) => release.version).sort()).toEqual([
+    expect(list.map((release) => release.version).toSorted()).toEqual([
       '0.1.0',
       '0.1.0-preview.1',
     ]);

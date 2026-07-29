@@ -250,7 +250,9 @@ describe('Delete reference protection', function () {
       }
       const refs = getReferencingEntries(error);
       expect(refs).not.toBeNull();
-      expect(refs!.map((r) => r.entryId).sort()).toEqual([r1.id, r2.id].sort());
+      expect(refs!.map((r) => r.entryId).toSorted()).toEqual(
+        [r1.id, r2.id].toSorted()
+      );
     });
 
     it('deletes an unreferenced Asset normally', async function () {

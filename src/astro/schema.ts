@@ -196,7 +196,7 @@ export function buildModelDigest(
   const model = {
     fieldDefinitions,
     languages,
-    components: [...components].sort((a, b) => a.id.localeCompare(b.id)),
+    components: components.toSorted((a, b) => a.id.localeCompare(b.id)),
   };
   return Crypto.createHash('sha256')
     .update(JSON.stringify(model))

@@ -296,9 +296,9 @@ function getComponentValueContentSchemaFromFieldDefinition(
 
     const fieldDefinitions = componentResolver(componentId);
     const shape: Record<string, z.ZodTypeAny> = {};
-    for (const fieldDefinition of fieldDefinitions) {
-      shape[fieldDefinition.slug] = getValueSchemaFromFieldDefinition(
-        fieldDefinition,
+    for (const componentFieldDefinition of fieldDefinitions) {
+      shape[componentFieldDefinition.slug] = getValueSchemaFromFieldDefinition(
+        componentFieldDefinition,
         languages,
         componentResolver,
         branchedVisited

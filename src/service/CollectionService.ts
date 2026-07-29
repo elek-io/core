@@ -525,7 +525,7 @@ export class CollectionService
         entryResolutions
       )) {
         const fieldDef = newFieldDefs.find(
-          (fieldDef) => fieldDef.slug === fieldSlug
+          (candidate) => candidate.slug === fieldSlug
         );
         if (fieldDef) {
           const schema = getValueSchemaFromFieldDefinition(fieldDef, languages);

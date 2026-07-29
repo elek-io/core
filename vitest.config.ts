@@ -16,7 +16,6 @@ export default defineConfig({
         ...coverageConfigDefaults.exclude, // keep Vitest defaults (test files, node_modules, etc.)
         'dist/**', // build output
         '**/package.json',
-        'eslint.config.*',
         'tsdown.config.*',
         'vitest.config.*',
         // Pure re-export barrels (no logic, only `export * from`)
