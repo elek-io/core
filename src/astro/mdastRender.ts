@@ -16,13 +16,16 @@
  * element — no class names, no `rel`/`target`, no slug ids, no syntax
  * highlighting. Consumers override only what they want to change.
  *
- * Defaults are constructed via `jsx` / `Fragment` from `astro/jsx-runtime`,
- * so they produce the same vnode shape as JSX written directly in a
- * consumer's `.astro` file — spread/override composition is type-safe and
- * runtime-clean.
+ * Defaults are constructed via `renderTemplate` and `addAttribute`, the
+ * same two functions the Astro compiler emits into every compiled
+ * `.astro` file, so the result is a value Astro's `renderChild` renders
+ * in any position. Building them from `astro/jsx-runtime` instead would
+ * produce a vnode, which only the page-level render pass unwraps, so the
+ * rendered markdown would collapse to "[object Object]" as soon as it
+ * sat inside an `.astro` component. See contributing/astro-entry.md.
  */
 
-import { jsx, Fragment } from 'astro/jsx-runtime';
+import { renderTemplate, addAttribute } from 'astro/runtime/server/index.js';
 import {
   mdastRender as primitive,
   type MdastRenderersBase,
@@ -39,54 +42,64 @@ type AstroElement = astroHTML.JSX.Element;
  */
 export type MdastAstroRenderers = FrameworkRenderers<AstroElement>;
 
+/**
+ * A heading tag cannot be interpolated into a `renderTemplate`, the
+ * static parts of the template are the markup. The six depths are a
+ * closed set, so they are spelled out.
+ */
+function renderHeading(
+  depth: number,
+  children: unknown
+): ReturnType<typeof renderTemplate> {
+  switch (depth) {
+    case 1:
+      return renderTemplate`<h1>${children}</h1>`;
+    case 2:
+      return renderTemplate`<h2>${children}</h2>`;
+    case 3:
+      return renderTemplate`<h3>${children}</h3>`;
+    case 4:
+      return renderTemplate`<h4>${children}</h4>`;
+    case 5:
+      return renderTemplate`<h5>${children}</h5>`;
+    default:
+      return renderTemplate`<h6>${children}</h6>`;
+  }
+}
+
 export const astroDefaults: Pick<
   MdastRenderersBase<AstroElement>,
   DefaultedRendererKey
 > = {
-  root: (_, children) => jsx(Fragment, { children }),
-  paragraph: (_, children) => jsx('p', { children }),
-  heading: (node, children) => jsx(`h${node.depth}`, { children }),
-  blockquote: (_, children) => jsx('blockquote', { children }),
-  list: (node, children) => jsx(node.ordered ? 'ol' : 'ul', { children }),
-  listItem: (_, children) => jsx('li', { children }),
-  code: (node) =>
-    jsx('pre', {
-      children: jsx('code', { children: node.value }),
-    }),
-  thematicBreak: () => jsx('hr', {}),
-  table: (_, children) => jsx('table', { children }),
-  tableRow: (_, children) => jsx('tr', { children }),
-  tableCell: (_, children) => jsx('td', { children }),
+  root: (_, children) => renderTemplate`${children}`,
+  paragraph: (_, children) => renderTemplate`<p>${children}</p>`,
+  heading: (node, children) => renderHeading(node.depth, children),
+  blockquote: (_, children) =>
+    renderTemplate`<blockquote>${children}</blockquote>`,
+  list: (node, children) =>
+    node.ordered
+      ? renderTemplate`<ol>${children}</ol>`
+      : renderTemplate`<ul>${children}</ul>`,
+  listItem: (_, children) => renderTemplate`<li>${children}</li>`,
+  code: (node) => renderTemplate`<pre><code>${node.value}</code></pre>`,
+  thematicBreak: () => renderTemplate`<hr>`,
+  table: (_, children) => renderTemplate`<table>${children}</table>`,
+  tableRow: (_, children) => renderTemplate`<tr>${children}</tr>`,
+  tableCell: (_, children) => renderTemplate`<td>${children}</td>`,
   footnoteDefinition: (node, children) =>
-    jsx('div', {
-      id: `fn-${node.identifier}`,
-      children,
-    }),
+    renderTemplate`<div${addAttribute(`fn-${node.identifier}`, 'id')}>${children}</div>`,
   text: (node) => node.value,
-  inlineCode: (node) => jsx('code', { children: node.value }),
-  emphasis: (_, children) => jsx('em', { children }),
-  strong: (_, children) => jsx('strong', { children }),
-  delete: (_, children) => jsx('del', { children }),
+  inlineCode: (node) => renderTemplate`<code>${node.value}</code>`,
+  emphasis: (_, children) => renderTemplate`<em>${children}</em>`,
+  strong: (_, children) => renderTemplate`<strong>${children}</strong>`,
+  delete: (_, children) => renderTemplate`<del>${children}</del>`,
   link: (node, children) =>
-    jsx('a', {
-      href: node.url,
-      title: node.title ?? undefined,
-      children,
-    }),
+    renderTemplate`<a${addAttribute(node.url, 'href')}${addAttribute(node.title, 'title')}>${children}</a>`,
   image: (node) =>
-    jsx('img', {
-      src: node.url,
-      alt: node.alt,
-      title: node.title ?? undefined,
-    }),
-  break: () => jsx('br', {}),
+    renderTemplate`<img${addAttribute(node.url, 'src')}${addAttribute(node.alt, 'alt')}${addAttribute(node.title, 'title')}>`,
+  break: () => renderTemplate`<br>`,
   footnoteReference: (node) =>
-    jsx('sup', {
-      children: jsx('a', {
-        href: `#fn-${node.identifier}`,
-        children: node.label ?? node.identifier,
-      }),
-    }),
+    renderTemplate`<sup><a${addAttribute(`#fn-${node.identifier}`, 'href')}>${node.label ?? node.identifier}</a></sup>`,
 };
 
 export function mdastRender(

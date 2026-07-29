@@ -144,3 +144,22 @@ export const releaseResultSchema = z.object({
   diff: releaseDiffSchema,
 });
 export type ReleaseResult = z.infer<typeof releaseResultSchema>;
+
+export const listReleasesSchema = z.object({
+  projectId: uuidSchema,
+});
+export type ListReleasesProps = z.infer<typeof listReleasesSchema>;
+
+/**
+ * A Release or preview Release read from its git tag
+ */
+export const releaseListItemSchema = z.object({
+  /**
+   * The git tag name carrying this Release, used to address it in git
+   */
+  tagId: uuidSchema,
+  type: z.enum(['release', 'preview']),
+  version: versionSchema,
+  datetime: z.iso.datetime(),
+});
+export type ReleaseListItem = z.infer<typeof releaseListItemSchema>;

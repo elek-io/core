@@ -78,6 +78,10 @@ export const projectSchema = projectFileSchema
     remoteOriginUrl: z.string().nullable().openapi({
       description: 'URL of the remote Git repository',
     }),
+    isProvisioned: z.boolean().openapi({
+      description:
+        'True if this local copy is a provisioned copy, kept in sync with the remote by provisioning and not meant for editing. False for a working copy.',
+    }),
   })
   .openapi('Project');
 export type Project = z.infer<typeof projectSchema>;
@@ -149,6 +153,64 @@ export const cloneProjectSchema = z.object({
   url: z.string(),
 });
 export type CloneProjectProps = z.infer<typeof cloneProjectSchema>;
+
+/**
+ * The channels provisioning can follow
+ *
+ * `production` is the latest Release, `preview` the latest preview
+ * Release, `draft` the tip of the work branch. Channels exist for
+ * every Project, so they are safe to set deployment-wide.
+ */
+export const contentChannelSchema = z.enum(['production', 'preview', 'draft']);
+export type ContentChannel = z.infer<typeof contentChannelSchema>;
+
+/**
+ * The content state to provision: a channel or an exact Release version
+ */
+export const contentRefSchema = z.union([contentChannelSchema, versionSchema]);
+export type ContentRef = z.infer<typeof contentRefSchema>;
+
+export const provisionProjectSchema = z.object({
+  id: uuidSchema,
+  /**
+   * The remote repository URL to provision from
+   */
+  url: z.string().trim().min(1),
+  /**
+   * The content state to provision: a channel (`production`,
+   * `preview`, `draft`) or an exact Release version
+   *
+   * @default 'production'
+   */
+  ref: contentRefSchema.optional(),
+});
+export type ProvisionProjectProps = z.infer<typeof provisionProjectSchema>;
+
+/**
+ * Where the provisioned content of a run came from
+ *
+ * `remote` is the normal path, the copy was fetched. `local-pin` is
+ * an exact version the copy already held, so the network was skipped.
+ * `local-fallback` is an unreachable remote the copy stood in for.
+ * `local-managed` is a working copy of another application, left
+ * untouched.
+ */
+export type ProvisionSource =
+  | 'remote'
+  | 'local-pin'
+  | 'local-fallback'
+  | 'local-managed';
+
+export interface ProvisionResult {
+  project: Project;
+  /** Where the content came from */
+  source: ProvisionSource;
+  /**
+   * Loud warning that the content may be outdated, non-null exactly
+   * when source is `local-fallback`
+   */
+  warning: string | null;
+}
 
 export const listBranchesProjectSchema = z.object({
   id: uuidSchema.readonly(),

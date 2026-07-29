@@ -10,7 +10,7 @@ For the data model these examples build on (Projects, Collections, Entries, Valu
 npm install @elek-io/core zod dugite
 ```
 
-Core declares `zod` and `dugite` as required peer dependencies, so you install them alongside Core. `dugite` is the git binding the Node entry point runs every Project operation through, see [git and sync](./git-and-sync.md). `zod` is what Core authors its schemas with: a compatible version (`zod@^4.3.6`) that resolves to a single copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage. The Astro integration adds one more optional peer, see [Astro integration](#astro-integration).
+Core declares `zod` and `dugite` as required peer dependencies, so you install them alongside Core. `dugite` is the git binding the Node entry point runs every Project operation through, see [git and sync](./git-and-sync.md). `zod` is what Core authors its schemas with: a compatible version (`zod@^4.3.6`) that resolves to a single copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage. Three more peers are optional and only needed by one feature each: `astro` for the [Astro integration](#astro-integration), `tsdown` and `typescript` for [compiling generated clients and types to JavaScript](./api-clients.md#compiling-to-javascript).
 
 You still install zod as above. As a convenience, Core also re-exports `z`, so in your own code you can import it from `@elek-io/core` instead of from `zod` directly. It is the same `z` plus `@hono/zod-openapi`'s `.openapi()` extension.
 
@@ -35,6 +35,7 @@ const core = new ElekIoCore({
     cache: true, // cache files in memory to speed up access - default true
   },
   dataDir: '/path/to/data', // directory Core reads and writes data in - default ~/elek.io
+  isReadOnly: false, // never mutate a Project or its remote - default false
 });
 ```
 
@@ -42,13 +43,24 @@ The resolved options are exposed on `core.options`, and the running Core version
 
 `dataDir` sets the data directory everything lives in, see [`storage-layout.md`](./storage-layout.md). It takes precedence over the `ELEK_IO_DATA_DIR` environment variable, which takes precedence over the default `~/elek.io`. Relative paths are resolved against the current working directory once at construction. `~` is not expanded, that is a shell feature, so pass an absolute path or let the shell expand it. The directory does not need to exist, Core creates it. An empty or whitespace-only value throws a `CoreError`. The resolved absolute path is exposed as `core.options.dataDir`, and `core.util.pathTo` builds every path from it.
 
+`log.level` is the lowest level Core writes, one of `error`, `warn`, `info` and `debug`. It takes precedence over the `ELEK_IO_LOG_LEVEL` environment variable, which takes precedence over the default `info`. A value that is none of the four throws a `CoreError`, so a typo says so instead of quietly leaving the logs as they were. Set it to `error` where Core is a library inside another tool's output, such as an Astro build.
+
+`isReadOnly` puts Core into read-only mode, meant for environments that only consume content, such as CI builds. Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`. In return, cloning and fetching work without a User being set, because nothing is ever committed. The option takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
+
 ### Environment variables
 
 Core reads its environment variables once at construction, never at import. All of them use the `ELEK_IO_` prefix with SCREAMING_SNAKE_CASE names. An empty or whitespace-only value counts as unset. When a constructor option covers the same setting, the option wins over the environment.
 
-| Variable           | Purpose                                     | Default     |
-| ------------------ | ------------------------------------------- | ----------- |
-| `ELEK_IO_DATA_DIR` | The directory Core reads and writes data in | `~/elek.io` |
+| Variable                           | Purpose                                                          | Default          |
+| ---------------------------------- | ---------------------------------------------------------------- | ---------------- |
+| `ELEK_IO_DATA_DIR`                 | The directory Core reads and writes data in                      | `~/elek.io`      |
+| `ELEK_IO_LOG_LEVEL`                | The lowest level Core logs                                       | `info`           |
+| `ELEK_IO_READ_ONLY`                | Set to `true` to put Core into read-only mode                    | unset            |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN`      | Token for authenticating git operations against a private remote | unset            |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN`   | `x-access-token` |
+| `ELEK_IO_CHANNEL`                  | The channel provisioning follows, overrides configured refs      | unset            |
+
+`ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git per invocation through an askpass helper. It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches. Prompts are disabled, a missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it. While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before. The token applies to HTTP(S) remotes only, SSH remotes authenticate through the ambient SSH setup like ssh-agent.
 
 On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room. See the limitation in [`features.md`](./features.md#intentional-constraints). macOS and Linux allow 1024 and 4096 characters and are not affected.
 
@@ -281,8 +293,10 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 
 - `elek generate:client [outDir] [language] [format] [target]` - generate a JS/TS API client. `--watch` regenerates on content changes.
 - `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported.
+  Both generators emit TypeScript by default. Passing `js` compiles it, which needs `tsdown` and `typescript` installed as dev dependencies of your project, see [compiling to JavaScript](./api-clients.md#compiling-to-javascript).
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
+- `elek provision --project <id> --url <url>` - provision a copy of a Project from its remote into the data directory, e.g. in CI. `--ref` selects a channel (`production` for the latest Release, `preview` for the latest preview Release, `draft` for the tip of the work branch) or an exact Release version, and is overridden by the `ELEK_IO_CHANNEL` environment variable. Runs read-only, so no User is required. Authentication against private remotes uses `ELEK_IO_REMOTE_ACCESS_TOKEN`. See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
 
 The global `--data-dir <path>` option sets the data directory for any command, e.g. `elek --data-dir /path/to/data export`. It overrides the `ELEK_IO_DATA_DIR` environment variable and defaults to `~/elek.io`, see [Options](#options).
 
@@ -290,30 +304,238 @@ Generated clients and types narrow translatable content to the Project's languag
 
 ## Astro integration
 
-`@elek-io/core/astro` exports content loaders that pull Project data into Astro's content collections, plus `mdastRender` for rendering `markdown` Values. It adds `astro` (`^6.0.0`) as an optional peer dependency, which your Astro project already provides.
+`@elek-io/core/astro` exports content loaders that pull Project data into Astro's content collections, plus `mdastRender` for rendering `markdown` Values. It adds `astro` (`^6.1.3 || ^7.0.0`) as an optional peer dependency, which your Astro project already provides.
+
+An Astro site declares the Projects it consumes once and imports that declaration wherever it is needed, so a Project id is written a single time.
+
+```typescript
+// elek.config.ts
+import { defineElekConfig } from '@elek-io/core/astro';
+
+export const config = defineElekConfig({
+  projects: {
+    website: {
+      id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+      remoteUrl: 'https://github.com/acme/website-content.git',
+    },
+  },
+});
+```
+
+The `id` is the Project's own UUID, which elek.io Desktop shows for every Project. `remoteUrl` is the content repository the Project is synchronized with, the same URL you would clone, and only the [`elek()` integration](#provisioning-in-ci-with-elek) reads it.
+
+Every Project gets an alias you choose (`website` above). The alias is what you reference everywhere else, it must start with a lowercase letter and continue with letters or digits. `defineElekConfig` validates the declaration right away, so a malformed id or a mistyped key fails where you wrote it rather than somewhere in the build.
+
+Both other files import that config:
+
+```javascript
+// astro.config.mjs
+import { defineConfig } from 'astro/config';
+import { elek } from '@elek-io/core/astro';
+import { config } from './elek.config';
+
+export default defineConfig({
+  integrations: [elek({ config })],
+});
+```
+
+```typescript
+// src/content.config.ts
+import { elekCollections } from '@elek-io/core/astro';
+import { config } from '../elek.config';
+
+export const collections = {
+  ...(await elekCollections(config)),
+};
+```
+
+`elekCollections()` reads the content model of every declared Project and derives one Astro collection per elek.io Collection, plus one for the Project's Assets. A Project aliased `website` with a `products` and a `blog-posts` Collection produces `websiteProducts`, `websiteBlogPosts` and `websiteAssets`, which is what `getCollection('websiteProducts')` then expects. Keys are always alias-prefixed, also when a single Project is declared, so adding a second Project later never renames the first one's collections. Two Collections that would derive the same key fail the build naming both sides rather than one silently winning.
+
+Called like that, with no second argument, it derives **everything** and says so in a warning. That is the shape to start with, before you know what a Project holds. Replace it with a selection before you ship, see [Choosing what to derive](#choosing-what-to-derive).
+
+Nothing discovers `elek.config.ts` automatically, the filename is a convention and the imports are what connect the three files. Put it wherever you like as long as both sides can import it.
+
+### What an Entry looks like
+
+The loaders supply Astro with both a schema and a TypeScript type per Collection, built from its field definitions, so `entry.data` is typed without any codegen step of yours. Every Value is keyed by the Project's languages, and a field the Collection does not require is `null` in a language nobody filled in:
+
+```typescript
+entry.data.title.en; // string, the field is required
+entry.data.subtitle.en; // string | null, the field is optional
+entry.data.body.en; // MdAstRoot | null, an optional markdown field
+entry.data.cover.en; // Array<{ id: string; objectType: 'asset' }>, never null
+entry.data.related.en; // Array<{ id: string; objectType: 'entry'; collectionId: string }>
+```
+
+A `reference` field is an array, empty rather than null when nothing is referenced. The field definition decides what it points at, so the type does too: an Asset reference carries an id, an Entry reference carries the id and the `collectionId` of the Collection the Entry lives in.
+
+That id is also the Astro store id, so following a reference is a `getEntry` away. An Asset resolves against the Project's Assets collection:
+
+```typescript
+const cover = await getEntry('websiteAssets', entry.data.cover.en[0].id);
+```
+
+An Entry needs the collection key its Collection derives, the alias plus the plural slug in PascalCase described above. `collectionId` is what tells you which Collection a reference landed in, which matters when a field allows more than one:
+
+```typescript
+const post = await getEntry('websitePosts', entry.data.related.en[0].id);
+```
+
+An Entry carries no `body` and no rendered HTML, so Astro's `render()` and `<Content />` produce an empty page rather than an error. A `markdown` field arrives on `entry.data` as a tree, which [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro) renders with `mdastRender`.
+
+### Choosing what to derive
+
+Pass a second argument and it becomes the complete list of what the site reads. This is the shape to ship:
+
+```typescript
+// src/content.config.ts
+export const collections = {
+  ...(await elekCollections(config, {
+    collections: { website: ['pages'], shop: ['products'], blog: ['posts'] },
+    assets: { website: { imageDir: './src/media' }, shop: true },
+  })),
+};
+```
+
+That derives `websitePages`, `shopProducts`, `blogPosts`, `websiteAssets` and `shopAssets`. Nothing else: `blog` is not named under `assets`, so its Assets are not derived, and any Collection not named under `collections` is not either.
+
+One rule covers both keys. **A key you leave out contributes nothing, and so does an alias you leave out of a key.** So `{ collections: { website: ['pages'] } }` derives one collection and no Assets at all.
+
+Name Collections by their plural slug or their id, the same two a loader's `collectionIdOrSlug` takes. Under `assets`, `true` takes the default directories and an object sets `imageDir` for image binaries and `publicDir` for every other file.
+
+Deriving less is worth doing. An unread Collection costs a file read and a schema validation per Entry on every sync, and an unread Assets collection copies every binary of its Project into the site each time.
+
+Three mistakes fail the build rather than passing quietly, because each would otherwise produce exactly what success produces:
+
+- A name that matches no Collection of the Project it is listed under. The error names the alias and lists what that Project does have, so a typo is obvious.
+- A selection that derives nothing at all, including `elekCollections(config, {})`.
+- A derived Collection that can reference Assets, through a reference field or a markdown field with `assetReferences` enabled, while that Project's Assets are left out. Following such a reference is `getEntry('websiteAssets', ref.id)`, so without the collection it would break while a page renders, far from the config that caused it.
+
+### Declaring collections explicitly
+
+`elekCollections()` returns a plain object, so individual collections can be added next to it, and the loaders behind it are exported for when you want to name a collection yourself or give it a key of your own:
 
 ```typescript
 // src/content.config.ts
 import { defineCollection } from 'astro:content';
-import { elekAssets, elekEntries } from '@elek-io/core/astro';
+import { elekCollections, elekEntriesLoader } from '@elek-io/core/astro';
+import { config } from '../elek.config';
 
 export const collections = {
-  assets: defineCollection({
-    loader: elekAssets({
-      projectId: 'abc-123-...',
-      outDir: './src/content/assets',
-    }),
-  }),
-  products: defineCollection({
-    loader: elekEntries({
-      projectId: 'abc-123-...',
-      collectionIdOrSlug: 'products',
+  ...(await elekCollections(config, { collections: { website: ['pages'] } })),
+  posts: defineCollection({
+    loader: elekEntriesLoader({
+      config,
+      project: 'website',
+      collectionIdOrSlug: 'blog-posts',
     }),
   }),
 };
 ```
 
-Both loaders accept a `core` property with the same options as the `ElekIoCore` constructor, so `elekEntries({ ..., core: { dataDir: '/path/to/data' } })` reads from a custom data directory. Note that all loaders share one Core instance, created by whichever loader runs first. Later `core` options are silently ignored, so pass identical `core` options to every loader or leave them off entirely. To change the data directory, prefer setting `ELEK_IO_DATA_DIR` in the build environment, which applies no matter which loader runs first.
+The `project` of a loader and the aliases in `elekCollections()`'s options accept only the aliases the config declares, so a typo is a TypeScript error rather than a failing build.
+
+### Routing by slug
+
+Entries are keyed by their UUID in Astro's store, which is what `getEntry()` and every reference between Entries uses. For public URLs you usually want a [`slug` field](./fields.md) instead, and `elekSlugPaths()` turns a collection into the paths `getStaticPaths` expects:
+
+```astro
+---
+// src/pages/[language]/[slug].astro
+import { getCollection } from 'astro:content';
+import { elekSlugPaths } from '@elek-io/core/astro';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('websitePosts');
+  return elekSlugPaths(posts, { slugField: 'slug' });
+}
+
+const { entry, language } = Astro.props;
+---
+<h1>{entry.data.title[language]}</h1>
+```
+
+Every path carries the language it was built for, so a page reads a translatable Value without naming the Project's languages itself. Taking it from `Astro.params` instead would not type-check, since Astro types every route param as `string | undefined` while a Value is keyed by the languages.
+
+Each language gets its own path, so `/en/hello-world` and `/de/hallo-welt` both reach the same Entry. Pass `language: 'en'` to route a single one, and the params hold only the slug, for a page at `src/pages/[slug].astro`. `language` is checked against the Project's languages and `slugField` against the Collection's fields, so a typo in either is a TypeScript error rather than a failing build.
+
+Slugs are unique per language within a Collection, not across languages, and an Entry that has no slug in a language simply gets no path there. A Collection can define several slug fields, which is why the field to route by is named per call.
+
+### Assets and astro:assets
+
+An Asset that Astro's image pipeline understands (`jpeg`, `jpg`, `png`, `tiff`, `webp`, `gif`, `svg`, `avif`) arrives as a ready-made Astro image on `data.src`, so it optimizes like any local image:
+
+```astro
+---
+import { getCollection } from 'astro:content';
+import { Image } from 'astro:assets';
+
+const assets = await getCollection('websiteAssets');
+---
+{assets.map((asset) =>
+  asset.data.src
+    ? <Image src={asset.data.src} alt={asset.data.description} />
+    : <a href={asset.data.href}>{asset.data.name}</a>
+)}
+```
+
+Every other Asset, a PDF or a ZIP for example, is served as it is and carries its URL on `data.href` instead. Each Asset has exactly one of the two, the other is `null`, so the check above is also how you tell them apart.
+
+The two kinds are saved in different places, because that is what makes each work. Images go to `src/elek/<alias>/images`, below `src/` where Astro can process them. Everything else goes to `public/elek/<alias>/assets`, because only the public directory is served. Override either per Project:
+
+```typescript
+await elekCollections(config, {
+  collections: { website: ['pages'], shop: ['products'] },
+  assets: {
+    website: { imageDir: './src/media', publicDir: './public/downloads' },
+  },
+});
+```
+
+`shop` is not named under `assets` there, so its Assets are not derived at all, see [Choosing what to derive](#choosing-what-to-derive). Relative paths resolve against the Astro project root. `imageDir` has to stay inside the project and `publicDir` inside Astro's own `publicDir`, otherwise the Asset cannot be processed or served, and the build says so.
+
+These binaries are derived from the Project, so they do not belong in your site's repository:
+
+```
+# .gitignore
+src/elek/
+public/elek/
+```
+
+Those are the only entries the integration needs. Everything else it produces goes through Astro's content store, which lives in `.astro` during development and in `node_modules/.astro` during a build, both of which a standard Astro `.gitignore` already covers.
+
+All loaders share one Core instance, which the loaders themselves take no options for. What configures it are the `ELEK_IO_*` environment variables of the build: set `ELEK_IO_DATA_DIR` to read from a data directory other than `~/elek.io`, `ELEK_IO_LOG_LEVEL` to `error` to keep Core out of the build output, `ELEK_IO_CHANNEL` to switch the content state deployment-wide and `ELEK_IO_REMOTE_ACCESS_TOKEN` to authenticate against a private remote. See [Environment variables](#environment-variables) for the full list, and note that it is the full list: a setting without an environment variable cannot be changed for the loaders' Core today.
+
+### Local development
+
+While `astro dev` runs, the loaders watch the Projects they read. Editing an Entry or an Asset in the Desktop app updates the open page a moment later, without restarting the dev server. Each loader watches only what it reads, so a Collection reloads when one of its own Entries changes and Assets reload on their own. The Project's git history is not watched, so committing in the Desktop app does not trigger a reload by itself.
+
+**Content edits are live, model edits need a restart.** Astro builds a collection's schema and its TypeScript types once, when it loads the content config, and offers no way to rebuild them while the server runs. So changing the content model means restarting `astro dev`:
+
+- Adding, removing or editing a **field definition** of a Collection
+- Adding, removing or editing a **Component**, or the fields of one
+- Changing a Project's **supported languages**, which every translatable Value is keyed by
+- Adding or removing a **Collection or Project**, which changes the set of collections `elekCollections()` returns
+
+The loaders notice the first three and stop rather than pretend. Instead of reloading Entries against a schema that no longer describes them, which would silently drop a new field or fail on a removed one, the build log says what happened:
+
+```
+[elek-entries] The content model of Collection "posts" of Project "website" changed.
+Astro builds a collection's schema and types once, when it loads the content config,
+so restart the dev server to pick them up. Entries are not reloaded until then.
+```
+
+Content editing carries on as normal after the restart. Adding or removing a whole Collection is not detected, because the set of collections is decided before any loader runs.
+
+### Provisioning in CI with elek()
+
+The loaders read from the local data directory, which is empty on a CI runner. The `elek()` integration fills it: it provisions every Project of the config from its remote before Astro's content sync runs.
+
+Each declaration takes an optional `ref`: a channel (`production`, `preview` or `draft`, default `production`) or an exact Release version, overridden by the `ELEK_IO_CHANNEL` environment variable, which accepts channels only. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`. The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated. A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content. Without the integration, a missing Project fails the build with an error pointing here. The underlying behavior is documented in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
+
+`elek()` provisions every declared Project that has a `remoteUrl`. A Project that only ever comes from the local data directory, for example one the Desktop app manages, is declared without one: the integration skips it, says so in the build log and leaves it to the loaders. So one config can mix a Project fetched from its remote with a local one. A config in which no Project has a `remoteUrl` fails while `astro.config` is read, naming the aliases, since there is nothing left for the integration to do. A site whose Projects are all local needs no integration at all.
+
+Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (production)`.
 
 For rendering `markdown` field Values (including the required `html`, `assetReference` and `entryReference` handlers), see [`markdown-content.md`](./markdown-content.md).
 

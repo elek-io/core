@@ -91,11 +91,13 @@ export class EntryService
   public async create<T extends Entry = Entry>(
     props: CreateEntryProps
   ): Promise<T> {
+    this.assertNotReadOnly('create');
     const { projectId, collectionId } = this.parseOrThrow(
       'create',
       z.object({ projectId: uuidSchema, collectionId: uuidSchema }),
       props
     );
+    await this.assertNotProvisioned('create', projectId);
     const languages = await this.readProjectLanguages(projectId);
     const collection = await this.collectionService.read({
       projectId,
@@ -107,7 +109,7 @@ export class EntryService
         projectId
       );
 
-    return this.validated(
+    return this.mutating(
       'create',
       getCreateEntrySchemaFromFieldDefinitions(
         fieldDefinitions,
@@ -227,11 +229,13 @@ export class EntryService
   public async update<T extends Entry = Entry>(
     props: UpdateEntryProps
   ): Promise<T> {
+    this.assertNotReadOnly('update');
     const { projectId, collectionId } = this.parseOrThrow(
       'update',
       z.object({ projectId: uuidSchema, collectionId: uuidSchema }),
       props
     );
+    await this.assertNotProvisioned('update', projectId);
     const languages = await this.readProjectLanguages(projectId);
     const collection = await this.collectionService.read({
       projectId,
@@ -243,7 +247,7 @@ export class EntryService
         projectId
       );
 
-    return this.validated(
+    return this.mutating(
       'update',
       getUpdateEntrySchemaFromFieldDefinitions(
         fieldDefinitions,
@@ -327,7 +331,9 @@ export class EntryService
    * `dynamic`/component block). A self-reference does not block.
    */
   public delete(props: DeleteEntryProps): Promise<void> {
-    return this.validated('delete', deleteEntrySchema, props, async () => {
+    return this.mutating('delete', deleteEntrySchema, props, async () => {
+      await this.assertNotProvisioned('delete', props.projectId);
+
       const referencingEntries =
         await this.referenceService.findEntriesReferencing({
           projectId: props.projectId,

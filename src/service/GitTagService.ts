@@ -19,7 +19,9 @@ import {
   type PaginatedList,
   type ReadGitTagProps,
 } from '../schema/index.js';
-import type { PathTo } from '../util/node.js';
+import Fs from 'fs-extra';
+import Path from 'node:path';
+import { PROVISIONED_MARKER, type PathTo } from '../util/node.js';
 import { datetime, uuid } from '../util/shared.js';
 import { AbstractService } from './AbstractService.js';
 import type { GitService } from './GitService.js';
@@ -51,7 +53,17 @@ export class GitTagService
    * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---annotate
    */
   public async create(props: CreateGitTagProps): Promise<GitTag> {
+    this.assertNotReadOnly('create');
+
     return this.validated('create', createGitTagSchema, props, async () => {
+      // Backstop for callers that bypass the service layer. The
+      // services guard earlier through assertNotProvisioned.
+      if (await Fs.pathExists(Path.join(props.path, PROVISIONED_MARKER))) {
+        throw CoreError.preconditionFailed(
+          `Cannot tag because "${props.path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+        );
+      }
+
       const id = uuid();
       let args = ['tag', '--annotate', id];
 

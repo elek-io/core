@@ -1,13 +1,12 @@
-import { build as compileToJs } from 'tsdown';
 import type { GenerateApiClientProps } from '../schema/index.js';
 import {
-  CoreError,
   flattenFieldDefinitions,
   type Collection,
   type Project,
 } from '../index.node.js';
 import {
   getCore,
+  loadCompiler,
   watchProjects,
   AUTO_GENERATED_HEADER,
   toPascalCase,
@@ -281,6 +280,7 @@ async function generateApiClientAs({
   await generateApiClient(outFileTs, typesMap);
 
   if (language === 'js') {
+    const compileToJs = await loadCompiler();
     const startedAt = Date.now();
     // Convert file paths into POSIX-style (forward slashes - even on Windows),
     // since tsdown treats these as glob patterns
@@ -329,32 +329,27 @@ export const generateApiClientAction = async ({
   target,
   options,
 }: GenerateApiClientProps) => {
-  try {
-    await generateApiClientAs({ outDir, language, format, target, options });
+  await generateApiClientAs({ outDir, language, format, target, options });
 
-    if (options.watch === true) {
-      const core = getCore();
+  if (options.watch === true) {
+    const core = getCore();
+    core.logger.info({
+      source: 'core',
+      message: 'Watching for changes to regenerate the API Client',
+    });
+
+    watchProjects().on('all', (event, path) => {
       core.logger.info({
         source: 'core',
-        message: 'Watching for changes to regenerate the API Client',
+        message: `Regenerating API Client due to ${event} on "${path}"`,
       });
-
-      watchProjects().on('all', (event, path) => {
-        core.logger.info({
-          source: 'core',
-          message: `Regenerating API Client due to ${event} on "${path}"`,
-        });
-        void generateApiClientAs({
-          outDir,
-          language,
-          format,
-          target,
-          options,
-        });
+      void generateApiClientAs({
+        outDir,
+        language,
+        format,
+        target,
+        options,
       });
-    }
-  } catch (error) {
-    console.error(error instanceof CoreError ? error.message : String(error));
-    process.exit(1);
+    });
   }
 };

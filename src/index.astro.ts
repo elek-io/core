@@ -1,17 +1,10 @@
-import type { Loader } from 'astro/loaders';
-import Path from 'node:path';
-import Fs from 'fs-extra';
+import type { AstroIntegration } from 'astro';
 import ElekIoCore, {
-  assetSchema,
-  flattenFieldDefinitions,
+  CoreError,
   type ConstructorElekIoCoreProps,
 } from './index.node.js';
-import {
-  buildEntryValuesSchema,
-  buildEntryValuesTypeString,
-} from './astro/schema.js';
-import { transformEntryValues } from './astro/transform.js';
-import { toPascalCase } from './cli/util.js';
+import { resolveContentRef } from './util/node.js';
+import { assertElekConfig, type ElekConfig } from './astro/elekConfig.js';
 
 export {
   mdastRender,
@@ -19,223 +12,144 @@ export {
   type MdastAstroRenderers,
 } from './astro/mdastRender.js';
 
+export {
+  defineElekConfig,
+  type ElekConfig,
+  type ElekProjectDeclaration,
+} from './astro/elekConfig.js';
+
+export {
+  elekAssetsLoader,
+  elekEntriesLoader,
+  type ElekAssetsLoaderProps,
+  type ElekEntriesLoaderProps,
+} from './astro/loaders.js';
+
+export {
+  elekCollections,
+  type ElekAssetsOption,
+  type ElekCollectionsOptions,
+} from './astro/collections.js';
+
+export {
+  elekSlugPaths,
+  type ElekRoutableEntry,
+  type ElekSlugPath,
+  type ElekSlugPathsProps,
+} from './astro/slugPaths.js';
+
 // Re-export `z` here too so it is available from the @elek-io/core/astro entry.
 // See the note in schema/index.ts. zod is a required peer dependency.
 export { z } from '@hono/zod-openapi';
 
-interface ElekAssetsProps {
-  projectId: string;
-  outDir: string;
+interface ElekIntegrationProps {
   /**
-   * Options for the shared ElekIoCore instance. Core is created once on first
-   * loader use, so the first loader to run wins and later options are ignored.
+   * The elek config, also imported by the content config
    */
-  core?: ConstructorElekIoCoreProps;
-}
-
-interface ElekEntriesOptions {
-  projectId: string;
-  /** Collection UUID or slug */
-  collectionIdOrSlug: string;
+  config: ElekConfig;
   /**
-   * Options for the shared ElekIoCore instance. Core is created once on first
-   * loader use, so the first loader to run wins and later options are ignored.
+   * Options for the short-lived Core the integration provisions with.
+   * Prefer the ELEK_IO_* environment variables, which also reach the
+   * loaders' own Core instance.
    */
   core?: ConstructorElekIoCoreProps;
 }
 
 /**
- * Lazily-created, process-wide ElekIoCore. Created on first loader use so that
- * importing @elek-io/core/astro has no side effects. The first loader to
- * initialize it wins.
- */
-let coreInstance: ElekIoCore | undefined;
-function getCore(options?: ConstructorElekIoCoreProps): ElekIoCore {
-  if (!coreInstance) {
-    coreInstance = new ElekIoCore(options ?? { log: { level: 'info' } });
-  }
-  return coreInstance;
-}
-
-/**
- * Astro content loader for elek.io Assets.
+ * Astro integration that provisions every Project of the elek config
+ * from its remote before Astro's content sync runs, so the loaders
+ * find them in the data directory - also on CI runners that start
+ * with an empty one.
  *
- * Reads and saves Assets from a Project and exposes them through
- * Astro's content collection system.
+ * A Project declared without a `remoteUrl` only ever comes from the
+ * local data directory, so it is skipped and left to the loaders. A
+ * config in which no Project has one fails, the integration would have
+ * nothing to do.
+ *
+ * Runs on its own short-lived read-only Core, so no User is required
+ * and nothing is ever mutated. A locally existing Project managed by
+ * another application (e.g. the Desktop app) is left untouched, so
+ * local development keeps reading the live working copy. Private
+ * remotes authenticate through the ELEK_IO_REMOTE_ACCESS_TOKEN environment variable.
  *
  * @example
- * ```ts
- * // src/content.config.ts
- * import { defineCollection } from 'astro:content';
- * import { elekAssets } from '@elek-io/core/astro';
+ * ```js
+ * // astro.config.mjs
+ * import { defineConfig } from 'astro/config';
+ * import { elek } from '@elek-io/core/astro';
+ * import { config } from './elek.config';
  *
- * export const collections = {
- *   assets: defineCollection({
- *     loader: elekAssets({
- *       projectId: 'abc-123-...',
- *       outDir: './content/assets',
- *     }),
- *   });
- * };
+ * export default defineConfig({
+ *   integrations: [elek({ config })],
+ * });
  * ```
  */
-export function elekAssets(props: ElekAssetsProps): Loader {
+export function elek(props: ElekIntegrationProps): AstroIntegration {
+  assertElekConfig(props.config);
+
+  // Resolved before the hook runs, so a config the integration cannot
+  // act on fails while astro.config is read instead of midway through a
+  // build. A declaration without a remoteUrl is a Project that only
+  // ever comes from the local data directory, which the loaders read on
+  // their own, so it is skipped rather than rejected.
+  const declarations = Object.entries(props.config.projects);
+  const projects = declarations.flatMap(([alias, declaration]) =>
+    declaration.remoteUrl
+      ? [{ alias, ...declaration, remoteUrl: declaration.remoteUrl }]
+      : []
+  );
+  const localOnly = declarations
+    .filter(([, declaration]) => !declaration.remoteUrl)
+    .map(([alias]) => alias);
+
+  if (projects.length === 0) {
+    throw CoreError.badRequest(
+      `No declared Project has a remoteUrl, so elek() has nothing to provision: ${localOnly.join(
+        ', '
+      )}. Add one to the Project the build should fetch from its remote, or drop the integration when every Project comes from the local data directory.`
+    );
+  }
+
   return {
-    name: 'elek-assets',
-    schema: assetSchema,
-    load: async (context) => {
-      const core = getCore(props.core);
-      context.logger.info(
-        `Loading elek.io Assets for Project "${props.projectId}", saving to "${props.outDir}"`
-      );
-
-      const { list: assets, total } = await core.assets.list({
-        projectId: props.projectId,
-        limit: 0,
-      });
-      if (total === 0) {
-        context.logger.warn('No Assets found');
-      } else {
-        context.logger.info(`Found ${total} Assets`);
-      }
-
-      const seen = new Set<string>();
-      for (const asset of assets) {
-        seen.add(asset.id);
-        const absoluteAssetFilePath = Path.resolve(
-          Path.join(props.outDir, `${asset.id}.${asset.extension}`)
-        );
-        const data = { ...asset, absolutePath: absoluteAssetFilePath };
-        const digest = context.generateDigest(data);
-
-        // Skip unchanged Assets, but only when the file is still on disk -
-        // outDir may have been cleaned since the digest was last stored.
-        const existing = context.store.get(asset.id);
-        if (
-          existing?.digest === digest &&
-          (await Fs.pathExists(absoluteAssetFilePath))
-        ) {
-          continue;
+    name: 'elek',
+    hooks: {
+      'astro:config:setup': async ({ logger }) => {
+        if (localOnly.length > 0) {
+          logger.info(
+            `Skipping "${localOnly.join(
+              '", "'
+            )}", declared without a remoteUrl and read from the local data directory`
+          );
         }
 
-        await Fs.ensureDir(Path.dirname(absoluteAssetFilePath));
-        await core.assets.save({
-          projectId: props.projectId,
-          id: asset.id,
-          filePath: absoluteAssetFilePath,
-        });
-
-        const parsed = await context.parseData({ id: asset.id, data });
-        context.store.set({ id: asset.id, data: parsed, digest });
-      }
-
-      // Remove store entries for Assets that no longer exist in the Project.
-      for (const id of [...context.store.keys()]) {
-        if (!seen.has(id)) context.store.delete(id);
-      }
-
-      context.logger.info('Finished loading Assets');
-    },
-  };
-}
-
-/**
- * Astro content loader for elek.io Collection Entries.
- *
- * Reads all Entries from a Collection and exposes them through
- * Astro's content collection system.
- *
- * @example
- * ```ts
- * // src/content.config.ts
- * import { defineCollection } from 'astro:content';
- * import { elekEntries } from '@elek-io/core/astro';
- *
- * export const collections = {
- *   entries: defineCollection({
- *     loader: elekEntries({
- *       projectId: 'abc-123-...',
- *       collectionIdOrSlug: 'blog-posts',
- *     }),
- *   });
- * };
- * ```
- */
-export function elekEntries(props: ElekEntriesOptions): Loader {
-  return {
-    name: 'elek-entries',
-    createSchema: async () => {
-      const core = getCore(props.core);
-      const resolvedId = await core.collections.resolveCollectionId({
-        projectId: props.projectId,
-        idOrSlug: props.collectionIdOrSlug,
-      });
-      const collection = await core.collections.read({
-        projectId: props.projectId,
-        id: resolvedId,
-      });
-      const project = await core.projects.read({ id: props.projectId });
-      const languages = project.settings.language.supported;
-      const { list: components } = await core.components.list({
-        projectId: props.projectId,
-        limit: 0,
-      });
-
-      return {
-        schema: buildEntryValuesSchema(
-          flattenFieldDefinitions(collection.fieldDefinitions),
-          languages,
-          components
-        ),
-        types: buildEntryValuesTypeString(
-          flattenFieldDefinitions(collection.fieldDefinitions),
-          languages,
-          components,
-          toPascalCase(collection.slug.plural)
-        ),
-      };
-    },
-    load: async (context) => {
-      const core = getCore(props.core);
-      const resolvedCollectionId = await core.collections.resolveCollectionId({
-        projectId: props.projectId,
-        idOrSlug: props.collectionIdOrSlug,
-      });
-      context.logger.info(
-        `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" and Project "${props.projectId}"`
-      );
-
-      const { list: entries, total } = await core.entries.list({
-        projectId: props.projectId,
-        collectionId: resolvedCollectionId,
-        limit: 0,
-      });
-      if (total === 0) {
-        context.logger.warn('No Entries found');
-      } else {
-        context.logger.info(`Found ${total} Entries`);
-      }
-
-      const seen = new Set<string>();
-      for (const entry of entries) {
-        seen.add(entry.id);
-        const values = transformEntryValues(entry.values);
-        const digest = context.generateDigest(values);
-
-        // Skip re-validating Entries whose data has not changed.
-        const existing = context.store.get(entry.id);
-        if (existing?.digest === digest) continue;
-
-        const parsed = await context.parseData({ id: entry.id, data: values });
-        context.store.set({ id: entry.id, data: parsed, digest });
-      }
-
-      // Remove store entries for Entries that no longer exist in the Collection.
-      for (const id of [...context.store.keys()]) {
-        if (!seen.has(id)) context.store.delete(id);
-      }
-
-      context.logger.info('Finished loading Entries');
+        // An own short-lived Core, disposed after provisioning: the
+        // loaders' shared instance lives in another module graph and
+        // both coordinate through the data directory and env vars only
+        const core = new ElekIoCore({ ...props.core, isReadOnly: true });
+        try {
+          for (const project of projects) {
+            const ref = resolveContentRef(project.ref);
+            logger.info(
+              `Provisioning "${project.alias}" (Project ${project.id}) at "${ref}" from "${project.remoteUrl}"`
+            );
+            const result = await core.projects.provision({
+              id: project.id,
+              url: project.remoteUrl,
+              ref,
+            });
+            if (result.warning) {
+              logger.warn(result.warning);
+            }
+            const source =
+              result.source === 'remote' ? '' : ` (${result.source})`;
+            logger.info(
+              `Provisioned "${project.alias}": Project "${result.project.name}" (${result.project.id}) at version ${result.project.version}${source}`
+            );
+          }
+        } finally {
+          await core.dispose();
+        }
+      },
     },
   };
 }

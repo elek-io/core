@@ -8,9 +8,11 @@ import type {
   FieldDefinition,
 } from '../schema/fieldSchema.js';
 import { assetSchema } from '../schema/assetSchema.js';
+import type { ProjectLanguages } from '../schema/projectSchema.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
+  buildModelDigest,
 } from './schema.js';
 
 /** Markdown features with everything disabled — tests opt in. */
@@ -37,6 +39,7 @@ const offMarkdownFeatures: MarkdownFeatures = {
 
 function makeMarkdownFieldDef(overrides: {
   slug?: string;
+  isRequired?: boolean;
   features?: Partial<MarkdownFeatures>;
   ofCollections?: string[];
   ofAssetMimeTypes?: string[];
@@ -48,7 +51,7 @@ function makeMarkdownFieldDef(overrides: {
     fieldType: 'markdown' as const,
     label: { en: 'Body' },
     description: null,
-    isRequired: false,
+    isRequired: overrides.isRequired ?? false,
     isDisabled: false,
     isUnique: false as const,
     inputWidth: '12' as const,
@@ -809,7 +812,7 @@ describe('buildEntryValuesTypeString', () => {
     expect(types).toContain('string');
     expect(types).toContain('number');
     expect(types).toContain('boolean');
-    expect(types).toContain('Array<{ id: string; objectType: string }>');
+    expect(types).toContain(`Array<{ id: string; objectType: 'asset' }>`);
     expect(types).toContain('ProjectLanguage');
   });
 
@@ -1348,5 +1351,431 @@ describe('buildEntryValuesTypeString with markdown fields', () => {
       'Articles'
     );
     expect(types).toContain(`import type { MdAstRoot } from '@elek-io/core';`);
+  });
+});
+
+/**
+ * A Value of an optional field is `null` in a language the editor left
+ * empty, which the generated schema accepts. The generated type has to
+ * say so, otherwise a consumer reads `entry.data.slug.de` as a string
+ * and gets null at runtime.
+ */
+function makeTextFieldDef(slug: string, isRequired: boolean): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'string',
+    fieldType: 'text',
+    label: { en: 'Text' },
+    description: null,
+    isRequired,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    min: null,
+    max: null,
+    defaultValue: null,
+  };
+}
+
+function makeSlugFieldDef(slug: string, isRequired: boolean): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'string',
+    fieldType: 'slug',
+    label: { en: 'Slug' },
+    description: null,
+    isRequired,
+    isDisabled: false,
+    isUnique: true,
+    inputWidth: '12',
+    defaultValue: null,
+    separator: '-',
+    lowercase: true,
+    decamelize: true,
+    ofFieldDefinitions: [],
+  };
+}
+
+function makeNumberFieldDef(
+  slug: string,
+  isRequired: boolean
+): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'number',
+    fieldType: 'number',
+    label: { en: 'Number' },
+    description: null,
+    isRequired,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    min: null,
+    max: null,
+    defaultValue: null,
+  };
+}
+
+/** A toggle is always required, it is either true or false */
+function makeToggleFieldDef(slug: string): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'boolean',
+    fieldType: 'toggle',
+    label: { en: 'Toggle' },
+    description: null,
+    isRequired: true,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    defaultValue: false,
+  };
+}
+
+function makeAssetFieldDef(slug: string, isRequired: boolean): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'reference',
+    fieldType: 'asset',
+    label: { en: 'Asset' },
+    description: null,
+    isRequired,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    min: null,
+    max: null,
+    ofAssetMimeTypes: [],
+  };
+}
+
+function makeEntryFieldDef(
+  slug: string,
+  isRequired: boolean,
+  ofCollections: string[] = []
+): FieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'reference',
+    fieldType: 'entry',
+    label: { en: 'Entry' },
+    description: null,
+    isRequired,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    min: null,
+    max: null,
+    ofCollections,
+  };
+}
+
+describe('buildEntryValuesTypeString reference fields', () => {
+  it('names the kind an Asset reference points at', () => {
+    const types = buildEntryValuesTypeString(
+      [makeAssetFieldDef('image', false)],
+      ['en'],
+      [],
+      'Articles'
+    );
+
+    expect(types).toContain(
+      `"image": Record<ProjectLanguage, Array<{ id: string; objectType: 'asset' }>>`
+    );
+  });
+
+  it('carries collectionId on an Entry reference', () => {
+    // The store is keyed per collection, so following a reference needs
+    // the Collection it belongs to, not only the Entry id
+    const types = buildEntryValuesTypeString(
+      [makeEntryFieldDef('related', false)],
+      ['en'],
+      [],
+      'Articles'
+    );
+
+    expect(types).toContain(
+      `"related": Record<ProjectLanguage, Array<{ id: string; objectType: 'entry'; collectionId: string }>>`
+    );
+  });
+
+  it('emits the shape the schema accepts, per reference kind', () => {
+    // The invariant behind both cases above. Both are generated from
+    // the same field definition, so they may never disagree.
+    const collectionId = uuid();
+    const asset = { id: uuid(), objectType: 'asset' };
+    const entry = { id: uuid(), objectType: 'entry', collectionId };
+
+    const assetSchema = buildEntryValuesSchema(
+      [makeAssetFieldDef('image', false)],
+      ['en'],
+      []
+    );
+    expect(assetSchema.safeParse({ image: { en: [asset] } }).success).toBe(
+      true
+    );
+    expect(assetSchema.safeParse({ image: { en: [entry] } }).success).toBe(
+      false
+    );
+
+    const entrySchema = buildEntryValuesSchema(
+      [makeEntryFieldDef('related', false)],
+      ['en'],
+      []
+    );
+    expect(entrySchema.safeParse({ related: { en: [entry] } }).success).toBe(
+      true
+    );
+    // Without collectionId there is no way to reach the Entry, so the
+    // schema rejects it and the type has to require it
+    expect(
+      entrySchema.safeParse({ related: { en: [{ id: entry.id }] } }).success
+    ).toBe(false);
+  });
+});
+
+describe('buildEntryValuesTypeString nullability', () => {
+  it('emits string | null for an optional string field', () => {
+    const types = buildEntryValuesTypeString(
+      [makeTextFieldDef('subtitle', false)],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(
+      `"subtitle": Record<ProjectLanguage, string | null>`
+    );
+  });
+
+  it('emits string for a required string field', () => {
+    const types = buildEntryValuesTypeString(
+      [makeTextFieldDef('title', true)],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(`"title": Record<ProjectLanguage, string>`);
+    expect(types).not.toContain(
+      `"title": Record<ProjectLanguage, string | null>`
+    );
+  });
+
+  it('emits string | null for an optional slug field', () => {
+    // The case elekSlugPaths() exists for: an Entry without a slug in
+    // a language simply has no page there
+    const types = buildEntryValuesTypeString(
+      [makeSlugFieldDef('slug', false)],
+      ['en', 'de'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(`"slug": Record<ProjectLanguage, string | null>`);
+  });
+
+  it('emits number | null for an optional number field', () => {
+    const types = buildEntryValuesTypeString(
+      [makeNumberFieldDef('weight', false)],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(`"weight": Record<ProjectLanguage, number | null>`);
+  });
+
+  it('emits MdAstRoot without null for a required markdown field', () => {
+    const types = buildEntryValuesTypeString(
+      [makeMarkdownFieldDef({ slug: 'body', isRequired: true })],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(`"body": Record<ProjectLanguage, MdAstRoot>`);
+    expect(types).not.toContain(`MdAstRoot | null`);
+  });
+
+  it('keeps boolean and reference fields non-nullable', () => {
+    // Neither schema is nullable: a toggle is always true or false and
+    // an empty reference field is an empty array
+    const types = buildEntryValuesTypeString(
+      [makeToggleFieldDef('active'), makeAssetFieldDef('image', false)],
+      ['en'],
+      [],
+      'Articles'
+    );
+    expect(types).toContain(`"active": Record<ProjectLanguage, boolean>`);
+    expect(types).toContain(
+      `"image": Record<ProjectLanguage, Array<{ id: string; objectType: 'asset' }>>`
+    );
+  });
+
+  it('applies the same rule to fields inside a referenced Component', () => {
+    const componentId = uuid();
+    const component = makeComponent({
+      id: componentId,
+      slug: 'hero',
+      fieldDefinitions: [
+        makeTextFieldDef('headline', true),
+        makeTextFieldDef('kicker', false),
+      ],
+    });
+
+    const types = buildEntryValuesTypeString(
+      [
+        {
+          id: uuid(),
+          slug: 'blocks',
+          valueType: 'component',
+          fieldType: 'dynamic',
+          label: { en: 'Blocks' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          ofComponents: [componentId],
+          min: null,
+          max: null,
+        },
+      ],
+      ['en'],
+      [component],
+      'Articles'
+    );
+
+    expect(types).toContain(`"headline": Record<ProjectLanguage, string>`);
+    expect(types).toContain(`"kicker": Record<ProjectLanguage, string | null>`);
+  });
+
+  it('admits null in the type exactly when the schema does', () => {
+    // The invariant behind every case above. Both are generated from
+    // the same field definition, so they may never disagree.
+    const fieldDefs: FieldDefinition[] = [
+      makeTextFieldDef('requiredText', true),
+      makeTextFieldDef('optionalText', false),
+      makeSlugFieldDef('requiredSlug', true),
+      makeSlugFieldDef('optionalSlug', false),
+      makeNumberFieldDef('requiredNumber', true),
+      makeNumberFieldDef('optionalNumber', false),
+      makeToggleFieldDef('toggle'),
+      makeAssetFieldDef('requiredAsset', true),
+      makeAssetFieldDef('optionalAsset', false),
+      makeMarkdownFieldDef({ slug: 'requiredBody', isRequired: true }),
+      makeMarkdownFieldDef({ slug: 'optionalBody', isRequired: false }),
+    ];
+
+    const types = buildEntryValuesTypeString(fieldDefs, ['en'], [], 'Articles');
+
+    for (const fieldDef of fieldDefs) {
+      const schema = buildEntryValuesSchema([fieldDef], ['en'], []);
+      const schemaAdmitsNull = schema.safeParse({
+        [fieldDef.slug]: { en: null },
+      }).success;
+
+      const line = types
+        .split('\n')
+        .find((candidate) => candidate.includes(`"${fieldDef.slug}":`));
+      expect(line, `no emitted line for "${fieldDef.slug}"`).toBeDefined();
+      const typeAdmitsNull = line?.includes('| null') ?? false;
+
+      expect(
+        typeAdmitsNull,
+        `"${fieldDef.slug}" is ${schemaAdmitsNull ? '' : 'not '}nullable in the schema but ${typeAdmitsNull ? '' : 'not '}in the type: ${line}`
+      ).toBe(schemaAdmitsNull);
+    }
+  });
+});
+
+describe('buildModelDigest', () => {
+  const languages: ProjectLanguages = ['en'];
+
+  it('is stable for the same model', () => {
+    const fieldDefs = [makeTextFieldDef('title', true)];
+    expect(buildModelDigest(fieldDefs, languages, [])).toBe(
+      buildModelDigest(fieldDefs, languages, [])
+    );
+  });
+
+  it('changes when a field definition is added', () => {
+    const before = buildModelDigest(
+      [makeTextFieldDef('title', true)],
+      languages,
+      []
+    );
+    const after = buildModelDigest(
+      [makeTextFieldDef('title', true), makeTextFieldDef('subtitle', false)],
+      languages,
+      []
+    );
+    expect(after).not.toBe(before);
+  });
+
+  it('changes when a field definition becomes optional', () => {
+    // The schema and the emitted type both depend on isRequired
+    const before = buildModelDigest(
+      [makeTextFieldDef('title', true)],
+      languages,
+      []
+    );
+    const after = buildModelDigest(
+      [makeTextFieldDef('title', false)],
+      languages,
+      []
+    );
+    expect(after).not.toBe(before);
+  });
+
+  it('changes when a referenced Component changes', () => {
+    const componentId = uuid();
+    const withOneField = makeComponent({
+      id: componentId,
+      slug: 'hero',
+      fieldDefinitions: [makeTextFieldDef('headline', true)],
+    });
+    const withTwoFields = makeComponent({
+      id: componentId,
+      slug: 'hero',
+      fieldDefinitions: [
+        makeTextFieldDef('headline', true),
+        makeTextFieldDef('subline', false),
+      ],
+    });
+    const fieldDefs = [makeTextFieldDef('title', true)];
+
+    expect(buildModelDigest(fieldDefs, languages, [withTwoFields])).not.toBe(
+      buildModelDigest(fieldDefs, languages, [withOneField])
+    );
+  });
+
+  it('changes when the Project gains a language', () => {
+    // Every translatable Value is keyed by the supported languages
+    const fieldDefs = [makeTextFieldDef('title', true)];
+    expect(buildModelDigest(fieldDefs, ['en', 'de'], [])).not.toBe(
+      buildModelDigest(fieldDefs, ['en'], [])
+    );
+  });
+
+  it('ignores the order Components happen to be listed in', () => {
+    // Their order is incidental, unlike the order of field definitions
+    const first = makeComponent({
+      id: '11111111-1111-4111-8111-111111111111',
+      slug: 'a',
+      fieldDefinitions: [makeTextFieldDef('x', true)],
+    });
+    const second = makeComponent({
+      id: '22222222-2222-4222-8222-222222222222',
+      slug: 'b',
+      fieldDefinitions: [makeTextFieldDef('y', true)],
+    });
+    const fieldDefs = [makeTextFieldDef('title', true)];
+
+    expect(buildModelDigest(fieldDefs, languages, [first, second])).toBe(
+      buildModelDigest(fieldDefs, languages, [second, first])
+    );
   });
 });

@@ -7,6 +7,7 @@ import {
   exportAction,
   generateApiClientAction,
   generateTypesAction,
+  provisionAction,
   startApiAction,
 } from './cli/index.js';
 import {
@@ -14,7 +15,9 @@ import {
   exportSchema,
   generateApiClientSchema,
   generateTypesSchema,
+  provisionSchema,
 } from './schema/index.js';
+import { CoreError } from './util/shared.js';
 
 const program = new Command()
   .name('elek')
@@ -142,4 +145,35 @@ program
     await exportAction(props);
   });
 
-await program.parseAsync();
+program
+  .command('provision')
+  .description(
+    'Provisions a copy of a Project from its remote into the data directory, meant for CI builds'
+  )
+  .requiredOption('-p, --project <id>', 'The ID of the Project to provision')
+  .requiredOption(
+    '-u, --url <url>',
+    'The remote repository URL to provision from'
+  )
+  .option(
+    '-r, --ref <ref>',
+    'The content state to provision: a channel ("production", "preview" or "draft") or an exact Release version. The ELEK_IO_CHANNEL environment variable overrides this option. Defaults to "production".'
+  )
+  .action(async (options) => {
+    // Provisioning never mutates the Project or its remote and must
+    // work without a User being set
+    configureCore({ isReadOnly: true });
+    const props = provisionSchema.parse(options);
+
+    await provisionAction(props);
+  });
+
+// Error presentation for every command in one place: actions throw,
+// the binary prints the actionable message instead of a stack trace
+// and exits non-zero
+try {
+  await program.parseAsync();
+} catch (error) {
+  console.error(error instanceof CoreError ? error.message : String(error));
+  process.exit(1);
+}

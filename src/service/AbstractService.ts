@@ -1,3 +1,4 @@
+import Fs from 'fs-extra';
 import type { ZodType } from 'zod';
 import type { ElekIoCoreOptions, ServiceType } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
@@ -45,6 +46,69 @@ export abstract class AbstractService {
       throw error;
     }
     return parsed.data;
+  }
+
+  /**
+   * Throws a logged `CoreError.preconditionFailed` when Core is in
+   * read-only mode. mutating() calls this before validating, methods
+   * that read before they can validate call it directly at their
+   * entry point.
+   */
+  protected assertNotReadOnly(context: string): void {
+    if (this.options.isReadOnly !== true) {
+      return;
+    }
+    const error = CoreError.preconditionFailed(
+      `Cannot ${context} because Core is in read-only mode`
+    );
+    this.logService.error({
+      source: 'core',
+      message: `[${error.type}] (${this.type}.${context}) ${error.message}`,
+    });
+    throw error;
+  }
+
+  /**
+   * Throws a logged `CoreError.preconditionFailed` when the Project is
+   * a provisioned copy, which the next provision run would overwrite.
+   * Called by every method that mutates Project content, at the point
+   * where the Project ID is first known. Project deletion is exempt,
+   * it is the escape hatch that removes a provisioned copy.
+   */
+  protected async assertNotProvisioned(
+    context: string,
+    projectId: string
+  ): Promise<void> {
+    const isProvisioned = await Fs.pathExists(
+      this.pathTo.projectProvisionedMarker(projectId)
+    );
+    if (!isProvisioned) {
+      return;
+    }
+    const error = CoreError.preconditionFailed(
+      `Cannot ${context} because Project "${projectId}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+    );
+    this.logService.error({
+      source: 'core',
+      message: `[${error.type}] (${this.type}.${context}) ${error.message}`,
+    });
+    throw error;
+  }
+
+  /**
+   * Like validated(), but for methods that mutate a Project or its remote.
+   * Throws a logged `CoreError.preconditionFailed` in read-only mode,
+   * before the input is validated, because the operation is forbidden
+   * regardless of its input.
+   */
+  protected async mutating<TSchema, TResult>(
+    context: string,
+    schema: ZodType<TSchema>,
+    data: unknown,
+    body: (props: TSchema) => Promise<TResult>
+  ): Promise<TResult> {
+    this.assertNotReadOnly(context);
+    return this.validated(context, schema, data, body);
   }
 
   /**

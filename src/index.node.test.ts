@@ -18,6 +18,7 @@ describe('Node.js', function () {
     // without creating or emptying anything in the real ~/elek.io
     const fakeHome = tmpDirPath();
     vi.stubEnv('ELEK_IO_DATA_DIR', undefined);
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', undefined);
     vi.spyOn(Os, 'homedir').mockReturnValue(fakeHome);
     const defaultDataDir = Path.join(fakeHome, 'elek.io');
 
@@ -47,6 +48,7 @@ describe('Node.js', function () {
         cache: true,
       },
       dataDir: defaultDataDir,
+      isReadOnly: false,
     });
 
     expect(coreWithLogLevel).to.be.instanceOf(ElekIoCore);
@@ -58,6 +60,7 @@ describe('Node.js', function () {
         cache: true,
       },
       dataDir: defaultDataDir,
+      isReadOnly: false,
     });
 
     expect(coreWithoutCache).to.be.instanceOf(ElekIoCore);
@@ -69,6 +72,7 @@ describe('Node.js', function () {
         cache: false,
       },
       dataDir: defaultDataDir,
+      isReadOnly: false,
     });
 
     expect(await Fs.pathExists(Path.join(defaultDataDir, 'projects'))).to.equal(
@@ -109,6 +113,54 @@ describe('Node.js', function () {
 
     expect(customCore.options.dataDir).to.equal(optionDataDir);
     expect(await Fs.pathExists(envDataDir)).to.equal(false);
+  });
+
+  it('should respect the ELEK_IO_READ_ONLY environment variable', function () {
+    vi.stubEnv('ELEK_IO_READ_ONLY', 'true');
+    const { core: envCore } = createTmpCore();
+
+    expect(envCore.options.isReadOnly).toEqual(true);
+  });
+
+  it('should prefer the isReadOnly option over the environment variable', function () {
+    vi.stubEnv('ELEK_IO_READ_ONLY', 'true');
+    const { core: optionCore } = createTmpCore({ isReadOnly: false });
+
+    expect(optionCore.options.isReadOnly).toEqual(false);
+  });
+
+  it('should treat an empty ELEK_IO_READ_ONLY as unset', function () {
+    vi.stubEnv('ELEK_IO_READ_ONLY', '   ');
+    const { core: envCore } = createTmpCore();
+
+    expect(envCore.options.isReadOnly).toEqual(false);
+  });
+
+  it('should respect the ELEK_IO_LOG_LEVEL environment variable', function () {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', 'error');
+    const { core: envCore } = createTmpCore();
+
+    expect(envCore.options.log.level).toEqual('error');
+  });
+
+  it('should prefer the log option over the environment variable', function () {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', 'error');
+    const { core: optionCore } = createTmpCore({ log: { level: 'debug' } });
+
+    expect(optionCore.options.log.level).toEqual('debug');
+  });
+
+  it('should treat an empty ELEK_IO_LOG_LEVEL as unset', function () {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', '   ');
+    const { core: envCore } = createTmpCore();
+
+    expect(envCore.options.log.level).toEqual('info');
+  });
+
+  it('should throw a CoreError for an unknown ELEK_IO_LOG_LEVEL', function () {
+    vi.stubEnv('ELEK_IO_LOG_LEVEL', 'verbose');
+
+    expect(() => new ElekIoCore()).to.throw(CoreError);
   });
 
   it('should throw a CoreError for an empty dataDir option', function () {

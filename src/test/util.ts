@@ -1,4 +1,5 @@
 import { faker } from '@faker-js/faker';
+import { execFile, type ExecFileOptions } from 'node:child_process';
 import crypto from 'node:crypto';
 import Fs from 'fs-extra';
 import Os from 'node:os';
@@ -139,6 +140,39 @@ export async function createLocalRemoteRepository() {
   await Fs.remove(core.util.pathTo.project(remoteProject.id));
 
   return remoteProject;
+}
+
+/**
+ * Creates a local bare remote seeded with a released Project.
+ *
+ * The remote holds a Collection and an Asset, one preview and one
+ * full Release, and a synchronized work branch. The local working
+ * copy is removed again, so the remote is the only place the
+ * Project exists. Used by provisioning tests.
+ */
+export async function seedRemoteWithRelease() {
+  const remoteProject = await createLocalRemoteRepository();
+  const remotePath = Path.join(core.util.pathTo.tmp, remoteProject.id);
+
+  const project = await core.projects.clone({ url: remotePath });
+  const collection = await createCollection(project.id);
+  const asset = await createAsset(project.id);
+  const preview = await core.releases.createPreview({
+    projectId: project.id,
+  });
+  const release = await core.releases.create({ projectId: project.id });
+  await core.projects.synchronize({ id: project.id });
+  await core.projects.delete({ id: project.id, force: true });
+
+  return {
+    projectId: project.id,
+    remotePath,
+    collectionId: collection.id,
+    assetId: asset.id,
+    assetExtension: asset.extension,
+    previewVersion: preview.version,
+    releaseVersion: release.version,
+  };
 }
 
 /**
@@ -562,5 +596,47 @@ export async function createPagesCollection(
         max: null,
       },
     ],
+  });
+}
+
+/**
+ * Executes a command async and returns the output.
+ *
+ * Runs the executable directly, without a shell, so every argument reaches it
+ * verbatim. Pass the executable as `command` and everything else in `args`.
+ * Only tests spawn processes, Core itself never does.
+ */
+export function execCommand({
+  command,
+  args,
+  options,
+}: {
+  command: string;
+  args: string[];
+  options?: ExecFileOptions;
+}) {
+  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    const fullCommand = `${command} ${args.join(' ')}`;
+    const execOptions: ExecFileOptions = { ...options };
+    const start = Date.now();
+
+    execFile(command, args, execOptions, (error, stdout, stderr) => {
+      const durationMs = Date.now() - start;
+      if (error) {
+        core.logger.error({
+          source: 'core',
+          message: `Error executing command "${fullCommand}" after ${durationMs}ms: ${error.message}`,
+          meta: { error, stdout: stdout.toString(), stderr: stderr.toString() },
+        });
+        reject(error instanceof Error ? error : new Error(error.message));
+      } else {
+        core.logger.info({
+          source: 'core',
+          message: `Command "${fullCommand}" executed successfully in ${durationMs}ms.`,
+          meta: { stdout: stdout.toString(), stderr: stderr.toString() },
+        });
+        resolve({ stdout: stdout.toString(), stderr: stderr.toString() });
+      }
+    });
   });
 }

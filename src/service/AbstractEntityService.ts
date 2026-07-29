@@ -145,7 +145,11 @@ export abstract class AbstractEntityService extends AbstractService {
         if (!projectId) {
           throw CoreError.badRequest('Missing required parameter "projectId"');
         }
-        return this.getFileReferences(this.pathTo.assets(projectId));
+        // Core writes a .gitkeep into every Project folder, so git
+        // tracks it while it is still empty
+        return this.getFileReferences(this.pathTo.assets(projectId), [
+          '.gitkeep',
+        ]);
 
       case objectTypeSchema.enum.project:
         return this.getFolderReferences(this.pathTo.projects);
@@ -171,8 +175,11 @@ export abstract class AbstractEntityService extends AbstractService {
             'Missing required parameter "collectionId"'
           );
         }
+        // Entries live in the Collection folder, next to the
+        // Collection's own file
         return this.getFileReferences(
-          this.pathTo.collection(projectId, collectionId)
+          this.pathTo.collection(projectId, collectionId),
+          ['collection.json']
         );
 
       default:
@@ -209,10 +216,22 @@ export abstract class AbstractEntityService extends AbstractService {
    * parses their names and returns them as FileReference
    *
    * Ignores files if the extension is not supported.
+   *
+   * @param ignore Names of the files Core writes into this folder
+   * itself. They are never entities and are skipped silently, so a
+   * consumer is not warned about files that are supposed to be there.
+   * Everything else that does not parse is still warned about.
    */
-  private async getFileReferences(path: string): Promise<FileReference[]> {
+  private async getFileReferences(
+    path: string,
+    ignore: string[]
+  ): Promise<FileReference[]> {
     const possibleFiles = await files(path);
     const results = possibleFiles.map((possibleFile) => {
+      if (ignore.includes(possibleFile.name)) {
+        return null;
+      }
+
       const fileNameArray = possibleFile.name.split('.');
 
       const parsed = fileReferenceSchema.safeParse({

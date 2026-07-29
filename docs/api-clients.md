@@ -1,6 +1,6 @@
 # Generated API Clients & Types
 
-Core's CLI can generate typed artifacts from your Project content models: a runtime **API client** (`elek generate:client`) and standalone **TypeScript types** (`elek generate:types`). Both narrow translatable content to each Project's languages, so you get `Record<ProjectLanguage, T>` instead of the broad superset Core's own types expose.
+Core's CLI can generate typed artifacts from your Project content models: a runtime **API client** (`elek generate:client`) and standalone **TypeScript types** (`elek generate:types`). Both narrow translatable content to each Project's languages, so you get `Record<ProjectLanguage, T>` instead of the broad superset Core's own types expose. A field the Collection does not require is `null` in a language nobody filled in, and the generated type says so: `Record<ProjectLanguage, string | null>`.
 
 For why the narrowing exists, see [`fields.md`](./fields.md#generated-client-types). For the API the client talks to, see [`local-api.md`](./local-api.md).
 
@@ -19,6 +19,8 @@ elek generate:client [outDir] [language] [format] [target] [--watch]
 | `--watch`  | off          | Regenerate automatically when Project content changes.            |
 
 This produces a typed client plus the supporting types in `outDir`. With `language: 'ts'` you get TypeScript source (`client.ts`) to bundle with your own toolchain. With `language: 'js'` the output is compiled to `.js` / `.mjs` with `.d.ts` declarations, where `format` and `target` control the module system and syntax level.
+
+`language: 'js'` needs the compiler, see [Compiling to JavaScript](#compiling-to-javascript).
 
 ### Using the client
 
@@ -58,7 +60,21 @@ elek generate:types [outDir] [language] [projects] [--watch]
 
 Unlike `generate:client`, this emits **type definitions only - no runtime code**. For each Project it produces a narrowed `ProjectLanguage` union plus typed interfaces for every Collection, Component and Entry (with their values narrowed to the Project's languages), and id constants. Use these to type content you load yourself (for example through the [Astro integration](./usage.md#astro-integration) or your own fetch layer) without pulling in the client.
 
-A single Project writes `types.ts`. Multiple Projects write one `types-{projectId}.ts` per Project.
+A single Project writes `types.ts`. Multiple Projects write one `types-{projectId}.ts` per Project. With no Projects in the data directory nothing is written and the command exits successfully, for either language.
+
+`language: 'js'` needs the compiler, see [Compiling to JavaScript](#compiling-to-javascript).
+
+## Compiling to JavaScript
+
+Both commands generate TypeScript first. Passing `js` as the language compiles it, which needs two packages Core declares as optional peer dependencies and does not install for you:
+
+```bash
+npm install --save-dev tsdown typescript
+```
+
+Install them as dev dependencies of the project you run `elek` in. Without them the `js` language fails with a message naming both, and every other command, including both generators with the default `ts` language, is unaffected.
+
+On **TypeScript 7** the compiler also needs a `tsconfig.json` in the project, otherwise it fails with `tsgo generator requires a tsconfig file to be specified`. TypeScript 5 and 6 have no such requirement.
 
 ## Output location
 

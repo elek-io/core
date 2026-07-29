@@ -754,3 +754,207 @@ describe('generateTypes - writes type files to disk', () => {
     expect(written).toContain('export type NotesCollection');
   });
 });
+
+describe('generateTypesForProject - optional and required fields', () => {
+  let project: Project & { destroy: () => Promise<void> };
+  let valuesBlock: string;
+
+  beforeAll(async () => {
+    project = await createProject('generateTypesForProject Nullability', {
+      language: { default: 'en', supported: ['en'] },
+    });
+
+    const base = {
+      description: null,
+      isDisabled: false,
+      isUnique: false as const,
+      inputWidth: '12' as const,
+    };
+
+    await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: { singular: { en: 'Post' }, plural: { en: 'Posts' } },
+      slug: { singular: 'post', plural: 'posts' },
+      description: { en: 'Posts' },
+      fieldDefinitions: [
+        {
+          ...base,
+          id: uuid(),
+          slug: 'required-text',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Required text' },
+          isRequired: true,
+          min: null,
+          max: null,
+          defaultValue: null,
+        },
+        {
+          ...base,
+          id: uuid(),
+          slug: 'optional-text',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Optional text' },
+          isRequired: false,
+          min: null,
+          max: null,
+          defaultValue: null,
+        },
+        {
+          ...base,
+          id: uuid(),
+          slug: 'required-number',
+          valueType: 'number',
+          fieldType: 'number',
+          label: { en: 'Required number' },
+          isRequired: true,
+          min: null,
+          max: null,
+          defaultValue: null,
+        },
+        {
+          ...base,
+          id: uuid(),
+          slug: 'optional-number',
+          valueType: 'number',
+          fieldType: 'number',
+          label: { en: 'Optional number' },
+          isRequired: false,
+          min: null,
+          max: null,
+          defaultValue: null,
+        },
+        {
+          ...base,
+          id: uuid(),
+          slug: 'required-body',
+          valueType: 'mdast',
+          fieldType: 'markdown',
+          label: { en: 'Required body' },
+          isRequired: true,
+          min: null,
+          max: null,
+          features: offMarkdownFeatures,
+          ofCollections: [],
+          ofAssetMimeTypes: [],
+          defaultValue: null,
+        },
+        {
+          ...base,
+          id: uuid(),
+          slug: 'optional-body',
+          valueType: 'mdast',
+          fieldType: 'markdown',
+          label: { en: 'Optional body' },
+          isRequired: false,
+          min: null,
+          max: null,
+          features: offMarkdownFeatures,
+          ofCollections: [],
+          ofAssetMimeTypes: [],
+          defaultValue: null,
+        },
+        {
+          ...base,
+          id: uuid(),
+          slug: 'toggle',
+          valueType: 'boolean',
+          fieldType: 'toggle',
+          label: { en: 'Toggle' },
+          isRequired: true,
+          defaultValue: false,
+        },
+        {
+          ...base,
+          id: uuid(),
+          slug: 'optional-asset',
+          valueType: 'reference',
+          fieldType: 'asset',
+          label: { en: 'Optional asset' },
+          isRequired: false,
+          min: null,
+          max: null,
+          ofAssetMimeTypes: [],
+        },
+        {
+          ...base,
+          id: uuid(),
+          slug: 'optional-entry',
+          valueType: 'reference',
+          fieldType: 'entry',
+          label: { en: 'Optional entry' },
+          isRequired: false,
+          min: null,
+          max: null,
+          ofCollections: [],
+        },
+      ],
+    });
+
+    const output = await generateTypesForProject(project);
+    valuesBlock =
+      output.match(/export interface PostsValues \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(valuesBlock).not.toBe('');
+  }, 30000);
+
+  afterAll(async () => {
+    await project.destroy();
+  });
+
+  it('narrows an optional string field to string | null', () => {
+    // A language the editor left empty holds null, which the Entry
+    // schema accepts for a field that is not required
+    expect(valuesBlock).toContain(
+      `'required-text': Omit<DirectStringValue, 'content'> & { content: Record<ProjectLanguage, string> };`
+    );
+    expect(valuesBlock).toContain(
+      `'optional-text': Omit<DirectStringValue, 'content'> & { content: Record<ProjectLanguage, string | null> };`
+    );
+  });
+
+  it('narrows an optional number field to number | null', () => {
+    expect(valuesBlock).toContain(
+      `'required-number': Omit<DirectNumberValue, 'content'> & { content: Record<ProjectLanguage, number> };`
+    );
+    expect(valuesBlock).toContain(
+      `'optional-number': Omit<DirectNumberValue, 'content'> & { content: Record<ProjectLanguage, number | null> };`
+    );
+  });
+
+  it('drops the null from a required markdown field', () => {
+    expect(valuesBlock).toContain(
+      `'required-body': Omit<MdAstValue, 'content'> & { content: Record<ProjectLanguage, MdAstRoot> };`
+    );
+    expect(valuesBlock).toContain(
+      `'optional-body': Omit<MdAstValue, 'content'> & { content: Record<ProjectLanguage, MdAstRoot | null> };`
+    );
+  });
+
+  it('leaves boolean and reference fields non-nullable', () => {
+    // Neither is ever null: a toggle is true or false and an empty
+    // reference field is an empty array
+    expect(valuesBlock).toContain(
+      `toggle: Omit<DirectBooleanValue, 'content'> & { content: Record<ProjectLanguage, boolean> };`
+    );
+    expect(valuesBlock).toContain(
+      `'optional-asset': Omit<ReferencedValue, 'content'> & { content: Record<ProjectLanguage, Array<{ id: string; objectType: 'asset' }>> };`
+    );
+  });
+
+  it('narrows a reference field to the kind it points at', () => {
+    // The field definition already says which of the two it is, and an
+    // Entry reference carries the Collection it belongs to
+    expect(valuesBlock).toContain(
+      `'optional-asset': Omit<ReferencedValue, 'content'> & { content: Record<ProjectLanguage, Array<{ id: string; objectType: 'asset' }>> };`
+    );
+    expect(valuesBlock).toContain(
+      `'optional-entry': Omit<ReferencedValue, 'content'> & { content: Record<ProjectLanguage, Array<{ id: string; objectType: 'entry'; collectionId: string }>> };`
+    );
+  });
+
+  it('emits TypeScript that transpiles without syntax errors', async () => {
+    expectTranspiles(await generateTypesForProject(project), 'generated types');
+  });
+});

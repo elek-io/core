@@ -341,7 +341,7 @@ describe('Unique field enforcement', function () {
     });
 
     // On a throwaway branch, change the Entry's unique value. The cache now holds 'v2'.
-    await core.git.branches.switch(projectPath, tmpBranch, { isNew: true });
+    await core.git.branches.switch(projectPath, tmpBranch, { create: true });
     await core.entries.update({
       projectId: project.id,
       collectionId: collection.id,

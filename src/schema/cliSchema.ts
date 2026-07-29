@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { uuidSchema } from './baseSchema.js';
+import { contentRefSchema } from './projectSchema.js';
 
 const outDirSchema = z.string().default('./.elek.io');
 const languageSchema = z.enum(['ts', 'js']).default('ts');
@@ -93,3 +94,22 @@ export const exportSchema = z.object({
   options: exportProjectsOptionsSchema,
 });
 export type ExportProps = z.infer<typeof exportSchema>;
+
+export const provisionSchema = z.object({
+  /**
+   * The ID of the Project to provision
+   */
+  project: uuidSchema,
+  /**
+   * The remote repository URL to provision from
+   */
+  url: z.string().trim().min(1),
+  /**
+   * The content state to provision: a channel or an exact Release
+   * version, overridden by the ELEK_IO_CHANNEL environment variable
+   *
+   * @default 'production'
+   */
+  ref: contentRefSchema.optional(),
+});
+export type ProvisionProps = z.infer<typeof provisionSchema>;

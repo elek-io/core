@@ -1,4 +1,3 @@
-import { build as compileToJs } from 'tsdown';
 import Path from 'node:path';
 import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
@@ -6,7 +5,6 @@ import {
   flattenFieldDefinitions,
   makeComponentsContext,
   resolveOfComponents,
-  CoreError,
   type ComponentsContext,
   type DynamicFieldDefinition,
   type FieldDefinition,
@@ -17,6 +15,7 @@ import {
 } from '../index.node.js';
 import {
   getCore,
+  loadCompiler,
   watchProjects,
   AUTO_GENERATED_HEADER,
   toPascalCase,
@@ -44,32 +43,50 @@ function getValueTypeName(valueType: ValueType): string {
 }
 
 /**
- * Maps a valueType to a narrowed type string with project-scoped language keys.
- * Uses `Omit + &` to override the `content` field with `Record<ProjectLanguage, T>`.
+ * Maps a field definition to a narrowed type string with project-scoped
+ * language keys. Uses `Omit + &` to override the `content` field with
+ * `Record<ProjectLanguage, T>`.
  *
- * Typed parameter (not `string`) so adding a new `valueType` is a
+ * A language slot an editor left empty holds `null`, which the Entry
+ * schema accepts for an optional string, number or markdown field, so
+ * the emitted type admits it too. Booleans and references never do: a
+ * toggle is always true or false and an empty reference field is an
+ * empty array. The rule mirrors `schemaFromFieldDefinition.ts` and the
+ * Astro loaders' `buildEntryValuesTypeString`.
+ *
+ * Switches on `valueType` (not `string`) so adding a new one is a
  * compile-time error here until every case is handled.
  */
-function getNarrowedValueType(valueType: ValueType): string {
-  switch (valueType) {
+function getNarrowedValueType(fieldDefinition: FieldDefinition): string {
+  const orNull = fieldDefinition.isRequired ? '' : ' | null';
+
+  switch (fieldDefinition.valueType) {
     case 'string':
-      return `Omit<DirectStringValue, 'content'> & { content: Record<ProjectLanguage, string> }`;
+      return `Omit<DirectStringValue, 'content'> & { content: Record<ProjectLanguage, string${orNull}> }`;
     case 'number':
-      return `Omit<DirectNumberValue, 'content'> & { content: Record<ProjectLanguage, number> }`;
+      return `Omit<DirectNumberValue, 'content'> & { content: Record<ProjectLanguage, number${orNull}> }`;
     case 'boolean':
       return `Omit<DirectBooleanValue, 'content'> & { content: Record<ProjectLanguage, boolean> }`;
-    case 'reference':
-      return 'ReferencedValue';
+    case 'reference': {
+      // The field definition already says which kind it points at, and
+      // an Entry reference carries the Collection it belongs to, which
+      // is what reading the referenced Entry needs alongside the id
+      const reference =
+        fieldDefinition.fieldType === 'entry'
+          ? `{ id: string; objectType: 'entry'; collectionId: string }`
+          : `{ id: string; objectType: 'asset' }`;
+      return `Omit<ReferencedValue, 'content'> & { content: Record<ProjectLanguage, Array<${reference}>> }`;
+    }
     case 'component':
       return 'ComponentValue';
     case 'mdast':
-      // Broad narrowing: content is per-language MdAstRoot | null. The
-      // per-field feature config (which node types are allowed) is
-      // emitted as a literal in the fieldDefinitions tuple instead — see
-      // writeFieldDefinitionNarrowing's markdown branch. Consumer
-      // renderers walk the tree with the broad MdAst* types; the schema
-      // layer guarantees disallowed node types never reach disk.
-      return `Omit<MdAstValue, 'content'> & { content: Record<ProjectLanguage, MdAstRoot | null> }`;
+      // Broad narrowing on the tree itself: the per-field feature config
+      // (which node types are allowed) is emitted as a literal in the
+      // fieldDefinitions tuple instead — see writeFieldDefinitionNarrowing's
+      // markdown branch. Consumer renderers walk the tree with the broad
+      // MdAst* types; the schema layer guarantees disallowed node types
+      // never reach disk.
+      return `Omit<MdAstValue, 'content'> & { content: Record<ProjectLanguage, MdAstRoot${orNull}> }`;
   }
 }
 
@@ -438,7 +455,7 @@ function writeValuesProperty(
   } else {
     writer
       .indent(1)
-      .write(`${propName}: ${getNarrowedValueType(fieldDefinition.valueType)};`)
+      .write(`${propName}: ${getNarrowedValueType(fieldDefinition)};`)
       .newLine();
   }
 }
@@ -745,7 +762,6 @@ async function generateTypesAs({
   const typesMap = await generateTypes({ outDir, projects });
 
   if (language === 'js') {
-    const startedAt = Date.now();
     const resolvedOutDir = Path.resolve(outDir);
 
     // Convert file paths into POSIX-style (forward slashes - even on Windows),
@@ -756,6 +772,21 @@ async function generateTypesAs({
     const tsFiles = [...typesMap.values()].map((fileName) =>
       Path.join(resolvedOutDir, fileName)
     );
+
+    // No Projects means no types file was written. The compiler rejects an
+    // empty entry list with "No input files", so nothing to compile has to
+    // mean nothing to do. Checked before loading the compiler, so an install
+    // without it is not asked for it when there is no work.
+    if (tsFiles.length === 0) {
+      core.logger.info({
+        source: 'core',
+        message: 'No types to compile to JavaScript, no Projects found',
+      });
+      return;
+    }
+
+    const compileToJs = await loadCompiler();
+    const startedAt = Date.now();
     const normalizedEntries = tsFiles.map(toPosix);
 
     await compileToJs({
@@ -787,26 +818,21 @@ export const generateTypesAction = async ({
   projects,
   options,
 }: GenerateTypesProps) => {
-  try {
-    await generateTypesAs({ outDir, language, projects });
+  await generateTypesAs({ outDir, language, projects });
 
-    if (options.watch === true) {
-      const core = getCore();
+  if (options.watch === true) {
+    const core = getCore();
+    core.logger.info({
+      source: 'core',
+      message: 'Watching for changes to regenerate types',
+    });
+
+    watchProjects().on('all', (event, path) => {
       core.logger.info({
         source: 'core',
-        message: 'Watching for changes to regenerate types',
+        message: `Regenerating types due to ${event} on "${path}"`,
       });
-
-      watchProjects().on('all', (event, path) => {
-        core.logger.info({
-          source: 'core',
-          message: `Regenerating types due to ${event} on "${path}"`,
-        });
-        void generateTypesAs({ outDir, language, projects });
-      });
-    }
-  } catch (error) {
-    console.error(error instanceof CoreError ? error.message : String(error));
-    process.exit(1);
+      void generateTypesAs({ outDir, language, projects });
+    });
   }
 };

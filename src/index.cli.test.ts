@@ -13,9 +13,10 @@ import {
   createCollection,
   createEntry,
   createProject,
+  execCommand,
+  seedRemoteWithRelease,
 } from './test/util.js';
 import core, { testApiPort } from './test/setup.js';
-import { execCommand } from './util/node.js';
 
 describe('CLI', function () {
   let project1: Project & { destroy: () => Promise<void> };
@@ -44,11 +45,28 @@ describe('CLI', function () {
     await fs.emptyDir('./.elek.io');
   });
 
+  it('should start the built binary the way a consumer install does', async function () {
+    // Every other test here inherits the NODE_PATH vitest gives its workers,
+    // which ends in pnpm's hidden hoist store and resolves packages a consumer
+    // never sees. Stripping it is what `elek` gets from a plain shell, and it
+    // is what catches a bundler leaking into dist/cli: rolldown's native
+    // binding cannot be bundled, so the binary dies before commander runs.
+    const env = { ...process.env };
+    delete env['NODE_PATH'];
+
+    const { stdout } = await execCommand({
+      command: 'node',
+      args: ['./dist/cli/index.cli.mjs', '--help'],
+      options: { env },
+    });
+
+    expect(stdout).toContain('CLI for elek.io');
+  });
+
   it('should be able to generate the TS API Client with default options', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
-      args: ['generate:client'],
-      logger: core.logger,
+      command: 'node',
+      args: ['./dist/cli/index.cli.mjs', 'generate:client'],
     });
 
     expect(await fs.exists('./.elek.io/client.ts')).toBe(true);
@@ -56,12 +74,38 @@ describe('CLI', function () {
 
   it('should be able to generate & compile the API Client as JavaScript, ESM and target ES2020', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
-      args: ['generate:client', './.elek.io', 'js', 'esm', 'es2020'],
-      logger: core.logger,
+      command: 'node',
+      args: [
+        './dist/cli/index.cli.mjs',
+        'generate:client',
+        './.elek.io',
+        'js',
+        'esm',
+        'es2020',
+      ],
     });
 
     expect(await fs.exists('./.elek.io/client.js')).toBe(true);
+  }, 10000);
+
+  it('should generate types as JavaScript when there are no Projects', async function () {
+    // An isolated data directory holds no Projects, so no types file is
+    // written and there is nothing to compile. The compiler rejects an empty
+    // entry list with "No input files", so the step has to be skipped rather
+    // than called with nothing, matching how the `ts` language already behaves.
+    await execCommand({
+      command: 'node',
+      args: [
+        './dist/cli/index.cli.mjs',
+        '--data-dir',
+        './.elek.io/no-projects-data-dir',
+        'generate:types',
+        './.elek.io/no-projects-out',
+        'js',
+      ],
+    });
+
+    expect(await fs.readdir('./.elek.io/no-projects-out')).toEqual([]);
   }, 10000);
 
   it('should be able to request a list of entries', async function () {
@@ -98,9 +142,8 @@ describe('CLI', function () {
 
   it('should be able to export all Projects nested into projects.json', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
-      args: ['export'],
-      logger: core.logger,
+      command: 'node',
+      args: ['./dist/cli/index.cli.mjs', 'export'],
     });
 
     expect(await fs.exists('./.elek.io/projects.json')).toBe(true);
@@ -135,9 +178,8 @@ describe('CLI', function () {
 
   it('should be able to export one Project to project-${id}.json', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
-      args: ['export', './.elek.io', project1.id],
-      logger: core.logger,
+      command: 'node',
+      args: ['./dist/cli/index.cli.mjs', 'export', './.elek.io', project1.id],
     });
 
     expect(await fs.exists(`./.elek.io/project-${project1.id}.json`)).toBe(
@@ -170,14 +212,14 @@ describe('CLI', function () {
 
   it('should be able to export multiple Projects to separate project-${id}/project.json files', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
+      command: 'node',
       args: [
+        './dist/cli/index.cli.mjs',
         'export',
         './.elek.io',
         `${project1.id},${project2.id}`,
         'separate',
       ],
-      logger: core.logger,
     });
 
     expect(
@@ -274,14 +316,14 @@ describe('CLI', function () {
     // The isolated directory holds no Projects, so the export is empty
     // even though this suite created Projects in the shared data directory
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
+      command: 'node',
       args: [
+        './dist/cli/index.cli.mjs',
         '--data-dir',
         './.elek.io/data-dir-flag',
         'export',
         './.elek.io/data-dir-flag-out',
       ],
-      logger: core.logger,
     });
 
     const projectsContent = await fs.readFile(
@@ -293,14 +335,19 @@ describe('CLI', function () {
   });
 
   it('should fail loudly for an empty --data-dir instead of falling back', async function () {
-    // The quotes survive execCommand's shell concatenation, so commander
-    // receives an empty string. It must throw, not silently use another
-    // directory, e.g. when a script passes an unset variable.
+    // The empty argument reaches commander verbatim, the way a script
+    // passing an unset variable would. It must throw, not silently use
+    // another directory.
     await expect(
       execCommand({
-        command: 'node ./dist/cli/index.cli.mjs',
-        args: ['--data-dir', '""', 'export', './.elek.io/data-dir-empty-out'],
-        logger: core.logger,
+        command: 'node',
+        args: [
+          './dist/cli/index.cli.mjs',
+          '--data-dir',
+          '',
+          'export',
+          './.elek.io/data-dir-empty-out',
+        ],
       })
     ).rejects.toThrow();
 
@@ -309,12 +356,15 @@ describe('CLI', function () {
 
   it('should isolate the data directory via the ELEK_IO_DATA_DIR environment variable', async function () {
     await execCommand({
-      command: 'node ./dist/cli/index.cli.mjs',
-      args: ['export', './.elek.io/data-dir-env-out'],
+      command: 'node',
+      args: [
+        './dist/cli/index.cli.mjs',
+        'export',
+        './.elek.io/data-dir-env-out',
+      ],
       options: {
         env: { ...process.env, ELEK_IO_DATA_DIR: './.elek.io/data-dir-env' },
       },
-      logger: core.logger,
     });
 
     const projectsContent = await fs.readFile(
@@ -324,4 +374,110 @@ describe('CLI', function () {
     expect(JSON.parse(projectsContent)).toEqual({});
     expect(await fs.exists('./.elek.io/data-dir-env/projects')).toBe(true);
   });
+
+  it('should provision a Project via the provision command', async function () {
+    const seed = await seedRemoteWithRelease();
+
+    await execCommand({
+      command: 'node',
+      args: [
+        './dist/cli/index.cli.mjs',
+        '--data-dir',
+        './.elek.io/provision-data-dir',
+        'provision',
+        '--project',
+        seed.projectId,
+        '--url',
+        seed.remotePath,
+      ],
+    });
+
+    const projectFile = JSON.parse(
+      await fs.readFile(
+        `./.elek.io/provision-data-dir/projects/${seed.projectId}/project.json`,
+        'utf-8'
+      )
+    );
+    expect(projectFile.version).toEqual(seed.releaseVersion);
+    expect(
+      await fs.exists(
+        `./.elek.io/provision-data-dir/projects/${seed.projectId}/.elek-provisioned`
+      )
+    ).toBe(true);
+  }, 60000);
+
+  it('should provision the channel given by ELEK_IO_CHANNEL via the provision command', async function () {
+    const seed = await seedRemoteWithRelease();
+
+    await execCommand({
+      command: 'node',
+      args: [
+        './dist/cli/index.cli.mjs',
+        '--data-dir',
+        './.elek.io/provision-ref-data-dir',
+        'provision',
+        '--project',
+        seed.projectId,
+        '--url',
+        seed.remotePath,
+        '--ref',
+        'production',
+      ],
+      options: {
+        env: { ...process.env, ELEK_IO_CHANNEL: 'draft' },
+      },
+    });
+
+    // The draft channel follows the work branch
+    const head = await fs.readFile(
+      `./.elek.io/provision-ref-data-dir/projects/${seed.projectId}/.git/HEAD`,
+      'utf-8'
+    );
+    expect(head).toContain('refs/heads/work');
+  }, 60000);
+
+  it('should reject an exact version in ELEK_IO_CHANNEL', async function () {
+    const seed = await seedRemoteWithRelease();
+
+    await expect(
+      execCommand({
+        command: 'node',
+        args: [
+          './dist/cli/index.cli.mjs',
+          '--data-dir',
+          './.elek.io/provision-channel-fail-data-dir',
+          'provision',
+          '--project',
+          seed.projectId,
+          '--url',
+          seed.remotePath,
+        ],
+        options: {
+          env: { ...process.env, ELEK_IO_CHANNEL: seed.releaseVersion },
+        },
+      })
+    ).rejects.toThrow();
+  }, 60000);
+
+  it('should fail loudly when the provision ref does not exist', async function () {
+    const seed = await seedRemoteWithRelease();
+
+    await expect(
+      execCommand({
+        command: 'node',
+        args: [
+          './dist/cli/index.cli.mjs',
+          '--data-dir',
+          './.elek.io/provision-fail-data-dir',
+          'provision',
+          '--project',
+          seed.projectId,
+          '--url',
+          seed.remotePath,
+          '--ref',
+          '9.9.9',
+        ],
+      })
+    ).rejects.toThrow();
+  }, 60000);
 });

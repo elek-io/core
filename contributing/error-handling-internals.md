@@ -73,6 +73,16 @@ return c.json(data, 200);
 
 A missing user file is the normal state for a fresh installation. Callers expect `User | null`, treating "no user" as a normal condition. `GitService.commit()` checks for `null` and throws `CoreError.unauthorized(...)`.
 
+### The Offline Fallback Is Scoped by Phase, Not by Error Message
+
+`provision()` continues with the copy on disk when a refresh cannot reach the remote (`docs/provisioning.md#building-offline`). Deciding what counts as "cannot reach the remote" from git's stderr would be guesswork: dugite's network patterns are incomplete (`HostDown` only matches some clone shapes) and its `SSHPermissionDenied` regex is git's generic `Could not read from remote repository.` line, which an unreachable host, a missing repository and a rejected key all print.
+
+So the split is structural instead. `provisionFetch` holds everything that talks to the remote, `ls-remote` and the fetches, and touches nothing else. `provisionRefresh` moves the working tree afterwards. Only a failure of the first may fall back, because only then is the copy guaranteed intact - a failure during checkout or LFS materialization may leave it half updated. Answers from a reachable remote stay hard for the same reason they always were: "no Release published", an unknown version, a wrong Project and `VersionSkew` are content states, not outages. That is also why a branch the remote does not advertise is reported by the working-tree phase, even though `ls-remote` is what discovered it.
+
+Two failures fail hard by decision rather than by structure. An `Unauthorized` error is an actionable configuration problem, and a warning nobody reads would let a dead token quietly ship stale content for weeks. An exact version pin promises reproducibility, so it falls back onto itself or not at all - the matching case never reaches the network, because `holdsPinnedVersion` short-circuits it.
+
+`classifyAuthError` carries the weight of the `Unauthorized` decision, so it only reports an SSH failure as authentication when git's output actually names a permission problem. Without that, every offline SSH remote would classify as `Unauthorized` and lose the fallback entirely.
+
 ### Stack Traces in API Error Responses
 
 Error responses include `error.cause.stack` because the local API is used by developers integrating elek.io content into their own apps. The API is never exposed to the internet, and stack traces aid debugging during integration development.

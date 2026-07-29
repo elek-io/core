@@ -1,9 +1,12 @@
 import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
-import { execFile, type ExecFileOptions } from 'node:child_process';
-import { projectFolderSchema } from '../schema/projectSchema.js';
-import type { LogService } from '../service/LogService.js';
+import { logLevelSchema, type LogLevel } from '../schema/baseSchema.js';
+import {
+  contentChannelSchema,
+  projectFolderSchema,
+} from '../schema/projectSchema.js';
+import { CoreError } from './shared.js';
 
 /**
  * Resolves the data directory Core reads and writes data in
@@ -21,6 +24,77 @@ export function resolveDataDir(dataDir?: string): string {
 }
 
 /**
+ * Resolves whether Core runs in read-only mode
+ *
+ * Precedence: the given value wins over the ELEK_IO_READ_ONLY
+ * environment variable, which defaults to false. The environment
+ * variable counts as true only when set to `true`, an empty or
+ * whitespace-only value counts as unset.
+ */
+export function resolveReadOnly(isReadOnly?: boolean): boolean {
+  if (isReadOnly !== undefined) {
+    return isReadOnly;
+  }
+  return process.env['ELEK_IO_READ_ONLY']?.trim() === 'true';
+}
+
+/**
+ * Resolves the lowest level Core logs
+ *
+ * Precedence: the given level wins over the ELEK_IO_LOG_LEVEL
+ * environment variable, which wins over the default `info`. An empty
+ * or whitespace-only value counts as unset. A level Core does not
+ * know throws rather than falling back, so a typo turns into a
+ * message instead of silently leaving the logs as they were.
+ */
+export function resolveLogLevel(level?: LogLevel): LogLevel {
+  if (level !== undefined) {
+    return level;
+  }
+  const fromEnv = process.env['ELEK_IO_LOG_LEVEL']?.trim();
+  if (!fromEnv) {
+    return 'info';
+  }
+  const parsed = logLevelSchema.safeParse(fromEnv);
+  if (!parsed.success) {
+    throw CoreError.badRequest(
+      `ELEK_IO_LOG_LEVEL must be "error", "warn", "info" or "debug", got "${fromEnv}"`
+    );
+  }
+  return parsed.data;
+}
+
+/**
+ * Resolves the content ref to provision
+ *
+ * Precedence: the ELEK_IO_CHANNEL environment variable wins over the
+ * given ref, which wins over the default `production`. The
+ * environment variable applies to every Project of a deployment, so
+ * it only accepts channels, never exact versions. Versions are
+ * per-Project decisions and belong into configuration. An empty or
+ * whitespace-only value counts as unset.
+ */
+export function resolveContentRef(ref?: string): string {
+  const fromEnv = process.env['ELEK_IO_CHANNEL']?.trim();
+  if (fromEnv) {
+    const channel = contentChannelSchema.safeParse(fromEnv);
+    if (!channel.success) {
+      throw CoreError.badRequest(
+        `ELEK_IO_CHANNEL must be "production", "preview" or "draft", got "${fromEnv}". Pin exact versions per Project through the ref option instead.`
+      );
+    }
+    return channel.data;
+  }
+  return ref?.trim() || 'production';
+}
+
+/**
+ * Name of the marker file whose presence identifies a provisioned copy
+ * of a Project. A dotfile, so the Project's gitignore covers it.
+ */
+export const PROVISIONED_MARKER = '.elek-provisioned';
+
+/**
  * Creates a collection of often used paths, rooted at the given data directory
  */
 export function createPathTo(dataDir: string) {
@@ -35,6 +109,9 @@ export function createPathTo(dataDir: string) {
     },
     projectFile: (projectId: string): string => {
       return Path.join(pathTo.project(projectId), 'project.json');
+    },
+    projectProvisionedMarker: (projectId: string): string => {
+      return Path.join(pathTo.project(projectId), PROVISIONED_MARKER);
     },
 
     lfs: (projectId: string): string => {
@@ -145,58 +222,5 @@ export async function files(
       return false;
     }
     return dirent.isFile();
-  });
-}
-
-/**
- * Executes a shell command async and returns the output.
- *
- * When on Windows, it will automatically append `.cmd` to the command if it is in the `commandsToSuffix` list.
- */
-export function execCommand({
-  command,
-  args,
-  options,
-  logger,
-}: {
-  command: string;
-  args: string[];
-  options?: ExecFileOptions;
-  logger: LogService;
-}) {
-  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    const commandsToSuffix = ['pnpm'];
-    const isWindows = Os.platform() === 'win32';
-    const suffixedCommand = isWindows
-      ? command
-          .split(' ')
-          .map((cmd) => (commandsToSuffix.includes(cmd) ? `${cmd}.cmd` : cmd))
-          .join(' ')
-      : command;
-    const fullCommand = `${suffixedCommand} ${args.join(' ')}`;
-    const execOptions: ExecFileOptions = {
-      ...options,
-      shell: true,
-    };
-    const start = Date.now();
-
-    execFile(suffixedCommand, args, execOptions, (error, stdout, stderr) => {
-      const durationMs = Date.now() - start;
-      if (error) {
-        logger.error({
-          source: 'core',
-          message: `Error executing command "${fullCommand}" after ${durationMs}ms: ${error.message}`,
-          meta: { error, stdout: stdout.toString(), stderr: stderr.toString() },
-        });
-        reject(error instanceof Error ? error : new Error(error.message));
-      } else {
-        logger.info({
-          source: 'core',
-          message: `Command "${fullCommand}" executed successfully in ${durationMs}ms.`,
-          meta: { stdout: stdout.toString(), stderr: stderr.toString() },
-        });
-        resolve({ stdout: stdout.toString(), stderr: stderr.toString() });
-      }
-    });
   });
 }

@@ -1,0 +1,9 @@
+# The Astro content loaders run inside Astro's own vite pipeline, which
+# vitest cannot instrument, so their reported coverage says nothing about
+# how well they are tested. Six Astro suites drive them end to end while
+# the report reads around 12%. Ignored here rather than in
+# vitest.config.ts on purpose: `pnpm coverage` keeps showing the file, so
+# the gap stays visible locally, and only the merge gate stops asserting
+# something untrue. See the coverage section of contributing/testing.md.
+ignore:
+  - 'src/astro/loaders.ts'

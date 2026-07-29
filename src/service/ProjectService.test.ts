@@ -160,10 +160,44 @@ describe('ProjectService', function () {
     await ensureCleanGitStatus(task, project.id);
   });
 
-  it('should be able to list all outdated Projects', async function () {
-    const outdatedProjects = await core.projects.listOutdated();
+  it('should list outdated Projects but not ones newer than Core', async function () {
+    // The previous test committed coreVersion 999.0.0. That Project is
+    // skewed, not outdated, so it must not be offered for an upgrade
+    expect((await core.projects.listOutdated()).length).toEqual(0);
 
+    const readProject = await core.projects.read({ id: project.id });
+    const newerCoreVersion = readProject.coreVersion;
+    readProject.coreVersion = '0.0.1';
+    await Fs.writeFile(
+      core.util.pathTo.projectFile(project.id),
+      JSON.stringify(projectFileSchema.parse(readProject))
+    );
+    await core.git.add(core.util.pathTo.project(project.id), [
+      core.util.pathTo.projectFile(project.id),
+    ]);
+    await core.git.commit(core.util.pathTo.project(project.id), {
+      method: 'update',
+      reference: { objectType: 'project', id: project.id },
+    });
+
+    const outdatedProjects = await core.projects.listOutdated();
     expect(outdatedProjects.length).toEqual(1);
+    // The returned file is migrated in memory, never on disk
+    expect(outdatedProjects[0]?.coreVersion).toEqual(core.coreVersion);
+
+    // Restore the state the previous test left behind
+    readProject.coreVersion = newerCoreVersion;
+    await Fs.writeFile(
+      core.util.pathTo.projectFile(project.id),
+      JSON.stringify(projectFileSchema.parse(readProject))
+    );
+    await core.git.add(core.util.pathTo.project(project.id), [
+      core.util.pathTo.projectFile(project.id),
+    ]);
+    await core.git.commit(core.util.pathTo.project(project.id), {
+      method: 'update',
+      reference: { objectType: 'project', id: project.id },
+    });
   });
 
   it('should be able to upgrade a Project with a higher version of Core than the Project was created with', async function ({
@@ -280,10 +314,14 @@ describe('ProjectService', function () {
     await ensureCleanGitStatus(task, clonedProject.id);
   });
 
-  it('should fail when trying to clone a Project twice', async function () {
+  it('should fail when trying to clone a Project twice and clean up the staged clone', async function () {
+    const tmpEntriesBefore = await Fs.readdir(core.util.pathTo.tmp);
+
     await expect(
       core.projects.clone({ url: remoteProjectPath })
     ).rejects.toThrow();
+
+    expect(await Fs.readdir(core.util.pathTo.tmp)).toEqual(tmpEntriesBefore);
   });
 
   it('should be able to delete the cloned Project locally', async function () {

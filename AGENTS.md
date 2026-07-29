@@ -9,7 +9,7 @@ Core handles file IO and git version control for elek.io Projects, a headless, g
 Core's docs live in two places, split by audience:
 
 - [`docs/`](./docs/) - consumer documentation: the observable behavior and public API. It ships inside the published package (listed in `package.json` `files`), so keep it self-contained. A doc here must not link into `contributing/`, or the link dangles in the package. [`docs/index.md`](./docs/index.md) is the index and the topic-to-doc map, add new consumer docs to it.
-- [`contributing/`](./contributing/) - contributor and design docs: the design and invariants behind the behavior, plus testing, how to add a field type, and the cross-CMS comparison. Never shipped, so these may link anywhere.
+- [`contributing/`](./contributing/) - contributor and design docs: the design and invariants behind the behavior, plus testing, how to add a field type, the Astro entry's internals ([`astro-entry.md`](./contributing/astro-entry.md)) and the cross-CMS comparison. Never shipped, so these may link anywhere.
 
 Two rules follow:
 
@@ -32,8 +32,9 @@ Two rules follow:
 - Write tests first. Core is integration-test heavy and most behavior is proven through real Projects.
 - Prefer a library's built-in feature over hand-rolled code.
 - Avoid type casts. Shape the types so a cast is not needed.
+- Boolean keys use an `is` or `has` prefix (`isReadOnly`, `hasToken`). Keys that mirror an external tool's name keep that name instead, like git flags (`detach`, `forceCreate`) or slugify options (`lowercase`). See [`contributing/naming.md`](./contributing/naming.md).
 - Keep comments short and put deeper detail in the docs. Avoid em-dashes and semicolons, use simple sentences for readability.
-- Core has three peer dependencies (`zod`, `dugite`, `astro`). Before bumping any of them, or a dependency that pulls `zod` (`@scalar/*`, `@hono/zod-openapi`), read [`contributing/peer-dependencies.md`](./contributing/peer-dependencies.md) for why each version range was chosen and how to re-check it. The `pnpm test` suite guards zod's single-copy invariant through [`src/zod-single-copy.test.ts`](./src/zod-single-copy.test.ts).
+- Core has five peer dependencies (`zod`, `dugite`, `astro`, `tsdown`, `typescript`). Before bumping any of them, or a dependency that pulls `zod` (`@scalar/*`, `@hono/zod-openapi`), read [`contributing/peer-dependencies.md`](./contributing/peer-dependencies.md) for why each version range was chosen and how to re-check it. The `pnpm test` suite guards zod's single-copy invariant through [`src/zod-single-copy.test.ts`](./src/zod-single-copy.test.ts). `tsdown` and `typescript` are peers so the CLI does not bundle them, which is why the CLI must only ever import `tsdown` lazily.
 - Core environment variables use the `ELEK_IO_` prefix, are read once at Core construction (never at module import) and are documented in the environment variables section of [`docs/usage.md`](./docs/usage.md).
 
 ## Testing notes

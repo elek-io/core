@@ -117,14 +117,16 @@ export class ComponentService
   public async create<T extends Component = Component>(
     props: CreateComponentProps
   ): Promise<T> {
+    this.assertNotReadOnly('create');
     const { projectId } = this.parseOrThrow(
       'create',
       z.object({ projectId: uuidSchema }),
       props
     );
+    await this.assertNotProvisioned('create', projectId);
     const languages = await this.readProjectLanguages(projectId);
 
-    return this.validated(
+    return this.mutating(
       'create',
       getCreateComponentSchemaFromLanguages(languages),
       props,
@@ -281,14 +283,16 @@ export class ComponentService
   public async update<T extends Component = Component>(
     props: UpdateComponentProps
   ): Promise<T> {
+    this.assertNotReadOnly('update');
     const { projectId } = this.parseOrThrow(
       'update',
       z.object({ projectId: uuidSchema }),
       props
     );
+    await this.assertNotProvisioned('update', projectId);
     const languages = await this.readProjectLanguages(projectId);
 
-    return this.validated(
+    return this.mutating(
       'update',
       getUpdateComponentSchemaFromLanguages(languages),
       props,
@@ -585,7 +589,9 @@ export class ComponentService
    * Blocks deletion if the Component is still referenced by a Collection or another Component.
    */
   public async delete(props: DeleteComponentProps): Promise<void> {
-    return this.validated('delete', deleteComponentSchema, props, async () => {
+    return this.mutating('delete', deleteComponentSchema, props, async () => {
+      await this.assertNotProvisioned('delete', props.projectId);
+
       const referencingEntities = await this.findReferences(
         props.projectId,
         props.id

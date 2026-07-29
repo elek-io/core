@@ -50,6 +50,17 @@ export const gitTagSchema = z.object({
 });
 export type GitTag = z.infer<typeof gitTagSchema>;
 
+/**
+ * A tag carrying a Project version. That is a Release or preview
+ * Release tag, as opposed to a Core upgrade tag.
+ */
+export type VersionedGitTag = GitTag & {
+  message: Extract<GitTagMessage, { type: 'release' | 'preview' }>;
+};
+
+export const isVersionedTag = (tag: GitTag): tag is VersionedGitTag =>
+  tag.message.type === 'release' || tag.message.type === 'preview';
+
 export const gitCommitSchema = z.object({
   /**
    * SHA-1 hash of the commit
@@ -92,6 +103,16 @@ export const gitCloneOptionsSchema = z.object({
    * @see https://git-scm.com/book/en/v2/Git-on-the-Server-Getting-Git-on-a-Server
    */
   bare: z.boolean(),
+  /**
+   * Which LFS objects to fetch after the clone
+   *
+   * `all` fetches the LFS objects of the whole history, keeping every
+   * Asset available offline. `current` fetches only the objects of the
+   * checked-out ref, meant for build-mode clones in CI.
+   *
+   * @default 'all'
+   */
+  lfs: z.enum(['all', 'current']),
 });
 export type GitCloneOptions = z.infer<typeof gitCloneOptionsSchema>;
 
@@ -106,7 +127,31 @@ export const gitSwitchOptionsSchema = z.object({
    *
    * @see https://git-scm.com/docs/git-switch#Documentation/git-switch.txt---createltnew-branchgt
    */
-  isNew: z.boolean().optional(),
+  create: z.boolean().optional(),
+  /**
+   * If true, detaches HEAD at the given ref, which can also be a tag
+   *
+   * @see https://git-scm.com/docs/git-switch#Documentation/git-switch.txt---detach
+   */
+  detach: z.boolean().optional(),
+  /**
+   * If true, creates the branch at `startPoint`, resetting it there
+   * when it already exists, then switches to it
+   *
+   * @see https://git-scm.com/docs/git-switch#Documentation/git-switch.txt---force-createltnew-branchgt
+   */
+  forceCreate: z.boolean().optional(),
+  /**
+   * The ref the branch starts at when `forceCreate` is set
+   */
+  startPoint: z.string().optional(),
+  /**
+   * If true, local modifications are thrown away instead of aborting
+   * the switch
+   *
+   * @see https://git-scm.com/docs/git-switch#Documentation/git-switch.txt---discard-changes
+   */
+  discardChanges: z.boolean().optional(),
 });
 export type GitSwitchOptions = z.infer<typeof gitSwitchOptionsSchema>;
 

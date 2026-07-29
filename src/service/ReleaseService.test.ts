@@ -799,3 +799,83 @@ describe('ReleaseService - slug field changes', function () {
     ).toBe(false);
   });
 });
+
+describe('ReleaseService - list', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let collection: Collection;
+
+  beforeAll(async function () {
+    project = await createProject();
+    collection = await createCollection(project.id);
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('should list nothing before the first Release', async function () {
+    const { list, total } = await core.releases.list({ projectId: project.id });
+
+    expect(list).toEqual([]);
+    expect(total).toEqual(0);
+  });
+
+  it('should list every Release and preview with its type and version', async function () {
+    await core.releases.createPreview({ projectId: project.id });
+    collection.name.singular.en = 'Listed Product';
+    await core.collections.update({ projectId: project.id, ...collection });
+    await core.releases.create({ projectId: project.id });
+
+    const { list, total } = await core.releases.list({ projectId: project.id });
+
+    expect(total).toEqual(2);
+    const published = list.map(({ type, version }) => ({ type, version }));
+    expect(published).toContainEqual({
+      type: 'preview',
+      version: '0.1.0-preview.1',
+    });
+    expect(published).toContainEqual({ type: 'release', version: '0.1.0' });
+
+    // Every entry names the tag it was read from, which is how a
+    // caller addresses that Release in git
+    const { list: tags } = await core.git.tags.list({
+      path: core.util.pathTo.project(project.id),
+    });
+    for (const release of list) {
+      expect(tags.some((tag) => tag.id === release.tagId)).toBe(true);
+    }
+  });
+
+  it('should order Releases newest first', async function () {
+    // Tags of one test run can share a timestamp, so the assertion is
+    // that the order is descending, not that it is strict
+    const { list } = await core.releases.list({ projectId: project.id });
+
+    const datetimes = list.map((release) => release.datetime);
+    expect(datetimes).toEqual([...datetimes].sort().reverse());
+  });
+
+  it('should ignore a tag that carries no version', async function () {
+    // Core tags its own upgrades, and those are not Releases
+    await core.git.tags.create({
+      path: core.util.pathTo.project(project.id),
+      message: { type: 'upgrade', coreVersion: '1.0.0' },
+    });
+
+    const { list: tags } = await core.git.tags.list({
+      path: core.util.pathTo.project(project.id),
+    });
+    expect(tags.length).toEqual(3);
+
+    const { list, total } = await core.releases.list({ projectId: project.id });
+    expect(total).toEqual(2);
+    expect(list.map((release) => release.version).sort()).toEqual([
+      '0.1.0',
+      '0.1.0-preview.1',
+    ]);
+  });
+});
