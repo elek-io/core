@@ -179,6 +179,9 @@ export abstract class AbstractSlugIndexedEntityService<
           this.entityFilePath(projectId, folder.name),
           this.entityFileSchema
         );
+        // read() infers from the schema field, which the subclass supplies
+        // alongside TFile, so the two agree by construction but not by type
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         index[folder.name] = this.extractSlug(file as TFile);
       } catch (error) {
         this.logService.warn({

@@ -1,6 +1,7 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
 import Semver from 'semver';
+import { z } from '@hono/zod-openapi';
 import type { FileReference, ObjectType, Version } from '../schema/index.js';
 import {
   cloneProjectSchema,
@@ -64,6 +65,19 @@ import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { PathTo } from '../util/node.js';
+
+/**
+ * The least a Project file has to satisfy to be considered for an upgrade.
+ *
+ * The upgrade path reads the file before any schema applies to it, because a
+ * Project written by an older Core may not satisfy the current one. That is
+ * the point of the upgrade. It still has to carry a Core version to compare,
+ * so only that is required here and every other key passes through untouched
+ * for `migrate` to handle.
+ */
+const upgradeableProjectFileSchema = z.looseObject({
+  coreVersion: z.string(),
+});
 
 /**
  * What the network phase of a refresh gathered, handed to the
@@ -914,9 +928,15 @@ export class ProjectService
       );
     }
 
-    const currentProjectFile = (await this.jsonFileService.unsafeRead(
-      projectFilePath
-    )) as Record<string, unknown> & { coreVersion: string };
+    const readProjectFile = upgradeableProjectFileSchema.safeParse(
+      await this.jsonFileService.unsafeRead(projectFilePath)
+    );
+    if (!readProjectFile.success) {
+      throw CoreError.upgradeFailed(
+        `The Project file "${projectFilePath}" carries no readable Core version, so there is nothing to upgrade from.`
+      );
+    }
+    const currentProjectFile = readProjectFile.data;
 
     if (Semver.gt(currentProjectFile.coreVersion, this.coreVersion)) {
       throw CoreError.upgradeFailed(

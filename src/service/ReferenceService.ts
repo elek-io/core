@@ -24,6 +24,7 @@ import {
   type Value,
 } from '../schema/index.js';
 import { CoreError } from '../util/shared.js';
+import { entriesOf } from '../util/typedObject.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import { migrateEntryFile } from './migrations/index.js';
 import type { GitService } from './GitService.js';
@@ -420,9 +421,8 @@ export class ReferenceService extends AbstractEntityService {
     const allowedMimeTypes =
       fieldDef.fieldType === 'asset' ? fieldDef.ofAssetMimeTypes : null;
 
-    for (const [language, refs] of Object.entries(value.content)) {
+    for (const [lang, refs] of entriesOf(value.content)) {
       if (!refs) continue;
-      const lang = language as SupportedLanguage;
 
       for (let index = 0; index < refs.length; index++) {
         const ref = refs[index];
@@ -472,9 +472,8 @@ export class ReferenceService extends AbstractEntityService {
     issues: EntryReferenceIssue[],
     componentPath: ReferenceComponentPathSegment[]
   ): Promise<void> {
-    for (const [language, root] of Object.entries(value.content)) {
+    for (const [lang, root] of entriesOf(value.content)) {
       if (!root) continue;
-      const lang = language as SupportedLanguage;
 
       for (const { node, treePath } of collectMdAstRefs(root)) {
         if (node.type === 'assetReference') {
@@ -727,9 +726,8 @@ function collectReferencesInValue(
   const result: FoundReference[] = [];
 
   if (value.valueType === 'reference') {
-    for (const [language, refs] of Object.entries(value.content)) {
+    for (const [lang, refs] of entriesOf(value.content)) {
       if (!refs) continue;
-      const lang = language as SupportedLanguage;
       for (let index = 0; index < refs.length; index += 1) {
         const ref = refs[index];
         if (!ref) continue;
@@ -774,9 +772,8 @@ function collectReferencesInValue(
       }
     }
   } else if (value.valueType === 'mdast') {
-    for (const [language, root] of Object.entries(value.content)) {
+    for (const [lang, root] of entriesOf(value.content)) {
       if (!root) continue;
-      const lang = language as SupportedLanguage;
       for (const { node, treePath } of collectMdAstRefs(root)) {
         if (node.type === 'assetReference') {
           result.push({

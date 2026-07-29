@@ -1,6 +1,7 @@
 import Path from 'node:path';
 import Fs from 'fs-extra';
 import CodeBlockWriter from 'code-block-writer';
+import { keysOf } from '../util/typedObject.js';
 import {
   flattenFieldDefinitions,
   makeComponentsContext,
@@ -341,11 +342,9 @@ function writeFieldDefinitionNarrowing(
       .indent(baseIndent + 1)
       .write(`features: {`)
       .newLine();
-    // Sort keys for stable output across regenerations. Cast to the typed
-    // key array so adding a new MarkdownFeatures flag is a TS error here.
-    const keys = (
-      Object.keys(features) as Array<keyof MarkdownFeatures>
-    ).toSorted();
+    // Sort keys for stable output across regenerations. Typed by keysOf so
+    // adding a new MarkdownFeatures flag is a TS error here.
+    const keys = keysOf(features).toSorted();
     for (const key of keys) {
       writer
         .indent(baseIndent + 2)

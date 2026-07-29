@@ -177,6 +177,7 @@ export class EntryService
               collectionId: validatedProps.collectionId,
             },
           });
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
           return this.toEntry(entryFile) as T;
         }, [entryFilePath]);
       }
@@ -195,6 +196,7 @@ export class EntryService
           this.pathTo.entryFile(props.projectId, props.collectionId, props.id),
           entryFileSchema
         );
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toEntry(entryFile) as T;
       } else {
         const content = await this.gitService.getFileContentAtCommit(
@@ -203,6 +205,7 @@ export class EntryService
           props.commitHash
         );
         const entryFile = this.migrate(JSON.parse(content));
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toEntry(entryFile) as T;
       }
     });
@@ -317,6 +320,7 @@ export class EntryService
               collectionId: validatedProps.collectionId,
             },
           });
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
           return this.toEntry(entryFile) as T;
         });
       }

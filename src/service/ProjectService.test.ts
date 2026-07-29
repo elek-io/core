@@ -160,6 +160,34 @@ describe('ProjectService', function () {
     await ensureCleanGitStatus(task, project.id);
   });
 
+  it('should throw UpgradeFailed when the Project file carries no coreVersion', async function () {
+    // The upgrade path reads the Project file before any schema applies to
+    // it, because the file may predate the current schema. It still has to
+    // find a coreVersion to compare, so a file without one is rejected with
+    // an UpgradeFailed rather than failing somewhere inside semver.
+    const brokenProject = await createProject('project without coreVersion');
+    const brokenProjectFilePath = core.util.pathTo.projectFile(
+      brokenProject.id
+    );
+    const { coreVersion: _, ...withoutCoreVersion } = await core.projects.read({
+      id: brokenProject.id,
+    });
+    await Fs.writeJson(brokenProjectFilePath, withoutCoreVersion);
+    await core.git.add(core.util.pathTo.project(brokenProject.id), [
+      brokenProjectFilePath,
+    ]);
+    await core.git.commit(core.util.pathTo.project(brokenProject.id), {
+      method: 'update',
+      reference: { objectType: 'project', id: brokenProject.id },
+    });
+
+    await expect(
+      core.projects.upgrade({ id: brokenProject.id })
+    ).rejects.toMatchObject({ type: 'UpgradeFailed' });
+
+    await brokenProject.destroy();
+  });
+
   it('should list outdated Projects but not ones newer than Core', async function () {
     // The previous test committed coreVersion 999.0.0. That Project is
     // skewed, not outdated, so it must not be offered for an upgrade

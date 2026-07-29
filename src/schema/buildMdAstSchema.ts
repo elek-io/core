@@ -283,6 +283,13 @@ export function buildMdAstSchemaForFeatures(
   }
 
   // Union helper handling the union-with-1-member edge case.
+  //
+  // The assertions below are zod's shape, not a shortcut. `z.union` takes a
+  // tuple of at least two members, and the members here are collected at
+  // runtime from the enabled features, so their count is not known to the
+  // type system. The element type is `ZodTypeAny` for the same reason, which
+  // is why the result has to be named as the union it builds.
+  /* oxlint-disable typescript/no-unsafe-type-assertion */
   function makeUnion<T>(members: z.ZodTypeAny[]): z.ZodType<T> {
     if (members.length === 0) {
       throw new Error('Cannot build union with zero members');
@@ -294,6 +301,7 @@ export function buildMdAstSchemaForFeatures(
       members as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]
     ) as z.ZodType<T>;
   }
+  /* oxlint-enable typescript/no-unsafe-type-assertion */
 
   const phrasingNodeSchema: z.ZodType<MdAstPhrasingNode> =
     makeUnion<MdAstPhrasingNode>(phrasingMembers);
@@ -314,7 +322,10 @@ export function buildMdAstSchemaForFeatures(
     const depthSchema =
       allowedHeadingDepths.length === 1
         ? z.literal(allowedHeadingDepths[0]!)
-        : z.union(
+        : // The same zod tuple constraint as makeUnion above: the depths are
+          // whatever the field allows, so their count is a runtime fact
+          z.union(
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
             allowedHeadingDepths.map((d) => z.literal(d)) as [
               z.ZodLiteral<MarkdownHeadingDepth>,
               z.ZodLiteral<MarkdownHeadingDepth>,

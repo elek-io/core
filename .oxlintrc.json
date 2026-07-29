@@ -84,6 +84,7 @@
     "typescript/unbound-method": "error",
 
     "no-shadow": "error",
+    "typescript/no-unsafe-type-assertion": "error",
     "typescript/no-unnecessary-type-parameters": "error",
     "typescript/no-unnecessary-template-expression": "error",
     "unicorn/no-array-reverse": "error",
@@ -110,5 +111,13 @@
     "no-throw-literal": "off",
     "prefer-promise-reject-errors": "off",
     "require-await": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "src/test/**"],
+      "rules": {
+        "typescript/no-unsafe-type-assertion": "off"
+      }
+    }
+  ]
 }

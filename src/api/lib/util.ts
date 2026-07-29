@@ -99,13 +99,19 @@ export default function createApi(
             stack: err.cause instanceof Error ? err.cause.stack : undefined,
           },
         },
+        // CoreError carries a plain number, hono wants its union of codes that
+        // may carry a body. Every CoreError status is one of them
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
         err.statusCode as ContentfulStatusCode
       );
     }
 
     const currentStatus =
       'status' in err ? err.status : c.newResponse(null).status;
+    // Same hono status union as above, with 200 excluded because a 200 here
+    // would be an error response carrying a success code
     const statusCode =
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       currentStatus !== 200 ? (currentStatus as ContentfulStatusCode) : 500;
 
     return c.json(

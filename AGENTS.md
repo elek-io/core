@@ -31,7 +31,7 @@ Two rules follow:
 
 - Write tests first. Core is integration-test heavy and most behavior is proven through real Projects.
 - Prefer a library's built-in feature over hand-rolled code.
-- Avoid type casts. Shape the types so a cast is not needed.
+- Avoid type casts. Shape the types so a cast is not needed. `pnpm lint` enforces this through `no-unsafe-type-assertion` across all of `src` except tests. The few casts that survive are inherent to a public API or a library's shape and each carries an inline disable naming the reason, see [`contributing/linting.md`](./contributing/linting.md).
 - Boolean keys use an `is` or `has` prefix (`isReadOnly`, `hasToken`). Keys that mirror an external tool's name keep that name instead, like git flags (`detach`, `forceCreate`) or slugify options (`lowercase`). See [`contributing/naming.md`](./contributing/naming.md).
 - Keep comments short and put deeper detail in the docs. Avoid em-dashes and semicolons, use simple sentences for readability.
 - Linting is oxlint, configured in [`.oxlintrc.json`](./.oxlintrc.json). Before changing the rule set, read [`contributing/linting.md`](./contributing/linting.md) for what each layer of the config is for, which rules are off on purpose and why the linter is independent of the `typescript` version.
