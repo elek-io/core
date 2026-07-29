@@ -132,6 +132,42 @@ describe('ProjectService provision', function () {
     ).toEqual('work');
   }, 30000);
 
+  it('should clone the work branch when the draft channel is provisioned into an empty data directory', async function () {
+    // A cold CI runner building a preview deploy takes a different
+    // path than the refresh above: a channel that follows a branch is
+    // cloned from that branch, while a Release channel clones the
+    // default branch and checks the tag out afterwards
+    const draftDataDir = Path.join(Os.tmpdir(), `elek-io-core-test-${uuid()}`);
+    const draftCore = new ElekIoCore({
+      isReadOnly: true,
+      dataDir: draftDataDir,
+    });
+
+    try {
+      const { project: provisioned, source } =
+        await draftCore.projects.provision({
+          id: seed.projectId,
+          url: seed.remotePath,
+          ref: 'draft',
+        });
+
+      expect(source).toEqual('remote');
+      expect(provisioned.id).toEqual(seed.projectId);
+      expect(
+        await draftCore.projects.branches.current({ id: seed.projectId })
+      ).toEqual('work');
+      // The content came along, not just the branch
+      const { total } = await draftCore.collections.list({
+        projectId: seed.projectId,
+        limit: 0,
+      });
+      expect(total).toBeGreaterThan(0);
+    } finally {
+      await draftCore.dispose();
+      await Fs.remove(draftDataDir);
+    }
+  }, 60000);
+
   it('should provision the newest preview on the preview channel', async function () {
     // The only preview so far is the one from the seed
     const { project: provisioned } = await readOnlyCore.projects.provision({
@@ -268,6 +304,33 @@ describe('ProjectService provision', function () {
     );
     expect(error instanceof CoreError && error.message).toContain('Release');
     // A failed fresh provision leaves nothing behind
+    expect(
+      await Fs.pathExists(readOnlyCore.util.pathTo.project(remoteProject.id))
+    ).toBe(false);
+  }, 60000);
+
+  it('should throw PreconditionFailed when the remote holds no preview Release', async function () {
+    // Asking for the preview channel of a Project that only ever
+    // published full Releases has to say so, not fall back to one
+    const remoteProject = await createLocalRemoteRepository();
+    const remotePath = Path.join(core.util.pathTo.tmp, remoteProject.id);
+
+    let error: unknown = null;
+    try {
+      await readOnlyCore.projects.provision({
+        id: remoteProject.id,
+        url: remotePath,
+        ref: 'preview',
+      });
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeInstanceOf(CoreError);
+    expect(error instanceof CoreError && error.type).toEqual(
+      'PreconditionFailed'
+    );
+    expect(error instanceof CoreError && error.message).toContain('preview');
     expect(
       await Fs.pathExists(readOnlyCore.util.pathTo.project(remoteProject.id))
     ).toBe(false);

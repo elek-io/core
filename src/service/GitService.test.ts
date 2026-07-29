@@ -129,6 +129,14 @@ describe('GitService', function () {
     await core.git.push(projectPath);
   });
 
+  it('should reject pushing all branches and named refs at once', async function () {
+    // Both reach git as arguments that contradict each other, so the
+    // caller is told rather than left with whatever git makes of it
+    await expect(
+      core.git.push(projectPath, { all: true, refs: ['work'] })
+    ).rejects.toThrow(/mutually exclusive/);
+  });
+
   it('should be able to see there is no difference between local and remote anymore', async function () {
     const changes = await core.projects.getChanges({ id: project.id });
 

@@ -7,12 +7,34 @@ import {
   it,
   vi,
 } from 'vitest';
-import core, { uuid } from '../test/setup.js';
+import core, { uuid, type MarkdownFeatures } from '../test/setup.js';
 import { createProject } from '../test/util.js';
 import { CoreError } from '../util/shared.js';
 import { defineElekConfig } from './elekConfig.js';
 import { elekCollections } from './collections.js';
 import { getCore } from './core.js';
+
+/** Every markdown feature off, so a test only turns on what it is about */
+const markdownFeaturesOff: MarkdownFeatures = {
+  headings: [],
+  blockquotes: false,
+  lists: false,
+  codeBlocks: false,
+  thematicBreak: false,
+  rawHtml: false,
+  tables: false,
+  taskListItems: false,
+  footnotes: false,
+  emphasis: false,
+  strong: false,
+  inlineCode: false,
+  externalLinks: false,
+  entryReferences: false,
+  externalImages: false,
+  assetReferences: false,
+  strikethrough: false,
+  hardLineBreaks: false,
+};
 
 /**
  * A Collection with nothing but a slug, the derived keys only depend
@@ -290,6 +312,80 @@ describe('elekCollections', function () {
         'websiteAssets',
         'websitePosts',
       ]);
+    } finally {
+      await referencing.destroy();
+    }
+  }, 60000);
+
+  it('should throw when a markdown field may reference excluded Assets', async function () {
+    // An Asset reference does not need a reference field, markdown
+    // carries assetReference nodes too, and mdastRender resolves them
+    // through the same Assets collection
+    const referencing = await createProject('Derived Collections Markdown');
+    try {
+      async function createBodyCollection(assetReferences: boolean) {
+        return core.collections.create({
+          projectId: referencing.id,
+          icon: 'home',
+          name: {
+            singular: { en: 'note', de: 'note' },
+            plural: {
+              en: assetReferences ? 'notes' : 'plain-notes',
+              de: assetReferences ? 'notes' : 'plain-notes',
+            },
+          },
+          slug: {
+            singular: assetReferences ? 'note' : 'plain-note',
+            plural: assetReferences ? 'notes' : 'plain-notes',
+          },
+          description: { en: 'The notes', de: 'The notes' },
+          fieldDefinitions: [
+            {
+              id: uuid(),
+              slug: 'body',
+              valueType: 'mdast',
+              fieldType: 'markdown',
+              label: { en: 'Body', de: 'Body' },
+              description: null,
+              isRequired: false,
+              isDisabled: false,
+              isUnique: false,
+              inputWidth: '12',
+              min: null,
+              max: null,
+              features: { ...markdownFeaturesOff, assetReferences },
+              ofCollections: [],
+              ofAssetMimeTypes: [],
+              defaultValue: null,
+            },
+          ],
+        });
+      }
+
+      await createBodyCollection(true);
+      await createBodyCollection(false);
+
+      const config = defineElekConfig({
+        projects: { website: { id: referencing.id } },
+      });
+
+      let error: unknown = null;
+      try {
+        await elekCollections(config, { collections: { website: ['notes'] } });
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeInstanceOf(CoreError);
+      expect(error instanceof CoreError && error.message).toContain('notes');
+      expect(error instanceof CoreError && error.message).toContain('body');
+
+      // The same field with the feature off reaches no Asset, so it
+      // derives without the Assets collection
+      const collections = await elekCollections(config, {
+        collections: { website: ['plain-notes'] },
+      });
+      expect(Object.keys(collections)).toEqual(['websitePlainNotes']);
     } finally {
       await referencing.destroy();
     }

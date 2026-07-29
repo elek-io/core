@@ -15,6 +15,7 @@ import {
   isNotEmpty,
   files,
   folders,
+  resolveContentRef,
   resolveDataDir,
   resolveLogLevel,
 } from './node.js';
@@ -226,6 +227,53 @@ describe('resolveLogLevel', () => {
     expect(() => resolveLogLevel()).toThrow(CoreError);
     expect(() => resolveLogLevel()).toThrow(
       'ELEK_IO_LOG_LEVEL must be "error", "warn", "info" or "debug", got "verbose"'
+    );
+  });
+});
+
+describe('resolveContentRef', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('provisions the production channel when nothing is configured', () => {
+    vi.stubEnv('ELEK_IO_CHANNEL', undefined);
+
+    expect(resolveContentRef()).toBe('production');
+  });
+
+  it('returns the given ref when the environment variable is unset', () => {
+    vi.stubEnv('ELEK_IO_CHANNEL', undefined);
+
+    expect(resolveContentRef('draft')).toBe('draft');
+    // A ref may also be an exact version, which is what pins a build
+    expect(resolveContentRef('1.2.3')).toBe('1.2.3');
+  });
+
+  it('lets the environment variable win over the given ref', () => {
+    // The opposite precedence of every other ELEK_IO_ variable, on
+    // purpose: it switches a whole deployment to another channel
+    // without touching the configuration of a single Project
+    vi.stubEnv('ELEK_IO_CHANNEL', 'preview');
+
+    expect(resolveContentRef('production')).toBe('preview');
+    expect(resolveContentRef('1.2.3')).toBe('preview');
+  });
+
+  it('treats an empty or whitespace-only environment variable as unset', () => {
+    vi.stubEnv('ELEK_IO_CHANNEL', '');
+    expect(resolveContentRef('draft')).toBe('draft');
+
+    vi.stubEnv('ELEK_IO_CHANNEL', '   ');
+    expect(resolveContentRef('draft')).toBe('draft');
+  });
+
+  it('rejects an exact version, since it would pin every Project alike', () => {
+    vi.stubEnv('ELEK_IO_CHANNEL', '1.2.3');
+
+    expect(() => resolveContentRef()).toThrow(CoreError);
+    expect(() => resolveContentRef()).toThrow(
+      'ELEK_IO_CHANNEL must be "production", "preview" or "draft", got "1.2.3"'
     );
   });
 });

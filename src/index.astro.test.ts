@@ -9,6 +9,7 @@ import {
 import { sync } from 'astro';
 import Path from 'node:path';
 import Fs from 'fs-extra';
+import core from './test/setup.js';
 import {
   createProject,
   createAsset,
@@ -137,6 +138,64 @@ export const collections = {
       expect(assetsJsonSchema.properties).toHaveProperty('extension');
     }
   });
+
+  it('should forget an Entry that was deleted from the Collection', async function () {
+    // A deleted Entry that stays in the store keeps its page in the
+    // built site, and nothing about the next build says why. Two syncs
+    // into the same root, so the second one restores a store that
+    // still holds the Entry.
+    const doomed = await createEntry(project.id, collection.id, asset.id);
+
+    const root = tmpDirPath();
+    const srcDir = Path.join(root, 'src');
+    await Fs.ensureDir(srcDir);
+    await Fs.symlink(
+      Path.resolve('node_modules'),
+      Path.join(root, 'node_modules')
+    );
+
+    const loaderPath = Path.resolve('src/index.astro.ts').replaceAll('\\', '/');
+    await Fs.writeFile(
+      Path.join(srcDir, 'content.config.ts'),
+      `
+import { defineCollection } from 'astro:content';
+import { defineElekConfig, elekEntriesLoader } from '${loaderPath}';
+
+const config = defineElekConfig({
+  projects: {
+    website: { id: '${project.id}' },
+  },
+});
+
+export const collections = {
+  entries: defineCollection({
+    loader: elekEntriesLoader({
+      config,
+      project: 'website',
+      collectionIdOrSlug: '${collection.id}',
+    }),
+  }),
+};
+`
+    );
+
+    // Astro's content store would otherwise land in node_modules,
+    // which every test root shares through its symlink
+    const cacheDir = Path.join(root, '.cache');
+    const storePath = Path.join(cacheDir, 'data-store.json');
+
+    await sync({ root, configFile: false, logLevel: 'info', cacheDir });
+    expect(await Fs.readFile(storePath, 'utf-8')).toContain(doomed.id);
+
+    await core.entries.delete({
+      projectId: project.id,
+      collectionId: collection.id,
+      id: doomed.id,
+    });
+
+    await sync({ root, configFile: false, logLevel: 'info', cacheDir });
+    expect(await Fs.readFile(storePath, 'utf-8')).not.toContain(doomed.id);
+  }, 120000);
 
   it('should throw NotFound listing the declared aliases for an unknown one', function () {
     // The generic makes this a compile error for a config built with

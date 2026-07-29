@@ -164,6 +164,34 @@ describe('Read-only mode', function () {
     );
   });
 
+  it('should reject a direct git init', async function () {
+    await expectReadOnlyError(
+      readOnlyCore.git.init(Path.join(readOnlyDataDir, 'should-not-exist'))
+    );
+  });
+
+  it('should reject a direct git commit', async function () {
+    // The services guard earlier, this is the backstop for a caller
+    // reaching for core.git itself
+    await expectReadOnlyError(
+      readOnlyCore.git.commit(readOnlyCore.util.pathTo.project(project.id), {
+        method: 'update',
+        reference: { objectType: 'project', id: project.id },
+      })
+    );
+  });
+
+  it('should reject a direct git push', async function () {
+    // Refused before the network is touched, so a read-only Core can
+    // never write to the remote it cloned from
+    await expectReadOnlyError(
+      readOnlyCore.git.push(readOnlyCore.util.pathTo.project(project.id))
+    );
+
+    const { list: remoteTags } = await core.git.tags.list({ path: remotePath });
+    expect(remoteTags.length).toEqual(0);
+  });
+
   it('should allow read operations', async function () {
     const { total } = await readOnlyCore.collections.list({
       projectId: project.id,

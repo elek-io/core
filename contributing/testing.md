@@ -4,6 +4,17 @@ Run the suite with `pnpm test`, watch mode with `pnpm dev`, coverage with `pnpm 
 
 The suite is integration heavy. Most service tests create real Projects, which means real git repositories. A full run spawns several thousand git subprocesses and writes tens of thousands of small files. Each test file writes to its own fresh data directory, `~/elek.io-test/worker-<poolId>-<uuid>` by default, see the parallel test files section below. This profile dominates how fast the suite runs on a given machine and explains the CI choices below.
 
+## Coverage under-reports two areas
+
+`pnpm coverage` measures what runs inside the vitest worker. Two parts of Core do not, so their numbers are far lower than what the suite actually exercises:
+
+- **The Astro loaders.** The Astro suites write a content config that imports [`src/index.astro.ts`](../src/index.astro.ts) by absolute path, and `sync()` loads it through Astro's own vite pipeline. v8 attributes nothing back to the source file, so [`src/astro/loaders.ts`](../src/astro/loaders.ts) reads around 12% while six suites drive it end to end.
+- **The CLI.** [`src/index.cli.test.ts`](../src/index.cli.test.ts) spawns the built binary, which is the point: it is the only thing that proves a consumer install starts. A spawned process is not instrumented either, so the action modules look thinner than they are.
+
+Do not close those gaps by unit-testing the same behavior in process. A test that reaches for the loader's internals to make a number move proves less than the sync-based test next to it. Add a test there when the behavior is worth proving, and accept the reported number.
+
+What a loader test can reach differs from what it cannot. `sync()` calls `load()` once, with no watcher, so anything on the dev reload path is out of reach from a test, see the hand-verified list below. Everything a repeated build does is in reach, by syncing twice into the same root with an explicit `cacheDir` so the store survives between the two, which is how the cleaned-directory and store-pruning tests work.
+
 ## CI runner performance
 
 CI runs the suite on four platforms. They differ a lot in speed for this git-bound workload. The per-git-command latencies are averages from serial CI logs (June 2026) and describe what each platform charges per operation, they inflate under parallel contention. The full suite rows are the vitest durations of one serial and one parallel CI run of the same code (July 2026, when parallel test files landed):
@@ -71,6 +82,14 @@ Re-check these when touching `watch.ts`, the loaders' sync functions or the load
 ### Limitation: git credentials cannot be integration-tested
 
 The suite's remotes are bare repositories on the local filesystem, and git skips its whole credential machinery for local paths. The `ELEK_IO_REMOTE_ACCESS_TOKEN` askpass flow (`buildCredentialEnv` and the helper scripts in `GitService`) is therefore covered by unit tests on the env it builds, plus a negative integration test asserting the token never lands in `.git/config` or the remote URL. What no test covers: git actually invoking the askpass helper against an HTTP remote, and the Windows `.bat` trampoline in particular, plus LFS object availability for old Release tags on real providers. Verify those manually against a real private HTTPS remote when touching the credential path, and before releasing changes to it. A local HTTP git server fixture would close this gap if it ever becomes worth the setup. The design rationale behind the askpass approach is in [`git-credentials.md`](./git-credentials.md).
+
+### Deliberately untested
+
+Three more paths are left uncovered on purpose. Each is listed so the next person reading a coverage report does not take it for an oversight:
+
+- **`--watch` on `elek export`, `generate:types` and `generate:client`.** Each is the same six-line wrapper that logs and hands `watchProjects()` to the same regenerate call. A test would start a watcher that never settles and assert the wrapper rather than the watching. The debouncing and overlap handling that is worth proving lives in `watchContent` and is covered by [`src/astro/watch.test.ts`](../src/astro/watch.test.ts).
+- **Auth failures on `push` and the generic git runner.** Both classify the stderr of a remote that rejected a credential, which the local bare remotes cannot produce, for the reason in the credentials limitation above.
+- **A remote without a `work` branch.** Provisioning the `draft` channel refuses one, but no Core operation produces such a remote. The fixture would have to be built by hand purely to read the error message back.
 
 ### Worker count: do not set it
 

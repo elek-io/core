@@ -181,4 +181,44 @@ export const collections = { ...(await elekCollections(config)) };
       `./${image.id}.${image.extension}`
     );
   }, 120000);
+
+  /**
+   * Runs last as well, and is the only test that changes the Project.
+   */
+  it('should save a binary again after its directory was cleaned and forget a deleted Asset', async function () {
+    // Two things a repeated build has to survive, in one sync because
+    // each one costs a full Astro pipeline.
+    //
+    // The Asset itself did not change, so its digest still matches the
+    // one the store holds and the loader would skip it. Skipping is
+    // only safe while the binary is still on disk, and a cleaned
+    // output directory is normal: the directories are derived
+    // artifacts, so they are gitignored and a fresh checkout has
+    // neither. Without the check the site builds once and loses every
+    // binary on the build after.
+    const imagePath = Path.join(
+      root,
+      'src',
+      'elek',
+      'website',
+      'images',
+      `${image.id}.${image.extension}`
+    );
+    await Fs.remove(imagePath);
+    expect(await Fs.pathExists(imagePath)).toBe(false);
+
+    // And an Asset deleted in the Desktop app has to leave the store,
+    // otherwise the built site keeps serving it until the cache is
+    // cleared by hand
+    await core.assets.delete({
+      projectId: project.id,
+      id: document.id,
+      extension: document.extension,
+    });
+
+    await sync({ root, configFile: false, logLevel: 'info', cacheDir });
+
+    expect(await Fs.pathExists(imagePath)).toBe(true);
+    expect(await storeContents()).not.toContain(document.id);
+  }, 120000);
 });
