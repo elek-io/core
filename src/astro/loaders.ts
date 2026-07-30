@@ -5,6 +5,7 @@ import Path from 'node:path';
 import Url from 'node:url';
 import Fs from 'fs-extra';
 import { assetSchema, flattenFieldDefinitions } from '../index.node.js';
+import { makeComponentsContext } from '../schema/componentSchema.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
@@ -387,19 +388,18 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     await logReadingProject(core, projectId, (message) =>
       context.logger.info(message)
     );
-    const resolvedCollectionId = await core.collections.resolveCollectionId({
-      projectId,
-      idOrSlug: props.collectionIdOrSlug,
-    });
 
-    if (modelDigest !== undefined) {
-      const { digest } = await readModel(core);
-      if (digest !== modelDigest) {
-        context.logger.warn(
-          `The content model of Collection "${props.collectionIdOrSlug}" of Project "${alias}" changed. Astro builds a collection's schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.`
-        );
-        return resolvedCollectionId;
-      }
+    // Read on every sync, not only to compare the digest: transforming
+    // an Entry needs the Components to name each item's Component
+    const model = await readModel(core);
+    const resolvedCollectionId = model.resolvedId;
+    const componentsContext = makeComponentsContext(model.components);
+
+    if (modelDigest !== undefined && model.digest !== modelDigest) {
+      context.logger.warn(
+        `The content model of Collection "${props.collectionIdOrSlug}" of Project "${alias}" changed. Astro builds a collection's schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.`
+      );
+      return resolvedCollectionId;
     }
 
     context.logger.info(
@@ -420,7 +420,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     const seen = new Set<string>();
     for (const entry of entries) {
       seen.add(entry.id);
-      const values = transformEntryValues(entry.values);
+      const values = transformEntryValues(entry.values, componentsContext);
       const digest = context.generateDigest(values);
 
       // Skip re-validating Entries whose data has not changed.

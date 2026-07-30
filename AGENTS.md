@@ -9,7 +9,7 @@ Core handles file IO and git version control for elek.io Projects, a headless, g
 Core's docs live in two places, split by audience:
 
 - [`docs/`](./docs/) - consumer documentation: the observable behavior and public API. It ships inside the published package (listed in `package.json` `files`), so keep it self-contained. A doc here must not link into `contributing/`, or the link dangles in the package. [`docs/index.md`](./docs/index.md) is the index and the topic-to-doc map, add new consumer docs to it.
-- [`contributing/`](./contributing/) - contributor and design docs: the design and invariants behind the behavior, plus testing, how to add a field type, the Astro entry's internals ([`astro-entry.md`](./contributing/astro-entry.md)) and the cross-CMS comparison. Never shipped, so these may link anywhere.
+- [`contributing/`](./contributing/) - contributor and design docs: the design and invariants behind the behavior, plus testing, how to add a field type, what the generated types describe ([`type-generation.md`](./contributing/type-generation.md)), the Astro entry's internals ([`astro-entry.md`](./contributing/astro-entry.md)) and the cross-CMS comparison. Never shipped, so these may link anywhere.
 
 Two rules follow:
 

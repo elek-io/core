@@ -381,6 +381,38 @@ const post = await getEntry('websitePosts', entry.data.related.en[0].id);
 
 An Entry carries no `body` and no rendered HTML, so Astro's `render()` and `<Content />` produce an empty page rather than an error. A `markdown` field arrives on `entry.data` as a tree, which [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro) renders with `mdastRender`.
 
+A `dynamic` field is an array of Component items instead of a per-language record, since the items themselves are shared across languages. Each item names the Component it is an instance of:
+
+```typescript
+entry.data.sections[0].id; // string, the item's own UUID
+entry.data.sections[0].componentId; // string, the UUID of its Component
+entry.data.sections[0].componentSlug; // "hero", the slug of its Component
+entry.data.sections[0].values.headline.en; // the item's own Values, keyed by language
+```
+
+`componentSlug` is what a page switches on when the field allows more than one Component, the page-builder shape where a `sections` field mixes a `prose`, a `comparison` and a `features` Component. The generated type is a union discriminated on it, so TypeScript narrows `values` per branch and tells you about a Component you forgot to render:
+
+```astro
+---
+const { sections } = entry.data;
+---
+
+{
+  sections.map((section) => {
+    switch (section.componentSlug) {
+      case 'prose':
+        return <Prose values={section.values} />;
+      case 'comparison':
+        return <Comparison values={section.values} />;
+      case 'features':
+        return <Features values={section.values} />;
+    }
+  })
+}
+```
+
+Dispatch on `componentSlug` rather than on `componentId`. Both identify the Component, but the slug is the one you write in a template and the one that survives content being re-created, as a re-provisioned or seeded Project keeps its slugs while every UUID is new.
+
 ### Choosing what to derive
 
 Pass a second argument and it becomes the complete list of what the site reads. This is the shape to ship:

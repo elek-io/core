@@ -23,7 +23,7 @@ New to elek.io Core? Read [`concepts.md`](./concepts.md) for the data model, the
 ## Reading and shipping content
 
 - [`local-api.md`](./local-api.md) - the read-only REST API: endpoints, pagination and the OpenAPI docs
-- [`api-clients.md`](./api-clients.md) - generating typed JS/TS clients and standalone TypeScript types
+- [`api-clients.md`](./api-clients.md) - generating typed JS/TS clients and standalone TypeScript types, and which types describe what
 - [`export.md`](./export.md) - exporting Projects to plain JSON
 - [`releases.md`](./releases.md) - tagged, versioned snapshots and promoting `work` to `production`
 - [`provisioning.md`](./provisioning.md) - provisioning Projects into build environments (CI/CD and local builds), whatever runs next

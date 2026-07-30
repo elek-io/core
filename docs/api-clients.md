@@ -2,7 +2,33 @@
 
 Core's CLI can generate typed artifacts from your Project content models: a runtime **API client** (`elek generate:client`) and standalone **TypeScript types** (`elek generate:types`). Both narrow translatable content to each Project's languages, so you get `Record<ProjectLanguage, T>` instead of the broad superset Core's own types expose. A field the Collection does not require is `null` in a language nobody filled in, and the generated type says so: `Record<ProjectLanguage, string | null>`.
 
-For why the narrowing exists, see [`fields.md`](./fields.md#generated-client-types). For the API the client talks to, see [`local-api.md`](./local-api.md).
+For why the narrowing exists, see [`fields.md`](./fields.md#types-built-from-field-definitions). For the API the client talks to, see [`local-api.md`](./local-api.md).
+
+## Which types describe what
+
+Content reaches your code typed in three ways, and they are not interchangeable. Two describe the same payload at different widths, the third describes a payload Core reshaped first.
+
+| Types                    | Where they come from                                  | Reach for them when                                                                                                                 |
+| ------------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Core's exported types    | `import type { Entry } from '@elek-io/core'`          | You write against Core without a specific Project in hand, so every Project and every supported language fits                       |
+| `elek generate:types`    | A file the CLI writes into `outDir`, you import it    | You read one Project's content through the [local API](./local-api.md), a generated client, an [export](./export.md) or Core itself |
+| The Astro loaders' types | Supplied to Astro by the loader, read as `entry.data` | You read content in an Astro site through `getEntry()` or `getCollection()`                                                         |
+
+The first two describe an Entry as it is stored, so every Value keeps its envelope. The Astro loaders transform an Entry before Astro ever sees it, and their types describe that result:
+
+```typescript
+// Core's types and elek generate:types - the stored Value envelope
+entry.values.title.content.en;
+entry.values.sections.content[0].componentId;
+
+// The Astro loaders - the envelope stripped by the loader
+entry.data.title.en;
+entry.data.sections[0].componentSlug;
+```
+
+Only the first two are ever a choice. In an Astro site the loaders supply the types, and generated types do not describe what `entry.data` holds.
+
+A `dynamic` field is where the shapes differ most, since both sides emit a discriminated union but not on the same discriminant. `elek generate:types` emits an id constant per Component and types the union on `componentId`, so an item is dispatched with `case HeroComponentId:`. The Astro loaders add a `componentSlug` to every item and type the union on that, so an item is dispatched with `case 'hero':`. Both identify the same Component, and each is the readable option in the place it is used.
 
 ## generate:client
 
@@ -58,7 +84,9 @@ elek generate:types [outDir] [language] [projects] [--watch]
 | `projects` | `all`        | `all`, or a comma-separated list of Project ids.       |
 | `--watch`  | off          | Regenerate automatically when Project content changes. |
 
-Unlike `generate:client`, this emits **type definitions only - no runtime code**. For each Project it produces a narrowed `ProjectLanguage` union plus typed interfaces for every Collection, Component and Entry (with their values narrowed to the Project's languages), and id constants. Use these to type content you load yourself (for example through the [Astro integration](./usage.md#astro-integration) or your own fetch layer) without pulling in the client.
+Unlike `generate:client`, this emits **type definitions only - no runtime code**. For each Project it produces a narrowed `ProjectLanguage` union plus typed interfaces for every Collection, Component and Entry (with their values narrowed to the Project's languages), and id constants. Use these to type content you load yourself, through the [local API](./local-api.md), an [export](./export.md), Core's own methods or your own fetch layer, without pulling in the client.
+
+They do not apply to an Astro site. The loaders supply Astro with types of their own, for the shape they transform content into, see [which types describe what](#which-types-describe-what).
 
 A single Project writes `types.ts`. Multiple Projects write one `types-{projectId}.ts` per Project. With no Projects in the data directory nothing is written and the command exits successfully, for either language.
 

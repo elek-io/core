@@ -45,6 +45,8 @@ So a model change has no good outcome. Reloading against the previous schema sil
 
 That is also why the Entries loader watches `pathTo.components(projectId)` even though it never reloads a Component. Without it, editing a Component that no Entry embeds yet changes nothing on disk that anyone watches, and the developer gets silence instead of the message. `pathTo.entries()` is the Collection directory itself, so `collection.json` needs no separate watch.
 
+The model is read on every sync, not only when there is a digest to compare against. `transformEntryValues` ([`transform.ts`](../src/astro/transform.ts)) resolves each component item's `componentId` to its Component's slug, which the item carries as `componentSlug` for a site to dispatch on, so the Components are an input of the transform and not only of the schema.
+
 The set of collections is decided before any loader runs, so adding or removing a Collection cannot be detected here at all. The consumer documentation lists it as a restart case alongside the rest.
 
 The loaders' Core runs with `file: { cache: false }` ([`core.ts`](../src/astro/core.ts)) because of this feature. Core invalidates its JSON cache for writes it makes itself, and here another application owns the files, so a cached Project would keep serving content one edit behind and the watcher would look broken. Each file is read once per sync either way. This was found the hard way: the first working version of the watcher reloaded on every edit and still rendered the old content.
@@ -146,5 +148,6 @@ The parse-time schema declares `src` as a nullable string, because a marker stri
 ## See Also
 
 - [`../docs/usage.md`](../docs/usage.md#astro-integration) - the consumer documentation
+- [`type-generation.md`](./type-generation.md) - why the loaders' types describe a different shape than the CLI's
 - [`comparisons/astro-integrations.md`](./comparisons/astro-integrations.md) - Astro platform constraints and how other CMSs solve the same problems
 - [`peer-dependencies.md`](./peer-dependencies.md) - why astro is an optional peer and how its majors are verified
