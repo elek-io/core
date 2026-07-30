@@ -1,6 +1,37 @@
 import { describe, expect, it } from 'vitest';
+import {
+  makeComponentsContext,
+  type Component,
+} from '../schema/componentSchema.js';
 import type { Value } from '../schema/valueSchema.js';
 import { transformEntryValues } from './transform.js';
+
+const heroId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const ctaId = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff';
+
+/**
+ * A Component is only read for its id and slug here, so no field
+ * definitions are needed
+ */
+function makeComponent(id: string, slug: string): Component {
+  return {
+    objectType: 'component',
+    id,
+    coreVersion: '1.0.0',
+    created: '2026-01-01T00:00:00.000Z',
+    updated: null,
+    name: { en: slug },
+    slug,
+    description: null,
+    fieldDefinitions: [],
+  };
+}
+
+const noComponents = makeComponentsContext([]);
+const components = makeComponentsContext([
+  makeComponent(heroId, 'hero'),
+  makeComponent(ctaId, 'cta'),
+]);
 
 describe('transformEntryValues', () => {
   it('transforms string values keyed by slug', () => {
@@ -12,7 +43,7 @@ describe('transformEntryValues', () => {
       },
     };
 
-    const result = transformEntryValues(values);
+    const result = transformEntryValues(values, noComponents);
 
     expect(result).toEqual({
       title: { en: 'Hello', de: 'Hallo' },
@@ -28,7 +59,7 @@ describe('transformEntryValues', () => {
       },
     };
 
-    const result = transformEntryValues(values);
+    const result = transformEntryValues(values, noComponents);
 
     expect(result).toEqual({
       count: { en: 42, de: 42 },
@@ -44,7 +75,7 @@ describe('transformEntryValues', () => {
       },
     };
 
-    const result = transformEntryValues(values);
+    const result = transformEntryValues(values, noComponents);
 
     expect(result).toEqual({
       active: { en: true },
@@ -64,7 +95,7 @@ describe('transformEntryValues', () => {
       },
     };
 
-    const result = transformEntryValues(values);
+    const result = transformEntryValues(values, noComponents);
 
     expect(result).toEqual({
       image: {
@@ -94,7 +125,7 @@ describe('transformEntryValues', () => {
       },
     };
 
-    const result = transformEntryValues(values);
+    const result = transformEntryValues(values, noComponents);
 
     expect(result).toEqual({
       title: { en: 'Title' },
@@ -111,7 +142,7 @@ describe('transformEntryValues', () => {
         content: [
           {
             id: '11111111-1111-1111-1111-111111111111',
-            componentId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            componentId: heroId,
             values: {
               heading: {
                 objectType: 'value',
@@ -129,13 +160,14 @@ describe('transformEntryValues', () => {
       },
     };
 
-    const result = transformEntryValues(values);
+    const result = transformEntryValues(values, components);
 
     expect(result).toEqual({
       sections: [
         {
           id: '11111111-1111-1111-1111-111111111111',
-          componentId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+          componentId: heroId,
+          componentSlug: 'hero',
           values: {
             heading: { en: 'Welcome', de: 'Willkommen' },
             visible: { en: true },
@@ -145,8 +177,118 @@ describe('transformEntryValues', () => {
     });
   });
 
+  it('names the Component of every item of a polymorphic dynamic field', () => {
+    const values: Record<string, Value> = {
+      sections: {
+        objectType: 'value',
+        valueType: 'component',
+        content: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            componentId: heroId,
+            values: {},
+          },
+          {
+            id: '22222222-2222-2222-2222-222222222222',
+            componentId: ctaId,
+            values: {},
+          },
+        ],
+      },
+    };
+
+    const result = transformEntryValues(values, components);
+
+    expect(result).toEqual({
+      sections: [
+        {
+          id: '11111111-1111-1111-1111-111111111111',
+          componentId: heroId,
+          componentSlug: 'hero',
+          values: {},
+        },
+        {
+          id: '22222222-2222-2222-2222-222222222222',
+          componentId: ctaId,
+          componentSlug: 'cta',
+          values: {},
+        },
+      ],
+    });
+  });
+
+  it('names the Component of nested component items too', () => {
+    const values: Record<string, Value> = {
+      sections: {
+        objectType: 'value',
+        valueType: 'component',
+        content: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            componentId: heroId,
+            values: {
+              'sub-blocks': {
+                objectType: 'value',
+                valueType: 'component',
+                content: [
+                  {
+                    id: '33333333-3333-3333-3333-333333333333',
+                    componentId: ctaId,
+                    values: {},
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    };
+
+    const result = transformEntryValues(values, components);
+
+    expect(result).toEqual({
+      sections: [
+        {
+          id: '11111111-1111-1111-1111-111111111111',
+          componentId: heroId,
+          componentSlug: 'hero',
+          values: {
+            'sub-blocks': [
+              {
+                id: '33333333-3333-3333-3333-333333333333',
+                componentId: ctaId,
+                componentSlug: 'cta',
+                values: {},
+              },
+            ],
+          },
+        },
+      ],
+    });
+  });
+
+  it('throws naming the Component and the field when an item does not resolve', () => {
+    const values: Record<string, Value> = {
+      sections: {
+        objectType: 'value',
+        valueType: 'component',
+        content: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            componentId: heroId,
+            values: {},
+          },
+        ],
+      },
+    };
+
+    expect(() => transformEntryValues(values, noComponents)).toThrow(
+      `Component "${heroId}" referenced by dynamic field "sections" not found in Project`
+    );
+  });
+
   it('returns empty object for empty values record', () => {
-    const result = transformEntryValues({});
+    const result = transformEntryValues({}, noComponents);
     expect(result).toEqual({});
   });
 });

@@ -316,11 +316,58 @@ describe('buildEntryValuesSchema', () => {
         {
           id: uuid(),
           componentId: heroId,
+          componentSlug: 'hero',
           values: { heading: { en: 'Hello' } },
         },
       ],
     };
     expect(schema.parse(valid)).toEqual(valid);
+  });
+
+  it('requires the Component slug on every component item', () => {
+    const heroId = uuid();
+    const hero = makeComponent({
+      id: heroId,
+      slug: 'hero',
+      fieldDefinitions: [],
+    });
+    const fieldDefs: FieldDefinition[] = [
+      {
+        id: uuid(),
+        slug: 'sections',
+        valueType: 'component',
+        fieldType: 'dynamic',
+        label: { en: 'Sections' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        ofComponents: [heroId],
+        min: null,
+        max: null,
+      },
+    ];
+
+    const schema = buildEntryValuesSchema(fieldDefs, ['en'], [hero]);
+
+    expect(() =>
+      schema.parse({
+        sections: [{ id: uuid(), componentId: heroId, values: {} }],
+      })
+    ).toThrow();
+    expect(() =>
+      schema.parse({
+        sections: [
+          {
+            id: uuid(),
+            componentId: heroId,
+            componentSlug: 'not-hero',
+            values: {},
+          },
+        ],
+      })
+    ).toThrow();
   });
 
   it('returns empty object schema for empty field definitions', () => {
@@ -417,12 +464,14 @@ describe('buildEntryValuesSchema with nested components', () => {
         {
           id: uuid(),
           componentId: heroId,
+          componentSlug: 'hero',
           values: {
             title: { en: 'Welcome', de: 'Willkommen' },
             'sub-blocks': [
               {
                 id: uuid(),
                 componentId: ctaId,
+                componentSlug: 'cta',
                 values: {
                   label: { en: 'Click', de: 'Klick' },
                 },
@@ -448,6 +497,7 @@ describe('buildEntryValuesSchema with nested components', () => {
         {
           id: uuid(),
           componentId: uuid(), // not heroId
+          componentSlug: 'hero',
           values: {
             title: { en: 'Welcome', de: 'Willkommen' },
             'sub-blocks': [],
@@ -471,12 +521,14 @@ describe('buildEntryValuesSchema with nested components', () => {
         {
           id: uuid(),
           componentId: heroId,
+          componentSlug: 'hero',
           values: {
             title: { en: 'Welcome', de: 'Willkommen' },
             'sub-blocks': [
               {
                 id: uuid(),
                 componentId: ctaId,
+                componentSlug: 'cta',
                 values: {
                   // missing 'de'
                   label: { en: 'Click' },
@@ -867,7 +919,7 @@ describe('buildEntryValuesTypeString', () => {
     expect(types).toContain('type HeroComponentValues = {');
     expect(types).toContain('type BlogPostsBlocksItem =');
     expect(types).toContain(
-      `| { id: string; componentId: "${heroId}"; values: HeroComponentValues }`
+      `| { id: string; componentId: "${heroId}"; componentSlug: "hero"; values: HeroComponentValues }`
     );
     expect(types).toContain('"blocks": Array<BlogPostsBlocksItem>');
   });
@@ -944,7 +996,7 @@ describe('buildEntryValuesTypeString', () => {
 
     expect(types).toContain('type HeroSubBlocksItem =');
     expect(types).toContain(
-      `| { id: string; componentId: "${ctaId}"; values: CtaComponentValues }`
+      `| { id: string; componentId: "${ctaId}"; componentSlug: "cta"; values: CtaComponentValues }`
     );
     expect(types).toContain('"sub-blocks": Array<HeroSubBlocksItem>');
   });
@@ -1023,6 +1075,54 @@ describe('buildEntryValuesTypeString', () => {
     );
     expect(types).toContain(
       'type SpacerComponentValues = Record<string, never>;'
+    );
+  });
+
+  it('emits a slug literal per member of an open dynamic field', () => {
+    // ofComponents: [] resolves to every Component of the Project, so the
+    // literals have to cover the resolved set, not the empty field config
+    const heroId = uuid();
+    const ctaId = uuid();
+    const hero = makeComponent({
+      id: heroId,
+      slug: 'hero',
+      fieldDefinitions: [],
+    });
+    const cta = makeComponent({
+      id: ctaId,
+      slug: 'cta',
+      fieldDefinitions: [],
+    });
+    const fieldDefs: FieldDefinition[] = [
+      {
+        id: uuid(),
+        slug: 'blocks',
+        valueType: 'component',
+        fieldType: 'dynamic',
+        label: { en: 'Blocks' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        ofComponents: [],
+        min: null,
+        max: null,
+      },
+    ];
+
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      [hero, cta],
+      'BlogPosts'
+    );
+
+    expect(types).toContain(
+      `| { id: string; componentId: "${heroId}"; componentSlug: "hero"; values: HeroComponentValues }`
+    );
+    expect(types).toContain(
+      `| { id: string; componentId: "${ctaId}"; componentSlug: "cta"; values: CtaComponentValues }`
     );
   });
 
@@ -1131,22 +1231,75 @@ describe('buildEntryValuesSchema dynamic field arity edge cases', () => {
     expect(
       schema.parse({
         blocks: [
-          { id: uuid(), componentId: alphaId, values: { a: { en: '1' } } },
+          {
+            id: uuid(),
+            componentId: alphaId,
+            componentSlug: 'alpha',
+            values: { a: { en: '1' } },
+          },
         ],
       })
     ).toBeTruthy();
     expect(
       schema.parse({
         blocks: [
-          { id: uuid(), componentId: betaId, values: { b: { en: '2' } } },
+          {
+            id: uuid(),
+            componentId: betaId,
+            componentSlug: 'beta',
+            values: { b: { en: '2' } },
+          },
         ],
       })
     ).toBeTruthy();
     expect(() =>
       schema.parse({
-        blocks: [{ id: uuid(), componentId: uuid(), values: {} }],
+        blocks: [
+          {
+            id: uuid(),
+            componentId: uuid(),
+            componentSlug: 'gamma',
+            values: {},
+          },
+        ],
       })
     ).toThrow();
+  });
+
+  it('discriminates the union on the Component slug', () => {
+    const alphaId = uuid();
+    const betaId = uuid();
+    const alpha = makeComponent({
+      id: alphaId,
+      slug: 'alpha',
+      fieldDefinitions: [textField('a')],
+    });
+    const beta = makeComponent({
+      id: betaId,
+      slug: 'beta',
+      fieldDefinitions: [textField('b')],
+    });
+
+    const schema = buildEntryValuesSchema(
+      [dynamicField('blocks', [alphaId, betaId])],
+      ['en'],
+      [alpha, beta]
+    );
+
+    // The slug picks the member, so alpha's item is validated against
+    // alpha's values and beta's are not accepted in its place
+    const result = schema.safeParse({
+      blocks: [
+        {
+          id: uuid(),
+          componentId: alphaId,
+          componentSlug: 'alpha',
+          values: { b: { en: '2' } },
+        },
+      ],
+    });
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error?.issues)).toContain('"a"');
   });
 
   it('requires at least one item for a required dynamic field with no explicit min', () => {
@@ -1167,7 +1320,12 @@ describe('buildEntryValuesSchema dynamic field arity edge cases', () => {
     expect(
       schema.parse({
         blocks: [
-          { id: uuid(), componentId: heroId, values: { title: { en: 'x' } } },
+          {
+            id: uuid(),
+            componentId: heroId,
+            componentSlug: 'hero',
+            values: { title: { en: 'x' } },
+          },
         ],
       })
     ).toBeTruthy();

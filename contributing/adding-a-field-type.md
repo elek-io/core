@@ -9,4 +9,4 @@ To add a field type:
 3. Add the new schema to the relevant union (`stringFieldDefinitionSchema` / `directFieldDefinitionSchema` / `referenceFieldDefinitionSchema`) and to `fieldDefinitionSchema` if it introduces a new top-level branch.
 4. Update `src/schema/schemaFromFieldDefinition.ts` to handle the new field type when generating runtime value validation.
 5. Add a migration step if existing Projects need their field definitions transformed (see [`migration-and-history-flow.md`](./migration-and-history-flow.md)).
-6. Update CLI/Astro generators if the new field type changes the emitted client types.
+6. Update CLI/Astro generators if the new field type changes the emitted client types. The two describe different shapes on purpose, see [`type-generation.md`](./type-generation.md).

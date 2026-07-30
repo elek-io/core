@@ -151,6 +151,7 @@ function buildComponentArraySchema(
     return z.object({
       id: z.string(),
       componentId: z.literal(id),
+      componentSlug: z.literal(component.slug),
       values: z.object(valuesShape),
     });
   });
@@ -163,7 +164,14 @@ function buildComponentArraySchema(
   } else if (!second) {
     itemSchema = first;
   } else {
-    itemSchema = z.discriminatedUnion('componentId', [first, second, ...rest]);
+    // Discriminated on the slug rather than the id, which is what a site
+    // switches on. Component slugs are unique within a Project, enforced
+    // by ComponentService on create and update.
+    itemSchema = z.discriminatedUnion('componentSlug', [
+      first,
+      second,
+      ...rest,
+    ]);
   }
 
   let arr = z.array(itemSchema);
@@ -336,7 +344,7 @@ function renderItemUnion(
       );
     }
     const innerPascal = toPascalCase(component.slug);
-    return `  | { id: string; componentId: "${id}"; values: ${innerPascal}ComponentValues }`;
+    return `  | { id: string; componentId: "${id}"; componentSlug: "${component.slug}"; values: ${innerPascal}ComponentValues }`;
   });
   return [`type ${typeName} =`, variants.join('\n') + ';'].join('\n');
 }
