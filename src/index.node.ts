@@ -65,7 +65,11 @@ export default class ElekIoCore {
     }
 
     this.options = {
-      log: { level: resolveLogLevel(parsedProps.data?.log?.level) },
+      log: {
+        level: resolveLogLevel(parsedProps.data?.log?.level),
+        hasProcessErrorHandlers:
+          parsedProps.data?.log?.hasProcessErrorHandlers ?? true,
+      },
       file: parsedProps.data?.file ?? { cache: true },
       dataDir: resolveDataDir(parsedProps.data?.dataDir),
       isReadOnly: resolveReadOnly(parsedProps.data?.isReadOnly),

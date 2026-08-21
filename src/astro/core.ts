@@ -15,12 +15,21 @@ import ElekIoCore, { CoreError } from '../index.node.js';
  * the Desktop app edits a Project while `astro dev` reads it, and a
  * cached Project would keep serving content one edit behind. Every file
  * is read once per sync either way, so there is nothing to gain.
+ *
+ * The process error handlers are off because inside a build the host
+ * owns the process. Astro has its own handling, and this instance is
+ * never disposed, so handlers registered here would outlive every
+ * loader and cover a process Core does not own. That is not theory: an
+ * Astro build whose stdout pipe closed produced an EPIPE Core then
+ * caught, logged, and turned back into an EPIPE, 5450 times a second
+ * for 13 minutes. See contributing/logging.md.
  */
 let coreInstance: ElekIoCore | undefined;
 export function getCore(): ElekIoCore {
   if (!coreInstance) {
     coreInstance = new ElekIoCore({
       file: { cache: false },
+      log: { hasProcessErrorHandlers: false },
     });
   }
   return coreInstance;

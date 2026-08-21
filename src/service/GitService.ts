@@ -22,7 +22,6 @@ import { GitTagService } from './GitTagService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { UserService } from './UserService.js';
-import type { LogProps } from '../schema/index.js';
 import { PROVISIONED_MARKER, type PathTo } from '../util/node.js';
 
 /**
@@ -129,6 +128,49 @@ export function classifyAuthError(
   return CoreError.unauthorized(
     'The remote requires authentication. Set the ELEK_IO_REMOTE_ACCESS_TOKEN environment variable.'
   );
+}
+
+const REDACTED = '[redacted]';
+
+/**
+ * Redacts the User's identity out of a git command line before it reaches
+ * a log record or an error message.
+ *
+ * Core's log files can be attached to a bug report, and the invariant in
+ * contributing/logging.md is that they never carry a git signature. Three
+ * places put one on a command line, and a rule written for only the first
+ * would have missed the other two:
+ *
+ * - `commit --author=<name> <email>`
+ * - `config --local user.name <value>`
+ * - `config --local user.email <value>`
+ *
+ * Credentials embedded in a remote URL go too. The access token never
+ * reaches a command line (it travels by environment variable through the
+ * askpass helper, see contributing/git-credentials.md), but a URL a caller
+ * supplied can carry its own.
+ *
+ * Everything else is left exactly as it is. Ids, paths and flags are what
+ * make a log line resolvable against the repository.
+ */
+export function redactGitArgs(args: readonly string[]): string[] {
+  return args.map((arg, index) => {
+    if (arg.startsWith('--author=')) {
+      return `--author=${REDACTED}`;
+    }
+    const previous = args[index - 1];
+    if (previous === 'user.name' || previous === 'user.email') {
+      return REDACTED;
+    }
+    // scheme://userinfo@host, never the SSH shorthand git@host:org/repo,
+    // where the user is part of the address rather than a credential
+    return arg.replace(/^([a-zA-Z][\w+.-]*:\/\/)[^/@]+@/, `$1${REDACTED}@`);
+  });
+}
+
+/** The command line as it may be written down. */
+function redactedCommand(args: readonly string[]): string {
+  return `git ${redactGitArgs(args).join(' ')}`;
 }
 
 export class GitService {
@@ -1350,22 +1392,18 @@ export class GitService {
 
     if (!result) {
       throw CoreError.internal(
-        `Git ${this.version} (${this.gitPath}) command "git ${args.join(
-          ' '
+        `Git ${this.version} (${this.gitPath}) command "${redactedCommand(
+          args
         )}" executed for "${path}" failed to return a result`
       );
     }
 
-    const gitLog: LogProps = {
+    const command = redactedCommand(args);
+    this.logService.debug({
       source: 'core',
-      message: `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`,
-      meta: { command: `git ${args.join(' ')}` },
-    };
-    if (result.durationMs >= 100) {
-      this.logService.warn(gitLog);
-    } else {
-      this.logService.debug(gitLog);
-    }
+      message: `Executed "${command}" in ${result.durationMs}ms`,
+      meta: { command, durationMs: result.durationMs },
+    });
 
     if (result.gitResult.exitCode !== 0 && tolerateNonZero !== true) {
       const authError = classifyAuthError(

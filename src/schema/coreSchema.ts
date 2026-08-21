@@ -12,6 +12,17 @@ export const elekIoCoreOptionsSchema = z.object({
      * @default 'info'
      */
     level: logLevelSchema,
+    /**
+     * Whether Core registers process-level uncaught exception and
+     * unhandled rejection handlers
+     *
+     * A host that owns its own error handling turns it off,
+     * which is what the Astro entry does:
+     * inside a build the host owns the process.
+     *
+     * @default true
+     */
+    hasProcessErrorHandlers: z.boolean(),
   }),
   file: z.object({
     /**
@@ -46,6 +57,11 @@ export const elekIoCoreOptionsSchema = z.object({
 export type ElekIoCoreOptions = z.infer<typeof elekIoCoreOptionsSchema>;
 
 export const constructorElekIoCoreSchema = elekIoCoreOptionsSchema
+  // `log` holds more than one setting, so its keys are individually
+  // optional. Without this, opting out of the process error handlers
+  // would force a caller to pin the level too, and the Astro entry
+  // deliberately leaves the level to ELEK_IO_LOG_LEVEL.
+  .extend({ log: elekIoCoreOptionsSchema.shape.log.partial() })
   .partial({
     log: true,
     file: true,

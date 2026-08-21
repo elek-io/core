@@ -897,8 +897,8 @@ export class ProjectService
           source: 'core',
           message: `Successfully upgraded Project "${props.id}" to Core version "${this.coreVersion}"`,
           meta: {
-            previous: currentProjectFile,
-            migrated: migratedProjectFile,
+            fromVersion: this.coreVersionOf(currentProjectFile),
+            toVersion: this.coreVersion,
           },
         });
       } catch (error) {
@@ -906,6 +906,19 @@ export class ProjectService
         throw error;
       }
     });
+  }
+
+  /**
+   * Reads the Core version out of an entity file that has not been validated
+   * against a schema yet, without asserting a shape onto it.
+   *
+   * The upgrade path reads files that may predate the current schema, so
+   * `unsafeRead` hands back `unknown` on purpose.
+   */
+  private coreVersionOf(file: unknown): string | null {
+    const coreVersionCarrier = z.object({ coreVersion: z.string() });
+    const parsed = coreVersionCarrier.safeParse(file);
+    return parsed.success ? parsed.data.coreVersion : null;
   }
 
   /**
@@ -1488,8 +1501,8 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${assetFilePath}"`,
           meta: {
-            previous: prevAssetFile,
-            migrated: migratedAssetFile,
+            fromVersion: this.coreVersionOf(prevAssetFile),
+            toVersion: this.coreVersion,
           },
         });
         return;
@@ -1511,8 +1524,8 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${componentFilePath}"`,
           meta: {
-            previous: prevComponentFile,
-            migrated: migratedComponentFile,
+            fromVersion: this.coreVersionOf(prevComponentFile),
+            toVersion: this.coreVersion,
           },
         });
         return;
@@ -1534,8 +1547,8 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${collectionFilePath}"`,
           meta: {
-            previous: prevCollectionFile,
-            migrated: migratedCollectionFile,
+            fromVersion: this.coreVersionOf(prevCollectionFile),
+            toVersion: this.coreVersion,
           },
         });
         return;
@@ -1563,8 +1576,10 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${entryFilePath}"`,
           meta: {
-            previous: prevEntryFile,
-            migrated: migratedEntryFile,
+            fromVersion: this.coreVersionOf(prevEntryFile),
+            toVersion: this.coreVersion,
+            valueCount: Object.keys(migratedEntryFile.values).length,
+            valueSlugs: Object.keys(migratedEntryFile.values),
           },
         });
         return;
