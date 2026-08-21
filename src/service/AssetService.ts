@@ -263,7 +263,7 @@ export class AssetService extends AbstractEntityService {
             // the file we just copied in.
             const pathsToStage = [assetPath];
             if (prevAssetPath !== assetPath) {
-              await Fs.remove(prevAssetPath);
+              await this.jsonFileService.delete(prevAssetPath);
               pathsToStage.push(prevAssetPath);
             }
             await this.gitService.add(projectPath, pathsToStage);
@@ -327,8 +327,8 @@ export class AssetService extends AbstractEntityService {
       );
 
       return this.withGitRollback(projectPath, async () => {
-        await Fs.remove(assetPath);
-        await Fs.remove(assetFilePath);
+        await this.jsonFileService.delete(assetPath);
+        await this.jsonFileService.delete(assetFilePath);
         await this.gitService.add(projectPath, [assetFilePath, assetPath]);
         await this.gitService.commit(projectPath, {
           method: 'delete',

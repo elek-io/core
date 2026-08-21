@@ -268,6 +268,10 @@ export async function elekCollections<const T extends ElekConfig>(
   if (options === undefined) {
     core.logger.warn({
       source: 'core',
+      meta: {
+        'elek.collection.count': keys.length,
+        'elek.project.count': Object.keys(declared.projects).length,
+      },
       message: `elekCollections() derived all ${String(keys.length)} collections of ${String(Object.keys(declared.projects).length)} Project(s), because it was called without a selection. That is meant for finding your way around a Project: it reads content this site may never use, and an Assets collection copies every binary of its Project into the site on each sync. Name what the site reads before shipping, for example elekCollections(config, { collections: { ${Object.keys(declared.projects)[0] ?? 'website'}: ['posts'] }, assets: { ${Object.keys(declared.projects)[0] ?? 'website'}: true } }).`,
     });
   }

@@ -105,7 +105,7 @@ export async function ensureCleanGitStatus(
       message: `Task "${
         task.name
       }" finished with an unclean git status: ${JSON.stringify(status)}`,
-      meta: { status },
+      meta: { 'elek.git.status': status },
     });
   }
   expect(status.length).toEqual(0);

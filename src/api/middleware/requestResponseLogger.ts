@@ -11,7 +11,12 @@ export const requestResponseLogger = createMiddleware<ApiEnv>(
 
     c.var.logService.info({
       source: 'core',
-      message: `Recieved API request "${method} ${url}" with requestId ${requestId}`,
+      message: `Received API request "${method} ${url}" with requestId ${requestId}`,
+      meta: {
+        'http.request.method': method,
+        'url.full': url,
+        'elek.request.id': requestId,
+      },
     });
     const start = Date.now();
 
@@ -22,6 +27,13 @@ export const requestResponseLogger = createMiddleware<ApiEnv>(
     const resultLog = {
       source: 'core',
       message: `Response for API request "${method} ${url}" with requestId ${requestId} and status code ${statusCode} in ${durationMs}ms`,
+      meta: {
+        'http.request.method': method,
+        'url.full': url,
+        'elek.request.id': requestId,
+        'http.response.status_code': c.res.status,
+        'elek.duration_ms': durationMs,
+      },
     } as const;
 
     if (statusCode.startsWith('2')) {

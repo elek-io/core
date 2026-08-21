@@ -173,7 +173,14 @@ export default class ElekIoCore {
     this.logService.info({
       source: 'core',
       message: `Initializing elek.io Core ${this.coreVersion}`,
-      meta: { options: this.options },
+      meta: {
+        'elek.options.log.level': this.options.log.level,
+        'elek.options.log.has_process_error_handlers':
+          this.options.log.hasProcessErrorHandlers,
+        'elek.options.file.cache': this.options.file.cache,
+        'elek.options.data_dir': this.options.dataDir,
+        'elek.options.is_read_only': this.options.isReadOnly,
+      },
     });
 
     Fs.mkdirpSync(this.pathTo.projects);

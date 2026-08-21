@@ -112,6 +112,12 @@ export abstract class AbstractSlugIndexedEntityService<
       this.logService.warn({
         source: 'core',
         message: `Failed to write ${this.type} slug index for project "${projectId}", cache invalidated: ${error instanceof Error ? error.message : String(error)}`,
+        meta: {
+          'elek.project.id': projectId,
+          'elek.object.type': this.type,
+          'exception.message':
+            error instanceof Error ? error.message : String(error),
+        },
       });
     }
   }
@@ -166,6 +172,7 @@ export abstract class AbstractSlugIndexedEntityService<
     this.logService.info({
       source: 'core',
       message: `Rebuilding ${this.type} slug index for Project "${projectId}"`,
+      meta: { 'elek.project.id': projectId, 'elek.object.type': this.type },
     });
 
     const index: Record<string, string> = {};
@@ -187,6 +194,13 @@ export abstract class AbstractSlugIndexedEntityService<
         this.logService.warn({
           source: 'core',
           message: `Skipping ${this.type} folder "${folder.name}" during slug index rebuild: ${error instanceof Error ? error.message : String(error)}`,
+          meta: {
+            'elek.project.id': projectId,
+            'elek.object.type': this.type,
+            'file.name': folder.name,
+            'exception.message':
+              error instanceof Error ? error.message : String(error),
+          },
         });
       }
     }
@@ -197,6 +211,12 @@ export abstract class AbstractSlugIndexedEntityService<
       this.logService.warn({
         source: 'core',
         message: `Failed to write slug index during rebuild: ${error instanceof Error ? error.message : String(error)}`,
+        meta: {
+          'elek.project.id': projectId,
+          'elek.object.type': this.type,
+          'exception.message':
+            error instanceof Error ? error.message : String(error),
+        },
       });
     }
     return index;

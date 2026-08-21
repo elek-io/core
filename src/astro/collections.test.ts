@@ -120,12 +120,15 @@ describe('elekCollections', function () {
 
     await elekCollections(config);
 
-    const messages = warn.mock.calls.map(([props]) => props.message);
+    const logged = warn.mock.calls.map(([props]) => props);
     expect(
-      messages.some((message) => message.includes('elekCollections'))
+      logged.some((props) => props.message.includes('elekCollections'))
     ).toBe(true);
-    // Names what it derived, so the cost is in front of the developer
-    expect(messages.some((message) => message.includes('3'))).toBe(true);
+    // Names what it derived, so the cost is in front of the developer and
+    // countable without reading the sentence back apart
+    expect(
+      logged.some((props) => props.meta?.['elek.collection.count'] === 3)
+    ).toBe(true);
     warn.mockRestore();
   }, 30000);
 

@@ -614,7 +614,7 @@ export class ComponentService
       const componentPath = this.pathTo.component(props.projectId, props.id);
 
       await this.withGitRollback(projectPath, async () => {
-        await Fs.remove(componentPath);
+        await this.jsonFileService.delete(componentPath);
         await this.gitService.add(projectPath, [componentPath]);
         await this.gitService.commit(projectPath, {
           method: 'delete',

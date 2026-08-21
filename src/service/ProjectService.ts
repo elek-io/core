@@ -224,7 +224,7 @@ export class ProjectService
         this.jsonFileService.clearCache();
         return await this.toProject(projectFile);
       } catch (error) {
-        await Fs.remove(tmpProjectPath);
+        await this.jsonFileService.delete(tmpProjectPath);
         throw error;
       }
     });
@@ -283,6 +283,7 @@ export class ProjectService
           this.logService.info({
             source: 'core',
             message: `Project "${id}" is managed by another application, leaving it untouched`,
+            meta: { 'elek.project.id': id },
           });
         } else if (!exists) {
           await this.provisionClone(id, url, ref);
@@ -291,6 +292,7 @@ export class ProjectService
           this.logService.info({
             source: 'core',
             message: `Project "${id}" already holds the pinned version ${ref}, skipping the remote`,
+            meta: { 'elek.project.id': id, 'elek.git.ref': ref },
           });
         } else {
           try {
@@ -310,7 +312,11 @@ export class ProjectService
         let warning: string | null = null;
         if (cause !== null) {
           warning = await this.composeFallbackWarning(project, ref, cause);
-          this.logService.warn({ source: 'core', message: warning });
+          this.logService.warn({
+            source: 'core',
+            message: warning,
+            meta: { 'elek.project.id': id, 'elek.git.ref': ref },
+          });
         }
 
         return { project, source, warning };
@@ -542,7 +548,7 @@ export class ProjectService
       // serve its staging paths
       this.jsonFileService.clearCache();
     } catch (error) {
-      await Fs.remove(stagingPath);
+      await this.jsonFileService.delete(stagingPath);
       throw error;
     }
   }
@@ -830,6 +836,11 @@ export class ProjectService
       this.logService.info({
         source: 'core',
         message: `Attempting to upgrade Project "${props.id}" from Core version ${currentProjectFile.coreVersion} to ${this.coreVersion}`,
+        meta: {
+          'elek.project.id': props.id,
+          'elek.upgrade.from_version': this.coreVersionOf(currentProjectFile),
+          'elek.upgrade.to_version': this.coreVersion,
+        },
       });
 
       const upgradeBranchName = `upgrade/core-${currentProjectFile.coreVersion}-to-${this.coreVersion}`;
@@ -897,8 +908,9 @@ export class ProjectService
           source: 'core',
           message: `Successfully upgraded Project "${props.id}" to Core version "${this.coreVersion}"`,
           meta: {
-            fromVersion: this.coreVersionOf(currentProjectFile),
-            toVersion: this.coreVersion,
+            'elek.project.id': props.id,
+            'elek.upgrade.from_version': this.coreVersionOf(currentProjectFile),
+            'elek.upgrade.to_version': this.coreVersion,
           },
         });
       } catch (error) {
@@ -1269,7 +1281,7 @@ export class ProjectService
         this.pathTo.projectProvisionedMarker(props.id)
       );
       if (isProvisioned) {
-        await Fs.remove(this.pathTo.project(props.id));
+        await this.jsonFileService.delete(this.pathTo.project(props.id));
         return;
       }
 
@@ -1292,7 +1304,7 @@ export class ProjectService
         }
       }
 
-      await Fs.remove(this.pathTo.project(props.id));
+      await this.jsonFileService.delete(this.pathTo.project(props.id));
     });
   }
 
@@ -1501,8 +1513,11 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${assetFilePath}"`,
           meta: {
-            fromVersion: this.coreVersionOf(prevAssetFile),
-            toVersion: this.coreVersion,
+            'elek.project.id': projectId,
+            'elek.object.type': objectType,
+            'file.path': assetFilePath,
+            'elek.upgrade.from_version': this.coreVersionOf(prevAssetFile),
+            'elek.upgrade.to_version': this.coreVersion,
           },
         });
         return;
@@ -1524,8 +1539,11 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${componentFilePath}"`,
           meta: {
-            fromVersion: this.coreVersionOf(prevComponentFile),
-            toVersion: this.coreVersion,
+            'elek.project.id': projectId,
+            'elek.object.type': objectType,
+            'file.path': componentFilePath,
+            'elek.upgrade.from_version': this.coreVersionOf(prevComponentFile),
+            'elek.upgrade.to_version': this.coreVersion,
           },
         });
         return;
@@ -1547,8 +1565,11 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${collectionFilePath}"`,
           meta: {
-            fromVersion: this.coreVersionOf(prevCollectionFile),
-            toVersion: this.coreVersion,
+            'elek.project.id': projectId,
+            'elek.object.type': objectType,
+            'file.path': collectionFilePath,
+            'elek.upgrade.from_version': this.coreVersionOf(prevCollectionFile),
+            'elek.upgrade.to_version': this.coreVersion,
           },
         });
         return;
@@ -1576,10 +1597,15 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${entryFilePath}"`,
           meta: {
-            fromVersion: this.coreVersionOf(prevEntryFile),
-            toVersion: this.coreVersion,
-            valueCount: Object.keys(migratedEntryFile.values).length,
-            valueSlugs: Object.keys(migratedEntryFile.values),
+            'elek.project.id': projectId,
+            'elek.collection.id': collectionId,
+            'elek.object.type': objectType,
+            'file.path': entryFilePath,
+            'elek.upgrade.from_version': this.coreVersionOf(prevEntryFile),
+            'elek.upgrade.to_version': this.coreVersion,
+            'elek.entry.value.count': Object.keys(migratedEntryFile.values)
+              .length,
+            'elek.entry.value.slugs': Object.keys(migratedEntryFile.values),
           },
         });
         return;

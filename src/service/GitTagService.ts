@@ -252,7 +252,8 @@ export class GitTagService
       default:
         this.logService.warn({
           source: 'core',
-          message: `Tag with ID "${type}" has an invalid or missing Type trailer and will be ignored`,
+          message: `Tag has an invalid or missing Type trailer "${String(type)}" and will be ignored`,
+          meta: { 'elek.git.tag.type': type },
         });
         return null;
     }

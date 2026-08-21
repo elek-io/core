@@ -67,7 +67,9 @@ export class UserService {
     }
 
     await this.jsonFileService.update(userFile, userFilePath, userFileSchema);
-    this.logService.debug({
+    // The identity every later commit is signed with, so it belongs in
+    // the record of what happened
+    this.logService.info({
       source: 'core',
       message: 'Updated User',
     });

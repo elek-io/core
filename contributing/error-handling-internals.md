@@ -16,7 +16,7 @@ public async create(props: CreateAssetProps): Promise<Asset> {
 }
 ```
 
-On failure, errors are logged once (e.g., `[NotFound] (Asset.create) File not found`) and re-thrown. Non-`CoreError` exceptions are wrapped as `CoreError.internal`.
+On failure, errors are logged once and re-thrown. Non-`CoreError` exceptions are wrapped as `CoreError.internal`. The log record carries the error message as its message, and the type, the method and the status code as the `error.type`, `code.function.name` and `elek.error.status_code` attributes, rather than packing them into the message string. See [`logging.md`](./logging.md).
 
 ### `withGitRollback` - Transactional Git Operations
 

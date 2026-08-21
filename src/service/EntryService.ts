@@ -1,4 +1,3 @@
-import Fs from 'fs-extra';
 import { z } from '@hono/zod-openapi';
 import {
   countEntriesSchema,
@@ -362,7 +361,7 @@ export class EntryService
       );
 
       return this.withGitRollback(projectPath, async () => {
-        await Fs.remove(entryFilePath);
+        await this.jsonFileService.delete(entryFilePath);
         await this.gitService.add(projectPath, [entryFilePath]);
         await this.gitService.commit(projectPath, {
           method: 'delete',

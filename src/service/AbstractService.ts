@@ -27,6 +27,25 @@ export abstract class AbstractService {
   }
 
   /**
+   * Logs a `CoreError` at a service boundary.
+   *
+   * The type and the method are attributes rather than a `[Type]
+   * (Service.method)` prefix on the message: both ends were parsing that
+   * string back apart. See contributing/logging.md.
+   */
+  private logBoundaryError(context: string, error: CoreError): void {
+    this.logService.error({
+      source: 'core',
+      message: error.message,
+      meta: {
+        'error.type': error.type,
+        'code.function.name': `${this.type}.${context}`,
+        'elek.error.status_code': error.statusCode,
+      },
+    });
+  }
+
+  /**
    * Parses `data` against `schema` or throws a logged `CoreError.badRequest`.
    * Used at service boundaries before `validated()` when a small pre-parse is
    * needed (e.g. to extract an ID required to build the full strict schema).
@@ -39,10 +58,7 @@ export abstract class AbstractService {
     const parsed = schema.safeParse(data);
     if (!parsed.success) {
       const error = CoreError.badRequest(parsed.error.message, parsed.error);
-      this.logService.error({
-        source: 'core',
-        message: `[${error.type}] (${this.type}.${context}) ${error.message}`,
-      });
+      this.logBoundaryError(context, error);
       throw error;
     }
     return parsed.data;
@@ -61,10 +77,7 @@ export abstract class AbstractService {
     const error = CoreError.preconditionFailed(
       `Cannot ${context} because Core is in read-only mode`
     );
-    this.logService.error({
-      source: 'core',
-      message: `[${error.type}] (${this.type}.${context}) ${error.message}`,
-    });
+    this.logBoundaryError(context, error);
     throw error;
   }
 
@@ -88,10 +101,7 @@ export abstract class AbstractService {
     const error = CoreError.preconditionFailed(
       `Cannot ${context} because Project "${projectId}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
     );
-    this.logService.error({
-      source: 'core',
-      message: `[${error.type}] (${this.type}.${context}) ${error.message}`,
-    });
+    this.logBoundaryError(context, error);
     throw error;
   }
 
@@ -128,11 +138,7 @@ export abstract class AbstractService {
     } catch (error) {
       const coreError =
         error instanceof CoreError ? error : CoreError.fromUnknown(error);
-      this.logService.error({
-        source: 'core',
-        message: `[${coreError.type}] (${this.type}.${context}) ${coreError.message}`,
-        meta: { type: coreError.type, statusCode: coreError.statusCode },
-      });
+      this.logBoundaryError(context, coreError);
       throw coreError;
     }
   }
