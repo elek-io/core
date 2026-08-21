@@ -1,4 +1,5 @@
 import { createMiddleware } from 'hono/factory';
+import type { LogProps } from '../../schema/index.js';
 import type { ApiEnv } from '../lib/types.js';
 
 /**
@@ -24,7 +25,7 @@ export const requestResponseLogger = createMiddleware<ApiEnv>(
 
     const durationMs = Date.now() - start;
     const statusCode = c.res.status.toString();
-    const resultLog = {
+    const resultLog: LogProps = {
       source: 'core',
       message: `Response for API request "${method} ${url}" with requestId ${requestId} and status code ${statusCode} in ${durationMs}ms`,
       meta: {
@@ -34,7 +35,7 @@ export const requestResponseLogger = createMiddleware<ApiEnv>(
         'http.response.status_code': c.res.status,
         'elek.duration_ms': durationMs,
       },
-    } as const;
+    };
 
     if (statusCode.startsWith('2')) {
       c.var.logService.info(resultLog);

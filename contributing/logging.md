@@ -105,6 +105,16 @@ The names that carry weight:
 
 The commit line carries the same ids the commit itself carries as trailers (`Method`, `Object-Type`, `Object-Id`, `Collection-Id`), so a log line and the commit it produced join without either being parsed.
 
+### The vocabulary is declared
+
+An attribute key would otherwise be a free string. `'file.paht'`, a camelCase relapse or a nested object all write themselves into a log file and are found by nobody, because the line still parses and the query for it just comes back empty. The record shape cannot drift, a vocabulary can.
+
+So every name Core writes is listed in [`logAttributeNames`](../src/schema/logSchema.ts), grouped by where it comes from, and **`LogProps` accepts only those names for a `source: 'core'` record**. A name nobody declared fails `tsc`, at the call site, before it ever reaches a file. Adding one means adding it to the list, which is the point: the list is short, it sits next to the schema, and picking a group forces the question of whether a convention already exists for it.
+
+`LogProps` is a discriminated union on `source`, so a host logging through `core.logger` keeps a free `meta`. Core cannot type what arrives over IPC, and the sink scrubs it instead. That is also why `logSchema` itself stays permissive: it is the runtime guard, and a logger that throws because an attribute name was misspelled is worse than a wrong key in a file. The type only ever narrows what the schema already accepts.
+
+Two paths a type cannot see, both closed the same way. An object built into a variable and logged later loses TypeScript's excess property check, so [`requestResponseLogger`](../src/api/middleware/requestResponseLogger.ts) annotates its record `LogProps` at the declaration. Attributes handed through another type are checked against that type, so `GitService`'s per command `attributes` option is `LogAttributes` rather than a free record. [`logSweep.test.ts`](../src/service/logSweep.test.ts) is the backstop underneath both: it fails on any key that reached a log file and is not on the list.
+
 ### The record is an allowlist
 
 [`toLogRecord`](../src/service/LogService.ts) builds the record key by key. Nothing reaches a log file because it happened to be sitting on winston's info object.
@@ -156,9 +166,20 @@ One rule, applied to the verb: a command that changes a repository, a remote or 
 
 **Names, again.** elek.io Desktop's consent copy tells a User that a report may carry "the names of your Projects, Collections and files". Core keeps them out anyway, so it promises less than it is asked for, which is the safe direction. Do not add names back to match the copy.
 
+**No `@opentelemetry/*` package, for now.** Checked against the real packages, not assumed:
+
+- `@opentelemetry/semantic-conventions` would verify 11 of the 36 attribute names: 8 from its stable entry point and 3 (`file.path`, `file.name`, `file.directory`) only from `/incubating`. The other 25 are `elek.` names it could never cover, and the 4 Resource keys are already pinned by `logResourceSchema` as a closed object. It is a dependency with no runtime cost and a monthly release cadence, for under a third of the vocabulary. `logAttributeNames` and its test cover all of it instead. All 15 Semantic Convention names Core uses were verified by hand against semconv 1.43.0, and `os.type` and `host.arch` carry exactly the values that enumeration defines.
+- `@opentelemetry/api-logs` does not describe this record. Its `LogRecord` has `timestamp?: TimeInput` in epoch nanoseconds, a `body`, a `severityText` and no per record Resource, so adopting it as the type would force the file format in the direction this document deliberately rejected. It is also a `0.x` package that pulls `@opentelemetry/api` at runtime, for four numbers that already have a test.
+
+Revisit when there is a collector to send to, which brings the SDK as a set and the conventions with it.
+
+**The winston bridge maps the info object, not this record.** `@opentelemetry/winston-transport` is a second transport that reads winston's own `{ message, level, ...rest }` and turns everything left over into attributes. It never sees the file record, so the two are independent. It also means a drop in today would emit `attributes: { source: 'core', meta: { ... } }`, nested and wrong: Core's log calls put their attributes under `meta`, which is one level too deep for it. Making it the configuration step it should be needs a format that lifts `meta` onto the info object first. Worth knowing before anything is built on the assumption that it is free.
+
 ## Testing the invariants
 
 Plant a string nothing else in the suite produces, exercise the path, and assert it never reaches `pathTo.logs`. [`logPrivacy.test.ts`](../src/service/logPrivacy.test.ts) does this for names, [`ProjectService.upgradeLogging.test.ts`](../src/service/ProjectService.upgradeLogging.test.ts) for authored Entry content, and [`GitService.redaction.test.ts`](../src/service/GitService.redaction.test.ts) for the git signature.
+
+[`logSweep.test.ts`](../src/service/logSweep.test.ts) is the broad one: it runs create, update, delete, release, upgrade and synchronize with a sentinel in every place a User types something, then checks the log files for all of them at once. It carries the attribute vocabulary check too, since both questions are about what ended up in the file and both want the same expensive setup.
 
 The other half is what a log file has to contain rather than what it must not. [`logLevels.test.ts`](../src/service/logLevels.test.ts) runs a Core at `info`, the level a packaged elek.io Desktop runs at, and reads its log file back: every file mutation and the commit are in it, no cache decision and no git command that only asked something is. [`LogService.record.test.ts`](../src/service/LogService.record.test.ts) covers the record shape, including that a field winston left on the info object does not reach the file.
 

@@ -5,7 +5,11 @@ import { exec as gitExec, GitError, parseError } from 'dugite';
 import PQueue from 'p-queue';
 import Path from 'node:path';
 import { CoreError } from '../util/shared.js';
-import type { GitMergeOptions, GitMessage } from '../schema/index.js';
+import type {
+  GitMergeOptions,
+  GitMessage,
+  LogAttributes,
+} from '../schema/index.js';
 import {
   gitCommitSchema,
   gitMessageSchema,
@@ -54,7 +58,7 @@ type GitCommandOptions = IGitExecutionOptions & {
    * Attributes added to the log record of this command, for the context
    * only the caller has. Stripped before the options reach dugite.
    */
-  attributes?: Record<string, unknown>;
+  attributes?: LogAttributes;
 };
 
 /**
