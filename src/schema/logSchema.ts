@@ -115,6 +115,11 @@ export const logAttributeNames = [
   'file.name',
   'file.path',
 
+  // The OpenTelemetry Collector's redaction processor, whose counters
+  // `LogService.tail()` stamps for the same reason it does
+  'redaction.masked.count',
+  'redaction.redacted.count',
+
   // elek.io's own, where no convention exists
   'elek.cache.cleared_count',
   'elek.collection.count',
@@ -126,6 +131,8 @@ export const logAttributeNames = [
   'elek.git.command',
   'elek.git.ref',
   'elek.git.tag.type',
+  'elek.log.repeat.count',
+  'elek.log.repeat.last_timestamp',
   'elek.method',
   'elek.object.id',
   'elek.object.type',
@@ -170,3 +177,27 @@ export const logRecordSchema = z.object({
   traceFlags: z.number().int().optional(),
 });
 export type LogRecord = z.infer<typeof logRecordSchema>;
+
+/**
+ * A window of log records, ready to be handed to someone else
+ *
+ * What `core.logger.tail()` returns and what a report carries when the
+ * User consented to attaching their logs. See contributing/logging.md
+ * for what a tail may contain and docs/reporting.md for where it goes.
+ */
+export const logTailSchema = z.object({
+  encoding: z.literal('gzip+base64'),
+  /** Start of the window the records come from, inclusive */
+  from: z.iso.datetime(),
+  /** End of the window the records come from, inclusive */
+  to: z.iso.datetime(),
+  /**
+   * Whether the oldest records were dropped to stay under the size
+   * ceiling. Expected to be false: collapsing the repeated records is
+   * what keeps a tail small, and it is worth far more than a bigger cap
+   */
+  isTruncated: z.boolean(),
+  /** The records, one JSON object per line, gzipped and then base64 encoded */
+  data: z.string(),
+});
+export type LogTail = z.infer<typeof logTailSchema>;

@@ -2,7 +2,7 @@ import Os from 'node:os';
 import Path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import DailyRotateFile from 'winston-daily-rotate-file';
-import { createTransports, LogService } from './LogService.js';
+import { LogService } from './LogService.js';
 import type { ElekIoCoreOptions } from '../schema/index.js';
 import { createPathTo } from '../util/node.js';
 
@@ -51,25 +51,27 @@ describe('LogService exception handling', function () {
     // write became a new uncaughtException, which winston wrote to the
     // console again, 5450 times a second for 13 minutes. See
     // contributing/logging.md.
-    const handlers = createTransports(options, pathTo).transports.filter(
-      (transport) => transport.handleExceptions === true
-    );
+    const handlers = LogService.createTransports(
+      options,
+      pathTo
+    ).transports.filter((transport) => transport.handleExceptions === true);
 
     expect(handlers).toHaveLength(1);
     expect(handlers[0]).toBeInstanceOf(DailyRotateFile);
   });
 
   it('does not let the console transport handle rejections either', function () {
-    const handlers = createTransports(options, pathTo).transports.filter(
-      (transport) => transport.handleRejections === true
-    );
+    const handlers = LogService.createTransports(
+      options,
+      pathTo
+    ).transports.filter((transport) => transport.handleRejections === true);
 
     expect(handlers).toHaveLength(1);
     expect(handlers[0]).toBeInstanceOf(DailyRotateFile);
   });
 
   it('keeps the durable sink handling them, so nothing is lost', function () {
-    const { rotatingFile } = createTransports(options, pathTo);
+    const { rotatingFile } = LogService.createTransports(options, pathTo);
 
     expect(rotatingFile.handleExceptions).toBe(true);
     expect(rotatingFile.handleRejections).toBe(true);
@@ -78,7 +80,7 @@ describe('LogService exception handling', function () {
 
 describe('LogService process error handlers', function () {
   it('leaves the transport flags off when opted out, which is what winston keys on', function () {
-    const { transports } = createTransports(
+    const { transports } = LogService.createTransports(
       { ...options, log: { ...options.log, hasProcessErrorHandlers: false } },
       pathTo
     );

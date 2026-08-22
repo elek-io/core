@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { logRecordSchema, type LogResource } from '../schema/logSchema.js';
-import { createLogResource, toLogRecord } from './LogService.js';
+import { LogService } from './LogService.js';
 
 /**
  * A log file is parsed for 30 days, so its record shape is expensive to
@@ -25,7 +25,7 @@ function info(props: Record<string, unknown>) {
 
 describe('toLogRecord', function () {
   it('writes a record the schema describes', function () {
-    const record = toLogRecord(info({}), resource);
+    const record = LogService.toLogRecord(info({}), resource);
 
     expect(logRecordSchema.safeParse(record).success).toBe(true);
     expect(record.timestamp).toBe('2026-08-21T14:02:11.000Z');
@@ -34,52 +34,58 @@ describe('toLogRecord', function () {
 
   it('adds the SeverityNumber of every level Core logs at', function () {
     const numbers = (['debug', 'info', 'warn', 'error'] as const).map(
-      (level) => toLogRecord(info({ level }), resource).severityNumber
+      (level) =>
+        LogService.toLogRecord(info({ level }), resource).severityNumber
     );
 
     expect(numbers).toEqual([5, 9, 13, 17]);
   });
 
   it('keeps the level text next to the number, because both are read', function () {
-    expect(toLogRecord(info({ level: 'warn' }), resource).level).toBe('warn');
+    expect(
+      LogService.toLogRecord(info({ level: 'warn' }), resource).level
+    ).toBe('warn');
   });
 
   it('maps a level Core does not know to UNSPECIFIED', function () {
-    expect(toLogRecord(info({ level: 'silly' }), resource).severityNumber).toBe(
-      0
-    );
+    expect(
+      LogService.toLogRecord(info({ level: 'silly' }), resource).severityNumber
+    ).toBe(0);
   });
 
   it('lifts the source onto the Resource, since it describes the emitter', function () {
-    const record = toLogRecord(info({ source: 'desktop' }), resource);
+    const record = LogService.toLogRecord(
+      info({ source: 'desktop' }),
+      resource
+    );
 
     expect(record.resource['service.name']).toBe('desktop');
     expect(Object.keys(record)).not.toContain('source');
   });
 
   it('carries the Core version only for records Core emitted', function () {
-    expect(toLogRecord(info({}), resource).resource['service.version']).toBe(
-      '0.24.0'
-    );
+    expect(
+      LogService.toLogRecord(info({}), resource).resource['service.version']
+    ).toBe('0.24.0');
     // Core does not know which version of a host logged through it
     expect(
-      toLogRecord(info({ source: 'desktop' }), resource).resource[
+      LogService.toLogRecord(info({ source: 'desktop' }), resource).resource[
         'service.version'
       ]
     ).toBeUndefined();
   });
 
   it('falls back to core for a record with no source, which is what winston writes', function () {
-    expect(toLogRecord(info({ source: undefined }), resource).resource).toEqual(
-      {
-        'service.name': 'core',
-        ...resource,
-      }
-    );
+    expect(
+      LogService.toLogRecord(info({ source: undefined }), resource).resource
+    ).toEqual({
+      'service.name': 'core',
+      ...resource,
+    });
   });
 
   it('moves meta to attributes and leaves the dotted keys alone', function () {
-    const record = toLogRecord(
+    const record = LogService.toLogRecord(
       info({ meta: { 'elek.project.id': 'abc', 'file.path': '/tmp/a.json' } }),
       resource
     );
@@ -91,13 +97,13 @@ describe('toLogRecord', function () {
   });
 
   it('omits attributes when there are none, rather than writing an empty object', function () {
-    expect(Object.keys(toLogRecord(info({}), resource))).not.toContain(
-      'attributes'
-    );
+    expect(
+      Object.keys(LogService.toLogRecord(info({}), resource))
+    ).not.toContain('attributes');
   });
 
   it('leaves TraceId and SpanId unset until there is something to put in them', function () {
-    const keys = Object.keys(toLogRecord(info({}), resource));
+    const keys = Object.keys(LogService.toLogRecord(info({}), resource));
 
     expect(keys).not.toContain('traceId');
     expect(keys).not.toContain('spanId');
@@ -108,7 +114,7 @@ describe('toLogRecord', function () {
     // The record is built from an allowlist rather than from whatever
     // winston left on the info object, which is what keeps a field nobody
     // reviewed out of a file that can be attached to a bug report
-    const record = toLogRecord(
+    const record = LogService.toLogRecord(
       info({ splat: ['x'], somethingNobodyReviewed: 'leak' }),
       resource
     );
@@ -141,7 +147,7 @@ describe('toLogRecord for the records winston writes itself', function () {
   };
 
   it('describes an uncaught exception through the exception attributes', function () {
-    const record = toLogRecord(exception, resource);
+    const record = LogService.toLogRecord(exception, resource);
 
     expect(record.attributes).toEqual({
       'exception.type': 'TypeError',
@@ -151,7 +157,7 @@ describe('toLogRecord for the records winston writes itself', function () {
   });
 
   it('takes the stack out of the message, so the message stays one line', function () {
-    expect(toLogRecord(exception, resource).message).toBe(
+    expect(LogService.toLogRecord(exception, resource).message).toBe(
       'uncaughtException: write EPIPE'
     );
   });
@@ -159,14 +165,14 @@ describe('toLogRecord for the records winston writes itself', function () {
   it('does not carry winston process and os blocks into the file', function () {
     // They repeat the Resource and add process.cwd, execPath and argv,
     // which is the account name and an arbitrary command line
-    const written = JSON.stringify(toLogRecord(exception, resource));
+    const written = JSON.stringify(LogService.toLogRecord(exception, resource));
 
     expect(written).not.toContain('/home/nils');
     expect(written).not.toContain('loadavg');
   });
 
   it('describes an unhandled rejection the same way', function () {
-    const record = toLogRecord(
+    const record = LogService.toLogRecord(
       { ...exception, exception: false, rejection: true },
       resource
     );
@@ -175,7 +181,7 @@ describe('toLogRecord for the records winston writes itself', function () {
   });
 
   it('survives a thrown value that is not an Error', function () {
-    const record = toLogRecord(
+    const record = LogService.toLogRecord(
       {
         level: 'error',
         message: 'uncaughtException: boom',
@@ -193,7 +199,7 @@ describe('toLogRecord for the records winston writes itself', function () {
 describe('createLogResource', function () {
   it('uses the Semantic Convention value, not the Node one', function () {
     expect(
-      createLogResource({
+      LogService.createLogResource({
         coreVersion: '0.24.0',
         platform: 'win32',
         arch: 'x64',
@@ -207,7 +213,7 @@ describe('createLogResource', function () {
 
   it('passes through the values that already match', function () {
     expect(
-      createLogResource({
+      LogService.createLogResource({
         coreVersion: '0.24.0',
         platform: 'darwin',
         arch: 'arm64',
@@ -221,7 +227,7 @@ describe('createLogResource', function () {
 
   it('keeps a value it has no mapping for rather than dropping it', function () {
     expect(
-      createLogResource({
+      LogService.createLogResource({
         coreVersion: '0.24.0',
         platform: 'haiku',
         arch: 'riscv64',

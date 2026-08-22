@@ -44,7 +44,7 @@ So the test for a call site is not "does it mention a name" but **"does it go th
 
 ### Enforced at the call site, not at the sink
 
-An error tracker guesses at the objects it is handed, because it does not own the code that produced them. Core writes every one of its own log calls, so the safe set is decidable rather than guessable, and a matcher that has to be right every time is not the mechanism. Pattern matching is a backstop for records Core did not author, which is a short list: elek.io Desktop's `meta` arriving over IPC, and winston's uncaught exception records.
+An error tracker guesses at the objects it is handed, because it does not own the code that produced them. Core writes every one of its own log calls, so the safe set is decidable rather than guessable, and a matcher that has to be right every time is not the mechanism. Pattern matching is a backstop for records Core did not author, which is a short list: elek.io Desktop's `meta` arriving over IPC, and winston's uncaught exception records. Those are scrubbed when a log file is [handed over](#handing-a-log-file-over), not when it is written.
 
 Practically: **log the shape, never the payload.** For a migration bug, "12 Values, languages `en` and `de`, changed `title` and `body`" is more diagnostic than the bodies and gives nothing away. Where the content already exists somewhere better, point at it instead of copying it. Git history holds every entity file at the exact commit, which is a stronger record than a log line can be.
 
@@ -160,6 +160,56 @@ One rule, applied to the verb: a command that changes a repository, a remote or 
 
 [`createTransports`](../src/service/LogService.ts) is exported so this policy can be asserted directly, and `LogService.test.ts` does.
 
+## Handing a log file over
+
+[`core.logger.tail()`](../src/service/LogService.ts) reads the last 24 hours of log files back as one gzipped blob. It is what a report attaches when a User consented to it, and equally what a "save my diagnostics to a file" button writes out with no network involved, which is why it lives on the logger and is public rather than sitting inside the reporting service.
+
+The window comes back in order, oldest record first, because [replay is the point](#what-a-log-file-may-contain): a tail plus the repository says what the User did, in order, with the commit for every step. Ids, paths and timestamps stay exact for the same reason. Only the account name comes out of a path.
+
+### The sink scrubs what the call site could not decide
+
+Core's own records are already safe, since [that is decided where they are written](#enforced-at-the-call-site-not-at-the-sink). What the sink adds is the short list of things a call site never saw:
+
+| What                                       | Why it is here rather than at the write site                                            |
+| ------------------------------------------ | --------------------------------------------------------------------------------------- |
+| The home directory prefix, replaced by `~` | The absolute path is allowed in a file on the reader's own machine, not in a copy of it |
+| Key names on Sentry's default denylist     | The `meta` a host hands `core.logger` arrives over IPC with a shape Core cannot type    |
+| A git signature on a command line          | The backstop under [`redactGitArgs`](#redacting-a-command-line)                         |
+| A credential in a URL, an address anywhere | Uncaught exception text is the one record Core did not author at all                    |
+
+The denylist runs over every record rather than only a host's. A Core attribute whose name matches one of these would be a leak rather than a false positive, and `logTail.test.ts` asserts that no name in `logAttributeNames` matches, so it cannot quietly start dropping something Core meant to write.
+
+**Redact, do not remove.** An absence reads as "this did not happen" and the reader draws the wrong conclusion, so what came out says what it was: `[redacted]`, `[email]`, `~`. And a record that was changed carries `redaction.masked.count` and `redaction.redacted.count`, the two the OpenTelemetry Collector's redaction processor stamps, so a reader can tell a deliberate gap from an empty one.
+
+**Never hash, rotate or truncate an id.** Hashing buys correlation without the value, which is the right trade for a name and the wrong one here: the ids are the join against the repository, and that join is what makes a tail worth reading at all.
+
+**A tail is personal data whatever the scrubbers do.** Data attributable to a person "by the use of additional information" is pseudonymised under GDPR Article 4(5), and pseudonymised data is still personal data. Scrubbing lowers what a report carries, it does not move it out of the category. Retention is the control, not redaction.
+
+### Collapsing what repeated is the algorithm
+
+A measured day was 78 MB, and 67% of it was one `uncaughtException: write EPIPE` stack repeating at up to 5450 records a second. Collapsing a run of identical records into the first of them plus `elek.log.repeat.count` and `elek.log.repeat.last_timestamp` took that day to 0.04 MB without dropping anything a reader needs, and 4 KB once gzipped. An ordinary day is 1 to 25 KB.
+
+That is why there is no trim loop. `TAIL_MAX_BYTES` is a safety valve rather than a working limit, the oldest records go first when it bites, and `isTruncated` says so. It is also why the collapse happens during the read: 78 MB read into memory to collapse it afterwards defeats the point, so each file is streamed line by line and gunzipped on the way.
+
+### Reading the directory
+
+- **Key off the extension, never off the date.** The transport only gzips on a rotation event while the process is running, so closing the app and reopening it the next day leaves yesterday's file plain forever.
+- **A file is named after a local date, a record is stamped in UTC.** The file names decide only which of the 30 kept files are worth opening, padded by a day either side. The record's own timestamp is what decides whether it is in the window.
+- **The `.*-audit.json` dotfile is not a log file.** It is the transport's own rotation state.
+- **Scrub after `JSON.parse`, never against the raw text.** On Windows a path is backslashed and JSON escapes it as `\\`, so a scrub over raw text would have to understand the escaping and a scrub over parsed strings does not. The home directory is matched case insensitively there, where `C:\Users\Nils` and `C:\users\nils` both occur, and in both separator spellings.
+
+### A line is a record or it is nothing
+
+`logRecordSchema` is the gate. A line that does not parse as one is skipped, which covers the half written last line, a file that is not a log file, and anything an older Core wrote in a shape this one no longer knows.
+
+**Nothing carries an older shape forward.** Core and the applications on it are alpha, so a reader that speaks two record shapes would be dead code the day it was written. When that stops being true, the thing to reach for is a version on the record, not a parser that guesses.
+
+This is also why `logRecordSchema` must not be tightened past what a record actually is. It is the read contract, and it has to keep accepting the free `meta` a host logs through `core.logger` as `attributes`.
+
+### The last lines can be missing
+
+winston hands a record to a write stream and there is no per transport flush, so a tail collected right after a crash can stop short of the lines it was collected for. `tail()` writes a `Collecting a log tail` marker and yields a macrotask before reading, which gives the stream a chance to drain and says in the file where the tail ended. That is a hedge, not a fix, and the residual gap is documented as a limitation rather than engineered around.
+
 ## Decisions worth not relitigating
 
 **No second tier on the record.** A `local` field, written to the file but always dropped from anything shared, was designed and rejected. It would have let the upgrade path keep logging whole entity bodies locally. The bodies are already in git history at the exact commit, which is the better record, and a field whose only job is to hold things too sensitive to share is a place for such things to accumulate. Revisit only if a concrete debugging need appears that git history cannot answer.
@@ -181,7 +231,7 @@ Plant a string nothing else in the suite produces, exercise the path, and assert
 
 [`logSweep.test.ts`](../src/service/logSweep.test.ts) is the broad one: it runs create, update, delete, release, upgrade and synchronize with a sentinel in every place a User types something, then checks the log files for all of them at once. It carries the attribute vocabulary check too, since both questions are about what ended up in the file and both want the same expensive setup.
 
-The other half is what a log file has to contain rather than what it must not. [`logLevels.test.ts`](../src/service/logLevels.test.ts) runs a Core at `info`, the level a packaged elek.io Desktop runs at, and reads its log file back: every file mutation and the commit are in it, no cache decision and no git command that only asked something is. [`LogService.record.test.ts`](../src/service/LogService.record.test.ts) covers the record shape, including that a field winston left on the info object does not reach the file.
+The other half is what a log file has to contain rather than what it must not. [`logLevels.test.ts`](../src/service/logLevels.test.ts) runs a Core at `info`, the level a packaged elek.io Desktop runs at, and reads its log file back: every file mutation and the commit are in it, no cache decision and no git command that only asked something is. [`LogService.record.test.ts`](../src/service/LogService.record.test.ts) covers the record shape, including that a field winston left on the info object does not reach the file. [`logTail.test.ts`](../src/service/logTail.test.ts) covers the third question, which is what may leave the machine once a log file is handed to someone else.
 
 A sentinel test is a scanner, and a scanner cannot prove absence. As a test that is the right trade: a false negative costs a missed case rather than a User's data, and it catches call sites added later, which is the failure mode review does not.
 
