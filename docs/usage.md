@@ -48,20 +48,23 @@ The resolved options are exposed on `core.options`, and the running Core version
 
 `log.hasProcessErrorHandlers` decides whether Core registers `process.on('uncaughtException')` and `process.on('unhandledRejection')`, which is what writes an uncaught error into the log file before the process goes down. It defaults to `true`. Set it to `false` where the host owns its own error handling, such as inside a build. The Astro entry does that for you. `dispose()` removes the handlers again either way.
 
+`cloud.url` is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`. A trailing slash is dropped, since Core appends a path to it. A value that is not a URL throws a `CoreError`, rather than falling back to the default and sending to production on the strength of a typo.
+
 `isReadOnly` puts Core into read-only mode, meant for environments that only consume content, such as CI builds. Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`. In return, cloning and fetching work without a User being set, because nothing is ever committed. The option takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
 
 ### Environment variables
 
 Core reads its environment variables once at construction, never at import. All of them use the `ELEK_IO_` prefix with SCREAMING_SNAKE_CASE names. An empty or whitespace-only value counts as unset. When a constructor option covers the same setting, the option wins over the environment.
 
-| Variable                           | Purpose                                                          | Default          |
-| ---------------------------------- | ---------------------------------------------------------------- | ---------------- |
-| `ELEK_IO_DATA_DIR`                 | The directory Core reads and writes data in                      | `~/elek.io`      |
-| `ELEK_IO_LOG_LEVEL`                | The lowest level Core logs                                       | `info`           |
-| `ELEK_IO_READ_ONLY`                | Set to `true` to put Core into read-only mode                    | unset            |
-| `ELEK_IO_REMOTE_ACCESS_TOKEN`      | Token for authenticating git operations against a private remote | unset            |
-| `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN`   | `x-access-token` |
-| `ELEK_IO_CHANNEL`                  | The channel provisioning follows, overrides configured refs      | unset            |
+| Variable                           | Purpose                                                          | Default               |
+| ---------------------------------- | ---------------------------------------------------------------- | --------------------- |
+| `ELEK_IO_DATA_DIR`                 | The directory Core reads and writes data in                      | `~/elek.io`           |
+| `ELEK_IO_LOG_LEVEL`                | The lowest level Core logs                                       | `info`                |
+| `ELEK_IO_READ_ONLY`                | Set to `true` to put Core into read-only mode                    | unset                 |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN`      | Token for authenticating git operations against a private remote | unset                 |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN`   | `x-access-token`      |
+| `ELEK_IO_CHANNEL`                  | The channel provisioning follows, overrides configured refs      | unset                 |
+| `ELEK_IO_CLOUD_URL`                | Base URL of the elek.io Cloud API                                | `https://api.elek.io` |
 
 `ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git per invocation through an askpass helper. It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches. Prompts are disabled, a missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it. While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before. The token applies to HTTP(S) remotes only, SSH remotes authenticate through the ambient SSH setup like ssh-agent.
 

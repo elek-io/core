@@ -15,6 +15,7 @@ export const serviceTypeSchema = z.enum([
   'Value',
   'Release',
   'Reference',
+  'Report',
 ]);
 export type ServiceType = z.infer<typeof serviceTypeSchema>;
 

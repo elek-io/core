@@ -71,6 +71,7 @@ export type CoreErrorType =
   | 'PreconditionFailed'
   | 'UpgradeFailed'
   | 'VersionSkew'
+  | 'RateLimited'
   | 'Internal';
 
 const statusCodes: Record<CoreErrorType, number> = {
@@ -81,6 +82,7 @@ const statusCodes: Record<CoreErrorType, number> = {
   PreconditionFailed: 412,
   UpgradeFailed: 422,
   VersionSkew: 422,
+  RateLimited: 429,
   Internal: 500,
 };
 
@@ -115,6 +117,9 @@ export class CoreError extends Error {
   }
   static versionSkew(message: string, cause?: unknown) {
     return new CoreError('VersionSkew', message, cause);
+  }
+  static rateLimited(message: string, cause?: unknown) {
+    return new CoreError('RateLimited', message, cause);
   }
   static internal(message: string, cause?: unknown) {
     return new CoreError('Internal', message, cause);

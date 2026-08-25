@@ -19,6 +19,7 @@ const dataDir = Path.join(Os.tmpdir(), `elek-io-core-jsonfile-${uuid()}`);
 const options: ElekIoCoreOptions = {
   log: { level: 'debug', hasProcessErrorHandlers: false },
   file: { cache: true },
+  cloud: { url: 'https://api.elek.io' },
   dataDir,
   isReadOnly: false,
 };

@@ -41,6 +41,21 @@ export const elekIoCoreOptionsSchema = z.object({
    * @default '~/elek.io'
    */
   dataDir: z.string().trim().min(1),
+  cloud: z.object({
+    /**
+     * Base URL of the elek.io Cloud API
+     *
+     * Everything Core does over the network other than git goes here,
+     * which today is sending a report. A constant would make the call
+     * untestable at every layer, so it is configuration.
+     *
+     * Overrides the ELEK_IO_CLOUD_URL environment variable.
+     * A trailing slash is dropped, since a path is appended to this.
+     *
+     * @default 'https://api.elek.io'
+     */
+    url: z.url(),
+  }),
   /**
    * If set to true, Core never mutates a Project or its remote
    *
@@ -65,6 +80,7 @@ export const constructorElekIoCoreSchema = elekIoCoreOptionsSchema
   .partial({
     log: true,
     file: true,
+    cloud: true,
     dataDir: true,
     isReadOnly: true,
   })

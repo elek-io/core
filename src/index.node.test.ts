@@ -49,6 +49,9 @@ describe('Node.js', function () {
         cache: true,
       },
       dataDir: defaultDataDir,
+      cloud: {
+        url: 'https://api.elek.io',
+      },
       isReadOnly: false,
     });
 
@@ -62,6 +65,9 @@ describe('Node.js', function () {
         cache: true,
       },
       dataDir: defaultDataDir,
+      cloud: {
+        url: 'https://api.elek.io',
+      },
       isReadOnly: false,
     });
 
@@ -75,6 +81,9 @@ describe('Node.js', function () {
         cache: false,
       },
       dataDir: defaultDataDir,
+      cloud: {
+        url: 'https://api.elek.io',
+      },
       isReadOnly: false,
     });
 

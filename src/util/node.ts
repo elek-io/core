@@ -2,6 +2,7 @@ import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
 import { logLevelSchema, type LogLevel } from '../schema/baseSchema.js';
+import { elekIoCoreOptionsSchema } from '../schema/coreSchema.js';
 import {
   contentChannelSchema,
   projectFolderSchema,
@@ -86,6 +87,33 @@ export function resolveContentRef(ref?: string): string {
     return channel.data;
   }
   return ref?.trim() || 'production';
+}
+
+/**
+ * Resolves the base URL of the elek.io Cloud API
+ *
+ * Precedence: the given URL wins over the ELEK_IO_CLOUD_URL environment
+ * variable, which wins over the default `https://api.elek.io`. An empty
+ * or whitespace-only value counts as unset. A trailing slash is dropped,
+ * since a path is appended to this.
+ *
+ * Something that is not a URL throws rather than falling back, because
+ * falling back would send a report to production on the strength of a
+ * typo in a staging setup.
+ */
+export function resolveCloudUrl(url?: string): string {
+  const fromArg = url?.trim();
+  const fromEnv = process.env['ELEK_IO_CLOUD_URL']?.trim();
+  const candidate = fromArg || fromEnv || 'https://api.elek.io';
+  // The same rule the option is validated by, rather than a second one
+  const parsed =
+    elekIoCoreOptionsSchema.shape.cloud.shape.url.safeParse(candidate);
+  if (!parsed.success) {
+    throw CoreError.badRequest(
+      `ELEK_IO_CLOUD_URL must be a URL, got "${candidate}"`
+    );
+  }
+  return parsed.data.replace(/\/+$/, '');
 }
 
 /**

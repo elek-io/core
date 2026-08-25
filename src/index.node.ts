@@ -22,6 +22,7 @@ import {
 import { LogService } from './service/LogService.js';
 import {
   createPathTo,
+  resolveCloudUrl,
   resolveDataDir,
   resolveLogLevel,
   resolveReadOnly,
@@ -72,6 +73,7 @@ export default class ElekIoCore {
       },
       file: parsedProps.data?.file ?? { cache: true },
       dataDir: resolveDataDir(parsedProps.data?.dataDir),
+      cloud: { url: resolveCloudUrl(parsedProps.data?.cloud?.url) },
       isReadOnly: resolveReadOnly(parsedProps.data?.isReadOnly),
     };
     this.pathTo = createPathTo(this.options.dataDir);
