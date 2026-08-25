@@ -5,8 +5,8 @@ import {
   createReportSchema,
   reportRequestSchema,
   reportResponseSchema,
+  type CreateReportBase,
   type CreateReportProps,
-  type ReportDesktop,
 } from './reportSchema.js';
 import { uuid } from '../util/shared.js';
 
@@ -17,7 +17,9 @@ import { uuid } from '../util/shared.js';
  * built against the request they describe. So what is asserted here is the
  * shape someone else already wrote code against, not an implementation.
  */
-const desktop: ReportDesktop = {
+// Derived rather than a named export, since Desktop is the only thing
+// that builds one and it can name it itself
+const desktop: CreateReportBase['desktop'] = {
   version: '0.5.0',
   runtime: { electron: '40.1.0', chrome: '142.0.0.0', node: '24.12.0' },
 };

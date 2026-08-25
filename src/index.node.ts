@@ -9,6 +9,7 @@ import {
 } from './schema/index.js';
 import {
   AssetService,
+  CloudService,
   CollectionService,
   ComponentService,
   EntryService,
@@ -17,6 +18,7 @@ import {
   ProjectService,
   ReferenceService,
   ReleaseService,
+  ReportService,
   UserService,
 } from './service/index.js';
 import { LogService } from './service/LogService.js';
@@ -56,6 +58,8 @@ export default class ElekIoCore {
   private readonly entryService: EntryService;
   private readonly referenceService: ReferenceService;
   private readonly releaseService: ReleaseService;
+  private readonly reportService: ReportService;
+  private readonly cloudService: CloudService;
   private readonly localApi: LocalApi;
 
   constructor(props?: ConstructorElekIoCoreProps) {
@@ -163,6 +167,13 @@ export default class ElekIoCore {
       this.jsonFileService,
       this.projectService
     );
+    this.reportService = new ReportService(
+      this.coreVersion,
+      this.options,
+      this.pathTo,
+      this.logService
+    );
+    this.cloudService = new CloudService(this.reportService);
     this.localApi = new LocalApi(
       this.logService,
       this.projectService,
@@ -267,6 +278,14 @@ export default class ElekIoCore {
    */
   public get releases(): ReleaseService {
     return this.releaseService;
+  }
+
+  /**
+   * Everything Core does against elek.io Cloud, which today is
+   * sending a bug report or feedback
+   */
+  public get cloud(): CloudService {
+    return this.cloudService;
   }
 
   /**

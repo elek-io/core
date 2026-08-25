@@ -96,6 +96,9 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **Astro's `render()` does not apply to Entries** - a `markdown` field arrives on `entry.data` as an mdast tree, not as the rendered HTML `render(entry)` and `<Content />` read, so the loaders leave Astro's rendered slot empty. Filling it would flatten `entryReference` and `assetReference` nodes into finished markup and lose the UUIDs a page resolves them by, which is the reason to store a tree in the first place. Calling `render()` on an Entry is not an error and renders nothing at all, so reach for `mdastRender` instead. See [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro).
 - **No plugin or marketplace system** - extending the field catalogue means changing code, not installing a package.
 - **No nested composition** - groups cannot nest groups, and `dynamic` fields cannot nest `dynamic` fields. Components are the flat, predictable reuse mechanism.
+- **A report is never retried** - `core.cloud.reports.create()` sends once. A retry after a timeout can duplicate a report elek.io Cloud already accepted, and Core cannot tell the difference from the outside, so a failure is handed back and sending again is left to whoever wrote it. See [`reporting.md`](./reporting.md#errors).
+- **A log tail can be truncated** - `core.logger.tail()` stops collecting at a size ceiling and sets `isTruncated`, dropping the oldest records first. Collapsing repeated records is what keeps a tail small, and it is worth far more than a bigger cap, so an ordinary day is 1 to 25 KB and the ceiling is a safety valve rather than a working limit. See [`reporting.md`](./reporting.md#the-log-tail).
+- **A log tail can be missing its last lines** - winston hands a record to a write stream and offers no per transport flush, so a tail collected right after a crash can stop short of the lines it was collected for, which are usually the interesting ones. `tail()` writes a marker and yields before reading to give the stream a chance to drain, which is a hedge rather than a fix. The residual gap is documented instead of engineered around.
 
 For how these compare to other CMS platforms and where Core leads, see [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md).
 
@@ -115,4 +118,5 @@ For how these compare to other CMS platforms and where Core leads, see [`compari
 - [`export.md`](./export.md) - exporting Projects to JSON
 - [`markdown-content.md`](./markdown-content.md) - rich `markdown` content storage and rendering
 - [`error-handling.md`](./error-handling.md) - `CoreError` and error patterns
+- [`reporting.md`](./reporting.md) - sending a report to elek.io Cloud, and handing a window of log files over
 - [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md) - cross-CMS field comparison
