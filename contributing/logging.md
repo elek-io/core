@@ -86,7 +86,11 @@ A log file is one JSON object per line, following the [OpenTelemetry Logs Data M
 
 **`level` and `message` keep their winston names, everything Core owns takes the OpenTelemetry one.** Those two are what a winston to OTel bridge maps to `SeverityText` and `Body` already, so renaming them would be work with no reader. `source` and `meta` were Core's own inventions, so they became `resource['service.name']` and `attributes`.
 
-`service.name` is the `source` of the call, which is how a record elek.io Desktop logged through Core stays distinguishable. `service.version` is only set for Core's own records, because Core does not know the version of a host that logs through it. `os.type` and `host.arch` carry the Semantic Convention value rather than the Node one, so `win32` is written as `windows` and `x64` as `amd64`. A Semantic Convention name has to carry a Semantic Convention value, otherwise the name is a lie to whatever reads it later.
+`service.name` is the `source` of the call, which is how a record elek.io Desktop logged through Core stays distinguishable. `os.type` and `host.arch` carry the Semantic Convention value rather than the Node one, so `win32` is written as `windows` and `x64` as `amd64`. A Semantic Convention name has to carry a Semantic Convention value, otherwise the name is a lie to whatever reads it later.
+
+`service.version` is Core's own version on Core's own records. Core cannot read the version of a host that logs through it, so a host declares one through `log.hostVersion` and Core writes it on that host's records only. A host that declares nothing leaves those records unversioned rather than borrowing Core's, which would read as a lie in exactly the way above. The option is validated as semver at construction, because `logRecordSchema` validates `service.version` on the way back in, and an unparseable one would make every record of that run invisible to `tail()`.
+
+That matters for a log file handed over on its own. A report carries the host's version in its body, but somebody who zips `<dataDir>/logs` and mails it sends no body, and without this the file says only which platform it came from.
 
 ### Attributes are flat and dotted
 

@@ -381,9 +381,16 @@ export class LogService {
    */
   public static toLogRecord(
     info: Logform.TransformableInfo,
-    resource: LogResourceBase
+    resource: LogResourceBase,
+    hostVersion?: string
   ): LogRecord {
     const source = logSourceSchema.safeParse(info['source']).data ?? 'core';
+    // Core stamps its own version on its own records. A host's is only known
+    // if it declared one through `log.hostVersion`, so a record it did not
+    // declare for stays unversioned rather than borrowing Core's, which would
+    // read as a lie to whoever opens the file.
+    const serviceVersion =
+      source === 'core' ? resource['service.version'] : hostVersion;
     const attributes = {
       ...LogService.exceptionAttributes(info),
       ...LogService.metaAttributes(info['meta']),
@@ -405,10 +412,9 @@ export class LogService {
         : message,
       resource: {
         'service.name': source,
-        // Core does not know the version of a host that logs through it
-        ...(source === 'core'
-          ? { 'service.version': resource['service.version'] }
-          : {}),
+        ...(serviceVersion === undefined
+          ? {}
+          : { 'service.version': serviceVersion }),
         'os.type': resource['os.type'],
         'host.arch': resource['host.arch'],
       },
@@ -457,7 +463,11 @@ export class LogService {
         format((info) => {
           // What reaches the file is the record, not whatever winston left
           // on the info object
-          const record = LogService.toLogRecord(info, resource);
+          const record = LogService.toLogRecord(
+            info,
+            resource,
+            options.log.hostVersion
+          );
           for (const key of Object.keys(info)) {
             delete info[key];
           }

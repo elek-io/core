@@ -1,5 +1,5 @@
 import { z } from '@hono/zod-openapi';
-import { logLevelSchema } from './baseSchema.js';
+import { logLevelSchema, versionSchema } from './baseSchema.js';
 
 /**
  * Options that can be passed to elek.io core
@@ -23,6 +23,20 @@ export const elekIoCoreOptionsSchema = z.object({
      * @default true
      */
     hasProcessErrorHandlers: z.boolean(),
+    /**
+     * The version of the application logging through Core
+     *
+     * Written to `service.version` on a record whose `source` is not
+     * `core`, so a log file says which build of the host wrote it. Core
+     * stamps its own version on its own records and cannot know a
+     * host's, so a host that wants its records identifiable declares it
+     * here. Without it those records carry no version at all, and a log
+     * file handed over without a report around it cannot be matched to
+     * a build.
+     *
+     * @default undefined
+     */
+    hostVersion: versionSchema.optional(),
   }),
   file: z.object({
     /**

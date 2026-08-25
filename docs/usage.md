@@ -48,6 +48,8 @@ The resolved options are exposed on `core.options`, and the running Core version
 
 `log.hasProcessErrorHandlers` decides whether Core registers `process.on('uncaughtException')` and `process.on('unhandledRejection')`, which is what writes an uncaught error into the log file before the process goes down. It defaults to `true`. Set it to `false` where the host owns its own error handling, such as inside a build. The Astro entry does that for you. `dispose()` removes the handlers again either way.
 
+`log.hostVersion` is the version of your own application, and it is written to `service.version` on every record you log with a `source` other than `core`. Core stamps its own version on its own records and has no way to read yours, so without this the records you write carry no version at all, and a log file someone hands you on its own cannot be matched to the build that produced it. It must be a semantic version. A value that is not one throws a `CoreError` rather than writing something the log file's own read contract would reject. See [`reporting.md`](./reporting.md) for what a log file and a report each carry.
+
 `cloud.url` is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`. A trailing slash is dropped, since Core appends a path to it. A value that is not a URL throws a `CoreError`, rather than falling back to the default and sending to production on the strength of a typo.
 
 `isReadOnly` puts Core into read-only mode, meant for environments that only consume content, such as CI builds. Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`. In return, cloning and fetching work without a User being set, because nothing is ever committed. The option takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
@@ -106,6 +108,8 @@ What each level carries is a promise rather than an accident:
 So `info`, the default, is enough to reconstruct what was done and in what order, and `debug` adds how Core did it. An application that ships Core to end users can run at `info` and still have a diagnostic record.
 
 A log file holds ids, paths, counts and error messages. It never holds the content of an Entry, the name of a Project, Collection or Asset, or the git signature of the User. It does hold the absolute data directory, which includes the account name, because it is written for the machine it is on. Anything that ships a log file elsewhere is responsible for scrubbing that prefix.
+
+`resource['service.name']` is the `source` the record was logged with, so your own records stay distinguishable from Core's in the same file. `service.version` is Core's version on Core's records, and yours on yours when you set the `log.hostVersion` option above. Set it: a log file someone sends you without a report around it has no other way to say which build wrote it.
 
 ## Setting the User (required before writing)
 

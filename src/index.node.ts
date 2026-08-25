@@ -74,6 +74,11 @@ export default class ElekIoCore {
         level: resolveLogLevel(parsedProps.data?.log?.level),
         hasProcessErrorHandlers:
           parsedProps.data?.log?.hasProcessErrorHandlers ?? true,
+        // Spread rather than assigned, so an undeclared host version stays
+        // absent instead of being written as an explicit undefined
+        ...(parsedProps.data?.log?.hostVersion === undefined
+          ? {}
+          : { hostVersion: parsedProps.data.log.hostVersion }),
       },
       file: parsedProps.data?.file ?? { cache: true },
       dataDir: resolveDataDir(parsedProps.data?.dataDir),

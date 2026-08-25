@@ -63,16 +63,41 @@ describe('toLogRecord', function () {
     expect(Object.keys(record)).not.toContain('source');
   });
 
-  it('carries the Core version only for records Core emitted', function () {
+  it('carries the Core version for records Core emitted', function () {
     expect(
       LogService.toLogRecord(info({}), resource).resource['service.version']
     ).toBe('0.24.0');
-    // Core does not know which version of a host logged through it
+  });
+
+  it('leaves a host record unversioned when the host declared nothing', function () {
+    // Core cannot know the version of a host that logs through it, so an
+    // undeclared one is left out rather than guessed at
     expect(
       LogService.toLogRecord(info({ source: 'desktop' }), resource).resource[
         'service.version'
       ]
     ).toBeUndefined();
+  });
+
+  it('carries the host version when the host declared one', function () {
+    // Otherwise a log file sent on its own, without a report around it,
+    // cannot be tied to the build that wrote it
+    const record = LogService.toLogRecord(
+      info({ source: 'desktop' }),
+      resource,
+      '0.3.4'
+    );
+
+    expect(record.resource['service.version']).toBe('0.3.4');
+    expect(logRecordSchema.safeParse(record).success).toBe(true);
+  });
+
+  it('never lets a declared host version reach a record Core emitted', function () {
+    expect(
+      LogService.toLogRecord(info({}), resource, '0.3.4').resource[
+        'service.version'
+      ]
+    ).toBe('0.24.0');
   });
 
   it('falls back to core for a record with no source, which is what winston writes', function () {
