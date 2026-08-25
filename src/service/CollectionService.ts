@@ -666,7 +666,7 @@ export class CollectionService
         );
 
         await this.withGitRollback(projectPath, async () => {
-          await Fs.remove(collectionPath);
+          await this.jsonFileService.delete(collectionPath);
           await this.gitService.add(projectPath, [collectionPath]);
           await this.gitService.commit(projectPath, {
             method: 'delete',

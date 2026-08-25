@@ -5,7 +5,11 @@ import { exec as gitExec, GitError, parseError } from 'dugite';
 import PQueue from 'p-queue';
 import Path from 'node:path';
 import { CoreError } from '../util/shared.js';
-import type { GitMergeOptions, GitMessage } from '../schema/index.js';
+import type {
+  GitMergeOptions,
+  GitMessage,
+  LogAttributes,
+} from '../schema/index.js';
 import {
   gitCommitSchema,
   gitMessageSchema,
@@ -22,7 +26,6 @@ import { GitTagService } from './GitTagService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { UserService } from './UserService.js';
-import type { LogProps } from '../schema/index.js';
 import { PROVISIONED_MARKER, type PathTo } from '../util/node.js';
 
 /**
@@ -46,9 +49,17 @@ import { PROVISIONED_MARKER, type PathTo } from '../util/node.js';
  * Options for the internal `git` runner: dugite's execution options plus
  * `tolerateNonZero`, which returns the result on a non-zero exit instead of
  * throwing, so the caller can classify the failure itself (used by `rebase`
- * and `push`). `tolerateNonZero` is stripped before the options reach dugite.
+ * and `push`), and `attributes` for the log record. Both are stripped
+ * before the options reach dugite.
  */
-type GitCommandOptions = IGitExecutionOptions & { tolerateNonZero?: boolean };
+type GitCommandOptions = IGitExecutionOptions & {
+  tolerateNonZero?: boolean;
+  /**
+   * Attributes added to the log record of this command, for the context
+   * only the caller has. Stripped before the options reach dugite.
+   */
+  attributes?: LogAttributes;
+};
 
 /**
  * Builds the environment for git commands.
@@ -129,6 +140,158 @@ export function classifyAuthError(
   return CoreError.unauthorized(
     'The remote requires authentication. Set the ELEK_IO_REMOTE_ACCESS_TOKEN environment variable.'
   );
+}
+
+const REDACTED = '[redacted]';
+
+/**
+ * Redacts the User's identity out of a git command line before it reaches
+ * a log record or an error message.
+ *
+ * Core's log files can be attached to a bug report, and the invariant in
+ * contributing/logging.md is that they never carry a git signature. Three
+ * places put one on a command line, and a rule written for only the first
+ * would have missed the other two:
+ *
+ * - `commit --author=<name> <email>`
+ * - `config --local user.name <value>`
+ * - `config --local user.email <value>`
+ *
+ * Credentials embedded in a remote URL go too. The access token never
+ * reaches a command line (it travels by environment variable through the
+ * askpass helper, see contributing/git-credentials.md), but a URL a caller
+ * supplied can carry its own.
+ *
+ * Everything else is left exactly as it is. Ids, paths and flags are what
+ * make a log line resolvable against the repository.
+ */
+export function redactGitArgs(args: readonly string[]): string[] {
+  return args.map((arg, index) => {
+    if (arg.startsWith('--author=')) {
+      return `--author=${REDACTED}`;
+    }
+    const previous = args[index - 1];
+    if (previous === 'user.name' || previous === 'user.email') {
+      return REDACTED;
+    }
+    // scheme://userinfo@host, never the SSH shorthand git@host:org/repo,
+    // where the user is part of the address rather than a credential
+    return arg.replace(/^([a-zA-Z][\w+.-]*:\/\/)[^/@]+@/, `$1${REDACTED}@`);
+  });
+}
+
+/** The command line as it may be written down. */
+function redactedCommand(args: readonly string[]): string {
+  return `git ${redactGitArgs(args).join(' ')}`;
+}
+
+/**
+ * Commands that only ask the repository something. Everything else
+ * changes it, a remote or the installation's configuration.
+ */
+const READING_GIT_COMMANDS = new Set([
+  'status',
+  'log',
+  'show',
+  'diff',
+  'rev-parse',
+  'rev-list',
+  'ls-files',
+  'ls-tree',
+  'ls-remote',
+  'cat-file',
+  'check-ref-format',
+  'check-ignore',
+  'describe',
+  'for-each-ref',
+  'symbolic-ref',
+  'shortlog',
+  'blame',
+  'var',
+  'help',
+]);
+
+/** Flags that turn a ref command into a listing */
+const LISTING_REF_FLAGS = new Set([
+  '--list',
+  '-l',
+  '--show-current',
+  '--contains',
+  '--no-contains',
+  '--points-at',
+  '--merged',
+  '--no-merged',
+  '-a',
+  '--all',
+  '-v',
+  '--verbose',
+]);
+
+/** Flags that turn a config command into a lookup */
+const READING_CONFIG_FLAGS = new Set([
+  '--get',
+  '--get-all',
+  '--get-regexp',
+  '--get-urlmatch',
+  '--list',
+  '-l',
+]);
+
+const READING_REMOTE_SUBCOMMANDS = new Set(['show', 'get-url']);
+
+const READING_LFS_SUBCOMMANDS = new Set([
+  'env',
+  'version',
+  'status',
+  'ls-files',
+  'locks',
+]);
+
+/**
+ * True when the command changes a repository, a remote or the git
+ * configuration, which is what decides whether it is logged at `info` or
+ * at `debug`.
+ *
+ * `info` is the whole of what a packaged elek.io Desktop records, so a
+ * mutation belongs in it and a read does not. A command nobody classified
+ * counts as a mutation: a noisy line is a smaller failure than a line
+ * that should have been there and is not. See contributing/logging.md.
+ */
+export function isMutatingGitCommand(args: readonly string[]): boolean {
+  const nonFlags = args.filter((arg) => !arg.startsWith('-'));
+  const command = nonFlags[0];
+
+  if (command === undefined) {
+    // `git --version` and `git --exec-path` ask the installation about itself
+    return false;
+  }
+  if (READING_GIT_COMMANDS.has(command)) {
+    return false;
+  }
+
+  switch (command) {
+    case 'branch':
+    case 'tag':
+      // Listing, everything else creates, deletes or moves a ref
+      return !args.some((arg) => LISTING_REF_FLAGS.has(arg));
+    case 'config':
+      return !args.some((arg) => READING_CONFIG_FLAGS.has(arg));
+    case 'remote': {
+      const subcommand = nonFlags[1];
+      // `git remote` on its own lists the remotes
+      return (
+        subcommand !== undefined && !READING_REMOTE_SUBCOMMANDS.has(subcommand)
+      );
+    }
+    case 'lfs': {
+      const subcommand = nonFlags[1];
+      return (
+        subcommand !== undefined && !READING_LFS_SUBCOMMANDS.has(subcommand)
+      );
+    }
+    default:
+      return true;
+  }
 }
 
 export class GitService {
@@ -998,7 +1161,18 @@ export class GitService {
       `--message=${fullMessage}`,
       `--author=${user.name} <${user.email}>`,
     ];
-    await this.git(path, args);
+    // The same ids the commit carries as trailers, so a log line and the
+    // commit it produced join without parsing either
+    await this.git(path, args, {
+      attributes: {
+        'elek.method': message.method,
+        'elek.object.type': message.reference.objectType,
+        'elek.object.id': message.reference.id,
+        ...(message.reference.collectionId
+          ? { 'elek.collection.id': message.reference.collectionId }
+          : {}),
+      },
+    });
   }
 
   /**
@@ -1335,7 +1509,7 @@ export class GitService {
     args: string[],
     options: GitCommandOptions = {}
   ): Promise<IGitStringResult> {
-    const { tolerateNonZero, ...execOptions } = options;
+    const { tolerateNonZero, attributes, ...execOptions } = options;
     const result = await this.queue.add(async () => {
       // Every git invocation gets the credential environment, so remote
       // operations and on-demand LFS smudges authenticate the same way
@@ -1350,21 +1524,26 @@ export class GitService {
 
     if (!result) {
       throw CoreError.internal(
-        `Git ${this.version} (${this.gitPath}) command "git ${args.join(
-          ' '
+        `Git ${this.version} (${this.gitPath}) command "${redactedCommand(
+          args
         )}" executed for "${path}" failed to return a result`
       );
     }
 
-    const gitLog: LogProps = {
+    const command = redactedCommand(args);
+    const record = {
       source: 'core',
-      message: `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`,
-      meta: { command: `git ${args.join(' ')}` },
-    };
-    if (result.durationMs >= 100) {
-      this.logService.warn(gitLog);
+      message: `Executed "${command}" in ${result.durationMs}ms`,
+      meta: {
+        'elek.git.command': command,
+        'elek.duration_ms': result.durationMs,
+        ...attributes,
+      },
+    } as const;
+    if (isMutatingGitCommand(args)) {
+      this.logService.info(record);
     } else {
-      this.logService.debug(gitLog);
+      this.logService.debug(record);
     }
 
     if (result.gitResult.exitCode !== 0 && tolerateNonZero !== true) {

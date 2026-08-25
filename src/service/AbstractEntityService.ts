@@ -85,6 +85,10 @@ export abstract class AbstractEntityService extends AbstractService {
           this.logService.error({
             source: 'core',
             message: `Failed to remove "${cleanupPath}" during rollback: ${e instanceof Error ? e.message : String(e)}`,
+            meta: {
+              'file.path': cleanupPath,
+              'exception.message': e instanceof Error ? e.message : String(e),
+            },
           })
         );
       }
@@ -96,6 +100,12 @@ export abstract class AbstractEntityService extends AbstractService {
         this.logService.error({
           source: 'core',
           message: `Failed to reset working tree during rollback, manual git reset may be needed: ${resetError instanceof Error ? resetError.message : String(resetError)}`,
+          meta: {
+            'exception.message':
+              resetError instanceof Error
+                ? resetError.message
+                : String(resetError),
+          },
         });
         // The reset did not run to completion, so it could not clear the cache
         // itself. Drop it defensively since disk state is now uncertain
@@ -119,7 +129,7 @@ export abstract class AbstractEntityService extends AbstractService {
           source: 'core',
           message: `collectResults: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
           meta: {
-            error:
+            'exception.message':
               r.reason instanceof Error ? r.reason.message : String(r.reason),
           },
         });
@@ -203,6 +213,7 @@ export abstract class AbstractEntityService extends AbstractService {
       this.logService.warn({
         source: 'core',
         message: `Function "getFolderReferences" is ignoring folder "${possibleFolder.name}" in "${path}" as it does not match the expected format`,
+        meta: { 'file.name': possibleFolder.name, 'file.directory': path },
       });
 
       return null;
@@ -246,6 +257,7 @@ export abstract class AbstractEntityService extends AbstractService {
       this.logService.warn({
         source: 'core',
         message: `Function "getFileReferences" is ignoring file "${possibleFile.name}" in "${path}" as it does not match the expected format`,
+        meta: { 'file.name': possibleFile.name, 'file.directory': path },
       });
 
       return null;

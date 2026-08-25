@@ -9,6 +9,7 @@ import {
 } from './schema/index.js';
 import {
   AssetService,
+  CloudService,
   CollectionService,
   ComponentService,
   EntryService,
@@ -17,11 +18,13 @@ import {
   ProjectService,
   ReferenceService,
   ReleaseService,
+  ReportService,
   UserService,
 } from './service/index.js';
 import { LogService } from './service/LogService.js';
 import {
   createPathTo,
+  resolveCloudUrl,
   resolveDataDir,
   resolveLogLevel,
   resolveReadOnly,
@@ -55,6 +58,8 @@ export default class ElekIoCore {
   private readonly entryService: EntryService;
   private readonly referenceService: ReferenceService;
   private readonly releaseService: ReleaseService;
+  private readonly reportService: ReportService;
+  private readonly cloudService: CloudService;
   private readonly localApi: LocalApi;
 
   constructor(props?: ConstructorElekIoCoreProps) {
@@ -65,9 +70,19 @@ export default class ElekIoCore {
     }
 
     this.options = {
-      log: { level: resolveLogLevel(parsedProps.data?.log?.level) },
+      log: {
+        level: resolveLogLevel(parsedProps.data?.log?.level),
+        hasProcessErrorHandlers:
+          parsedProps.data?.log?.hasProcessErrorHandlers ?? true,
+        // Spread rather than assigned, so an undeclared host version stays
+        // absent instead of being written as an explicit undefined
+        ...(parsedProps.data?.log?.hostVersion === undefined
+          ? {}
+          : { hostVersion: parsedProps.data.log.hostVersion }),
+      },
       file: parsedProps.data?.file ?? { cache: true },
       dataDir: resolveDataDir(parsedProps.data?.dataDir),
+      cloud: { url: resolveCloudUrl(parsedProps.data?.cloud?.url) },
       isReadOnly: resolveReadOnly(parsedProps.data?.isReadOnly),
     };
     this.pathTo = createPathTo(this.options.dataDir);
@@ -157,6 +172,13 @@ export default class ElekIoCore {
       this.jsonFileService,
       this.projectService
     );
+    this.reportService = new ReportService(
+      this.coreVersion,
+      this.options,
+      this.pathTo,
+      this.logService
+    );
+    this.cloudService = new CloudService(this.reportService);
     this.localApi = new LocalApi(
       this.logService,
       this.projectService,
@@ -169,7 +191,14 @@ export default class ElekIoCore {
     this.logService.info({
       source: 'core',
       message: `Initializing elek.io Core ${this.coreVersion}`,
-      meta: { options: this.options },
+      meta: {
+        'elek.options.log.level': this.options.log.level,
+        'elek.options.log.has_process_error_handlers':
+          this.options.log.hasProcessErrorHandlers,
+        'elek.options.file.cache': this.options.file.cache,
+        'elek.options.data_dir': this.options.dataDir,
+        'elek.options.is_read_only': this.options.isReadOnly,
+      },
     });
 
     Fs.mkdirpSync(this.pathTo.projects);
@@ -254,6 +283,14 @@ export default class ElekIoCore {
    */
   public get releases(): ReleaseService {
     return this.releaseService;
+  }
+
+  /**
+   * Everything Core does against elek.io Cloud, which today is
+   * sending a bug report or feedback
+   */
+  public get cloud(): CloudService {
+    return this.cloudService;
   }
 
   /**

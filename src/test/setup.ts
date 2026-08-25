@@ -8,6 +8,7 @@ export * from '../index.node.js';
  */
 export const testUserProps: SetUserProps = {
   userType: 'local',
+  id: null,
   name: 'John Doe',
   email: 'john.doe@test.com',
   language: 'en',

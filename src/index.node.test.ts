@@ -43,11 +43,15 @@ describe('Node.js', function () {
     expect(defaultCore.options).to.deep.equal({
       log: {
         level: 'info',
+        hasProcessErrorHandlers: true,
       },
       file: {
         cache: true,
       },
       dataDir: defaultDataDir,
+      cloud: {
+        url: 'https://api.elek.io',
+      },
       isReadOnly: false,
     });
 
@@ -55,11 +59,15 @@ describe('Node.js', function () {
     expect(coreWithLogLevel.options).to.deep.equal({
       log: {
         level: 'debug',
+        hasProcessErrorHandlers: true,
       },
       file: {
         cache: true,
       },
       dataDir: defaultDataDir,
+      cloud: {
+        url: 'https://api.elek.io',
+      },
       isReadOnly: false,
     });
 
@@ -67,11 +75,15 @@ describe('Node.js', function () {
     expect(coreWithoutCache.options).to.deep.equal({
       log: {
         level: 'info',
+        hasProcessErrorHandlers: true,
       },
       file: {
         cache: false,
       },
       dataDir: defaultDataDir,
+      cloud: {
+        url: 'https://api.elek.io',
+      },
       isReadOnly: false,
     });
 
@@ -148,6 +160,31 @@ describe('Node.js', function () {
     const { core: optionCore } = createTmpCore({ log: { level: 'debug' } });
 
     expect(optionCore.options.log.level).toEqual('debug');
+  });
+
+  it('registers no process error handlers when the host owns them', function () {
+    // The Astro entry does this, because inside a build the host owns the
+    // process. See contributing/logging.md.
+    const baseUncaught = process.listenerCount('uncaughtException');
+    const baseUnhandled = process.listenerCount('unhandledRejection');
+
+    const { core: quietCore } = createTmpCore({
+      log: { hasProcessErrorHandlers: false },
+    });
+
+    expect(quietCore.options.log.hasProcessErrorHandlers).toBe(false);
+    expect(process.listenerCount('uncaughtException')).toBe(baseUncaught);
+    expect(process.listenerCount('unhandledRejection')).toBe(baseUnhandled);
+  });
+
+  it('still takes a log level without being told about error handlers', function () {
+    // `log` holds more than one setting now, so its keys have to be
+    // individually optional. Pinning the level must not force a caller to
+    // also pin the handlers, and vice versa.
+    const { core: levelOnly } = createTmpCore({ log: { level: 'warn' } });
+
+    expect(levelOnly.options.log.level).toEqual('warn');
+    expect(levelOnly.options.log.hasProcessErrorHandlers).toBe(true);
   });
 
   it('should treat an empty ELEK_IO_LOG_LEVEL as unset', function () {

@@ -100,12 +100,13 @@ export async function ensureCleanGitStatus(
 ) {
   const status = await core.git.status(core.util.pathTo.project(projectId));
   if (status.length > 0) {
+    // No attributes, so the vocabulary in logSchema.ts stays the one Core
+    // itself writes. The status is in the message already
     core.logger.error({
       source: 'core',
       message: `Task "${
         task.name
       }" finished with an unclean git status: ${JSON.stringify(status)}`,
-      meta: { status },
     });
   }
   expect(status.length).toEqual(0);
@@ -626,14 +627,18 @@ export function execCommand({
         core.logger.error({
           source: 'core',
           message: `Error executing command "${fullCommand}" after ${durationMs}ms: ${error.message}`,
-          meta: { error, stdout: stdout.toString(), stderr: stderr.toString() },
+          meta: {
+            'exception.type': error.name,
+            'exception.message': error.message,
+            'elek.duration_ms': durationMs,
+          },
         });
         reject(error instanceof Error ? error : new Error(error.message));
       } else {
         core.logger.info({
           source: 'core',
           message: `Command "${fullCommand}" executed successfully in ${durationMs}ms.`,
-          meta: { stdout: stdout.toString(), stderr: stderr.toString() },
+          meta: { 'elek.duration_ms': durationMs },
         });
         resolve({ stdout: stdout.toString(), stderr: stderr.toString() });
       }

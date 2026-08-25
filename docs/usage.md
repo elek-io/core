@@ -30,6 +30,7 @@ The constructor accepts an optional options object. All fields are optional and 
 const core = new ElekIoCore({
   log: {
     level: 'info', // 'error' | 'warn' | 'info' | 'debug' - default 'info'
+    hasProcessErrorHandlers: true, // handle uncaught exceptions - default true
   },
   file: {
     cache: true, // cache files in memory to speed up access - default true
@@ -45,26 +46,70 @@ The resolved options are exposed on `core.options`, and the running Core version
 
 `log.level` is the lowest level Core writes, one of `error`, `warn`, `info` and `debug`. It takes precedence over the `ELEK_IO_LOG_LEVEL` environment variable, which takes precedence over the default `info`. A value that is none of the four throws a `CoreError`, so a typo says so instead of quietly leaving the logs as they were. Set it to `error` where Core is a library inside another tool's output, such as an Astro build.
 
+`log.hasProcessErrorHandlers` decides whether Core registers `process.on('uncaughtException')` and `process.on('unhandledRejection')`, which is what writes an uncaught error into the log file before the process goes down. It defaults to `true`. Set it to `false` where the host owns its own error handling, such as inside a build. The Astro entry does that for you. `dispose()` removes the handlers again either way.
+
+`log.hostVersion` is the version of your own application, and it is written to `service.version` on every record you log with a `source` other than `core`. Core stamps its own version on its own records and has no way to read yours, so without this the records you write carry no version at all, and a log file someone hands you on its own cannot be matched to the build that produced it. It must be a semantic version. A value that is not one throws a `CoreError` rather than writing something the log file's own read contract would reject. See [`reporting.md`](./reporting.md) for what a log file and a report each carry.
+
+`cloud.url` is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`. A trailing slash is dropped, since Core appends a path to it. A value that is not a URL throws a `CoreError`, rather than falling back to the default and sending to production on the strength of a typo.
+
 `isReadOnly` puts Core into read-only mode, meant for environments that only consume content, such as CI builds. Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`. In return, cloning and fetching work without a User being set, because nothing is ever committed. The option takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
 
 ### Environment variables
 
 Core reads its environment variables once at construction, never at import. All of them use the `ELEK_IO_` prefix with SCREAMING_SNAKE_CASE names. An empty or whitespace-only value counts as unset. When a constructor option covers the same setting, the option wins over the environment.
 
-| Variable                           | Purpose                                                          | Default          |
-| ---------------------------------- | ---------------------------------------------------------------- | ---------------- |
-| `ELEK_IO_DATA_DIR`                 | The directory Core reads and writes data in                      | `~/elek.io`      |
-| `ELEK_IO_LOG_LEVEL`                | The lowest level Core logs                                       | `info`           |
-| `ELEK_IO_READ_ONLY`                | Set to `true` to put Core into read-only mode                    | unset            |
-| `ELEK_IO_REMOTE_ACCESS_TOKEN`      | Token for authenticating git operations against a private remote | unset            |
-| `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN`   | `x-access-token` |
-| `ELEK_IO_CHANNEL`                  | The channel provisioning follows, overrides configured refs      | unset            |
+| Variable                           | Purpose                                                          | Default               |
+| ---------------------------------- | ---------------------------------------------------------------- | --------------------- |
+| `ELEK_IO_DATA_DIR`                 | The directory Core reads and writes data in                      | `~/elek.io`           |
+| `ELEK_IO_LOG_LEVEL`                | The lowest level Core logs                                       | `info`                |
+| `ELEK_IO_READ_ONLY`                | Set to `true` to put Core into read-only mode                    | unset                 |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN`      | Token for authenticating git operations against a private remote | unset                 |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN`   | `x-access-token`      |
+| `ELEK_IO_CHANNEL`                  | The channel provisioning follows, overrides configured refs      | unset                 |
+| `ELEK_IO_CLOUD_URL`                | Base URL of the elek.io Cloud API                                | `https://api.elek.io` |
 
 `ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git per invocation through an askpass helper. It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches. Prompts are disabled, a missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it. While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before. The token applies to HTTP(S) remotes only, SSH remotes authenticate through the ambient SSH setup like ssh-agent.
 
 On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room. See the limitation in [`features.md`](./features.md#intentional-constraints). macOS and Linux allow 1024 and 4096 characters and are not affected.
 
 The environment variable is what makes a packaged app configurable from the outside. For example, an end to end test can point a packaged Electron app at a disposable data directory by injecting `ELEK_IO_DATA_DIR` at launch, without redirecting `HOME` or adding test-only code paths.
+
+### Log files
+
+Core writes to the console and to daily rotated files under `<dataDir>/logs`, kept 30 days. A log file is one JSON object per line, following the [OpenTelemetry Logs Data Model](https://opentelemetry.io/docs/specs/otel/logs/data-model/):
+
+```json
+{
+  "timestamp": "2026-08-21T14:02:11.000Z",
+  "level": "info",
+  "severityNumber": 9,
+  "message": "Created file \"/home/you/elek.io/projects/<uuid>/collections/<uuid>/<uuid>.json\"",
+  "resource": {
+    "service.name": "core",
+    "service.version": "0.24.0",
+    "os.type": "linux",
+    "host.arch": "amd64"
+  },
+  "attributes": { "file.path": "..." }
+}
+```
+
+`attributes` uses flat dotted [Semantic Convention](https://opentelemetry.io/docs/specs/semconv/) names where one exists (`error.type`, `code.function.name`, `file.path`, `http.request.method`) and the `elek.` namespace for the rest (`elek.project.id`, `elek.collection.id`, `elek.object.type`, `elek.method`). No `@opentelemetry/*` package is involved, the shape is just the shape.
+
+What each level carries is a promise rather than an accident:
+
+| Level   | What lands in it                                                                                                                                 |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `error` | a failure at a service method boundary, and anything Core could not recover from                                                                 |
+| `warn`  | something anomalous Core recovered from, such as a file it skipped                                                                               |
+| `info`  | **what happened**: every file created, updated or deleted, every git command that changed a repository or a remote, and the Project level events |
+| `debug` | **how it happened**: reads, cache hits and misses, and the git commands that only asked something                                                |
+
+So `info`, the default, is enough to reconstruct what was done and in what order, and `debug` adds how Core did it. An application that ships Core to end users can run at `info` and still have a diagnostic record.
+
+A log file holds ids, paths, counts and error messages. It never holds the content of an Entry, the name of a Project, Collection or Asset, or the git signature of the User. It does hold the absolute data directory, which includes the account name, because it is written for the machine it is on. Anything that ships a log file elsewhere is responsible for scrubbing that prefix.
+
+`resource['service.name']` is the `source` the record was logged with, so your own records stay distinguishable from Core's in the same file. `service.version` is Core's version on Core's records, and yours on yours when you set the `log.hostVersion` option above. Set it: a log file someone sends you without a report around it has no other way to say which build wrote it.
 
 ## Setting the User (required before writing)
 

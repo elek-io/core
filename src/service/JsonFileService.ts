@@ -1,4 +1,5 @@
 import Fs from 'fs-extra';
+import Path from 'node:path';
 import type { z } from '@hono/zod-openapi';
 import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
@@ -39,9 +40,10 @@ export class JsonFileService extends AbstractService {
     if (this.options.file.cache === true) {
       this.cache.set(path, parsedData);
     }
-    this.logService.debug({
+    this.logService.info({
       source: 'core',
       message: `Created file "${path}"`,
+      meta: { 'file.path': path },
     });
     return parsedData;
   }
@@ -61,6 +63,7 @@ export class JsonFileService extends AbstractService {
       this.logService.debug({
         source: 'core',
         message: `Cache hit reading file "${path}"`,
+        meta: { 'file.path': path },
       });
       const json = this.cache.get(path);
       return schema.parse(json);
@@ -69,6 +72,7 @@ export class JsonFileService extends AbstractService {
     this.logService.debug({
       source: 'core',
       message: `Cache miss reading file "${path}"`,
+      meta: { 'file.path': path },
     });
     const data = await Fs.readFile(path, { flag: 'r', encoding: 'utf8' });
     const json = this.deserialize(data);
@@ -96,6 +100,7 @@ export class JsonFileService extends AbstractService {
     this.logService.warn({
       source: 'core',
       message: `Unsafe reading of file "${path}"`,
+      meta: { 'file.path': path },
     });
     return this.deserialize(data);
   }
@@ -121,11 +126,39 @@ export class JsonFileService extends AbstractService {
     if (this.options.file.cache === true) {
       this.cache.set(path, parsedData);
     }
-    this.logService.debug({
+    this.logService.info({
       source: 'core',
       message: `Updated file "${path}"`,
+      meta: { 'file.path': path },
     });
     return parsedData;
+  }
+
+  /**
+   * Deletes a file or a folder on disk. Does nothing if the path does not
+   * exist, which is what `Fs.remove` does.
+   *
+   * Every service deletes through this, so a deletion is recorded in one
+   * place and cannot serve what it removed: the cache is keyed by path,
+   * so a file read before it was deleted would otherwise still be handed
+   * out. A folder takes everything below it with it.
+   *
+   * @param path Path of the file or folder to delete
+   */
+  public async delete(path: string): Promise<void> {
+    await Fs.remove(path);
+    this.cache.delete(path);
+    const below = path + Path.sep;
+    for (const cached of this.cache.keys()) {
+      if (cached.startsWith(below)) {
+        this.cache.delete(cached);
+      }
+    }
+    this.logService.info({
+      source: 'core',
+      message: `Deleted "${path}"`,
+      meta: { 'file.path': path },
+    });
   }
 
   /**
@@ -142,6 +175,7 @@ export class JsonFileService extends AbstractService {
     this.logService.debug({
       source: 'core',
       message: `Cleared JSON file cache (${cleared} elements)`,
+      meta: { 'elek.cache.cleared_count': cleared },
     });
   }
 

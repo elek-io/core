@@ -300,6 +300,11 @@ export class ReleaseService extends AbstractService {
         this.logService.info({
           source: 'core',
           message: `Released version ${nextVersion} (${diff.bump} bump)`,
+          meta: {
+            'elek.project.id': props.projectId,
+            'elek.release.version': nextVersion,
+            'elek.release.bump': diff.bump,
+          },
         });
 
         return {
@@ -394,6 +399,11 @@ export class ReleaseService extends AbstractService {
           this.logService.info({
             source: 'core',
             message: `Preview released version ${previewVersion} (${diff.bump} bump)`,
+            meta: {
+              'elek.project.id': props.projectId,
+              'elek.release.version': previewVersion,
+              'elek.release.bump': diff.bump,
+            },
           });
 
           return {
@@ -472,6 +482,7 @@ export class ReleaseService extends AbstractService {
         this.logService.debug({
           source: 'core',
           message: `Skipping asset "${fileName}" at ref "${ref}" during release diff`,
+          meta: { 'file.name': fileName, 'elek.git.ref': ref },
         });
       }
     }
@@ -521,6 +532,11 @@ export class ReleaseService extends AbstractService {
         this.logService.debug({
           source: 'core',
           message: `Skipping entry "${fileName}" in collection "${collectionId}" at ref "${ref}" during release diff`,
+          meta: {
+            'file.name': fileName,
+            'elek.collection.id': collectionId,
+            'elek.git.ref': ref,
+          },
         });
       }
     }
@@ -564,6 +580,7 @@ export class ReleaseService extends AbstractService {
         this.logService.debug({
           source: 'core',
           message: `Skipping folder "${folderName}" at ref "${ref}" during release diff`,
+          meta: { 'file.name': folderName, 'elek.git.ref': ref },
         });
       }
     }
@@ -607,6 +624,7 @@ export class ReleaseService extends AbstractService {
         this.logService.debug({
           source: 'core',
           message: `Skipping component folder "${folderName}" at ref "${ref}" during release diff`,
+          meta: { 'file.name': folderName, 'elek.git.ref': ref },
         });
       }
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from '@hono/zod-openapi';
-import { datetime, slug, uuid, uuidSchema } from '../test/setup.js';
+import { CoreError, datetime, slug, uuid, uuidSchema } from '../test/setup.js';
 
 describe('UUID', () => {
   it('can be generated', () => {
@@ -39,5 +39,37 @@ describe('Slug', () => {
     expect(slug('Hello @!` World')).toBe('hello-world');
     expect(slug('1Hello @!` World')).toBe('1-hello-world');
     expect(slug('1hello @!` world')).toBe('1hello-world');
+  });
+});
+
+describe('CoreError', () => {
+  // Every type carries the HTTP status the local API answers with and the
+  // one a Cloud response maps from, so a type added without a status would
+  // otherwise surface as an undefined statusCode at a boundary
+  it.each([
+    ['notFound', 'NotFound', 404],
+    ['badRequest', 'BadRequest', 400],
+    ['unauthorized', 'Unauthorized', 401],
+    ['conflict', 'Conflict', 409],
+    ['preconditionFailed', 'PreconditionFailed', 412],
+    ['upgradeFailed', 'UpgradeFailed', 422],
+    ['versionSkew', 'VersionSkew', 422],
+    ['rateLimited', 'RateLimited', 429],
+    ['internal', 'Internal', 500],
+  ] as const)(
+    'has a %s with the status code %s',
+    (factory, type, statusCode) => {
+      const error = CoreError[factory]('something happened');
+
+      expect(error.type).toBe(type);
+      expect(error.statusCode).toBe(statusCode);
+      expect(error.message).toBe('something happened');
+    }
+  );
+
+  it('keeps the cause of what it was raised from', () => {
+    const cause = new Error('the real one');
+
+    expect(CoreError.rateLimited('too many', cause).cause).toBe(cause);
   });
 });

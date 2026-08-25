@@ -26,8 +26,11 @@ export const provisionAction = async ({
     ref: resolvedRef,
   });
 
+  // The Project id rather than its name. This goes through Core's logger,
+  // so it lands in a log file that can be attached to a bug report, and
+  // names stay out of those. See contributing/logging.md.
   core.logger.info({
     source: 'core',
-    message: `Provisioned Project "${result.project.name}" (${result.project.id}) at "${resolvedRef}", version ${result.project.version} (${result.source})`,
+    message: `Provisioned Project ${result.project.id} at "${resolvedRef}", version ${result.project.version} (${result.source})`,
   });
 };

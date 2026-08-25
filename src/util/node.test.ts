@@ -15,6 +15,7 @@ import {
   isNotEmpty,
   files,
   folders,
+  resolveCloudUrl,
   resolveContentRef,
   resolveDataDir,
   resolveLogLevel,
@@ -228,6 +229,61 @@ describe('resolveLogLevel', () => {
     expect(() => resolveLogLevel()).toThrow(
       'ELEK_IO_LOG_LEVEL must be "error", "warn", "info" or "debug", got "verbose"'
     );
+  });
+});
+
+describe('resolveCloudUrl', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('returns the elek.io Cloud API when nothing is configured', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_URL', undefined);
+
+    expect(resolveCloudUrl()).toBe('https://api.elek.io');
+  });
+
+  it('returns the ELEK_IO_CLOUD_URL environment variable when set', () => {
+    // What a test suite and Desktop's E2E run point at a Cloud of their own
+    vi.stubEnv('ELEK_IO_CLOUD_URL', 'http://127.0.0.1:31311');
+
+    expect(resolveCloudUrl()).toBe('http://127.0.0.1:31311');
+  });
+
+  it('prefers the given URL over the environment variable', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_URL', 'http://127.0.0.1:31311');
+
+    expect(resolveCloudUrl('https://staging.elek.io')).toBe(
+      'https://staging.elek.io'
+    );
+  });
+
+  it('treats an empty or whitespace-only value as unset', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_URL', '   ');
+    expect(resolveCloudUrl('')).toBe('https://api.elek.io');
+
+    vi.stubEnv('ELEK_IO_CLOUD_URL', 'http://127.0.0.1:31311');
+    expect(resolveCloudUrl('  ')).toBe('http://127.0.0.1:31311');
+  });
+
+  it('drops a trailing slash, since a path is appended to this', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_URL', undefined);
+
+    expect(resolveCloudUrl('http://127.0.0.1:31311/')).toBe(
+      'http://127.0.0.1:31311'
+    );
+    expect(resolveCloudUrl('http://127.0.0.1:31311/base/')).toBe(
+      'http://127.0.0.1:31311/base'
+    );
+  });
+
+  it('throws on something that is not a URL, rather than falling back', () => {
+    // Falling back would send a report to production because of a typo
+    vi.stubEnv('ELEK_IO_CLOUD_URL', 'api.elek.io');
+    expect(() => resolveCloudUrl()).toThrowError(/ELEK_IO_CLOUD_URL/);
+
+    vi.stubEnv('ELEK_IO_CLOUD_URL', undefined);
+    expect(() => resolveCloudUrl('not a url')).toThrowError(/not a url/);
   });
 });
 
