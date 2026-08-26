@@ -80,6 +80,7 @@ const capitalizedWords = new Set([
   'Actions',
   'TypeScript',
   'JavaScript',
+  'OpenAPI',
   'Node',
   'Markdown',
   'Desktop',

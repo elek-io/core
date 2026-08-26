@@ -11,6 +11,5 @@ Plans are committed and reach `main`, so an idea survives until someone picks it
 - [`jsdoc-findings.md`](./jsdoc-findings.md) - what that review found, the work list phase 4 writes from
 - [`git-service-object-parameters.md`](./git-service-object-parameters.md) - give every public `GitService` method one props object, a breaking change
 - [`gitignore-os-junk.md`](./gitignore-os-junk.md) - the non-dot OS files a generated Project `.gitignore` still misses
-- [`openapi-document-500.md`](./openapi-document-500.md) - the local API's OpenAPI document answers 500, taking the built-in reference UI with it
 - [`project-description-shape.md`](./project-description-shape.md) - whether a Project description becomes optional and translatable like a Collection's
 - [`reporting.md`](./reporting.md) - Core's half of in-app reporting, and the request shape elek.io Cloud should be built against

@@ -27,6 +27,7 @@ About to change an area? Read its doc first, so you change behavior on purpose r
 - [`error-handling-internals.md`](./error-handling-internals.md) - how `CoreError` and validation work inside Core
 - [`logging.md`](./logging.md) - what a log file may contain, and why names never appear in one
 - [`astro-entry.md`](./astro-entry.md) - the design and invariants behind `@elek-io/core/astro`
+- [`openapi-document.md`](./openapi-document.md) - how `GET /openapi.json` is generated, and the rule a recursive schema has to follow
 
 ## Dependencies and tooling
 

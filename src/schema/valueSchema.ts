@@ -345,21 +345,27 @@ export const mdAstEntryReferenceSchema: z.ZodType<MdAstEntryReference> =
  * are annotated with `z.ZodType<T>`, which hides the literal discriminator
  * field from `z.discriminatedUnion`'s type-level check. Runtime cost is
  * negligible for a 12-member union.
+ *
+ * Named for OpenAPI because this is where the phrasing cycle closes.
+ *
+ * @see ../../contributing/openapi-document.md
  */
-export const mdAstPhrasingNodeSchema: z.ZodType<MdAstPhrasingNode> = z.union([
-  mdAstTextSchema,
-  mdAstInlineCodeSchema,
-  mdAstBreakSchema,
-  mdAstHtmlSchema,
-  mdAstImageSchema,
-  mdAstFootnoteReferenceSchema,
-  mdAstAssetReferenceSchema,
-  mdAstEmphasisSchema,
-  mdAstStrongSchema,
-  mdAstDeleteSchema,
-  mdAstLinkSchema,
-  mdAstEntryReferenceSchema,
-]);
+export const mdAstPhrasingNodeSchema: z.ZodType<MdAstPhrasingNode> = z
+  .union([
+    mdAstTextSchema,
+    mdAstInlineCodeSchema,
+    mdAstBreakSchema,
+    mdAstHtmlSchema,
+    mdAstImageSchema,
+    mdAstFootnoteReferenceSchema,
+    mdAstAssetReferenceSchema,
+    mdAstEmphasisSchema,
+    mdAstStrongSchema,
+    mdAstDeleteSchema,
+    mdAstLinkSchema,
+    mdAstEntryReferenceSchema,
+  ])
+  .openapi('MdAstPhrasingNode');
 
 //
 // Non-recursive block nodes
@@ -502,18 +508,24 @@ export const mdAstFootnoteDefinitionSchema: z.ZodType<MdAstFootnoteDefinition> =
  * Union of all block-level node types. Same `mdAstHtmlSchema` appears in
  * both block and phrasing unions - the mdast spec uses a single `html`
  * node type for both contexts.
+ *
+ * Named for OpenAPI because this is where the block cycle closes.
+ *
+ * @see ../../contributing/openapi-document.md
  */
-export const mdAstBlockNodeSchema: z.ZodType<MdAstBlockNode> = z.union([
-  mdAstParagraphSchema,
-  mdAstHeadingSchema,
-  mdAstBlockquoteSchema,
-  mdAstListSchema,
-  mdAstCodeSchema,
-  mdAstThematicBreakSchema,
-  mdAstHtmlSchema,
-  mdAstTableSchema,
-  mdAstFootnoteDefinitionSchema,
-]);
+export const mdAstBlockNodeSchema: z.ZodType<MdAstBlockNode> = z
+  .union([
+    mdAstParagraphSchema,
+    mdAstHeadingSchema,
+    mdAstBlockquoteSchema,
+    mdAstListSchema,
+    mdAstCodeSchema,
+    mdAstThematicBreakSchema,
+    mdAstHtmlSchema,
+    mdAstTableSchema,
+    mdAstFootnoteDefinitionSchema,
+  ])
+  .openapi('MdAstBlockNode');
 
 /**
  * Returns true if the tree contains exactly one child that is an empty
@@ -575,10 +587,20 @@ export const mdastValueSchema = directValueBaseSchema.extend({
 });
 export type MdAstValue = z.infer<typeof mdastValueSchema>;
 
-export const valueSchema = z.union([
-  directValueSchema,
-  referencedValueSchema,
-  componentValueSchema,
-  mdastValueSchema,
-]);
+/**
+ * Union of every Value shape an Entry can hold.
+ *
+ * Named for OpenAPI because a component Value holds items whose own values
+ * are Values again.
+ *
+ * @see ../../contributing/openapi-document.md
+ */
+export const valueSchema = z
+  .union([
+    directValueSchema,
+    referencedValueSchema,
+    componentValueSchema,
+    mdastValueSchema,
+  ])
+  .openapi('Value');
 export type Value = z.infer<typeof valueSchema>;

@@ -45,3 +45,4 @@ What they let through on purpose:
 - [`astro-entry.md`](./astro-entry.md) - the Astro binding of the fold, and why its defaults avoid `astro/jsx-runtime`
 - [`adding-a-field-type.md`](./adding-a-field-type.md) - where a field's schema is declared
 - [`reference-integrity.md`](./reference-integrity.md) - the reference checks a tree is subject to
+- [`openapi-document.md`](./openapi-document.md) - why the two recursive node unions carry an OpenAPI component name
