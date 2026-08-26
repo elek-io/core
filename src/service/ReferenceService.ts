@@ -556,11 +556,12 @@ export class ReferenceService extends AbstractEntityService {
 //
 
 /**
- * `CoreError.notFound` predicate. `JsonFileService.read` wraps the
- * underlying ENOENT in `CoreError.notFound` (via `CoreError.fromUnknown`
- * but actually the read path throws directly when the file is absent,
- * see `JsonFileService.read`'s `Fs.readFile` call). We catch both shapes
- * defensively.
+ * `CoreError.notFound` predicate. `JsonFileService.readFile` raises
+ * `CoreError.notFound` directly for an absent file, rather than letting an
+ * ENOENT through `CoreError.fromUnknown`.
+ *
+ * Both callers read through `jsonFileService`, so the `ENOENT` branch below
+ * is a defensive leftover rather than the one that fires.
  */
 function isNotFoundError(error: unknown): boolean {
   if (error instanceof CoreError && error.type === 'NotFound') {
@@ -579,13 +580,12 @@ function isNotFoundError(error: unknown): boolean {
 }
 
 /**
- * Returns every `entryReference` and `assetReference` node in an mdast
- * tree, along with the path of `children` indices from the root to the
- * node. Used by both reference gates to report the location of references.
+ * The one mdast carrier every gate walks: the write gate directly, the delete
+ * and sync gates through `collectReferencesInValue`.
  *
- * Hand-rolled because we need each node's index-path (the sequence of
- * `children` indices from the root), which the unist visitor APIs do not
- * provide directly.
+ * It returns every `entryReference` and `assetReference` node along with its
+ * `treePath`, the sequence of `children` indices from the root. Hand-rolled
+ * because the unist visitor APIs do not hand that path back.
  */
 function collectMdAstRefs(root: MdAstRoot): Array<{
   node: MdAstEntryReference | MdAstAssetReference;
@@ -671,9 +671,9 @@ type FoundReference = {
  * `Value`, descending through `dynamic` and component items so nested
  * references are not missed.
  *
- * `fieldSlug` is the slug of the field holding `value`, `componentPath` the
- * chain of hops already traversed. This is the shared value-only walker behind
- * the reverse reference gates.
+ * Shared by the delete gate and the sync scan, the two that walk values
+ * without field definitions. `componentPath` carries the chain of hops
+ * already traversed.
  *
  * @see ../../contributing/reference-integrity.md
  */

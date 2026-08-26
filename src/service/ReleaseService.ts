@@ -46,10 +46,13 @@ import type { ProjectService } from './ProjectService.js';
 import type { PathTo } from '../util/node.js';
 
 /**
- * Service that manages Release functionality
+ * Diffs the `work` branch against `production` to compute a semver bump from
+ * what actually changed.
  *
- * A release diffs the current `work` branch against the `production` branch
- * to determine what changed, computes a semver bump, and merges work into production.
+ * `create()` then promotes `work` to `production` and tags it. `createPreview()`
+ * only tags a snapshot on `work` and never touches `production`.
+ *
+ * @see ../../docs/releases.md
  */
 export class ReleaseService extends AbstractService {
   private gitService: GitService;
@@ -99,10 +102,15 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Prepares a release by diffing the current `work` branch against `production`.
+   * Diffs the current `work` branch against `production` and returns a
+   * read-only summary plus the computed next version. With no changes, both
+   * `bump` and `nextVersion` are null.
    *
-   * Returns a read-only summary of all changes and the computed next version.
-   * If there are no changes, the next version and bump will be null.
+   * Throws `PreconditionFailed` unless the Project is checked out on `work`.
+   * Writes nothing, to disk or to git.
+   *
+   * A `work` branch merely ahead in commits, with no classified change, still
+   * yields a `patch` bump.
    */
   public prepare(props: PrepareReleaseProps): Promise<ReleaseDiff> {
     return this.validated('prepare', prepareReleaseSchema, props, async () => {
@@ -231,9 +239,9 @@ export class ReleaseService extends AbstractService {
    * 2. Merging `work` into `production`
    * 3. Updating the project version on `production`
    * 4. Tagging on `production`
-   * 5. Merging `production` back into `work` (fast-forward to sync the version commit)
-   * 6. Switching back to `work`
-   * 7. Pushing `production` and the tag to `origin`, if a remote is set
+   * 5. Switching back to `work` and merging `production` into it, which
+   *    fast-forwards the version commit across
+   * 6. Pushing `production` and the tag to `origin`, if a remote is set
    */
   public create(props: CreateReleaseProps): Promise<ReleaseResult> {
     return this.mutating('create', createReleaseSchema, props, async () => {
@@ -427,7 +435,10 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads the project file as it exists at a given git ref
+   * Reads the project file as it exists at a given git ref.
+   *
+   * Every failure is swallowed and returns null, which `diffProject()` reads
+   * as the first-release case rather than as an error.
    */
   private async getProjectAtRef(
     projectId: string,
@@ -448,7 +459,12 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads asset metadata files as they exist at a given git ref
+   * Reads asset metadata files as they exist at a given git ref.
+   *
+   * Lossy on purpose: a file that cannot be read is logged at debug, and one
+   * that fails `assetFileSchema` is dropped with no log at all. So a corrupt
+   * Asset reads as absent at that ref, and the diff reports it as added or
+   * deleted.
    */
   private async getAssetsAtRef(
     projectId: string,
@@ -491,7 +507,11 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads entry files for a single collection as they exist at a given git ref
+   * Reads entry files for a single Collection as they exist at a given git
+   * ref, filtering `collection.json` out of the list.
+   *
+   * Lossy the same way `getAssetsAtRef` is: an unreadable or invalid file
+   * reads as absent at that ref.
    */
   private async getEntriesAtRef(
     projectId: string,
@@ -545,7 +565,11 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads collections as they exist at a given git ref (branch or commit)
+   * Reads Collections as they exist at a given git ref, branch or commit.
+   *
+   * Lossy the same way `getAssetsAtRef` is: a folder whose `collection.json`
+   * is unreadable or fails its schema is skipped, so it reads as absent at
+   * that ref.
    */
   private async getCollectionsAtRef(
     projectId: string,
@@ -589,7 +613,10 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads component files as they exist at a given git ref
+   * Reads component files as they exist at a given git ref.
+   *
+   * Lossy the same way `getCollectionsAtRef` is: a folder whose file is
+   * unreadable or invalid reads as absent at that ref.
    */
   private async getComponentsAtRef(
     projectId: string,
@@ -765,7 +792,11 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Checks if there are any commits between two refs
+   * Checks if there are any commits between two refs.
+   *
+   * A failed `git log` returns true, so a Project whose `production` branch
+   * holds no commits yet is treated as having changes and `prepare()` falls
+   * back to a `patch` bump.
    */
   private async hasCommitsBetween(
     projectPath: string,
@@ -1438,7 +1469,13 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Counts existing preview tags for a given base version since the last full release.
+   * Counts existing preview tags for a given base version since the last full
+   * release.
+   *
+   * It walks `GitTagService.list` in the order that method returns, newest
+   * first by the tagged commit's author date, and stops at the first
+   * `release` tag, skipping `upgrade` tags. Changing that sort order silently
+   * breaks preview numbering.
    */
   private async countPreviewsSinceLastRelease(
     projectPath: string,

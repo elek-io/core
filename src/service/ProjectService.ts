@@ -143,7 +143,15 @@ export class ProjectService
   }
 
   /**
-   * Creates a new Project
+   * Creates the Project folder with its `assets`, `collections`, `components`
+   * and `lfs` subfolders, writes `.gitignore` and `.gitattributes`, then
+   * initializes a git repository whose first commit lands on `production`.
+   * The Project is left checked out on `work`.
+   *
+   * Throws `PreconditionFailed` in read-only mode and `Unauthorized` when no
+   * User is set. A failure at any step force-deletes the half-created folder.
+   *
+   * @see ../../docs/git-and-sync.md
    */
   public create(props: CreateProjectProps): Promise<Project> {
     return this.mutating(
@@ -200,11 +208,13 @@ export class ProjectService
   }
 
   /**
-   * Clones a Project by URL
+   * Clones a Project by URL into a full working copy for editing: whole
+   * history and every LFS object. To consume content in a build, see
+   * `provision()` instead.
    *
-   * Creates a full working copy for editing: whole history, every LFS
-   * object and a User set for committing. To consume content in a
-   * build, see provision().
+   * Throws `Unauthorized` when no User is set and `Conflict` when the Project
+   * id already exists locally. On a read-only Core the clone runs without a
+   * git identity, so the copy is readable but cannot commit.
    */
   public clone(props: CloneProjectProps): Promise<Project> {
     return this.validated('clone', cloneProjectSchema, props, async () => {
@@ -743,7 +753,11 @@ export class ProjectService
   }
 
   /**
-   * Returns the commit history of a Project
+   * `history` holds the commits that touched `project.json` alone, while
+   * `fullHistory` holds every commit in the repository, Assets, Collections
+   * and Entries included.
+   *
+   * Both are read straight from git, with no pagination.
    */
   public history(props: ProjectHistoryProps): Promise<ProjectHistoryResult> {
     return this.validated('history', projectHistorySchema, props, async () => {
@@ -795,9 +809,13 @@ export class ProjectService
   }
 
   /**
-   * Upgrades given Project to the current version of Core
+   * Migrates and commits every Asset, Component, Collection and Entry file on
+   * a temporary `upgrade/core-<from>-to-<to>` branch, squash-merges that into
+   * `work` and records an `upgrade` tag. A failure leaves `work` untouched.
    *
-   * Needed when a new Core version is requiring changes to existing files or structure.
+   * Throws `UpgradeFailed` when the Project was written by a newer Core or is
+   * already up to date without `force`, and `PreconditionFailed` in read-only
+   * mode and on a provisioned copy.
    */
   public upgrade(props: UpgradeProjectProps): Promise<void> {
     return this.mutating('upgrade', upgradeProjectSchema, props, async () => {
@@ -1037,6 +1055,14 @@ export class ProjectService
   }
 
   public branches = {
+    /**
+     * Fetches from `origin` first when the Project has one, so `remote`
+     * reflects the remote as of the call and an unreachable remote fails the
+     * call rather than returning a stale list. A Project without an origin
+     * skips the fetch and returns local branches only.
+     *
+     * Remote entries carry their `origin/` prefix.
+     */
     list: (
       props: ListBranchesProjectProps
     ): Promise<{ local: string[]; remote: string[] }> => {
@@ -1055,6 +1081,18 @@ export class ProjectService
         }
       );
     },
+    /**
+     * The checked-out branch name, or an empty string when HEAD is detached,
+     * which is the state a provisioned copy sits in on a Release tag.
+     *
+     * Reads local git only, no network and no side effect.
+     */
+    /**
+     * The checked-out branch name, or an empty string when HEAD is detached,
+     * which is the state a provisioned copy sits in on a Release tag.
+     *
+     * Reads local git only, no network and no side effect.
+     */
     current: (props: CurrentBranchProjectProps): Promise<string> => {
       return this.validated(
         'branches.current',
@@ -1066,6 +1104,15 @@ export class ProjectService
         }
       );
     },
+    /**
+     * Moves the Project's working tree, so every subsequent create, update
+     * and delete commits to whatever branch is now current. Switching back to
+     * `work` is the caller's job.
+     *
+     * Throws `PreconditionFailed` on a provisioned copy, and git fails on
+     * uncommitted changes unless `options.discardChanges` is set, which
+     * throws that work away. Not blocked in read-only mode.
+     */
     switch: (props: SwitchBranchProjectProps): Promise<void> => {
       return this.validated(
         'branches.switch',
@@ -1290,7 +1337,13 @@ export class ProjectService
   }
 
   /**
-   * Lists outdated Projects that need to be upgraded
+   * Walks every Project folder in the data directory and returns the
+   * in-memory migrated `ProjectFile` of each Project older than the installed
+   * Core. Writes nothing.
+   *
+   * A Project written by a newer Core is skew rather than outdated and is
+   * left out, and one whose file cannot be read or parsed is skipped silently
+   * rather than throwing.
    */
   public async listOutdated(): Promise<ProjectFile[]> {
     const projectReferences = await this.listReferences(

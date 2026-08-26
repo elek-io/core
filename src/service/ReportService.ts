@@ -61,7 +61,16 @@ export class ReportService extends AbstractService {
   }
 
   /**
-   * Sends a report and returns the id elek.io Cloud filed it under
+   * Sends a report and returns the id elek.io Cloud filed it under.
+   *
+   * Throws `BadRequest` for a rejected or over-2 MB body, `Unauthorized`,
+   * `RateLimited`, `PreconditionFailed` when Cloud is unreachable or silent
+   * for 15 seconds, and `Internal` otherwise.
+   *
+   * Read-only mode does not block it, and Core never retries, so sending
+   * again after a timeout can duplicate a report Cloud already accepted.
+   *
+   * @see ../../docs/reporting.md
    */
   public async create(props: CreateReportProps): Promise<ReportResponse> {
     // validated() rather than mutating(): assertNotReadOnly protects a
