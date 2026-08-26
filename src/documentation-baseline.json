@@ -10,10 +10,7 @@
     "contributing/testing.md",
     "contributing/toolchain.md"
   ],
-  "links/source-paths": [
-    "contributing/error-handling-internals.md",
-    "plans/reporting.md"
-  ],
+  "links/source-paths": ["contributing/error-handling-internals.md"],
   "links/jsdoc-see": ["src/schema/baseSchema.ts"],
   "prose/punctuation": ["contributing/comparisons/fields.md", "docs/fields.md"],
   "prose/sentence-case-headings": [
@@ -34,23 +31,20 @@
     "docs/provisioning.md",
     "docs/references.md",
     "docs/schema-changes.md",
-    "docs/storage-layout.md",
-    "plans/reporting.md"
+    "docs/storage-layout.md"
   ],
   "prose/fence-language": [
     "README.md",
     "contributing/linting.md",
     "docs/markdown-content.md",
-    "docs/references.md",
-    "plans/reporting.md"
+    "docs/references.md"
   ],
   "prose/vocabulary": [
     "contributing/comparisons/astro-integrations.md",
     "contributing/comparisons/fields.md",
     "contributing/git-credentials.md",
     "docs/concepts.md",
-    "docs/storage-layout.md",
-    "plans/reporting.md"
+    "docs/storage-layout.md"
   ],
   "prose/inline-header-list": ["docs/markdown-content.md"],
   "prose/no-temporal-words": [
@@ -86,8 +80,7 @@
     "docs/reporting.md",
     "docs/schema-changes.md",
     "docs/storage-layout.md",
-    "docs/usage.md",
-    "plans/reporting.md"
+    "docs/usage.md"
   ],
   "brevity/prose-run": [
     "contributing/astro-entry.md",
@@ -100,8 +93,7 @@
     "docs/markdown-content.md",
     "docs/references.md",
     "docs/reporting.md",
-    "docs/usage.md",
-    "plans/reporting.md"
+    "docs/usage.md"
   ],
   "brevity/jsdoc-block-length": [
     "src/astro/collections.ts",

@@ -251,12 +251,16 @@ const planFiles = () => markdownFilesIn('plans');
 const sourceFiles = () => filesIn(['src'], (name) => name.endsWith('.ts'));
 const rootFiles = () =>
   ['AGENTS.md', 'README.md'].filter((file) => exists(file));
-const allMarkdownFiles = () => [
+
+/** Everything a style rule shapes. Plans are out, a captured idea is a draft. */
+const styledFiles = () => [
   ...documentationFiles(),
   ...contributingFiles(),
-  ...planFiles(),
   ...rootFiles(),
 ];
+
+/** Every markdown file, for the rules that check correctness rather than shape. */
+const allMarkdownFiles = () => [...styledFiles(), ...planFiles()];
 
 /** Splits into lines, marking the ones inside a fenced code block. */
 function linesOf(content: string): MarkdownLine[] {
@@ -353,7 +357,10 @@ export const rules: Rule[] = [
   {
     id: 'structure/indexed',
     summary: 'every doc is listed in its folder index',
-    files: () => ['docs/index.md', 'contributing/index.md'].filter(exists),
+    files: () =>
+      ['docs/index.md', 'contributing/index.md', 'plans/index.md'].filter(
+        exists
+      ),
     check: (file, content) => {
       const directory = Path.dirname(file);
       const linked = new Set(
@@ -371,11 +378,7 @@ export const rules: Rule[] = [
   {
     id: 'structure/single-h1',
     summary: 'one H1, on the first line',
-    files: () => [
-      ...documentationFiles(),
-      ...contributingFiles(),
-      ...planFiles(),
-    ],
+    files: () => [...documentationFiles(), ...contributingFiles()],
     check: (file, content) => {
       const headings = linesOf(content).filter(
         (line) => !line.inFence && line.text.startsWith('# ')
@@ -393,11 +396,7 @@ export const rules: Rule[] = [
   {
     id: 'structure/lead-paragraph',
     summary: 'a lead paragraph follows the H1',
-    files: () => [
-      ...documentationFiles(),
-      ...contributingFiles(),
-      ...planFiles(),
-    ],
+    files: () => [...documentationFiles(), ...contributingFiles()],
     check: (file, content) => {
       const lines = content.split('\n');
       if (lines[1]?.trim() === '' && isProse(lines[2] ?? '')) return [];
@@ -555,7 +554,7 @@ export const rules: Rule[] = [
   {
     id: 'prose/sentence-case-headings',
     summary: 'headings are sentence case',
-    files: allMarkdownFiles,
+    files: styledFiles,
     check: (file, content) => {
       const violations: Violation[] = [];
       for (const line of linesOf(content)) {
@@ -582,7 +581,7 @@ export const rules: Rule[] = [
   {
     id: 'prose/fence-language',
     summary: 'code fences use the agreed language tags',
-    files: allMarkdownFiles,
+    files: styledFiles,
     check: (file, content) => {
       const violations: Violation[] = [];
       let inFence = false;
@@ -605,7 +604,7 @@ export const rules: Rule[] = [
   {
     id: 'prose/vocabulary',
     summary: 'no filler words, marketing words or abstract metaphors',
-    files: allMarkdownFiles,
+    files: styledFiles,
     check: (file, content) => {
       const violations: Violation[] = [];
       for (const line of linesOf(content)) {
@@ -634,7 +633,7 @@ export const rules: Rule[] = [
   {
     id: 'prose/inline-header-list',
     summary: 'no bold label ending in a colon that restates the line',
-    files: allMarkdownFiles,
+    files: styledFiles,
     check: (file, content) =>
       linesOf(content)
         .filter(
@@ -672,7 +671,7 @@ export const rules: Rule[] = [
   {
     id: 'brevity/paragraph-length',
     summary: `a paragraph or list item stays under ${maxParagraphLength} characters`,
-    files: allMarkdownFiles,
+    files: styledFiles,
     check: (file, content) =>
       linesOf(content)
         .filter((line) => !line.inFence)
@@ -687,7 +686,7 @@ export const rules: Rule[] = [
   {
     id: 'brevity/prose-run',
     summary: `no more than ${maxProseRun} paragraphs in a row`,
-    files: allMarkdownFiles,
+    files: styledFiles,
     check: (file, content) => {
       const violations: Violation[] = [];
       let run = 0;
@@ -715,7 +714,7 @@ export const rules: Rule[] = [
   {
     id: 'brevity/section-length',
     summary: `a section stays under ${maxSectionLength} content lines`,
-    files: allMarkdownFiles,
+    files: styledFiles,
     check: (file, content) => {
       const violations: Violation[] = [];
       let heading = { text: 'the lead', line: 1 };

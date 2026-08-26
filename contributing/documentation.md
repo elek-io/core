@@ -11,7 +11,7 @@ Everything a machine can check is checked, in [`src/test/documentation.ts`](../s
 | `docs/` | a developer or agent using the published package | what you can do and how | yes, in the npm package |
 | `contributing/` | someone about to change this area of Core | why it is built this way and what must hold | no |
 | JSDoc in `src/` | on exports, the consumer through their editor. On internals, the next contributor | what the type signature cannot say | exports do, through the `.d.ts` |
-| `plans/` | whoever picks the work up next, often an agent | what still has to happen | no |
+| `plans/` | whoever picks the work up next, often an agent | what still has to happen | no, but it reaches `main` |
 
 Who may link to whom follows from what ships:
 
@@ -20,7 +20,7 @@ flowchart TD
     docs["docs/<br/>ships in the package"]
     contributing["contributing/<br/>repository only"]
     jsdoc["JSDoc in src/"]
-    plans["plans/<br/>deleted when the work ships"]
+    plans["plans/<br/>deleted once implemented"]
 
     docs -->|relative| docs
     contributing -->|relative| docs
@@ -135,9 +135,18 @@ Never restate a type, a parameter name or a default. A `@param` that repeats the
 
 ## plans/
 
-A plan is work that still has to happen, kept out of `contributing/` so nobody mistakes it for how Core behaves. It lives on its feature branch, and it is deleted before that branch merges, with anything durable folded into a real doc first. CI fails when `plans/` is not empty on `main`.
+A plan is work that still has to happen, kept out of `contributing/` so nobody mistakes it for how Core behaves. It can be an idea written down before it vanishes or a brief for work already scoped, and it may be captured on a branch that has nothing to do with its subject.
 
-Nothing in `docs/` or `contributing/` links into a plan, because the target disappears.
+Plans are committed and reach `main`, so an idea survives until someone picks it up. Delete a plan once its work is implemented or dropped, folding anything durable into a real doc first. List every plan in `plans/index.md`, which is what keeps an old idea findable.
+
+Only the correctness rules read a plan:
+
+- Its links and anchors resolve, and every source path it cites exists.
+- Its mermaid diagrams parse.
+- It carries no em dashes and no curly quotes.
+- It appears in `plans/index.md`.
+
+The shape and brevity rules are yours to keep here rather than the suite's to enforce, so writing an idea down stays cheap. Nothing in `docs/` or `contributing/` links into a plan, because the target disappears.
 
 ## What the tools enforce
 

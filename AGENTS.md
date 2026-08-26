@@ -11,7 +11,7 @@ Core documents on four surfaces, each written for a different reader:
 - [`docs/`](./docs/) - consumer documentation, ships inside the published package
 - [`contributing/`](./contributing/) - contributor and design docs, never shipped
 - JSDoc in `src/` - on an export it reaches the consumer through the `.d.ts`, on an internal it does not
-- [`plans/`](./plans/) - work that still has to happen, deleted before its branch merges
+- `plans/` - captured ideas and work that still has to happen, kept until implemented or dropped
 
 Two rules:
 
