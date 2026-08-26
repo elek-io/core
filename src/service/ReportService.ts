@@ -44,7 +44,7 @@ const REPORT_MAX_BYTES = 2 * 1024 * 1024;
  * not read from `user.get()` here, because the address somebody can be
  * reached at is editable in the form that collected the report.
  *
- * See docs/reporting.md.
+ * @see ../../docs/reporting.md
  */
 export class ReportService extends AbstractService {
   private readonly coreVersion: string;

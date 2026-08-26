@@ -94,7 +94,9 @@ function hasImageExtension(extension: string): boolean {
  * Astro's marker for "resolve this string as an image import". Astro's
  * own image() schema helper emits the same prefix, the content store
  * picks it up and the runtime replaces the value with the resolved
- * ImageMetadata. See contributing/astro-entry.md.
+ * ImageMetadata.
+ *
+ * @see ../../contributing/astro-entry.md
  */
 const IMAGE_IMPORT_PREFIX = '__ASTRO_IMAGE_';
 

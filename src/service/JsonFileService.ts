@@ -9,7 +9,12 @@ import { isFileNotFound, type PathTo } from '../util/node.js';
 import { CoreError } from '../util/shared.js';
 
 /**
- * Service that manages CRUD functionality for JSON files on disk
+ * The one chokepoint every JSON file write and delete in Core goes through,
+ * which is what lets a mutation be logged in a single place.
+ *
+ * It holds a path-keyed in-memory cache shared by every service, correct only
+ * while nothing outside it touches the files. Anything that moves the working
+ * tree from underneath it, a pull or a rebase, has to `clearCache()`.
  */
 export class JsonFileService extends AbstractService {
   private cache: Map<string, unknown> = new Map();
@@ -25,9 +30,6 @@ export class JsonFileService extends AbstractService {
   /**
    * Creates a new file on disk. Fails if path already exists
    *
-   * @param data Data to write into the file
-   * @param path Path to write the file to
-   * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
   public async create<T extends z.ZodTypeAny>(
@@ -52,8 +54,6 @@ export class JsonFileService extends AbstractService {
   /**
    * Reads the content of a file on disk. Fails if path does not exist
    *
-   * @param path Path to read the file from
-   * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
   public async read<T extends z.ZodTypeAny>(
@@ -93,7 +93,6 @@ export class JsonFileService extends AbstractService {
    *
    * Does not read from or write to cache.
    *
-   * @param path Path to read the file from
    * @returns Unvalidated content of the file from disk
    */
   public async unsafeRead(path: string): Promise<unknown> {
@@ -112,9 +111,6 @@ export class JsonFileService extends AbstractService {
    * Creates the file when it does not exist, which is what the slug index
    * write in `AbstractSlugIndexedEntityService` relies on.
    *
-   * @param data Data to write into the file
-   * @param path Path to the file to overwrite
-   * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
   public async update<T extends z.ZodTypeAny>(
@@ -144,8 +140,6 @@ export class JsonFileService extends AbstractService {
    * place and cannot serve what it removed: the cache is keyed by path,
    * so a file read before it was deleted would otherwise still be handed
    * out. A folder takes everything below it with it.
-   *
-   * @param path Path of the file or folder to delete
    */
   public async delete(path: string): Promise<void> {
     await Fs.remove(path);

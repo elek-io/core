@@ -1,18 +1,5 @@
 /// <reference types="astro/astro-jsx" />
 
-/**
- * Astro-bound `mdastRender`. Takes an `MdAstRoot` and a renderers override
- * object, returns an Astro JSX element ready to interpolate in an `.astro`
- * file.
- *
- * Three keys are required from the consumer (`html`, `assetReference`,
- * `entryReference`), every other node type has a default that emits plain
- * semantic HTML. Defaults are built with `renderTemplate` and `addAttribute`
- * rather than with `astro/jsx-runtime`, which decides where they render.
- *
- * @see ../../contributing/astro-entry.md
- */
-
 import { renderTemplate, addAttribute } from 'astro/runtime/server/index.js';
 import {
   mdastRender as primitive,
@@ -55,6 +42,11 @@ function renderHeading(
   }
 }
 
+/**
+ * The default renderer for every node type that has a safe one, so a consumer
+ * overrides only what they care about. Spread under an override object, which
+ * is what `mdastRender` below does.
+ */
 export const astroDefaults: Pick<
   MdastRenderersBase<AstroElement>,
   DefaultedRendererKey
@@ -90,6 +82,18 @@ export const astroDefaults: Pick<
     renderTemplate`<sup><a${addAttribute(`#fn-${node.identifier}`, 'href')}>${node.label ?? node.identifier}</a></sup>`,
 };
 
+/**
+ * Astro-bound `mdastRender`. Takes an `MdAstRoot` and a renderers override
+ * object, returns an Astro JSX element ready to interpolate in an `.astro`
+ * file.
+ *
+ * Three keys are required from the consumer (`html`, `assetReference`,
+ * `entryReference`), every other node type has a default that emits plain
+ * semantic HTML. Defaults are built with `renderTemplate` and `addAttribute`
+ * rather than with `astro/jsx-runtime`, which decides where they render.
+ *
+ * @see ../../contributing/astro-entry.md
+ */
 export function mdastRender(
   root: MdAstRoot,
   overrides: MdastAstroRenderers

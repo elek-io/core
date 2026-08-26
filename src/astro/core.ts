@@ -1,10 +1,13 @@
 import Fs from 'fs-extra';
 import ElekIoCore, { CoreError } from '../index.node.js';
 
+let coreInstance: ElekIoCore | undefined;
+
 /**
- * Lazily-created, process-wide ElekIoCore. Created on first use so that
- * importing @elek-io/core/astro has no side effects. Configured through the
- * ELEK_IO_* environment variables, which are read once here.
+ * The process-wide ElekIoCore, created on first call so that importing the
+ * astro entry has no side effects. Every later call returns the same instance,
+ * configured through the ELEK_IO_* environment variables, which are read once
+ * here.
  *
  * The file cache and the process error handlers are off on purpose, and the
  * log level is left to ELEK_IO_LOG_LEVEL rather than passed as an option.
@@ -12,7 +15,6 @@ import ElekIoCore, { CoreError } from '../index.node.js';
  * @see ../../contributing/astro-entry.md
  * @see ../../contributing/logging.md
  */
-let coreInstance: ElekIoCore | undefined;
 export function getCore(): ElekIoCore {
   if (!coreInstance) {
     coreInstance = new ElekIoCore({

@@ -11,9 +11,10 @@ export const logSchema = z.object({
    * Attributes of the log record, as flat dotted keys
    *
    * Semantic Convention names where one exists, the `elek.` namespace
-   * for the rest. See contributing/logging.md.
+   * for the rest.
    *
    * @example { 'elek.project.id': '...', 'code.function.name': 'Asset.create' }
+   * @see ../../contributing/logging.md
    */
   meta: z.record(z.string(), z.unknown()).optional(),
 });
@@ -152,7 +153,9 @@ export type LogAttributes = Partial<Record<LogAttributeName, unknown>>;
  *
  * `level` and `message` keep their winston names, because that is what
  * an OTel winston bridge maps to SeverityText and Body. Everything Core
- * owns carries the OTel name. See contributing/logging.md.
+ * owns carries the OTel name.
+ *
+ * @see ../../contributing/logging.md
  */
 export const logRecordSchema = z.object({
   timestamp: z.iso.datetime(),
@@ -175,8 +178,11 @@ export type LogRecord = z.infer<typeof logRecordSchema>;
  * A window of log records, ready to be handed to someone else
  *
  * What `core.logger.tail()` returns and what a report carries when the
- * User consented to attaching their logs. See contributing/logging.md
- * for what a tail may contain and docs/reporting.md for where it goes.
+ * User consented to attaching their logs. The first doc below says what a
+ * tail may contain, the second where it goes.
+ *
+ * @see ../../contributing/logging.md
+ * @see ../../docs/reporting.md
  */
 export const logTailSchema = z.object({
   encoding: z.literal('gzip+base64'),

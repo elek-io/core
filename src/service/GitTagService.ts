@@ -28,7 +28,15 @@ import type { GitService } from './GitService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * Service that manages CRUD functionality for GitTags
+ * Annotated git tags, each named with a generated UUID, carrying their kind in
+ * the message trailers: `Type` plus `Version`, or `Core-Version` for an
+ * upgrade. This is the mechanism behind Releases, preview Releases and Core
+ * upgrades.
+ *
+ * A tag stays local until something pushes it, and a tag without a `Type`
+ * trailer is invisible to every read here.
+ *
+ * @see ../../docs/git-and-sync.md
  */
 export class GitTagService
   extends AbstractService
@@ -119,9 +127,6 @@ export class GitTagService
    * Deletes a tag
    *
    * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---delete
-   *
-   * @param path  Path to the repository
-   * @param id    UUID of the tag to delete
    */
   public async delete(props: DeleteGitTagProps): Promise<void> {
     return this.validated('delete', deleteGitTagSchema, props, async () => {
@@ -202,8 +207,6 @@ export class GitTagService
    *
    * Internally uses list(), so do not use count()
    * in conjuncion with it to avoid multiple git calls.
-   *
-   * @param path Path to the repository
    */
   public async count(props: CountGitTagsProps): Promise<number> {
     return this.validated('count', countGitTagsSchema, props, async () => {
@@ -261,8 +264,6 @@ export class GitTagService
 
   /**
    * Type guard for GitTag
-   *
-   * @param obj The object to check
    */
   private isGitTag(obj: unknown): obj is GitTag {
     return gitTagSchema.safeParse(obj).success;

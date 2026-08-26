@@ -1,14 +1,13 @@
 import type { ReportService } from './ReportService.js';
 
 /**
- * Everything Core does against elek.io Cloud
+ * The elek.io Cloud APIs, reached as `core.cloud.<api>`. Today that is
+ * `core.cloud.reports` alone, which sends bug reports and feedback.
  *
- * The one place in Core that is two levels deep, and deliberately.
- * elek.io Cloud is several APIs rather than one, so `core.cloud.reports`
- * names which of them a call belongs to and leaves the Management and
- * Publish surfaces somewhere to land without renaming anything.
+ * It owns no behavior of its own, only the second namespace level.
  *
- * See docs/reporting.md.
+ * @see ../../contributing/naming.md
+ * @see ../../docs/reporting.md
  */
 export class CloudService {
   private readonly reportService: ReportService;

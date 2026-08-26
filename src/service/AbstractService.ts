@@ -31,7 +31,9 @@ export abstract class AbstractService {
    *
    * The type and the method are attributes rather than a `[Type]
    * (Service.method)` prefix on the message: both ends were parsing that
-   * string back apart. See contributing/logging.md.
+   * string back apart.
+   *
+   * @see ../../contributing/logging.md
    */
   private logBoundaryError(context: string, error: CoreError): void {
     this.logService.error({

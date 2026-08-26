@@ -85,7 +85,9 @@ export interface MdastRenderersBase<T> {
 
 /**
  * Node types a consumer must render explicitly, because no default is safe
- * in any framework. See docs/markdown-content.md for the reasoning.
+ * in any framework. The reasoning is in the doc below.
+ *
+ * @see ../../docs/markdown-content.md
  */
 export const REQUIRED_RENDERER_KEYS = [
   'html',
@@ -156,7 +158,9 @@ const blockContainerTypes = new Set<string>([
  * `inlineCode` and `code` values. Block-level siblings (blocks, list items,
  * table rows and cells) are joined with `separator`, which defaults to a
  * space; inline content keeps its own spacing. Raw html and image/reference
- * alt text are not included. See docs/markdown-content.md.
+ * alt text are not included.
+ *
+ * @see ../../docs/markdown-content.md
  */
 export function extractText(node: MdAstAnyNode, separator = ' '): string {
   if (node.type === 'text') return node.value;

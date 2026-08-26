@@ -58,7 +58,14 @@ import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * Service that manages CRUD functionality for Component files on disk
+ * A Component is the folder `components/<uuid>/`, holding `component.json`. It
+ * is a reusable bundle of field definitions that a Collection's dynamic fields
+ * embed by reference rather than by copy.
+ *
+ * An update cascades into every Entry holding the Component, and the file plus
+ * every rewritten Entry land in one commit.
+ *
+ * @see ../../docs/schema-changes.md
  */
 export class ComponentService
   extends AbstractSlugIndexedEntityService<ComponentFile>
@@ -632,6 +639,16 @@ export class ComponentService
     });
   }
 
+  /**
+   * One page of Components, in whatever order the filesystem returns the
+   * folders rather than any sort.
+   *
+   * `limit` defaults to 15 and `limit: 0` returns everything from `offset`.
+   * `total` counts every Component folder in the Project rather than the
+   * page, and a Component whose file fails to read or validate is logged and
+   * dropped while still counted in `total`, so one broken Component never
+   * fails the call.
+   */
   public async list<T extends Component = Component>(
     props: ListComponentsProps
   ): Promise<PaginatedList<T>> {
@@ -667,6 +684,12 @@ export class ComponentService
     });
   }
 
+  /**
+   * Counts the folders under `components/` whose name parses as a UUID,
+   * without opening `component.json`. So it counts a Component whose file is
+   * missing or unreadable, can exceed the length of what `list` returns, and
+   * can disagree with `listAllIds`, which reads the slug index instead.
+   */
   public async count(props: CountComponentsProps): Promise<number> {
     return this.validated('count', countComponentsSchema, props, async () => {
       const refs = await this.listReferences(

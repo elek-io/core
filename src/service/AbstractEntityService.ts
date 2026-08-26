@@ -74,9 +74,9 @@ export abstract class AbstractEntityService extends AbstractService {
    * 2. Runs `git reset --hard HEAD` to restore the working tree
    * 3. Re-throws the original error
    *
-   * @param projectPath  Path to the project's git repository
-   * @param operation    The async operation to execute
-   * @param cleanupPaths Optional paths to remove before git reset (for create operations)
+   * `git reset --hard` leaves untracked files alone, so anything the operation
+   * newly created has to be named in `cleanupPaths` or it survives the
+   * rollback.
    */
   protected async withGitRollback<T>(
     projectPath: string,
@@ -147,9 +147,9 @@ export abstract class AbstractEntityService extends AbstractService {
   /**
    * Returns a list of all file references of given project and type
    *
-   * @param type File type of the references wanted
-   * @param projectId Project to get all asset references from
-   * @param collectionId Only needed when requesting files of type "Entry"
+   * Every type but `project` needs a `projectId`, and `entry` needs a
+   * `collectionId` as well. A missing one is a `BadRequest`, and a directory
+   * that is not there is a `NotFound`.
    */
   protected async listReferences(
     type: ObjectType,

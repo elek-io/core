@@ -42,7 +42,11 @@ import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * Service that manages CRUD functionality for Asset files on disk
+ * An Asset is two files, the binary under `lfs/` tracked by Git LFS and a JSON
+ * metadata sidecar under `assets/`. Every mutating method writes both and
+ * commits them together, so the pair never drifts apart in history.
+ *
+ * @see ../../docs/asset-management.md
  */
 export class AssetService extends AbstractEntityService {
   private readonly coreVersion: string;
@@ -342,6 +346,15 @@ export class AssetService extends AbstractEntityService {
     });
   }
 
+  /**
+   * One page of Assets, built from the JSON sidecars in `assets/` alone. No
+   * binary is opened, and the order is whatever the filesystem returns.
+   *
+   * `limit` defaults to 15 and `limit: 0` returns everything from `offset`.
+   * `total` counts every Asset in the Project rather than the page, and an
+   * Asset whose sidecar cannot be read is left out with a logged warning
+   * rather than failing the call, so `list` can be shorter than both.
+   */
   public list(props: ListAssetsProps): Promise<PaginatedList<Asset>> {
     return this.validated('list', listAssetsSchema, props, async () => {
       const offset = props.offset || 0;
@@ -373,6 +386,11 @@ export class AssetService extends AbstractEntityService {
     });
   }
 
+  /**
+   * Counts the JSON sidecars in `assets/` without opening one, so it equals
+   * the `total` a `list` reports. It still counts an Asset `list` had to drop
+   * as unreadable, and one whose binary was never fetched.
+   */
   public count(props: CountAssetsProps): Promise<number> {
     return this.validated('count', countAssetsSchema, props, async () => {
       const refs = await this.listReferences(
@@ -392,8 +410,6 @@ export class AssetService extends AbstractEntityService {
 
   /**
    * Returns the size of a file in bytes
-   *
-   * @param path Path of the file to get the size from
    */
   private async getFileSize(path: string): Promise<number> {
     const stats = await Fs.stat(path);
@@ -402,9 +418,6 @@ export class AssetService extends AbstractEntityService {
 
   /**
    * Creates an Asset from given AssetFile
-   *
-   * @param projectId   The project's ID
-   * @param assetFile   The AssetFile to convert
    */
   private toAsset(
     projectId: string,
@@ -424,8 +437,6 @@ export class AssetService extends AbstractEntityService {
   /**
    * Returns the found and supported extension as well as mime type,
    * otherwise throws an error
-   *
-   * @param filePath Path to the file to check
    */
   private getFileType(filePath: string): {
     extension: string;

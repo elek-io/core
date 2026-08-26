@@ -711,9 +711,11 @@ export const slugSourceReferencesSuperRefinement = (
  * Nested-component uniqueness has an ambiguous scope (within-item vs
  * within-entry vs collection vs project) and Components are reused across
  * Collections, so we deliberately defer it rather than advertise an unenforced
- * flag. See docs/features.md.
+ * flag.
  *
  * Use via superRefine on a Component's `fieldDefinitions` array.
+ *
+ * @see ../../docs/features.md
  */
 export const forbidUniqueAndSlugInComponentSuperRefinement = (
   fieldDefinitions: FieldDefinition[],

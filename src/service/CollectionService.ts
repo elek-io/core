@@ -61,7 +61,14 @@ import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * Service that manages CRUD functionality for Collection files on disk
+ * A Collection is the folder `collections/<uuid>/`, holding `collection.json`
+ * next to the Entries that belong to it. Every create, update and delete
+ * commits.
+ *
+ * Slug lookups and slug uniqueness go through `slug.index.json`, a cache git
+ * does not track and that rebuilds by scanning the folders when it misses.
+ *
+ * @see ../../docs/storage-layout.md
  */
 export class CollectionService
   extends AbstractSlugIndexedEntityService<CollectionFile>
@@ -682,6 +689,15 @@ export class CollectionService
     );
   }
 
+  /**
+   * One page of Collections, in whatever order the filesystem returns the
+   * folders rather than any sort.
+   *
+   * `limit` defaults to 15 and `limit: 0` returns everything from `offset`.
+   * `total` counts the Collection folders on disk while `list` holds only
+   * those that read and validate, so a `collection.json` failing its schema
+   * is dropped with a warning and the two numbers disagree.
+   */
   public async list<T extends Collection = Collection>(
     props: ListCollectionsProps
   ): Promise<PaginatedList<T>> {
@@ -722,6 +738,11 @@ export class CollectionService
     );
   }
 
+  /**
+   * Counts the UUID-named folders under `collections/` without reading or
+   * validating a single `collection.json`. Cheap, and higher than the length
+   * of what `list` returns whenever a file fails to parse.
+   */
   public async count(props: CountCollectionsProps): Promise<number> {
     return this.validated(
       'count',
@@ -767,8 +788,6 @@ export class CollectionService
 
   /**
    * Creates an Collection from given CollectionFile
-   *
-   * @param collectionFile   The CollectionFile to convert
    */
   private toCollection(collectionFile: CollectionFile): Collection {
     return {

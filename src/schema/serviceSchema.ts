@@ -56,14 +56,20 @@ export interface CrudService<T> {
  */
 export interface CrudServiceWithListCount<T> extends CrudService<T> {
   /**
-   * Returns a list of this services objects
+   * One page, and the contract every implementation owes its own block,
+   * because a concrete block replaces this one in the consumer's editor
+   * rather than adding to it.
    *
-   * Does not return objects where the schema validation fails.
-   * If that is the case, upgrade the Client and then Project to the latest version.
+   * `limit` defaults to 15 and `limit: 0` returns everything from `offset`.
+   * `total` counts the references on disk rather than the page. Anything that
+   * fails to read, a missing file, an IO error or a schema rejection, is
+   * dropped with a logged warning instead of failing the call, so `list` can
+   * be shorter than both `limit` and `total`.
    */
   list: (...props: never[]) => Promise<PaginatedList<T>>;
   /**
-   * Returns the total number of this services objects
+   * The same reference count `list` reports as `total`, without reading any
+   * of the files, so it counts objects `list` has to drop.
    */
   count: (...props: never[]) => Promise<number>;
 }

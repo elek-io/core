@@ -29,17 +29,6 @@ import type { UserService } from './UserService.js';
 import { PROVISIONED_MARKER, type PathTo } from '../util/node.js';
 
 /**
- * Service that manages Git functionality
- *
- * Uses the dugite Node.js bindings for Git, so Git LFS works, and is heavily
- * inspired by the GitHub Desktop app. Git operations are sequential, a FIFO
- * queue turns async calls into a sequence of git operations.
- *
- * @see https://github.com/desktop/dugite
- * @see ../../contributing/git-credentials.md
- */
-
-/**
  * Options for the internal `git` runner: dugite's execution options plus
  * `tolerateNonZero`, which returns the result on a non-zero exit instead of
  * throwing, so the caller can classify the failure itself (used by `rebase`
@@ -250,7 +239,9 @@ const READING_LFS_SUBCOMMANDS = new Set([
  * `info` is the whole of what a packaged elek.io Desktop records, so a
  * mutation belongs in it and a read does not. A command nobody classified
  * counts as a mutation: a noisy line is a smaller failure than a line
- * that should have been there and is not. See contributing/logging.md.
+ * that should have been there and is not.
+ *
+ * @see ../../contributing/logging.md
  */
 export function isMutatingGitCommand(args: readonly string[]): boolean {
   const nonFlags = args.filter((arg) => !arg.startsWith('-'));
@@ -289,6 +280,16 @@ export function isMutatingGitCommand(args: readonly string[]): boolean {
   }
 }
 
+/**
+ * Service that manages Git functionality
+ *
+ * Uses the dugite Node.js bindings for Git, so Git LFS works, and is heavily
+ * inspired by the GitHub Desktop app. Git operations are sequential, a FIFO
+ * queue turns async calls into a sequence of git operations.
+ *
+ * @see https://github.com/desktop/dugite
+ * @see ../../contributing/git-credentials.md
+ */
 export class GitService {
   private version: string | null;
   private gitPath: string | null;
@@ -345,10 +346,10 @@ export class GitService {
   /**
    * Create an empty Git repository or reinitialize an existing one
    *
-   * @see https://git-scm.com/docs/git-init
+   * Fails when the path does not exist, it initializes into a directory
+   * rather than creating one.
    *
-   * @param path    Path to initialize in. Fails if path does not exist
-   * @param options Options specific to the init operation
+   * @see https://git-scm.com/docs/git-init
    */
   public async init(
     path: string,
@@ -374,12 +375,9 @@ export class GitService {
   /**
    * Clone a repository into a directory
    *
-   * @see https://git-scm.com/docs/git-clone
+   * The destination has to exist and be empty, git does not create it.
    *
-   * @param url     The remote repository URL to clone from
-   * @param path    The destination path for the cloned repository.
-   *                Which is only working if the directory is existing and empty.
-   * @param options Options specific to the clone operation
+   * @see https://git-scm.com/docs/git-clone
    */
   public async clone(
     url: string,
@@ -437,9 +435,6 @@ export class GitService {
    * Add file contents to the index
    *
    * @see https://git-scm.com/docs/git-add
-   *
-   * @param path  Path to the repository
-   * @param files Files to add
    */
   public async add(path: string, files: string[]): Promise<void> {
     const relativePathsFromRepositoryRoot = files.map((filePath) => {
@@ -475,8 +470,6 @@ export class GitService {
      * List branches
      *
      * @see https://www.git-scm.com/docs/git-branch
-     *
-     * @param path  Path to the repository
      */
     list: async (
       path: string
@@ -507,8 +500,6 @@ export class GitService {
      * Returns the name of the current branch. In detached HEAD state, an empty string is returned.
      *
      * @see https://www.git-scm.com/docs/git-branch#Documentation/git-branch.txt---show-current
-     *
-     * @param path  Path to the repository
      */
     current: async (path: string): Promise<string> => {
       const args = ['branch', '--show-current'];
@@ -519,10 +510,6 @@ export class GitService {
      * Switch branches
      *
      * @see https://git-scm.com/docs/git-switch/
-     *
-     * @param path    Path to the repository
-     * @param branch  Name of the branch to switch to
-     * @param options Options specific to the switch operation
      */
     switch: async (
       path: string,
@@ -559,9 +546,6 @@ export class GitService {
      * Delete a branch
      *
      * @see https://git-scm.com/docs/git-branch#Documentation/git-branch.txt---delete
-     *
-     * @param path Path to the repository
-     * @param branch Name of the branch to delete
      */
     delete: async (
       path: string,
@@ -583,8 +567,6 @@ export class GitService {
      * Returns a list of currently tracked remotes
      *
      * @see https://git-scm.com/docs/git-remote
-     *
-     * @param path  Path to the repository
      */
     list: async (path: string): Promise<string[]> => {
       const args = ['remote'];
@@ -595,8 +577,6 @@ export class GitService {
     },
     /**
      * Returns true if the `origin` remote exists, otherwise false
-     *
-     * @param path  Path to the repository
      */
     hasOrigin: async (path: string): Promise<boolean> => {
       const remotes = await this.remotes.list(path);
@@ -611,8 +591,6 @@ export class GitService {
      * Git LFS endpoint is broken or absent.
      *
      * @see https://git-scm.com/docs/git-ls-remote
-     *
-     * @param path  Path to the repository
      */
     isOriginReachable: async (path: string): Promise<boolean> => {
       try {
@@ -628,8 +606,6 @@ export class GitService {
      * Throws if `origin` remote is added already.
      *
      * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emaddem
-     *
-     * @param path  Path to the repository
      */
     addOrigin: async (path: string, url: string): Promise<void> => {
       const args = ['remote', 'add', 'origin', url.trim()];
@@ -641,8 +617,6 @@ export class GitService {
      * Throws if no `origin` remote is added yet.
      *
      * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emget-urlem
-     *
-     * @param path  Path to the repository
      */
     getOriginUrl: async (path: string): Promise<string | null> => {
       const args = ['remote', 'get-url', 'origin'];
@@ -656,8 +630,6 @@ export class GitService {
      * Throws if no `origin` remote is added yet.
      *
      * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emset-urlem
-     *
-     * @param path  Path to the repository
      */
     setOriginUrl: async (path: string, url: string): Promise<void> => {
       const args = ['remote', 'set-url', 'origin', url.trim()];
@@ -683,8 +655,6 @@ export class GitService {
      * cleaned to a pointer automatically.
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-install.adoc
-     *
-     * @param path  Path to the repository
      */
     install: async (path: string): Promise<void> => {
       await this.git(path, ['lfs', 'install', '--local']);
@@ -696,8 +666,6 @@ export class GitService {
      * without LFS objects, so it is safe to call unconditionally.
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-fetch.adoc
-     *
-     * @param path  Path to the repository
      */
     fetchAll: async (path: string): Promise<void> => {
       await this.git(path, ['lfs', 'fetch', '--all']);
@@ -707,8 +675,6 @@ export class GitService {
      * the `origin` remote into the local LFS store
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-fetch.adoc
-     *
-     * @param path Path to the repository
      */
     fetch: async (path: string): Promise<void> => {
       await this.git(path, ['lfs', 'fetch', 'origin']);
@@ -717,8 +683,6 @@ export class GitService {
      * Materializes (smudges) working-tree files from the local LFS store
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-checkout.adoc
-     *
-     * @param path  Path to the repository
      */
     checkout: async (path: string): Promise<void> => {
       await this.git(path, ['lfs', 'checkout']);
@@ -731,8 +695,6 @@ export class GitService {
      * `smudge`.
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/spec.md
-     *
-     * @param content  The content to check
      */
     isPointer: (content: string): boolean => {
       return content.startsWith('version https://git-lfs.github.com/spec/v1');
@@ -891,8 +853,6 @@ export class GitService {
    * working tree.
    *
    * @see https://git-scm.com/docs/git-rebase#Documentation/git-rebase.txt---abort
-   *
-   * @param path Path to the repository
    */
   public async rebaseAbort(path: string): Promise<void> {
     await this.git(path, ['rebase', '--abort']);
@@ -905,10 +865,6 @@ export class GitService {
    * Reset current HEAD to the specified state
    *
    * @see https://git-scm.com/docs/git-reset
-   *
-   * @param path    Path to the repository
-   * @param mode    Modifies the working tree depending on given mode
-   * @param commit  Resets the current branch head to this commit / tag
    */
   public async reset(
     path: string,
@@ -932,9 +888,6 @@ export class GitService {
    * fetched history.
    *
    * @see https://www.git-scm.com/docs/git-fetch
-   *
-   * @param path    Path to the repository
-   * @param options Options specific to the fetch operation
    */
   public async fetch(
     path: string,
@@ -957,9 +910,6 @@ export class GitService {
    * Resolves a revision to the commit hash it points to
    *
    * @see https://git-scm.com/docs/git-rev-parse
-   *
-   * @param path Path to the repository
-   * @param rev  The revision to resolve, e.g. `HEAD` or a tag name
    */
   public async revParse(path: string, rev: string): Promise<string> {
     const result = await this.git(path, ['rev-parse', rev]);
@@ -970,8 +920,6 @@ export class GitService {
    * Lists the ref names a remote repository advertises, without cloning
    *
    * @see https://git-scm.com/docs/git-ls-remote
-   *
-   * @param url The remote repository URL
    */
   public async lsRemote(url: string): Promise<string[]> {
     const result = await this.git('', ['ls-remote', '--quiet', url]);
@@ -988,8 +936,6 @@ export class GitService {
    * Fetch from and integrate (rebase or merge) with a local branch
    *
    * @see https://git-scm.com/docs/git-pull
-   *
-   * @param path Path to the repository
    */
   public async pull(path: string): Promise<void> {
     const args = ['pull'];
@@ -1088,9 +1034,6 @@ export class GitService {
    * Record changes to the repository
    *
    * @see https://git-scm.com/docs/git-commit
-   *
-   * @param path    Path to the repository
-   * @param message An object describing the changes
    */
   public async commit(path: string, message: GitMessage): Promise<void> {
     if (this.options.isReadOnly) {
@@ -1154,9 +1097,6 @@ export class GitService {
    * Gets local commit history
    *
    * @see https://git-scm.com/docs/git-log
-   *
-   * @param path    Path to the repository
-   * @param options Options specific to the log operation
    */
   public async log(
     path: string,
@@ -1281,11 +1221,10 @@ export class GitService {
    * Useful for discovering what files/folders existed at a past commit,
    * e.g. to detect deleted collections when comparing branches.
    *
-   * @see https://git-scm.com/docs/git-ls-tree
+   * `treePath` may be absolute or repository relative, the repository prefix
+   * is stripped either way.
    *
-   * @param path      Path to the repository
-   * @param treePath  Relative path within the repository to list
-   * @param commitRef Commit hash, branch name, or other git ref
+   * @see https://git-scm.com/docs/git-ls-tree
    */
   public async listTreeAtCommit(
     path: string,
@@ -1360,9 +1299,6 @@ export class GitService {
    * This method checks if given name matches the required format
    *
    * @see https://git-scm.com/docs/git-check-ref-format
-   *
-   * @param path Path to the repository
-   * @param name Name to check
    */
   private async checkBranchOrTagName(
     path: string,
@@ -1427,8 +1363,6 @@ export class GitService {
 
   /**
    * Sets the git config of given local repository from ElekIoCoreOptions
-   *
-   * @param path Path to the repository
    */
   private async setLocalConfig(path: string): Promise<void> {
     const user = await this.userService.get();
@@ -1462,8 +1396,6 @@ export class GitService {
 
   /**
    * Type guard for GitCommit
-   *
-   * @param obj The object to check
    */
   private isGitCommit(obj: unknown): obj is GitCommit {
     return gitCommitSchema.safeParse(obj).success;
@@ -1472,9 +1404,6 @@ export class GitService {
   /**
    * Wraps the execution of any git command
    * to use a FIFO queue for sequential processing
-   *
-   * @param path Path to the repository
-   * @param args Arguments to append after the `git` command
    */
   private async git(
     path: string,

@@ -95,7 +95,11 @@ interface ProvisionFetch {
 }
 
 /**
- * Service that manages CRUD functionality for Project files on disk
+ * A Project is a git repository under the data directory, and every mutating
+ * call commits. Beyond create, read, update and delete this service clones,
+ * provisions, synchronizes, upgrades and switches branches.
+ *
+ * @see ../../docs/git-and-sync.md
  */
 export class ProjectService
   extends AbstractEntityService
@@ -1317,6 +1321,15 @@ export class ProjectService
     return results.filter(isNotEmpty);
   }
 
+  /**
+   * One page of the Projects in the data directory, provisioned copies
+   * included, in whatever order the filesystem returns the folders.
+   *
+   * `limit` defaults to 15 and `limit: 0` returns everything from `offset`.
+   * `total` counts every Project folder while `list` holds only those that
+   * could be read, so a Project whose `project.json` is missing or fails
+   * validation is logged and dropped and a page can be short.
+   */
   public async list(
     props?: ListProjectsProps
   ): Promise<PaginatedList<Project>> {
@@ -1353,6 +1366,11 @@ export class ProjectService
     };
   }
 
+  /**
+   * Counts the Project folders in the data directory, so it matches the
+   * `total` a `list` reports and can exceed the number of Projects `list`
+   * manages to return. Touches no git and reads no `project.json`.
+   */
   public async count(): Promise<number> {
     const refs = await this.listReferences(objectTypeSchema.enum.project);
     return refs.length;

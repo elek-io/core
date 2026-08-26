@@ -359,7 +359,6 @@ function writeFieldDefinitionNarrowing(
 
 /**
  * Writes a single field definition type entry within a tuple.
- * @param baseIndent - the indentation level of this entry within the tuple
  */
 function writeFieldDefinitionTupleEntry(
   writer: CodeBlockWriter,

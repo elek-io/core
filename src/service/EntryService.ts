@@ -47,7 +47,15 @@ import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * Service that manages CRUD functionality for Entry files on disk
+ * An Entry is one JSON file inside its Collection's folder, and every mutation
+ * commits it.
+ *
+ * The optional `T extends Entry` on `read`, `create`, `update` and `list` is
+ * the caller's own narrowing claim and is never checked. Core validates
+ * against `entryFileSchema`, and on a write against the Collection's field
+ * definitions, nothing further.
+ *
+ * @see ../../docs/storage-layout.md
  */
 export class EntryService
   extends AbstractEntityService
@@ -375,6 +383,15 @@ export class EntryService
     });
   }
 
+  /**
+   * One page of a Collection's Entries, in directory read order rather than
+   * any sort.
+   *
+   * `limit` defaults to 15 and `limit: 0` returns every Entry from `offset`.
+   * `total` counts the Entry files in the Collection rather than the page,
+   * and an Entry that fails to read is dropped with a logged warning instead
+   * of failing the call, so `list` can be shorter than both.
+   */
   public list<T extends Entry = Entry>(
     props: ListEntriesProps
   ): Promise<PaginatedList<T>> {
@@ -410,6 +427,14 @@ export class EntryService
     });
   }
 
+  /**
+   * Counts the Entry files in the Collection folder, skipping
+   * `collection.json`, without parsing any of them. One directory read, so it
+   * can exceed the number of Entries `list` manages to return.
+   *
+   * Throws `NotFound` for a Collection that is not there, rather than
+   * answering 0.
+   */
   public count(props: CountEntriesProps): Promise<number> {
     return this.validated('count', countEntriesSchema, props, async () => {
       const entryReferences = await this.listReferences(

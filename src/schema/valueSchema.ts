@@ -557,8 +557,10 @@ export function isEmptyParagraphOnly(root: {
  * components/HTML. Gives full control over how entryReference / assetReference
  * nodes render (resolve to your URL structure of choice).
  *
- * See docs/markdown-content.md for rendering patterns and security notes
- * (especially around `rawHtml`-enabled fields).
+ * Rendering patterns and the security notes around a `rawHtml`-enabled field
+ * are in the doc below.
+ *
+ * @see ../../docs/markdown-content.md
  */
 export const mdAstRootSchema = z
   .object({

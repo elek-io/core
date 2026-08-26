@@ -206,10 +206,9 @@ export function createPathTo(dataDir: string) {
 export type PathTo = ReturnType<typeof createPathTo>;
 
 /**
- * Used as parameter for filter() methods to assure,
- * only values not null, undefined or empty strings are returned
- *
- * @param value Value to check
+ * Narrows out null, undefined and strings holding nothing but whitespace, so a
+ * `filter()` keeps only values worth passing on. Whitespace counts as empty
+ * here, the same rule the ELEK_IO_ resolvers above read a value by.
  */
 export function isNotEmpty<T>(value: T | null | undefined): value is T {
   if (value === null || value === undefined) {

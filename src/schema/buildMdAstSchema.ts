@@ -93,7 +93,9 @@ export const markdownFeaturesSchema = z.object({
    * Raw HTML node (mdast `html`). Same flag covers both block and inline
    * contexts. SECURITY: enabling this allows authors to embed arbitrary
    * HTML - including scripts. Consumer renderers MUST sanitize the output
-   * (e.g. DOMPurify). Core does not sanitize. See docs/markdown-content.md.
+   * (e.g. DOMPurify). Core does not sanitize.
+   *
+   * @see ../../docs/markdown-content.md
    */
   rawHtml: z.boolean(),
   tables: z.boolean(),
