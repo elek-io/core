@@ -375,6 +375,40 @@ interface ExportedSymbol {
 }
 
 /** True when a node carries a block, its own or the variable statement's. */
+let classMemberCache: Map<string, Set<string>> | null = null;
+
+/**
+ * Maps every class Core declares to its member names, so a comment naming
+ * `Class.member` can be resolved. Built once, it parses every source file.
+ */
+function classMembers(): Map<string, Set<string>> {
+  if (classMemberCache !== null) return classMemberCache;
+
+  const members = new Map<string, Set<string>>();
+  for (const file of sourceFiles()) {
+    const source = ts.createSourceFile(
+      file,
+      readFile(file),
+      ts.ScriptTarget.Latest,
+      true
+    );
+    const walk = (node: ts.Node) => {
+      if (ts.isClassDeclaration(node) && node.name) {
+        const known = members.get(node.name.text) ?? new Set<string>();
+        for (const member of node.members) {
+          if (member.name) known.add(member.name.getText(source));
+        }
+        members.set(node.name.text, known);
+      }
+      ts.forEachChild(node, walk);
+    };
+    walk(source);
+  }
+
+  classMemberCache = members;
+  return members;
+}
+
 function hasJsdoc(node: ts.Node): boolean {
   return ts.getJSDocCommentsAndTags(node).length > 0;
 }
@@ -950,6 +984,35 @@ export const rules: Rule[] = [
           line: symbol.line,
           message: `${symbol.name} carries no JSDoc block, say what its signature cannot`,
         })),
+  },
+  {
+    id: 'jsdoc/symbol-reference',
+    summary: 'a comment naming `Class.member` names one that exists',
+    files: sourceFiles,
+    check: (file, content) => {
+      const members = classMembers();
+      const violations: Violation[] = [];
+      for (const [index, text] of content.split('\n').entries()) {
+        // Only Core's own classes are resolvable, so a reference to anything
+        // else is skipped rather than guessed at. A nested `A.b.c` is missed,
+        // the reference has to close right after the member.
+        if (!/^\s*(\/\/|\/\*|\*)/.test(text)) continue;
+        const references = text.matchAll(
+          /`([A-Z][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)(?:\(\))?`/g
+        );
+        for (const [, className, member] of references) {
+          if (className === undefined || member === undefined) continue;
+          const known = members.get(className);
+          if (known === undefined || known.has(member)) continue;
+          violations.push({
+            file,
+            line: index + 1,
+            message: `${className} has no member "${member}", the reference is stale or names the wrong class`,
+          });
+        }
+      }
+      return violations;
+    },
   },
 ];
 

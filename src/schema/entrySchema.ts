@@ -179,7 +179,7 @@ export interface UniqueValueConflict {
 
 /**
  * An Entry that still references a delete target (an Asset or another Entry).
- * Collected by `EntryService.findEntriesReferencing` and attached as the
+ * Collected by `ReferenceService.findEntriesReferencing` and attached as the
  * `cause` of the `Conflict` error thrown when a referenced Asset/Entry delete
  * is blocked. One record per referring Entry (first match within that Entry).
  */
@@ -213,7 +213,7 @@ export interface ReferencingEntry {
  * A reference found in the integrated tree whose target file is absent. The
  * forward analogue of `ReferencingEntry`: it names both the referring Entry
  * (where the broken reference lives) and the missing target. Collected by
- * `EntryService.findDanglingReferences` and attached as the `cause` of the
+ * `ReferenceService.findDanglingReferences` and attached as the `cause` of the
  * `Conflict` thrown when a sync would integrate a dangling reference. One
  * record per dangling reference (every broken reference is reported, not just
  * the first within an Entry).

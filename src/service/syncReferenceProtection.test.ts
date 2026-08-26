@@ -80,7 +80,7 @@ function entryRef(id: string, collectionId: string): Value {
 }
 
 /**
- * Direct, isolated tests of the forward scan `EntryService.findDanglingReferences`.
+ * Direct, isolated tests of the forward scan `ReferenceService.findDanglingReferences`.
  * Each test builds a valid tree, removes a target file from disk (simulating the
  * state a rebase can integrate), and asserts the scan reports the now-broken
  * reference. The whole-tree two-client sync behaviour is covered separately.
