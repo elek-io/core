@@ -18,6 +18,44 @@ public async create(props: CreateAssetProps): Promise<Asset> {
 
 On failure, errors are logged once and re-thrown. Non-`CoreError` exceptions are wrapped as `CoreError.internal`. The log record carries the error message as its message, and the type, the method and the status code as the `error.type`, `code.function.name` and `elek.error.status_code` attributes, rather than packing them into the message string. See [`logging.md`](./logging.md).
 
+### `mutating()` - the envelope a write goes through
+
+A method that changes a Project, its content or its remote uses `this.mutating()` rather than `validated()`. It is `validated()` with one thing in front: `assertNotReadOnly()`, called before the input is parsed, because a write is refused in read-only mode whatever its input says.
+
+Two guards sit around it, both raising a logged `CoreError.preconditionFailed`:
+
+- `assertNotReadOnly(context)` refuses every write while `isReadOnly` is set. `mutating()` calls it, and a method that has to read before it can validate calls it directly at its entry point, so nothing touches disk first.
+- `assertNotProvisioned(context, projectId)` refuses a write to a provisioned copy, which the next provision run would overwrite. It needs the Project id, so it is called at the point that id is first known, not at the entry point. Deleting a Project is exempt, it is the escape hatch that removes a copy.
+
+So a write can refuse before it validates, and the order is deliberate: read-only, then the id parse, then provisioned, then the real validation.
+
+### The two-stage parse
+
+Some schemas cannot exist until Core has read from disk. An Entry is validated against a schema built from its Collection's field definitions and its Project's languages, and reaching those needs the ids, which are inside the unvalidated props.
+
+`parseOrThrow()` covers that gap. It parses a small schema at the boundary, raising the same logged `CoreError.badRequest` a full validation would, so the ids are trustworthy before they are used to build the strict schema:
+
+```typescript
+this.assertNotReadOnly('create');
+const { projectId, collectionId } = this.parseOrThrow(
+  'create',
+  z.object({ projectId: uuidSchema, collectionId: uuidSchema }),
+  props
+);
+await this.assertNotProvisioned('create', projectId);
+// ... read the Project's languages and the Collection, build the schema ...
+return this.mutating(
+  'create',
+  schemaFromFieldDefinitions,
+  props,
+  async (validatedProps) => {
+    // ... the write ...
+  }
+);
+```
+
+`assertNotReadOnly` runs twice on this path, once directly and once inside `mutating()`. That is intended rather than redundant, the direct call is what stops a read-only Core from reading a Collection it is never allowed to write to.
+
 ### `withGitRollback` - transactional Git operations
 
 Entity create/update/delete operations are wrapped in `withGitRollback` (`src/service/AbstractEntityService.ts`). On failure, it:

@@ -431,7 +431,7 @@ export const assetFieldDefinitionSchema = referenceFieldDefinitionBaseSchema
     max: z.int().min(1).nullable(),
     /**
      * Allowed MIME types for referenced Assets. Empty array = any MIME.
-     * Enforced at write time by `EntryService.validateValueReferences`,
+     * Enforced at write time by `ReferenceService.validateValueReferences`,
      * which reads each referenced Asset's `mimeType` and compares against
      * this list. Schema-level enforcement isn't possible because asset
      * references carry only `id` - MIME info lives on the asset file.
@@ -491,7 +491,7 @@ export type DynamicFieldDefinition = z.infer<
  *
  * `buildMdAstSchemaForFeatures` builds the per-field schema that validates a
  * tree at write time. Existence and MIME validation lives in
- * `EntryService.validateValueReferences`, because both need IO.
+ * `ReferenceService.validateValueReferences`, because both need IO.
  *
  * @see ../../contributing/markdown-internals.md
  */

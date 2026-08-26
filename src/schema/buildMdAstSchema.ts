@@ -6,7 +6,7 @@
  * and applies the structural limits that config carries.
  *
  * Reference existence and `ofAssetMimeTypes` are not checked here, they need
- * IO and live in `EntryService.validateValueReferences`.
+ * IO and live in `ReferenceService.validateValueReferences`.
  *
  * @see ../../contributing/markdown-internals.md
  */

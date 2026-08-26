@@ -162,6 +162,21 @@ Run `pnpm test` and `pnpm lint`. Neither list below needs remembering, they are 
 | `diagrams/mermaid` | a mermaid diagram does not parse, checked with mermaid's own parser |
 | oxlint `jsdoc/*` | a tag is malformed, empty, or restates a type or default |
 
+### Why the coverage rule requires what it does
+
+`jsdoc/documented-export` requires a block on exported functions, exported classes and their public members. Three definitions were measured against the source before that one was picked:
+
+| Definition                                     | Requires | Missing |
+| ---------------------------------------------- | -------- | ------- |
+| Every exported symbol                          | 637      | 482     |
+| Exported functions, classes and public members | 271      | 57      |
+| The same, reachable from the four entry points | 66       | 28      |
+
+Why the other two were rejected:
+
+- The first is dominated by 231 exported types and 234 zod schemas whose shape is their own documentation, so it would manufacture exactly the noise the rules ban.
+- The third looks tightest and is the trap. `index.node.ts` re-exports only schemas, shared utils and the `ElekIoCore` class, and a consumer reaches a service through a getter's return type rather than an export. An export-graph walk never arrives at `EntryService.create`, so Core's most consumer-facing API would have been exempt.
+
 A file written before a rule existed is exempted in `src/documentation-baseline.json`. It is committed, so a clone and CI judge the same files and the diff shows the list shrinking. It may only shrink, and the suite fails when an entry stops being needed, so an exemption cannot quietly become permanent.
 
 ## See also
