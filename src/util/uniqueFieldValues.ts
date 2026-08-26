@@ -29,10 +29,13 @@ export interface UniqueValueCollision {
 }
 
 /**
- * Whether a field definition participates in uniqueness enforcement.
- * Only top-level direct-string fields qualify: a `slug` field (always unique)
- * or any string field with `isUnique: true`. Non-string types are forced to
- * `isUnique: false` by the schema, so this never matches them.
+ * Whether a field definition participates in uniqueness enforcement: a `slug`
+ * field, always unique, or any string field with `isUnique: true`. Non-string
+ * types are forced to `isUnique: false` by the schema.
+ *
+ * The scope is Collection level, a group's children included, because every
+ * caller passes `flattenFieldDefinitions()` output. A Component's definitions
+ * never qualify, the schema rejects `slug` and `isUnique` inside one.
  */
 export function isUniqueFieldDefinition(
   fieldDefinition: FieldDefinition
@@ -45,6 +48,10 @@ export function isUniqueFieldDefinition(
 
 /**
  * Filters a flat list of field definitions to those that enforce uniqueness.
+ *
+ * `EntryService.findUniqueValueConflicts` treats an empty result as the fast
+ * path that skips reading every other Entry in the Collection, so a Collection
+ * with no unique field pays nothing per write.
  */
 export function getUniqueFieldDefinitions(
   fieldDefinitions: FieldDefinition[]
@@ -104,8 +111,11 @@ function collisionKey(fieldSlug: string, language: string, value: string) {
 /**
  * Detects, across a set of Entries, every (field, language, value) triple held
  * by more than one Entry. Pure and order-preserving: the first Entry to hold a
- * value appears first in `entryIds`. Used both to validate a Collection update
- * that introduces uniqueness and to flag duplicates during an index rebuild.
+ * value appears first in `entryIds`.
+ *
+ * Two callers: the per-write scan on Entry create and update, which rescans
+ * the Collection every time precisely because nothing is indexed, and the
+ * Collection update path validating a newly introduced uniqueness.
  */
 export function detectUniqueValueCollisions(
   fieldDefinitions: FieldDefinition[],

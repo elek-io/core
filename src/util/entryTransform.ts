@@ -44,13 +44,14 @@ export interface TransformResult {
 }
 
 /**
- * Transforms entry values based on field definition changes.
+ * Rebuilds an Entry's values record on a field definition change, matching by
+ * UUID, so a slug swap or a rename plus an add with the same slug is safe.
  *
- * Rebuilds the values record from scratch using UUID-based mapping, so a slug
- * swap, or a rename plus an add with the same slug, is handled safely.
- *
- * Deterministic transforms are applied automatically. A non-deterministic
- * change produces an issue that needs a decision from the caller.
+ * Two deterministic transforms destroy content the caller then writes
+ * straight to disk: a value whose definition is gone is dropped, and a
+ * narrowed `ofComponents` or `ofCollections` strips the items and Entry
+ * references no longer allowed. Asset references stay, an empty allowlist
+ * strips nothing, and a non-deterministic change raises an issue instead.
  *
  * @see ../../docs/schema-changes.md
  */

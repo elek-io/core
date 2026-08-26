@@ -123,7 +123,15 @@ export function resolveCloudUrl(url?: string): string {
 export const PROVISIONED_MARKER = '.elek-provisioned';
 
 /**
- * Creates a collection of often used paths, rooted at the given data directory
+ * Builds the often used paths, rooted at the given data directory. Every
+ * returned function only assembles a string, none of them touch disk.
+ *
+ * Two layout facts a caller would otherwise get wrong: `entries()` is the
+ * Collection folder itself, because Entries are files inside it, and an Asset
+ * has two paths, `assetFile()` for the metadata under `assets/` and `asset()`
+ * for the binary under `lfs/`.
+ *
+ * @see ../../docs/storage-layout.md
  */
 export function createPathTo(dataDir: string) {
   const pathTo = {

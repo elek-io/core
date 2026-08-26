@@ -4,8 +4,9 @@
  * handler with its already-rendered children, then the root handler combines.
  *
  * Framework-agnostic, `T` is the consumer's element type. A framework wrapper
- * such as `@elek-io/core/astro` binds `T` to its JSX flavour, supplies
- * defaults for the safe node types and exposes only the required overrides.
+ * such as the astro entry binds `T` to its JSX flavour and defaults every node
+ * type that has a safe default, so only the three unsafe keys are required and
+ * every other one stays optional over its default.
  *
  * @see ../../contributing/markdown-internals.md
  */
@@ -117,6 +118,17 @@ export type FrameworkRenderers<T> = Pick<
 > &
   Partial<Pick<MdastRenderersBase<T>, DefaultedRendererKey>>;
 
+/**
+ * The framework-agnostic rendering primitive, as opposed to the bound one the
+ * astro entry exports. `renderers` is total here, all 24 node types required
+ * with no defaults merged, which is what a binding does for you. `T` is the
+ * caller's element type.
+ *
+ * The walk is depth-first and a parent handler receives its already-rendered
+ * children. An unknown node type throws a plain `Error`, not a `CoreError`.
+ *
+ * @see ../../docs/markdown-content.md
+ */
 export function mdastRender<T>(
   root: MdAstRoot,
   renderers: MdastRenderersBase<T>
