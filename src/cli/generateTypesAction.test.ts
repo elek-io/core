@@ -12,7 +12,7 @@ import {
   generateTypesForProject,
 } from './generateTypesAction.js';
 
-/** All markdown features OFF — the all-field-types collection just needs a valid markdown field. */
+/** All markdown features OFF, the all-field-types collection just needs a valid markdown field. */
 const offMarkdownFeatures: MarkdownFeatures = {
   headings: [],
   blockquotes: false,
@@ -315,7 +315,7 @@ describe('generateTypesForProject - markdown field', () => {
     const output = await generateTypesForProject(project);
 
     // The narrowed fieldDefinitions tuple lives inside the Collection
-    // wrapper type — find that block and inspect it.
+    // wrapper type, find that block and inspect it.
     const collectionBlockMatch = output.match(
       /export type ArticlesCollection[\s\S]*?\n\}/
     );

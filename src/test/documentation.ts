@@ -374,6 +374,23 @@ function resolveTarget(file: string, target: string): string {
   return Path.posix.normalize(Path.posix.join(Path.dirname(file), path));
 }
 
+/**
+ * The lines the punctuation rule reads. Markdown gives up its prose outside a
+ * fence, a source file only its comment lines, so an en dash inside a string
+ * or a character class stays the code's business rather than the writer's.
+ */
+function punctuatedLinesOf(
+  file: string,
+  content: string
+): { number: number; text: string }[] {
+  if (!file.endsWith('.ts'))
+    return linesOf(content).filter((line) => !line.inFence);
+  return content
+    .split('\n')
+    .map((text, index) => ({ number: index + 1, text }))
+    .filter((line) => /^\s*(\/\/|\/\*|\*)/.test(line.text));
+}
+
 /** Collects every JSDoc block in a TypeScript file. */
 function jsdocBlocksOf(content: string): JsdocBlock[] {
   const blocks: JsdocBlock[] = [];
@@ -744,10 +761,10 @@ export const rules: Rule[] = [
   {
     id: 'prose/punctuation',
     summary: 'no em dashes, en dashes as dashes, or curly quotes',
-    files: allMarkdownFiles,
+    files: () => [...allMarkdownFiles(), ...sourceFiles()],
     check: (file, content) =>
-      linesOf(content)
-        .filter((line) => !line.inFence && /[—–‘’“”]/.test(line.text))
+      punctuatedLinesOf(file, content)
+        .filter((line) => /[—–‘’“”]/.test(line.text))
         .map((line) => ({
           file,
           line: line.number,

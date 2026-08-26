@@ -121,6 +121,8 @@ Say what the type signature cannot say:
 
 Never restate a type, a parameter name or a default. A `@param` that repeats the parameter name is noise, so drop it rather than pad it. When a block outgrows its cap, the reasoning belongs in a `contributing/` doc with a one line `@see` left in the source. No diagrams here, they belong in markdown.
 
+`prose/punctuation` reads source comments as well as markdown, so an em dash or a curly quote fails in a block exactly as it fails in a doc. It reads comment lines only, which leaves a dash inside a string or a character class alone.
+
 ```typescript
 /**
  * Ensures a provisioned copy exists at the given ref, provisioning it from

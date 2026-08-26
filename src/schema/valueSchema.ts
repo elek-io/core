@@ -163,7 +163,7 @@ export const mdAstHtmlSchema = z.object({
 export type MdAstHtml = z.infer<typeof mdAstHtmlSchema>;
 
 /**
- * External image URL. Internal assets use `assetReference` instead — the
+ * External image URL. Internal assets use `assetReference` instead, the
  * `image` node is for external sources only. Allows `http`/`https`; rejects
  * relative paths (use the asset library), `data:` URIs (payload bloat, SVG
  * XSS), and exotic schemes.

@@ -80,7 +80,7 @@ function getNarrowedValueType(fieldDefinition: FieldDefinition): string {
     case 'mdast':
       // Broad narrowing on the tree itself: the per-field feature config
       // (which node types are allowed) is emitted as a literal in the
-      // fieldDefinitions tuple instead — see writeFieldDefinitionNarrowing's
+      // fieldDefinitions tuple instead, see writeFieldDefinitionNarrowing's
       // markdown branch. Consumer renderers walk the tree with the broad
       // MdAst* types; the schema layer guarantees disallowed node types
       // never reach disk.
@@ -167,7 +167,7 @@ function collectUsedValueTypes(
 /**
  * Renders a single MarkdownFeatures value as a TypeScript literal. Typed
  * by `keyof MarkdownFeatures` so adding a new feature flag is a TS error
- * here until handled — this is the single point that has to change when
+ * here until handled, this is the single point that has to change when
  * the feature shape evolves.
  */
 function markdownFeatureLiteral(

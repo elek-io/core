@@ -777,7 +777,7 @@ describe('ComponentService - read at a commit', function () {
       const creationHash =
         historyAfterCreate[historyAfterCreate.length - 1]!.hash;
 
-      // A metadata-only update (name) — no field definition changes.
+      // A metadata-only update (name), no field definition changes.
       await core.components.update({
         projectId: project.id,
         id: component.id,

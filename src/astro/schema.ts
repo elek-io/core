@@ -387,7 +387,7 @@ function fieldDefToTsType(fieldDef: FieldDefinition): string {
         ? `Array<{ id: string; objectType: 'entry'; collectionId: string }>`
         : `Array<{ id: string; objectType: 'asset' }>`;
     case 'component':
-      // Unreachable — component fields are handled inline before calling
+      // Unreachable, component fields are handled inline before calling
       // fieldDefToTsType. Returned value is a safe fallback.
       return 'unknown';
     case 'mdast':

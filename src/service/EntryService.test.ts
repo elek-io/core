@@ -323,7 +323,7 @@ function getReferenceIssues(error: unknown): EntryReferenceIssue[] | null {
   return cause.issues as EntryReferenceIssue[];
 }
 
-/** Markdown features map with everything disabled — tests opt in. */
+/** Markdown features map with everything disabled, tests opt in. */
 const offMarkdownFeatures: MarkdownFeatures = {
   headings: [],
   blockquotes: false,
@@ -446,7 +446,7 @@ describe('EntryService - reference validation', function () {
           inputWidth: '12',
           min: null,
           max: null,
-          // Allow only JPEG — the test fixture asset is PNG, so any
+          // Allow only JPEG, the test fixture asset is PNG, so any
           // reference to it triggers asset_mime_mismatch.
           ofAssetMimeTypes: ['image/jpeg'],
         },

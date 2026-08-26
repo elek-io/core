@@ -558,7 +558,7 @@ export class ReferenceService extends AbstractEntityService {
 /**
  * `CoreError.notFound` predicate. `JsonFileService.read` wraps the
  * underlying ENOENT in `CoreError.notFound` (via `CoreError.fromUnknown`
- * — but actually the read path throws directly when the file is absent;
+ * but actually the read path throws directly when the file is absent,
  * see `JsonFileService.read`'s `Fs.readFile` call). We catch both shapes
  * defensively.
  */

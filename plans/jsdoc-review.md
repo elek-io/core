@@ -4,7 +4,7 @@ Review every JSDoc block in Core against the documentation rules: is one there, 
 
 Read [`../contributing/documentation.md`](../contributing/documentation.md) first, in particular the JSDoc section. Everything here assumes it.
 
-The pass runs in five phases, one session each. Phases 1 to 3 are done, their sections are kept because phase 4 reads the exemplar and the rule they produced. Phase 4 is the next session, and it writes from [`jsdoc-findings.md`](./jsdoc-findings.md).
+The pass runs in five phases. Phases 1 to 3.5 were one session each. Phase 4 is more writing than one session holds and is staged accordingly. Phases 1 to 3 are done, their sections are kept because phase 4 reads the exemplar and the rule they produced. Phase 4 is the next session, and it writes from [`jsdoc-findings.md`](./jsdoc-findings.md).
 
 ## Where the work sits
 
@@ -161,15 +161,48 @@ Rewrite the code-at-fault section of `plans/jsdoc-findings.md` in place as those
 
 Close with the order you would fix them in, and say which `blocking` items phase 4 could proceed without if a decision is slow.
 
-## Phase 4, writing, later
+## Phase 4, the writing
 
-Phase 3.5 sorted the code findings, and most of phase 4 is not waiting on them. The `phase-4` bucket, the 14 `overflows` doc edits and the 128 `restates` rows need nothing from the blocking list, and seven of the eighteen blocking rows offer to document today's behavior. Start there rather than holding the whole phase for five decisions.
+Turn the 272 findings into written documentation, and finish with the baseline, the findings file and this plan all deleted.
 
-Seven rows genuinely cannot be written, because their `overflows` partner asserts the opposite of what the code does. Leave those and say so in the report.
+**Serial, one voice. Never fan out.** Parallel writing produces as many dialects as there are agents, which is the problem this whole exercise exists to prevent. Serial does not mean one sitting, though. This is more writing than one session holds, so work the stages below in order and commit each one. The findings file is the resumption point, strike a row when it is written.
 
-One session, serial, one voice. Parallel writing would produce as many dialects as there are agents, which is the problem the documentation rules exist to prevent.
+### Work the patterns, not the rows
 
-Order the work so the docs come first: write the `contributing/` sections the `overflows` findings ask for, then the blocks that `@see` them. Burn the coverage baseline down to nothing as you go, and delete `plans/jsdoc-findings.md` and this plan when it is empty.
+The Synthesis section of `plans/jsdoc-findings.md` found ten patterns across files, and each collapses many edits into one decision. Going row by row through 272 findings would answer the same question dozens of times and answer it differently each time.
+
+Two of the ten are not yours. Pattern 7, the `ofComponents` disagreement, and pattern 9, the `toPascalCase` collision, are code bugs in the `blocking` bucket. Do not document either as though it were settled.
+
+### Stage 1, make the rules cover what you are about to write
+
+Pattern 5 found that `prose/punctuation` runs on markdown only, so an em dash in a JSDoc block passes while the same character fails in a doc. Extend it to source comments before writing anything, so 272 new blocks are checked as they land rather than swept afterwards. Six existing em dashes come with it.
+
+### Stage 2, the docs, before the blocks
+
+Fourteen `overflows` rows land in eight docs that already exist, so this is editing rather than authoring. Write these first, because the blocks in stage 3 and 4 `@see` them, and a block pointing at a section that does not exist fails `links/jsdoc-see`.
+
+### Stage 3, the cross-file patterns
+
+Highest leverage, and each is one decision:
+
+1. Seven identical class blocks, written together so they divide the work consistently.
+2. `list` and `count` on five services. Decide first whether `CrudServiceWithListCount` in `src/schema/serviceSchema.ts` is canonical and the concrete blocks add only per-service specifics. That decision shapes ten of the 57 `missing` rows.
+3. Thirteen prose "See docs/x.md" endings become `@see`, so the link rule starts checking them.
+4. 73 of the 76 `@param` tags sit in five files. Two name parameters that no longer exist.
+5. Three blocks are orphaned where they cannot reach the `.d.ts`. The text is already decent, move it rather than rewriting it.
+6. No block in `src` points at either error-handling doc today, and twelve rows want one. Expect the `@see` surface into those docs to roughly triple.
+
+### Stage 4, the rest, directory by directory
+
+What the patterns did not absorb, taken in the order the findings file lists it. `restates` is nearly half the total and is concentrated: nine files hold 69 of the 128.
+
+Seven `blocking` rows cannot be written at all, because their `overflows` partner asserts the opposite of what the code does. Leave them, strike nothing, and name them in the report.
+
+### Stage 5, finish
+
+Burn `src/documentation-baseline.json` to nothing, 57 symbols across 24 files, then delete it. Delete `plans/jsdoc-findings.md` and this plan, and drop both from the plans index.
+
+`pnpm test` is the check on your own output. Run it as you go rather than at the end, because the rules catch the em dash, the 400 character paragraph and the dangling `@see` while the context is still in your head.
 
 ## What to escalate
 
@@ -177,9 +210,10 @@ Do not resolve these alone, collect them and report them back to Nils:
 
 - A block that looks `wrong` in a way that suggests the code is at fault rather than the comment. Phase 2 found one of these, and it turned into five methods that broke a promise `docs/error-handling.md` makes. Phase 3 found 32 more.
 - Anything in the `safety` bucket. Those do not wait for the review to finish, the four found so far are already fixed.
-- A new `contributing/` doc the `overflows` findings want. Naming it is phase 3's job, writing it is not.
-- A rule that fires on something that is actually fine. The rules bend to good writing, not the other way round, but that call is not the fan-out's to make.
-- Any file skipped, with the reason.
+- Whether `CrudServiceWithListCount` in `src/schema/serviceSchema.ts` is the canonical block for `list` and `count`, if making it so means a concrete block says less than a reader expects. That one answer shapes ten rows.
+- A finding that turns out to want a code change after all. It belongs in the `blocking` bucket, not in a block written around it.
+- A rule that fires on something that is actually fine. The rules bend to good writing, not the other way round, but that call is not the writer's to make alone.
+- Any row left unwritten, with the reason. Seven are expected, more is worth knowing.
 
 ## Exemplar
 
