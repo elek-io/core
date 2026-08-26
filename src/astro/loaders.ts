@@ -48,22 +48,31 @@ export interface ElekEntriesLoaderProps<T extends ElekConfig> {
   config: T;
   /** Alias of the Project in config.projects */
   project: keyof T['projects'] & string;
-  /** Collection UUID or slug */
+  /**
+   * The Collection's id or its plural slug, the pair `resolveCollectionId`
+   * accepts and the slug the derived collection key is built from. A miss
+   * throws `NotFound` while the collection loads, not at config time.
+   */
   collectionIdOrSlug: string;
 }
 
 /**
- * Where a Project saves its image binaries when the loader is left to
- * decide. Below `src/` so `astro:assets` can pick them up, and per
- * alias so two Projects never write into the same directory.
+ * Where a Project saves its image binaries when the loader is left to decide.
+ * Below `src/` so `astro:assets` can pick them up, and per alias so two
+ * Projects never write into the same directory.
+ *
+ * Exported for this file's tests. Nothing re-exports it, so it is not part of
+ * the astro entry's surface.
  */
 export function defaultImageDir(alias: string): string {
   return Path.join('src', 'elek', alias, 'images');
 }
 
 /**
- * Where a Project saves every other binary. Below `public/`, which
- * Astro copies into the build as it is, so they keep a stable URL.
+ * Where a Project saves every other binary. Below `public/`, which Astro
+ * copies into the build as it is, so they keep a stable URL.
+ *
+ * Exported for this file's tests, the same as `defaultImageDir` above.
  */
 export function defaultPublicDir(alias: string): string {
   return Path.join('public', 'elek', alias, 'assets');
@@ -114,10 +123,13 @@ function toRelativePosix(from: string, path: string): string | null {
 }
 
 /**
- * Astro content loader for elek.io Assets.
+ * Astro content loader for elek.io Assets, which also writes their binaries
+ * into the Astro project as it loads: images below `imageDir` so
+ * `astro:assets` processes them, everything else below `publicDir` so Astro
+ * serves it. Both default to a directory named after the Project's alias.
  *
- * Reads and saves Assets from a Project and exposes them through Astro's
- * content collection system.
+ * An Asset landing outside those directories is still stored, with `src` or
+ * `href` null and a warning, rather than failing the build.
  *
  * @see ../../docs/usage.md
  */
@@ -290,10 +302,13 @@ export function elekAssetsLoader<const T extends ElekConfig>(
 }
 
 /**
- * Astro content loader for elek.io Collection Entries.
+ * Astro content loader for elek.io Collection Entries, which also supplies
+ * Astro with the Collection's schema and its generated `Entry` type. Both are
+ * built from the content model once, when Astro loads the content config.
  *
- * Reads all Entries from a Collection and exposes them through Astro's
- * content collection system.
+ * In dev it reloads Entries as they change. A change to the content model
+ * stops it instead, with a log line saying the dev server has to be
+ * restarted, because Astro can rebuild neither the schema nor the types.
  *
  * @see ../../docs/usage.md
  */

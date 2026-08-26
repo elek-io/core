@@ -200,11 +200,15 @@ export function buildModelDigest(
 }
 
 /**
- * Generates a flat Zod object schema from collection field definitions
- * for use with Astro's `parseData` validation.
+ * Zod schema for Astro's `parseData`, validating the envelope-stripped shape
+ * `transformEntryValues` produces rather than the stored `Value` objects.
  *
- * Each key is the field definition slug and each value schema
- * is the translatable content schema for that field type.
+ * Keys are field definition slugs. Most are language keyed, a `component`
+ * field is not: it yields an array of `{ id, componentId, values }` and
+ * recurses into the referenced Components.
+ *
+ * Throws on a circular Component reference and on an `ofComponents` id naming
+ * no Component of the Project.
  */
 export function buildEntryValuesSchema(
   fieldDefinitions: FieldDefinition[],
@@ -224,11 +228,16 @@ export function buildEntryValuesSchema(
 }
 
 /**
- * Generates a TypeScript type string from collection field definitions
- * for use with Astro's `createSchema` API.
+ * TypeScript source Astro writes to a file and imports for the Collection.
+ * Only `Entry` is exported. The string also declares `ProjectLanguage`, one
+ * `<Component>ComponentValues` per referenced Component and one
+ * `<Collection><field>Item` union per dynamic field, plus an `MdAstRoot`
+ * import when any field is markdown.
  *
- * The generated string is written by Astro to a `.ts` file and imported
- * as the `Entry` type for the collection.
+ * Throws the same way `buildEntryValuesSchema` does, and has to admit exactly
+ * what it admits.
+ *
+ * @see ../../contributing/astro-entry.md
  */
 export function buildEntryValuesTypeString(
   fieldDefinitions: FieldDefinition[],

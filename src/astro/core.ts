@@ -4,13 +4,13 @@ import ElekIoCore, { CoreError } from '../index.node.js';
 let coreInstance: ElekIoCore | undefined;
 
 /**
- * The process-wide ElekIoCore, created on first call so that importing the
- * astro entry has no side effects. Every later call returns the same instance,
- * configured through the ELEK_IO_* environment variables, which are read once
- * here.
+ * The process-wide ElekIoCore, created on first call so importing the astro
+ * entry has no side effect. Every later call returns that same instance,
+ * configured from the ELEK_IO_* variables read once at construction.
  *
  * The file cache and the process error handlers are off on purpose, and the
- * log level is left to ELEK_IO_LOG_LEVEL rather than passed as an option.
+ * log level is left to ELEK_IO_LOG_LEVEL. Nothing disposes it, so a caller
+ * must not call `dispose()` on what it hands back.
  *
  * @see ../../contributing/astro-entry.md
  * @see ../../contributing/logging.md
@@ -44,8 +44,12 @@ export async function ensureProjectAvailable(
 }
 
 /**
- * Logs which content state a loader is about to read, so every build
- * states its source and ref
+ * Logs what a loader is about to read, so a build states its content state
+ * rather than leaving it to be guessed from the output.
+ *
+ * The line carries the Project's name and version, the data directory, and a
+ * source label: `draft` on the `work` branch, the branch name on any other,
+ * and the literal `Release tag` when HEAD is detached.
  */
 export async function logReadingProject(
   core: ElekIoCore,

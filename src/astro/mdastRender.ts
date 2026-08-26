@@ -83,14 +83,12 @@ export const astroDefaults: Pick<
 };
 
 /**
- * Astro-bound `mdastRender`. Takes an `MdAstRoot` and a renderers override
- * object, returns an Astro JSX element ready to interpolate in an `.astro`
- * file.
+ * Astro-bound `mdastRender`, returning something ready to interpolate in an
+ * `.astro` file. Overrides are merged over `astroDefaults` per key, so only
+ * `html`, `assetReference` and `entryReference` have to be supplied.
  *
- * Three keys are required from the consumer (`html`, `assetReference`,
- * `entryReference`), every other node type has a default that emits plain
- * semantic HTML. Defaults are built with `renderTemplate` and `addAttribute`
- * rather than with `astro/jsx-runtime`, which decides where they render.
+ * The result is a `renderTemplate` output rather than a JSX vnode, which is
+ * what makes it render the same in a page, nested, and through a slot.
  *
  * @see ../../contributing/astro-entry.md
  */

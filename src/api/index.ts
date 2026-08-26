@@ -15,9 +15,20 @@ import routes from './routes/index.js';
 import type { ApiEnv } from './lib/types.js';
 import { Scalar } from '@scalar/hono-api-reference';
 
-// The only address the local API binds, see docs/local-api.md
+// The only address the local API binds, see docs/local-api.md. Passed
+// explicitly because without a `hostname` `@hono/node-server` hands
+// `undefined` to `server.listen`, which answers on every interface.
 const LOOPBACK = '127.0.0.1';
 
+/**
+ * The local, read-only REST API. Constructing it assembles the whole Hono app,
+ * the content routes, `/openapi.json` and the Scalar reference UI on `/`, but
+ * binds no port. Nothing listens until `start()`.
+ *
+ * CORS admits `http://localhost` and nothing else.
+ *
+ * @see ../../docs/local-api.md
+ */
 export class LocalApi {
   private logService: LogService;
   private projectService: ProjectService;
@@ -118,12 +129,13 @@ export class LocalApi {
   }
 
   /**
-   * Starts the local API on given port, bound to loopback.
+   * Starts the local API on the given port, bound to loopback. The bind
+   * address is deliberately not an option.
    *
-   * The bind address is not an option. Without a `hostname`
-   * `@hono/node-server` hands `undefined` to `server.listen` and the API
-   * answers on every interface, which puts a read API over every local
-   * Project on the network.
+   * Returns before the server is listening, so `isRunning()` is still false on
+   * the next line. Calling it again while one runs replaces the tracked server,
+   * leaving the first impossible to stop and the failed listen surfacing as an
+   * unhandled `EADDRINUSE` error event.
    *
    * @see ../../docs/local-api.md
    */
@@ -144,7 +156,11 @@ export class LocalApi {
   }
 
   /**
-   * Stops the local API
+   * Stops the local API, and does nothing when it was never started.
+   *
+   * Returns immediately while `close()` goes on waiting for open connections,
+   * so the port is released later than this call. Restarting on the same port
+   * right away can still fail.
    */
   public stop() {
     this.server?.close(() => {
@@ -153,7 +169,9 @@ export class LocalApi {
   }
 
   /**
-   * Returns true if the local API is running
+   * Reports the HTTP server's own `listening` flag, so it is false in the tick
+   * after `start()` returns. A caller needing certainty has to poll it, which
+   * is what the API test does.
    */
   public isRunning() {
     if (this.server?.listening) {

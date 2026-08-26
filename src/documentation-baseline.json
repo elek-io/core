@@ -1,7 +1,5 @@
 {
   "jsdoc/documented-export": [
-    "src/api/index.ts",
-    "src/api/lib/util.ts",
     "src/cli/exportAction.ts",
     "src/cli/generateApiClientAction.ts",
     "src/cli/generateTypesAction.ts",

@@ -8,7 +8,8 @@ import { CoreError } from '../util/shared.js';
  */
 export interface ElekProjectDeclaration {
   /**
-   * ID of the Project
+   * The Project's own UUID, the one elek.io Desktop shows. Validated as a
+   * UUID when the config is declared rather than when a loader runs.
    */
   id: string;
   /**
@@ -20,9 +21,13 @@ export interface ElekProjectDeclaration {
    */
   remoteUrl?: string;
   /**
-   * The content state to read: a channel (`production`, `preview` or
-   * `draft`) or an exact Release version. The ELEK_IO_CHANNEL
-   * environment variable overrides this.
+   * What `elek()` provisions: a channel (`production`, `preview` or `draft`)
+   * or an exact Release version. Nothing else reads it, so on a Project
+   * declared without a `remoteUrl` it has no effect and the loaders read
+   * whatever the data directory already holds.
+   *
+   * The ELEK_IO_CHANNEL environment variable overrides it with a channel
+   * only, so an exact Release version there throws `BadRequest`.
    *
    * @default 'production'
    */
@@ -31,7 +36,11 @@ export interface ElekProjectDeclaration {
 
 export interface ElekConfig {
   /**
-   * The Projects this site consumes, keyed by an alias you choose
+   * The Projects this site consumes, keyed by an alias you choose.
+   *
+   * An alias has to match `^[a-z][a-zA-Z0-9]*$`, because it is concatenated
+   * into every derived collection key. `my-site` fails the config with a
+   * `BadRequest` rather than producing an unusable key at sync time.
    */
   projects: Record<string, ElekProjectDeclaration>;
 }

@@ -13,9 +13,14 @@ import { getCore, ensureProjectAvailable } from './core.js';
 type ElekCollection = ReturnType<typeof defineCollection>;
 
 /**
- * Where the binaries of one Project's Assets are saved. `imageDir`
- * takes the images, `publicDir` every other file. `true` takes both
- * defaults.
+ * Where the binaries of one Project's Assets are saved. `imageDir` takes the
+ * images, `publicDir` every other file, and `true` takes both defaults.
+ *
+ * A relative path resolves against the Astro project root. `imageDir` has to
+ * stay inside the project for `astro:assets` to process an image, and
+ * `publicDir` inside Astro's own `publicDir` for the file to be served. An
+ * Asset landing outside either is still saved and stored, with `src` or `href`
+ * null and a warning, rather than failing the build.
  */
 export type ElekAssetsOption = true | { imageDir?: string; publicDir?: string };
 
@@ -141,14 +146,14 @@ function assertAssetsReachable(
 }
 
 /**
- * Derives an Astro content collection for every elek.io Collection of every
- * Project the config declares, plus one Assets collection per Project. Keys
- * are the alias followed by the Collection's plural slug in PascalCase
- * (`websitePosts`), and a Project's Assets are `${alias}Assets`.
+ * Derives Astro content collections from the elek.io Collections the options
+ * name. That object is the complete list, nothing outside it is derived, and
+ * with no options at all it derives everything and warns. Keys are the alias
+ * plus the plural slug in PascalCase (`websitePosts`), Assets `${alias}Assets`.
  *
- * Reads the content model from disk, so the Projects have to be in the data
- * directory already. Called without options it derives everything and warns,
- * an options object is the complete list instead.
+ * Reads the content model from disk. Throws `Conflict` on a key two sources
+ * derive, `BadRequest` on a selection naming nothing, deriving nothing, or
+ * leaving out Assets a derived Collection can reference.
  *
  * @see ../../docs/usage.md
  */

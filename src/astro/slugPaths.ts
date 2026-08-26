@@ -68,14 +68,14 @@ function languagesOf<Language extends string>(
 }
 
 /**
- * Turns Entries into the paths a `getStaticPaths` returns, routing them by one
- * of their slug fields instead of by their UUID.
- *
- * Every language of the Collection gets its own path, with the language in the
- * params, unless a single one is asked for. An Entry without a slug in a
- * language is left out of that language. Each path carries its language typed
- * as the Project's languages, which `Astro.params` cannot do, and Entries stay
- * keyed by their UUID in Astro's store, which `getEntry()` keeps using.
+ * Turns Entries into the paths `getStaticPaths` returns, routed by a slug
+ * field rather than by UUID. They stay keyed by UUID in Astro's store, so
+ * `getEntry()` keeps working. Every language gets its own path, its language
+ * in the params and typed as the Project's languages, which `Astro.params`
+ * cannot do, unless a single language is asked for. An Entry whose slug is
+ * null or empty in a language is left out of it, while one whose `slugField`
+ * is absent or is not translatable throws `BadRequest`, as does a `language`
+ * the Value does not hold.
  *
  * @see ../../docs/usage.md
  */

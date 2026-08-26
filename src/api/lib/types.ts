@@ -36,5 +36,10 @@ export interface ApiEnv extends Env {
   Variables: Variables;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+/**
+ * A router mounted into the local API, carrying the service context every
+ * route handler reads from. `S` is hono's own route schema, threaded through
+ * so a mounted router keeps its typed paths.
+ */
+// oxlint-disable-next-line typescript/no-empty-object-type -- hono's own default for `Schema`, narrowing it here would reject a bare router
 export type Api<S extends Schema = {}> = OpenAPIHono<ApiEnv, S>;
