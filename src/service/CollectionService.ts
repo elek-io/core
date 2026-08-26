@@ -156,10 +156,15 @@ export class CollectionService
 
         const index = await this.getSlugIndex(validatedProps.projectId);
 
-        // Enforce collection slug uniqueness via index
-        if (Object.values(index).includes(slugPlural)) {
+        // Enforce collection slug uniqueness via index. The clashing
+        // Collection is named by id, never by the slug the caller sent,
+        // which the service boundary would log. See contributing/logging.md
+        const clashing = Object.entries(index).find(
+          ([, existing]) => existing === slugPlural
+        );
+        if (clashing) {
           throw CoreError.conflict(
-            `Collection slug "${slugPlural}" is already in use by another collection`
+            `Collection slug is already in use by Collection "${clashing[0]}"`
           );
         }
 
@@ -455,7 +460,7 @@ export class CollectionService
     );
     if (existingUuid && existingUuid[0] !== currentId) {
       throw CoreError.conflict(
-        `Collection slug "${newSlugPlural}" is already in use by another collection`
+        `Collection slug is already in use by Collection "${existingUuid[0]}"`
       );
     }
   }

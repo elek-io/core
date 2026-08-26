@@ -263,8 +263,26 @@ Approach A with the id write-back, plus the policy question settled the way the 
 
 The check: [`logSweep.test.ts`](../src/service/logSweep.test.ts) drives every route through `createTestApi`, with a sentinel in the Collection and Component slugs, one undeclared query parameter and one unmatched path. Its field definition slug is deliberately not a sentinel, which is where the policy decision is encoded. Verified it can fail: putting `c.req.url` back turns exactly four sentinels red and nothing else.
 
+## Done, the three sibling leaks
+
+The root cause was one thing rather than three: **a `CoreError` message is written for whoever made the call and then logged verbatim**, so one string serves two audiences under different rules. Fixed at the throw site, which is where `logging.md` says the decision belongs.
+
+- The slug clash in `CollectionService` and `ComponentService` now names the id of the entity holding the slug, which the caller does not know, instead of the slug, which they just sent. A better message as well as a safe one.
+- `AssetService.getFileType` no longer names the file. The path is the one the User picked on their own disk, so it carries the name they gave it.
+- Zod is the case that cannot be fixed one message at a time, because an issue message is authored by whichever refinement raised it. `AbstractService` logs a Zod failure as its shape instead, the path and code of each issue and nothing either said. The thrown error keeps the full message, so a slug field still tells the caller the canonical form it wanted.
+
+That last one closes the whole class, not just the one leak found: any refinement message added later is covered.
+
+The check: the sweep now provokes all four rejections with a sentinel in each. Verified red first, on exactly those four sentinels and no others.
+
+Two more things `logging.md` was underspecified on, both settled the same way as the slug question, by what the string names rather than who typed it:
+
+- **A path Core built from ids is allowed, a path the User chose is not.** The sweep already encoded this by banning the Asset source file name, while the doc said "file paths" without qualification.
+- **An error message has two audiences**, with the rule that a message may not repeat the caller's own string back.
+
 ## Still open
 
 1. **Bug 2**, unchanged. The wrap belongs in `JsonFileService.read`, and the raw `Error` escaping `entries.create` and `collections.create` goes with it.
-2. **The three sibling leaks** in the escalation list: the slug clash `Conflict` message, the canonical slug message on a slug field value, and the unsupported MIME type message. The sweep now reaches the API but still never provokes an error path with a sentinel in it, so it would not catch any of them.
-3. **The error contract test** and the `statusCodes` documentation rule, which are bug 2's half of the recurrence check.
+2. **The error contract test** and the `statusCodes` documentation rule, which are bug 2's half of the recurrence check.
+
+Worth knowing for whoever picks up 1: `AbstractSlugIndexedEntityService` logs a caught `error.message` in two warn calls, `safeWriteSlugIndex` and `rebuildSlugIndexInternal`. Neither is reachable with a User's string today, since both only ever see Core-written files, so they were left alone rather than routed through the same helper.

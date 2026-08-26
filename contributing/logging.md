@@ -10,7 +10,7 @@ A log file is read by the person whose machine wrote it, and it can be handed to
 
 Allowed, and wanted:
 
-- ids and file paths, which is what makes a line resolvable against the repository
+- ids, and the file paths Core builds from them, which is what makes a line resolvable against the repository
 - what happened, when, and in what order
 - counts, lengths, languages, versions, durations
 - **a field slug**, which names a position in the content model rather than an object
@@ -21,6 +21,7 @@ Never:
 - the content of an Entry, an Asset or any other authored value
 - **a name, or the slug made from one**: of a Project, Collection, Component, Entry or Asset. Anything a User typed that identifies one object, not only what they wrote into a field
 - a User's name or email, including inside a git command line
+- **a path the User chose**, such as the file an Asset was created from, which carries the name they gave it
 - the remote access token, which today only ever travels by environment variable
 
 **Names go even though they are not content.** They buy a reader nothing: every line already carries the id, and an id resolves to the object, its name included, the moment the repository is on hand. A name is the one part of a line that reads as somebody's words, and it is the part that survives being read by someone the User never expected to read it. So it goes, and the ids stay.
@@ -29,6 +30,8 @@ Never:
 
 - An **entity slug** names one object, which has an id. The id is already on the line and resolves to the slug, so the slug buys a reader nothing.
 - A **field slug** names a position in the content model. It is the same string for every Entry in the Collection, and it is what a record says instead of the values: `elek.entry.value.slugs` is the shape, the values would be the payload.
+
+**A path splits the same way.** `projects/<uuid>/collections/<uuid>/<uuid>.json` is ids and separators, so it is the line's join against the repository. `/home/nils/Pictures/Urlaub in Italien 2024.png`, handed to `assets.create`, is a name a person gave a file. Core builds the first and the User picked the second.
 
 Two things are allowed that look like they should not be:
 
@@ -61,6 +64,14 @@ Practically: **log the shape, never the payload.** For a migration bug, "12 Valu
 [`redactGitArgs`](../src/service/GitService.ts) takes the User's identity out of a git command before it reaches a log record or an error message: the `--author` of a commit, the values of `config --local user.name` and `user.email`, and credentials embedded in a remote URL. Ids, paths and flags pass through untouched.
 
 Anything that builds a string from git arguments has to go through it. There is more than one identity site, and a rule written for only the one in front of you will miss the others.
+
+### An error message has two audiences
+
+A `CoreError` message is written for whoever made the call, and [`AbstractService`](../src/service/AbstractService.ts) logs it at the service boundary. So one string is read by a User in a dialog and by whoever the log file is handed to, under different rules.
+
+The rule at a throw site is that **the message may not repeat the caller's own string back**. It rarely needs to: a slug clash names the id of the entity holding the slug, which the caller does not know, rather than the slug, which they just sent.
+
+Zod is the exception, because an issue message is authored by whichever refinement raised it and a slug field answers with the canonical form of the Value it rejected. Those cannot be checked one at a time, so a Zod failure is logged as its shape, the path and code of each issue and nothing either said. The thrown error keeps the full message.
 
 ### The API logs a route, never a URL
 

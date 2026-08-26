@@ -155,9 +155,14 @@ export class ComponentService
 
         const index = await this.getSlugIndex(validatedProps.projectId);
 
-        if (Object.values(index).includes(componentSlug)) {
+        // Named by id, never by the slug the caller sent, which the
+        // service boundary would log. See contributing/logging.md
+        const clashing = Object.entries(index).find(
+          ([, existing]) => existing === componentSlug
+        );
+        if (clashing) {
           throw CoreError.conflict(
-            `Component slug "${componentSlug}" is already in use by another component`
+            `Component slug is already in use by Component "${clashing[0]}"`
           );
         }
 
@@ -401,7 +406,7 @@ export class ComponentService
     );
     if (existingUuid && existingUuid[0] !== componentId) {
       throw CoreError.conflict(
-        `Component slug "${newSlug}" is already in use by another component`
+        `Component slug is already in use by Component "${existingUuid[0]}"`
       );
     }
   }

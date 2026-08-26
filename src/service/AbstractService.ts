@@ -1,5 +1,5 @@
 import Fs from 'fs-extra';
-import type { ZodType } from 'zod';
+import { ZodError, type ZodType } from 'zod';
 import type { ElekIoCoreOptions, ServiceType } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
 import { CoreError } from '../util/shared.js';
@@ -36,7 +36,7 @@ export abstract class AbstractService {
   private logBoundaryError(context: string, error: CoreError): void {
     this.logService.error({
       source: 'core',
-      message: error.message,
+      message: boundaryMessage(error),
       meta: {
         'error.type': error.type,
         'code.function.name': `${this.type}.${context}`,
@@ -142,4 +142,24 @@ export abstract class AbstractService {
       throw coreError;
     }
   }
+}
+
+/**
+ * What a boundary error says in a log file, which is not always what it says
+ * to the caller.
+ *
+ * A Zod failure is logged as its shape, the path and code of each issue, never
+ * the issue messages, which a refinement authors and which can hold the Value
+ * that was rejected. The thrown error keeps the full message.
+ *
+ * @see ../../contributing/logging.md
+ */
+function boundaryMessage(error: CoreError): string {
+  if (!(error.cause instanceof ZodError)) {
+    return error.message;
+  }
+  const issues = error.cause.issues.map(
+    (issue) => `${issue.path.join('.') || '<root>'} (${issue.code})`
+  );
+  return `Validation failed at ${issues.join(', ')}`;
 }

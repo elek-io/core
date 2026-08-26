@@ -433,15 +433,20 @@ export class AssetService extends AbstractEntityService {
   } {
     const mimeType = mime.getType(filePath);
 
+    // Neither message names the file. The path is the one the User picked
+    // on their own disk, so it carries the name they gave it, and the
+    // service boundary logs a message. See contributing/logging.md
     if (mimeType === null) {
-      throw CoreError.badRequest(`Unsupported MIME type of file "${filePath}"`);
+      throw CoreError.badRequest(
+        'The file has no MIME type Core recognises, so it cannot be stored as an Asset'
+      );
     }
 
     const extension = mime.getExtension(mimeType);
 
     if (extension === null) {
       throw CoreError.badRequest(
-        `Unsupported extension for MIME type "${mimeType}" of file "${filePath}"`
+        `No file extension is known for MIME type "${mimeType}"`
       );
     }
 

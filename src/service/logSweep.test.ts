@@ -30,7 +30,14 @@ const sentinel = {
   componentSlug: 'zqx-canary-3e90b2-heroslug',
   queryParameter: 'zqx-canary-3e90b2-query',
   unmatchedPath: 'zqx-canary-3e90b2-path',
+  entrySlugValue: 'zqx-canary-3e90b2-entryslug',
+  // What `slug()` makes of `nonCanonicalSlugInput`, which is the form the
+  // rejection message names and therefore the form that can leak
+  canonicalSlugValue: 'zqx-canary-3e90b2-badslug',
 };
+
+/** Rejected by a slug field, which answers with the canonical form */
+const nonCanonicalSlugInput = 'zqx canary 3e90b2 badslug';
 
 /**
  * A field definition's slug is not a sentinel, on purpose. It names a
@@ -40,6 +47,7 @@ const sentinel = {
  * is banned like the name it was made from.
  */
 const titleSlug = 'title';
+const permalinkSlug = 'permalink';
 
 beforeAll(async function () {
   const project = await core.projects.create({
@@ -77,6 +85,23 @@ beforeAll(async function () {
         min: null,
         max: 200,
         defaultValue: null,
+      },
+      {
+        id: uuid(),
+        slug: permalinkSlug,
+        valueType: 'string',
+        label: { en: 'Permalink' },
+        description: null,
+        fieldType: 'slug',
+        inputWidth: '12',
+        isDisabled: false,
+        isRequired: true,
+        isUnique: true,
+        defaultValue: null,
+        separator: '-',
+        lowercase: true,
+        decamelize: true,
+        ofFieldDefinitions: [],
       },
     ],
   });
@@ -126,6 +151,11 @@ beforeAll(async function () {
         valueType: 'string',
         content: { en: sentinel.value },
       },
+      [permalinkSlug]: {
+        objectType: 'value',
+        valueType: 'string',
+        content: { en: sentinel.entrySlugValue },
+      },
     },
   });
 
@@ -138,6 +168,11 @@ beforeAll(async function () {
         objectType: 'value',
         valueType: 'string',
         content: { en: sentinel.updatedValue },
+      },
+      [permalinkSlug]: {
+        objectType: 'value',
+        valueType: 'string',
+        content: { en: sentinel.entrySlugValue },
       },
     },
   });
@@ -177,6 +212,61 @@ beforeAll(async function () {
   // A failure at a service boundary, so the error path is in the file too
   await expect(
     core.entries.read({ projectId, collectionId: collection.id, id: 'nope' })
+  ).rejects.toThrow();
+
+  // The rejections that answer with the caller's own string. Each one builds
+  // a `CoreError` message a human reads, and the service boundary logs that
+  // message, so the two audiences meet in one string
+  await expect(
+    core.collections.create({
+      ...collection,
+      projectId,
+      slug: {
+        singular: 'other',
+        // The slug already in use, so the Conflict names it
+        plural: sentinel.collectionSlugPlural,
+      },
+    })
+  ).rejects.toThrow();
+  await expect(
+    core.components.create({
+      ...component,
+      projectId,
+      slug: sentinel.componentSlug,
+    })
+  ).rejects.toThrow();
+  await expect(
+    core.entries.create({
+      projectId,
+      collectionId: collection.id,
+      values: {
+        [titleSlug]: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: sentinel.value },
+        },
+        // Rejected with the canonical form of what was sent, which is
+        // `slug()` of an authored Value
+        [permalinkSlug]: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: nonCanonicalSlugInput },
+        },
+      },
+    })
+  ).rejects.toThrow();
+  const unsupportedPath = Path.join(
+    assetDir,
+    `${sentinel.assetFile}.zzzunknown`
+  );
+  await Fs.writeFile(unsupportedPath, 'not a supported type');
+  await expect(
+    core.assets.create({
+      projectId,
+      filePath: unsupportedPath,
+      name: sentinel.asset,
+      description: sentinel.asset,
+    })
   ).rejects.toThrow();
 
   await core.entries.delete({
