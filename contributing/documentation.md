@@ -158,7 +158,7 @@ Run `pnpm test` and `pnpm lint`. Neither list below needs remembering, they are 
 | `links/*` | a link, anchor, cited source path or `@see` does not resolve, `docs/` links out relatively, or anything links into `plans/` |
 | `prose/*` | em dashes, curly quotes, title case headings, an unknown fence language, a blocked word or phrase, a `**Label:**` list, or a word that dates a consumer doc |
 | `brevity/*` | a paragraph passes 400 characters, four paragraphs run in a row, a section passes 45 content lines, or a JSDoc block passes 12 lines |
-| `jsdoc/*` | JSDoc uses a tag outside the agreed set, or a `@todo` carries no issue URL |
+| `jsdoc/*` | an exported function, class or public member carries no block, JSDoc uses a tag outside the agreed set, or a `@todo` carries no issue URL |
 | `diagrams/mermaid` | a mermaid diagram does not parse, checked with mermaid's own parser |
 | oxlint `jsdoc/*` | a tag is malformed, empty, or restates a type or default |
 

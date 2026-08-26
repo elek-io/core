@@ -1,6 +1,7 @@
 import Path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fs from 'fs-extra';
+import ts from 'typescript';
 
 /**
  * The machine checkable half of the documentation rules.
@@ -256,6 +257,12 @@ const documentationFiles = () => markdownFilesIn('docs');
 const contributingFiles = () => markdownFilesIn('contributing');
 const planFiles = () => markdownFilesIn('plans');
 const sourceFiles = () => filesIn(['src'], (name) => name.endsWith('.ts'));
+
+/** What the coverage rule reads. A test documents nobody, so it is left out. */
+const productionSourceFiles = () =>
+  sourceFiles().filter(
+    (file) => !file.endsWith('.test.ts') && !file.startsWith('src/test/')
+  );
 const rootFiles = () =>
   ['AGENTS.md', 'README.md'].filter((file) => exists(file));
 
@@ -358,6 +365,134 @@ function jsdocBlocksOf(content: string): JsdocBlock[] {
     }
   }
   return blocks;
+}
+
+/** A symbol the coverage rule requires a JSDoc block on. */
+interface ExportedSymbol {
+  name: string;
+  line: number;
+  hasBlock: boolean;
+}
+
+/** True when a node carries a block, its own or the variable statement's. */
+function hasJsdoc(node: ts.Node): boolean {
+  return ts.getJSDocCommentsAndTags(node).length > 0;
+}
+
+/** True when the node declares any of the given modifiers. */
+function hasModifier(node: ts.Node, ...kinds: ts.SyntaxKind[]): boolean {
+  if (!ts.canHaveModifiers(node)) return false;
+  return (ts.getModifiers(node) ?? []).some((modifier) =>
+    kinds.includes(modifier.kind)
+  );
+}
+
+/** True for an initializer that makes its declaration a function, not a value. */
+function isFunctionInitializer(node: ts.Expression | undefined): boolean {
+  if (node === undefined) return false;
+  return ts.isArrowFunction(node) || ts.isFunctionExpression(node);
+}
+
+/**
+ * Every symbol in a file the coverage rule wants a block on, and whether it has
+ * one. Three definitions were counted against the source before this one won:
+ *
+ * - Every exported symbol, 482 missing. Most are types and zod schemas whose
+ *   shape is their own documentation, so the rule would manufacture the noise
+ *   that contributing/documentation.md bans.
+ * - Only what the four entry points re-export, 28 missing. It misses every
+ *   service method, which a consumer reaches through a getter's return type.
+ * - Exported functions, classes and their public members, 57 across 24 files.
+ */
+function exportedSymbolsOf(file: string, content: string): ExportedSymbol[] {
+  const source = ts.createSourceFile(
+    file,
+    content,
+    ts.ScriptTarget.Latest,
+    true
+  );
+  const symbols: ExportedSymbol[] = [];
+
+  const nameOf = (node: ts.NamedDeclaration) =>
+    node.name === undefined ? 'default' : node.name.getText(source);
+
+  const record = (node: ts.Node, name: string) => {
+    symbols.push({
+      name,
+      line:
+        source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+      hasBlock: hasJsdoc(node),
+    });
+  };
+
+  const recordMembers = (node: ts.ClassDeclaration, className: string) => {
+    for (const member of node.members) {
+      // The class block covers the constructor, and an internal member
+      // documents a contributor through the source it sits in
+      if (ts.isConstructorDeclaration(member)) continue;
+      if (
+        hasModifier(
+          member,
+          ts.SyntaxKind.PrivateKeyword,
+          ts.SyntaxKind.ProtectedKeyword
+        )
+      )
+        continue;
+
+      const name = `${className}.${nameOf(member)}`;
+      if (ts.isMethodDeclaration(member)) {
+        // An overload signature has no body, the implementation carries it
+        if (member.body) record(member, name);
+        continue;
+      }
+      if (ts.isGetAccessor(member) || ts.isSetAccessor(member)) {
+        record(member, name);
+        continue;
+      }
+      if (!ts.isPropertyDeclaration(member)) continue;
+      const initializer = member.initializer;
+      if (isFunctionInitializer(initializer)) {
+        record(member, name);
+        continue;
+      }
+      // A property holding an object literal only groups methods, like
+      // `public branches = {` in GitService, so the methods inside carry it
+      if (
+        initializer === undefined ||
+        !ts.isObjectLiteralExpression(initializer)
+      )
+        continue;
+      for (const property of initializer.properties) {
+        const isMethod =
+          ts.isMethodDeclaration(property) ||
+          (ts.isPropertyAssignment(property) &&
+            isFunctionInitializer(property.initializer));
+        if (isMethod) record(property, `${name}.${nameOf(property)}`);
+      }
+    }
+  };
+
+  for (const statement of source.statements) {
+    // A re-export carries no declaration, the file it points at does
+    if (!hasModifier(statement, ts.SyntaxKind.ExportKeyword)) continue;
+    if (ts.isFunctionDeclaration(statement)) {
+      if (statement.body) record(statement, nameOf(statement));
+      continue;
+    }
+    if (ts.isClassDeclaration(statement)) {
+      const className = nameOf(statement);
+      record(statement, className);
+      recordMembers(statement, className);
+      continue;
+    }
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!isFunctionInitializer(declaration.initializer)) continue;
+      record(declaration, declaration.name.getText(source));
+    }
+  }
+
+  return symbols;
 }
 
 export const rules: Rule[] = [
@@ -801,6 +936,19 @@ export const rules: Rule[] = [
           line: line.number,
           message:
             '@todo needs its issue URL on the same line, otherwise delete it',
+        })),
+  },
+  {
+    id: 'jsdoc/documented-export',
+    summary: 'every exported function, class and public member carries a block',
+    files: productionSourceFiles,
+    check: (file, content) =>
+      exportedSymbolsOf(file, content)
+        .filter((symbol) => !symbol.hasBlock)
+        .map((symbol) => ({
+          file,
+          line: symbol.line,
+          message: `${symbol.name} carries no JSDoc block, say what its signature cannot`,
         })),
   },
 ];
