@@ -128,8 +128,8 @@ export function classifyAuthError(
 const REDACTED = '[redacted]';
 
 /**
- * Redacts the User's identity out of a git command line before it reaches a
- * log record or an error message.
+ * Redacts the User's identity out of a git command line before it is written
+ * down, in a log record or in an error message.
  *
  * Three places put one on a command line: `commit --author`, `config --local
  * user.name` and `config --local user.email`. Credentials embedded in a remote
@@ -281,11 +281,12 @@ export function isMutatingGitCommand(args: readonly string[]): boolean {
 }
 
 /**
- * Service that manages Git functionality
- *
- * Uses the dugite Node.js bindings for Git, so Git LFS works, and is heavily
- * inspired by the GitHub Desktop app. Git operations are sequential, a FIFO
- * queue turns async calls into a sequence of git operations.
+ * Runs real git through the dugite bindings, so Git LFS works. Every command
+ * goes through a FIFO queue of concurrency 1, so calls against one Core are
+ * serialized rather than racing, and every command line is logged, a mutation
+ * at `info` and a read at `debug`, with the User's identity redacted out of
+ * it. The remote token is read from `ELEK_IO_REMOTE_ACCESS_TOKEN` once at
+ * construction, never at import.
  *
  * @see https://github.com/desktop/dugite
  * @see ../../contributing/git-credentials.md
@@ -344,10 +345,13 @@ export class GitService {
   }
 
   /**
-   * Create an empty Git repository or reinitialize an existing one
+   * Create an empty Git repository or reinitialize an existing one. Fails
+   * when the path does not exist, it initializes into a directory rather than
+   * creating one. It also writes the local git config and installs the Git
+   * LFS filters, so it has to run before any file below `lfs/` is added.
    *
-   * Fails when the path does not exist, it initializes into a directory
-   * rather than creating one.
+   * Throws `PreconditionFailed` in read-only mode, and `Unauthorized` when no
+   * User is set, since the config carries the commit identity.
    *
    * @see https://git-scm.com/docs/git-init
    */
@@ -373,9 +377,13 @@ export class GitService {
   }
 
   /**
-   * Clone a repository into a directory
+   * Clone a repository into a directory, which has to exist and be empty.
    *
-   * The destination has to exist and be empty, git does not create it.
+   * The `lfs` option decides how much is downloaded: the default fetches
+   * every LFS object of the whole history so Assets work offline, `current`
+   * only the checked-out ref, which is what a build clone wants. A bare clone
+   * skips both LFS and the local config. Outside read-only mode it writes
+   * that config, so it throws `Unauthorized` when no User is set.
    *
    * @see https://git-scm.com/docs/git-clone
    */
@@ -467,7 +475,11 @@ export class GitService {
 
   public branches = {
     /**
-     * List branches
+     * List branches, split by the `remotes/` prefix git prints.
+     *
+     * The `*` marker is stripped, so `branches.current` is what identifies
+     * the checked-out branch. Git's `origin/HEAD -> origin/main` symref line
+     * comes back verbatim in `remote` and is not a branch name.
      *
      * @see https://www.git-scm.com/docs/git-branch
      */
@@ -700,13 +712,14 @@ export class GitService {
       return content.startsWith('version https://git-lfs.github.com/spec/v1');
     },
     /**
-     * Converts an LFS pointer into the real file content
+     * Reads a pointer on stdin and writes the bytes to stdout, which resolves
+     * a binary Asset read from history. `filePath` is only for the progress
+     * bar.
      *
-     * Reads a pointer on stdin and writes the bytes to stdout. With the
-     * fetch-all guarantee the object is always present locally, so this does
-     * not reach the network. Used to resolve a binary asset read from history.
-     *
-     * `filePath` is only used for the progress bar.
+     * After a default clone every object of the history is local, so this
+     * stays offline. A clone made with `lfs: 'current'`, which a provisioned
+     * copy gets, holds only the checked-out ref, so smudging a blob from
+     * another ref does reach the remote.
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-smudge.adoc
      */
@@ -781,7 +794,14 @@ export class GitService {
   };
 
   /**
-   * Join two development histories together
+   * Join two development histories together.
+   *
+   * `squash` stages the merged result without creating a commit, so the
+   * caller has to commit afterwards, which is what the Project upgrade flow
+   * does.
+   *
+   * A conflict throws `Internal` and leaves the tree mid-merge, rather than
+   * aborting it the way `rebase` does.
    *
    * @see https://git-scm.com/docs/git-merge
    */
@@ -933,7 +953,12 @@ export class GitService {
   }
 
   /**
-   * Fetch from and integrate (rebase or merge) with a local branch
+   * Fetch from `origin` and rebase the local branch onto it. Always a rebase:
+   * `setLocalConfig` sets `pull.rebase` in every repository `init` or `clone`
+   * touches.
+   *
+   * A conflict is not aborted here, so the working tree is left mid-rebase
+   * and `Internal` is thrown.
    *
    * @see https://git-scm.com/docs/git-pull
    */
@@ -946,16 +971,16 @@ export class GitService {
   }
 
   /**
-   * Update remote refs along with associated objects to remote `origin`
+   * Update remote refs and their objects on `origin`, LFS objects first so an
+   * upload failure is attributable. By default the current branch is pushed,
+   * `refs` the named branches or tags, `all` every branch.
    *
-   * The LFS objects are uploaded first in an explicit `git lfs push`, so an
-   * upload failure is attributable. The ref push then runs with `--no-verify`
-   * to skip the now-redundant pre-push hook.
+   * Throws `PreconditionFailed` in read-only mode, on a provisioned copy, on
+   * a non-fast-forward rejection and on an unusable LFS endpoint,
+   * `BadRequest` when `all` and `refs` are combined, `Unauthorized` when the
+   * remote rejects the credentials.
    *
-   * By default the current branch is pushed. `refs` pushes the named branches
-   * or tags instead, `all` pushes all branches.
-   *
-   * @see https://git-scm.com/docs/git-push
+   * @see ../../docs/git-and-sync.md
    */
   public async push(
     path: string,
@@ -1031,7 +1056,14 @@ export class GitService {
   }
 
   /**
-   * Record changes to the repository
+   * Records what is already staged, so `add` has to run first. `message` is a
+   * structured reference rather than free text: the commit message is
+   * generated from it, a capitalized `<method> <objectType> <id>` subject
+   * plus `Method:`, `Object-Type:`, `Object-Id:` and `Collection-Id:`
+   * trailers, which `log()` parses back out.
+   *
+   * Throws `BadRequest` when `message` fails its schema, and `Unauthorized`
+   * when no User is set.
    *
    * @see https://git-scm.com/docs/git-commit
    */
@@ -1094,7 +1126,12 @@ export class GitService {
   }
 
   /**
-   * Gets local commit history
+   * Local commit history, filtered through `isGitCommit`, so any commit not
+   * carrying Core's own trailers is silently dropped. A merge commit or one
+   * made outside Core never appears.
+   *
+   * `tag` is resolved by reading the tag file, and comes back null when the
+   * decoration is not a bare `tag: <uuid>` or the tag cannot be read.
    *
    * @see https://git-scm.com/docs/git-log
    */
@@ -1216,13 +1253,13 @@ export class GitService {
   }
 
   /**
-   * Lists directory entries at a specific commit
+   * Lists directory entries at a specific commit, for example to detect
+   * deleted Collections when comparing branches. `treePath` may be absolute
+   * or repository relative, the repository prefix is stripped either way.
    *
-   * Useful for discovering what files/folders existed at a past commit,
-   * e.g. to detect deleted collections when comparing branches.
-   *
-   * `treePath` may be absolute or repository relative, the repository prefix
-   * is stripped either way.
+   * The entries are last path segments rather than repository-relative paths.
+   * A missing path or ref yields an empty array rather than throwing, so an
+   * empty result does not tell nothing-there from does-not-exist.
    *
    * @see https://git-scm.com/docs/git-ls-tree
    */
@@ -1362,7 +1399,11 @@ export class GitService {
   }
 
   /**
-   * Sets the git config of given local repository from ElekIoCoreOptions
+   * Writes the local git config of the repository.
+   *
+   * The identity comes from `userService.get()`, and `Unauthorized` is thrown
+   * when there is none. It also sets `push.autoSetupRemote` and
+   * `pull.rebase`, which is what makes every Core pull a rebase.
    */
   private async setLocalConfig(path: string): Promise<void> {
     const user = await this.userService.get();
@@ -1402,8 +1443,13 @@ export class GitService {
   }
 
   /**
-   * Wraps the execution of any git command
-   * to use a FIFO queue for sequential processing
+   * The single choke point every git command goes through. Nothing should
+   * call `gitExec` directly, or it loses all of this.
+   *
+   * The credential environment is built inside the queue, the command is
+   * timed, redacted and logged at `info` or `debug`, and a non-zero exit is
+   * classified into `Unauthorized` or `Internal`, unless `tolerateNonZero`
+   * hands the result back for the caller to classify.
    */
   private async git(
     path: string,

@@ -93,7 +93,15 @@ export class EntryService
   }
 
   /**
-   * Creates a new Entry for given Collection
+   * Creates an Entry in the given Collection, then commits it.
+   *
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
+   * `BadRequest` when a Value fails the Collection's field definitions or
+   * points at something that is not there, and `Conflict` when a unique field
+   * repeats a value another Entry already holds. Nothing is written unless
+   * all three pass, and a failure mid-write rolls the working tree back.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public async create<T extends Entry = Entry>(
     props: CreateEntryProps
@@ -192,9 +200,15 @@ export class EntryService
   }
 
   /**
-   * Returns an Entry from given Collection by ID
+   * Returns an Entry from given Collection by ID, and with `commitHash` the
+   * version at that commit.
    *
-   * If a commit hash is provided, the Entry is read from history
+   * A historical read parses the blob at that commit and runs it through
+   * `migrate()`, so an Entry written by an older Core is upgraded in memory.
+   * A normal read parses the file as stored and fails when it predates the
+   * current schema.
+   *
+   * A missing Entry surfaces as `NotFound`.
    */
   public read<T extends Entry = Entry>(props: ReadEntryProps): Promise<T> {
     return this.validated('read', readEntrySchema, props, async () => {
@@ -219,7 +233,10 @@ export class EntryService
   }
 
   /**
-   * Returns the commit history of an Entry
+   * The git log scoped to that Entry's file, newest commit first, including
+   * the commit that deleted the Entry.
+   *
+   * An id that never existed returns an empty array rather than throwing.
    */
   public history(props: EntryHistoryProps): Promise<GitCommit[]> {
     return this.validated('history', entryHistorySchema, props, async () => {
@@ -234,7 +251,16 @@ export class EntryService
   }
 
   /**
-   * Updates an Entry of given Collection with new Values
+   * Replaces the Entry's Values wholesale and commits. Every field the
+   * Collection defines has to be present, or the call is a `BadRequest`, and
+   * `updated` is stamped on write.
+   *
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
+   * `BadRequest` when a Value fails the field definitions or points at
+   * something that is not there, and `Conflict` when a unique field repeats
+   * another Entry's value. A failure mid-write rolls the working tree back.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public async update<T extends Entry = Entry>(
     props: UpdateEntryProps
@@ -335,11 +361,14 @@ export class EntryService
   }
 
   /**
-   * Deletes given Entry from it's Collection
+   * Deletes the Entry from its Collection and commits the removal.
    *
-   * Blocks deletion if the Entry is still referenced by another Entry's values
-   * (a flat reference field, an mdast node, or a reference nested in a
-   * `dynamic`/component block). A self-reference does not block.
+   * Blocked when another Entry's values still reference it, through a flat
+   * reference field, an mdast node, or a reference nested in a
+   * `dynamic`/component block. That raises `Conflict` with the referring
+   * Entries as its cause. A self-reference does not block.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public delete(props: DeleteEntryProps): Promise<void> {
     return this.mutating('delete', deleteEntrySchema, props, async () => {
@@ -447,7 +476,11 @@ export class EntryService
   }
 
   /**
-   * Checks if given object is of type Entry
+   * A full, deep `entrySchema` parse that never throws and returns false
+   * instead.
+   *
+   * It checks no Values against any Collection's field definitions, so an
+   * object can pass here and still be rejected by `create` or `update`.
    */
   public isEntry(obj: unknown): obj is Entry {
     return entrySchema.safeParse(obj).success;
@@ -465,7 +498,9 @@ export class EntryService
   }
 
   /**
-   * Creates an Entry from given EntryFile by resolving it's Values
+   * The one seam between the on-disk `EntryFile` and the returned `Entry`,
+   * kept so the two can diverge. Today it is a plain spread, and Values come
+   * back exactly as stored.
    */
   private toEntry(entryFile: EntryFile): Entry {
     return {
@@ -544,12 +579,14 @@ export class EntryService
   }
 
   /**
-   * Pre-loads all Components referenced (transitively) by the given field definitions
-   * and returns a synchronous ComponentResolver for use during schema generation.
+   * Pre-loads every Component the given field definitions reach, transitively,
+   * and returns a synchronous `ComponentResolver` for schema generation.
    *
-   * When a dynamic field has an empty ofComponents array (meaning "all allowed"),
-   * all project components are loaded and the returned field definitions have
-   * ofComponents populated with the full list of component IDs.
+   * A top-level dynamic field with an empty `ofComponents` is expanded: the
+   * Project's Components are loaded and the returned definition carries the
+   * full id list. The walk does not rewrite a dynamic field nested inside a
+   * Component, so an empty nested `ofComponents` stays empty and the schema
+   * falls back to its permissive record item schema.
    */
   private async buildComponentResolver(
     fieldDefinitions: FieldDefinition[],

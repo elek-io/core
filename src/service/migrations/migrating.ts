@@ -3,10 +3,12 @@ import { CoreError } from '../../util/shared.js';
 /**
  * Runs a migration and turns a failed schema parse into a `CoreError`.
  *
- * Migrating is the one place a file Core did not write reaches a consumer, and
- * it sits on every read path, so a raw `ZodError` escaping here would break the
- * promise every service makes. A `CoreError` raised inside, such as the
- * `VersionSkew` `applyMigrations` throws, passes through untouched.
+ * It wraps the public `migrate()` methods, which a history read,
+ * `ProjectService.upgrade` and `ReferenceService.readEntryFileMigrating`
+ * reach. Those run outside `validated()`, so nothing else would convert a
+ * `ZodError` for them. A normal read does not come through here, it goes
+ * through `JsonFileService.read` and never migrates. A `CoreError` raised
+ * inside, such as `applyMigrations`'s `VersionSkew`, passes through.
  *
  * @see ../../../contributing/migration-and-history-flow.md
  */

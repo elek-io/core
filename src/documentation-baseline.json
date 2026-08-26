@@ -1,9 +1,7 @@
 {
   "jsdoc/documented-export": [
     "src/service/GitService.ts",
-    "src/service/LogService.ts",
     "src/service/ProjectService.ts",
-    "src/service/migrations/applyMigrations.ts",
     "src/util/mdastRender.ts",
     "src/util/shared.ts"
   ]

@@ -203,7 +203,14 @@ class TailBuffer {
 }
 
 /**
- * Service that handles logging to file and console
+ * Writes records to the console and to daily rotated files under
+ * `<dataDir>/logs`, kept 30 days. `log.level` decides which are written.
+ *
+ * A log file can be handed to someone else, so a caller must never pass a
+ * name a User typed or any authored content. Ids, paths and counts are what
+ * belongs in a record.
+ *
+ * @see ../../docs/usage.md
  */
 export class LogService {
   private readonly logger: Logger;
@@ -242,24 +249,57 @@ export class LogService {
     });
   }
 
+  /**
+   * How something happened: reads, cache decisions, git commands that only
+   * asked the repository something.
+   *
+   * The default `log.level` is `info`, so a debug record is dropped unless
+   * the level was lowered at construction. Ids, paths, counts and slugs only,
+   * never a name or authored content, and for `source: 'core'` a `meta` key
+   * has to be a declared attribute name.
+   */
   public debug(props: LogProps) {
     const { source, message, meta } = logSchema.parse(props);
 
     this.logger.debug(message, { source, meta });
   }
 
+  /**
+   * The load-bearing level. Every file, Project or remote mutation belongs
+   * here, because a packaged host runs Core at `info` and this is the whole
+   * of what a User's machine records.
+   *
+   * Same payload rule as `debug`. `logSchema.parse` throws a `ZodError`
+   * rather than a `CoreError` when `source` or `message` is not what the type
+   * says.
+   */
   public info(props: LogProps) {
     const { source, message, meta } = logSchema.parse(props);
 
     this.logger.info(message, { source, meta });
   }
 
+  /**
+   * Something anomalous Core recovered from, such as a file it skipped. A
+   * slow operation is not one: duration is a value on the record and never
+   * an input to the level.
+   *
+   * Same payload rule as `debug`.
+   */
   public warn(props: LogProps) {
     const { source, message, meta } = logSchema.parse(props);
 
     this.logger.warn(message, { source, meta });
   }
 
+  /**
+   * A `CoreError` at a service boundary, or a failure Core could not recover
+   * from. The call only writes a record, it neither throws nor rethrows, so
+   * the caller still owns the failure.
+   *
+   * Same payload rule as `debug`. The error's own type belongs in `meta` as
+   * `error.type` rather than pasted into the message.
+   */
   public error(props: LogProps) {
     const { source, message, meta } = logSchema.parse(props);
 
@@ -267,12 +307,14 @@ export class LogService {
   }
 
   /**
-   * Reads the last 24 hours of log files back as one gzipped blob.
+   * Reads the last 24 hours of log files back as one gzipped blob. It writes
+   * before it reads: an info record marking where the tail ended, then a
+   * yielded macrotask, a hedge against winston's missing per-transport flush
+   * rather than a guarantee the last lines are there.
    *
-   * Public because it is a log concern rather than a reporting one. What comes
-   * back is safe to hand to someone else: Core's own records are decided safe
-   * at the call site, and the rest is scrubbed here. Ids, paths and timestamps
-   * stay exact, because they are what makes a line resolvable.
+   * The scrubbers mask the home directory, a git signature, a credential in a
+   * URL and an address, and drop secret-named keys. Ids, paths and timestamps
+   * stay exact, so a tail is still personal data needing consent.
    *
    * @see ../../contributing/logging.md
    */
