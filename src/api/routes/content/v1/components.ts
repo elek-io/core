@@ -138,6 +138,7 @@ const router = createRouter()
         projectId,
         idOrSlug: componentIdOrSlug,
       });
+      c.set('componentId', id);
       const data = await c.var.componentService.read({ projectId, id });
 
       return c.json(data, 200);

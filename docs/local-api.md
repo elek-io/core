@@ -93,7 +93,15 @@ With the server running:
 - `GET /` serves an interactive [Scalar](https://scalar.com/) API reference UI.
 - `GET /openapi.json` serves the OpenAPI 3.0 document.
 
-Both are generated from the same Zod schemas the routes use, so they always match the running version. Requests are logged through Core's logger, and CORS is restricted to `http://localhost`.
+Both are generated from the same Zod schemas the routes use, so they always match the running version. CORS is restricted to `http://localhost`.
+
+Requests are logged through Core's logger, never as the URL. A log file can be handed to someone else, and both a `{collectionIdOrSlug}` segment and a query parameter carry whatever the caller sent. What a record holds instead is the matched route pattern and the ids the request addressed, so:
+
+```
+GET /content/v1/projects/<project-uuid>/collections/blog-posts
+```
+
+is recorded as the route `/content/v1/projects/:projectId/collections/:collectionIdOrSlug`, the Project and Collection ids, and a note that the Collection was addressed by slug rather than by id.
 
 ## See also
 

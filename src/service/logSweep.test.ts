@@ -2,6 +2,8 @@ import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { createTestApi } from '../api/lib/util.js';
+import apiRoutes from '../api/routes/index.js';
 import { logAttributeNames, logRecordSchema } from '../schema/logSchema.js';
 import core, { uuid } from '../test/setup.js';
 
@@ -23,8 +25,20 @@ const sentinel = {
   assetFile: 'zqx-canary-3e90b2-filename',
   value: 'zqx-canary-3e90b2-value',
   updatedValue: 'zqx-canary-3e90b2-updated-value',
+  collectionSlugSingular: 'zqx-canary-3e90b2-singularslug',
+  collectionSlugPlural: 'zqx-canary-3e90b2-pluralslug',
+  componentSlug: 'zqx-canary-3e90b2-heroslug',
+  queryParameter: 'zqx-canary-3e90b2-query',
+  unmatchedPath: 'zqx-canary-3e90b2-path',
 };
 
+/**
+ * A field definition's slug is not a sentinel, on purpose. It names a
+ * position in the content model rather than an object, which is why
+ * `contributing/logging.md` allows one and `elek.entry.value.slugs`
+ * carries them. An entity slug names an object that has an id, so it
+ * is banned like the name it was made from.
+ */
 const titleSlug = 'title';
 
 beforeAll(async function () {
@@ -43,7 +57,10 @@ beforeAll(async function () {
       singular: { en: sentinel.collection },
       plural: { en: sentinel.collection },
     },
-    slug: { singular: 'product', plural: 'products' },
+    slug: {
+      singular: sentinel.collectionSlugSingular,
+      plural: sentinel.collectionSlugPlural,
+    },
     description: { en: sentinel.collection },
     fieldDefinitions: [
       {
@@ -67,7 +84,7 @@ beforeAll(async function () {
   const component = await core.components.create({
     projectId,
     name: { en: sentinel.component },
-    slug: 'hero',
+    slug: sentinel.componentSlug,
     description: { en: sentinel.component },
     fieldDefinitions: [
       {
@@ -137,6 +154,12 @@ beforeAll(async function () {
     description: sentinel.asset,
   });
 
+  // Every route of the local API, which logs a record per request and
+  // per response. Nothing else in the suite drives it with a sentinel in
+  // the path, and the request logger is the surface that used to write
+  // the URL, so a slug in it reached the log file on a 200
+  await sweepApi(projectId, collection.id, entry.id, asset.id);
+
   await core.releases.createPreview({ projectId });
   await core.releases.create({ projectId });
 
@@ -183,6 +206,13 @@ describe('nothing a User typed reaches a log file', function () {
 });
 
 describe('every attribute is a name Core declared', function () {
+  it('does not declare url.full, which cannot hold a URL safely', function () {
+    // The Semantic Convention name for a full URL is the obvious reach for
+    // an HTTP logger and it is the leak: a path carries a slug and a query
+    // string carries whatever a caller sent. `http.route` replaced it
+    expect(logAttributeNames).not.toContain('url.full');
+  });
+
   it('writes no attribute key that logSchema does not name', async function () {
     // `LogProps` already rejects an undeclared name at the call site. This
     // is the backstop for the paths a type cannot see: an object built
@@ -199,6 +229,57 @@ describe('every attribute is a name Core declared', function () {
     expect([...written].filter((key) => !declared.has(key))).toEqual([]);
   });
 });
+
+/**
+ * Sends one request to every route, plus an undeclared query parameter and
+ * a path that matches no route, which are the two ways a caller reaches the
+ * request logger with a string of its own choosing.
+ */
+async function sweepApi(
+  projectId: string,
+  collectionId: string,
+  entryId: string,
+  assetId: string
+): Promise<void> {
+  const api = createTestApi(
+    apiRoutes,
+    core.logger,
+    core.projects,
+    core.collections,
+    core.components,
+    core.entries,
+    core.assets
+  );
+  const project = `/content/v1/projects/${projectId}`;
+  // Addressed by slug wherever a route accepts one, since that is the form
+  // that carries a User's text
+  const collection = `${project}/collections/${sentinel.collectionSlugPlural}`;
+
+  const paths = [
+    '/content/v1/projects',
+    '/content/v1/projects/count',
+    project,
+    `${project}/collections`,
+    `${project}/collections/count`,
+    collection,
+    `${project}/collections/${collectionId}`,
+    `${project}/components`,
+    `${project}/components/count`,
+    `${project}/components/${sentinel.componentSlug}`,
+    `${collection}/entries`,
+    `${collection}/entries/count`,
+    `${collection}/entries/${entryId}`,
+    `${project}/assets`,
+    `${project}/assets/count`,
+    `${project}/assets/${assetId}`,
+    `${project}/collections?limit=1&q=${sentinel.queryParameter}`,
+    `${project}/${sentinel.unmatchedPath}`,
+  ];
+
+  for (const path of paths) {
+    await api.request(path);
+  }
+}
 
 async function readLogs(): Promise<string> {
   const dir = core.util.pathTo.logs;

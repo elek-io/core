@@ -12,17 +12,23 @@ Allowed, and wanted:
 
 - ids and file paths, which is what makes a line resolvable against the repository
 - what happened, when, and in what order
-- counts, lengths, languages, field slugs, versions, durations
+- counts, lengths, languages, versions, durations
+- **a field slug**, which names a position in the content model rather than an object
 - error types, messages and stacks Core itself raised
 
 Never:
 
 - the content of an Entry, an Asset or any other authored value
-- **a name**: of a Project, Collection, Component, Entry or Asset. Anything a User typed, not only what they wrote into a field
+- **a name, or the slug made from one**: of a Project, Collection, Component, Entry or Asset. Anything a User typed that identifies one object, not only what they wrote into a field
 - a User's name or email, including inside a git command line
 - the remote access token, which today only ever travels by environment variable
 
 **Names go even though they are not content.** They buy a reader nothing: every line already carries the id, and an id resolves to the object, its name included, the moment the repository is on hand. A name is the one part of a line that reads as somebody's words, and it is the part that survives being read by someone the User never expected to read it. So it goes, and the ids stay.
+
+**A slug is a name**, and that it looks mechanical is not the test. It is `slug()` of a string a User typed, so it goes for the reason the name does. What separates the two kinds is what the string names:
+
+- An **entity slug** names one object, which has an id. The id is already on the line and resolves to the slug, so the slug buys a reader nothing.
+- A **field slug** names a position in the content model. It is the same string for every Entry in the Collection, and it is what a record says instead of the values: `elek.entry.value.slugs` is the shape, the values would be the payload.
 
 Two things are allowed that look like they should not be:
 
@@ -55,6 +61,18 @@ Practically: **log the shape, never the payload.** For a migration bug, "12 Valu
 [`redactGitArgs`](../src/service/GitService.ts) takes the User's identity out of a git command before it reaches a log record or an error message: the `--author` of a commit, the values of `config --local user.name` and `user.email`, and credentials embedded in a remote URL. Ids, paths and flags pass through untouched.
 
 Anything that builds a string from git arguments has to go through it. There is more than one identity site, and a rule written for only the one in front of you will miss the others.
+
+### The API logs a route, never a URL
+
+A request URL is not Core's to write down. Its path carries whatever the caller put in a `{collectionIdOrSlug}` segment, and its query string carries anything at all, since nothing strips a parameter a route did not declare. A local API is reachable by any process on the machine, so neither is bounded by what Core itself would log.
+
+[`requestResponseLogger`](../src/api/middleware/requestResponseLogger.ts) writes the matched route pattern as `http.route` instead, which is a constant from the route table. What a reader resolves the request by are the ids, so they are written alongside it:
+
+- a path parameter, when it parses as a UUID. `c.req.param` hands back the raw segment whether or not the route's schema accepted it, so the check is what keeps a rejected request from logging what was rejected.
+- the Collection or Component id a route resolved, which the handler leaves in `c.var` for the response record. The logger runs before the slug is resolved and may not write it, so this is how a slug lookup stays resolvable.
+- `elek.request.lookup`, saying whether the caller addressed the object by `slug` or by `id`. Without it every request reads as an id lookup and a reader debugging a slug is misled.
+
+The slug that did not resolve is still in the `NotFound` the caller gets back. The log file is the copy that goes to someone else, and that one does not need it.
 
 ## The record shape
 
@@ -114,6 +132,7 @@ The names that carry weight:
 | `error.type`, `code.function.name` | the `[BadRequest] (Asset.create)` prefix `AbstractService` packed into a message |
 | `exception.type`, `exception.message`, `exception.stacktrace` | winston's own uncaught exception fields |
 | `elek.project.id`, `elek.collection.id`, `elek.object.type`, `elek.object.id`, `elek.method` | ids that were only readable by parsing a message string |
+| `http.route` | `url.full` on the API request logger, which carried a slug segment and any query string a caller sent |
 | `file.path`, `file.name`, `file.directory` | the same, for the file a line is about |
 
 The commit line carries the same ids the commit itself carries as trailers (`Method`, `Object-Type`, `Object-Id`, `Collection-Id`), so a log line and the commit it produced join without either being parsed.

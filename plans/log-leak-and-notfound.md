@@ -244,3 +244,27 @@ Collected here rather than resolved, per the brief.
 2. **Three further leaks of the same class**, all verified: the slug-clash `Conflict` message in `CollectionService` and `ComponentService`, the canonical slug message in `schemaFromFieldDefinition` (which is authored Entry content, so it does not wait on question 1), and the unsupported MIME type message in `AssetService` carrying the source file name. Plus one that is a refactor away, `lookupBySlug`'s message holding unvalidated caller input.
 3. **A raw `Error` escapes `entries.create` and `collections.create`** against a missing Project, against the first sentence of `docs/error-handling.md`. Folded into the bug 2 recommendation above, flagged here because it is a separate bug from the one the brief describes.
 4. **Not breaking for Desktop at the type level**, so no coordination is required before shipping bug 2's fix. Worth a line in the bump notes anyway, because the dialog copy a User sees changes.
+
+---
+
+# Status
+
+Bug 1 is fixed on this branch. Everything else in this plan is still open, so the plan stays.
+
+## Done, bug 1
+
+Approach A with the id write-back, plus the policy question settled the way the analysis recommended.
+
+- [`requestResponseLogger`](../src/api/middleware/requestResponseLogger.ts) records `http.route`, the matched route pattern, and the ids the request addressed. It no longer touches `c.req.url`, so neither a slug segment nor a query string can reach a log file.
+- A path parameter is written only when it parses as a UUID, since `c.req.param` returns the raw segment whether or not the route's schema accepted it.
+- The five routes that accept a slug leave the id they resolved in `c.var`, so a slug lookup stays resolvable. `elek.request.lookup` records `slug` or `id`, so a reader is not misled into thinking every request was an id lookup.
+- `url.full` is out of `logAttributeNames` and `http.route` is in, along with `elek.asset.id`, `elek.component.id`, `elek.entry.id` and `elek.request.lookup`.
+- [`../contributing/logging.md`](../contributing/logging.md) now says an entity slug is a name and a field slug is not, with the reason being what the string names rather than who typed it.
+
+The check: [`logSweep.test.ts`](../src/service/logSweep.test.ts) drives every route through `createTestApi`, with a sentinel in the Collection and Component slugs, one undeclared query parameter and one unmatched path. Its field definition slug is deliberately not a sentinel, which is where the policy decision is encoded. Verified it can fail: putting `c.req.url` back turns exactly four sentinels red and nothing else.
+
+## Still open
+
+1. **Bug 2**, unchanged. The wrap belongs in `JsonFileService.read`, and the raw `Error` escaping `entries.create` and `collections.create` goes with it.
+2. **The three sibling leaks** in the escalation list: the slug clash `Conflict` message, the canonical slug message on a slug field value, and the unsupported MIME type message. The sweep now reaches the API but still never provokes an error path with a sentinel in it, so it would not catch any of them.
+3. **The error contract test** and the `statusCodes` documentation rule, which are bug 2's half of the recurrence check.

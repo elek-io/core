@@ -97,7 +97,7 @@ export const logAttributeNames = [
   'exception.type',
   'http.request.method',
   'http.response.status_code',
-  'url.full',
+  'http.route',
 
   // Semantic Conventions, still incubating as of semconv 1.43.0
   'file.directory',
@@ -110,10 +110,13 @@ export const logAttributeNames = [
   'redaction.redacted.count',
 
   // elek.io's own, where no convention exists
+  'elek.asset.id',
   'elek.cache.cleared_count',
   'elek.collection.count',
   'elek.collection.id',
+  'elek.component.id',
   'elek.duration_ms',
+  'elek.entry.id',
   'elek.entry.value.count',
   'elek.entry.value.slugs',
   'elek.error.status_code',
@@ -135,6 +138,7 @@ export const logAttributeNames = [
   'elek.release.bump',
   'elek.release.version',
   'elek.request.id',
+  'elek.request.lookup',
   'elek.upgrade.from_version',
   'elek.upgrade.to_version',
 ] as const;
