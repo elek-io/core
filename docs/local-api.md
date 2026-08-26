@@ -22,6 +22,12 @@ elek api:start [port]   # port defaults to 31310
 
 When you embed Core yourself, the API only runs once you start it, with `core.api.start()` or `elek api:start`.
 
+## It binds loopback only
+
+The API listens on `127.0.0.1` and the bind address is not an option. Only the machine it runs on can reach it, so nothing on the network sees a read API over every Project in your data directory. Reach it through `localhost` or `127.0.0.1`.
+
+A tool on another host cannot connect to it. Forward a port to it, for example over SSH, rather than looking for a setting.
+
 The User's `localApi.isEnabled` preference (set via `core.user.set()`) records whether the API should auto-start. Core never acts on it. It is there for elek.io clients such as elek.io Desktop, which read the flag and start the API on launch.
 
 ## Read-only by design

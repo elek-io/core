@@ -76,7 +76,7 @@ export class JsonFileService extends AbstractService {
       meta: { 'file.path': path },
     });
     const data = await this.readFile(path);
-    const json = this.deserialize(data);
+    const json = this.deserialize(data, path);
     const value: z.output<T> = schema.parse(json);
     if (this.options.file.cache === true) {
       this.cache.set(path, value);
@@ -103,7 +103,7 @@ export class JsonFileService extends AbstractService {
       message: `Unsafe reading of file "${path}"`,
       meta: { 'file.path': path },
     });
-    return this.deserialize(data);
+    return this.deserialize(data, path);
   }
 
   /**
@@ -207,7 +207,23 @@ export class JsonFileService extends AbstractService {
     return JSON.stringify(data, null, 2);
   }
 
-  private deserialize(data: string): unknown {
-    return JSON.parse(data);
+  /**
+   * Parses a file's content, naming the file rather than quoting it.
+   *
+   * V8 quotes a window of the input back in its own parse failure, and for
+   * an entity file that window is authored content. The path says which
+   * file broke, the cause keeps what V8 said for whoever debugs it.
+   *
+   * @see ../../contributing/logging.md
+   */
+  private deserialize(data: string, path: string): unknown {
+    try {
+      return JSON.parse(data);
+    } catch (error) {
+      throw CoreError.internal(
+        `File "${path}" does not hold valid JSON`,
+        error
+      );
+    }
   }
 }

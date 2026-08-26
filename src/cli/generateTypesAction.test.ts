@@ -958,3 +958,88 @@ describe('generateTypesForProject - optional and required fields', () => {
     expectTranspiles(await generateTypesForProject(project), 'generated types');
   });
 });
+
+describe('generateTypesForProject - free-form strings in a field definition', () => {
+  let project: Project & { destroy: () => Promise<void> };
+
+  // Every one of these is a `z.string()` in fieldSchema, so an editor can
+  // put a line break in it and the generator writes it into a single
+  // quoted TypeScript literal
+  const multiLineDefault = 'first line\nsecond line\r\nthird line';
+  const multiLineOption = 'option\nvalue';
+  const multiLineMimeType = 'image/png\nimage/jpeg';
+
+  beforeAll(async () => {
+    project = await createProject('generateTypes Free Form Test', {
+      language: { default: 'en', supported: ['en'] },
+    });
+
+    const base = {
+      description: null,
+      isDisabled: false,
+      inputWidth: '12' as const,
+    };
+    await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: { singular: { en: 'Note' }, plural: { en: 'Notes' } },
+      slug: { singular: 'note', plural: 'notes' },
+      description: { en: 'Notes' },
+      fieldDefinitions: [
+        {
+          ...base,
+          id: uuid(),
+          slug: 'body',
+          valueType: 'string',
+          fieldType: 'textarea',
+          label: { en: 'Body' },
+          isRequired: false,
+          isUnique: false,
+          min: null,
+          max: null,
+          defaultValue: multiLineDefault,
+        },
+        {
+          ...base,
+          id: uuid(),
+          slug: 'choice',
+          valueType: 'string',
+          fieldType: 'select',
+          label: { en: 'Choice' },
+          isRequired: false,
+          isUnique: false,
+          defaultValue: null,
+          options: [{ value: multiLineOption, label: { en: 'Multi line' } }],
+        },
+        {
+          ...base,
+          id: uuid(),
+          slug: 'attachment',
+          valueType: 'reference',
+          fieldType: 'asset',
+          label: { en: 'Attachment' },
+          isRequired: false,
+          isUnique: false,
+          min: null,
+          max: null,
+          ofAssetMimeTypes: [multiLineMimeType],
+        },
+      ],
+    });
+  }, 30000);
+
+  afterAll(async () => {
+    await project.destroy();
+  });
+
+  it('emits TypeScript that transpiles, with a line break in every one', async () => {
+    const output = await generateTypesForProject(project);
+
+    // Each value reaches a single quoted literal, and a raw line break
+    // in one ends the line rather than the string
+    expect(output).toContain(`defaultValue: 'first line\\nsecond line\\r\\n`);
+    expect(output).toContain(`{ value: 'option\\nvalue';`);
+    expect(output).toContain(`ofAssetMimeTypes: ['image/png\\nimage/jpeg'];`);
+    expectTranspiles(output, 'generated types');
+  });
+});

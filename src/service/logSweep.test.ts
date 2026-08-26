@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { createTestApi } from '../api/lib/util.js';
 import apiRoutes from '../api/routes/index.js';
 import { logAttributeNames, logRecordSchema } from '../schema/logSchema.js';
-import core, { uuid } from '../test/setup.js';
+import core, { testUserProps, uuid } from '../test/setup.js';
 
 /**
  * The broad pass over Core: create, update, delete, release, upgrade and
@@ -34,6 +34,13 @@ const sentinel = {
   // What `slug()` makes of `nonCanonicalSlugInput`, which is the form the
   // rejection message names and therefore the form that can leak
   canonicalSlugValue: 'zqx-canary-3e90b2-badslug',
+  // The git identity, which every commit and the local git config carry
+  userName: 'zqx-canary-3e90b2-username',
+  userEmail: 'zqx-canary-3e90b2-user@canary.invalid',
+  // Short on purpose. V8 quotes a window of about sixteen characters of
+  // the input back in a JSON parse failure, so a longer one would never
+  // appear whole and the check would pass without proving anything
+  brokenFile: 'zqx3e90b2f',
 };
 
 /** Rejected by a slug field, which answers with the canonical form */
@@ -50,6 +57,14 @@ const titleSlug = 'title';
 const permalinkSlug = 'permalink';
 
 beforeAll(async function () {
+  // The identity reaches a git command line, the local git config and the
+  // author of every commit, so it is a User-typed string like any other
+  await core.user.set({
+    ...testUserProps,
+    name: sentinel.userName,
+    email: sentinel.userEmail,
+  });
+
   const project = await core.projects.create({
     name: sentinel.project,
     description: sentinel.project,
@@ -269,6 +284,11 @@ beforeAll(async function () {
     })
   ).rejects.toThrow();
 
+  // The failure paths. `boundaryMessage` guards the service boundary, and
+  // eleven `warn` and `error` calls interpolate a raw `error.message`
+  // without it, so a failure has to be driven rather than reasoned about
+  await sweepFailures(projectId, collection.id);
+
   await core.entries.delete({
     projectId,
     collectionId: collection.id,
@@ -369,6 +389,69 @@ async function sweepApi(
   for (const path of paths) {
     await api.request(path);
   }
+}
+
+/**
+ * The three ways something Core reads or runs answers with text of its
+ * own: a git command that fails, a file that will not parse and a schema
+ * that rejects. Each runs with a sentinel in what it is handed.
+ */
+async function sweepFailures(
+  projectId: string,
+  collectionId: string
+): Promise<void> {
+  const projectPath = core.util.pathTo.project(projectId);
+  const entryFile = (id: string) =>
+    core.util.pathTo.entryFile(projectId, collectionId, id);
+
+  // A git command that fails. git echoes the offending argument back and
+  // its output is localized, so the hook stands in for that: it fails the
+  // commit an Entry create ends with, and prints an authored Value
+  const hook = Path.join(projectPath, '.git', 'hooks', 'pre-commit');
+  await Fs.writeFile(
+    hook,
+    `#!/bin/sh\necho "refusing ${sentinel.value}" >&2\nexit 1\n`,
+    { encoding: 'utf8' }
+  );
+  await Fs.chmod(hook, 0o755);
+  await expect(
+    core.entries.create({
+      projectId,
+      collectionId,
+      values: {
+        [titleSlug]: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: sentinel.value },
+        },
+        // Its own slug, so the create reaches git rather than stopping at
+        // the unique check the Entry above already holds
+        [permalinkSlug]: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: `${sentinel.entrySlugValue}-2` },
+        },
+      },
+    })
+  ).rejects.toThrow();
+  await Fs.remove(hook);
+
+  // A file that will not parse, and a file that parses and fails the
+  // schema. Both are read through list(), which collects what it could
+  // not read and warns with the raw message rather than through the
+  // boundary that strips one
+  const unparseable = entryFile(uuid());
+  await Fs.writeFile(unparseable, `{"a": ${sentinel.brokenFile}}`);
+  const invalid = entryFile(uuid());
+  await Fs.writeFile(
+    invalid,
+    JSON.stringify({ objectType: 'entry', values: sentinel.value })
+  );
+
+  await core.entries.list({ projectId, collectionId, limit: 0 });
+
+  await Fs.remove(unparseable);
+  await Fs.remove(invalid);
 }
 
 async function readLogs(): Promise<string> {

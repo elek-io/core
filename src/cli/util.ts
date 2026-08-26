@@ -89,7 +89,17 @@ export function toPascalCase(slug: string): string {
 
 /**
  * Escapes a string for use inside a single-quoted TypeScript literal.
+ *
+ * A line break goes with the quote and the backslash. The literal is one
+ * line of source, so a raw one ends the line rather than the string and
+ * the generated file no longer parses. Three free-form inputs reach here:
+ * a textarea `defaultValue`, a string select's `option.value` and
+ * `ofAssetMimeTypes`.
  */
 export function escapeForSingleQuotedString(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n');
 }

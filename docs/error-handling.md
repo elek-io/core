@@ -27,6 +27,17 @@ throw CoreError.internal('Git command failed', originalError);
 throw CoreError.fromUnknown(caughtException); // wraps any unknown into Internal
 ```
 
+## The message and the cause
+
+`error.message` is written to be shown to a person and to be written into a log file, so it never repeats a string the caller sent and never carries text Core did not author.
+
+`error.cause` is where that text lives instead:
+
+- a failed git command puts git's own stdout and stderr there, and the message keeps the redacted command line and the exit code
+- a file that will not parse puts `JSON.parse`'s own failure there, and the message names the file
+
+Show the `message`. Read the `cause` while debugging, and keep it out of anything you send elsewhere: git echoes its arguments back, so it can hold a User's name and email, and a parse failure quotes part of the file.
+
 ## Consumer patterns
 
 ### Desktop app (direct usage)

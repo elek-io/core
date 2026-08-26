@@ -359,6 +359,8 @@ Core's schema rejects exotic URL schemes on `link` and `image` nodes. `javascrip
 - `link.url` accepts `http`, `https`, `mailto` and `tel`, plus site-relative (`/path`), sibling and parent-relative (`./`, `../`) and fragment-only (`#section`) forms.
 - `image.url` accepts only absolute `http` and `https`. Use `assetReference` for internal images.
 
+A relative `link.url` is resolved before it is accepted, and has to keep the origin it is relative to. `/\evil.com` reads as a path and resolves to `https://evil.com/`, and so does the same shape holding a tab, a line feed or a carriage return.
+
 Renderers should still apply their own per-context policy on top of this. Examples: a closed-corpus site might want to allow only same-origin links. An email-rendering pipeline might want to strip `tel:` links. The schema check eliminates the most dangerous classes. The rendering layer owns the rest.
 
 ## Out of scope in Core

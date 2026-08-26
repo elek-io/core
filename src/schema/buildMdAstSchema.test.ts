@@ -367,6 +367,11 @@ describe('buildMdAstSchemaForFeatures', () => {
         'vbscript:msgbox(1)',
         'file:///etc/passwd',
         '//evil.example.com',
+        // Site-relative in shape, cross-origin once resolved
+        '/\\evil.example.com',
+        '/\t/evil.example.com',
+        '/\n/evil.example.com',
+        '/\r/evil.example.com',
       ]) {
         expect(() => schema.parse(linkTree(url)), url).toThrow();
       }

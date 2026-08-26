@@ -4,7 +4,7 @@ Review every JSDoc block in Core against the documentation rules: is one there, 
 
 Read [`../contributing/documentation.md`](../contributing/documentation.md) first, in particular the JSDoc section. Everything here assumes it.
 
-The pass runs in four phases, one session each. Phases 1 to 3 are done, their sections are kept because phase 4 reads the exemplar and the rule they produced. Phase 4 is the next session, and it writes from [`jsdoc-findings.md`](./jsdoc-findings.md).
+The pass runs in five phases, one session each. Phases 1 to 3 are done, their sections are kept because phase 4 reads the exemplar and the rule they produced. Phase 4 is the next session, and it writes from [`jsdoc-findings.md`](./jsdoc-findings.md).
 
 ## Where the work sits
 
@@ -118,7 +118,54 @@ Concatenating 92 reports is not the deliverable. The `overflows` findings are th
 2. Counts the findings per kind, so phase 4 can be sized.
 3. Names any pattern that recurs across files, the way `ReferenceService` methods attributed to `EntryService` did across six sites.
 
+## Phase 3.5, triage the code findings (done)
+
+Phase 3 found more than it was asked for. Alongside the 272 JSDoc findings it produced a list of 32 open cases where the code is at fault rather than the comment, and its own note says each blocks at least one row. Phase 4 cannot write a `throws` line for behavior that is itself wrong, so those 32 get sorted before any writing starts.
+
+**This session fixes nothing and writes no JSDoc.** It verifies, sorts and sizes.
+
+### Two were called scheduled and were not
+
+Phase 3 set these aside as already being handled elsewhere. Nothing was handling them, and the label hid two verified bugs behind a triage exemption:
+
+- `LocalApi.start()` calls `serve({ fetch, port })` with no `hostname`, so the API binds every interface while its log line says `localhost`.
+- `mdAstLinkUrlSchema` accepts `/\evil.com`, which `new URL()` resolves to `https://evil.com/`, against a block comment promising protocol-relative URLs are rejected.
+
+Both are fixed now, together with the other two `safety` items, and the widened URL bypass this session found reached the fix. **An item is scheduled when a plan says who does it and when, not when a triage says so.**
+
+What this session owed them is one question: is there more of that class in the 32, and did the sweep miss any surface where the same shape could hide.
+
+### First, reconcile
+
+The findings were written before commits `b6907f2`, `e327d60` and `bfd111c` landed, so some rows are now false. A known one is `src/service/EntryService.ts:191`, which tells phase 4 to note that a missing Entry surfaces "rather than a typed `NotFound`". It now is one.
+
+22 rows mention an error type and 44 mention logging. Re-check each against `HEAD`, correct it in place, and strike anything the three commits already fixed. `GitService` redaction not covering error messages is the likeliest candidate, `e327d60` may have covered it.
+
+### Then verify and sort
+
+Every one of the 32 is a claim from an agent, and a claim is not a finding until it reproduces. Verify each against `HEAD` before sorting it, and put anything that does not reproduce in the last bucket rather than quietly dropping it.
+
+| Bucket | Holds |
+| --- | --- |
+| `safety` | a bug about what leaves the machine, what binds a port, or what a generated file can be made to contain |
+| `blocking` | a code bug phase 4 cannot write around, because the behavior it would document is wrong |
+| `phase-4` | a doc or comment that is simply wrong, no code change needed, so phase 4 fixes it while writing |
+| `rule-gap` | a documentation check that should have caught this and did not |
+| `not-a-bug` | the claim does not reproduce, with what was actually found |
+
+Size each `safety` and `blocking` item as a one line fix, a contained change, or a design decision. That is what makes the list schedulable, and it is the part a bare bug list never gives you.
+
+### Output
+
+Rewrite the code-at-fault section of `plans/jsdoc-findings.md` in place as those five buckets, and correct the stale rows in the findings table above it. No new file, the whole findings file goes when phase 4 finishes.
+
+Close with the order you would fix them in, and say which `blocking` items phase 4 could proceed without if a decision is slow.
+
 ## Phase 4, writing, later
+
+Phase 3.5 sorted the code findings, and most of phase 4 is not waiting on them. The `phase-4` bucket, the 14 `overflows` doc edits and the 128 `restates` rows need nothing from the blocking list, and seven of the eighteen blocking rows offer to document today's behavior. Start there rather than holding the whole phase for five decisions.
+
+Seven rows genuinely cannot be written, because their `overflows` partner asserts the opposite of what the code does. Leave those and say so in the report.
 
 One session, serial, one voice. Parallel writing would produce as many dialects as there are agents, which is the problem the documentation rules exist to prevent.
 
@@ -128,7 +175,8 @@ Order the work so the docs come first: write the `contributing/` sections the `o
 
 Do not resolve these alone, collect them and report them back to Nils:
 
-- A block that looks `wrong` in a way that suggests the code is at fault rather than the comment. Phase 2 found one of these, and it turned into five methods that broke a promise `docs/error-handling.md` makes.
+- A block that looks `wrong` in a way that suggests the code is at fault rather than the comment. Phase 2 found one of these, and it turned into five methods that broke a promise `docs/error-handling.md` makes. Phase 3 found 32 more.
+- Anything in the `safety` bucket. Those do not wait for the review to finish, the four found so far are already fixed.
 - A new `contributing/` doc the `overflows` findings want. Naming it is phase 3's job, writing it is not.
 - A rule that fires on something that is actually fine. The rules bend to good writing, not the other way round, but that call is not the fan-out's to make.
 - Any file skipped, with the reason.

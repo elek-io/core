@@ -8,6 +8,7 @@ import type {
   Entry,
   Project,
 } from '../index.node.js';
+import Os from 'node:os';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   createProject,
@@ -17,6 +18,8 @@ import {
   createEntry,
 } from '../test/util.js';
 import core, { testApiPort } from '../test/setup.js';
+
+const externalAddress = externalIpv4();
 
 const app = createTestApi(
   router,
@@ -70,6 +73,31 @@ describe('API', function () {
     expect(isRunningBefore).toEqual(false);
     expect(isRunningAfter).toEqual(true);
   });
+
+  it('answers on loopback', async function () {
+    const response = await fetch(
+      `http://127.0.0.1:${testApiPort}/content/v1/projects/count`
+    );
+
+    expect(response.status).toEqual(200);
+  });
+
+  it.skipIf(externalAddress === null)(
+    'does not answer on any other address of this machine',
+    async function () {
+      // Without a hostname node listens on every interface, so a read API
+      // over every local Project is on the network while the log line and
+      // docs/local-api.md both say localhost
+      await expect(
+        fetch(
+          `http://${externalAddress}:${testApiPort}/content/v1/projects/count`,
+          {
+            signal: AbortSignal.timeout(5000),
+          }
+        )
+      ).rejects.toThrow();
+    }
+  );
 
   // Projects
 
@@ -386,3 +414,18 @@ describe('API', function () {
     expect(isRunningAfter).toEqual(false);
   });
 });
+
+/**
+ * An IPv4 address of this machine that is not loopback, or null when it
+ * has none, which is what a sandboxed runner looks like.
+ */
+function externalIpv4(): string | null {
+  for (const addresses of Object.values(Os.networkInterfaces())) {
+    for (const address of addresses ?? []) {
+      if (address.family === 'IPv4' && address.internal === false) {
+        return address.address;
+      }
+    }
+  }
+  return null;
+}

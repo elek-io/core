@@ -73,6 +73,22 @@ The rule at a throw site is that **the message may not repeat the caller's own s
 
 Zod is the exception, because an issue message is authored by whichever refinement raised it and a slug field answers with the canonical form of the Value it rejected. Those cannot be checked one at a time, so a Zod failure is logged as its shape, the path and code of each issue and nothing either said. The thrown error keeps the full message.
 
+### Text Core did not author goes on the cause
+
+Two things a `CoreError` is built from are written by something other than Core, and neither can be checked at the throw site.
+
+- **What git printed.** git echoes the offending argument back, so a failed `commit --author=` puts the User's name and email on its own stderr. **git's output is localized**, so the same failure reads `fatal: --author '...' is not ...` on one machine and `Schwerwiegend: --author '...' ist nicht ...` on another.
+- **What `JSON.parse` quoted.** V8 puts a window of about sixteen characters of the input into its own message, and for an entity file that window is authored content.
+
+Both go on the error's `cause`, which is thrown and never logged. The message keeps what a reader can act on and Core can vouch for: the redacted command and the exit code, or the path of the file that would not parse.
+
+Two alternatives were rejected:
+
+- **Redacting the text.** Any pattern that matches git's English phrasing is already wrong on a German or Japanese machine, and the same holds for a V8 message under a different engine. A redaction that has to be right every time is not the mechanism, per [enforcing at the call site](#enforced-at-the-call-site-not-at-the-sink).
+- **Stripping it at the boundary, the way a Zod failure is stripped.** `boundaryMessage` guards `logBoundaryError` and nothing else. Eleven `warn` and `error` calls interpolate a raw `error.message`, so a message that is only safe at one sink is not safe.
+
+The cost is that git's own words no longer reach a caller through `error.message`. `error.cause` carries them, and the local API already serves `err.cause.stack`, so the diagnostic is still there for whoever debugs it.
+
 ### The API logs a route, never a URL
 
 A request URL is not Core's to write down. Its path carries whatever the caller put in a `{collectionIdOrSlug}` segment, and its query string carries anything at all, since nothing strips a parameter a route did not declare. A local API is reachable by any process on the machine, so neither is bounded by what Core itself would log.
@@ -304,7 +320,13 @@ Plant a string nothing else in the suite produces, exercise the path, and assert
 - [`ProjectService.upgradeLogging.test.ts`](../src/service/ProjectService.upgradeLogging.test.ts) does it for authored Entry content.
 - [`GitService.redaction.test.ts`](../src/service/GitService.redaction.test.ts) does it for the git signature.
 
-[`logSweep.test.ts`](../src/service/logSweep.test.ts) is the broad one: it runs create, update, delete, release, upgrade and synchronize with a sentinel in every place a User types something, then checks the log files for all of them at once. It carries the attribute vocabulary check too, since both questions are about what ended up in the file and both want the same expensive setup.
+[`logSweep.test.ts`](../src/service/logSweep.test.ts) is the broad one. It runs create, update, delete, release, upgrade and synchronize with a sentinel in every place a User types one, the git identity included, then checks the log files for all of them at once. The attribute vocabulary check rides along, since both questions want the same setup.
+
+**It drives the failure paths, not only the service calls.** A success path says nothing about the eleven `warn` and `error` calls that interpolate a raw `error.message` past `boundaryMessage`. That is how a fix on the Zod path left the git one open. So the sweep also runs, each with a sentinel in what it is handed:
+
+- a git command that fails, failed by a `pre-commit` hook, which works on every platform and prints text of its own the way git echoes an argument back
+- a file that will not parse
+- a schema that rejects
 
 The other half is what a log file has to contain rather than what it must not:
 

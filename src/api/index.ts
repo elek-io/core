@@ -15,6 +15,9 @@ import routes from './routes/index.js';
 import type { ApiEnv } from './lib/types.js';
 import { Scalar } from '@scalar/hono-api-reference';
 
+// The only address the local API binds, see docs/local-api.md
+const LOOPBACK = '127.0.0.1';
+
 export class LocalApi {
   private logService: LogService;
   private projectService: ProjectService;
@@ -115,18 +118,26 @@ export class LocalApi {
   }
 
   /**
-   * Starts the local API on given port
+   * Starts the local API on given port, bound to loopback.
+   *
+   * The bind address is not an option. Without a `hostname`
+   * `@hono/node-server` hands `undefined` to `server.listen` and the API
+   * answers on every interface, which puts a read API over every local
+   * Project on the network.
+   *
+   * @see ../../docs/local-api.md
    */
   public start(port: number) {
     this.server = serve(
       {
         fetch: this.api.fetch,
         port,
+        hostname: LOOPBACK,
       },
       (info) => {
         this.logService.info({
           source: 'core',
-          message: `Started local API on http://localhost:${info.port}`,
+          message: `Started local API on http://${info.address}:${info.port}`,
         });
       }
     );

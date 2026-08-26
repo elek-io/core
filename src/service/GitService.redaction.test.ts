@@ -1,8 +1,9 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
-import { describe, expect, it } from 'vitest';
-import core, { testUserProps } from '../test/setup.js';
+import { assert, describe, expect, it } from 'vitest';
+import core, { testUserProps, uuid } from '../test/setup.js';
 import { createProject } from '../test/util.js';
+import { CoreError } from '../util/shared.js';
 import { redactGitArgs } from './GitService.js';
 
 /**
@@ -76,7 +77,72 @@ describe('git identity never reaches a log file', function () {
     expect(written).not.toContain(testUserProps.email);
     await project.destroy();
   });
+
+  it('does not write it when the command fails either', async function () {
+    const project = await createProject();
+    const path = core.util.pathTo.project(project.id);
+    await rejectNextCommit(path, 'nothing a log file may hold');
+
+    await expect(
+      core.git.commit(path, {
+        method: 'create',
+        reference: { objectType: 'entry', id: uuid() },
+      })
+    ).rejects.toThrow(CoreError);
+
+    const written = await readLogs();
+    expect(written).not.toContain(testUserProps.name);
+    expect(written).not.toContain(testUserProps.email);
+    await project.destroy();
+  });
 });
+
+describe('a failed git command', function () {
+  it('says what failed without repeating the command line or git', async function () {
+    const project = await createProject();
+    const path = core.util.pathTo.project(project.id);
+    // git echoes the offending argument back and its output is localized,
+    // so nothing built from it can be redacted by pattern. The hook stands
+    // in for that output. See contributing/logging.md
+    await rejectNextCommit(path, `refusing ${testUserProps.name}`);
+
+    const error: unknown = await core.git
+      .commit(path, {
+        method: 'create',
+        reference: { objectType: 'entry', id: uuid() },
+      })
+      .catch((reason: unknown) => reason);
+
+    assert(error instanceof CoreError);
+    expect(error.message).not.toContain(testUserProps.name);
+    expect(error.message).not.toContain(testUserProps.email);
+    // The exit code and the redacted command are what is left, and they
+    // are enough to find the command in the log line above the failure
+    expect(error.message).toContain('--author=[redacted]');
+    expect(error.message).toContain('exit code');
+
+    // git's own words are thrown but never logged, so whoever made the
+    // call still has them
+    assert(error.cause instanceof Error);
+    expect(error.cause.message).toContain(testUserProps.name);
+    await project.destroy();
+  });
+});
+
+/**
+ * Makes the next commit in the repository fail, with the given text on
+ * git's stderr, which is where an identity git echoed back would sit.
+ */
+async function rejectNextCommit(
+  projectPath: string,
+  stderr: string
+): Promise<void> {
+  const hook = Path.join(projectPath, '.git', 'hooks', 'pre-commit');
+  await Fs.writeFile(hook, `#!/bin/sh\necho "${stderr}" >&2\nexit 1\n`, {
+    encoding: 'utf8',
+  });
+  await Fs.chmod(hook, 0o755);
+}
 
 async function readLogs(): Promise<string> {
   const dir = core.util.pathTo.logs;

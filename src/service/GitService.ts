@@ -170,6 +170,17 @@ function redactedCommand(args: readonly string[]): string {
 }
 
 /**
+ * What git said, as the cause of the error rather than part of its
+ * message. A message is read by whoever made the call and by whoever the
+ * log file is handed to, and this text is only safe for the first.
+ *
+ * @see ../../contributing/logging.md
+ */
+function gitOutputCause(stderr: string, stdout: string): Error {
+  return new Error(`${stderr}\n${stdout}`.trim());
+}
+
+/**
  * Commands that only ask the repository something. Everything else
  * changes it, a remote or the installation's configuration.
  */
@@ -870,9 +881,8 @@ export class GitService {
     }
 
     throw CoreError.internal(
-      `Git rebase onto "${onto}" failed with exit code "${
-        result.exitCode
-      }" and message "${`${result.stderr}\n${result.stdout}`.trim()}"`
+      `Git rebase onto "${onto}" failed with exit code "${result.exitCode}"`,
+      gitOutputCause(result.stderr, result.stdout)
     );
   }
 
@@ -1068,7 +1078,8 @@ export class GitService {
         );
       }
       throw CoreError.internal(
-        `Git push to origin failed with exit code "${result.exitCode}" and message "${message}"`
+        `Git push to origin failed with exit code "${result.exitCode}"`,
+        gitOutputCause(result.stderr, result.stdout)
       );
     }
   }
@@ -1516,14 +1527,11 @@ export class GitService {
         throw authError;
       }
       throw CoreError.internal(
-        `Git ${this.version} (${this.gitPath}) command "git ${args.join(
-          ' '
-        )}" executed for "${path}" failed with exit code "${
-          result.gitResult.exitCode
-        }" and message "${
-          result.gitResult.stderr.toString().trim() ||
-          result.gitResult.stdout.toString().trim()
-        }"`
+        `Git ${this.version} (${this.gitPath}) command "${command}" executed for "${path}" failed with exit code "${result.gitResult.exitCode}"`,
+        gitOutputCause(
+          result.gitResult.stderr.toString(),
+          result.gitResult.stdout.toString()
+        )
       );
     }
 

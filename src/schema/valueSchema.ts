@@ -273,20 +273,50 @@ export const mdAstDeleteSchema: z.ZodType<MdAstDelete> = z.object({
 });
 
 /**
- * External link URL. Internal entries use `entryReference` instead — the
- * `link` node is for external destinations only. Accepts:
- *  - `http`/`https` absolute URLs
- *  - `mailto:` and `tel:` for contact links
- *  - site-relative (`/path`), sibling/parent-relative (`./`, `../`), and
- *    fragment-only (`#section`) URLs
+ * The origin a relative link has to keep. Reserved by RFC 2606, so it
+ * resolves to nothing and can only ever be the yardstick it is here.
+ */
+const RELATIVE_LINK_BASE = new URL('https://elek-io.invalid/');
+
+/**
+ * True when a relative link stays on the site it is relative to.
  *
- * Rejects exotic schemes (`javascript:`, `data:`, `file:`, `vbscript:`) and
- * protocol-relative URLs (`//host`, which inherit the page's scheme and
- * make a malicious target indistinguishable from a benign one).
+ * `new URL()` is what a renderer resolves the value with, so it is the
+ * oracle rather than a pattern: a backslash, a tab, a line feed and a
+ * carriage return each read as a separator there, and `/\evil.com` leaves
+ * the origin while looking site-relative. Matching those one at a time is
+ * what let it through, and the next separator would go the same way.
+ */
+function keepsItsOrigin(url: string): boolean {
+  try {
+    return (
+      new URL(url, RELATIVE_LINK_BASE).origin === RELATIVE_LINK_BASE.origin
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * External link URL. Internal entries use `entryReference` instead, the
+ * `link` node is for external destinations only. Accepts `http`, `https`,
+ * `mailto` and `tel` absolute URLs, site-relative (`/path`), sibling and
+ * parent-relative (`./`, `../`) and fragment-only (`#section`) forms.
+ *
+ * Rejects exotic schemes (`javascript:`, `data:`, `file:`, `vbscript:`),
+ * protocol-relative URLs (`//host`) and any relative form that resolves
+ * off the origin it is relative to.
+ *
+ * @see ../../docs/markdown-content.md
  */
 export const mdAstLinkUrlSchema = z.union([
   z.url({ protocol: /^(https?|mailto|tel)$/ }),
-  z.string().regex(/^\/(?!\/)|^\.\.?\/|^#/),
+  z
+    .string()
+    .regex(/^\/(?!\/)|^\.\.?\/|^#/)
+    .refine(keepsItsOrigin, {
+      message: 'Relative link URL resolves to another origin',
+    }),
 ]);
 
 export const mdAstLinkSchema: z.ZodType<MdAstLink> = z.object({
