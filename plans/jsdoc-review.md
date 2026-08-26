@@ -4,22 +4,23 @@ Review every JSDoc block in Core against the documentation rules: is one there, 
 
 Read [`../contributing/documentation.md`](../contributing/documentation.md) first, in particular the JSDoc section. Everything here assumes it.
 
-The pass runs in four phases. Phases 1 and 2 are one session and are described in full below. Phases 3 and 4 are sketched, and get their own briefs once phase 2 has produced the exemplar they depend on.
+The pass runs in four phases, one session each. Phases 1 to 3 are done, their sections are kept because phase 4 reads the exemplar and the rule they produced. Phase 4 is the next session, and it writes from [`jsdoc-findings.md`](./jsdoc-findings.md).
 
 ## Where the work sits
 
-Rough greps, not exact counts. Re-measure rather than trusting these:
+Measured after phase 1. Re-measure rather than trusting these:
 
-| Measure                               | Count |
-| ------------------------------------- | ----- |
-| Non-test source files                 | 91    |
-| Public methods and exported functions | 229   |
-| Of those, preceded by a JSDoc block   | 177   |
-| So, apparently undocumented           | 52    |
+| Measure                                       | Count |
+| --------------------------------------------- | ----- |
+| Non-test source files                         | 92    |
+| JSDoc blocks in them                          | 613   |
+| Symbols the coverage rule wants a block on    | 271   |
+| Of those, still missing one                   | 57    |
+| Files holding those, exempted in the baseline | 24    |
 
-Four of these rules already run in `pnpm test` and `pnpm lint`, so do not review what they cover: block length, the allowed tag set, `@see` targets resolving, and `@todo` carrying an issue URL.
+Six rules already run in `pnpm test` and `pnpm lint`, so never report what they cover: a missing block, a stale `Class.member` reference, block length, the allowed tag set, `@see` targets resolving, and `@todo` carrying an issue URL.
 
-## Phase 1, make coverage a rule
+## Phase 1, make coverage a rule (done)
 
 Coverage is mechanical, so it belongs in a check rather than in a review. Add a `jsdoc/documented-export` rule to [`../src/test/documentation.ts`](../src/test/documentation.ts), alongside the existing `jsdoc/*` rules, and give it a baseline the way every other rule has one.
 
@@ -44,7 +45,7 @@ Whether an exported type, interface or zod schema needs a block is a genuine que
 
 Done when the rule exists, its baseline is generated and committed, `pnpm test` and `pnpm lint` pass, and the baseline is the work list phases 3 and 4 will burn down.
 
-## Phase 2, calibrate on four files
+## Phase 2, calibrate on four files (done)
 
 Do not fan out over 91 files until a good finding and a good JSDoc block have a worked example. Review these four by hand, one from each kind of file in the repository:
 
@@ -73,21 +74,64 @@ Then write the exemplar. Pick two or three symbols across the four files, one of
 
 Do not rewrite JSDoc anywhere else. Phase 2 produces findings and an exemplar, not edits.
 
-## Phase 3, analysis across the repository, later
+## Phase 3, analysis across the repository (done)
 
-Fan out per file, findings only, using the shape and exemplar from phase 2. No agent writes JSDoc. Synthesize the `overflows` findings centrally, because the useful output is "these six files all need something about X, so write one doc", which no single file can see.
+Review all 92 non-test source files and produce one findings list. **No agent writes or edits JSDoc in this phase.** Phase 4 does the writing, serially, so the repository ends up with one voice rather than one per agent.
+
+92 files is more than one context reads carefully, so fan out. One agent per file for the services and schemas, one per small directory for the rest, is a reasonable split. Whatever you choose, every file is covered, and a file deliberately skipped is named in the output with the reason.
+
+### What every agent needs
+
+Give each agent the JSDoc section of [`../contributing/documentation.md`](../contributing/documentation.md) and the Exemplar section below. The exemplar is the calibration, a finding's "what to do" should describe a block of that shape.
+
+### What counts as a finding
+
+Four kinds, and something fitting none of them is not a finding:
+
+- `missing`, no block on a symbol the coverage rule requires one for. Do not hunt for these, the rule already knows them. What phase 3 adds is the "what to do", meaning what the block should say.
+- `restates`, the block says only what the signature already says.
+- `wrong`, the block contradicts what the code does.
+- `stale`, the block describes behavior that has since changed. Symbol references are excluded, `jsdoc/symbol-reference` covers those.
+- `overflows`, the explanation does not fit a block, and either no `contributing/` or `docs/` file covers it or the one that should does not say it yet.
+
+The bar is that a reader is misled, or is missing something they need. "Could be phrased better" is not a finding. Length is not a finding either: a one line block that names the one thing a signature hides is finished, and the exemplar's `isNotEmpty` is exactly that.
+
+### Getting the missing list
+
+The 57 symbols are exempted by file in `src/documentation-baseline.json`, so the suite stays green and will not print them. Read them out of the rule directly rather than by hand, for example by running `jsdoc/documented-export` from [`../src/test/documentation.ts`](../src/test/documentation.ts) with the baseline ignored.
+
+### Output
+
+Write the findings to `plans/jsdoc-findings.md` and list it in [`index.md`](./index.md). One row per finding:
+
+```text
+file:line  symbol  kind  what to do
+```
+
+Group by file, ordered as the repository is. The brevity rules do not apply to a plan, so a long table is fine.
+
+### Then synthesize
+
+Concatenating 92 reports is not the deliverable. The `overflows` findings are the ones that only make sense together, because the useful output is "these six files all need something about X, so write one doc", which no single file can see. Close the findings file with a section that:
+
+1. Groups every `overflows` finding by the doc it wants, naming which are new `contributing/` docs and which are missing sections in a doc that exists.
+2. Counts the findings per kind, so phase 4 can be sized.
+3. Names any pattern that recurs across files, the way `ReferenceService` methods attributed to `EntryService` did across six sites.
 
 ## Phase 4, writing, later
 
 One session, serial, one voice. Parallel writing would produce as many dialects as there are agents, which is the problem the documentation rules exist to prevent.
 
+Order the work so the docs come first: write the `contributing/` sections the `overflows` findings ask for, then the blocks that `@see` them. Burn the coverage baseline down to nothing as you go, and delete `plans/jsdoc-findings.md` and this plan when it is empty.
+
 ## What to escalate
 
 Do not resolve these alone, collect them and report them back to Nils:
 
-- Any definition of `jsdoc/documented-export` that is either noisy or trivially small, with the counts that show it.
-- A JSDoc block that looks `wrong` in a way that suggests the code is the thing at fault.
-- A new `contributing/` doc that phase 2 thinks is needed, before writing it.
+- A block that looks `wrong` in a way that suggests the code is at fault rather than the comment. Phase 2 found one of these, and it turned into five methods that broke a promise `docs/error-handling.md` makes.
+- A new `contributing/` doc the `overflows` findings want. Naming it is phase 3's job, writing it is not.
+- A rule that fires on something that is actually fine. The rules bend to good writing, not the other way round, but that call is not the fan-out's to make.
+- Any file skipped, with the reason.
 
 ## Exemplar
 
