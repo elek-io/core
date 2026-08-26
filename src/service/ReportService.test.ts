@@ -78,7 +78,7 @@ interface FakeCloud {
  * A real HTTP server standing in for elek.io Cloud.
  *
  * Core's suite has no HTTP mocking and does not need one, since hono and
- * @hono/node-server are already dependencies. Port 0 rather than the
+ * `@hono/node-server` are already dependencies. Port 0 rather than the
  * per-worker port the local API uses, so test files running in parallel
  * cannot contend at all, and 127.0.0.1 explicitly because the default
  * binds `::`.

@@ -283,7 +283,7 @@ describe('Node.js', function () {
     { timeout: 30000 },
     async function () {
       /**
-       * @todo:
+       * @todo
        * - Should the description be optional? -> Yes
        * - Should the description be an object with language keys? -> Yes
        */
@@ -1473,7 +1473,7 @@ describe('Node.js', function () {
       });
 
       /**
-       * @todo:
+       * @todo
        * - Should allow for sections of field definitions to visually group them.
        */
       const productsCollection = await core.collections.create({
@@ -2048,7 +2048,7 @@ describe('Node.js', function () {
       });
 
       /**
-       * @todo:
+       * @todo
        * - Conditional fields based on other field values e.g. if "External Link" is true, the "Target page" field is not visible and the "URL" field is shown.
        */
       const navigationItemComponent = await core.components.create({
@@ -2149,7 +2149,7 @@ describe('Node.js', function () {
       });
 
       /**
-       * @todo:
+       * @todo
        * - Should the user define field definition IDs or should they be generated?
        * - Should the description be optional? -> Yes
        * - Field definitions need a valueType of "reference" with the fieldType of "slug" and ofField referencing a field definition ID of the same collection to be able to generate slugs based on another field.

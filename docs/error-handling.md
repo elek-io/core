@@ -6,17 +6,17 @@ All services throw `CoreError` on failure. `CoreError` extends `Error` with `typ
 
 A class extending `Error` with 8 typed variants (`src/util/shared.ts`):
 
-| Type                 | Status Code | Used For                                                                                              |
-| -------------------- | ----------- | ----------------------------------------------------------------------------------------------------- |
-| `NotFound`           | 404         | Entity doesn't exist                                                                                  |
-| `BadRequest`         | 400         | Invalid input, bad UUID, unsupported file type                                                        |
-| `Unauthorized`       | 401         | No user configured                                                                                    |
-| `Conflict`           | 409         | Sync failed, uncommitted changes, slug clash                                                          |
-| `PreconditionFailed` | 412         | Remote origin missing (setup required), mutation attempted in read-only mode or on a provisioned copy |
-| `UpgradeFailed`      | 422         | Project version upgrade failed                                                                        |
-| `VersionSkew`        | 422         | Content written by a newer Core than installed                                                        |
-| `RateLimited`        | 429         | elek.io Cloud refused because too much was sent from here recently                                    |
-| `Internal`           | 500         | Git errors, FS errors, unexpected failures                                                            |
+| Type | Status Code | Used For |
+| --- | --- | --- |
+| `NotFound` | 404 | Entity doesn't exist |
+| `BadRequest` | 400 | Invalid input, bad UUID, unsupported file type |
+| `Unauthorized` | 401 | No user configured |
+| `Conflict` | 409 | Sync failed, uncommitted changes, slug clash |
+| `PreconditionFailed` | 412 | Remote origin missing (setup required), mutation attempted in read-only mode or on a provisioned copy |
+| `UpgradeFailed` | 422 | Project version upgrade failed |
+| `VersionSkew` | 422 | Content written by a newer Core than installed |
+| `RateLimited` | 429 | elek.io Cloud refused because too much was sent from here recently |
+| `Internal` | 500 | Git errors, FS errors, unexpected failures |
 
 Static factory methods:
 
@@ -69,7 +69,7 @@ const { list: assets, total } = await core.assets.list({
 });
 ```
 
-## See Also
+## See also
 
 - [`usage.md`](./usage.md) - catching `CoreError` in application code
 - [`git-and-sync.md`](./git-and-sync.md) - the errors git operations and synchronizing raise

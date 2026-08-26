@@ -74,15 +74,15 @@ A log file is one JSON object per line, following the [OpenTelemetry Logs Data M
 }
 ```
 
-| Key              | OpenTelemetry                     | Note                                                                                                  |
-| ---------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `timestamp`      | `Timestamp`                       | ISO 8601 UTC                                                                                          |
-| `level`          | `SeverityText`                    | winston's own field name                                                                              |
-| `severityNumber` | `SeverityNumber`                  | see the level table below, 0 for a level Core does not know                                           |
-| `message`        | `Body`                            | winston's own field name                                                                              |
-| `resource`       | `Resource`                        | what emitted the record                                                                               |
-| `attributes`     | `Attributes`                      | flat dotted keys, omitted when there are none                                                         |
-| absent           | `TraceId`, `SpanId`, `TraceFlags` | reserved in [`logSchema.ts`](../src/schema/logSchema.ts), unset until an OpenTelemetry SDK fills them |
+| Key | OpenTelemetry | Note |
+| --- | --- | --- |
+| `timestamp` | `Timestamp` | ISO 8601 UTC |
+| `level` | `SeverityText` | winston's own field name |
+| `severityNumber` | `SeverityNumber` | see the level table below, 0 for a level Core does not know |
+| `message` | `Body` | winston's own field name |
+| `resource` | `Resource` | what emitted the record |
+| `attributes` | `Attributes` | flat dotted keys, omitted when there are none |
+| absent | `TraceId`, `SpanId`, `TraceFlags` | reserved in [`logSchema.ts`](../src/schema/logSchema.ts), unset until an OpenTelemetry SDK fills them |
 
 **`level` and `message` keep their winston names, everything Core owns takes the OpenTelemetry one.** Those two are what a winston to OTel bridge maps to `SeverityText` and `Body` already, so renaming them would be work with no reader. `source` and `meta` were Core's own inventions, so they became `resource['service.name']` and `attributes`.
 
@@ -100,12 +100,12 @@ The reason is not only convention. `meta: { previous: <whole EntryFile> }` is le
 
 The names that carry weight:
 
-| Attribute                                                                                    | What it replaced                                                                 |
-| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `error.type`, `code.function.name`                                                           | the `[BadRequest] (Asset.create)` prefix `AbstractService` packed into a message |
-| `exception.type`, `exception.message`, `exception.stacktrace`                                | winston's own uncaught exception fields                                          |
-| `elek.project.id`, `elek.collection.id`, `elek.object.type`, `elek.object.id`, `elek.method` | ids that were only readable by parsing a message string                          |
-| `file.path`, `file.name`, `file.directory`                                                   | the same, for the file a line is about                                           |
+| Attribute | What it replaced |
+| --- | --- |
+| `error.type`, `code.function.name` | the `[BadRequest] (Asset.create)` prefix `AbstractService` packed into a message |
+| `exception.type`, `exception.message`, `exception.stacktrace` | winston's own uncaught exception fields |
+| `elek.project.id`, `elek.collection.id`, `elek.object.type`, `elek.object.id`, `elek.method` | ids that were only readable by parsing a message string |
+| `file.path`, `file.name`, `file.directory` | the same, for the file a line is about |
 
 The commit line carries the same ids the commit itself carries as trailers (`Method`, `Object-Type`, `Object-Id`, `Collection-Id`), so a log line and the commit it produced join without either being parsed.
 
@@ -129,12 +129,12 @@ That matters most for the records Core did not author. winston's uncaught except
 
 Taken from the [OpenTelemetry log data model](https://opentelemetry.io/docs/specs/otel/logs/data-model/), so the rule is objective rather than a matter of taste.
 
-| Level   | OpenTelemetry                                                           | `SeverityNumber` | In Core                                                                       |
-| ------- | ----------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------- |
-| `debug` | "A debugging event"                                                     | 5                | How something happened. Reads, cache decisions, internal steps                |
-| `info`  | "An informational event. Indicates that an event happened"              | 9                | **What happened.** Every mutation of a file, a Project or a remote            |
-| `warn`  | "Not an error but is likely more important than an informational event" | 13               | Something anomalous that Core recovered from                                  |
-| `error` | "Something went wrong"                                                  | 17               | A `CoreError` at a service boundary, or a failure Core could not recover from |
+| Level | OpenTelemetry | `SeverityNumber` | In Core |
+| --- | --- | --- | --- |
+| `debug` | "A debugging event" | 5 | How something happened. Reads, cache decisions, internal steps |
+| `info` | "An informational event. Indicates that an event happened" | 9 | **What happened.** Every mutation of a file, a Project or a remote |
+| `warn` | "Not an error but is likely more important than an informational event" | 13 | Something anomalous that Core recovered from |
+| `error` | "Something went wrong" | 17 | A `CoreError` at a service boundary, or a failure Core could not recover from |
 
 **`info` is the load bearing line.** A packaged elek.io Desktop runs Core at `info`, so `info` is the whole of what a real User's machine records. The test for a call site is one question: _if this line is missing, can someone reconstruct what the User did?_
 
@@ -174,12 +174,12 @@ The window comes back in order, oldest record first, because [replay is the poin
 
 Core's own records are already safe, since [that is decided where they are written](#enforced-at-the-call-site-not-at-the-sink). What the sink adds is the short list of things a call site never saw:
 
-| What                                       | Why it is here rather than at the write site                                            |
-| ------------------------------------------ | --------------------------------------------------------------------------------------- |
+| What | Why it is here rather than at the write site |
+| --- | --- |
 | The home directory prefix, replaced by `~` | The absolute path is allowed in a file on the reader's own machine, not in a copy of it |
-| Key names on Sentry's default denylist     | The `meta` a host hands `core.logger` arrives over IPC with a shape Core cannot type    |
-| A git signature on a command line          | The backstop under [`redactGitArgs`](#redacting-a-command-line)                         |
-| A credential in a URL, an address anywhere | Uncaught exception text is the one record Core did not author at all                    |
+| Key names on Sentry's default denylist | The `meta` a host hands `core.logger` arrives over IPC with a shape Core cannot type |
+| A git signature on a command line | The backstop under [`redactGitArgs`](#redacting-a-command-line) |
+| A credential in a URL, an address anywhere | Uncaught exception text is the one record Core did not author at all |
 
 The denylist runs over every record rather than only a host's. A Core attribute whose name matches one of these would be a leak rather than a false positive, and `logTail.test.ts` asserts that no name in `logAttributeNames` matches, so it cannot quietly start dropping something Core meant to write.
 

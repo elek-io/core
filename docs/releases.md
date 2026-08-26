@@ -6,11 +6,11 @@ For the branch model these build on, see [`git-and-sync.md`](./git-and-sync.md).
 
 ## The three operations
 
-| Method            | What it does                                                                                                                | Touches production? |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| `prepare()`       | Read-only. Diffs `work` against `production` and returns the computed bump and per-object changes.                          | No                  |
-| `create()`        | Promotes `work` to `production`, bumps the version, tags it, merges back into `work` and pushes to `origin` if set.         | Yes                 |
-| `createPreview()` | Tags a pre-release snapshot on `work` (for example `1.1.0-preview.3`) without promoting, pushes the tag to `origin` if set. | No                  |
+| Method | What it does | Touches production? |
+| --- | --- | --- |
+| `prepare()` | Read-only. Diffs `work` against `production` and returns the computed bump and per-object changes. | No |
+| `create()` | Promotes `work` to `production`, bumps the version, tags it, merges back into `work` and pushes to `origin` if set. | Yes |
+| `createPreview()` | Tags a pre-release snapshot on `work` (for example `1.1.0-preview.3`) without promoting, pushes the tag to `origin` if set. | No |
 
 All three take `{ projectId }`. `prepare()` returns a `ReleaseDiff`. `create()` and `createPreview()` return a `ReleaseResult` (`{ version, diff }`).
 
@@ -36,11 +36,11 @@ const diff = await core.releases.prepare({ projectId: project.id });
 
 Each change is classified as `major`, `minor` or `patch`, and the highest classification across all changes wins. The classification follows the contract a **consumer of the generated client and types** depends on: anything that can break that contract is major, anything that only adds to it is minor, and cosmetic or content-only edits are patch.
 
-| Bump      | Meaning                                   | Examples                                                                                                                                                                                                                                                                        |
-| --------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bump | Meaning | Examples |
+| --- | --- | --- |
 | **major** | Breaks an existing consumer's assumptions | Collection / Component / Entry / Asset deleted. Field deleted. A field's `valueType`, `fieldType` or `slug` changed. `min`/`max` tightened. `isRequired` turned off. `isUnique` turned off. `ofCollections` changed. Default language changed, or a supported language removed. |
-| **minor** | Adds something without breaking           | Collection / Component / Entry / Asset added. Field added. `isRequired` turned on. `isUnique` turned on. A supported language added.                                                                                                                                            |
-| **patch** | Cosmetic or content-only                  | `label`, `description`, `inputWidth`, `isDisabled` or `defaultValue` changed. `min`/`max` loosened. Project `name` / `description` changed. An Asset's binary or metadata changed. An Entry's values modified.                                                                  |
+| **minor** | Adds something without breaking | Collection / Component / Entry / Asset added. Field added. `isRequired` turned on. `isUnique` turned on. A supported language added. |
+| **patch** | Cosmetic or content-only | `label`, `description`, `inputWidth`, `isDisabled` or `defaultValue` changed. `min`/`max` loosened. Project `name` / `description` changed. An Asset's binary or metadata changed. An Entry's values modified. |
 
 If `work` has commits ahead of `production` but the diff finds no classified change, the bump defaults to `patch`. If there are no changes at all, `bump` and `nextVersion` are `null`. The exhaustive list of change types lives in `src/schema/releaseSchema.ts`.
 
@@ -104,7 +104,7 @@ Each `GitTag` carries an `id`, an `author`, a `datetime`, and a discriminated `m
 
 The Project's `version` field follows [Semantic Versioning](https://semver.org/) and is the value a release writes. `production` holds the released version. `work` tracks it after a full release and carries pre-release versions (`-preview.N`) in between.
 
-## See Also
+## See also
 
 - [`git-and-sync.md`](./git-and-sync.md) - the `work` / `production` branch model and tags
 - [`schema-changes.md`](./schema-changes.md) - how the field-definition changes a release reports actually transform content- [`concepts.md`](./concepts.md) - Releases in the overall data model

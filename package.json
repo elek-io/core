@@ -80,6 +80,8 @@
     "commander": "15.0.0",
     "dugite": "3.2.2",
     "jiti": "2.7.0",
+    "jsdom": "^30.0.1",
+    "mermaid": "^11.17.1",
     "oxlint": "1.76.0",
     "oxlint-tsgolint": "7.0.2001",
     "prettier": "3.9.6",

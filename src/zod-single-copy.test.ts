@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
  *
  * This reads the committed pnpm-lock.yaml and fails if more than one zod version
  * resolves. If it fails after a dependency change, run `pnpm dedupe`. astro and
- * @scalar/* depend on zod through caret ranges that resolve up to the newest zod, so a
+ * `@scalar/*` depend on zod through caret ranges that resolve up to the newest zod, so a
  * partial install can leave a second copy alongside the version Core pins.
  */
 const lockfilePath = Path.resolve(

@@ -30,6 +30,13 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Check that no plan reached main
+        run: |
+          if [ -n "$(find plans -type f -name '*.md' 2>/dev/null)" ]; then
+            echo "plans/ has to be empty on main. Delete the plan before merging and fold anything durable into docs/ or contributing/ first, see contributing/documentation.md."
+            find plans -type f -name '*.md'
+            exit 1
+          fi
       - name: Run lint, check types and formatting
         run: pnpm run lint && pnpm run check-types && pnpm run check-format
       - name: Build

@@ -2,10 +2,10 @@
 
 Core can send a report to elek.io Cloud, and it can hand a window of its own log files to whoever asks for one. The two are deliberately separate, because collecting diagnostics and sending them are different things and only one of them needs a network.
 
-| Method                        | What it does                                                                          |
-| ----------------------------- | ------------------------------------------------------------------------------------- |
+| Method | What it does |
+| --- | --- |
 | `core.cloud.reports.create()` | Sends a bug report or feedback to elek.io Cloud and returns the id it was filed under |
-| `core.logger.tail()`          | Returns the last 24 hours of log files as one gzipped blob, sending nothing anywhere  |
+| `core.logger.tail()` | Returns the last 24 hours of log files as one gzipped blob, sending nothing anywhere |
 
 A report attaches a tail when whoever wrote it consented to that. A "save my diagnostics to a file" button uses the same tail and no network at all.
 
@@ -117,13 +117,13 @@ For what Core writes into a log file in the first place, and the level each thin
 
 `create()` throws a `CoreError` like every other service method. See [`error-handling.md`](./error-handling.md).
 
-| Type                 | When                                                                                      |
-| -------------------- | ----------------------------------------------------------------------------------------- |
-| `BadRequest`         | The report failed validation, or elek.io Cloud rejected the body (400, 413)               |
-| `Unauthorized`       | elek.io Cloud refused the credential, or wanted one (401, 403)                            |
-| `RateLimited`        | Too much was sent from here recently (429)                                                |
-| `PreconditionFailed` | elek.io Cloud could not be reached, or did not answer within 15 seconds                   |
-| `Internal`           | elek.io Cloud failed (5xx), or accepted the report and answered with something unreadable |
+| Type | When |
+| --- | --- |
+| `BadRequest` | The report failed validation, or elek.io Cloud rejected the body (400, 413) |
+| `Unauthorized` | elek.io Cloud refused the credential, or wanted one (401, 403) |
+| `RateLimited` | Too much was sent from here recently (429) |
+| `PreconditionFailed` | elek.io Cloud could not be reached, or did not answer within 15 seconds |
+| `Internal` | elek.io Cloud failed (5xx), or accepted the report and answered with something unreadable |
 
 `PreconditionFailed` is the one worth designing a form around, because it is also what a send answers with while there is no network. Keep the text somebody wrote and let them send again.
 
@@ -135,7 +135,7 @@ For what Core writes into a log file in the first place, and the level each thin
 
 **The report itself is never written to a log file.** A failure is logged at the service boundary with the error type, the method and the status code, and never with what somebody wrote.
 
-## See Also
+## See also
 
 - [`usage.md`](./usage.md#log-files) - what Core writes into a log file, and the `cloud.url` option
 - [`error-handling.md`](./error-handling.md) - `CoreError` and how to catch failures

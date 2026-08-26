@@ -8,12 +8,12 @@
 elek export [outDir] [projects] [template] [--watch]
 ```
 
-| Argument   | Default      | Meaning                                                 |
-| ---------- | ------------ | ------------------------------------------------------- |
-| `outDir`   | `./.elek.io` | Where to write the export.                              |
-| `projects` | `all`        | `all`, or a comma-separated list of Project ids.        |
-| `template` | `nested`     | `nested` (one JSON file) or `separate` (a folder tree). |
-| `--watch`  | off          | Re-export automatically when Project content changes.   |
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `outDir` | `./.elek.io` | Where to write the export. |
+| `projects` | `all` | `all`, or a comma-separated list of Project ids. |
+| `template` | `nested` | `nested` (one JSON file) or `separate` (a folder tree). |
+| `--watch` | off | Re-export automatically when Project content changes. |
 
 ## What an export contains
 
@@ -60,7 +60,7 @@ Best when you want browsable files and the binaries alongside them.
 
 `--watch` keeps the export current: it watches the Projects directory (ignoring `.git`) with chokidar and re-runs the same export on any change. Useful as a background step while developing against the exported JSON.
 
-## See Also
+## See also
 
 - [`storage-layout.md`](./storage-layout.md) - the on-disk source the export reads from
 - [`local-api.md`](./local-api.md) - reading content over HTTP instead of exporting

@@ -30,23 +30,23 @@ Every endpoint is a **`GET`**. There are no create, update or delete routes - wr
 
 All content routes are mounted under `/content/v1`. Each resource offers the same three shapes: list, count, and get-one.
 
-| Method | Path                                                                                  | Returns                     |
-| ------ | ------------------------------------------------------------------------------------- | --------------------------- |
-| GET    | `/content/v1/projects`                                                                | `PaginatedList<Project>`    |
-| GET    | `/content/v1/projects/count`                                                          | `number`                    |
-| GET    | `/content/v1/projects/{projectId}`                                                    | `Project`                   |
-| GET    | `/content/v1/projects/{projectId}/collections`                                        | `PaginatedList<Collection>` |
-| GET    | `/content/v1/projects/{projectId}/collections/count`                                  | `number`                    |
-| GET    | `/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}`                   | `Collection`                |
-| GET    | `/content/v1/projects/{projectId}/components`                                         | `PaginatedList<Component>`  |
-| GET    | `/content/v1/projects/{projectId}/components/count`                                   | `number`                    |
-| GET    | `/content/v1/projects/{projectId}/components/{componentIdOrSlug}`                     | `Component`                 |
-| GET    | `/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}/entries`           | `PaginatedList<Entry>`      |
-| GET    | `/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}/entries/count`     | `number`                    |
-| GET    | `/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}/entries/{entryId}` | `Entry`                     |
-| GET    | `/content/v1/projects/{projectId}/assets`                                             | `PaginatedList<Asset>`      |
-| GET    | `/content/v1/projects/{projectId}/assets/count`                                       | `number`                    |
-| GET    | `/content/v1/projects/{projectId}/assets/{assetId}`                                   | `Asset`                     |
+| Method | Path | Returns |
+| --- | --- | --- |
+| GET | `/content/v1/projects` | `PaginatedList<Project>` |
+| GET | `/content/v1/projects/count` | `number` |
+| GET | `/content/v1/projects/{projectId}` | `Project` |
+| GET | `/content/v1/projects/{projectId}/collections` | `PaginatedList<Collection>` |
+| GET | `/content/v1/projects/{projectId}/collections/count` | `number` |
+| GET | `/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}` | `Collection` |
+| GET | `/content/v1/projects/{projectId}/components` | `PaginatedList<Component>` |
+| GET | `/content/v1/projects/{projectId}/components/count` | `number` |
+| GET | `/content/v1/projects/{projectId}/components/{componentIdOrSlug}` | `Component` |
+| GET | `/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}/entries` | `PaginatedList<Entry>` |
+| GET | `/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}/entries/count` | `number` |
+| GET | `/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}/entries/{entryId}` | `Entry` |
+| GET | `/content/v1/projects/{projectId}/assets` | `PaginatedList<Asset>` |
+| GET | `/content/v1/projects/{projectId}/assets/count` | `number` |
+| GET | `/content/v1/projects/{projectId}/assets/{assetId}` | `Asset` |
 
 Collections and Components accept either a UUID or a slug in the path (`{collectionIdOrSlug}` / `{componentIdOrSlug}`). Core resolves the slug to an id.
 
@@ -93,7 +93,7 @@ With the server running:
 
 Both are generated from the same Zod schemas the routes use, so they always match the running version. Requests are logged through Core's logger, and CORS is restricted to `http://localhost`.
 
-## See Also
+## See also
 
 - [`api-clients.md`](./api-clients.md) - a typed client generated over this API
 - [`usage.md`](./usage.md) - starting the API and writing content through the services

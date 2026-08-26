@@ -58,15 +58,15 @@ The resolved options are exposed on `core.options`, and the running Core version
 
 Core reads its environment variables once at construction, never at import. All of them use the `ELEK_IO_` prefix with SCREAMING_SNAKE_CASE names. An empty or whitespace-only value counts as unset. When a constructor option covers the same setting, the option wins over the environment.
 
-| Variable                           | Purpose                                                          | Default               |
-| ---------------------------------- | ---------------------------------------------------------------- | --------------------- |
-| `ELEK_IO_DATA_DIR`                 | The directory Core reads and writes data in                      | `~/elek.io`           |
-| `ELEK_IO_LOG_LEVEL`                | The lowest level Core logs                                       | `info`                |
-| `ELEK_IO_READ_ONLY`                | Set to `true` to put Core into read-only mode                    | unset                 |
-| `ELEK_IO_REMOTE_ACCESS_TOKEN`      | Token for authenticating git operations against a private remote | unset                 |
-| `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN`   | `x-access-token`      |
-| `ELEK_IO_CHANNEL`                  | The channel provisioning follows, overrides configured refs      | unset                 |
-| `ELEK_IO_CLOUD_URL`                | Base URL of the elek.io Cloud API                                | `https://api.elek.io` |
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `ELEK_IO_DATA_DIR` | The directory Core reads and writes data in | `~/elek.io` |
+| `ELEK_IO_LOG_LEVEL` | The lowest level Core logs | `info` |
+| `ELEK_IO_READ_ONLY` | Set to `true` to put Core into read-only mode | unset |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN` | Token for authenticating git operations against a private remote | unset |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN` | `x-access-token` |
+| `ELEK_IO_CHANNEL` | The channel provisioning follows, overrides configured refs | unset |
+| `ELEK_IO_CLOUD_URL` | Base URL of the elek.io Cloud API | `https://api.elek.io` |
 
 `ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git per invocation through an askpass helper. It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches. Prompts are disabled, a missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it. While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before. The token applies to HTTP(S) remotes only, SSH remotes authenticate through the ambient SSH setup like ssh-agent.
 
@@ -98,12 +98,12 @@ Core writes to the console and to daily rotated files under `<dataDir>/logs`, ke
 
 What each level carries is a promise rather than an accident:
 
-| Level   | What lands in it                                                                                                                                 |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `error` | a failure at a service method boundary, and anything Core could not recover from                                                                 |
-| `warn`  | something anomalous Core recovered from, such as a file it skipped                                                                               |
-| `info`  | **what happened**: every file created, updated or deleted, every git command that changed a repository or a remote, and the Project level events |
-| `debug` | **how it happened**: reads, cache hits and misses, and the git commands that only asked something                                                |
+| Level | What lands in it |
+| --- | --- |
+| `error` | a failure at a service method boundary, and anything Core could not recover from |
+| `warn` | something anomalous Core recovered from, such as a file it skipped |
+| `info` | **what happened**: every file created, updated or deleted, every git command that changed a repository or a remote, and the Project level events |
+| `debug` | **how it happened**: reads, cache hits and misses, and the git commands that only asked something |
 
 So `info`, the default, is enough to reconstruct what was done and in what order, and `debug` adds how Core did it. An application that ships Core to end users can run at `info` and still have a diagnostic record.
 
@@ -335,8 +335,7 @@ With the server running, interactive OpenAPI documentation is served at `http://
 The package installs an `elek` binary. Run a command with `--help` to see all arguments and options.
 
 - `elek generate:client [outDir] [language] [format] [target]` - generate a JS/TS API client. `--watch` regenerates on content changes.
-- `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported.
-  Both generators emit TypeScript by default. Passing `js` compiles it, which needs `tsdown` and `typescript` installed as dev dependencies of your project, see [compiling to JavaScript](./api-clients.md#compiling-to-javascript).
+- `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported. Both generators emit TypeScript by default. Passing `js` compiles it, which needs `tsdown` and `typescript` installed as dev dependencies of your project, see [compiling to JavaScript](./api-clients.md#compiling-to-javascript).
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
 - `elek provision --project <id> --url <url>` - provision a copy of a Project from its remote into the data directory, e.g. in CI. `--ref` selects a channel (`production` for the latest Release, `preview` for the latest preview Release, `draft` for the tip of the work branch) or an exact Release version, and is overridden by the `ELEK_IO_CHANNEL` environment variable. Runs read-only, so no User is required. Authentication against private remotes uses `ELEK_IO_REMOTE_ACCESS_TOKEN`. See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
@@ -582,7 +581,7 @@ Every build logs which content state the loaders read, e.g. `Reading Project "We
 
 For rendering `markdown` field Values (including the required `html`, `assetReference` and `entryReference` handlers), see [`markdown-content.md`](./markdown-content.md).
 
-## See Also
+## See also
 
 - [`concepts.md`](./concepts.md) - the data model these examples build on
 - [`fields.md`](./fields.md) - full field type reference

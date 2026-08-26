@@ -67,7 +67,7 @@ Core derives the `mimeType` and `extension` from the file using the `mime` packa
 
 `asset` reference fields and `markdown` fields both accept an `ofAssetMimeTypes` allowlist. At Entry write time, Core reads the referenced Asset's `mimeType` and rejects the reference if it is not in the allowlist (an empty allowlist means "any type"). This is enforced in the Entry validation layer, so a field restricted to `['image/jpeg', 'image/png']` cannot reference a PDF.
 
-## See Also
+## See also
 
 - [`fields.md`](./fields.md) - `asset` reference fields and `ofAssetMimeTypes`
 - [`storage-layout.md`](./storage-layout.md) - where Asset files live on disk

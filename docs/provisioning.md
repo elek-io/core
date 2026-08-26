@@ -167,7 +167,7 @@ Because every provision run overwrites the copy, a provisioned copy is read-only
 - **"Could not reach the remote ... building with the copy already in the data directory"**: the fetch failed and the build continued on the cached copy, see [Building offline](#building-offline). The warning names the git failure. The published content did not reach that build, so re-run it once the remote is reachable again.
 - **Project not found, pointing at `elek()`**: the Astro loaders ran without the Project being present. Add the integration, or make sure `ELEK_IO_DATA_DIR` points at the directory that holds it.
 
-## See Also
+## See also
 
 - [`usage.md`](./usage.md) - the programmatic API, the CLI, the Astro integration and all environment variables
 - [`export.md`](./export.md) - exporting provisioned content to plain JSON

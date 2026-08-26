@@ -20,46 +20,46 @@ All tables put **elek.io Core first** so the reader scans rightward to see how e
 
 ### Setup and configuration
 
-| Dimension              | elek.io Core                                                          | Storyblok                                                | Hygraph                         | Sanity                                           | Keystatic                                                     |
-| ---------------------- | --------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------- | ------------------------------------------------ | ------------------------------------------------------------- |
-| **Config surfaces**    | 3-4 (elek.config, content config, env, astro.config for provisioning) | 3-4 (astro.config, content config, env, component files) | 2 (content config, env)         | 3-5 (astro.config, env.d.ts, sanity.config, env) | 2-3 (astro.config, keystatic.config, optional content config) |
-| **Integration needed** | For provisioning in CI                                                | Yes                                                      | No (loader only)                | Yes                                              | Yes                                                           |
-| **Identity repeated**  | No, one declaration referenced by alias                               | Token in astro.config and loader                         | Endpoint in every collection    | projectId in astro.config and sanity.config      | Collection schema in two config languages                     |
-| **Credentials**        | Env only, never in a config file                                      | Token in two files via `loadEnv`                         | Endpoint option, token optional | `loadEnv` into astro.config                      | None locally, GitHub wizard writes `.env`                     |
-| **Content source**     | Local git copy, provisioned from the remote                           | REST API                                                 | GraphQL API                     | GROQ API                                         | Files in the consumer's repo                                  |
+| Dimension | elek.io Core | Storyblok | Hygraph | Sanity | Keystatic |
+| --- | --- | --- | --- | --- | --- |
+| **Config surfaces** | 3-4 (elek.config, content config, env, astro.config for provisioning) | 3-4 (astro.config, content config, env, component files) | 2 (content config, env) | 3-5 (astro.config, env.d.ts, sanity.config, env) | 2-3 (astro.config, keystatic.config, optional content config) |
+| **Integration needed** | For provisioning in CI | Yes | No (loader only) | Yes | Yes |
+| **Identity repeated** | No, one declaration referenced by alias | Token in astro.config and loader | Endpoint in every collection | projectId in astro.config and sanity.config | Collection schema in two config languages |
+| **Credentials** | Env only, never in a config file | Token in two files via `loadEnv` | Endpoint option, token optional | `loadEnv` into astro.config | None locally, GitHub wizard writes `.env` |
+| **Content source** | Local git copy, provisioned from the remote | REST API | GraphQL API | GROQ API | Files in the consumer's repo |
 
 ### Collections and types
 
-| Dimension                  | elek.io Core                                  | Storyblok                     | Hygraph                              | Sanity                   | Keystatic                                     |
-| -------------------------- | --------------------------------------------- | ----------------------------- | ------------------------------------ | ------------------------ | --------------------------------------------- |
-| **Collection granularity** | One per elek.io Collection, derived           | Whole space in one collection | One per model, declared by hand      | No collections           | One per Keystatic collection, declared twice  |
-| **Schema source**          | Loader-supplied, built from field definitions | None                          | Hand-written zod                     | None                     | Hand-written zod copy of the Keystatic schema |
-| **TypeScript types**       | Generated per Collection via `createSchema`   | None (`ISbStoryData` cast)    | zod inference from the manual schema | Separate TypeGen codegen | `Entry<typeof config>` inference (Reader API) |
-| **Derived from CMS model** | Yes, `elekCollections()` enumerates them      | No                            | No                                   | No                       | No                                            |
-| **Store keys**             | Entry UUID, `elekSlugPaths()` routes by slug  | `full_slug`                   | id                                   | Not applicable           | File slug                                     |
+| Dimension | elek.io Core | Storyblok | Hygraph | Sanity | Keystatic |
+| --- | --- | --- | --- | --- | --- |
+| **Collection granularity** | One per elek.io Collection, derived | Whole space in one collection | One per model, declared by hand | No collections | One per Keystatic collection, declared twice |
+| **Schema source** | Loader-supplied, built from field definitions | None | Hand-written zod | None | Hand-written zod copy of the Keystatic schema |
+| **TypeScript types** | Generated per Collection via `createSchema` | None (`ISbStoryData` cast) | zod inference from the manual schema | Separate TypeGen codegen | `Entry<typeof config>` inference (Reader API) |
+| **Derived from CMS model** | Yes, `elekCollections()` enumerates them | No | No | No | No |
+| **Store keys** | Entry UUID, `elekSlugPaths()` routes by slug | `full_slug` | id | Not applicable | File slug |
 
 No other surveyed provider derives collections or schemas from the CMS content model, and none besides Core uses the content layer's ability for a loader to supply the schema itself. Core can occupy that niche because the full content model sits on local disk at load time, while API-based competitors would need an extra introspection round trip.
 
 ### Content state and builds
 
-| Dimension                        | elek.io Core                                 | Storyblok                              | Hygraph               | Sanity                              | Keystatic                              |
-| -------------------------------- | -------------------------------------------- | -------------------------------------- | --------------------- | ----------------------------------- | -------------------------------------- |
-| **Draft vs published**           | Channels (`production`, `preview`, `draft`)  | `version: DEV ? 'draft' : 'published'` | Undocumented          | `useCdn` + read token + perspective | Storage kind, branches as environments |
-| **Deployment-wide switch**       | `ELEK_IO_CHANNEL` env var                    | Manual per option                      | --                    | Manual per option                   | Branch choice                          |
-| **Reproducible pins**            | Exact Release version per Project            | --                                     | --                    | --                                  | Implicit via git commit                |
-| **Fills an empty CI runner**     | Yes, `elek()` provisions before content sync | API fetch at load                      | API fetch at load     | API fetch at request                | Content is already in the repo         |
-| **Incremental sync**             | git fetch increments plus store digests      | Delta fetch via `updated_at_gt` cursor | Content-layer digests | None (no loader)                    | Native (local files)                   |
-| **Offline build with warm copy** | Yes, warns and builds with the copy on disk  | No                                     | No                    | No                                  | Yes                                    |
+| Dimension | elek.io Core | Storyblok | Hygraph | Sanity | Keystatic |
+| --- | --- | --- | --- | --- | --- |
+| **Draft vs published** | Channels (`production`, `preview`, `draft`) | `version: DEV ? 'draft' : 'published'` | Undocumented | `useCdn` + read token + perspective | Storage kind, branches as environments |
+| **Deployment-wide switch** | `ELEK_IO_CHANNEL` env var | Manual per option | -- | Manual per option | Branch choice |
+| **Reproducible pins** | Exact Release version per Project | -- | -- | -- | Implicit via git commit |
+| **Fills an empty CI runner** | Yes, `elek()` provisions before content sync | API fetch at load | API fetch at load | API fetch at request | Content is already in the repo |
+| **Incremental sync** | git fetch increments plus store digests | Delta fetch via `updated_at_gt` cursor | Content-layer digests | None (no loader) | Native (local files) |
+| **Offline build with warm copy** | Yes, warns and builds with the copy on disk | No | No | No | Yes |
 
 ### Assets and rich text
 
-| Dimension                | elek.io Core                                             | Storyblok                                        | Hygraph                                  | Sanity                                  | Keystatic                             |
-| ------------------------ | -------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------- | --------------------------------------- | ------------------------------------- |
-| **Binaries**             | Downloaded locally, images below `src/`, rest in public  | CDN URLs                                         | CDN URLs                                 | CDN URLs plus URL builder               | Stored in the repo                    |
-| **`astro:assets`**       | Yes, images arrive as Astro images                       | --                                               | --                                       | -- (community package)                  | Yes, `image()` helper composes        |
-| **Rich text shape**      | mdast tree with first-class reference nodes              | Storyblok rich text JSON                         | HTML or AST                              | Portable Text JSON                      | Real Markdoc/MDX files                |
-| **Rendering**            | `mdastRender`, typed and exhaustive, 3 required handlers | `renderRichText` to HTML, or components registry | `richText` option into native `render()` | Community `astro-portabletext` mappings | Native Astro pipeline (`<Content />`) |
-| **Renderer type safety** | Compile error on unhandled node types                    | None                                             | None                                     | None                                    | Not applicable                        |
+| Dimension | elek.io Core | Storyblok | Hygraph | Sanity | Keystatic |
+| --- | --- | --- | --- | --- | --- |
+| **Binaries** | Downloaded locally, images below `src/`, rest in public | CDN URLs | CDN URLs | CDN URLs plus URL builder | Stored in the repo |
+| **`astro:assets`** | Yes, images arrive as Astro images | -- | -- | -- (community package) | Yes, `image()` helper composes |
+| **Rich text shape** | mdast tree with first-class reference nodes | Storyblok rich text JSON | HTML or AST | Portable Text JSON | Real Markdoc/MDX files |
+| **Rendering** | `mdastRender`, typed and exhaustive, 3 required handlers | `renderRichText` to HTML, or components registry | `richText` option into native `render()` | Community `astro-portabletext` mappings | Native Astro pipeline (`<Content />`) |
+| **Renderer type safety** | Compile error on unhandled node types | None | None | None | Not applicable |
 
 ## Astro platform constraints
 
@@ -109,7 +109,7 @@ Settled during the Astro DX exploration on branch `astro-dx` and since implement
 - **Shipped.** Provisioning gained graceful offline behavior: when the fetch fails and a usable provisioned copy exists, it warns loudly and builds with the existing copy instead of failing. An exact version pin the copy already holds skips the network entirely. A missing copy, an authentication failure and a pin the copy does not hold stay hard failures, so a dead token or a broken pin cannot hide behind a warning.
 - **Shipped.** Naming: the loaders are named `elekAssetsLoader` and `elekEntriesLoader` alongside the config reshape, following the ecosystem's `Loader` suffix convention and separating them from `elekCollections()`. The integration stays product-named `elek()` and exports use the bare brand, never `elekIo*`. Both rules are recorded in [`../naming.md`](../naming.md).
 
-## See Also
+## See also
 
 - [`fields.md`](./fields.md) - the cross-CMS field type comparison
 - [`../astro-entry.md`](../astro-entry.md) - the design and invariants of Core's own Astro entry

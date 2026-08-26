@@ -102,7 +102,7 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 
 For how these compare to other CMS platforms and where Core leads, see [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md).
 
-## See Also
+## See also
 
 - [`concepts.md`](./concepts.md) - the data model behind these features
 - [`usage.md`](./usage.md) - how to use Core programmatically, via the API, CLI and Astro

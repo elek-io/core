@@ -24,16 +24,14 @@ Each Project declares its supported languages in its settings, along with one of
 
 ## Collections
 
-Contains field definitions (a schema) for possible Values each Entry can or has to have.
-e.g. for a Blog, it could have the following field definition for each post / Entry:
+Contains field definitions (a schema) for possible Values each Entry can or has to have. e.g. for a Blog, it could have the following field definition for each post / Entry:
 
 - an image that is displayed on top of the post (Asset reference)
 - a title to catch users attention (Value)
 - content that contains multiple headlines and paragraphs (Value)
 - an author that wrote the post (Entry reference)
 
-Each definition like the title, contains additional information for the input field, that is used to modify it's Value.
-e.g. the title would be a simple one line input field, that has a maximum length of 150 characters and is required for each post. But the content is a markdown editor to easily add formatting. The image let's the user select a jpeg or png from disk. And the author is a reference to another Collection's Entry, so the user is able to choose one of them.
+Each definition like the title, contains additional information for the input field, that is used to modify it's Value. e.g. the title would be a simple one line input field, that has a maximum length of 150 characters and is required for each post. But the content is a markdown editor to easily add formatting. The image let's the user select a jpeg or png from disk. And the author is a reference to another Collection's Entry, so the user is able to choose one of them.
 
 For the full catalogue of field types and their constraints, see [`fields.md`](./fields.md).
 
@@ -55,14 +53,13 @@ Direct Values (`string` / `number` / `boolean`), `reference` and `mdast` Values 
 
 ## Assets
 
-Are files / blobs like images (png, jpeg etc.), documents (excel sheets etc.), music or a compressed folder.
-Assets have two files inside the Project's repository - the actual file and additionally a file containing meta information like the size.
+Are files / blobs like images (png, jpeg etc.), documents (excel sheets etc.), music or a compressed folder. Assets have two files inside the Project's repository - the actual file and additionally a file containing meta information like the size.
 
 ## Releases
 
 Are tagged snapshots of a Project at a specific point in time, managed through git tags. They allow you to mark stable versions of your content that can be deployed or exported.
 
-## See Also
+## See also
 
 - [`fields.md`](./fields.md) - full field type reference and the Value structure
 - [`schema-changes.md`](./schema-changes.md) - how editing field definitions cascades into existing Entries

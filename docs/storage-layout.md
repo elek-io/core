@@ -8,12 +8,12 @@ For the data model these files represent, see [`concepts.md`](./concepts.md).
 
 Core works under a single data directory, `~/elek.io` by default. The root is configurable with the `dataDir` constructor option or the `ELEK_IO_DATA_DIR` environment variable, see [`usage.md`](./usage.md#options). The `pathTo` helper (`src/util/node.ts`, exposed as `core.util.pathTo`) builds every path from the resolved root. With the default root:
 
-| Path                 | Resolves to                      | Holds                                      |
-| -------------------- | -------------------------------- | ------------------------------------------ |
-| `pathTo.projects`    | `~/elek.io/projects`             | All Projects, one folder each              |
-| `pathTo.project(id)` | `~/elek.io/projects/{projectId}` | A single Project (a git repository)        |
-| `pathTo.userFile`    | `~/elek.io/user.json`            | The current User set via `core.user.set()` |
-| `pathTo.tmp`         | `~/elek.io/tmp`                  | Scratch space (emptied on Core startup)    |
+| Path | Resolves to | Holds |
+| --- | --- | --- |
+| `pathTo.projects` | `~/elek.io/projects` | All Projects, one folder each |
+| `pathTo.project(id)` | `~/elek.io/projects/{projectId}` | A single Project (a git repository) |
+| `pathTo.userFile` | `~/elek.io/user.json` | The current User set via `core.user.set()` |
+| `pathTo.tmp` | `~/elek.io/tmp` | Scratch space (emptied on Core startup) |
 
 The User file is global, not per-Project. There is one `user.json` per data directory.
 
@@ -93,7 +93,7 @@ The result is that a Project is byte identical whichever OS created it. Without 
 
 Binary assets are stored under `lfs/` rather than alongside their metadata, and are tracked with Git LFS. A `.gitattributes` file generated at Project creation tracks `lfs/**`, so each binary is committed as a small pointer while the actual bytes live in the local LFS store (`.git/lfs/objects`). The working-tree file stays the real binary, so reading an Asset returns its content directly. See [`git-and-sync.md`](./git-and-sync.md#git-lfs) for how this works across clone, push and pull.
 
-## See Also
+## See also
 
 - [`concepts.md`](./concepts.md) - what these files represent
 - [`asset-management.md`](./asset-management.md) - the two-file Asset model in detail- [`git-and-sync.md`](./git-and-sync.md) - the git repository each Project lives in

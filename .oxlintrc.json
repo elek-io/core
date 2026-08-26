@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn"],
+  "plugins": ["typescript", "unicorn", "jsdoc"],
   "categories": {
     "correctness": "error",
     "perf": "error"
@@ -90,7 +90,24 @@
     "unicorn/no-array-reverse": "error",
     "unicorn/no-array-sort": "error",
 
+    "jsdoc/check-tag-names": "error",
+    "jsdoc/empty-tags": "error",
+    "jsdoc/no-defaults": "error",
+    "jsdoc/require-param-name": "error",
+    "jsdoc/require-param-description": "error",
+    "jsdoc/require-returns-description": "error",
+    "jsdoc/require-throws-description": "error",
+
     "no-await-in-loop": "off",
+
+    "jsdoc/require-param": "off",
+    "jsdoc/require-returns": "off",
+    "jsdoc/require-property": "off",
+    "jsdoc/require-yields": "off",
+    "jsdoc/require-param-type": "off",
+    "jsdoc/require-returns-type": "off",
+    "jsdoc/require-throws-type": "off",
+    "jsdoc/require-property-type": "off",
 
     "constructor-super": "off",
     "getter-return": "off",

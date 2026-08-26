@@ -34,15 +34,15 @@ Every field definition extends `fieldDefinitionBaseSchema`:
 }
 ```
 
-| Property      | Constraints                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | UUID. Caller-supplied (you pass one, for example via `uuid()`) - Core does not generate it. It is the stable identity used to match field definitions on update, so keep it constant. See [`schema-changes.md`](./schema-changes.md#the-golden-rule-field-definitions-are-matched-by-id).                                                                                                                                                                   |
-| `slug`        | 1–128 chars, lowercase with hyphens, no reserved values. Must be unique within its parent Collection or Component.                                                                                                                                                                                                                                                                                                                                          |
-| `label`       | Translatable. Must contain a non-empty string for every project-supported language at validation time.                                                                                                                                                                                                                                                                                                                                                      |
-| `description` | Translatable or `null`.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `isRequired`  | Forced `true` on `toggle` and `range` (those types always carry a value).                                                                                                                                                                                                                                                                                                                                                                                   |
-| `isUnique`    | Only meaningful on `string` value types; the schema forces `false` on `number`, `boolean`, `reference`, `dynamic`, and `mdast`, and forces `true` on `slug`. Enforced per language within a Collection (see [Uniqueness](#uniqueness)). A unique field may not carry a non-null `defaultValue`, and this is checked on each field type's own schema, so a single field definition is rejected on its own rather than only when the Collection is assembled. |
-| `inputWidth`  | Layout hint for the editor's 12-column grid. `'12'` = full row, `'6'` = half, `'4'` = third, `'3'` = quarter.                                                                                                                                                                                                                                                                                                                                               |
+| Property | Constraints |
+| --- | --- |
+| `id` | UUID. Caller-supplied (you pass one, for example via `uuid()`) - Core does not generate it. It is the stable identity used to match field definitions on update, so keep it constant. See [`schema-changes.md`](./schema-changes.md#the-golden-rule-field-definitions-are-matched-by-id). |
+| `slug` | 1–128 chars, lowercase with hyphens, no reserved values. Must be unique within its parent Collection or Component. |
+| `label` | Translatable. Must contain a non-empty string for every project-supported language at validation time. |
+| `description` | Translatable or `null`. |
+| `isRequired` | Forced `true` on `toggle` and `range` (those types always carry a value). |
+| `isUnique` | Only meaningful on `string` value types; the schema forces `false` on `number`, `boolean`, `reference`, `dynamic`, and `mdast`, and forces `true` on `slug`. Enforced per language within a Collection (see [Uniqueness](#uniqueness)). A unique field may not carry a non-null `defaultValue`, and this is checked on each field type's own schema, so a single field definition is rejected on its own rather than only when the Collection is assembled. |
+| `inputWidth` | Layout hint for the editor's 12-column grid. `'12'` = full row, `'6'` = half, `'4'` = third, `'3'` = quarter. |
 
 ## Field Type Catalogue
 
@@ -455,14 +455,14 @@ Two things to notice:
 
 Direct values (`string` / `number` / `boolean`) and `reference` values store per-language content, while `component` values store an ordered, language-independent array of items whose internal values are themselves translatable.
 
-| Value Type  | `content` Shape                                                                        | Per-language?                                                               |
-| ----------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `string`    | `{ [lang]: string \| null }` (non-empty trimmed strings or null)                       | yes                                                                         |
-| `number`    | `{ [lang]: number \| null }`                                                           | yes                                                                         |
-| `boolean`   | `{ [lang]: boolean }` (never null)                                                     | yes                                                                         |
-| `reference` | `{ [lang]: Array<{ id: UUID, objectType: 'asset' \| 'entry', collectionId?: UUID }> }` | yes                                                                         |
-| `component` | `ComponentItem[]` - `{ id, componentId, values: Record<slug, Value> }`                 | **no** (array shell is flat, nested values translate per their definitions) |
-| `mdast`     | `{ [lang]: MdAstRoot \| null }` (structured tree of typed mdast nodes, `null` = empty) | yes                                                                         |
+| Value Type | `content` Shape | Per-language? |
+| --- | --- | --- |
+| `string` | `{ [lang]: string \| null }` (non-empty trimmed strings or null) | yes |
+| `number` | `{ [lang]: number \| null }` | yes |
+| `boolean` | `{ [lang]: boolean }` (never null) | yes |
+| `reference` | `{ [lang]: Array<{ id: UUID, objectType: 'asset' \| 'entry', collectionId?: UUID }> }` | yes |
+| `component` | `ComponentItem[]` - `{ id, componentId, values: Record<slug, Value> }` | **no** (array shell is flat, nested values translate per their definitions) |
+| `mdast` | `{ [lang]: MdAstRoot \| null }` (structured tree of typed mdast nodes, `null` = empty) | yes |
 
 The full Entry shape and the `Value` union live in `src/schema/valueSchema.ts`.
 
@@ -488,7 +488,7 @@ Two generators consume Project metadata and emit typed API client code:
 
 Both emit the narrow `Record<ProjectLanguage, T>` type for translatable content rather than the broad `Partial<Record<SupportedLanguage, T>>` exposed by Core's static types, and both admit `null` in that type for a field the Collection does not require, which is what an empty language slot holds. See the [README's Exports section](https://github.com/elek-io/core#exports) for the package's entry points.
 
-## See Also
+## See also
 
 - [`markdown-content.md`](./markdown-content.md) - rendering, serialization, and security for `markdown` field values
 - [`schema-changes.md`](./schema-changes.md) - how editing field definitions cascades into existing Entries

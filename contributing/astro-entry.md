@@ -6,13 +6,13 @@ Design notes and invariants behind `@elek-io/core/astro`. The consumer-facing do
 
 [`src/index.astro.ts`](../src/index.astro.ts) is a thin entry: it re-exports and holds the `elek()` integration. Everything else lives in `src/astro/`:
 
-| Module           | Holds                                                      |
-| ---------------- | ---------------------------------------------------------- |
-| `core.ts`        | the shared `ElekIoCore`, `ensureProjectAvailable`, logging |
-| `elekConfig.ts`  | `defineElekConfig`, the config schema, alias resolution    |
-| `loaders.ts`     | `elekAssetsLoader`, `elekEntriesLoader`                    |
-| `collections.ts` | `elekCollections`                                          |
-| `mdastRender.ts` | the Astro binding of the mdast renderer                    |
+| Module | Holds |
+| --- | --- |
+| `core.ts` | the shared `ElekIoCore`, `ensureProjectAvailable`, logging |
+| `elekConfig.ts` | `defineElekConfig`, the config schema, alias resolution |
+| `loaders.ts` | `elekAssetsLoader`, `elekEntriesLoader` |
+| `collections.ts` | `elekCollections` |
+| `mdastRender.ts` | the Astro binding of the mdast renderer |
 
 The split is not cosmetic. `collections.ts` builds its collections from the loaders, so leaving the loaders in the entry would make the entry and `collections.ts` import each other. Keeping `getCore()` in its own module also keeps the "one Core per process" promise honest, a second copy of that module would mean a second Core.
 
@@ -143,7 +143,7 @@ Only extensions in Astro's `VALID_INPUT_FORMATS` may carry the marker. For anyth
 
 The parse-time schema declares `src` as a nullable string, because a marker string is what is stored and validated. The type consumers see is declared separately through `createSchema`'s `types`, as `ImageMetadata | null`. That split looks odd but is exactly what Astro does with its own `ImageFunction`, which is typed as returning an object schema while the runtime schema for content layer collections is a string transform.
 
-## See Also
+## See also
 
 - [`../docs/usage.md`](../docs/usage.md#astro-integration) - the consumer documentation
 - [`comparisons/astro-integrations.md`](./comparisons/astro-integrations.md) - Astro platform constraints and how other CMSs solve the same problems

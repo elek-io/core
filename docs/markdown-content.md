@@ -344,7 +344,7 @@ Renderers should still apply their own per-context policy on top of this. Exampl
 - **Reference integrity on delete**: deleting an Asset, Entry or Collection that is still referenced is blocked with a `Conflict`, and create / update reject a reference to content that does not exist. Projects are managed only through Core or elek.io Desktop, so these gates cover every supported change. See [`references.md`](./references.md) for the full model and the one case (a sync that merges concurrent changes) they cannot fully prevent.
 - **Tree depth limit**: enforced at 100 levels of nesting (matches `markdown-it`'s `maxNesting` default). Trees deeper than that are rejected at write time. Renderers don't need their own bound, but it remains good hygiene for any consumer that processes trees from outside Core.
 
-## See Also
+## See also
 
 - [`fields.md`](./fields.md) - the `markdown` field definition and its `features` allowlist
 - [`references.md`](./references.md) - how `assetReference` / `entryReference` fit the wider reference model and its integrity rules

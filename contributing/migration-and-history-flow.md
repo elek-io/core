@@ -199,7 +199,7 @@ A file stored at commit `abc123` may have been written by Core v1.0.0 with a dif
 
 Normal (non-history) reads parse strictly and do not migrate. A read-only Core (CI provisioning) can therefore fail on an older Project whose file shape changed, because the upgrade flow is unavailable there. The intended fix is generalizing the `readEntryFileMigrating` pattern (`src/service/ReferenceService.ts`) to the normal read paths of the entity services, gated on read-only mode: strict read first, on a ZodError fall back to an unsafe read plus in-memory `migrate()`, never writing. This is deliberately deferred until the first real migration lands. All migration arrays are empty today, so the fallback could never produce a different outcome than the strict read and would be untestable dead code. Whoever ships the first migration should implement it in the same change.
 
-## See Also
+## See also
 
 - [`releases.md`](../docs/releases.md) - the related `upgrade` tag and versioned snapshots
 - [`schema-changes.md`](../docs/schema-changes.md) - a separate mechanism: editing field definitions cascades into existing content
