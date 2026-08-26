@@ -7,8 +7,7 @@ Plans are committed and reach `main`, so an idea survives until someone picks it
 ## Open
 
 - [`git-clone-progress.md`](./git-clone-progress.md) - report clone progress instead of asking git for it and discarding it
-- [`jsdoc-review.md`](./jsdoc-review.md) - review every JSDoc block in Core, the first of two documentation review passes
-- [`jsdoc-findings.md`](./jsdoc-findings.md) - what that review found, the work list phase 4 writes from
+- [`open-code-fixes.md`](./open-code-fixes.md) - eighteen verified code bugs the JSDoc review found, and the ten blocks waiting on them
 - [`git-service-object-parameters.md`](./git-service-object-parameters.md) - give every public `GitService` method one props object, a breaking change
 - [`gitignore-os-junk.md`](./gitignore-os-junk.md) - the non-dot OS files a generated Project `.gitignore` still misses
 - [`project-description-shape.md`](./project-description-shape.md) - whether a Project description becomes optional and translatable like a Collection's
