@@ -12,7 +12,13 @@ import {
   type ServiceType,
   type Uuid,
 } from '../schema/index.js';
-import { files, folders, isNotEmpty, type PathTo } from '../util/node.js';
+import {
+  files,
+  folders,
+  isFileNotFound,
+  isNotEmpty,
+  type PathTo,
+} from '../util/node.js';
 import { AbstractService } from './AbstractService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
@@ -200,7 +206,7 @@ export abstract class AbstractEntityService extends AbstractService {
   }
 
   private async getFolderReferences(path: string): Promise<FileReference[]> {
-    const possibleFolders = await folders(path);
+    const possibleFolders = await folders(path).catch(notFoundIfMissing(path));
     const results = possibleFolders.map((possibleFolder) => {
       const parsed = fileReferenceSchema.safeParse({
         id: possibleFolder.name,
@@ -237,7 +243,7 @@ export abstract class AbstractEntityService extends AbstractService {
     path: string,
     ignore: string[]
   ): Promise<FileReference[]> {
-    const possibleFiles = await files(path);
+    const possibleFiles = await files(path).catch(notFoundIfMissing(path));
     const results = possibleFiles.map((possibleFile) => {
       if (ignore.includes(possibleFile.name)) {
         return null;
@@ -265,4 +271,21 @@ export abstract class AbstractEntityService extends AbstractService {
 
     return results.filter(isNotEmpty);
   }
+}
+
+/**
+ * Turns a missing directory into the `NotFound` an absent entity answers
+ * with, so listing the Entries of a Collection that is not there fails the
+ * same way reading it does. Anything else a read of the directory raises is
+ * a real failure and passes through.
+ *
+ * @see ../../docs/error-handling.md
+ */
+function notFoundIfMissing(path: string): (error: unknown) => never {
+  return (error) => {
+    if (isFileNotFound(error)) {
+      throw CoreError.notFound(`Directory "${path}" does not exist`);
+    }
+    throw error;
+  };
 }

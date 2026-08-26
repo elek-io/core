@@ -224,6 +224,22 @@ export function isNotEmpty<T>(value: T | null | undefined): value is T {
 }
 
 /**
+ * Whether a caught error is Node's "no such file or directory".
+ *
+ * `fs` reports a missing path with an `ENOENT` code rather than a type, so
+ * this is the one place that knows the shape. Callers turn it into the
+ * `NotFound` that `docs/error-handling.md` promises.
+ */
+export function isFileNotFound(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'ENOENT'
+  );
+}
+
+/**
  * Returns all folders of given path to a directory
  */
 export async function folders(path: string): Promise<Fs.Dirent[]> {

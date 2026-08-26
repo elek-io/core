@@ -5,7 +5,8 @@ import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
 import { AbstractService } from './AbstractService.js';
 import type { LogService } from './LogService.js';
-import type { PathTo } from '../util/node.js';
+import { isFileNotFound, type PathTo } from '../util/node.js';
+import { CoreError } from '../util/shared.js';
 
 /**
  * Service that manages CRUD functionality for JSON files on disk
@@ -74,7 +75,7 @@ export class JsonFileService extends AbstractService {
       message: `Cache miss reading file "${path}"`,
       meta: { 'file.path': path },
     });
-    const data = await Fs.readFile(path, { flag: 'r', encoding: 'utf8' });
+    const data = await this.readFile(path);
     const json = this.deserialize(data);
     const value: z.output<T> = schema.parse(json);
     if (this.options.file.cache === true) {
@@ -96,7 +97,7 @@ export class JsonFileService extends AbstractService {
    * @returns Unvalidated content of the file from disk
    */
   public async unsafeRead(path: string): Promise<unknown> {
-    const data = await Fs.readFile(path, { flag: 'r', encoding: 'utf8' });
+    const data = await this.readFile(path);
     this.logService.warn({
       source: 'core',
       message: `Unsafe reading of file "${path}"`,
@@ -178,6 +179,28 @@ export class JsonFileService extends AbstractService {
       message: `Cleared JSON file cache (${cleared} elements)`,
       meta: { 'elek.cache.cleared_count': cleared },
     });
+  }
+
+  /**
+   * Reads a file, answering a missing one with `CoreError.notFound`.
+   *
+   * This is the one place that knows a file is not there, and every entity
+   * read reaches it, so it is where the `NotFound` in the error table comes
+   * from. Without it Node's raw `ENOENT` travelled up to `fromUnknown`,
+   * which types everything it does not recognise as `Internal`, and a
+   * missing Entry answered 500.
+   *
+   * @see ../../docs/error-handling.md
+   */
+  private async readFile(path: string): Promise<string> {
+    try {
+      return await Fs.readFile(path, { flag: 'r', encoding: 'utf8' });
+    } catch (error) {
+      if (isFileNotFound(error)) {
+        throw CoreError.notFound(`File "${path}" does not exist`);
+      }
+      throw error;
+    }
   }
 
   private serialize(data: unknown): string {

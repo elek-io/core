@@ -4,11 +4,11 @@ All services throw `CoreError` on failure. `CoreError` extends `Error` with `typ
 
 ## CoreError
 
-A class extending `Error` with 8 typed variants (`src/util/shared.ts`):
+A class extending `Error` with 9 typed variants (`src/util/shared.ts`):
 
 | Type | Status Code | Used For |
 | --- | --- | --- |
-| `NotFound` | 404 | Entity doesn't exist |
+| `NotFound` | 404 | Entity doesn't exist, whether addressed by id or by slug |
 | `BadRequest` | 400 | Invalid input, bad UUID, unsupported file type |
 | `Unauthorized` | 401 | No user configured |
 | `Conflict` | 409 | Sync failed, uncommitted changes, slug clash |

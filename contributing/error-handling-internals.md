@@ -16,7 +16,11 @@ public async create(props: CreateAssetProps): Promise<Asset> {
 }
 ```
 
-On failure, errors are logged once and re-thrown. Non-`CoreError` exceptions are wrapped as `CoreError.internal`. The log record carries the error message as its message, and the type, the method and the status code as the `error.type`, `code.function.name` and `elek.error.status_code` attributes, rather than packing them into the message string. See [`logging.md`](./logging.md).
+On failure, errors are logged once and re-thrown. Non-`CoreError` exceptions are wrapped as `CoreError.internal`, so anything arriving here that has not already decided what it is becomes an `Internal`.
+
+That is why a failure mode belongs at the site that knows it. Node reports a missing file with an `ENOENT` code and no type, and until `JsonFileService` turned that into a `CoreError.notFound`, a missing Entry arrived here as an unknown and answered 500.
+
+The log record carries the type, the method and the status code as the `error.type`, `code.function.name` and `elek.error.status_code` attributes, rather than packing them into the message string. Its message is the error's, except for a validation failure, which is logged as the shape of its issues. See [`logging.md`](./logging.md).
 
 ### `mutating()` - the envelope a write goes through
 
@@ -55,6 +59,10 @@ return this.mutating(
 ```
 
 `assertNotReadOnly` runs twice on this path, once directly and once inside `mutating()`. That is intended rather than redundant, the direct call is what stops a read-only Core from reading a Collection it is never allowed to write to.
+
+**Nothing wraps the reads between the two stages.** They run after `parseOrThrow` and before `mutating()`, so they sit outside every `try` and whatever they throw reaches the caller as it is. That is how `entries.create` against a Project that does not exist used to throw a raw `Error`.
+
+The promise in [`../docs/error-handling.md`](../docs/error-handling.md) holds today because those reads go through `JsonFileService`, which raises a `CoreError` for a missing file, and `CollectionService.read`, which has its own boundary. It is not structural, so a read added here that raises something else escapes the same way. `errorContract.test.ts` is what notices.
 
 ### `withGitRollback` - transactional Git operations
 

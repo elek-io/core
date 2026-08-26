@@ -348,17 +348,18 @@ describe('API', function () {
     expect(body.message).toEqual('Not Found - /this-does-not-exist');
   });
 
-  it('should return 500 for internal errors', async function () {
+  it('should return 404 in the CoreError envelope for an entity that does not exist', async function () {
     const res = await app.request(
       `/content/v1/projects/${crypto.randomUUID()}`
     );
 
-    expect(res.status).toEqual(500);
+    expect(res.status).toEqual(404);
     const body = (await res.json()) as {
-      error: { type: string; message: string };
+      error: { type: string; message: string; statusCode: number };
     };
     expect(body.error).toBeDefined();
-    expect(body.error.type).toBe('Internal');
+    expect(body.error.type).toBe('NotFound');
+    expect(body.error.statusCode).toBe(404);
     expect(body.error.message).toBeDefined();
   });
 

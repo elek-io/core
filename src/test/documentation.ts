@@ -258,6 +258,32 @@ const contributingFiles = () => markdownFilesIn('contributing');
 const planFiles = () => markdownFilesIn('plans');
 const sourceFiles = () => filesIn(['src'], (name) => name.endsWith('.ts'));
 
+/**
+ * The `CoreErrorType` to status code mapping, read out of its declaration.
+ *
+ * `docs/error-handling.md` restates this as a table a consumer branches on,
+ * and a table maintained by hand drifts from the literal it copies. Parsed
+ * rather than imported, because a rule reads the repository as text.
+ */
+function statusCodesOf(): Map<string, string> {
+  const source = readFile('src/util/shared.ts');
+  const block =
+    /const statusCodes: Record<CoreErrorType, number> = \{([^}]*)\}/s.exec(
+      source
+    )?.[1];
+  if (block === undefined) {
+    throw new Error(
+      'statusCodes is not declared as expected in src/util/shared.ts'
+    );
+  }
+  return new Map(
+    [...block.matchAll(/(\w+):\s*(\d{3})/g)].map(([, type, code]) => [
+      type ?? '',
+      code ?? '',
+    ])
+  );
+}
+
 /** What the coverage rule reads. A test documents nobody, so it is left out. */
 const productionSourceFiles = () =>
   sourceFiles().filter(
@@ -971,6 +997,58 @@ export const rules: Rule[] = [
           message:
             '@todo needs its issue URL on the same line, otherwise delete it',
         })),
+  },
+  {
+    id: 'links/error-table',
+    summary:
+      'the documented error types and status codes are the ones Core has',
+    files: () => ['docs/error-handling.md'].filter((file) => exists(file)),
+    check: (file, content) => {
+      const declared = statusCodesOf();
+      const documented = new Map<string, string>();
+      const violations: Violation[] = [];
+      for (const line of linesOf(content)) {
+        // | `NotFound` | 404 | Entity doesn't exist |
+        const row = /^\|\s*`(\w+)`\s*\|\s*(\d{3})\s*\|/.exec(line.text);
+        if (!row?.[1] || !row[2]) continue;
+        documented.set(row[1], row[2]);
+        const expected = declared.get(row[1]);
+        if (expected === undefined) {
+          violations.push({
+            file,
+            line: line.number,
+            message: `${row[1]} is not a CoreErrorType, drop the row`,
+          });
+        } else if (expected !== row[2]) {
+          violations.push({
+            file,
+            line: line.number,
+            message: `${row[1]} carries ${expected}, not ${row[2]}`,
+          });
+        }
+      }
+      for (const type of declared.keys()) {
+        if (!documented.has(type)) {
+          violations.push({
+            file,
+            line: 1,
+            message: `${type} is a CoreErrorType with no row in the table`,
+          });
+        }
+      }
+      // The sentence above the table counts the rows, so it drifts with them
+      const counted = /extending `Error` with (\d+) typed variants/.exec(
+        content
+      );
+      if (counted?.[1] && Number(counted[1]) !== declared.size) {
+        violations.push({
+          file,
+          line: 1,
+          message: `the table has ${declared.size} types, the sentence says ${counted[1]}`,
+        });
+      }
+      return violations;
+    },
   },
   {
     id: 'jsdoc/documented-export',

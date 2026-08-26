@@ -411,7 +411,7 @@ Not for the fan-out to resolve. Grouped by what the answer changes.
 - Neither cascade call site passes a `componentResolver`, so any Collection or Component update touching a dynamic field while an Entry holds a value for it ends as `Internal` instead of the strip-and-`Conflict` `docs/schema-changes.md` promises. Uncovered by tests.
 - `mdAstLinkUrlSchema` accepts `/\evil.com`, which `new URL()` resolves cross-origin, against the protocol-relative promise both the block and `docs/markdown-content.md` make.
 - The mdast depth guard runs as a root-level `.refine`, so zod recurses first and a sufficiently deep tree throws `RangeError` out of `safeParse` instead of returning an issue.
-- `getValueSchemaFromFieldDefinition` throws a plain `Error`, not a `CoreError`, and `EntryService` builds the strict schema outside `validated()`, so a Component cycle surfaces a raw `Error` from a public service method.
+- `getValueSchemaFromFieldDefinition` throws a plain `Error`, not a `CoreError`, and `EntryService` builds the strict schema outside `validated()`, so a Component cycle surfaces a raw `Error` from a public service method. The second half of this is now documented in `contributing/error-handling-internals.md` and covered by `errorContract.test.ts`, but no row provokes a cycle, so the plain `Error` stands.
 - `getNumberValueContentSchemaFromFieldDefinition` guards with `if (fieldDefinition.min)`, so a legal `min: 0` or `max: 0` is silently not enforced.
 - `escapeForSingleQuotedString` does not escape newlines, so a multi-line textarea `defaultValue` emits a TypeScript file that does not parse.
 - `watchProjects` filters `.git` with `path.includes('/.git/')`, a POSIX separator only, so on Windows every git write retriggers a regeneration.
@@ -436,7 +436,7 @@ Not for the fan-out to resolve. Grouped by what the answer changes.
 **Docs that phase 4 will touch anyway and that are wrong today.** Strictly the second review pass's work, listed so it is not rediscovered.
 
 - `docs/git-and-sync.md` destructures `{ local, current }` from `branches.list`, which returns `{ local, remote }`.
-- `docs/error-handling.md` says "8 typed variants" above a table listing 9.
+- ~~`docs/error-handling.md` says "8 typed variants" above a table listing 9.~~ **Fixed**, and the `links/error-table` rule now asserts the whole table against `statusCodes` in the source.
 - `docs/fields.md` carries the same stale group enumeration as `fieldSchema.ts:575`.
 - `docs/export.md` says the `nested` template writes arrays, the code writes keyed Records.
 - `contributing/reference-integrity.md` contradicts itself on gate direction between its table and its prose. The JSDoc is right and the doc is wrong.
