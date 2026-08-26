@@ -1,5 +1,3 @@
 {
-  "jsdoc/documented-export": [
-    "src/service/GitService.ts"
-  ]
+  "jsdoc/documented-export": ["src/service/GitService.ts"]
 }
