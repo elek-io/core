@@ -17,7 +17,8 @@ export class CloudService {
   }
 
   /**
-   * Sends a bug report or feedback to elek.io Cloud
+   * The Report API. `core.cloud.reports.create()` is the call that sends a
+   * bug report or feedback and returns the id Cloud filed it under.
    */
   public get reports(): ReportService {
     return this.reportService;

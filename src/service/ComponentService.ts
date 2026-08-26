@@ -109,7 +109,11 @@ export class ComponentService
   }
 
   /**
-   * Resolves a UUID-or-slug string to a component UUID.
+   * Resolves a UUID-or-slug string to a Component UUID.
+   *
+   * A UUID is accepted only when that Component folder exists on disk,
+   * otherwise it falls back to the slug index, rebuilt once on a miss.
+   * Throws `NotFound` when neither matches.
    */
   public async resolveComponentId(
     props: ResolveComponentIdProps
@@ -118,12 +122,16 @@ export class ComponentService
   }
 
   /**
-   * Creates a new Component
+   * Writes the Component folder and its `component.json`, then commits. The
+   * slug index is written after the commit, its failure swallowed with a
+   * warning. Core generates the Component's `id`, but field-definition `id`s
+   * are caller-supplied and become the identity later updates match on.
    *
-   * Core generates the Component's `id`, but field-definition `id`s are
-   * caller-supplied (pass a UUID per field definition, for example via
-   * `uuid()`). They become the stable identity used to match field definitions
-   * on later updates, see `update`.
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
+   * `Conflict` on a slug already in use, and `BadRequest` on a circular
+   * `ofComponents` reference.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public async create<T extends Component = Component>(
     props: CreateComponentProps
@@ -207,7 +215,12 @@ export class ComponentService
   }
 
   /**
-   * Returns a Component by ID
+   * Returns a Component by ID.
+   *
+   * With `commitHash` the file is read out of git history and run through the
+   * migration chain, so a historical read can additionally throw
+   * `VersionSkew` or `BadRequest`. A working-tree read parses strictly and
+   * does not migrate.
    */
   public async read<T extends Component = Component>(
     props: ReadComponentProps
@@ -245,7 +258,11 @@ export class ComponentService
   }
 
   /**
-   * Reads a Component by its slug
+   * Reads a Component by its slug, resolved through the slug index, throwing
+   * `NotFound` when no Component carries it. A UUID is accepted too, because
+   * this goes through `resolveComponentId`.
+   *
+   * `commitHash` is forwarded to `read`.
    */
   public async readBySlug<T extends Component = Component>(
     props: ReadBySlugComponentProps
@@ -262,7 +279,12 @@ export class ComponentService
   }
 
   /**
-   * Returns the commit history of a Component
+   * The git log filtered to the Component's own `component.json` on the
+   * current branch, newest first and unpaginated. Each returned `hash` is
+   * what `read({ commitHash })` takes.
+   *
+   * An unknown or never-committed Component yields an empty array rather
+   * than an error.
    */
   public async history(props: ComponentHistoryProps): Promise<GitCommit[]> {
     return this.validated(
@@ -284,13 +306,14 @@ export class ComponentService
   }
 
   /**
-   * Updates given Component
+   * Field definitions are matched by `id`. Send back the `id` of every one
+   * you want to keep, a missing or changed `id` counts as a new field and
+   * removes the Entry data keyed to the old one. The Component file and every
+   * Entry the cascade rewrites land in one commit that rolls back as a unit.
    *
-   * Field definitions are matched by `id`. Send back the `id` of every field
-   * definition you want to keep, a missing or changed `id` counts as a new
-   * field and removes the Entry data keyed to the old one. The cascade runs
-   * across every Entry that references this Component, and an ambiguous
-   * change throws `Conflict` with structured issues.
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
+   * `Conflict` on a taken slug or an ambiguous change, carrying structured
+   * issues, and `BadRequest` on a circular reference.
    *
    * @see ../../docs/schema-changes.md
    */
@@ -601,7 +624,13 @@ export class ComponentService
   /**
    * Deletes given Component
    *
-   * Blocks deletion if the Component is still referenced by a Collection or another Component.
+   * Blocks the delete with `Conflict` when a Collection or another Component
+   * still references it. An unconstrained `component` field, one whose
+   * `ofComponents` is empty, counts as referencing every Component, so a
+   * single one anywhere in the Project blocks every delete.
+   *
+   * The `Conflict` names the referring entities in its message text only,
+   * with no structured cause.
    */
   public async delete(props: DeleteComponentProps): Promise<void> {
     return this.mutating('delete', deleteComponentSchema, props, async () => {
@@ -743,8 +772,12 @@ export class ComponentService
   }
 
   /**
-   * Validates that no circular references exist in dynamic field definitions.
-   * Walks the tree of ofComponents references to detect cycles.
+   * Walks `ofComponents` looking for a cycle, throwing `BadRequest` when it
+   * finds one.
+   *
+   * An empty `ofComponents` means every Component of the Project, so the walk
+   * expands it to the whole slug index rather than stopping. `visited` is
+   * copied per branch, so a diamond is re-walked rather than pruned.
    */
   private async validateNoCircularReferences(
     componentId: string | null,
@@ -795,9 +828,12 @@ export class ComponentService
   }
 
   /**
-   * Finds dynamic field slugs that (transitively) reference the given componentId.
-   * A dynamic field references a component if its ofComponents contains the componentId,
-   * or if any of its ofComponents' own fieldDefinitions transitively reference it.
+   * Finds dynamic field slugs that reference the given componentId, directly
+   * or transitively.
+   *
+   * A dynamic field matches when its `ofComponents` is empty, which means
+   * every Component, when it lists the id, or when one of the Components it
+   * does list transitively references it.
    */
   private async findDynamicFieldsReferencingComponent(
     fieldDefinitions: FieldDefinition[],
@@ -903,7 +939,11 @@ export class ComponentService
   }
 
   /**
-   * Checks if any field definition in the array references the given componentId
+   * The one place the empty-`ofComponents` rule is decided, for both delete
+   * protection and the update cascade: a `component` field matches when its
+   * `ofComponents` lists the id, or when the list is empty.
+   *
+   * Per array and not transitive, the callers walk.
    */
   private areFieldDefinitionsReferencingComponent(
     fieldDefinitions: FieldDefinition[],

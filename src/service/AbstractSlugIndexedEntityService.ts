@@ -15,8 +15,12 @@ import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * A service for entities that support UUID-to-slug indexing.
- * Subclasses must implement abstract methods to define entity paths and slug extraction.
+ * The base for entities addressable by slug as well as by UUID.
+ *
+ * It holds a per-Project UUID to slug map, so an entity can be resolved and
+ * slug uniqueness checked without scanning every folder. The map is derived
+ * rather than authoritative: git ignores the file, the cache lives per Core
+ * instance, and a miss rebuilds it from the entity folders.
  */
 export abstract class AbstractSlugIndexedEntityService<
   TFile = unknown,
@@ -36,15 +40,32 @@ export abstract class AbstractSlugIndexedEntityService<
     super(type, options, pathTo, logService, gitService, jsonFileService);
   }
 
-  /** Path to the folder containing all entities of this type */
+  /**
+   * Path to the folder containing all entities of this type.
+   *
+   * `writeSlugIndex` puts `slug.index.json` inside it, and the generated
+   * `.gitignore` names only `collections/slug.index.json` and
+   * `components/slug.index.json`, so a subclass pointing anywhere else
+   * commits its cache file.
+   */
   protected abstract entitiesPath(projectId: string): string;
   /** Path to a specific entity folder */
   protected abstract entityPath(projectId: string, id: string): string;
   /** Path to the JSON file for a specific entity */
   protected abstract entityFilePath(projectId: string, id: string): string;
-  /** Extract the slug value from a parsed entity file */
+  /**
+   * Extract the slug value from a parsed entity file. It has to be unique
+   * across the Project: `lookupBySlug` scans the map and returns the first
+   * match, so a duplicate leaves one entity unreachable by slug while both
+   * stay in the index.
+   */
   protected abstract extractSlug(file: TFile): string;
-  /** Zod schema for validating entity files */
+  /**
+   * Zod schema for validating entity files. It has to parse into the same
+   * shape as the class's `TFile`, because `rebuildSlugIndexInternal` hands
+   * the parsed result to `extractSlug` through an unchecked assertion. The
+   * two agree by the subclass's construction, not by the type system.
+   */
   protected abstract entityFileSchema: z.ZodTypeAny;
 
   /**
@@ -88,7 +109,12 @@ export abstract class AbstractSlugIndexedEntityService<
   }
 
   /**
-   * Invalidates the cached index for a project, forcing a rebuild on next access.
+   * Drops the cached index for a Project, forcing a rebuild on next access.
+   *
+   * Nothing else drops this cache. `GitService` clears only the JSON file
+   * cache after a pull, checkout or hard reset, so any git operation that
+   * can change entity files under a live Core leaves this map stale, and a
+   * stale hit does not self-heal the way a miss does.
    */
   protected invalidateSlugIndex(projectId: string): void {
     this.cachedSlugIndex.delete(projectId);
@@ -124,8 +150,11 @@ export abstract class AbstractSlugIndexedEntityService<
 
   /**
    * Resolves a UUID-or-slug string to a UUID.
-   * If the input matches UUID format, verifies the folder exists on disk first.
-   * Otherwise, looks up via the index. Rebuilds cache once on miss.
+   *
+   * Not an either/or: a UUID-shaped input is accepted only when its folder
+   * exists on disk, and otherwise falls through to the slug lookup and is
+   * reported as a slug. The lookup rebuilds the index once on a miss, then
+   * throws `NotFound` when neither the folder nor the index matches.
    */
   protected async resolveId(
     projectId: string,
@@ -165,6 +194,11 @@ export abstract class AbstractSlugIndexedEntityService<
 
   /**
    * Rebuilds the slug index by scanning all entity folders on disk.
+   *
+   * An entity folder whose file will not read or parse is warned about and
+   * left out, so it cannot be resolved by slug until it parses. The rebuild
+   * also writes `slug.index.json` back, swallowing a failed write with a
+   * warning.
    */
   private async rebuildSlugIndexInternal(
     projectId: string

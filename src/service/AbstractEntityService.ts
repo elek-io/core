@@ -25,8 +25,12 @@ import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * A service for entities that are stored as files or folders on disk.
- * Provides listing of file and folder references.
+ * The base every entity service extends, for entities stored as files or
+ * folders on disk. It hands them three things:
+ *
+ * - git-backed writes that roll the working tree back when the body throws
+ * - list reads that tolerate a single unreadable file rather than failing
+ * - reference listing over a Project's folders
  */
 export abstract class AbstractEntityService extends AbstractService {
   protected readonly gitService: GitService;
@@ -46,7 +50,12 @@ export abstract class AbstractEntityService extends AbstractService {
   }
 
   /**
-   * Reads and parses the project file for the given project id.
+   * Reads and parses `project.json`, through `JsonFileService`'s cache when
+   * `options.file.cache` is on.
+   *
+   * A missing or schema-invalid file raises a raw fs error or a `ZodError`
+   * here, becoming a `CoreError` only once the `validated()` boundary
+   * converts it. So callers must not reach for this outside one.
    */
   protected async readProjectFile(projectId: Uuid): Promise<ProjectFile> {
     return this.jsonFileService.read(
@@ -148,8 +157,12 @@ export abstract class AbstractEntityService extends AbstractService {
    * Returns a list of all file references of given project and type
    *
    * Every type but `project` needs a `projectId`, and `entry` needs a
-   * `collectionId` as well. A missing one is a `BadRequest`, and a directory
-   * that is not there is a `NotFound`.
+   * `collectionId` as well. A missing one throws `BadRequest`, an
+   * unsupported type `Internal`, and a directory that is not there
+   * `NotFound`.
+   *
+   * A file or folder whose name does not parse is warned about and dropped
+   * rather than failing the list.
    */
   protected async listReferences(
     type: ObjectType,

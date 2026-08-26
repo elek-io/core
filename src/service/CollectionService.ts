@@ -115,7 +115,11 @@ export class CollectionService
   }
 
   /**
-   * Resolves a UUID-or-slug string to a collection UUID.
+   * Resolves a UUID-or-slug string to a Collection UUID.
+   *
+   * Throws `NotFound` when the string matches neither a Collection folder nor
+   * an indexed slug. A UUID whose folder does not exist is not returned as
+   * is, it falls through to the slug lookup and throws.
    */
   public async resolveCollectionId(
     props: ResolveCollectionIdProps
@@ -253,7 +257,12 @@ export class CollectionService
   }
 
   /**
-   * Reads a Collection by its slug
+   * Reads a Collection by its slug, resolved through the slug index, which
+   * rebuilds from disk once on a miss. An unknown slug throws `NotFound`
+   * rather than returning null.
+   *
+   * `commitHash` is forwarded, so a slug can be read as it was at that
+   * commit.
    */
   public async readBySlug<T extends Collection = Collection>(
     props: ReadBySlugCollectionProps
@@ -270,7 +279,11 @@ export class CollectionService
   }
 
   /**
-   * Returns the commit history of a Collection
+   * The git log scoped to the Collection's own `collection.json`, newest
+   * first and unpaginated. An Entry-only commit never appears, while an
+   * update that cascades into Entries does.
+   *
+   * Reads git without touching the working tree.
    */
   public async history(props: CollectionHistoryProps): Promise<GitCommit[]> {
     return this.validated(
@@ -632,16 +645,16 @@ export class CollectionService
   }
 
   /**
-   * Deletes given Collection (folder), including it's Entries
+   * Deletes the Collection folder, its Entries and its field definitions,
+   * which live inside `collection.json`. The Components a `dynamic` field
+   * definition referenced survive, they belong to the Project.
    *
-   * Blocks deletion if a surviving Entry outside this Collection still
-   * references into it (a flat reference field, an mdast node, or a reference
-   * nested in a `dynamic`/component block), which would otherwise leave a
-   * dangling reference behind. References between Entries that are all being
-   * deleted together do not block. The thrown `Conflict` carries the list of
-   * referring Entries, mirroring Asset and Entry delete protection.
+   * A surviving Entry outside this Collection that still references into it
+   * blocks the delete with `Conflict`, carrying the referring Entries, the
+   * same protection Asset and Entry delete carry. References between Entries
+   * that are all going together do not block.
    *
-   * The Fields that Collection used are not deleted.
+   * @see ../../contributing/reference-integrity.md
    */
   public async delete(props: DeleteCollectionProps): Promise<void> {
     return this.mutating(
@@ -759,7 +772,12 @@ export class CollectionService
   }
 
   /**
-   * Checks if given object is of type Collection
+   * Parses against the full Collection file schema, so `id`, `objectType`,
+   * `created`, `updated` and the field definition slug and slug-source
+   * refinements all have to be present and valid.
+   *
+   * A half-built object about to be passed to `create` therefore returns
+   * false. It never throws.
    */
   public isCollection(obj: unknown): obj is Collection {
     return collectionFileSchema.safeParse(obj).success;
@@ -787,7 +805,10 @@ export class CollectionService
   }
 
   /**
-   * Creates an Collection from given CollectionFile
+   * The one seam between the on-disk `CollectionFile` and the returned
+   * `Collection`. Today it is a plain spread, because `Collection` is
+   * `collectionFileSchema.openapi('Collection')` and the two shapes are
+   * identical. It is kept for the point where they diverge.
    */
   private toCollection(collectionFile: CollectionFile): Collection {
     return {
