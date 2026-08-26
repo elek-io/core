@@ -52,7 +52,11 @@ import {
   type UpgradeProjectProps,
   type VersionedGitTag,
 } from '../schema/index.js';
-import { applyMigrations, projectMigrations } from './migrations/index.js';
+import {
+  applyMigrations,
+  migrating,
+  projectMigrations,
+} from './migrations/index.js';
 import { isNotEmpty, PROVISIONED_MARKER } from '../util/node.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
@@ -1362,16 +1366,22 @@ export class ProjectService
   }
 
   /**
-   * Migrates an potentially outdated Project file to the current schema
+   * Migrates a potentially outdated Project file to the current schema.
+   *
+   * Throws `BadRequest` when the file does not match what Core expects, with
+   * the underlying `ZodError` as its cause, and `VersionSkew` when it was
+   * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedFile: unknown): ProjectFile {
-    const loose = migrateProjectSchema.parse(potentiallyOutdatedFile);
-    const migrated = applyMigrations(
-      loose,
-      projectMigrations,
-      this.coreVersion
-    );
-    return projectFileSchema.parse(migrated);
+    return migrating('Project', () => {
+      const loose = migrateProjectSchema.parse(potentiallyOutdatedFile);
+      const migrated = applyMigrations(
+        loose,
+        projectMigrations,
+        this.coreVersion
+      );
+      return projectFileSchema.parse(migrated);
+    });
   }
 
   /**

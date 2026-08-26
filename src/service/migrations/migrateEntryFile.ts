@@ -4,6 +4,7 @@ import {
   type EntryFile,
 } from '../../schema/index.js';
 import { applyMigrations } from './applyMigrations.js';
+import { migrating } from './migrating.js';
 import { entryMigrations } from './entryMigrations.js';
 
 /**
@@ -19,7 +20,9 @@ export function migrateEntryFile(
   coreVersion: string,
   potentiallyOutdatedEntryFile: unknown
 ): EntryFile {
-  const loose = migrateEntrySchema.parse(potentiallyOutdatedEntryFile);
-  const migrated = applyMigrations(loose, entryMigrations, coreVersion);
-  return entryFileSchema.parse(migrated);
+  return migrating('Entry', () => {
+    const loose = migrateEntrySchema.parse(potentiallyOutdatedEntryFile);
+    const migrated = applyMigrations(loose, entryMigrations, coreVersion);
+    return entryFileSchema.parse(migrated);
+  });
 }

@@ -429,7 +429,11 @@ export class EntryService
   }
 
   /**
-   * Migrates an potentially outdated Entry file to the current schema
+   * Migrates a potentially outdated Entry file to the current schema.
+   *
+   * Throws `BadRequest` when the file does not match what Core expects, with
+   * the underlying `ZodError` as its cause, and `VersionSkew` when it was
+   * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedEntryFile: unknown): EntryFile {
     return migrateEntryFile(this.coreVersion, potentiallyOutdatedEntryFile);

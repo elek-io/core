@@ -29,7 +29,11 @@ import {
   assetHistorySchema,
 } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
-import { applyMigrations, assetMigrations } from './migrations/index.js';
+import {
+  applyMigrations,
+  assetMigrations,
+  migrating,
+} from './migrations/index.js';
 import { datetime, slug, uuid, CoreError } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { ReferenceService } from './ReferenceService.js';
@@ -448,11 +452,21 @@ export class AssetService extends AbstractEntityService {
   }
 
   /**
-   * Migrates a potentially outdated Asset file to the current schema
+   * Migrates a potentially outdated Asset file to the current schema.
+   *
+   * Throws `BadRequest` when the file does not match what Core expects, with
+   * the underlying `ZodError` as its cause, and `VersionSkew` when it was
+   * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedAssetFile: unknown) {
-    const loose = migrateAssetSchema.parse(potentiallyOutdatedAssetFile);
-    const migrated = applyMigrations(loose, assetMigrations, this.coreVersion);
-    return assetFileSchema.parse(migrated);
+    return migrating('Asset', () => {
+      const loose = migrateAssetSchema.parse(potentiallyOutdatedAssetFile);
+      const migrated = applyMigrations(
+        loose,
+        assetMigrations,
+        this.coreVersion
+      );
+      return assetFileSchema.parse(migrated);
+    });
   }
 }

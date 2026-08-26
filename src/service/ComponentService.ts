@@ -46,7 +46,11 @@ import {
 import { transformComponentValues } from '../util/componentTransform.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
 import type { EntryIssue } from '../util/entryTransform.js';
-import { applyMigrations, componentMigrations } from './migrations/index.js';
+import {
+  applyMigrations,
+  componentMigrations,
+  migrating,
+} from './migrations/index.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { GitService } from './GitService.js';
@@ -684,18 +688,24 @@ export class ComponentService
   }
 
   /**
-   * Migrates a potentially outdated Component file to the current schema
+   * Migrates a potentially outdated Component file to the current schema.
+   *
+   * Throws `BadRequest` when the file does not match what Core expects, with
+   * the underlying `ZodError` as its cause, and `VersionSkew` when it was
+   * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedComponentFile: unknown) {
-    const loose = migrateComponentSchema.parse(
-      potentiallyOutdatedComponentFile
-    );
-    const migrated = applyMigrations(
-      loose,
-      componentMigrations,
-      this.coreVersion
-    );
-    return componentFileSchema.parse(migrated);
+    return migrating('Component', () => {
+      const loose = migrateComponentSchema.parse(
+        potentiallyOutdatedComponentFile
+      );
+      const migrated = applyMigrations(
+        loose,
+        componentMigrations,
+        this.coreVersion
+      );
+      return componentFileSchema.parse(migrated);
+    });
   }
 
   private toComponent(componentFile: ComponentFile): Component {

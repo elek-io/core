@@ -48,7 +48,11 @@ import {
   type EntryIssue,
 } from '../util/entryTransform.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
-import { applyMigrations, collectionMigrations } from './migrations/index.js';
+import {
+  applyMigrations,
+  collectionMigrations,
+  migrating,
+} from './migrations/index.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { ReferenceService } from './ReferenceService.js';
@@ -736,18 +740,24 @@ export class CollectionService
   }
 
   /**
-   * Migrates an potentially outdated Collection file to the current schema
+   * Migrates a potentially outdated Collection file to the current schema.
+   *
+   * Throws `BadRequest` when the file does not match what Core expects, with
+   * the underlying `ZodError` as its cause, and `VersionSkew` when it was
+   * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedCollectionFile: unknown) {
-    const loose = migrateCollectionSchema.parse(
-      potentiallyOutdatedCollectionFile
-    );
-    const migrated = applyMigrations(
-      loose,
-      collectionMigrations,
-      this.coreVersion
-    );
-    return collectionFileSchema.parse(migrated);
+    return migrating('Collection', () => {
+      const loose = migrateCollectionSchema.parse(
+        potentiallyOutdatedCollectionFile
+      );
+      const migrated = applyMigrations(
+        loose,
+        collectionMigrations,
+        this.coreVersion
+      );
+      return collectionFileSchema.parse(migrated);
+    });
   }
 
   /**
