@@ -38,9 +38,9 @@ Each change is classified as `major`, `minor` or `patch`, and the highest classi
 
 | Bump | Meaning | Examples |
 | --- | --- | --- |
-| **major** | Breaks an existing consumer's assumptions | Collection / Component / Entry / Asset deleted. Field deleted. A field's `valueType`, `fieldType` or `slug` changed. `min`/`max` tightened. `isRequired` turned off. `isUnique` turned off. `ofCollections` changed. Default language changed, or a supported language removed. |
+| **major** | Breaks an existing consumer's assumptions | Collection / Component / Entry / Asset deleted. Field deleted. A field's `valueType`, `fieldType` or `slug` changed. `min`/`max` tightened. `isRequired` turned off. `isUnique` turned off. `ofCollections` changed. A slug field's `separator`, `lowercase` or `decamelize` changed, which re-canonicalises every value it holds. Default language changed, or a supported language removed. |
 | **minor** | Adds something without breaking | Collection / Component / Entry / Asset added. Field added. `isRequired` turned on. `isUnique` turned on. A supported language added. |
-| **patch** | Cosmetic or content-only | `label`, `description`, `inputWidth`, `isDisabled` or `defaultValue` changed. `min`/`max` loosened. Project `name` / `description` changed. An Asset's binary or metadata changed. An Entry's values modified. |
+| **patch** | Cosmetic or content-only | `label`, `description`, `inputWidth`, `isDisabled` or `defaultValue` changed. `min`/`max` loosened. A slug field's `ofFieldDefinitions` changed, a generation hint that never rewrites a stored value. Project `name` / `description` changed. An Asset's binary or metadata changed. An Entry's values modified. |
 
 If `work` has commits ahead of `production` but the diff finds no classified change, the bump defaults to `patch`. If there are no changes at all, `bump` and `nextVersion` are `null`. The exhaustive list of change types lives in `src/schema/releaseSchema.ts`.
 

@@ -107,6 +107,26 @@ That last check is the tractable half of "derive only the Assets that are actual
 
 The keys a consumer autocompletes against come from the types Astro generates after a sync, not from what `elekCollections` returns. Its return type is honestly string-keyed, and making it more precise would not help, Astro reads the collection object at sync time either way.
 
+## The generated schema and the generated types
+
+A loader's `createSchema` returns two things built from the same model:
+
+| Built by | Shape | Astro uses it for |
+| --- | --- | --- |
+| `buildEntryValuesSchema` | a Zod object keyed by field definition slug | `parseData` validation at sync time |
+| `buildEntryValuesTypeString` | TypeScript source | the collection's `Entry` type, written to a file and imported |
+
+They are two walks over one `fieldDefinitions` array, and the invariant is that they admit the same values. Violating it breaks a consumer in one of two ways, neither of which shows up where the mistake was made:
+
+- A schema wider than the type gives a type error on data that validated and synced.
+- A type wider than the schema gives a sync failure on data that type-checked.
+
+Nothing structural enforces the pairing. `buildValueContentSchema` and `fieldDefToTsType` are separate switches over `valueType`, as are `buildComponentArraySchema` and `renderComponentValuesType` one level down, so a new field type means editing both sides. `schema.test.ts` is the only thing holding them together, asserting per field type that the emitted leaf type and the schema agree on `null`.
+
+The emitted type names are PascalCased slugs: `${CollectionPascal}${FieldPascal}Item` and `${ComponentPascal}${FieldPascal}Item` for dynamic field item unions, `${ComponentPascal}ComponentValues` for a Component's values.
+
+That is the same `toPascalCase` derivation as the collection keys above, so it carries the same digit-boundary collision class. Unlike the keys, the collision is not detected here, and two declarations of one name land in a file the consumer has to compile. Closing that is open work.
+
 ## What the mdast renderers return
 
 `astroDefaults` builds every default with `renderTemplate` and `addAttribute` from `astro/runtime/server/index.js`, never with `jsx()` from `astro/jsx-runtime`. Keep it that way.

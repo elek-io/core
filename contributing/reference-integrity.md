@@ -20,12 +20,14 @@ An index would go stale the moment a pull or a rebase brings in Entries that nev
 
 Entry files an older Core wrote are read through `readEntryFileMigrating`, so a file brought in by a pull is upgraded through the migration chain instead of throwing.
 
-## Forward and reverse walk separately
+## Two walkers, three gates
 
-The two walkers stay separate on purpose:
+Direction and walker are separate axes. The table above gives the direction, and it does not decide the walker:
 
-- The forward gate walks the value tree driven by `fieldDefinitions`, because it also enforces rules the reverse gates have no use for, `ofAssetMimeTypes` and descent through the `ComponentResolver`.
-- The reverse gates walk the same tree value-only, through `collectReferencesInValue`, to extract reference ids. They already share the mdast carrier `collectMdAstRefs`.
+- `validateValueReferences` walks the value tree driven by `fieldDefinitions`, because it also enforces rules the other two have no use for, `ofAssetMimeTypes` and descent through the `ComponentResolver`.
+- `findEntriesReferencing` and `findDanglingReferences` walk the same tree value-only, through `collectReferencesInValue`, to extract reference ids. They already share the mdast carrier `collectMdAstRefs`.
+
+So the value-only walker serves a reverse gate and a forward one. Asking which Entries point at a doomed target and asking which of a reference's targets are gone both need the ids and nothing else, which is what makes the field definitions dispensable there.
 
 `findEntriesReferencing` reports the first match per referring Entry, because one link is enough to block a delete. `findDanglingReferences` reports every one, because each broken reference is a separate thing to repair.
 

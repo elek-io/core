@@ -25,10 +25,11 @@ When `core.projects.create()` runs, it initializes the repository with `producti
 `work` is promoted to `production` through **Releases** (tagged snapshots managed by `core.releases`). Day-to-day create / update / delete operations never touch `production` directly.
 
 ```typescript
-const { local, current } = await core.projects.branches.list({
+const { local, remote } = await core.projects.branches.list({
   id: project.id,
 });
-// local -> ['production', 'work']
+// local  -> ['production', 'work']
+// remote -> ['origin/production', 'origin/work'], empty without an origin
 
 const branch = await core.projects.branches.current({ id: project.id });
 // branch -> 'work'
@@ -80,15 +81,22 @@ const { ahead, behind } = await core.projects.getChanges({ id: project.id });
 
 ## Synchronizing
 
-`synchronize()` pulls then pushes the current branch. That is `work` in day to day use. The `production` branch and the Release tags are published by `core.releases` instead, see below.
+`synchronize()` integrates `origin` into the current branch, then pushes it. That is `work` in day to day use. The `production` branch and the Release tags are published by `core.releases` instead, see below.
 
 ```typescript
 await core.projects.synchronize({ id: project.id });
 ```
 
-Because `pull.rebase` is set, local commits are replayed on top of the fetched remote commits. After pulling, Core fetches the full LFS history so every Asset stays available offline, then pushes, uploading the LFS objects first, see [Git LFS](#git-lfs).
+One call, four steps, and nothing reaches the remote until the last:
 
-`synchronize()` does not pre-check for a remote or for a clean working tree. If there is no `origin`, no upstream, or a conflicting change, the underlying git command fails and surfaces as a `CoreError` of type `Internal` carrying git's own message. Commit or discard working-tree changes before synchronizing.
+1. **Refuse a dirty working tree** with `PreconditionFailed`. A rebase against uncommitted changes fails and could cost you work, so commit or discard first.
+2. **Fetch and rebase** onto `origin/<branch>` rather than pulling, then top up the LFS objects of every ref so switching branches works offline.
+3. **Scan the integrated tree** for dangling references, throwing `Conflict` if it finds any. The integrated commits stay local, so you can repair them through Core's own update or delete and synchronize again.
+4. **Push**, uploading the LFS objects first, see [Git LFS](#git-lfs).
+
+A remote that advanced between the fetch and the push rejects the push as non-fast-forward. Core answers that by re-integrating and trying again, up to five attempts before the `PreconditionFailed` reaches you.
+
+There is still no pre-check for a remote. Without an `origin` or an upstream the underlying git command fails and surfaces as `Internal` carrying git's own message.
 
 ## Cloning an existing Project
 
@@ -190,16 +198,27 @@ Releases, preview releases and Core upgrades are recorded as annotated git tags 
 
 This is how `core.releases` and the Project upgrade flow mark points in history.
 
+A tag is named with a fresh UUID rather than with its version, so the version lives in the `Version:` trailer and nowhere else. Two Releases can never collide on a name, and a tag is addressed by that UUID in `read()` and `delete()`.
+
+The trailers are the whole contract, which decides what Core can see:
+
+- `list()`, `count()` and `read()` drop any tag whose `Type:` trailer is missing or is not one of the three, and log a warning naming what they saw.
+- A `v1.2.3` tag pushed by hand, and any lightweight tag, is therefore invisible to Core. `count()` counts Core's own tags rather than the repository's.
+- Tags come back newest first, sorted by the author date of the commit they point at rather than by when the tag was written, and `list()` returns all of them in one page.
+
 When a remote `origin` is set, `core.releases` pushes at creation time: a full Release pushes `production` and its tag, a preview Release pushes its tag. Upgrade tags are not pushed. See [`releases.md`](./releases.md).
 
 ## Errors during git operations
 
 | Error type | When |
 | --- | --- |
-| `Unauthorized` (401) | A commit (or `init` / `clone` config) is attempted with no User set. In read-only mode, cloning needs no User, see [`usage.md`](./usage.md#options). |
-| `PreconditionFailed` (412) | `getChanges()` or a guarded `delete()` runs without a remote `origin`, or a push fails because the remote does not support Git LFS. |
-| `Conflict` (409) | `clone()` targets an already-present Project, or a guarded `delete()` has unpushed commits. |
+| `Unauthorized` (401) | A commit (or `init` / `clone` config) is attempted with no User set, or the remote rejects the credentials on a push. In read-only mode, cloning needs no User, see [`usage.md`](./usage.md#options). |
+| `PreconditionFailed` (412) | `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree or a rebase conflict, or a push fails because the remote does not support Git LFS. |
+| `Conflict` (409) | `clone()` targets an already-present Project, a guarded `delete()` has unpushed commits, or `synchronize()` would integrate dangling references. |
+| `BadRequest` (400) | A `core.git.push()` combines the `all` and `refs` options, which are mutually exclusive. |
 | `Internal` (500) | The underlying git command exits non-zero (no upstream, merge conflict, network, ...). |
+
+The read-only and provisioned-copy pair is the one to expect first, because it guards `init`, `commit` and `push` alike, at the git layer as well as in the services.
 
 See [`error-handling.md`](./error-handling.md) for the full error model.
 

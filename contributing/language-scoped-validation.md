@@ -55,6 +55,10 @@ Validated output (typed as Record<string, Value>)
 
 The `.pipe()` step exists purely for TypeScript type inference - it ensures the output type is `Record<string, Value>` rather than `Record<string, unknown>`. The static `valueSchema` must therefore accept nullable content values (see "Static value schemas accept nullable content" below).
 
+The `z.object()` in front of the pipe is keyed by field definition slug, and a `z.object()` strips what its shape does not name. A Value whose slug matches no field definition is therefore dropped rather than rejected: `EntryService.create` and `update` accept the call, write the Entry without that Value, and report nothing.
+
+Only the slugs the Collection declares survive the pass, which is the invariant the generated types rely on. The cost is that a caller cannot tell a typo in a slug from a Value it never sent.
+
 ### Admin metadata validation
 
 Collection names, Component names, and field definition labels are validated using `.superRefine()` layered onto the existing static `createCollectionSchema` / `updateCollectionSchema` / `createComponentSchema` / `updateComponentSchema`. The refinement walks translatable admin fields and records a `ZodError` issue for any language key missing on any field:
@@ -66,30 +70,16 @@ export function getCreateCollectionSchemaFromLanguages(
 ) {
   const ts = strictTranslatableString(languages);
   return createCollectionSchema.superRefine((val, ctx) => {
-    checkStrictTranslatable(val.name.singular, ts, ctx, ['name', 'singular']);
-    checkStrictTranslatable(val.name.plural, ts, ctx, ['name', 'plural']);
-    checkStrictTranslatable(val.description, ts, ctx, ['description']);
-    for (const [i, fd] of flattenFieldDefinitions(
-      val.fieldDefinitions
-    ).entries()) {
-      checkStrictTranslatable(fd.label, ts, ctx, [
-        'fieldDefinitions',
-        i,
-        'label',
-      ]);
-      checkStrictTranslatable(
-        fd.description,
-        ts,
-        ctx,
-        ['fieldDefinitions', i, 'description'],
-        true
-      );
-    }
+    checkCollectionAdminMetadata(val, ctx, ts);
   });
 }
 ```
 
-`.superRefine()` attaches to the existing schema (which is a `ZodEffects` once the internal `fieldDefinitionSlugUniquenessSuperRefinement` is added) without rewriting any field definition schema. Issue paths are preserved - a missing `de` key on `fieldDefinitions[2].label` reports at `['fieldDefinitions', 2, 'label', 'de']`. All issues aggregate into a single `ZodError`.
+`checkCollectionAdminMetadata` is shared with the update factory. It walks `fieldDefinitions` rather than flattening them, because a group's children are nested and a flattened index would address a definition the User never edited. A group's own label and description are admin metadata too, so they are checked alongside its children.
+
+`.superRefine()` attaches to the existing schema (which is a `ZodEffects` once the internal `fieldDefinitionSlugUniquenessSuperRefinement` is added) without rewriting any field definition schema.
+
+Issue paths are preserved, so a missing `de` key on the label of the third field inside the second group reports at `['fieldDefinitions', 1, 'fieldDefinitions', 2, 'label', 'de']`. All issues aggregate into a single `ZodError`.
 
 ### Service-side preamble
 

@@ -384,7 +384,7 @@ Use the second one to build error paths. A flattened index does not address a gr
 
 Constraints:
 
-- Groups can contain direct, reference, and dynamic fields - but not other groups.
+- Groups can contain any field definition, direct, reference, dynamic and markdown alike - but not other groups.
 - Components hold a flat list of fields and cannot use groups (Collections only).
 - A group's own `label` and `description` are admin metadata, so like a field definition's they must carry every language the Project supports. A `null` description is allowed, a partially translated one is not.
 

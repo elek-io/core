@@ -60,7 +60,7 @@ Collections and Components accept either a UUID or a slug in the path (`{collect
 
 ## Pagination
 
-List endpoints take `limit` and `offset` query parameters. `limit` defaults to **15** and `offset` to **0** (note this differs from the service-layer `list()`, where `limit: 0` means "everything"). The response is a `PaginatedList`:
+List endpoints take `limit` and `offset` query parameters. Both are passed straight to the service layer, so they behave exactly as `list()` does: `limit` defaults to **15**, `offset` to **0**, and `?limit=0` means everything from `offset` on. The response is a `PaginatedList`:
 
 ```typescript
 {
@@ -77,7 +77,9 @@ GET /content/v1/projects/3f2504e0-4f89-41d3-9a0c-0305e82c3301/collections/blog-p
 
 ## Responses and errors
 
-Single-resource and count endpoints return the raw object or number. Thrown `CoreError`s are mapped to HTTP responses by the API's error handler, with the embedded `statusCode` becoming the HTTP status:
+Single-resource and count endpoints return the raw object or number. A failure answers with one of four bodies, and which one you get depends on what failed rather than on the route.
+
+A thrown `CoreError` keeps its `statusCode` as the HTTP status:
 
 ```json
 {
@@ -90,7 +92,38 @@ Single-resource and count endpoints return the raw object or number. Thrown `Cor
 }
 ```
 
-The stack trace is included deliberately - the API is a local developer tool, never public.
+`stack` is the stack of the error the `CoreError` wraps, so it is absent when nothing was wrapped. It is included deliberately - the API is a local developer tool, never public.
+
+Anything else that throws is not a `CoreError` and has no `type`, so the body is flatter. The status comes from the error's own `status` when it carries one, and is `500` otherwise:
+
+```json
+{
+  "message": "...",
+  "stack": "..."
+}
+```
+
+A path no route matches answers `404` with a message and nothing else, so branch on the presence of `error` rather than on the status:
+
+```json
+{
+  "message": "Not Found - /content/v1/nope"
+}
+```
+
+A path or query parameter that fails its schema never reaches a service. It answers `422` with Zod's own issues, which name the parameter and why it was rejected:
+
+```json
+{
+  "success": false,
+  "error": {
+    "name": "ZodError",
+    "issues": [
+      { "code": "invalid_format", "path": ["projectId"], "message": "..." }
+    ]
+  }
+}
+```
 
 ## Built-in documentation
 
