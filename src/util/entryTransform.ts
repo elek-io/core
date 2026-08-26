@@ -46,16 +46,13 @@ export interface TransformResult {
 /**
  * Transforms entry values based on field definition changes.
  *
- * Rebuilds the values record from scratch using UUID-based mapping
- * to safely handle slug swaps, renames + add-with-same-slug, etc.
+ * Rebuilds the values record from scratch using UUID-based mapping, so a slug
+ * swap, or a rename plus an add with the same slug, is handled safely.
  *
- * Deterministic transforms are applied automatically:
- * - Slug renames (same UUID, different slug)
- * - Field removals (strip orphaned keys)
- * - Field additions with defaults or optional fields
- * - Disallowed component items / collection references (auto-stripped)
+ * Deterministic transforms are applied automatically. A non-deterministic
+ * change produces an issue that needs a decision from the caller.
  *
- * Non-deterministic changes produce issues that require user resolution.
+ * @see ../../docs/schema-changes.md
  */
 export function transformEntryValues(
   entryId: Uuid,

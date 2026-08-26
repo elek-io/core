@@ -31,7 +31,7 @@ Core declares five peer dependencies, so you install them yourself. Two are requ
 
 As a convenience, Core also re-exports `z`, so in your own code you can import it from `@elek-io/core` instead of from `zod` directly. It is the same `z` plus `@hono/zod-openapi`'s `.openapi()` extension:
 
-```ts
+```typescript
 import { z } from '@elek-io/core';
 
 const mySchema = z.object({ title: z.string() }).openapi('MySchema');
@@ -164,7 +164,9 @@ The package includes a CLI accessible via the `elek` command:
 
 ## Documentation
 
-The [`docs/`](./docs/) folder is the consumer documentation and ships inside the published package, see [Using Core with AI agents](#using-core-with-ai-agents). New to elek.io Core? Start with [`concepts.md`](./docs/concepts.md) for the data model and [`usage.md`](./docs/usage.md) for a runnable walkthrough, then reach for the reference docs below. [`docs/index.md`](./docs/index.md) indexes them all.
+The [`docs/`](./docs/) folder is the consumer documentation and ships inside the published package, see [Using Core with AI agents](#using-core-with-ai-agents).
+
+New to elek.io Core? Start with [`concepts.md`](./docs/concepts.md) for the data model and [`usage.md`](./docs/usage.md) for a runnable walkthrough, then reach for the reference docs below. [`docs/index.md`](./docs/index.md) indexes them all.
 
 Docs for working on Core itself live in [`contributing/`](./contributing/) and are not published: testing, design references (language-scoped validation, migration and history flow), how to add a field type, error-handling internals, and a cross-CMS field comparison.
 
@@ -172,7 +174,7 @@ Docs for working on Core itself live in [`contributing/`](./contributing/) and a
 
 Core ships its consumer documentation inside the package at `node_modules/@elek-io/core/docs/`, so an AI coding agent works from references matched to the installed version rather than stale training data, with no network lookup. Point your agent at it by adding the following to your project's `AGENTS.md` (Claude Code, Cursor, GitHub Copilot and others read that file automatically):
 
-```md
+```markdown
 ## elek.io Core
 
 When working with `@elek-io/core`, read the relevant doc under `node_modules/@elek-io/core/docs/` before writing code, starting from `docs/index.md`. These docs are matched to the installed version and are the source of truth.

@@ -141,43 +141,16 @@ function assertAssetsReachable(
 }
 
 /**
- * Derives an Astro content collection for every elek.io Collection of
- * every Project the config declares, plus one Assets collection per
- * Project.
+ * Derives an Astro content collection for every elek.io Collection of every
+ * Project the config declares, plus one Assets collection per Project. Keys
+ * are the alias followed by the Collection's plural slug in PascalCase
+ * (`websitePosts`), and a Project's Assets are `${alias}Assets`.
  *
- * Keys are the Project alias followed by the Collection's plural slug
- * in PascalCase (`websitePosts`), always prefixed, also when a single
- * Project is declared. The Assets collection of a Project is
- * `${alias}Assets`.
+ * Reads the content model from disk, so the Projects have to be in the data
+ * directory already. Called without options it derives everything and warns,
+ * an options object is the complete list instead.
  *
- * Reads the content model from disk, so the Projects have to be in the
- * data directory already. In a build that is what the elek()
- * integration takes care of, it runs before the content config loads.
- *
- * Called without options it derives everything and warns, which is the
- * exploration step. An options object is the complete list instead: a
- * key left out contributes nothing, and so does an alias left out of a
- * key.
- *
- * @example
- * ```ts
- * // src/content.config.ts
- * import { elekCollections } from '@elek-io/core/astro';
- * import { config } from '../elek.config';
- *
- * // Everything, to find your way around a Project. Warns.
- * export const collections = {
- *   ...(await elekCollections(config)),
- * };
- *
- * // What to ship: exactly what the site reads
- * export const collections = {
- *   ...(await elekCollections(config, {
- *     collections: { website: ['pages'], shop: ['products'] },
- *     assets: { website: { imageDir: './src/media' }, shop: true },
- *   })),
- * };
- * ```
+ * @see ../../docs/usage.md
  */
 export async function elekCollections<const T extends ElekConfig>(
   config: T,

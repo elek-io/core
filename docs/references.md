@@ -126,13 +126,15 @@ Core finds the "into C" case cheaply. Every Entry reference already carries the 
 
 ### Component delete
 
-A Component is referenced by Collections and other Components through their field definitions (a `dynamic` field listing the Component in `ofComponents`), not through Entry values. So Component delete is protected by a different check: it is blocked while any Collection or Component field definition still uses it. Its `Conflict` names the referring entities in the message text rather than carrying the structured `ReferencingEntry` list described below.
+A Component is referenced by Collections and other Components through their field definitions, a `dynamic` field listing the Component in `ofComponents`, not through Entry values.
 
-## The Conflict contract (for consumers)
+So Component delete is protected by a different check. It is blocked while any Collection or Component field definition still uses it, and its `Conflict` names the referring entities in the message text rather than carrying the structured `ReferencingEntry` list described below.
+
+## The `Conflict` contract (for consumers)
 
 When an Asset, Entry, or Collection delete is blocked, Core throws a `Conflict` error whose `cause` is a plain array of `ReferencingEntry` records, one per referring Entry. An editor can use these to link the user straight to the content they need to fix first.
 
-```ts
+```typescript
 interface ReferencingEntry {
   collectionId: string; // the Collection the REFERRING Entry lives in
   entryId: string; // the REFERRING Entry
@@ -155,13 +157,21 @@ Every change made through Core goes through the two gates above, so no single cr
 
 Core (and Desktop) sync a Project by pulling and rebasing, which is what lets people work offline and across machines. A rebase reconciles two independently valid histories, so it can combine a delete made on one side with a new reference added on the other into a result that neither change produced alone. No per-operation check can catch this, because each side was valid on its own.
 
-Core closes this at sync time. `synchronize` integrates the remote (fetch then a controlled rebase) and, before pushing, scans the whole integrated `work` tree for any reference whose target is now absent (the forward analogue of the delete-time scan). If it finds one, the sync stops with a `Conflict` and does not push, leaving the integrated commits in the local tree to repair through Core's own (integrity-gated) delete or update before syncing again, so the shared remote never receives a dangling state. This guarantee holds because Projects are reconciled only through Core's `synchronize`, run locally, never through a server-side or pull-request merge or a raw `git push`. The day a merge bypasses Core, the remote can hold a state no local gate saw.
+Core closes it at sync time instead:
+
+1. `synchronize` integrates the remote, a fetch and then a controlled rebase.
+2. Before pushing, it scans the whole integrated `work` tree for any reference whose target is now absent, the forward analogue of the delete-time scan.
+3. If it finds one, the sync stops with a `Conflict` and does not push. The integrated commits stay in the local tree, to repair through Core's own delete or update before syncing again.
+
+So the shared remote never receives a dangling state. The guarantee holds because Projects are reconciled only through Core's `synchronize`, run locally, never through a server-side or pull-request merge or a raw `git push`. The day a merge bypasses Core, the remote can hold a state no local gate saw.
 
 One smaller nuance: a field `defaultValue` is not counted as a reference. A reference embedded in a Collection or Component field's `defaultValue` only becomes live once it is stamped into an Entry, so it is not protected until then.
 
 ## Edge cases
 
-A reference whose `objectType` is `collection` (pointing at a Collection itself rather than at one of its Entries) is representable in the data model, but no field type produces one and no supported workflow creates one. Collection delete still checks for it and blocks, as a defensive measure so that a future format or field type cannot quietly reintroduce the gap. Asset and Entry deletes never encounter it, because their targets are not Collections.
+A reference whose `objectType` is `collection`, pointing at a Collection itself rather than at one of its Entries, is representable in the data model, but no field type produces one and no supported workflow creates one.
+
+Collection delete still checks for it and blocks, so a future format or field type cannot quietly reintroduce the gap. Asset and Entry deletes never encounter it, because their targets are not Collections.
 
 ## See also
 

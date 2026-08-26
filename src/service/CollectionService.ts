@@ -276,25 +276,16 @@ export class CollectionService
   }
 
   /**
-   * Updates given Collection
+   * Updates given Collection, enforcing Collection slug uniqueness.
    *
    * Field definitions are matched by `id`. Send back the `id` of every field
-   * definition you want to keep so Core matches it to the existing one and
-   * preserves the entry data stored under it, even across slug renames or type
-   * changes. A field definition with no `id` (or a changed `id`) is treated as
-   * new, so the old field and the entry data keyed to it is removed. Ids are
-   * caller-supplied (Core does not generate them), so always round-trip the
-   * ids you read.
+   * definition you want to keep, a missing or changed `id` counts as a new
+   * field and removes the Entry data keyed to the old one. Deterministic
+   * changes cascade automatically, a change that needs a decision throws
+   * `Conflict` with structured `EntryIssue[]` the caller can retry with
+   * `resolutions`.
    *
-   * Handles fieldDefinition change cascade:
-   * - Slug renames, field additions (with defaults), field removals, and
-   *   disallowed component/reference stripping are applied automatically.
-   * - Changes requiring user decisions (required field with no default,
-   *   type mismatches, constraint violations) throw CoreError.conflict()
-   *   with structured EntryIssue[] as cause.
-   * - The caller can retry with `resolutions` to resolve all issues.
-   *
-   * Also enforces collection slug uniqueness.
+   * @see ../../docs/schema-changes.md
    */
   public async update<T extends Collection = Collection>(
     props: UpdateCollectionProps

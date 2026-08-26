@@ -3,26 +3,14 @@ import ElekIoCore, { CoreError } from '../index.node.js';
 
 /**
  * Lazily-created, process-wide ElekIoCore. Created on first use so that
- * importing @elek-io/core/astro has no side effects. Configured through
- * the ELEK_IO_* environment variables, which are read once here.
+ * importing @elek-io/core/astro has no side effects. Configured through the
+ * ELEK_IO_* environment variables, which are read once here.
  *
- * The log level is left to ELEK_IO_LOG_LEVEL rather than passed, since
- * an option would win over the variable and there would be no way to
- * quieten Core inside an Astro build.
+ * The file cache and the process error handlers are off on purpose, and the
+ * log level is left to ELEK_IO_LOG_LEVEL rather than passed as an option.
  *
- * The file cache is off on purpose. Core only invalidates it for writes
- * it performs itself, while here another application owns the files:
- * the Desktop app edits a Project while `astro dev` reads it, and a
- * cached Project would keep serving content one edit behind. Every file
- * is read once per sync either way, so there is nothing to gain.
- *
- * The process error handlers are off because inside a build the host
- * owns the process. Astro has its own handling, and this instance is
- * never disposed, so handlers registered here would outlive every
- * loader and cover a process Core does not own. That is not theory: an
- * Astro build whose stdout pipe closed produced an EPIPE Core then
- * caught, logged, and turned back into an EPIPE, 5450 times a second
- * for 13 minutes. See contributing/logging.md.
+ * @see ../../contributing/astro-entry.md
+ * @see ../../contributing/logging.md
  */
 let coreInstance: ElekIoCore | undefined;
 export function getCore(): ElekIoCore {

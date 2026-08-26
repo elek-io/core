@@ -114,22 +114,10 @@ function toRelativePosix(from: string, path: string): string | null {
 /**
  * Astro content loader for elek.io Assets.
  *
- * Reads and saves Assets from a Project and exposes them through
- * Astro's content collection system.
+ * Reads and saves Assets from a Project and exposes them through Astro's
+ * content collection system.
  *
- * @example
- * ```ts
- * // src/content.config.ts
- * import { defineCollection } from 'astro:content';
- * import { elekAssetsLoader } from '@elek-io/core/astro';
- * import { config } from '../elek.config';
- *
- * export const collections = {
- *   assets: defineCollection({
- *     loader: elekAssetsLoader({ config, project: 'website' }),
- *   });
- * };
- * ```
+ * @see ../../docs/usage.md
  */
 export function elekAssetsLoader<const T extends ElekConfig>(
   props: ElekAssetsLoaderProps<T>
@@ -302,26 +290,10 @@ export function elekAssetsLoader<const T extends ElekConfig>(
 /**
  * Astro content loader for elek.io Collection Entries.
  *
- * Reads all Entries from a Collection and exposes them through
- * Astro's content collection system.
+ * Reads all Entries from a Collection and exposes them through Astro's
+ * content collection system.
  *
- * @example
- * ```ts
- * // src/content.config.ts
- * import { defineCollection } from 'astro:content';
- * import { elekEntriesLoader } from '@elek-io/core/astro';
- * import { config } from '../elek.config';
- *
- * export const collections = {
- *   posts: defineCollection({
- *     loader: elekEntriesLoader({
- *       config,
- *       project: 'website',
- *       collectionIdOrSlug: 'posts',
- *     }),
- *   });
- * };
- * ```
+ * @see ../../docs/usage.md
  */
 export function elekEntriesLoader<const T extends ElekConfig>(
   props: ElekEntriesLoaderProps<T>

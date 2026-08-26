@@ -33,13 +33,15 @@ There are two types of report and they take different fields:
 | `bug`      | `message`, `user`, `desktop`, and `includeLogs`            |
 | `feedback` | `message`, `user`, `desktop`. It never carries a log tail. |
 
-`message` is the report. It is between 10 and 5000 characters, and there is no separate summary field: a second free text box for the first line of the first one is one more thing to fill in and one more to validate.
+Three keys carry what the sender wrote:
 
-`user` is who to answer, and `null` is valid. It is meant to be prefilled from `core.user.get()` and left editable, so somebody can be reached at an address other than the one their commits are signed with, and so a report still has a way back before a User exists at all, which is when a report is worth most. **Core does not read the User for you.** What you pass is what is sent.
+- **`message`.** The report itself, between 10 and 5000 characters. There is no separate summary field, because a second free text box for the first line of the first one is one more thing to fill in and one more to validate.
+- **`user`.** Who to answer, and `null` is valid. It is meant to be prefilled from `core.user.get()` and left editable, so somebody can be reached at an address other than the one their commits are signed with, and so a report still has a way back before a User exists at all, which is when a report is worth most.
+- **`desktop`.** The application the report was written in, which is the one part Core cannot know. A report is written in front of a user interface, and that interface is elek.io Desktop, so the block is named for it.
 
-All of it is self-declared and none of it is proof of anything. Whether a sender is who they claim is a question a credential answers, never a question the body answers.
+**Core does not read the User for you.** What you pass is what is sent. All of it is self-declared and none of it is proof of anything. Whether a sender is who they claim is a question a credential answers, never a question the body answers.
 
-`desktop` is the application the report was written in, which is the one part Core cannot know. A report is written in front of a user interface, and today that interface is elek.io Desktop, so the block is named for it. `version` is a semantic version, while the three runtime versions are plain strings, because a Chrome version has four segments and an application may not have been able to read one at all.
+Inside `desktop`, `version` is a semantic version while the three runtime versions are plain strings, because a Chrome version has four segments and an application may not have been able to read one at all.
 
 The schemas are exported from the browser entry as well as the node one, so a renderer that cannot touch the filesystem still validates a form against the same schema Core will, and a character counter reads its cap off `createBugReportSchema.shape.message.maxLength` rather than from a copy of the number.
 
@@ -101,11 +103,20 @@ const tail = await core.logger.tail();
 // { encoding: 'gzip+base64', from, to, isTruncated: false, data: 'H4sIAAAA...' }
 ```
 
-The records come back oldest first, one JSON object per line, gzipped and then base64 encoded. Log files are read line by line and gunzipped on the way, so a very large one is never held in memory, and a run of identical records collapses into the first of them plus `elek.log.repeat.count` and `elek.log.repeat.last_timestamp`. That collapse is what keeps a tail attachable: a measured day of 78 MB, two thirds of it one stack repeating, came to 4 KB. An ordinary day is 1 to 25 KB.
+The records come back oldest first, one JSON object per line, gzipped and then base64 encoded. Two things keep a tail small enough to attach:
+
+- Log files are read line by line and gunzipped on the way, so a very large one is never held in memory.
+- A run of identical records collapses into the first of them plus `elek.log.repeat.count` and `elek.log.repeat.last_timestamp`. A measured day of 78 MB, two thirds of it one stack repeating, came to 4 KB, and an ordinary day is 1 to 25 KB.
 
 **What a tail holds.** Ids, paths, timestamps, counts and error messages, which is to say what happened and in what order. Ids and timestamps are exact, and paths keep their structure below the data directory, because those are the join: a tail plus the repository replays what was done, in order, with the commit for every step. Hashing or truncating an id would destroy that and buy nothing.
 
-**What a tail does not hold.** The content of an Entry, the name of a Project, Collection or Asset, and the git signature of the User were never written to a log file in the first place, so they cannot be in a tail. What the tail itself removes is the short list a log file may hold because it is written for the machine it is on: the home directory prefix becomes `~`, an attribute whose key name is on Sentry's default denylist (`token`, `secret`, `password`, `auth` and the rest) is dropped with its value, and a git signature, a credential in a URL or an address anywhere in the text is redacted.
+**What a tail does not hold.** The content of an Entry, the name of a Project, Collection or Asset, and the git signature of the User were never written to a log file in the first place, so they cannot be in a tail.
+
+What the tail itself removes is the short list a log file may hold because it is written for the machine it is on:
+
+- The home directory prefix becomes `~`.
+- An attribute whose key name is on Sentry's default denylist (`token`, `secret`, `password`, `auth` and the rest) is dropped with its value.
+- A git signature, a credential in a URL, or an address anywhere in the text is redacted.
 
 Nothing goes silently. What was replaced says what it was (`~`, `[redacted]`, `[email]`), and a record that changed carries `redaction.masked.count` and `redaction.redacted.count`, so a reader can tell a deliberate gap from an empty one.
 
@@ -121,19 +132,18 @@ For what Core writes into a log file in the first place, and the level each thin
 | --- | --- |
 | `BadRequest` | The report failed validation, or elek.io Cloud rejected the body (400, 413) |
 | `Unauthorized` | elek.io Cloud refused the credential, or wanted one (401, 403) |
-| `RateLimited` | Too much was sent from here recently (429) |
+| `RateLimited` | This client passed its rate limit (429) |
 | `PreconditionFailed` | elek.io Cloud could not be reached, or did not answer within 15 seconds |
 | `Internal` | elek.io Cloud failed (5xx), or accepted the report and answered with something unreadable |
 
 `PreconditionFailed` is the one worth designing a form around, because it is also what a send answers with while there is no network. Keep the text somebody wrote and let them send again.
 
-**Core never retries.** A retry after a timeout can duplicate a report elek.io Cloud already accepted, and Core cannot tell the difference from the outside. Sending again is a decision somebody makes, not one Core makes for them.
+The rest holds whatever the answer is:
 
-**A body over 2 MB is refused before it is sent**, as a `BadRequest`. Base64 inflates a gzipped tail by a third, so the 1 MB a log blob may be is 1.33 MB on the wire. This is a backstop rather than something a realistic tail meets.
-
-**Read-only mode does not block a report.** `isReadOnly` protects a Project and its remote, and a report mutates nothing local. Being unable to write is a reason to send one.
-
-**The report itself is never written to a log file.** A failure is logged at the service boundary with the error type, the method and the status code, and never with what somebody wrote.
+- **Core never retries.** A retry after a timeout can duplicate a report elek.io Cloud already accepted, and Core cannot tell the difference from the outside. Sending again is a decision somebody makes, not one Core makes for them.
+- **A body over 2 MB is refused before it is sent**, as a `BadRequest`. Base64 inflates a gzipped tail by a third, so the 1 MB a log blob may be is 1.33 MB on the wire. This is a backstop rather than something a realistic tail meets.
+- **Read-only mode does not block a report.** `isReadOnly` protects a Project and its remote, and a report mutates nothing local. Being unable to write is a reason to send one.
+- **The report itself is never written to a log file.** A failure is logged at the service boundary with the error type, the method and the status code, and never with what somebody wrote.
 
 ## See also
 

@@ -804,16 +804,10 @@ describe('Dynamic zod schema from field definition', () => {
       })
     ).toThrow();
 
-    // @todo The following (and possible more) URLs are passing although they should not. Zod v4 should provide better parsing
-    // @see https://github.com/colinhacks/zod/issues/2236 and https://github.com/colinhacks/zod/pull/3049
-
-    // expect(() =>
-    //   requiredUrlValueschema.parse({...defaultStringValue, content: { en: 'https:/example.com/' } })
-    // ).toThrow();
-    // expect(() => requiredUrlValueschema.parse({...defaultStringValue, content: { en: 'https:example.com/' } })).toThrow();
-    // expect(() =>
-    //   requiredUrlValueschema.parse({...defaultStringValue, content: { en: 'https:.....///example.com/' } })
-    // ).toThrow();
+    // Accepted on purpose. "https:/example.com/", "https:example.com/" and
+    // "https:.....///example.com/" are valid per WHATWG and Node's own URL
+    // parser normalizes the first two to "https://example.com/", so there is
+    // nothing for zod to reject here.
 
     expect(() =>
       requiredUrlValueschema.parse({

@@ -68,35 +68,16 @@ function languagesOf<Language extends string>(
 }
 
 /**
- * Turns Entries into the paths a `getStaticPaths` returns, routing
- * them by one of their slug fields instead of by their UUID.
+ * Turns Entries into the paths a `getStaticPaths` returns, routing them by one
+ * of their slug fields instead of by their UUID.
  *
- * Every language of the Collection gets its own path, with the
- * language in the params, unless a single one is asked for. An Entry
- * without a slug in a language is left out of that language, it has no
- * public URL there.
+ * Every language of the Collection gets its own path, with the language in the
+ * params, unless a single one is asked for. An Entry without a slug in a
+ * language is left out of that language. Each path carries its language typed
+ * as the Project's languages, which `Astro.params` cannot do, and Entries stay
+ * keyed by their UUID in Astro's store, which `getEntry()` keeps using.
  *
- * A Collection can define any number of slug fields, so the field to
- * route by is named per call. Entries stay keyed by their UUID in
- * Astro's store, which is what `getEntry()` and every reference
- * lookup keeps using.
- *
- * Each path carries the language it was built for, typed as the
- * Project's languages, so a page reads a translatable Value without
- * naming them. `Astro.params` cannot do this, it types every route
- * param as `string | undefined`.
- *
- * @example
- * ```ts
- * // src/pages/[language]/[slug].astro
- * export async function getStaticPaths() {
- *   const posts = await getCollection('websitePosts');
- *   return elekSlugPaths(posts, { slugField: 'slug' });
- * }
- *
- * const { entry, language } = Astro.props;
- * // <h1>{entry.data.title[language]}</h1>
- * ```
+ * @see ../../docs/usage.md
  */
 export function elekSlugPaths<
   E extends ElekRoutableEntry,

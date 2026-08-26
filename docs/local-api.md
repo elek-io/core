@@ -20,7 +20,9 @@ elek api:start [port]   # port defaults to 31310
 
 `ElekIoCore.dispose()` stops the API if it is running.
 
-When using Core directly, the API only runs when you start it explicitly. The User's `localApi.isEnabled` preference (set via `core.user.set()`) records whether the API should auto-start, but Core itself does not act on it. That preference is for elek.io clients such as elek.io Desktop, which reads the flag and starts the API on launch. So when you embed Core yourself, start the API with `core.api.start()` or `elek api:start`.
+When you embed Core yourself, the API only runs once you start it, with `core.api.start()` or `elek api:start`.
+
+The User's `localApi.isEnabled` preference (set via `core.user.set()`) records whether the API should auto-start. Core never acts on it. It is there for elek.io clients such as elek.io Desktop, which read the flag and start the API on launch.
 
 ## Read-only by design
 

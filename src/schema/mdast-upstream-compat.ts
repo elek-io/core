@@ -1,24 +1,12 @@
 /**
- * Compile-time drift detection between our MdAst* types and the upstream
+ * Compile-time drift detection between Core's MdAst* types and the upstream
  * mdast spec types from `@types/mdast`.
  *
- * Purpose: when `@types/mdast` updates, these assertions fail at compile
- * time if upstream:
- *   - adds a new required scalar field to a node type we model
- *   - changes the shape of an existing scalar field (e.g. narrows `depth`)
- *   - renames a field
+ * The assertions fail at compile time when upstream adds a required scalar
+ * field, changes the shape of one, or renames one. An added optional field, a
+ * removed field and a change in a children shape pass on purpose.
  *
- * Acceptable false negatives (we don't try to catch these):
- *   - upstream adds an optional field - additive; we can ignore until needed
- *   - upstream removes a field - we may keep it deliberately
- *   - children-shape changes - our recursive types are structurally distinct
- *     from upstream's (we omit `position`/`data` from every node), so a deep
- *     children comparison is fragile. We compare only the non-recursive,
- *     non-metadata fields per node.
- *
- * Why we keep `@types/mdast` as a devDep: this drift check is the sole
- * runtime-zero reason. Our schemas are hand-written for Zod, and inferred
- * types are derived via `z.infer<typeof xSchema>` - not from `@types/mdast`.
+ * @see ../../contributing/markdown-internals.md
  */
 
 import type {

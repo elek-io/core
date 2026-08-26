@@ -57,16 +57,15 @@ export function createTmpCore(
 
 /**
  * Asserts that a string of generated TypeScript transpiles without syntax
- * errors. Uses `ts.transpileModule`, which is single-file (isolatedModules)
- * transpilation: it catches malformed output - unbalanced braces, invalid
- * tokens, broken type literals - but does NOT resolve imports or type-check
- * against other modules. A diagnostic here means the generator emitted
- * invalid source; fix the generator, do not loosen this assertion.
+ * errors. `ts.transpileModule` is single-file (isolatedModules) transpilation,
+ * so it catches malformed output but resolves no imports and type-checks
+ * against no other module.
  *
- * Note: because transpilation is single-file, a plain `export { Foo }` for a
- * type (instead of `export type { Foo }`) surfaces as a real diagnostic - the
- * same thing esbuild/tsdown would reject in the product's `language: 'js'`
- * path, so treat it as a true positive.
+ * A diagnostic here is a true positive: the generator emitted invalid source,
+ * a plain `export { Foo }` for a type included, which tsdown rejects too. Fix
+ * the generator, do not loosen this assertion.
+ *
+ * @see ../../contributing/testing.md
  */
 export function expectTranspiles(source: string, label = 'generated source') {
   const { diagnostics } = ts.transpileModule(source, {

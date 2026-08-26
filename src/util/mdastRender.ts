@@ -1,17 +1,13 @@
 /**
- * Internal generic primitive — a typed fold over an MdAstRoot. Every node
- * type has a required handler in `MdastRenderersBase<T>`; the walk descends
- * depth-first and calls each parent handler with its already-rendered
- * children, then the root handler at the top to combine.
+ * A typed fold over an MdAstRoot. Every node type has a required handler in
+ * `MdastRenderersBase<T>`, the walk descends depth-first and calls each parent
+ * handler with its already-rendered children, then the root handler combines.
  *
- * Framework-agnostic: T is the consumer's element type. Framework-specific
- * wrappers (`@elek-io/core/astro` and friends) bind T to their JSX flavour,
- * supply defaults for the safe standard node types, and expose only the
- * required overrides to consumers.
+ * Framework-agnostic, `T` is the consumer's element type. A framework wrapper
+ * such as `@elek-io/core/astro` binds `T` to its JSX flavour, supplies
+ * defaults for the safe node types and exposes only the required overrides.
  *
- * Not exported from `@elek-io/core` — kept internal until a non-Astro
- * consumer demands a public lower-level API. Exposing later is a
- * non-breaking change.
+ * @see ../../contributing/markdown-internals.md
  */
 
 import type {

@@ -21,16 +21,12 @@ export const logSchema = z.object({
 /**
  * What a caller hands `core.logger`.
  *
- * The type is narrower than `logSchema` on purpose, and only for Core's
- * own records: an attribute name Core writes has to be one it declared,
- * which a build says and a running logger must not. `logSchema` stays
- * permissive at runtime, so a name nobody declared writes a wrong key
- * into a log file instead of throwing inside a log call. Every value the
- * type accepts is one the schema accepts, never the other way round.
+ * The type is narrower than `logSchema` on purpose, and only for Core's own
+ * records. `logSchema` stays permissive at runtime, so a name nobody declared
+ * writes a wrong key into a log file instead of throwing inside a log call.
+ * A host logging through Core keeps a free `meta`, which the sink scrubs.
  *
- * A host logging through Core keeps a free `meta`. Its shape arrives over
- * IPC and Core cannot type it, which is why the sink scrubs it rather
- * than trusting it. See contributing/logging.md.
+ * @see ../../contributing/logging.md
  */
 export type LogProps =
   | { source: 'core'; message: string; meta?: LogAttributes }
@@ -84,20 +80,13 @@ export type LogResource = z.infer<typeof logResourceSchema>;
 /**
  * Every attribute name Core writes.
  *
- * The record shape is enforced by `logRecordSchema` and the Resource by
- * `logResourceSchema`, but an attribute key would otherwise be a free
- * string, so a typo or a camelCase relapse would write itself into a log
- * file and be found by nobody: the line still parses and the query for it
- * just comes back empty.
+ * An attribute key would otherwise be a free string, so a typo would write
+ * itself into a log file and be found by nobody. These names are the ones
+ * `LogProps` accepts for a record Core wrote, so an undeclared one fails the
+ * build. A Semantic Convention name is used wherever one exists, and the
+ * `elek.` namespace for the rest.
  *
- * These names are the ones `LogProps` accepts for a record Core wrote, so
- * using one that is not here fails the build rather than the reader, and
- * `logSweep.test.ts` checks what actually reached a log file for the paths
- * a type cannot see.
- *
- * A Semantic Convention name is used wherever one exists, and the
- * `elek.` namespace for the rest, which is what Semantic Conventions
- * themselves prescribe for custom attributes. See contributing/logging.md.
+ * @see ../../contributing/logging.md
  */
 export const logAttributeNames = [
   // Semantic Conventions, stable as of semconv 1.43.0

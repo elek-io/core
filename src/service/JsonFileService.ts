@@ -108,7 +108,8 @@ export class JsonFileService extends AbstractService {
   /**
    * Overwrites an existing file on disk
    *
-   * @todo Check how to error out if the file does not exist already
+   * Creates the file when it does not exist, which is what the slug index
+   * write in `AbstractSlugIndexedEntityService` relies on.
    *
    * @param data Data to write into the file
    * @param path Path to the file to overwrite

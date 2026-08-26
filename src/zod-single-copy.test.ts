@@ -6,15 +6,12 @@ import { describe, expect, it } from 'vitest';
 /**
  * Guards the single-zod-copy invariant.
  *
- * zod v4 brands every schema with its exact version, so two physical zod copies in the
- * dependency tree make Core's schemas unassignable to a consumer's zod. That breaks
- * downstream type-checking such as @hookform/resolvers' zodResolver. zod is a required
- * peer dependency for this reason. See contributing/peer-dependencies.md.
+ * zod v4 brands every schema with its exact version, so two physical copies in
+ * the dependency tree make Core's schemas unassignable to a consumer's zod.
+ * This reads the committed pnpm-lock.yaml and fails if more than one zod
+ * version resolves. Run `pnpm dedupe` if it fails after a dependency change.
  *
- * This reads the committed pnpm-lock.yaml and fails if more than one zod version
- * resolves. If it fails after a dependency change, run `pnpm dedupe`. astro and
- * `@scalar/*` depend on zod through caret ranges that resolve up to the newest zod, so a
- * partial install can leave a second copy alongside the version Core pins.
+ * @see ../contributing/peer-dependencies.md
  */
 const lockfilePath = Path.resolve(
   Path.dirname(fileURLToPath(import.meta.url)),

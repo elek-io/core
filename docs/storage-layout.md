@@ -1,4 +1,4 @@
-# Storage Layout
+# Storage layout
 
 elek.io Core stores everything as plain files on disk. This document describes where those files live and what a Project looks like as a directory tree.
 
@@ -73,27 +73,39 @@ The `coreVersion` stamp on each file is what the migration chain reads when upgr
 
 ## Index files
 
-`collections/slug.index.json` and `components/slug.index.json` are UUID-to-slug lookup caches that let Core resolve a slug to an id without scanning every folder, and back the uniqueness of Collection and Component slugs. They are **performance caches, not source of truth**: they are listed in the Project's `.gitignore`, never committed, and rebuilt from disk if missing or stale. A failed index write is swallowed and the cache self-heals on next access.
+`collections/slug.index.json` and `components/slug.index.json` are UUID-to-slug lookup caches. They let Core resolve a slug to an id without scanning every folder, and they back the uniqueness of Collection and Component slugs.
+
+They are **performance caches, not source of truth**:
+
+- They are listed in the Project's `.gitignore` and never committed.
+- They are rebuilt from disk when missing or stale.
+- A failed index write is swallowed, and the cache heals itself on next access.
 
 Note that field-value uniqueness (`isUnique` and the `slug` field type) is **not** backed by an index file. It is enforced by scanning a Collection's Entries on each write (see [`fields.md`](./fields.md#uniqueness)), which keeps it correct for Entries brought in by a pull or merge that never passed through Core's write path.
 
 ## What is and isn't committed
 
-The generated `.gitignore` ignores all hidden files (`.*`) except `.gitignore`, `.gitattributes` and `.gitkeep` files, and additionally ignores the `slug.index.json` caches. Everything else - `project.json`, every `collection.json` / `component.json`, every Entry, asset metadata, and the binaries under `lfs/` - is committed.
+The generated `.gitignore` ignores all hidden files (`.*`) except `.gitignore`, `.gitattributes` and `.gitkeep` files, and also ignores the `slug.index.json` caches. Everything else - `project.json`, every `collection.json` / `component.json`, every Entry, asset metadata, and the binaries under `lfs/` - is committed.
 
 ## Line endings
 
 Every file Core writes uses LF, on every operating system. Object files get it from `JSON.stringify`, and the generated `.gitignore` and `.gitattributes` are joined with LF rather than the platform newline.
 
-Core is the only writer inside a Project folder, but `core.autocrlf` is a per machine git setting that Core does not control, and a Windows checkout with it enabled would convert files to CRLF anyway. The generated `.gitattributes` therefore starts with `* text=auto eol=lf`, which pins the checkout to LF regardless of that setting. The `lfs/**` rules follow it, so binaries keep their `-text` marker and stay out of conversion (last matching pattern wins).
+That is not enough on its own. `core.autocrlf` is a per machine git setting Core does not control, and a Windows checkout with it enabled would convert files to CRLF anyway. So the generated `.gitattributes` pins the checkout instead:
+
+- `* text=auto eol=lf` comes first and holds for every text file, whatever `core.autocrlf` says.
+- The `lfs/**` rules follow it, so binaries keep their `-text` marker and stay out of conversion. The last matching pattern wins.
 
 The result is that a Project is byte identical whichever OS created it. Without this, the same Project edited on Windows and on Linux would differ on every line of every file, and syncing the two would conflict everywhere.
 
 ## The `lfs` folder
 
-Binary assets are stored under `lfs/` rather than alongside their metadata, and are tracked with Git LFS. A `.gitattributes` file generated at Project creation tracks `lfs/**`, so each binary is committed as a small pointer while the actual bytes live in the local LFS store (`.git/lfs/objects`). The working-tree file stays the real binary, so reading an Asset returns its content directly. See [`git-and-sync.md`](./git-and-sync.md#git-lfs) for how this works across clone, push and pull.
+Binary assets live under `lfs/` rather than next to their metadata, and are tracked with Git LFS. The `.gitattributes` generated at Project creation tracks `lfs/**`, so each binary is committed as a small pointer while the bytes live in the local LFS store (`.git/lfs/objects`).
+
+The working-tree file stays the real binary, so reading an Asset returns its content directly. See [`git-and-sync.md`](./git-and-sync.md#git-lfs) for how this works across clone, push and pull.
 
 ## See also
 
 - [`concepts.md`](./concepts.md) - what these files represent
-- [`asset-management.md`](./asset-management.md) - the two-file Asset model in detail- [`git-and-sync.md`](./git-and-sync.md) - the git repository each Project lives in
+- [`asset-management.md`](./asset-management.md) - the two-file Asset model in detail
+- [`git-and-sync.md`](./git-and-sync.md) - the git repository each Project lives in

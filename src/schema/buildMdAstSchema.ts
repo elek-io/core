@@ -1,21 +1,14 @@
 /**
  * Per-field mdast schema construction.
  *
- * `buildMdAstSchemaForFeatures` narrows the fully-permissive mdast tree
- * schema (from `valueSchema.ts`) to only those node types enabled by a
- * field's `features` config. The resulting schema:
- *   - rejects nodes whose `type` isn't in the allowed set
- *   - enforces `ofCollections` structurally on `entryReference` node
- *     `collectionId` claims
- *   - rejects `headings` of depths outside the configured set
- *   - enforces block-count `min`/`max` on the root's children array
- *   - accepts `null` when the field is not required (matching the existing
- *     pattern for text/number/boolean fields at
- *     `schemaFromFieldDefinition.ts:118-122`)
+ * `buildMdAstSchemaForFeatures` narrows the fully-permissive mdast tree schema
+ * from `valueSchema.ts` to the node types a field's `features` config enables,
+ * and applies the structural limits that config carries.
  *
- * Reference-existence and `ofAssetMimeTypes` checks are NOT done here -
- * those live in `EntryService.validateValueReferences` because they
- * require IO (read the target asset/entry file).
+ * Reference existence and `ofAssetMimeTypes` are not checked here, they need
+ * IO and live in `EntryService.validateValueReferences`.
+ *
+ * @see ../../contributing/markdown-internals.md
  */
 
 import { z } from '@hono/zod-openapi';
@@ -149,19 +142,16 @@ export interface BuildMdAstSchemaContext {
 }
 
 /**
- * Builds a Zod schema that validates an `MdAstRoot | null` against the
- * given features and ofCollections.
+ * Builds a Zod schema that validates an `MdAstRoot | null` against the given
+ * features and ofCollections.
  *
- * Behaviour:
- *   - `null` accepted when `isRequired === false`; rejected when `true`.
- *   - Tree shape: only allowed node types per the features map.
- *   - Block count: at least `effectiveMin` and at most `max ?? Infinity`,
- *     where `effectiveMin = min ?? (isRequired ? 1 : 0)` - mirrors
- *     `.min(1)` for required strings.
- *   - Empty-paragraph-only trees are rejected (Desktop normalizes to
- *     null).
- *   - `entryReference.collectionId` must be in `ofCollections` when that
- *     array is non-empty.
+ * `null` is accepted when `isRequired` is false. Only the node types the
+ * features map allows pass. The block count is at least
+ * `min ?? (isRequired ? 1 : 0)` and at most `max`. A tree of empty paragraphs
+ * is rejected, and an `entryReference.collectionId` has to be in a non-empty
+ * `ofCollections`.
+ *
+ * @see ../../contributing/markdown-internals.md
  */
 export function buildMdAstSchemaForFeatures(
   ctx: BuildMdAstSchemaContext

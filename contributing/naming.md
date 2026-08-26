@@ -36,3 +36,10 @@ Two conventions from the Astro ecosystem apply to `@elek-io/core/astro`:
 - The integration is product-named, like every Astro integration (`react()`, `sitemap()`, `starlight()`): `elek()`, not `elekIntegration()`. Its position inside `integrations: []` states its kind.
 - Loader factories carry the `Loader` suffix, like Starlight's `docsLoader` and the community loaders: `elekAssetsLoader()`, `elekEntriesLoader()`. The suffix separates them from functions that return collection definitions instead, like `elekCollections()`.
 - Config helpers follow the `define*` convention of `defineConfig` and `defineCollection`: `defineElekConfig()`.
+
+## See also
+
+- [`documentation.md`](./documentation.md) - how to write about the things you just named
+- [`astro-entry.md`](./astro-entry.md) - why the Astro entry exports carry the names they do
+- [`linting.md`](./linting.md) - the rules a linter does check
+- [`adding-a-field-type.md`](./adding-a-field-type.md) - the naming a new field type has to fit into

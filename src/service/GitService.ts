@@ -31,18 +31,12 @@ import { PROVISIONED_MARKER, type PathTo } from '../util/node.js';
 /**
  * Service that manages Git functionality
  *
- * Uses dugite Node.js bindings for Git to be fully compatible
- * and be able to leverage Git LFS functionality
+ * Uses the dugite Node.js bindings for Git, so Git LFS works, and is heavily
+ * inspired by the GitHub Desktop app. Git operations are sequential, a FIFO
+ * queue turns async calls into a sequence of git operations.
+ *
  * @see https://github.com/desktop/dugite
- *
- * Heavily inspired by the GitHub Desktop app
- * @see https://github.com/desktop/desktop
- *
- * Git operations are sequential!
- * We use a FIFO queue to translate async calls
- * into a sequence of git operations
- *
- * @todo All public methods should recieve only a single object as parameter and the type should be defined through the shared library to be accessible in Core and Client
+ * @see ../../contributing/git-credentials.md
  */
 
 /**
@@ -145,25 +139,15 @@ export function classifyAuthError(
 const REDACTED = '[redacted]';
 
 /**
- * Redacts the User's identity out of a git command line before it reaches
- * a log record or an error message.
+ * Redacts the User's identity out of a git command line before it reaches a
+ * log record or an error message.
  *
- * Core's log files can be attached to a bug report, and the invariant in
- * contributing/logging.md is that they never carry a git signature. Three
- * places put one on a command line, and a rule written for only the first
- * would have missed the other two:
+ * Three places put one on a command line: `commit --author`, `config --local
+ * user.name` and `config --local user.email`. Credentials embedded in a remote
+ * URL go too. Everything else is left exactly as it is, because ids, paths and
+ * flags are what make a log line resolvable against the repository.
  *
- * - `commit --author=<name> <email>`
- * - `config --local user.name <value>`
- * - `config --local user.email <value>`
- *
- * Credentials embedded in a remote URL go too. The access token never
- * reaches a command line (it travels by environment variable through the
- * askpass helper, see contributing/git-credentials.md), but a URL a caller
- * supplied can carry its own.
- *
- * Everything else is left exactly as it is. Ids, paths and flags are what
- * make a log line resolvable against the repository.
+ * @see ../../contributing/logging.md
  */
 export function redactGitArgs(args: readonly string[]): string[] {
   return args.map((arg, index) => {
@@ -380,8 +364,6 @@ export class GitService {
    * Clone a repository into a directory
    *
    * @see https://git-scm.com/docs/git-clone
-   *
-   * @todo Implement progress callback / events
    *
    * @param url     The remote repository URL to clone from
    * @param path    The destination path for the cloned repository.
@@ -751,11 +733,9 @@ export class GitService {
      * fetch-all guarantee the object is always present locally, so this does
      * not reach the network. Used to resolve a binary asset read from history.
      *
-     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-smudge.adoc
+     * `filePath` is only used for the progress bar.
      *
-     * @param path      Path to the repository
-     * @param pointer   The LFS pointer content to resolve
-     * @param filePath  Path of the file the pointer belongs to (used for the progress bar)
+     * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-smudge.adoc
      */
     smudge: async (
       path: string,
@@ -791,13 +771,9 @@ export class GitService {
      * Run before the ref push so an upload failure is attributable. If the
      * remote does not support Git LFS, has it disabled, or its LFS endpoint is
      * unreachable, throws a descriptive `PreconditionFailed`. A genuine host or
-     * auth outage - where plain git transport also fails - is surfaced
-     * unchanged.
+     * auth outage, where plain git transport also fails, is surfaced unchanged.
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-push.adoc
-     *
-     * @param path    Path to the repository
-     * @param options Options specific to the push operation
      */
     push: async (
       path: string,
@@ -858,21 +834,14 @@ export class GitService {
   /**
    * Rebase the current branch onto `onto` (for example `origin/work`).
    *
-   * A controlled rebase that tells three outcomes apart from the raw result:
-   *   - clean success: the working tree now holds the integrated state.
-   *   - textual conflict: aborts the rebase so the tree is left clean, never
-   *     mid-rebase, then throws `PreconditionFailed`.
-   *   - any other failure: throws `Internal`, so an unrecognised failure stays
-   *     loud rather than silently leaving a half-applied rebase.
+   * A clean success leaves the working tree holding the integrated state. A
+   * textual conflict aborts the rebase, so the tree is never left mid-rebase,
+   * and throws `PreconditionFailed`. Any other failure throws `Internal`.
    *
-   * Conflicts are classified with dugite's own `parseError` + `GitError`, the
-   * maintained mapping of git output to error codes that GitHub Desktop relies
-   * on, rather than bespoke regexes.
+   * Conflicts are classified with dugite's own `parseError` and `GitError`
+   * rather than with bespoke regexes.
    *
    * @see https://git-scm.com/docs/git-rebase
-   *
-   * @param path Path to the repository
-   * @param onto The ref to rebase the current branch onto
    */
   public async rebase(path: string, onto: string): Promise<void> {
     const result = await this.git(path, ['rebase', onto], {
@@ -925,7 +894,6 @@ export class GitService {
   /**
    * Reset current HEAD to the specified state
    *
-   * @todo maybe add more options
    * @see https://git-scm.com/docs/git-reset
    *
    * @param path    Path to the repository
@@ -1024,18 +992,14 @@ export class GitService {
   /**
    * Update remote refs along with associated objects to remote `origin`
    *
-   * The LFS objects are uploaded first in an explicit `git lfs push`, so that
-   * an upload failure is attributable and can be turned into a descriptive
-   * error. The ordinary ref push then runs with `--no-verify` to skip the
-   * now-redundant pre-push hook.
+   * The LFS objects are uploaded first in an explicit `git lfs push`, so an
+   * upload failure is attributable. The ref push then runs with `--no-verify`
+   * to skip the now-redundant pre-push hook.
    *
-   * By default the current branch is pushed. The `refs` option pushes the
-   * named branches or tags instead, the `all` option pushes all branches.
+   * By default the current branch is pushed. `refs` pushes the named branches
+   * or tags instead, `all` pushes all branches.
    *
    * @see https://git-scm.com/docs/git-push
-   *
-   * @param path    Path to the repository
-   * @param options Options specific to the push operation
    */
   public async push(
     path: string,
@@ -1179,9 +1143,6 @@ export class GitService {
    * Gets local commit history
    *
    * @see https://git-scm.com/docs/git-log
-   *
-   * @todo Check if there is a need to trim the git commit message of chars
-   * @todo Use this method in a service. Decide if we need a HistoryService for example
    *
    * @param path    Path to the repository
    * @param options Options specific to the log operation

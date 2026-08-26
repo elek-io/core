@@ -18,6 +18,8 @@ About to change an area? Read its doc first, so you change behavior on purpose r
 - [`adding-a-field-type.md`](./adding-a-field-type.md) - the steps to add a field type, from schema to migration
 - [`language-scoped-validation.md`](./language-scoped-validation.md) - how translatable content is guaranteed to carry the Project's languages
 - [`migration-and-history-flow.md`](./migration-and-history-flow.md) - how Projects are upgraded, and how objects are read out of git history
+- [`markdown-internals.md`](./markdown-internals.md) - how an mdast tree is validated, rendered and kept in step with upstream
+- [`reference-integrity.md`](./reference-integrity.md) - the three gates that stop a reference from dangling
 
 ## Platform
 

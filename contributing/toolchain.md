@@ -44,13 +44,18 @@ An auto-managed runtime also works against the rule that CI should reflect a rea
 
 Task caching across workspaces and workspace-aware execution are the main wins, and Core is a single package with no workspaces. Caching the test run would be unsound anyway: the suite creates real git repositories on disk, so its result is not a pure function of the source tree.
 
-Core is also not a web app. There is no dev server, no HMR, no browser bundle and no deploy target, so `vp dev`, `vp preview` and the app side of `vp build` have nothing to act on. The build is four library entry points, and it depends on tsdown being a _peer_ so tsdown externalizes itself and stays out of `dist/cli`. That arrangement is verified and easy to break, so it is not worth routing through another layer.
+Core is also not a web app:
+
+- There is no dev server, no HMR, no browser bundle and no deploy target, so `vp dev`, `vp preview` and the app side of `vp build` have nothing to act on.
+- The build is four library entry points, and it depends on tsdown being a _peer_ so tsdown externalizes itself and stays out of `dist/cli`. That arrangement is verified and easy to break, so it is not worth routing through another layer.
 
 For dependency work, `pnpm outdated`, `pnpm dedupe` and `pnpm why` already cover what `vp outdated`, `vp dedupe` and `vp why` would.
 
 ### Verdict
 
-No. Adopting Vite+ would regress a tool version, surrender pin control, and wrap a pnpm configuration that has to keep working, in exchange for monorepo and application features Core has no use for. The individual tools are the right unit of adoption, and Core already takes them that way. This is worth re-checking if Core ever becomes a workspace with the Desktop or Cloud packages beside it, because that is the shape Vite+ is built for.
+No. Adopting Vite+ would regress a tool version, surrender pin control, and wrap a pnpm configuration that has to keep working, in exchange for monorepo and application features Core has no use for.
+
+The individual tools are the right unit of adoption, and Core already takes them that way. Re-check that if Core ever becomes a workspace with the Desktop or Cloud packages beside it, because that is the shape Vite+ is built for.
 
 ## Evaluated and deferred
 
@@ -88,4 +93,13 @@ Coverage matches too, because [`tsconfig.json`](../tsconfig.json) is `include: [
 | `oxlint` (lint only, what `pnpm lint` runs)   | 2.4s |
 | `oxlint --type-check` (lint plus diagnostics) | 2.8s |
 
-That is roughly 8.8s of `lint` plus `check-types` down to 2.8s. It was still turned down, because oxlint's own configuration schema describes the option as "Enable **experimental** type checking". Core publishes `.d.ts` files, so type correctness is not the place to depend on a flag its authors label experimental. `tsc` stays the authority. Re-check when the experimental label is dropped, since this is the more attractive of the two.
+That is roughly 8.8s of `lint` plus `check-types` down to 2.8s. It was still turned down, because oxlint's own configuration schema describes the option as "Enable **experimental** type checking".
+
+Core publishes `.d.ts` files, so type correctness is not the place to depend on a flag its authors label experimental. `tsc` stays the authority. Re-check when the experimental label is dropped, since this is the more attractive of the two.
+
+## See also
+
+- [`linting.md`](./linting.md) - the oxlint rule set, and which rules are off on purpose
+- [`testing.md`](./testing.md) - how vitest runs the suite, and why it is slow by design
+- [`peer-dependencies.md`](./peer-dependencies.md) - the ranges behind the `tsdown` and `typescript` peers
+- [`documentation.md`](./documentation.md) - the documentation rules `pnpm test` and `pnpm lint` enforce

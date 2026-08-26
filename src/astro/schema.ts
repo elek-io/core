@@ -174,19 +174,15 @@ function buildComponentArraySchema(
 }
 
 /**
- * Fingerprints everything the generated schema and types are built
- * from: the Collection's field definitions, the Project's languages and
- * the Components the fields reference.
+ * Fingerprints everything the generated schema and types are built from: the
+ * Collection's field definitions, the Project's languages and the Components
+ * the fields reference.
  *
- * Astro builds a collection's schema and types once, when it loads the
- * content config. In dev the loaders compare this digest on every
- * reload to notice that the model moved underneath them, which no
- * amount of reloading can fix, and say so instead of validating content
- * against a schema that no longer describes it.
+ * The loaders compare this digest on every dev reload, to notice that the
+ * model moved underneath them. Field definitions keep their order, which the
+ * emitted type follows, and Components are sorted by id first.
  *
- * Field definitions keep their order, which the emitted type follows.
- * Components are sorted by id first, since the order they are listed in
- * is incidental.
+ * @see ../../contributing/astro-entry.md
  */
 export function buildModelDigest(
   fieldDefinitions: FieldDefinition[],
@@ -366,18 +362,12 @@ function renderComponentValuesType(
  * Maps a field definition to its emitted TS leaf type, used inside
  * `Record<ProjectLanguage, ...>` in the Astro-generated entry types.
  *
- * A language slot an editor left empty holds `null`, which the
- * generated schema accepts for an optional string, number or markdown
- * field. The type has to admit it too, otherwise a consumer reads
- * `entry.data.slug.de` as a string and gets null at runtime. Booleans
- * and references are never nullable: a toggle is always true or false
- * and an empty reference field is an empty array. The rule mirrors
- * `schemaFromFieldDefinition.ts` and `schema.test.ts` asserts the two
- * agree per field type.
+ * A language slot an editor left empty holds `null`, and the emitted type has
+ * to admit it for an optional string, number or markdown field. Booleans and
+ * references never do. The rule mirrors `schemaFromFieldDefinition.ts`, and
+ * `schema.test.ts` asserts the two agree per field type.
  *
- * The `'component'` case is unreachable because `renderEntryValuesType`
- * and `renderComponentValuesType` special-case it before calling here.
- * Included for exhaustiveness.
+ * @see ../../contributing/language-scoped-validation.md
  */
 function fieldDefToTsType(fieldDef: FieldDefinition): string {
   const orNull = fieldDef.isRequired ? '' : ' | null';

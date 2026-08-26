@@ -1,4 +1,4 @@
-# CMS Field Type Comparison
+# CMS field type comparison
 
 Comparison of content field types across CMS platforms, with elek.io Core's design situated against Strapi, Directus, Payload CMS, and TinaCMS.
 
@@ -8,7 +8,7 @@ For elek.io Core's full field reference and code examples, see [`../fields.md`](
 
 ## Summary at a glance
 
-- **elek.io Core** - Git-backed JSON storage with first-class i18n. 6 value types × 18 field types. Strong on validated string types (`url`/`ipv4`/`telephone`), grid layout control (`inputWidth`), reusable Components composed via the polymorphic `dynamic` field, and structured (mdast) rich text via the `markdown` field. No M2M. Nested groups and nested `dynamic` fields are intentionally disallowed.
+- **elek.io Core** - Git-backed JSON storage with first-class i18n. 6 value types, 18 field types. Strong on validated string types (`url`/`ipv4`/`telephone`), grid layout control (`inputWidth`), reusable Components composed via the polymorphic `dynamic` field, and structured (mdast) rich text via the `markdown` field. No M2M, and nested groups and nested `dynamic` fields are disallowed.
 - **Strapi** - Simplest field model. Good basics but fewest UI-layer options. Unique UID field for slug generation. Components + Dynamic Zones for composition.
 - **Directus** - Most granular. Clean separation of data types from UI interfaces gives maximum flexibility. Strongest in presentation/layout fields, geospatial, and selection widgets. Best for database-first projects.
 - **Payload CMS** - Developer-centric with code-first config. Strongest typed relationship model (polymorphic + virtual joins). Monaco code editor built-in. Best React integration for custom fields.
@@ -18,7 +18,7 @@ For elek.io Core's full field reference and code examples, see [`../fields.md`](
 
 All comparison tables put **elek.io Core first** so the reader scans rightward to see how each competitor handles the same row.
 
-### Field Type Coverage
+### Field type coverage
 
 | Category | elek.io Core | Strapi | Directus | Payload CMS | TinaCMS |
 | --- | --- | --- | --- | --- | --- |
@@ -44,7 +44,7 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 | **Geospatial** | -- | -- | Map (7 geometry types) | Point (GeoJSON) | -- |
 | **Tags** | -- | -- | Tags (CSV/JSON) | -- | String + `tags` UI |
 
-### Relationship Models
+### Relationship models
 
 | Relation Type | elek.io Core | Strapi | Directus | Payload CMS | TinaCMS |
 | --- | --- | --- | --- | --- | --- |
@@ -59,7 +59,7 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 | **Translations** | Built into all direct values (`TranslatableString`) | -- | Yes (specialized M2M) | -- | -- |
 | **Reverse/Virtual Join** | -- | -- | -- | Yes (Join field) | -- |
 
-### Composite / Structural Fields
+### Composite / structural fields
 
 | Feature | elek.io Core | Strapi | Directus | Payload CMS | TinaCMS |
 | --- | --- | --- | --- | --- | --- |
@@ -69,7 +69,7 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 | **Tabs** | -- | -- | -- | Tabs (Named) | -- |
 | **Nesting** | Components reusable across Collections, groups cannot nest, dynamic cannot nest dynamic | Components in components | -- | Groups in groups | Objects in objects |
 
-### Presentation / Layout-Only Fields
+### Presentation / layout-only fields
 
 | Feature | elek.io Core | Strapi | Directus | Payload CMS | TinaCMS |
 | --- | --- | --- | --- | --- | --- |
@@ -85,7 +85,7 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 | **Tabs (presentational)** | -- | -- | -- | Tabs (Unnamed) | -- |
 | **Unstyled grouping** | -- | -- | Raw Group | -- | -- |
 
-### Architectural Differences
+### Architectural differences
 
 | Aspect | elek.io Core | Strapi | Directus | Payload CMS | TinaCMS |
 | --- | --- | --- | --- | --- | --- |
@@ -98,13 +98,13 @@ All comparison tables put **elek.io Core first** so the reader scans rightward t
 | **Virtual/computed fields** | -- | -- | -- | Any field with `virtual: true`, Join field | -- |
 | **Field count** | 18 field types across 6 value types | ~14 built-in | 40+ interfaces on 28 data types | ~18 data fields + presentational + Join | 8 documented core types (10 in source) + UI plugins |
 
-## Per-CMS Reference
+## Per-CMS reference
 
 Full per-platform field-type detail. Use this section to look up one CMS in depth - the [comparison tables](#comparison) above are the right starting point for cross-platform comparison.
 
 ### Strapi
 
-#### Regular Fields
+#### Regular fields
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
@@ -121,7 +121,7 @@ Full per-platform field-type detail. Use this section to look up one CMS in dept
 | UID | Generates a unique identifier, optionally derived from another field. Ensures uniqueness. | URL slugs (e.g. auto-generating a slug from a title field). |
 | Media | Select one or multiple files from the Media Library (images, videos, documents). Two modes: single media or multiple media. Can restrict allowed media types. | Hero images, galleries, file attachments, video embeds. |
 
-#### Relational Field
+#### Relational field
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
@@ -138,7 +138,7 @@ Supported relation types:
 | Many-to-many | A has and belongs to many B | Articles have many tags, tags have many articles |
 | Many-way | A has many B (no back-reference) | A post references many related posts |
 
-#### Composite / Structural Fields
+#### Composite / structural fields
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
@@ -155,9 +155,9 @@ Supported relation types:
 
 Directus has a layered system: **data types** (how values are stored in the database) and **interfaces** (how users interact with fields in the UI). A single data type can be presented through different interfaces. There are 28 underlying data types (`TYPES` in `@directus/constants`, of which 6 are `geometry.*` subtypes) and over 40 interfaces in total.
 
-#### Regular Fields
+#### Regular fields
 
-##### Text & Input
+##### Text and input
 
 | Field Type | Interface ID | Description | When to Use |
 | --- | --- | --- | --- |
@@ -171,7 +171,7 @@ Directus has a layered system: **data types** (how values are stored in the data
 | Hash | `input-hash` | Text input that one-way hashes the value on save. Original value cannot be retrieved. | Passwords, API keys, secrets - any sensitive data that should not be stored in plaintext. |
 | Tags | `tags` | Input for adding multiple free-form tags. Stored as CSV or JSON. | Keywords, categories, labels, or multiple short text values on a single field. |
 
-##### Selection & Choice
+##### Selection and choice
 
 | Field Type | Interface ID | Description | When to Use |
 | --- | --- | --- | --- |
@@ -183,7 +183,7 @@ Directus has a layered system: **data types** (how values are stored in the data
 | Radio Buttons | `select-radio` | Single-value selection with all options visible at once. | When all options should be visible (not hidden in a dropdown) and only one can be selected. |
 | Color | `select-color` | Color picker supporting HEX, RGB, HSL with visual palette. | Brand colors, theme settings, UI accent colors. |
 | Icon | `select-icon` | Picker for Google Material Symbols icon library. | Choosing icons for navigation items, categories, or UI elements. |
-| Slider | `slider` | Range input with interactive slider. Configurable min, max, step. | Numeric values within a bounded range (rating 1–10, opacity 0–100). |
+| Slider | `slider` | Range input with interactive slider. Configurable min, max, step. | Numeric values within a bounded range (rating 1 to 10, opacity 0 to 100). |
 | Datetime | `datetime` | Date and/or time picker with calendar UI. Works with date, dateTime, timestamp, and time types. | Scheduling, event dates, publication dates, deadlines. |
 
 ##### Geospatial
@@ -194,7 +194,7 @@ Directus has a layered system: **data types** (how values are stored in the data
 
 Supported geometry data types: `geometry`, `geometry.Point`, `geometry.LineString`, `geometry.Polygon`, `geometry.MultiPoint`, `geometry.MultiLineString`, `geometry.MultiPolygon`.
 
-#### Relational Fields
+#### Relational fields
 
 | Field Type | Interface ID | Description | When to Use |
 | --- | --- | --- | --- |
@@ -218,7 +218,7 @@ Supported relation types:
 | Many to Any (M2A) | One collection relates to items in any number of other collections. Junction stores both item ID and collection name. | Page builders with heterogeneous content blocks |
 | Translations | Specialized M2M variant with a languages collection. Each junction row holds translated values for one language. | Any multilingual content |
 
-#### Composite / Structural Fields
+#### Composite / structural fields
 
 | Field Type | Interface ID | Description | When to Use |
 | --- | --- | --- | --- |
@@ -226,7 +226,7 @@ Supported relation types:
 | Collection Item Dropdown | `collection-item-dropdown` | Dropdown to select one item from any collection, stored as JSON (not a true relational link). | Quick single-item reference stored as JSON without formal relational setup. |
 | Collection Item Dropdown (Multiple) | `collection-item-multiple-dropdown` | Select multiple items from any collection, stored as JSON. | Multiple item references as JSON without formal M2M junction tables. |
 
-#### Presentation & Layout
+#### Presentation and layout
 
 These are alias fields - they store no data and are purely for organizing the edit form UI.
 
@@ -260,11 +260,11 @@ Directus supports custom interfaces, displays, layouts, modules, panels, and hoo
 
 ### Payload CMS
 
-Payload has three field categories: **data fields** (store data in the database, all have a `name` property), **presentational fields** (organize/present fields in the Admin Panel, no data stored), and **virtual fields** (computed or derived, not persisted in the database). Additionally, any data field can be made virtual by adding `virtual: true` to its config.
+Payload has three field categories: **data fields** (store data in the database, all have a `name` property), **presentational fields** (organize/present fields in the Admin Panel, no data stored), and **virtual fields** (computed or derived, not persisted in the database). Any data field can also be made virtual by adding `virtual: true` to its config.
 
-#### Data Fields
+#### Data fields
 
-##### Text & Input
+##### Text and input
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
@@ -275,7 +275,7 @@ Payload has three field categories: **data fields** (store data in the database,
 | Code | Code editor interface (Monaco editor). Saves a string. | Code snippets, HTML embeds, configuration, or any syntax-highlighted content. |
 | JSON | JSON editor interface. Saves a JSON object. | Arbitrary structured data, configuration objects, metadata, or complex nested data. |
 
-##### Selection & Choice
+##### Selection and choice
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
@@ -283,27 +283,27 @@ Payload has three field categories: **data fields** (store data in the database,
 | Select | Dropdown/picklist. Saves one or multiple predefined string values. Supports `hasMany`. | Choosing from a known set of options (e.g. status, category, priority). |
 | Radio | Radio button group. Saves a single string value. | Same as Select but when all options should be visible at once (small option sets). |
 
-##### Date & Location
+##### Date and location
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
 | Date | Date picker. Saves a timestamp. | Publish dates, event dates, deadlines, scheduling. |
 | Point | Saves geographic coordinates in GeoJSON format. Supports geo-queries with automatic indexing (not supported on SQLite). | Location data, maps, store locators, geospatial queries. |
 
-##### Rich Content
+##### Rich content
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
 | Rich Text | Fully extensible rich text editor (Lexical default; Slate adapter deprecated in 3.x, removed in 4.0). Saves structured JSON. | Long-form formatted content - blog posts, articles, documentation, page content. |
 
-#### Relational Fields
+#### Relational fields
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
 | Relationship | References documents in other collections. Supports polymorphic relationships (multiple collections via `relationTo` array) and `hasMany`. | Linking content together - post → author, product → category, article → tags. |
 | Upload | References documents in upload-enabled collections. Can reference multiple upload collections. Essentially a specialized relationship for files. | Attaching files, images, videos, or documents. Hero images, galleries, file attachments. |
 
-#### Composite / Structural Fields
+#### Composite / structural fields
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
@@ -312,7 +312,7 @@ Payload has three field categories: **data fields** (store data in the database,
 | Blocks | Array of objects where each object is a "block" with its own distinct schema. | Flexible/mixed content - page builders, layout builders, form builders. Each block type (e.g. `Hero`, `CallToAction`, `Gallery`) defines its own fields. |
 | Tabs (Named) | Like Group, but renders fields in a tabbed layout. Saves data under a keyed object. | Same use as Group, but when you want a tabbed editing experience to reduce visual clutter in complex forms. |
 
-#### Presentational Fields
+#### Presentational fields
 
 These are layout-only fields - they do **not** have a `name` property and store no data in the database.
 
@@ -323,7 +323,7 @@ These are layout-only fields - they do **not** have a `name` property and store 
 | Tabs (Unnamed) | Displays fields in tabs without storing data under a key. Data stays flat. | Organizing the admin UI into tabs purely for presentation. |
 | UI | Blank field slot for completely custom React components. | Adding custom UI elements - buttons, previews, instructions, visualizations - anything not covered by built-in fields. |
 
-#### Virtual Fields
+#### Virtual fields
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
@@ -337,20 +337,22 @@ Payload supports fully custom field types through its component-based architectu
 
 ### TinaCMS
 
-TinaCMS has a layered system: **8 documented core schema field types** (set via the `type` property) define how data is stored, while **UI component plugins** (set via `ui.component`) control how those types render in the editor without changing the underlying data type. (The schema source actually defines 10 `type` literals - the 8 documented ones plus `password` and `displayOnly`.) All content is stored as Markdown/MDX files with frontmatter.
+TinaCMS has a layered system. **8 documented core schema field types** (set via the `type` property) define how data is stored, while **UI component plugins** (set via `ui.component`) control how those types render in the editor without changing the underlying data type.
 
-#### Data Fields
+The schema source actually defines 10 `type` literals, the 8 documented ones plus `password` and `displayOnly`. All content is stored as Markdown/MDX files with frontmatter.
 
-##### Text & Input
+#### Data fields
+
+##### Text and input
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
 | String | Short-form plain text. Supports `list: true` for arrays and `options` for predefined value sets (renders as dropdown or checkboxes). `isTitle: true` marks it as the display title for collection items in the CMS list view. | Titles, descriptions, slugs, and other brief textual content without formatting. |
 | Number | Numeric values (integers or decimals). Supports `list: true` and `options` like String. | Quantities, prices, sort orders, ratings, measurements. |
 | Boolean | True/false toggle switch. | Feature flags, published/draft state, visibility toggles, any on/off setting. |
-| Datetime | Date/time values in ISO 8601 format (UTC). Configurable via `ui.dateFormat` and `ui.timeFormat`. Uses `react-datetime` under the hood. Values are persisted as UTC, converted from the user's local time on input. | Publication dates, event times, scheduling, timestamps. |
+| Datetime | Date/time values in ISO 8601 format (UTC). Configurable via `ui.dateFormat` and `ui.timeFormat`. Built on `react-datetime`. Values are persisted as UTC, converted from the user's local time on input. | Publication dates, event times, scheduling, timestamps. |
 
-##### Rich Content
+##### Rich content
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
@@ -362,19 +364,19 @@ TinaCMS has a layered system: **8 documented core schema field types** (set via 
 | --- | --- | --- |
 | Image | Dedicated file input that stores the URL or path of an uploaded image. Supports drag-and-drop upload, a built-in media manager, and external media providers (Cloudinary, S3). Supports `list: true` for galleries. | Featured images, thumbnails, hero banners, gallery items. |
 
-#### Relational Fields
+#### Relational fields
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
 | Reference | Creates a relationship link from one document to another document in a specified collection. Requires `collections` array to specify which collections can be referenced (supports multiple). Querying the parent document returns the full data of the referenced document. Cannot be set as `list: true` directly - wrap in an Object field with `list: true` instead. Supports `ui.collectionFilter` for filtering options and `ui.optionComponent` for custom rendering. | Linking a blog post to an author, associating a product with a category, any cross-document relationship. |
 
-#### Composite / Structural Fields
+#### Composite / structural fields
 
 | Field Type | Description | When to Use |
 | --- | --- | --- |
 | Object | Groups multiple fields into a nested structure. Two modes: **fields** (static shape - all instances have the same sub-fields) and **templates** (polymorphic blocks where the user picks from different shapes, stores a `_template` discriminator key). Supports `list: true`, `ui.visualSelector` for visual block picking with preview images, `ui.itemProps` for custom list item labels, `ui.defaultItem` for presets, and `ui.min`/`ui.max` constraints on list item count. | Grouping related fields (SEO metadata, address blocks), creating repeatable content blocks, page builder sections. |
 
-#### UI Component Plugins
+#### UI component plugins
 
 These change how a core type renders in the editor (set via `ui.component`). They do not change the stored data type - only the editor widget.
 
@@ -395,7 +397,7 @@ These change how a core type renders in the editor (set via `ui.component`). The
 | `markdown` | Rich Text | Raw Markdown editor (external plugin, requires separate import). | When a raw Markdown editing experience is preferred over the WYSIWYG editor. |
 | `html` | Rich Text / String | HTML code editor (external plugin, requires separate import). | When content needs to be authored as raw HTML. |
 
-#### Common Field Properties
+#### Common field properties
 
 These properties are available on every field definition:
 
@@ -418,7 +420,7 @@ These properties are available on every field definition:
 | `isTitle` | boolean | Marks field as collection display title (String only). |
 | `isBody` | boolean | Saves field to Markdown body section below frontmatter (String/Rich Text only). |
 
-#### Notable Absences
+#### Notable absences
 
 TinaCMS has no dedicated email, URL, or generic file (non-image) field type. For those use cases, use String with a custom `ui.component`. It does have a `password` field type and a read-only `displayOnly` field type in source, though both are lightly documented.
 
@@ -426,11 +428,12 @@ TinaCMS has no dedicated email, URL, or generic file (non-image) field type. For
 
 TinaCMS supports custom field components by passing a React component directly to `ui.component` on any field definition. This allows building entirely custom editing experiences while using the core schema types for data storage.
 
-## elek.io Core: Strengths and Gaps
+## elek.io Core: strengths and gaps
 
 ### Strengths
 
-- **Built-in i18n** - Every direct value is multilingual by default via `TranslatableString`, translated per field inline. This differs architecturally from Strapi (whole entry duplicated per locale, even though i18n is now core in v5) and Directus (a translations junction collection): no junction tables or per-locale entry copies, just the value carrying every language. Validation is narrowed to project-configured languages via `ProjectLanguages`.
+- **Built-in i18n** - Every direct value is multilingual by default via `TranslatableString`, translated per field inline. Validation is narrowed to project-configured languages via `ProjectLanguages`.
+  - This differs architecturally from Strapi (whole entry duplicated per locale, even though i18n is core in v5) and Directus (a translations junction collection). No junction tables or per-locale entry copies, just the value carrying every language.
 - **Dedicated validated types** - `url`, `telephone`, `ipv4` are standalone field types with built-in validation, where other CMS platforms rely on generic text + custom validation.
 - **Polymorphic blocks via shared Components** - The `dynamic` field with `ofComponents` lets editors compose flexible page layouts from a curated catalog of reusable Components, avoiding the inline-block-schema duplication that other platforms require.
 - **Grid layout control** - `inputWidth` (12/6/4/3) provides a simple but effective 12-column grid for field layout, comparable to Payload's Row field but more granular.

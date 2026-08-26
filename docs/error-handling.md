@@ -1,4 +1,4 @@
-# Error Handling
+# Error handling
 
 All services throw `CoreError` on failure. `CoreError` extends `Error` with `type` and `statusCode` fields. The `ElekIoCore` constructor throws a `CoreError` of type `BadRequest` for invalid options too.
 
@@ -15,7 +15,7 @@ A class extending `Error` with 8 typed variants (`src/util/shared.ts`):
 | `PreconditionFailed` | 412 | Remote origin missing (setup required), mutation attempted in read-only mode or on a provisioned copy |
 | `UpgradeFailed` | 422 | Project version upgrade failed |
 | `VersionSkew` | 422 | Content written by a newer Core than installed |
-| `RateLimited` | 429 | elek.io Cloud refused because too much was sent from here recently |
+| `RateLimited` | 429 | elek.io Cloud refused because this client passed its rate limit |
 | `Internal` | 500 | Git errors, FS errors, unexpected failures |
 
 Static factory methods:
@@ -27,9 +27,9 @@ throw CoreError.internal('Git command failed', originalError);
 throw CoreError.fromUnknown(caughtException); // wraps any unknown into Internal
 ```
 
-## Consumer Patterns
+## Consumer patterns
 
-### Desktop App (Direct Usage)
+### Desktop app (direct usage)
 
 Consumers call service methods with standard `try/catch`:
 
@@ -43,7 +43,7 @@ try {
 }
 ```
 
-### CLI Commands
+### CLI commands
 
 Each CLI action wraps its body in a top-level `try/catch`:
 
@@ -58,7 +58,7 @@ export const exportAction = async (props: ExportProps) => {
 };
 ```
 
-### Astro Integration
+### Astro integration
 
 Astro content loaders expect errors to be thrown, so service methods work naturally:
 

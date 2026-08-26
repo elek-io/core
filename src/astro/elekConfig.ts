@@ -92,31 +92,16 @@ export function assertElekConfig(config: ElekConfig): void {
 }
 
 /**
- * Declares the elek.io Projects a site consumes, validating them right
- * away
+ * Declares the elek.io Projects a site consumes, validating them right away.
  *
- * The returned config is the single declaration both `astro.config`
- * and the content config import, so a Project id is written once. By
- * convention it lives in `elek.config.ts` in the project root, but the
- * filename is yours to choose, nothing discovers it automatically.
+ * The returned config is the single declaration both `astro.config` and the
+ * content config import, so a Project id is written once. By convention it
+ * lives in `elek.config.ts`, but nothing discovers it automatically.
  *
- * Returns the very object it was given, so the alias keys survive as
- * literal types and every loader can check them at compile time.
+ * Returns the very object it was given, so the alias keys survive as literal
+ * types and every loader can check them at compile time.
  *
- * @example
- * ```ts
- * // elek.config.ts
- * import { defineElekConfig } from '@elek-io/core/astro';
- *
- * export const config = defineElekConfig({
- *   projects: {
- *     website: {
- *       id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
- *       remoteUrl: 'https://github.com/acme/website-content.git',
- *     },
- *   },
- * });
- * ```
+ * @see ../../docs/usage.md
  */
 export function defineElekConfig<const T extends ElekConfig>(config: T): T {
   assertElekConfig(config);

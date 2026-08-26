@@ -1,4 +1,4 @@
-# Markdown Content
+# Markdown content
 
 elek.io stores rich body content as a structured [mdast](https://github.com/syntax-tree/mdast) tree (markdown abstract syntax tree), not as a markdown source string. This document explains why and how to use it.
 
@@ -8,7 +8,7 @@ For the field reference, see [`fields.md`](./fields.md).
 
 A `markdown` field on a Collection or Component produces an `MdAstValue` on the Entry. Its `content` is keyed per language:
 
-```ts
+```typescript
 entry.values.body.content.en ===
   {
     type: 'root',
@@ -46,11 +46,15 @@ Every node has a `type` field. Nested content lives in `children`. Empty markdow
 
 Core ships `mdastRender` from `@elek-io/core/astro`. It walks the mdast tree, dispatches each node type to a renderer, and returns an Astro JSX element ready to interpolate.
 
-**Astro's `render()` does not apply to an elek.io Entry.** It hands back the rendered HTML an entry carries with it, and the loaders store none, because a finished HTML string cannot keep the `entryReference` and `assetReference` nodes a page needs the UUIDs from. Calling it anyway is not an error and produces nothing: `<Content />` renders empty, `headings` is `[]` and `remarkPluginFrontmatter` is `{}`, with no warning anywhere. Body content arrives on `entry.data` as a tree instead, and `mdastRender` is what turns it into markup.
+Three things to know before writing a renderer:
 
-Three node types require an explicit override (`html`, `assetReference`, `entryReference`). The other 21 have semantic HTML defaults you can keep or override. The required keys are surfaced by the type system because content editors can flip `features.rawHtml` / `features.assetReferences` / `features.entryReferences` (or extend `ofCollections`) on any field at any time - the API forces a documented decision per key so the renderer can't silently no-op when a new node type appears. Choosing `() => null` is a valid decision and documents "render nothing if this ever appears."
-
-One rule of the Astro side decides where the code goes, and it is a property of Astro rather than of `mdastRender`: **JSX belongs in the template, not in the frontmatter.** The `---` fence of an `.astro` file is TypeScript, not TSX, so a handler written as `(node) => <em>{node.alt}</em>` up there is a parse error. Write the renderers object inline at the `mdastRender` call in the template, as below. What `mdastRender` returns is an ordinary Astro template result, so it renders wherever you put it, including inside a component you pass it to.
+- **Astro's `render()` does not apply to an elek.io Entry.** It hands back the rendered HTML an entry carries with it, and the loaders store none, because a finished HTML string cannot keep the `entryReference` and `assetReference` nodes a page needs the UUIDs from.
+  - Calling it anyway is not an error and produces nothing: `<Content />` renders empty, `headings` is `[]` and `remarkPluginFrontmatter` is `{}`, with no warning anywhere. Body content arrives on `entry.data` as a tree instead, and `mdastRender` is what turns it into markup.
+- **Three node types require an explicit override**, `html`, `assetReference` and `entryReference`. The other 21 have semantic HTML defaults you can keep or override.
+  - The type system surfaces the required keys because content editors can flip `features.rawHtml`, `features.assetReferences` and `features.entryReferences`, or extend `ofCollections`, on any field at any time.
+  - Forcing a documented decision per key stops the renderer from silently no-opping when a new node type appears. Choosing `() => null` is a valid decision and documents "render nothing if this ever appears."
+- **JSX belongs in the template, not in the frontmatter.** That is a property of Astro rather than of `mdastRender`. The `---` fence of an `.astro` file is TypeScript, not TSX, so a handler written as `(node) => <em>{node.alt}</em>` up there is a parse error.
+  - Write the renderers object inline at the `mdastRender` call in the template, as below. What `mdastRender` returns is an ordinary Astro template result, so it renders wherever you put it, including inside a component you pass it to.
 
 ```astro
 ---
@@ -110,7 +114,13 @@ const body = post.data.body[language];
 
 The object is checked against `MdastAstroRenderers` by the call itself, so a missing required key or a mistyped node property is an error without annotating it.
 
-`entryReference` nodes carry the referenced Entry's UUID, which is also its store id, so `getEntry('posts', node.entryId)` resolves a reference from anywhere without a map. The map above exists only to turn that UUID into the same URL the routes were built from. A Collection without a slug field routes by UUID instead, with a `getStaticPaths` that returns `posts.map((post) => ({ params: { id: post.id }, props: { post } }))`.
+`entryReference` nodes carry the referenced Entry's UUID, which is also its store id, so `getEntry('posts', node.entryId)` resolves a reference from anywhere without a map. The map above exists only to turn that UUID into the same URL the routes were built from.
+
+A Collection without a slug field routes by UUID instead, with a `getStaticPaths` that returns:
+
+```typescript
+posts.map((post) => ({ params: { id: post.id }, props: { post } }));
+```
 
 The three required handlers are ~20 lines for the typical case. Without the helper the equivalent hand-rolled switch (see the [fallback recipe](#fallback-recipe-for-frameworks-without-an-official-wrapper) below) takes ~90, and it grows with every node type Core adds.
 
@@ -118,9 +128,9 @@ The three required handlers are ~20 lines for the typical case. Without the help
 
 The defaults emit plain semantic HTML - no class names, no `rel`/`target`, no slug anchors, no syntax highlighting. The shape is `(node, children) => ...` for parents and `(node) => ...` for leaves. Each snippet below goes into the renderers object at the `mdastRender` call in the template, next to the three required handlers. Common override patterns:
 
-**Slug-id anchors on headings (table of contents):** `extractText` is exported from `@elek-io/core` and returns the concatenated plain text of an mdast node.
+**Slug-id anchors on headings (table of contents).** `extractText` is exported from `@elek-io/core` and returns the concatenated plain text of an mdast node.
 
-```ts
+```typescript
 heading: (node, children) => {
   const id = slugify(extractText(node));
   const Tag = `h${node.depth}` as const;
@@ -130,7 +140,7 @@ heading: (node, children) => {
 
 **Syntax highlighting on code blocks.** Most highlighters (Prism / Shiki / Highlight.js) look for `class="language-${lang}"` on the `<code>` element. The default ships without any class - override to wire the format your highlighter expects:
 
-```ts
+```typescript
 code: (node) => (
   <pre>
     <code class={node.lang ? `language-${node.lang}` : undefined}>
@@ -142,7 +152,7 @@ code: (node) => (
 
 **External-link policy on `link`.** The default emits a plain `<a>` because the same tree mixes internal site URLs (`/path`, `#section`, `./sibling`) with external `https://` ones - a single auto policy would be wrong for half. Override when you know your tree's URL mix:
 
-```ts
+```typescript
 link: (node, children) => {
   const isExternal = /^https?:\/\//.test(node.url);
   return (
@@ -160,13 +170,15 @@ link: (node, children) => {
 
 **Optimized `<Image>` for the `image` node.** The default emits a plain `<img>` because Astro's `<Image>` for remote URLs needs `image.remotePatterns` config the consumer may not have, and dimensions the mdast `image` node doesn't carry. If you control the external image hosts, override to opt into optimization:
 
-```ts
+```typescript
 image: (node) => (
   <Image src={node.url} alt={node.alt} inferSize />
 ),
 ```
 
-**Collected footnotes section at the bottom.** The default renders each `footnoteDefinition` inline in tree order (matching mdast structure). Most articles want a single collected footnotes section at the end. Declare the accumulator in the frontmatter, override the handler to fill it and return `null`, then render your section after the article. Astro evaluates template expressions in order, so the list is complete by the time the second one is reached:
+**Collected footnotes section at the bottom.** The default renders each `footnoteDefinition` inline in tree order, matching mdast structure. Most articles want a single collected footnotes section at the end.
+
+Declare the accumulator in the frontmatter, override the handler to fill it and return `null`, then render your section after the article. Astro evaluates template expressions in order, so the list is complete by the time the second one is reached:
 
 ```astro
 ---
@@ -193,7 +205,7 @@ const footnotes: astroHTML.JSX.Element[] = [];
 
 **Custom top-level wrap via `root`.** The default wraps the rendered blocks in a Fragment so `<article>{rendered}</article>` works at the call site. You can override `root` to do the wrapping at the renderer level instead - useful when the renderer is responsible for the whole article shell:
 
-```ts
+```typescript
 root: (_, children) => <article class="prose">{children}</article>,
 ```
 
@@ -234,7 +246,9 @@ Core does not ship this component itself - it would be a thin one-file wrapper, 
 
 ### Fallback recipe for frameworks without an official wrapper
 
-If you're targeting a framework Core doesn't ship a wrapper for yet (React, Vue, Solid, SvelteKit, ...), use the framework-agnostic primitive directly. `mdastRender` and `MdastRenderersBase<T>` are exported from `@elek-io/core`. The primitive is the same typed fold the Astro binding wraps. `T` is your framework's element type, and you supply one handler per node type. Parents receive their already-rendered `children`, leaves receive just the node.
+If you're targeting a framework Core doesn't ship a wrapper for yet (React, Vue, Solid, SvelteKit and so on), use the framework-agnostic primitive directly. `mdastRender` and `MdastRenderersBase<T>` are exported from `@elek-io/core`.
+
+The primitive is the same typed fold the Astro binding wraps. `T` is your framework's element type, and you supply one handler per node type. Parents receive their already-rendered `children`, leaves receive just the node.
 
 The example below uses React (`T = ReactNode`). For Vue bind `T = VNode`, for Solid `T = JSX.Element`. Only the element factory changes, the structure stays identical.
 
@@ -302,15 +316,23 @@ const rendered = root !== null ? mdastRender(root, renderers) : null;
 
 `MdastRenderersBase<T>` requires a handler for every node type, so a forgotten one is a compile error rather than a silent gap. The `walk` switch is exhaustiveness-checked the same way, so adding a node type in a future Core release surfaces as a type error in your renderers until you handle it.
 
-If you're building a reusable binding (what `@elek-io/core/astro` is) rather than a one-off, layer defaults on top so your consumers override only what they want. Mirror `astroDefaults`: build a `Pick<MdastRenderersBase<T>, DefaultedRendererKey>` of safe defaults, expose `FrameworkRenderers<T>` as the consumer-facing override shape, and merge `{ ...defaults, ...overrides }` before calling `mdastRender`. `REQUIRED_RENDERER_KEYS` names the three keys (`html`, `assetReference`, `entryReference`) that stay required because no default is safe for them. All four are exported from `@elek-io/core`.
+If you're building a reusable binding (what `@elek-io/core/astro` is) rather than a one-off, layer defaults on top so your consumers override only what they want. Mirror `astroDefaults`:
+
+- Build a `Pick<MdastRenderersBase<T>, DefaultedRendererKey>` of safe defaults.
+- Expose `FrameworkRenderers<T>` as the consumer-facing override shape.
+- Merge `{ ...defaults, ...overrides }` before calling `mdastRender`.
+
+`REQUIRED_RENDERER_KEYS` names the three keys (`html`, `assetReference`, `entryReference`) that stay required because no default is safe for them. All four are exported from `@elek-io/core`.
 
 ## When you need plain text (no markdown)
 
 If you only need plain text (e.g. for fulltext search, excerpts or heading slugs), Core ships `extractText` from `@elek-io/core`. It walks any mdast node and concatenates `text`, `inlineCode` and `code` values in document order. Raw html and image/reference alt text are skipped. Going through markdown serialization is overkill for that case.
 
-Block-level siblings (paragraphs, list items, table rows and cells) are joined with a separator that defaults to a single space, so a heading followed by a paragraph reads as `Title Body` rather than `TitleBody`. Inline content keeps its own spacing, so a sentence is never broken up. Pass a second argument to change the separator, for example `'\n'` when producing a plain-text document that should keep block breaks.
+Block-level siblings (paragraphs, list items, table rows and cells) are joined with a separator that defaults to a single space, so a heading followed by a paragraph reads as `Title Body` rather than `TitleBody`. Inline content keeps its own spacing, so a sentence is never broken up.
 
-```ts
+Pass a second argument to change the separator, for example `'\n'` when producing a plain-text document that should keep block breaks.
+
+```typescript
 import { extractText } from '@elek-io/core';
 
 const plain = body !== null ? extractText(body) : '';
@@ -330,18 +352,23 @@ case 'html':
 
 This is non-optional when `rawHtml` is enabled. Partial sanitization in Core would create false confidence - consumers might stop sanitizing themselves, and any bypass becomes a production XSS incident. Putting the responsibility entirely on the rendering layer (where the output context is known: HTML doc? JSX? plain text?) is the correct layering.
 
-## Security note: link and image URLs
+## Security note: the URL a link or image may hold
 
-Core's schema rejects exotic URL schemes on `link` and `image` nodes: `javascript:`, `data:`, `file:`, `vbscript:`, and protocol-relative URLs (`//host`) cannot be persisted. `link.url` accepts `http`/`https`/`mailto`/`tel` plus site-relative (`/path`), sibling/parent-relative (`./`, `../`), and fragment-only (`#section`) forms. `image.url` accepts only absolute `http`/`https` (use `assetReference` for internal images).
+Core's schema rejects exotic URL schemes on `link` and `image` nodes. `javascript:`, `data:`, `file:`, `vbscript:` and protocol-relative URLs (`//host`) cannot be persisted.
+
+- `link.url` accepts `http`, `https`, `mailto` and `tel`, plus site-relative (`/path`), sibling and parent-relative (`./`, `../`) and fragment-only (`#section`) forms.
+- `image.url` accepts only absolute `http` and `https`. Use `assetReference` for internal images.
 
 Renderers should still apply their own per-context policy on top of this. Examples: a closed-corpus site might want to allow only same-origin links. An email-rendering pipeline might want to strip `tel:` links. The schema check eliminates the most dangerous classes. The rendering layer owns the rest.
 
 ## Out of scope in Core
 
 - **HTML rendering / sanitization**: not provided. Consumers walk the tree and own any sanitization (especially for `rawHtml`-enabled fields).
-- **Markdown serialization itself**: not provided. Since `assetReference` and `entryReference` are custom mdast nodes that do not have a standard way of being represented in markdown - especially since Core does not know about the locations of referenced files in the output, every consumer needs to resolve elek.io-specific reference nodes into standard mdast how they see fit. Then consumers compose with `mdast-util-to-markdown` (and any extensions they want) for the string conversion.
+- **Markdown serialization itself**: not provided. `assetReference` and `entryReference` are custom mdast nodes with no standard markdown representation, and Core does not know where referenced files end up in the output.
+  - Every consumer resolves elek.io-specific reference nodes into standard mdast how they see fit, then composes with `mdast-util-to-markdown` (and any extensions they want) for the string conversion.
 - **Markdown-to-mdast parsing**: not provided. Same reasoning as above.
-- **Reference integrity on delete**: deleting an Asset, Entry or Collection that is still referenced is blocked with a `Conflict`, and create / update reject a reference to content that does not exist. Projects are managed only through Core or elek.io Desktop, so these gates cover every supported change. See [`references.md`](./references.md) for the full model and the one case (a sync that merges concurrent changes) they cannot fully prevent.
+- **Reference integrity on delete**: deleting an Asset, Entry or Collection that is still referenced is blocked with a `Conflict`, and create / update reject a reference to content that does not exist. Projects are managed only through Core or elek.io Desktop, so these gates cover every supported change.
+  - See [`references.md`](./references.md) for the full model and the one case, a sync that merges concurrent changes, they cannot fully prevent.
 - **Tree depth limit**: enforced at 100 levels of nesting (matches `markdown-it`'s `maxNesting` default). Trees deeper than that are rejected at write time. Renderers don't need their own bound, but it remains good hygiene for any consumer that processes trees from outside Core.
 
 ## See also

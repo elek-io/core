@@ -231,35 +231,16 @@ export class ProjectService
   }
 
   /**
-   * Ensures a provisioned copy of the Project exists in the data
-   * directory at the given ref, provisioning it from the remote when
-   * needed. Idempotent, meant to run before every build.
+   * Ensures a provisioned copy of the Project exists in the data directory at
+   * the given ref, provisioning it from the remote when needed. Idempotent,
+   * meant to run before every build.
    *
-   * A provisioned copy consumes content, it is not for editing. It is
-   * created as a build-mode clone (shallow, single ref, only the LFS
-   * objects of the checked-out ref) and later runs fetch and hard-reset
-   * it, so a reachable remote decides what it holds. To work on a Project, use
-   * clone() instead: a working copy with full history, every LFS
-   * object and a User set for committing. clone() throws if the
-   * Project is already present, provision() converges it.
+   * A provisioned copy consumes content, it is not for editing. Use `clone()`
+   * to work on a Project instead. Runs on a read-only Core without a User.
+   * A refresh keeps building when the remote cannot be reached, and the
+   * returned `source` states where the content came from.
    *
-   * Three cases, decided by the provisioning marker:
-   * - Missing: provisioned as a fresh build-mode clone, marker written.
-   * - Present with the marker: fetched and hard-reset to the ref.
-   * - Present without the marker: a working copy managed by another
-   *   application (e.g. Desktop), left untouched.
-   *
-   * `ref` is a channel (`production` for the latest Release,
-   * `preview` for the latest preview Release, `draft` for the tip of
-   * the work branch) or an exact Release version, default
-   * `production`. Runs on a read-only Core without a User being set.
-   *
-   * A refresh keeps building when the remote cannot be reached: an
-   * exact version the copy already holds skips the network entirely,
-   * and a failed fetch falls back to the copy on disk with a loud
-   * warning. The returned `source` states which of the two happened.
-   *
-   * @see docs/provisioning.md and docs/git-and-sync.md
+   * @see ../../docs/provisioning.md
    */
   public provision(props: ProvisionProjectProps): Promise<ProvisionResult> {
     return this.validated(
@@ -1099,7 +1080,9 @@ export class ProjectService
   /**
    * Updates the remote origin URL of given Project
    *
-   * @todo maybe add this logic to the update method
+   * Its own method rather than part of `update`, because a remote is git state
+   * rather than a field of `project.json`. `remoteOriginUrl` is derived in
+   * `toProject` by asking git, so `update` has no file to write it into.
    */
   public setRemoteOriginUrl(
     props: SetRemoteOriginUrlProjectProps
@@ -1178,23 +1161,13 @@ export class ProjectService
    * Integrates remote changes of `origin` and pushes local commits, refusing to
    * push a state that would strand a dangling reference.
    *
-   * A rebase can integrate two individually valid changes (one client deletes a
-   * target after the last reference to it is removed, another adds a reference
-   * to that same target) into a tree with a dangling reference and no textual
-   * conflict. To stop that state ever reaching the shared remote, the integrated
-   * tree is scanned for dangling references BEFORE the push and the push is
-   * blocked if any are found (`ReferenceService.findDanglingReferences`). The
-   * integrated commits stay local so the user can repair them through Core's own
-   * (integrity-gated) delete/update and synchronize again.
+   * The integrated tree is scanned for dangling references before the push, and
+   * the push is blocked if any are found. The integrated commits stay local, so
+   * they can be repaired through Core's own delete or update and synchronized
+   * again. A blocked sync performs no remote mutation, and the scope is the
+   * current `work` tree only.
    *
-   * The transaction is: refuse on a dirty tree, then fetch, controlled rebase
-   * (a textual conflict aborts cleanly rather than leaving the repository
-   * mid-rebase), top up LFS, scan, and push inside a bounded non-fast-forward
-   * retry loop. A blocked sync performs no remote mutation, since every gate
-   * throws before the push.
-   *
-   * Scope is the current `work` tree only; released `production` history is not
-   * reconciled here.
+   * @see ../../contributing/reference-integrity.md
    */
   public synchronize(props: SynchronizeProjectProps): Promise<void> {
     return this.mutating(
@@ -1452,7 +1425,6 @@ export class ProjectService
    * Joined with LF instead of `Os.EOL`, so the file is byte identical no
    * matter which OS created the Project.
    *
-   * @todo Add general things to ignore
    * @see https://github.com/github/gitignore/tree/master/Global
    */
   private async createGitignore(path: string): Promise<void> {
@@ -1474,18 +1446,12 @@ export class ProjectService
   /**
    * Writes the Projects .gitattributes file to disk
    *
-   * Checks out every text file with LF on every platform. Core writes LF and
-   * is the only writer inside a Project, but `core.autocrlf` is a per machine
-   * git setting Core does not control, so without this a Windows checkout can
-   * still convert files to CRLF. A Project shared across operating systems
-   * would then conflict on every line of every file.
+   * Checks out every text file with LF on every platform, so a Project shared
+   * across operating systems does not conflict on every line. Tracks every
+   * binary Asset under `lfs/` with Git LFS, keeping the `.gitkeep` placeholder
+   * out of it, since the last matching pattern wins.
    *
-   * Tracks every binary Asset under `lfs/` with Git LFS so they are stored as
-   * pointers in history while the bytes are offloaded. The `.gitkeep`
-   * placeholder is kept out of LFS (last matching pattern wins, so the
-   * catch-all above must stay first).
-   *
-   * @see https://git-lfs.com
+   * @see ../../docs/storage-layout.md
    */
   private async createGitattributes(path: string): Promise<void> {
     const lines = [

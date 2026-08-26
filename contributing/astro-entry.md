@@ -20,15 +20,19 @@ The split is not cosmetic. `collections.ts` builds its collections from the load
 
 The loaders share one lazily created `ElekIoCore` and take no options of their own. They used to accept a `core` prop, which only the first loader to run actually applied while every later one was silently ignored. The `ELEK_IO_*` variables configure that instance instead, and they reach it wherever it is constructed.
 
-`elek()` keeps its own `core` option because it runs a second, short-lived, read-only Core for provisioning, in a different module graph, before the loaders exist. `log.level` reaches the loaders through `ELEK_IO_LOG_LEVEL`, which is what a consumer silences Core with in a build. `file.cache` is deliberately not exposed, the loaders pin it off (see below). Anything else that is ever needed is a new `ELEK_IO_` variable read at construction, not a prop.
+`elek()` keeps its own `core` option because it runs a second, short-lived, read-only Core for provisioning, in a different module graph, before the loaders exist.
+
+- `log.level` reaches the loaders through `ELEK_IO_LOG_LEVEL`, which is what a consumer silences Core with in a build.
+- `file.cache` is deliberately not exposed, the loaders pin it off (see below).
+- Anything else that is ever needed is a new `ELEK_IO_` variable read at construction, not a prop.
 
 ## Watching content in dev
 
-Astro hands a loader a `watcher` in dev and nothing in a build, which is exactly the condition the loaders reload under. There is no `refreshContent` on `LoaderContext`, so a loader cannot ask Astro to re-run it. What it can do is what astro's own `glob` loader does: register handlers on the watcher and write the store again from inside them. `src/astro/watch.ts` holds that wiring, `load()` calls the same sync function the watcher does.
+Astro hands a loader a `watcher` in dev and nothing in a build, which is exactly the condition the loaders reload under. There is no `refreshContent` on `LoaderContext`, so a loader cannot ask Astro to re-run it.
 
-The watcher is vite's and covers the whole Astro project, so every handler fires for every file the site has. Filtering the changed path against the watched directories is what keeps an edit in `src/` from reloading Project content.
+What it can do is what astro's own `glob` loader does: register handlers on the watcher and write the store again from inside them. `src/astro/watch.ts` holds that wiring, and `load()` calls the same sync function the watcher does.
 
-What is watched is deliberately narrow:
+The watcher is vite's and covers the whole Astro project, so every handler fires for every file the site has. Filtering the changed path against the watched directories is what keeps an edit in `src/` from reloading Project content, and what is watched is deliberately narrow:
 
 - The Entries loader watches `pathTo.entries(projectId, collectionId)`, so one Collection's Entries do not reload another's.
 - The Assets loader watches `pathTo.assets(projectId)`.
@@ -39,25 +43,36 @@ Reloads are debounced and never overlap. Saving one Entry writes more than one f
 
 ## Why a model change stops the reload
 
-A reload writes the store. It cannot rebuild the schema, because `createSchema()` runs only when Astro loads the content config, and it cannot rebuild the generated types at all: astro's type generator caches `createSchema()` results in a module-level map it never invalidates, so the types a dev server writes are the types it dies with. Not even `refreshContent`, which does re-run `createSchema` through `contentLayer.sync()`, gets the types back.
+A reload writes the store. It cannot rebuild the schema, because `createSchema()` runs only when Astro loads the content config, and it cannot rebuild the generated types at all:
 
-So a model change has no good outcome. Reloading against the previous schema silently drops a field that was added and fails validation on one that was removed, and in both cases the generated types disagree with what the page renders. `buildModelDigest` ([`schema.ts`](../src/astro/schema.ts)) fingerprints exactly the inputs of `buildEntryValuesSchema`, the field definitions, the languages and the Components. `createSchema` records it, every reload compares it, and a mismatch logs the restart and returns without touching the store.
+- astro's type generator caches `createSchema()` results in a module-level map it never invalidates, so the types a dev server writes are the types it dies with.
+- Not even `refreshContent`, which does re-run `createSchema` through `contentLayer.sync()`, gets the types back.
 
-That is also why the Entries loader watches `pathTo.components(projectId)` even though it never reloads a Component. Without it, editing a Component that no Entry embeds yet changes nothing on disk that anyone watches, and the developer gets silence instead of the message. `pathTo.entries()` is the Collection directory itself, so `collection.json` needs no separate watch.
+So a model change has no good outcome. Reloading against the previous schema silently drops a field that was added and fails validation on one that was removed, and in both cases the generated types disagree with what the page renders.
+
+`buildModelDigest` ([`schema.ts`](../src/astro/schema.ts)) fingerprints exactly the inputs of `buildEntryValuesSchema`, the field definitions, the languages and the Components. `createSchema` records it, every reload compares it, and a mismatch logs the restart and returns without touching the store.
+
+Two consequences for what is watched:
+
+- The Entries loader watches `pathTo.components(projectId)` even though it never reloads a Component. Without it, editing a Component that no Entry embeds yet changes nothing on disk that anyone watches, and the developer gets silence instead of the message.
+- `pathTo.entries()` is the Collection directory itself, so `collection.json` needs no separate watch.
 
 The set of collections is decided before any loader runs, so adding or removing a Collection cannot be detected here at all. The consumer documentation lists it as a restart case alongside the rest.
 
-The loaders' Core runs with `file: { cache: false }` ([`core.ts`](../src/astro/core.ts)) because of this feature. Core invalidates its JSON cache for writes it makes itself, and here another application owns the files, so a cached Project would keep serving content one edit behind and the watcher would look broken. Each file is read once per sync either way. This was found the hard way: the first working version of the watcher reloaded on every edit and still rendered the old content.
+The loaders' Core runs with `file: { cache: false }` ([`core.ts`](../src/astro/core.ts)) because of this feature. Core invalidates its JSON cache for writes it makes itself, and here another application owns the files, so a cached Project would keep serving content one edit behind and the watcher would look broken.
+
+Each file is read once per sync either way. This was found the hard way: the first working version of the watcher reloaded on every edit and still rendered the old content.
 
 ## The elek config
 
-`defineElekConfig` returns the very object it was handed, it never returns the parse result. That is what preserves the alias keys as literal types, which the loaders then constrain their `project` against (`keyof T['projects'] & string`). Returning `schema.parse(config)` would widen everything back to `Record<string, ...>` and lose the compile-time alias check, and getting the literal type back would need a cast.
+`defineElekConfig` returns the very object it was handed, it never returns the parse result. That is what preserves the alias keys as literal types, which the loaders then constrain their `project` against (`keyof T['projects'] & string`).
 
-`assertElekConfig` therefore validates without transforming, and every entry point calls it on the config it receives, so a hand-built config fails the same way a declared one does.
+Returning `schema.parse(config)` would widen everything back to `Record<string, ...>` and lose the compile-time alias check, and getting the literal type back would need a cast. `assertElekConfig` therefore validates without transforming, and every entry point calls it on the config it receives, so a hand-built config fails the same way a declared one does.
 
-Alias keys are `^[a-z][a-zA-Z0-9]*$` because they are concatenated into collection keys. The schema is strict, since a silently stripped `remotUrl` would surface much later as "this Project was never provisioned".
+Two details of the schema:
 
-`ref` stays a plain `string` on the declaration rather than a channel union, because `contentRefSchema` validates it anyway and `ELEK_IO_CHANNEL` can override it at runtime, so a narrower type would promise a precision the value does not have.
+- Alias keys are `^[a-z][a-zA-Z0-9]*$` because they are concatenated into collection keys. The schema is strict, since a silently stripped `remotUrl` would surface much later as "this Project was never provisioned".
+- `ref` stays a plain `string` on the declaration rather than a channel union, because `contentRefSchema` validates it anyway and `ELEK_IO_CHANNEL` can override it at runtime, so a narrower type would promise a precision the value does not have.
 
 The config is found by import, never by discovery. `elek.config.ts` is a convention the docs state, and the imports are what connect `astro.config.mjs` and the content config. That astro.config can import a sibling `.ts` file at all was the design's riskiest assumption and is covered by [`src/index.astro.config.test.ts`](../src/index.astro.config.test.ts).
 
@@ -74,17 +89,19 @@ One class that looks reachable is not: a Collection can never take the `${alias}
 
 ## Selecting what is derived
 
-One rule governs both options: **no options object derives everything, and an options object is the complete list.** A key left out contributes nothing, and so does an alias left out of a key. Deriving all twenty Collections of a Project to read two means syncing all twenty, and an Assets collection copies every binary of its Project into the site on each sync, so the cost of the permissive default is real.
+One rule governs both options: **no options object derives everything, and an options object is the complete list.** A key left out contributes nothing, and so does an alias left out of a key. Deriving all twenty Collections of a Project to read two means syncing all twenty, and an Assets collection copies every binary into the site on each sync.
 
-The bare `elekCollections(config)` survives that argument only as the exploration step: you cannot name Collections you have not seen yet, and with no argument there is no partial specification to misread. It warns every time, naming what it derived, and the warning goes through `core.logger` so `ELEK_IO_LOG_LEVEL` silences it for anyone who means it.
+Two consequences:
 
-The strict reading is what removes API rather than adding it. `assets: false` and a per-alias `false` both disappear, since leaving the key or the alias out already says none.
+- The bare `elekCollections(config)` survives that argument only as the exploration step. You cannot name Collections you have not seen yet, and with no argument there is no partial specification to misread. It warns every time, naming what it derived, and the warning goes through `core.logger` so `ELEK_IO_LOG_LEVEL` silences it for anyone who means it.
+- The strict reading is what removes API rather than adding it. `assets: false` and a per-alias `false` both disappear, since leaving the key or the alias out already says none.
 
 Three cases throw, all for one reason: each would otherwise produce exactly what success produces, so the developer would go looking for a broken loader.
 
 - **A name matching no Collection of the Project it is listed under.** Matched against the plural slug and the id, the same two a loader's `collectionIdOrSlug` accepts.
 - **A selection deriving nothing at all**, which `elekCollections(config, {})` does.
-- **A derived Collection that can reference Assets while that Project's Assets are left out.** Following such a reference is `getEntry('<alias>Assets', ref.id)`, which without the collection fails while a page renders, far from the config that caused it. The check reads field definitions only, never Entries, so it needs no ordering between loaders: a reference field, or a markdown field with `assetReferences` enabled, is enough to know.
+- **A derived Collection that can reference Assets while that Project's Assets are left out.** Following such a reference is `getEntry('<alias>Assets', ref.id)`, which without the collection fails while a page renders, far from the config that caused it.
+  - The check reads field definitions only, never Entries, so it needs no ordering between loaders. A reference field, or a markdown field with `assetReferences` enabled, is enough to know.
 
 That last check is the tractable half of "derive only the Assets that are actually referenced". The full version is not available to us: loaders are independent and Astro decides their order, so the Assets loader cannot wait on every Entries loader, and it would silently drop Assets a template uses without any Entry referencing them.
 
@@ -94,7 +111,10 @@ The keys a consumer autocompletes against come from the types Astro generates af
 
 `astroDefaults` builds every default with `renderTemplate` and `addAttribute` from `astro/runtime/server/index.js`, never with `jsx()` from `astro/jsx-runtime`. Keep it that way.
 
-An `astro/jsx-runtime` vnode is only unwrapped by `renderStreaming`, which runs on the top-level result of a page. A nested `.astro` component renders its template through `renderChild`, which handles strings, promises, arrays, functions, `RenderInstance`, `RenderTemplateResult` and iterables, and writes anything else straight to the destination. A vnode therefore renders correctly on a page and stringifies to `[object Object]` one component deep, which is exactly where a site puts its markdown rendering. `renderTemplate` returns a `RenderTemplateResult`, one of the shapes `renderChild` knows, so the same element renders in a page, in a component and through a slot alike.
+An `astro/jsx-runtime` vnode is only unwrapped by `renderStreaming`, which runs on the top-level result of a page. A nested `.astro` component renders its template through `renderChild`, which handles strings, promises, arrays, functions, `RenderInstance`, `RenderTemplateResult` and iterables, and writes anything else straight to the destination.
+
+- A vnode therefore renders correctly on a page and stringifies to `[object Object]` one component deep, which is exactly where a site puts its markdown rendering.
+- `renderTemplate` returns a `RenderTemplateResult`, one of the shapes `renderChild` knows, so the same element renders in a page, in a component and through a slot alike.
 
 The two functions are what the Astro compiler emits into every compiled `.astro` file, so this is the compiler's own contract rather than a private constant. It is still an internal import and is recorded as one in [`peer-dependencies.md`](./peer-dependencies.md).
 
@@ -117,11 +137,22 @@ If it ever disappears, the fallback is cheap: `defineCollection` is a validating
 
 ## Asset binaries
 
-Assets are split by kind, because a single location cannot serve both. Images go to `src/elek/<alias>/images`, below `src/` where Astro's image pipeline can reach them. Everything else goes to `public/elek/<alias>/assets`, because Astro copies only the public directory into the build verbatim and ignores unrecognized formats under `src/` entirely. Without the split, a Project holding both photos and PDFs would have to choose which half works. The per-alias segment keeps two Projects from writing into one directory.
+Assets are split by kind, because a single location cannot serve both:
 
-Both paths resolve against `context.config.root` (a `URL`, so it goes through `fileURLToPath`), not against `process.cwd()`. In a normal `astro build` the two are the same, but they diverge when the build is started from elsewhere, and the root is the only one the consumer wrote down. A path that lands outside the root, or outside the public directory, is warned about and its Asset loses `src` or `href` accordingly rather than silently producing a URL that 404s.
+- Images go to `src/elek/<alias>/images`, below `src/` where Astro's image pipeline can reach them.
+- Everything else goes to `public/elek/<alias>/assets`, because Astro copies only the public directory into the build verbatim and ignores unrecognized formats under `src/` entirely.
 
-Writing into `src/` during `astro dev` was checked for a watcher loop, since a write under `src/` is exactly what vite watches. It settles: the loader skips an Asset whose digest matches and whose file is still on disk, so a resync writes nothing and no further sync is triggered. Measured as one content sync across 20 seconds of idle dev. Keep that skip intact, dropping it would turn dev into a rebuild loop.
+Without the split, a Project holding both photos and PDFs would have to choose which half works. The per-alias segment keeps two Projects from writing into one directory.
+
+Both paths resolve against `context.config.root` (a `URL`, so it goes through `fileURLToPath`), not against `process.cwd()`:
+
+- In a normal `astro build` the two are the same, but they diverge when the build is started from elsewhere, and the root is the only one the consumer wrote down.
+- A path that lands outside the root, or outside the public directory, is warned about and its Asset loses `src` or `href` accordingly, rather than silently producing a URL that 404s.
+
+Writing into `src/` during `astro dev` was checked for a watcher loop, since a write under `src/` is exactly what vite watches. It settles:
+
+- The loader skips an Asset whose digest matches and whose file is still on disk, so a resync writes nothing and no further sync is triggered. Measured as one content sync across 20 seconds of idle dev.
+- Keep that skip intact. Dropping it would turn dev into a rebuild loop.
 
 The skip is also what sets the astro peer floor at 6.1.3. An Asset the loader skips registers no image import of its own, so it stays in the build only because astro rebuilds that list from the store it restored, which it does from 6.1.3 on. See [`peer-dependencies.md`](./peer-dependencies.md).
 
@@ -129,7 +160,9 @@ The binaries are derived artifacts and the docs tell consumers to gitignore `src
 
 ## Handing images to astro:assets
 
-An image Asset gets `data.src` set to `__ASTRO_IMAGE_./<id>.<ext>` and the entry gets a root-relative `filePath`. Astro's content store scans stored data for that prefix, records the hit as an asset import anchored at `filePath`, and its runtime replaces the value with the resolved `ImageMetadata` when a page reads the entry. So `<Image src={asset.data.src} />` works in dev and in build, with Astro doing the emitting and hashing.
+An image Asset gets `data.src` set to `__ASTRO_IMAGE_./<id>.<ext>` and the entry gets a root-relative `filePath`. Astro's content store scans stored data for that prefix, records the hit as an asset import anchored at `filePath`, and its runtime replaces the value with the resolved `ImageMetadata` when a page reads the entry.
+
+So `<Image src={asset.data.src} />` works in dev and in build, with Astro doing the emitting and hashing.
 
 This is the same path Astro's own `image()` schema helper takes for content layer collections, but the prefix is an internal constant rather than public API. Three routes were compared before settling on it:
 
@@ -139,9 +172,14 @@ This is the same path Astro's own `image()` schema helper takes for content laye
 
 `IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.1.3 and 7.1.3. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro collected the image as an import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
 
-Only extensions in Astro's `VALID_INPUT_FORMATS` may carry the marker. For anything else Astro strips the prefix and hands the consumer an unanchored relative path, which is why `src` is `null` for non-images and they take the `href` route instead. `imageExtensions` in `loaders.ts` mirrors that list and is tied to Astro's public `ImageInputFormat` with `satisfies`, so a format added or removed there is a compile error here.
+Only extensions in Astro's `VALID_INPUT_FORMATS` may carry the marker:
 
-The parse-time schema declares `src` as a nullable string, because a marker string is what is stored and validated. The type consumers see is declared separately through `createSchema`'s `types`, as `ImageMetadata | null`. That split looks odd but is exactly what Astro does with its own `ImageFunction`, which is typed as returning an object schema while the runtime schema for content layer collections is a string transform.
+- For anything else Astro strips the prefix and hands the consumer an unanchored relative path, which is why `src` is `null` for non-images and they take the `href` route instead.
+- `imageExtensions` in `loaders.ts` mirrors that list and is tied to Astro's public `ImageInputFormat` with `satisfies`, so a format added or removed there is a compile error here.
+
+The parse-time schema declares `src` as a nullable string, because a marker string is what is stored and validated. The type consumers see is declared separately through `createSchema`'s `types`, as `ImageMetadata | null`.
+
+That split looks odd but is exactly what Astro does with its own `ImageFunction`, which is typed as returning an object schema while the runtime schema for content layer collections is a string transform.
 
 ## See also
 

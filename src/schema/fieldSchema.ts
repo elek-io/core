@@ -120,17 +120,15 @@ const numberDefaultWithinRangeRefinement: [
 ];
 
 /**
- * A unique field may not carry a non-null default value: a shared default
+ * A unique field may not carry a non-null default value. A shared default
  * could only ever be valid for a single Entry, and adding such a field to a
  * populated Collection would stamp the same value into every Entry at once.
- * Slug fields enforce this structurally (defaultValue is always null).
+ * Slug fields enforce this structurally, their `defaultValue` is always null.
  *
- * This is a per-field rule (it reads only `isUnique` and `defaultValue`), so it
- * lives on the shared string base rather than the string union. An editor that
- * validates a single field against its per-type schema before saving then
- * rejects the combination up front, same as the min/max default rules above.
- * Building it into the base means every string field type carries it, current
- * and future ones alike.
+ * It reads only `isUnique` and `defaultValue`, so it lives on the shared
+ * string base and every string field type carries it.
+ *
+ * @see ../../contributing/adding-a-field-type.md
  */
 const uniqueFieldCannotHaveDefaultRefinement: [
   (data: { isUnique: boolean; defaultValue: unknown }) => boolean,
@@ -487,18 +485,15 @@ export type DynamicFieldDefinition = z.infer<
 //
 
 /**
- * A markdown field stores rich body content as a structured mdast tree
- * (one tree per language). The writer experience is markdown-style; the
- * storage shape is the structured AST. See `docs/markdown-content.md`.
+ * A markdown field stores rich body content as a structured mdast tree, one
+ * tree per language. The writer experience is markdown-style, the storage
+ * shape is the structured AST.
  *
- * The per-field schema (constructed by `buildMdAstSchemaForFeatures`) is
- * what actually validates an entry's tree at write time - it narrows the
- * permissive `mdAstRootSchema` to only the node types enabled in the
- * `features` config, enforces `ofCollections` structurally on
- * `entryReference` nodes, and applies block-count min/max.
+ * `buildMdAstSchemaForFeatures` builds the per-field schema that validates a
+ * tree at write time. Existence and MIME validation lives in
+ * `EntryService.validateValueReferences`, because both need IO.
  *
- * Existence + MIME validation lives in `EntryService.validateValueReferences`
- * because both require IO (read the target asset/entry file).
+ * @see ../../contributing/markdown-internals.md
  */
 export const markdownFieldDefinitionSchema = fieldDefinitionBaseSchema
   .extend({

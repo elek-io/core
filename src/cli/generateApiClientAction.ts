@@ -20,31 +20,11 @@ import assert from 'node:assert';
 /**
  * API Client generator
  *
- * Generates an API client with full type safety in given folder
- * based on the locally available Projects, Collections and Entries.
- * Uses a generated schema based on the field definitions
- * of Collections to provide correct types for available Entries.
+ * Generates a typed API client in the given folder from the locally available
+ * Projects, Collections and Entries. The schema is generated from the field
+ * definitions of Collections, so Entries carry correct types.
  *
- * @example
- * Usage: Import the generated client and use it to access the local content API
- *
- * ```ts
- * import { apiClient } from './.elek.io/client.js';
- *
- * const client = await apiClient({
- *   baseUrl: 'http://localhost:31310',
- *   apiKey: '<token>'
- * }).content.v1;
- *
- * const entries = await client
- *   .projects['d9920ad7-07b8-41c4-84f7-5d6babf0f800']
- *   .collections['blog-posts']
- *   .entries.list({
- *     limit: 10,
- *   })
- *
- * console.log(entries);
- * ```
+ * @see ../../docs/api-clients.md
  */
 async function generateApiClient(
   outFile: string,

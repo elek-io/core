@@ -1,4 +1,4 @@
-# elek.io Core Documentation
+# elek.io Core documentation
 
 Consumer documentation for `@elek-io/core`. These docs ship inside the published package, so a developer or AI coding agent always has version-matched references for the exact Core version in use, with no network lookup.
 

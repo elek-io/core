@@ -1,10 +1,10 @@
-# Schema Changes
+# Schema changes
 
 What happens to existing content when you edit a Collection's or Component's field definitions. Changing a schema in elek.io Core is not just a metadata edit - Core cascades the change into every affected Entry so stored content stays valid against its schema, all in a single commit.
 
 For the field types this operates on, see [`fields.md`](./fields.md). For the data model, see [`concepts.md`](./concepts.md).
 
-## The golden rule: Field definitions are matched by `id`
+## The golden rule: field definitions are matched by `id`
 
 Every field definition has a stable `id` (UUID). The cascade matches old and new definitions **by `id`, never by `slug`**.
 
@@ -42,7 +42,7 @@ Renames, removals, additions with a usable default, and allowlist narrowing are 
 
 There is no separate confirmation step for these - the commit is made as part of the update. Treat field removal and allowlist narrowing as destructive operations.
 
-### Default values for added Fields
+### Default values for added fields
 
 A newly added field's value is built per its type:
 
@@ -75,7 +75,13 @@ The unresolved issues are attached as the **`cause`** of the thrown `Conflict` e
 }
 ```
 
-A `unique_collision` issue is shaped a little differently. It sets `transformedValues` to `{}` and has no `currentValue`. Instead it carries `value` (the colliding string), `language` (the slot it collides in), and `conflictingEntryId` (the kept Entry that already holds the value). These are the same fields as the `UniqueValueConflict` thrown on a per-Entry create or update, so an editor renders both the same way.
+A `unique_collision` issue is shaped a little differently. It sets `transformedValues` to `{}`, has no `currentValue`, and carries three fields of its own:
+
+- `value`, the colliding string
+- `language`, the slot it collides in
+- `conflictingEntryId`, the kept Entry that already holds the value
+
+These are the same fields as the `UniqueValueConflict` thrown on a per-Entry create or update, so an editor renders both the same way.
 
 ### The resolution workflow
 

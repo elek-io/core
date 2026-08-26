@@ -2,27 +2,15 @@
 
 /**
  * Astro-bound `mdastRender`. Takes an `MdAstRoot` and a renderers override
- * object; returns an Astro JSX element ready to interpolate in an `.astro`
+ * object, returns an Astro JSX element ready to interpolate in an `.astro`
  * file.
  *
  * Three keys are required from the consumer (`html`, `assetReference`,
- * `entryReference`) — defaults can't be safe and correct for those, and
- * content editors can flip the corresponding `features` flags or extend
- * `ofCollections` at any time, so the type system forces a documented
- * decision per key. Choosing `() => null` is valid and documents "render
- * nothing if this ever appears."
+ * `entryReference`), every other node type has a default that emits plain
+ * semantic HTML. Defaults are built with `renderTemplate` and `addAttribute`
+ * rather than with `astro/jsx-runtime`, which decides where they render.
  *
- * Every other node type has a default that emits a plain semantic HTML
- * element — no class names, no `rel`/`target`, no slug ids, no syntax
- * highlighting. Consumers override only what they want to change.
- *
- * Defaults are constructed via `renderTemplate` and `addAttribute`, the
- * same two functions the Astro compiler emits into every compiled
- * `.astro` file, so the result is a value Astro's `renderChild` renders
- * in any position. Building them from `astro/jsx-runtime` instead would
- * produce a vnode, which only the page-level render pass unwraps, so the
- * rendered markdown would collapse to "[object Object]" as soon as it
- * sat inside an `.astro` component. See contributing/astro-entry.md.
+ * @see ../../contributing/astro-entry.md
  */
 
 import { renderTemplate, addAttribute } from 'astro/runtime/server/index.js';

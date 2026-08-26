@@ -76,6 +76,7 @@ const capitalizedWords = new Set([
   'Astro',
   'Git',
   'GitHub',
+  'Actions',
   'TypeScript',
   'JavaScript',
   'Node',
@@ -86,6 +87,7 @@ const capitalizedWords = new Set([
   'Linux',
   'macOS',
   'Zod',
+  'Vite',
   'Vitest',
   'Prettier',
   'ESLint',
@@ -97,6 +99,10 @@ const capitalizedWords = new Set([
   'Contentful',
   'Sanity',
   'Starlight',
+  'Vercel',
+  'Netlify',
+  'Cloudflare',
+  'Pages',
 ]);
 
 /**
@@ -108,6 +114,7 @@ const externalRepositories = [
   'Cloud',
   'dugite',
   'GitHub Desktop',
+  'VS Code',
   'Astro',
   'Client',
 ];

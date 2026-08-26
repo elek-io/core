@@ -48,15 +48,12 @@ function getValueTypeName(valueType: ValueType): string {
  * language keys. Uses `Omit + &` to override the `content` field with
  * `Record<ProjectLanguage, T>`.
  *
- * A language slot an editor left empty holds `null`, which the Entry
- * schema accepts for an optional string, number or markdown field, so
- * the emitted type admits it too. Booleans and references never do: a
- * toggle is always true or false and an empty reference field is an
- * empty array. The rule mirrors `schemaFromFieldDefinition.ts` and the
- * Astro loaders' `buildEntryValuesTypeString`.
+ * A language slot an editor left empty holds `null`, and the emitted type has
+ * to admit it for an optional string, number or markdown field. Booleans and
+ * references never do. Switches on `valueType` so a new one is a compile-time
+ * error here until every case is handled.
  *
- * Switches on `valueType` (not `string`) so adding a new one is a
- * compile-time error here until every case is handled.
+ * @see ../../contributing/language-scoped-validation.md
  */
 function getNarrowedValueType(fieldDefinition: FieldDefinition): string {
   const orNull = fieldDefinition.isRequired ? '' : ' | null';

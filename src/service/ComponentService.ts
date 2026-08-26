@@ -271,17 +271,12 @@ export class ComponentService
    * Updates given Component
    *
    * Field definitions are matched by `id`. Send back the `id` of every field
-   * definition you want to keep so Core matches it to the existing one and
-   * preserves the entry data stored under it, even across slug renames or type
-   * changes. A field definition with no `id` (or a changed `id`) is treated as
-   * new, so the old field and the entry data keyed to it is removed. Ids are
-   * caller-supplied (Core does not generate them), so always round-trip the
-   * ids you read.
+   * definition you want to keep, a missing or changed `id` counts as a new
+   * field and removes the Entry data keyed to the old one. The cascade runs
+   * across every Entry that references this Component, and an ambiguous
+   * change throws `Conflict` with structured issues.
    *
-   * Handles fieldDefinition change cascade across all entries that reference
-   * this Component. Deterministic changes (slug renames, field removals,
-   * additions with defaults) are applied automatically. Ambiguous changes
-   * throw CoreError.conflict() with structured issues.
+   * @see ../../docs/schema-changes.md
    */
   public async update<T extends Component = Component>(
     props: UpdateComponentProps

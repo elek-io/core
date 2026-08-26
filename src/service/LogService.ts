@@ -110,17 +110,14 @@ const SECRET_KEY_PARTS = [
 ];
 
 /**
- * Collects the records of a tail in order, collapsing a run of identical
- * ones into the first of them and a count.
+ * Collects the records of a tail in order, collapsing a run of identical ones
+ * into the first of them and a count.
  *
- * That collapse is the whole algorithm rather than a nicety. A measured
- * day was 78 MB, 67% of it one repeated stack, and it came out at 0.04 MB
- * without dropping anything a reader needs. It is what removes the need
- * for a trim loop, and it happens during the read, since reading 78 MB
- * into memory to collapse it afterwards defeats the point.
+ * That collapse is the whole algorithm rather than a nicety, and it happens
+ * during the read. A collector rather than state on `LogService`, because it
+ * belongs to one call of `tail()` rather than to the service.
  *
- * A collector rather than state on `LogService`, because it belongs to
- * one call of `tail()` rather than to the service.
+ * @see ../../contributing/logging.md
  */
 class TailBuffer {
   private readonly lines: (string | undefined)[] = [];
@@ -272,17 +269,12 @@ export class LogService {
   /**
    * Reads the last 24 hours of log files back as one gzipped blob.
    *
-   * Public because it is a log concern rather than a reporting one: it is
-   * what a report attaches when the User consented to it, and equally
-   * what a "save my diagnostics to a file" button writes out with no
-   * network involved.
+   * Public because it is a log concern rather than a reporting one. What comes
+   * back is safe to hand to someone else: Core's own records are decided safe
+   * at the call site, and the rest is scrubbed here. Ids, paths and timestamps
+   * stay exact, because they are what makes a line resolvable.
    *
-   * What comes back is safe to hand to someone else. The records Core
-   * authored are safe already, since that is decided at the call site,
-   * and the rest is scrubbed here: the home directory prefix, and the key
-   * names a host's `meta` must not carry a value under. Ids, paths and
-   * timestamps stay exact, because they are what makes a line resolvable
-   * against the repository. See contributing/logging.md.
+   * @see ../../contributing/logging.md
    */
   public async tail(): Promise<LogTail> {
     // winston hands a record to a write stream and there is no per
@@ -426,17 +418,13 @@ export class LogService {
    * Builds the transports a LogService logs through.
    *
    * Static so the exception handling policy can be asserted directly.
-   * `service/index.ts` is not re-exported from the package entries, so
-   * this stays internal to Core.
+   * `service/index.ts` is not re-exported from the package entries, so this
+   * stays internal to Core.
    *
-   * Only the rotating file handles exceptions and rejections. The console
-   * must not, because winston writes an uncaught exception to every
-   * transport that handles them: a console write that fails is itself a
-   * new uncaught exception, which winston writes to the console again.
-   * That loop was measured at 5450 records a second for 13 minutes inside
-   * an Astro build whose stdout pipe had closed. The file transport is
-   * never part of it, since the sink it writes to is not the one failing.
-   * See contributing/logging.md.
+   * Only the rotating file handles exceptions and rejections, never the
+   * console, which would loop.
+   *
+   * @see ../../contributing/logging.md
    */
   public static createTransports(
     options: ElekIoCoreOptions,
@@ -735,15 +723,12 @@ export class LogService {
   /**
    * The log files that can hold a record of the window, oldest first.
    *
-   * Keyed off the extension rather than the date, because the transport
-   * only gzips on a rotation event while the process is running: close
-   * the app and reopen it the next day and yesterday's file stays plain
-   * forever. The rotation's `.*-audit.json` dotfiles are not log files.
+   * Keyed off the extension rather than the date, because the transport only
+   * gzips on a rotation event while the process is running. A file is named
+   * after a local date while a record is stamped in UTC, so the range is padded
+   * by a day on either side, and the record's own timestamp decides.
    *
-   * A file is named after a local date while a record is stamped in UTC,
-   * so the range is padded by a day on either side. The record's own
-   * timestamp is what decides, this only decides which of the 30 kept
-   * files are worth opening at all.
+   * @see ../../contributing/logging.md
    */
   private static async logFilesInWindow(
     dir: string,
