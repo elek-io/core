@@ -58,6 +58,14 @@ export type VersionedGitTag = GitTag & {
   message: Extract<GitTagMessage, { type: 'release' | 'preview' }>;
 };
 
+/**
+ * Narrows a `GitTag` to one carrying a Project version, so
+ * `.filter(isVersionedTag)` keeps the `release` and `preview` tags and drops
+ * the Core upgrade tags a Project's tag list also holds.
+ *
+ * An upgrade tag carries `coreVersion` and no `version`, so this guard is
+ * what makes `tag.message.version` reachable without a cast.
+ */
 export const isVersionedTag = (tag: GitTag): tag is VersionedGitTag =>
   tag.message.type === 'release' || tag.message.type === 'preview';
 
@@ -163,7 +171,9 @@ export const gitLogOptionsSchema = z.object({
   /**
    * Only list commits that are between given SHAs or tag names
    *
-   * Note that the commits of from and to are not included in the result
+   * `from` is exclusive and `to` is inclusive, which is git's own `from..to`
+   * range. This is what `core.projects.getChanges()` returns as `ahead` and
+   * `behind`, so a tip commit is counted.
    */
   between: z.object({
     /**

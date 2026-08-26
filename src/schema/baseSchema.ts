@@ -59,9 +59,9 @@ export const uuidSchema = z.uuid();
 export type Uuid = z.infer<typeof uuidSchema>;
 
 /**
- * A record keyed by every language the DeepL API supports, every key optional.
- * This is the structural type used for file I/O and for Core's exported
- * TypeScript types.
+ * A record keyed by every language Core supports, the 24 of
+ * `supportedLanguageSchema`, with every key optional. This is the structural
+ * type used for file I/O and for Core's exported TypeScript types.
  *
  * Static types stay broad because a Project's supported languages are runtime
  * data. Per-project completeness is enforced at service boundaries by the
@@ -75,7 +75,8 @@ export function partialTranslatableRecordOf<T extends z.ZodTypeAny>(schema: T) {
 }
 
 /**
- * A record that can be used to translate a string value into all supported languages.
+ * A translatable string. Every value is trimmed and must not be empty, so
+ * `{ en: '   ' }` is rejected as `BadRequest` rather than stored blank.
  *
  * @see {@link partialTranslatableRecordOf} for why keys are optional and where
  *   per-project language completeness is enforced.

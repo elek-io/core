@@ -38,6 +38,17 @@ export interface ComponentsContext {
   allIds: readonly string[];
 }
 
+/**
+ * Snapshot of a Project's Component graph, built once and passed down so the
+ * map and the id list are not recomputed per recursion.
+ *
+ * Pass the Project's complete Component list. `resolveOfComponents` reads an
+ * empty `ofComponents` on a dynamic field as every Component in the Project
+ * and answers that from `allIds`, so a filtered list silently narrows what
+ * such a field resolves to.
+ *
+ * Pure and non-throwing, and stale as soon as a Component changes.
+ */
 export function makeComponentsContext(
   components: readonly Component[]
 ): ComponentsContext {

@@ -36,6 +36,14 @@ import {
 // Primitives
 // ---------------------------------------------------------------------------
 
+/**
+ * The single place the language guarantee is expressed.
+ * `z.record(z.enum(languages), schema)` requires every language in the
+ * Project's non-empty tuple to be present and rejects any key outside it,
+ * which is what turns a partial record shape into a complete one at runtime.
+ *
+ * @see ../../contributing/language-scoped-validation.md
+ */
 export function strictTranslatableRecordOf<T extends z.ZodTypeAny>(
   schema: T,
   languages: ProjectLanguages
@@ -133,6 +141,18 @@ function checkComponentAdminMetadata(
 // Collection
 // ---------------------------------------------------------------------------
 
+/**
+ * The anchor for the four admin-metadata factories. It layers a `superRefine`
+ * onto the static `createCollectionSchema` rather than rewriting it, so the
+ * existing field definition refinements survive, and it walks groups instead
+ * of flattening them so an issue path points at the definition the User
+ * edited.
+ *
+ * A Collection's own `description` has to carry every language. A field
+ * definition's or a group's may be `null`.
+ *
+ * @see ../../contributing/language-scoped-validation.md
+ */
 export function getCreateCollectionSchemaFromLanguages(
   languages: ProjectLanguages
 ) {
@@ -142,6 +162,10 @@ export function getCreateCollectionSchemaFromLanguages(
   });
 }
 
+/**
+ * The same refinement as `getCreateCollectionSchemaFromLanguages`, over
+ * `updateCollectionSchema`, which carries the Collection's `id`.
+ */
 export function getUpdateCollectionSchemaFromLanguages(
   languages: ProjectLanguages
 ) {
@@ -155,6 +179,12 @@ export function getUpdateCollectionSchemaFromLanguages(
 // Component
 // ---------------------------------------------------------------------------
 
+/**
+ * The same layered refinement as `getCreateCollectionSchemaFromLanguages`,
+ * with two differences: a Component holds a flat field definition list, so
+ * there is no group walk, and its own `description` may be `null` where a
+ * Collection's may not.
+ */
 export function getCreateComponentSchemaFromLanguages(
   languages: ProjectLanguages
 ) {
@@ -164,6 +194,10 @@ export function getCreateComponentSchemaFromLanguages(
   });
 }
 
+/**
+ * The same refinement as `getCreateComponentSchemaFromLanguages`, over
+ * `updateComponentSchema`.
+ */
 export function getUpdateComponentSchemaFromLanguages(
   languages: ProjectLanguages
 ) {
@@ -177,6 +211,17 @@ export function getUpdateComponentSchemaFromLanguages(
 // Entry
 // ---------------------------------------------------------------------------
 
+/**
+ * The anchor for the three Entry factories, and the one exported into
+ * generated API clients to validate responses.
+ *
+ * It demands a Value for every field definition slug. An unknown slug is
+ * stripped rather than rejected, and a `componentResolver` is required
+ * whenever a field definition is dynamic, or schema generation throws.
+ *
+ * This variant validates a stored Entry, so it keeps `id`, `coreVersion`,
+ * `created` and `updated`.
+ */
 export function getEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
   languages: ProjectLanguages,
@@ -188,6 +233,14 @@ export function getEntrySchemaFromFieldDefinitions(
   });
 }
 
+/**
+ * The values behavior of `getEntrySchemaFromFieldDefinitions`, built on
+ * `createEntrySchema`: no `id`, `created` or `updated`, and `projectId` plus
+ * `collectionId` instead.
+ *
+ * This is the schema `EntryService.create` hands to `mutating()` as its
+ * single validation pass.
+ */
 export function getCreateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
   languages: ProjectLanguages,
@@ -199,6 +252,13 @@ export function getCreateEntrySchemaFromFieldDefinitions(
   });
 }
 
+/**
+ * The values behavior of `getEntrySchemaFromFieldDefinitions`, built on
+ * `updateEntrySchema`, which keeps `id`.
+ *
+ * An update replaces `values` wholesale, so every field definition's Value
+ * has to be sent, not only the changed ones.
+ */
 export function getUpdateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
   languages: ProjectLanguages,

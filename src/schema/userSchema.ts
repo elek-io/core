@@ -40,7 +40,8 @@ export const userSettingsSchema = z.object({
      */
     isEnabled: z.boolean(),
     /**
-     * The port the local API should use
+     * The port the local API should use. Stored for elek.io clients to read,
+     * Core never does. `core.api.start(port)` takes the port as an argument.
      */
     port: z.number(),
   }),

@@ -115,10 +115,11 @@ export type ComponentValue = z.infer<typeof componentValueSchema>;
 // are first-class typed nodes (entryReference / assetReference).
 //
 // These are the fully-permissive schemas: every modelled node type is
-// accepted. Per-field narrowing (based on the field's `features` config)
-// happens via `buildMdAstSchemaForField` in `./buildMdAstSchema.ts`. The
-// permissive version here is what a raw entry JSON conforms to when
-// loaded without a field-definition context.
+// accepted. Per-field narrowing happens via `buildMdAstSchemaForFeatures` in
+// `./buildMdAstSchema.ts`, which narrows by more than the `features` map: it
+// also applies `ofCollections`, the block `min` and `max` count and
+// MAX_MDAST_DEPTH. The permissive version here is what a raw entry JSON
+// conforms to when loaded without a field-definition context.
 //
 // `position` info (start/end source coordinates emitted by markdown
 // parsers) is intentionally NOT part of any node schema. The mdast spec
@@ -225,10 +226,11 @@ export interface MdAstLink {
 }
 /**
  * Custom node: typed reference to an Entry stored in the same Project.
- * Carries both `collectionId` and `entryId` - Core's filesystem layout
- * (`projects/<pid>/collections/<cid>/entries/<eid>/…`) requires both for
- * path resolution, and the schema-level `ofCollections` constraint check
- * (in `buildMdAstSchemaForField`) uses `collectionId` directly.
+ *
+ * Both ids are carried because an Entry is addressed by its Collection as
+ * well as by itself, and because the `ofCollections` constraint check in
+ * `buildMdAstSchemaForFeatures` reads `collectionId` directly, refining only
+ * when `ofCollections` is non-empty.
  */
 export interface MdAstEntryReference {
   type: 'entryReference';
@@ -551,14 +553,11 @@ export function isEmptyParagraphOnly(root: {
 }
 
 /**
- * Markdown abstract syntax tree (mdast) - structured representation of body content.
+ * The root of a markdown value's node tree, as stored.
  *
- * Recommended for rendering: walk the tree via `node.type` and emit per-node
- * components/HTML. Gives full control over how entryReference / assetReference
- * nodes render (resolve to your URL structure of choice).
- *
- * Rendering patterns and the security notes around a `rawHtml`-enabled field
- * are in the doc below.
+ * A parsed root holds at least one block, and a tree whose only child is an
+ * empty paragraph is rejected, because empty markdown is serialised as `null`
+ * per language rather than as an empty tree.
  *
  * @see ../../docs/markdown-content.md
  */

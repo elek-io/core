@@ -59,8 +59,9 @@ function exceedsMaxDepth(root: unknown, maxDepth: number): boolean {
 }
 
 /**
- * Heading depth - one of 1..6. Empty array on the field config disables
- * headings entirely.
+ * Heading depth. A field's `headings` array is an exact allowlist rather than
+ * a ceiling, so `[2, 3]` rejects a depth 1 heading, and an empty array
+ * disables headings entirely.
  */
 export const markdownHeadingDepthSchema = z.union([
   z.literal(1),
@@ -107,9 +108,10 @@ export const markdownFeaturesSchema = z.object({
   strong: z.boolean(),
   inlineCode: z.boolean(),
   /**
-   * mdast `link` with absolute http(s)/mailto URL. Covers `[text](url)`
-   * and CommonMark autolinks `<url>` (which parse to `link` nodes). GFM
-   * `autolinkLiteral` (bare URLs in body text) is excluded entirely.
+   * mdast `link` nodes whose URL passes Core's scheme allowlist, which
+   * `mdAstLinkUrlSchema` defines. Covers `[text](url)` and CommonMark
+   * autolinks `<url>`, which parse to `link` nodes. GFM `autolinkLiteral`,
+   * a bare URL in body text, is excluded entirely.
    */
   externalLinks: z.boolean(),
   /** Custom `entryReference` node (typed reference to another Entry). */
@@ -144,14 +146,13 @@ export interface BuildMdAstSchemaContext {
 }
 
 /**
- * Builds a Zod schema that validates an `MdAstRoot | null` against the given
- * features and ofCollections.
- *
- * `null` is accepted when `isRequired` is false. Only the node types the
- * features map allows pass. The block count is at least
- * `min ?? (isRequired ? 1 : 0)` and at most `max`. A tree of empty paragraphs
- * is rejected, and an `entryReference.collectionId` has to be in a non-empty
- * `ofCollections`.
+ * Validates an `MdAstRoot | null` against a field's whole configuration, not
+ * only its features map. `null` is accepted when `isRequired` is false, and
+ * empty content is `null` per language rather than an empty tree: a present
+ * root always holds at least one block, and one whose only child is an empty
+ * paragraph is rejected. `min` and `max` bound the block count above that
+ * floor, an `entryReference.collectionId` has to be in a non-empty
+ * `ofCollections`, and nesting past `MAX_MDAST_DEPTH` is rejected.
  *
  * @see ../../contributing/markdown-internals.md
  */
@@ -348,12 +349,10 @@ export function buildMdAstSchemaForFeatures(
   }
 
   if (features.lists) {
-    // listItem can carry a `checked` boolean when taskListItems is enabled.
-    // We don't structurally couple them - features.taskListItems false +
-    // listItem.checked = boolean would still pass the tree shape. The
-    // field-definition-level refinement `taskListItems requires lists`
-    // (in fieldSchema.ts) catches the inverse (taskListItems without
-    // lists), which is the real misconfiguration.
+    // listItem carries a `checked` boolean only when taskListItems is on,
+    // below it is narrowed to null. The field-definition-level refinement
+    // `taskListItems requires lists` (in fieldSchema.ts) catches the inverse
+    // misconfiguration, taskListItems without lists.
     const listItemFieldSchema: z.ZodType<{
       type: 'listItem';
       spread: boolean | null;

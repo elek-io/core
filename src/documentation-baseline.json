@@ -1,10 +1,5 @@
 {
   "jsdoc/documented-export": [
-    "src/schema/componentSchema.ts",
-    "src/schema/gitSchema.ts",
-    "src/schema/schemaFromFieldDefinition.ts",
-    "src/schema/serviceSchema.ts",
-    "src/schema/strictEntitySchema.ts",
     "src/service/GitService.ts",
     "src/service/LogService.ts",
     "src/service/ProjectService.ts",

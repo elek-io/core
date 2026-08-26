@@ -158,10 +158,13 @@ export const slugSeparatorSchema = z
   });
 
 /**
- * Validates that fieldDefinition slugs are unique within their parent fieldDefinitions array.
- * Handles both FieldDefinitions and FieldDefinitionGroups.
+ * Enforces slug uniqueness across the whole Collection or Component, not
+ * within a group: the walk flattens groups into one `seen` set, so a
+ * definition inside a group collides with a top-level one.
  *
- * Use this refinement via the superRefine method, not the standard refine.
+ * The issue lands on the second and later occurrences, at their nested path.
+ *
+ * Use it through `superRefine`, not `refine`.
  */
 export const fieldDefinitionSlugUniquenessSuperRefinement = (
   fieldDefinitionsOrGroups: FieldDefinitionOrGroup[],
@@ -183,8 +186,11 @@ export const fieldDefinitionSlugUniquenessSuperRefinement = (
 };
 
 /**
- * Base Field definition
- * Contains all common properties across all Field definitions
+ * The properties every field definition family shares.
+ *
+ * `isUnique` is declared here for all of them, but only string field types
+ * may set it true. The number, boolean, reference, dynamic and markdown bases
+ * narrow it to `z.literal(false)`, and `slug` narrows it to `z.literal(true)`.
  */
 export const fieldDefinitionBaseSchema = z.object({
   id: uuidSchema.readonly(),
@@ -403,7 +409,12 @@ export const toggleFieldDefinitionSchema =
 export type ToggleFieldDefinition = z.infer<typeof toggleFieldDefinitionSchema>;
 
 /**
- * Union of all direct Field definitions
+ * The direct families, meaning the `string`, `number` and `boolean` value
+ * types, whose content is stored inline in the Entry file rather than as a
+ * reference to something else.
+ *
+ * `fieldType: 'select'` appears twice in this union, once per value type.
+ * The discriminator is `valueType`, not `fieldType`.
  */
 export const directFieldDefinitionSchema = z.union([
   stringFieldDefinitionSchema,
@@ -452,7 +463,12 @@ export const entryFieldDefinitionSchema = referenceFieldDefinitionBaseSchema
 export type EntryFieldDefinition = z.infer<typeof entryFieldDefinitionSchema>;
 
 /**
- * Union of all reference Field definitions
+ * The reference families. A reference field stores ids alone, so nothing
+ * about a target is checked when a definition or a value parses here.
+ *
+ * `ofCollections` is enforced by the value schema `schemaFromFieldDefinition`
+ * builds, and target existence plus `ofAssetMimeTypes` at write time, by
+ * `ReferenceService.validateValueReferences`.
  */
 export const referenceFieldDefinitionSchema = z.union([
   assetFieldDefinitionSchema,
@@ -463,8 +479,11 @@ export type ReferenceFieldDefinition = z.infer<
 >;
 
 /**
- * A dynamic field definition references one or more Components.
- * Entry data contains an ordered array of polymorphic component items.
+ * A dynamic field embeds Components by reference, and its Entry data is an
+ * ordered array of polymorphic component items.
+ *
+ * An empty `ofComponents` allows any Component of the Project, it is not an
+ * invalid definition. A non-empty one restricts to the listed ids.
  */
 export const dynamicFieldDefinitionSchema = fieldDefinitionBaseSchema
   .extend({
@@ -567,10 +586,12 @@ export const fieldDefinitionSchema = z.union([
 export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
 
 /**
- * A group of Field definitions, displayed as a named fieldset in the UI.
- * Groups are purely presentational and do not affect entry data or validation.
- * Ordering is determined by position in the parent array (supports drag-and-drop).
- * Groups can contain direct, reference and dynamic field definitions but not nested groups.
+ * A group of field definitions, displayed as a named fieldset. Purely
+ * presentational, it affects neither Entry data nor validation, and ordering
+ * follows position in the parent array.
+ *
+ * A group holds any field definition, markdown included, except another
+ * group.
  */
 export const fieldDefinitionGroupSchema = z.object({
   isGroup: z.literal(true),
@@ -582,7 +603,8 @@ export const fieldDefinitionGroupSchema = z.object({
 export type FieldDefinitionGroup = z.infer<typeof fieldDefinitionGroupSchema>;
 
 /**
- * Union of a FieldDefinition or a FieldDefinitionGroup,
+ * Only a Collection's `fieldDefinitions` accepts this union. A Component
+ * takes a flat `FieldDefinition[]` and rejects groups.
  */
 export const fieldDefinitionOrGroupSchema = z.union([
   fieldDefinitionGroupSchema,
@@ -593,8 +615,12 @@ export type FieldDefinitionOrGroup = z.infer<
 >;
 
 /**
- * Flattens a mixed array of FieldDefinitions and FieldDefinitionGroups
- * into a flat array of FieldDefinitions.
+ * Flattens groups away, preserving order with a group's children spliced in
+ * place.
+ *
+ * An index into the result no longer addresses a definition in the original
+ * array, so anything building an issue path has to use
+ * `flattenFieldDefinitionsWithPaths` instead.
  */
 export function flattenFieldDefinitions(
   fieldDefinitionsOrGroups: FieldDefinitionOrGroup[]

@@ -2,9 +2,11 @@
  * Compile-time drift detection between Core's MdAst* types and the upstream
  * mdast spec types from `@types/mdast`.
  *
- * The assertions fail at compile time when upstream adds a required scalar
- * field, changes the shape of one, or renames one. An added optional field, a
- * removed field and a change in a children shape pass on purpose.
+ * The check is one-directional assignability, so an assertion fails when
+ * Core's type stops being assignable to upstream's: a required scalar field
+ * added, one Core widened narrowed again, or a rename to a required name. An
+ * upstream widening passes, and so do an added optional field, a removed
+ * field, a rename to an optional name and a change in a children shape.
  *
  * @see ../../contributing/markdown-internals.md
  */
@@ -60,8 +62,11 @@ import type {
 } from './valueSchema.js';
 
 /**
- * Compares our type against the upstream type with `position`, `data`, and
- * `children` removed. Catches drift in scalar fields and `type` literals.
+ * Catches drift in scalar fields and `type` literals. `position` and `data`
+ * are excluded because Core's recursive types omit them on every node, and
+ * `children` because a deep comparison through them would be fragile.
+ *
+ * @see ../../contributing/markdown-internals.md
  */
 type MatchesUpstream<Ours, Upstream> =
   Ours extends Omit<Upstream, 'position' | 'data' | 'children'> ? true : false;

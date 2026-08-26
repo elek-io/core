@@ -2,11 +2,19 @@ import { z } from '@hono/zod-openapi';
 import { objectTypeSchema, uuidSchema, versionSchema } from './baseSchema.js';
 
 /**
- * A basic file structure every elek.io file on disk has to follow
+ * The envelope every object file shares, the five that carry an `objectType`.
+ * `user.json`, the slug index files and the log files are not object files
+ * and do not extend it.
+ *
+ * `objectType` also carries `value`, which never names a file of its own, it
+ * lives inside an Entry file.
+ *
+ * @see ../../docs/storage-layout.md
  */
 export const baseFileSchema = z.object({
   /**
-   * The object type of the file
+   * Set by the service writing the file, and it names the folder the file
+   * lives in.
    */
   objectType: objectTypeSchema.readonly(),
   /**

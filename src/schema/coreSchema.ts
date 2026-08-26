@@ -2,7 +2,10 @@ import { z } from '@hono/zod-openapi';
 import { logLevelSchema, versionSchema } from './baseSchema.js';
 
 /**
- * Options that can be passed to elek.io core
+ * The fully resolved option set, once the defaults and the `ELEK_IO_`
+ * environment variables have been applied. Core exposes it as `core.options`.
+ *
+ * A constructor takes the partial `constructorElekIoCoreSchema` below instead.
  */
 export const elekIoCoreOptionsSchema = z.object({
   log: z.object({
@@ -37,7 +40,11 @@ export const elekIoCoreOptionsSchema = z.object({
   }),
   file: z.object({
     /**
-     * If set to true, caches files in memory to speed up access
+     * Caches parsed JSON object files in memory, never Asset binaries. The
+     * map is per Core instance and unbounded, and is cleared after a git
+     * operation that changes the working tree.
+     *
+     * So a stale read needs a writer outside this Core instance.
      *
      * @default true
      */

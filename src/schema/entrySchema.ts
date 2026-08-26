@@ -104,7 +104,8 @@ export interface ReferenceComponentPathSegment {
  */
 export interface EntryReferenceIssueLocation {
   /**
-   * The field's slug.
+   * Slug of the leaf field holding the reference, the innermost one when the
+   * reference is nested inside `dynamic` or component blocks.
    */
   fieldSlug: string;
   /**
@@ -178,10 +179,12 @@ export interface UniqueValueConflict {
 }
 
 /**
- * An Entry that still references a delete target (an Asset or another Entry).
+ * An Entry that still references a delete target: an Asset, another Entry, or
+ * a Collection whose Entries are about to go with it.
+ *
  * Collected by `ReferenceService.findEntriesReferencing` and attached as the
- * `cause` of the `Conflict` error thrown when a referenced Asset/Entry delete
- * is blocked. One record per referring Entry (first match within that Entry).
+ * `cause` of the `Conflict` thrown when an Asset, Entry or Collection delete
+ * is blocked. One record per referring Entry, its first match.
  */
 export interface ReferencingEntry {
   /**
