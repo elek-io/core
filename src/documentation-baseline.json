@@ -1,10 +1,5 @@
 {
   "jsdoc/documented-export": [
-    "src/cli/exportAction.ts",
-    "src/cli/generateApiClientAction.ts",
-    "src/cli/generateTypesAction.ts",
-    "src/cli/startApiAction.ts",
-    "src/cli/util.ts",
     "src/schema/componentSchema.ts",
     "src/schema/gitSchema.ts",
     "src/schema/schemaFromFieldDefinition.ts",

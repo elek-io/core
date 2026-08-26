@@ -39,6 +39,17 @@ export function getCore(): ElekIoCore {
   return coreInstance;
 }
 
+/**
+ * An open watcher on the data directory's `projects` path, which the caller
+ * owns and nothing closes, so a command that calls this never exits on its
+ * own. It builds the CLI's Core through `getCore()` when none exists yet,
+ * which fixes the directory being watched.
+ *
+ * The initial scan is skipped so a first run does not fire one event per
+ * existing file, and `.git` is ignored so Core's own git writes do not
+ * retrigger the regeneration that caused them. That filter matches a POSIX
+ * separator only.
+ */
 export function watchProjects() {
   return chokidar.watch(getCore().util.pathTo.projects, {
     ignoreInitial: true, // Do not regenerate Client while chokidar first discovers all directories and files

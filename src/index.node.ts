@@ -38,9 +38,15 @@ export * from './schema/index.js';
 export * from './util/shared.js';
 
 /**
- * elek.io Core
+ * elek.io Core, the entry point every service hangs off.
  *
- * Provides access to all services Core is offering
+ * Constructing it resolves the `ELEK_IO_` environment variables once, never
+ * at import, creates `<dataDir>/projects` and empties `<dataDir>/tmp` on
+ * disk, and registers process-level exception and rejection handlers unless
+ * `log.hasProcessErrorHandlers` is false. Throws `BadRequest` on invalid
+ * options and on an unusable `ELEK_IO_LOG_LEVEL` or `ELEK_IO_CLOUD_URL`.
+ *
+ * @see ../docs/usage.md
  */
 export default class ElekIoCore {
   public readonly coreVersion: Version;
@@ -207,7 +213,11 @@ export default class ElekIoCore {
   }
 
   /**
-   * Exposes the logger
+   * The same `LogService` Core writes its own records through. Records land
+   * in daily rotated JSONL files under `<dataDir>/logs`, each built from an
+   * allowlist so nothing a User typed reaches a log file.
+   *
+   * `dispose()` closes it.
    */
   public get logger() {
     return this.logService;
@@ -223,49 +233,76 @@ export default class ElekIoCore {
   }
 
   /**
-   * Exposes git functions
+   * Shells out to real git through dugite, against a Project's repository on
+   * disk. An escape hatch below the services rather than an alternative to
+   * them.
+   *
+   * A mutating command throws `PreconditionFailed` in read-only mode, and
+   * `Unauthorized` when no User is set, because a commit is authored with
+   * that User.
    */
   public get git(): GitService {
     return this.gitService;
   }
 
   /**
-   * Getter and setter methods for the User currently working with Core
+   * The User currently working with Core, stored once per data directory in
+   * `user.json` rather than per Project.
+   *
+   * It authors every commit, so it has to be set before any mutating call
+   * unless Core runs read-only.
    */
   public get user(): UserService {
     return this.userService;
   }
 
   /**
-   * CRUD methods to work with Projects
+   * Projects, each its own git repository under `<dataDir>/projects/<id>`.
+   * `clone`, `provision`, `synchronize` and the `branches` calls live here
+   * too, and every mutating call commits.
+   *
+   * @see ../docs/git-and-sync.md
    */
   public get projects(): ProjectService {
     return this.projectService;
   }
 
   /**
-   * CRUD methods to work with Assets
+   * Assets, each two files: the binary and its `.json` metadata. Deleting one
+   * an Entry still references throws `Conflict`.
+   *
+   * @see ../docs/asset-management.md
    */
   public get assets(): AssetService {
     return this.assetService;
   }
 
   /**
-   * CRUD methods to work with Collections
+   * Collections, each carrying the field definitions every Entry inside it
+   * has to follow. Editing them cascades into the existing Entries.
+   *
+   * @see ../docs/schema-changes.md
    */
   public get collections(): CollectionService {
     return this.collectionService;
   }
 
   /**
-   * CRUD methods to work with Components
+   * Components, reusable named groups of field definitions that Collections
+   * reference, so a change here reaches every Collection using it.
+   *
+   * @see ../docs/concepts.md
    */
   public get components(): ComponentService {
     return this.componentService;
   }
 
   /**
-   * CRUD methods to work with Entries
+   * Entries. Every write is validated against the Collection's field
+   * definitions, its unique fields and its reference targets before anything
+   * reaches disk, and a successful call commits.
+   *
+   * @see ../docs/references.md
    */
   public get entries(): EntryService {
     return this.entryService;
@@ -279,7 +316,10 @@ export default class ElekIoCore {
   }
 
   /**
-   * Prepare and create releases
+   * Releases. Diffs the `work` branch against `production`, computes the
+   * semver bump from what changed, and merges, leaving a tagged snapshot.
+   *
+   * @see ../docs/releases.md
    */
   public get releases(): ReleaseService {
     return this.releaseService;
@@ -294,8 +334,10 @@ export default class ElekIoCore {
   }
 
   /**
-   * Allows starting and stopping a REST API
-   * to allow developers to read local Project data
+   * The local, read-only REST API over the Projects in this data directory.
+   * Assembled with Core, but nothing listens until `start()`.
+   *
+   * @see ../docs/local-api.md
    */
   public get api(): LocalApi {
     return this.localApi;

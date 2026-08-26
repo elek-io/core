@@ -165,10 +165,11 @@ function collectUsedValueTypes(
 }
 
 /**
- * Renders a single MarkdownFeatures value as a TypeScript literal. Typed
- * by `keyof MarkdownFeatures` so adding a new feature flag is a TS error
- * here until handled, this is the single point that has to change when
- * the feature shape evolves.
+ * Renders a single MarkdownFeatures value as a TypeScript literal.
+ *
+ * Booleans and arrays are the only shapes it renders. Anything else falls
+ * through `String(value)` and emits nonsense rather than failing to compile,
+ * so a flag of a new shape has to be handled here before it is added.
  */
 function markdownFeatureLiteral(
   features: MarkdownFeatures,
@@ -182,11 +183,13 @@ function markdownFeatureLiteral(
 }
 
 /**
- * Writes the narrowed properties of a field definition as an intersection type.
- * Narrows structural properties to literals, keeps labels as TranslatableString.
+ * Writes the narrowed properties of a field definition as an intersection
+ * type. Structural properties become literals, and `label` and `description`
+ * are narrowed to `Record<ProjectLanguage, string>` like every other
+ * translatable slot.
  *
- * Uses explicit line-by-line writing instead of inlineBlock() to preserve
- * the parent indentation context from the caller.
+ * Written line by line rather than with `inlineBlock()`, because the caller
+ * owns the indentation and `inlineBlock()` would impose its own.
  */
 function writeFieldDefinitionNarrowing(
   writer: CodeBlockWriter,
@@ -359,6 +362,10 @@ function writeFieldDefinitionNarrowing(
 
 /**
  * Writes a single field definition type entry within a tuple.
+ *
+ * The caller must have written `writer.indent(baseIndent)` itself first: the
+ * type name is emitted at the current cursor, and only the continuation lines
+ * are indented from `baseIndent`.
  */
 function writeFieldDefinitionTupleEntry(
   writer: CodeBlockWriter,
@@ -456,7 +463,12 @@ function writeValuesProperty(
 }
 
 /**
- * Generates the types file content for a single project.
+ * Builds the types file content for one Project, reading every Collection and
+ * Component through the shared Core instance. Returns the content, touching
+ * no disk.
+ *
+ * Rejects with a plain `Error`, not a `CoreError`, when a dynamic field's
+ * `ofComponents` names a Component the Project does not hold.
  */
 export async function generateTypesForProject(
   project: Project
@@ -807,6 +819,18 @@ async function generateTypesAs({
   }
 }
 
+/**
+ * Writes into the caller's project: `types.ts` for a single Project, or one
+ * `types-{projectId}.ts` per Project, into `outDir`. It creates that
+ * directory and overwrites on every run.
+ *
+ * `language: 'js'` loads the optional `tsdown` and `typescript` peers lazily,
+ * throwing `PreconditionFailed` when they are absent, and deletes the
+ * generated `.ts` sources once they compile. With `options.watch` it resolves
+ * after the first generation and leaves a watcher running.
+ *
+ * @see ../../docs/api-clients.md
+ */
 export const generateTypesAction = async ({
   outDir,
   language,

@@ -18,11 +18,13 @@ import CodeBlockWriter from 'code-block-writer';
 import assert from 'node:assert';
 
 /**
- * API Client generator
+ * Writes a typed API client to the single `outFile`, overwriting it, from the
+ * local Projects and their Collections. No Entry is read.
  *
- * Generates a typed API client in the given folder from the locally available
- * Projects, Collections and Entries. The schema is generated from the field
- * definitions of Collections, so Entries carry correct types.
+ * Every Project id, Collection plural slug and flattened field definition is
+ * baked into the emitted source, so the client is a snapshot and has to be
+ * regenerated when the content model changes. `typesMap` decides which types
+ * file each Project's Entry types are imported from.
  *
  * @see ../../docs/api-clients.md
  */
@@ -101,9 +103,20 @@ async function generateApiClient(
 
   // API client function
   writer.writeLine(`/**`);
-  writer.writeLine(` * elek.io Client`);
+  writer.writeLine(` * Typed client for the elek.io local API.`);
   writer.writeLine(` * `);
-  writer.writeLine(` * Used to access elek.io APIs.`);
+  writer.writeLine(
+    ` * Validates baseUrl and apiKey, throwing a ZodError on a bad one, and`
+  );
+  writer.writeLine(
+    ` * needs the local API already running at baseUrl. Each list() validates`
+  );
+  writer.writeLine(
+    ` * the response against the Collection's field definitions, so an API`
+  );
+  writer.writeLine(
+    ` * error response surfaces as a ZodError rather than as its own envelope.`
+  );
   writer.writeLine(` */`);
   writer.writeLine(
     `export function apiClient({ baseUrl, apiKey }: ApiClientProps) {`
@@ -302,6 +315,18 @@ async function generateApiClientAs({
   }
 }
 
+/**
+ * Writes into the caller's project: it creates `outDir`, then `types.ts` or
+ * one `types-{projectId}.ts` per Project plus `client.ts`, overwriting on
+ * every run without removing files of Projects that are gone.
+ *
+ * `language: 'js'` compiles those through the lazily imported optional peer
+ * `tsdown` and deletes the `.ts` sources, so an install without `tsdown` and
+ * `typescript` throws `PreconditionFailed`. With `options.watch` it resolves
+ * after the first generation and leaves a watcher running.
+ *
+ * @see ../../docs/api-clients.md
+ */
 export const generateApiClientAction = async ({
   outDir,
   language,
