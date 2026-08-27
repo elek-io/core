@@ -76,16 +76,15 @@ export abstract class AbstractEntityService extends AbstractService {
   }
 
   /**
-   * Wraps an operation with automatic git rollback on failure.
+   * Runs an operation and, when it throws, removes every `cleanupPaths` entry
+   * and resets the working tree before re-throwing the original error.
    *
-   * On error:
-   * 1. Removes any files/dirs specified in `cleanupPaths` (for newly created files)
-   * 2. Runs `git reset --hard HEAD` to restore the working tree
-   * 3. Re-throws the original error
+   * The reset is `git reset --hard HEAD`, so it is repository wide and keeps
+   * whatever the operation already committed. A body that has to be
+   * all-or-nothing therefore makes exactly one commit. It also leaves
+   * untracked files alone, which is what `cleanupPaths` is for.
    *
-   * `git reset --hard` leaves untracked files alone, so anything the operation
-   * newly created has to be named in `cleanupPaths` or it survives the
-   * rollback.
+   * @see ../../contributing/error-handling-internals.md
    */
   protected async withGitRollback<T>(
     projectPath: string,

@@ -66,7 +66,7 @@ The promise in [`../docs/error-handling.md`](../docs/error-handling.md) holds to
 
 ### `withGitRollback` - transactional Git operations
 
-Entity create/update/delete operations are wrapped in `withGitRollback` (`src/service/AbstractEntityService.ts`). On failure, it:
+Every entity create, update and delete is wrapped in `withGitRollback` (`src/service/AbstractEntityService.ts`). On failure it:
 
 1. Removes newly created files (from `cleanupPaths`)
 2. Runs `git reset --hard HEAD` to restore the working tree
@@ -85,6 +85,16 @@ return this.withGitRollback(
   [filePath] // cleaned up on failure
 );
 ```
+
+Two things about the reset decide what may go inside the wrapper:
+
+- **It is repository wide.** `git reset --hard HEAD` restores the whole working tree rather than the paths the operation touched, so it also discards an uncommitted change made outside the call. Core's own writes always commit, so losing something means a caller edited a Project folder by hand while a write was in flight.
+- **It resets to `HEAD`, not to where the call started.** A body that commits twice keeps the first commit, because `HEAD` has already moved. An operation that has to be all-or-nothing therefore makes exactly one commit, which is why the cascades collect `filesToGitAdd` and stage them together.
+
+Two `ProjectService` methods cannot use it:
+
+- `create` runs `ensureDir`, then `git init`, then the first commit, so for most of its window there is no `HEAD` to reach. It removes the folder it made instead.
+- `delete` wraps only the removal. Its guards run first, so a refused delete never resets a working tree it was not allowed to touch in the first place.
 
 ### `collectResults` - partial failure tolerance for list operations
 
@@ -111,9 +121,11 @@ return c.json(data, 200);
 
 ## Intentional design decisions
 
-### `safeWriteSlugIndex` swallows errors
+### The slug index has no failure path
 
-`safeWriteSlugIndex` (`src/service/AbstractSlugIndexedEntityService.ts`) intentionally catches errors. The index file is a performance cache - if the write fails, the cache is invalidated and rebuilt from disk on next access.
+`AbstractSlugIndexedEntityService` keeps its UUID-to-slug map in memory and writes nothing, so a mutation cannot fail on it. It used to mirror the map into `slug.index.json` and swallow a failed write, which was correct handling of a write that bought nothing, because nothing ever read the file back.
+
+See [`../docs/storage-layout.md`](../docs/storage-layout.md) for why reading it back is not a free optimisation.
 
 ### `UserService.get()` returns `null` for any error
 

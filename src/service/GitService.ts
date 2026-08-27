@@ -1371,6 +1371,14 @@ export class GitService {
     }
   }
 
+  /**
+   * Picks the tag out of a `%D` decoration list, or null when there is none.
+   *
+   * A tagged tip reads `HEAD -> master, tag: <uuid>`, so the tag has to be
+   * found among the decorations rather than stripped off the front. Core's
+   * own tags are named with a UUID, which is what separates one from a tag
+   * somebody else put on the same commit, and anything else answers null.
+   */
   public refNameToTagName(refName: string) {
     // `%D` lists every decoration of the commit, so a tagged tip reads
     // `HEAD -> master, tag: <uuid>` and the tag has to be picked out of it
