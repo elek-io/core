@@ -5,6 +5,7 @@ import mermaid from 'mermaid';
 import { describe, expect, it } from 'vitest';
 import z from 'zod';
 import {
+  anchorOf,
   exists,
   mermaidBlocks,
   repositoryRoot,
@@ -79,6 +80,26 @@ describe('documentation', () => {
       broken,
       `${broken.length} diagram(s) do not parse:\n${broken.join('\n')}\n\nSee ${rulesDoc}.`
     ).toStrictEqual([]);
+  });
+
+  it('anchors match the ones GitHub generates', () => {
+    // Ground truth from GitHub's own markdown API, not inferred. It keeps `-`
+    // and `_`, so an underscore survives and a `--` flag after a space yields
+    // three hyphens.
+    const cases = [
+      [
+        'Decided: `min_scale = 1`, and the runtime choice survives it',
+        'decided-min_scale--1-and-the-runtime-choice-survives-it',
+      ],
+      [
+        'The fix is `--no-optional`, and the setting that reads like the fix does nothing',
+        'the-fix-is---no-optional-and-the-setting-that-reads-like-the-fix-does-nothing',
+      ],
+    ] as const;
+
+    for (const [heading, expected] of cases) {
+      expect(anchorOf(heading), `anchor for "${heading}"`).toEqual(expected);
+    }
   });
 
   it('baseline holds no stale entries', () => {

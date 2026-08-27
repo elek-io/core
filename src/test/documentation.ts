@@ -331,13 +331,20 @@ function withoutInlineCode(text: string): string {
   return text.replaceAll(/`[^`]*`/g, '');
 }
 
-/** Turns a heading into the anchor GitHub generates for it. */
-function anchorOf(heading: string): string {
+/**
+ * Turns a heading into the anchor GitHub generates for it.
+ *
+ * GitHub strips punctuation but keeps `-` and `_`, then turns each space into a
+ * hyphen, each space separately rather than each run. So `min_scale` survives,
+ * and `min_scale = 1` yields two hyphens because the stripped `=` leaves two
+ * spaces behind. Verified against GitHub's own markdown API rather than inferred.
+ */
+export function anchorOf(heading: string): string {
   return heading
     .toLowerCase()
-    .replaceAll(/[^\p{L}\p{N} -]/gu, '')
+    .replaceAll(/[^\p{L}\p{N} _-]/gu, '')
     .trim()
-    .replaceAll(/\s+/g, '-');
+    .replaceAll(/\s/g, '-');
 }
 
 /** Every anchor a markdown file offers, taken from its headings. */
