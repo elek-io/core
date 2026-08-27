@@ -56,18 +56,18 @@ try {
 
 ### CLI commands
 
-Each CLI action wraps its body in a top-level `try/catch`:
+`elek` presents every failure in one place. The actions throw, and the binary prints the message and exits non-zero:
 
 ```typescript
-export const exportAction = async (props: ExportProps) => {
-  try {
-    // ... all service calls use plain await ...
-  } catch (error) {
-    console.error(error instanceof CoreError ? error.message : String(error));
-    process.exit(1);
-  }
-};
+try {
+  await program.parseAsync();
+} catch (error) {
+  console.error(error instanceof CoreError ? error.message : String(error));
+  process.exit(1);
+}
 ```
+
+So a command prints the actionable message rather than a stack trace, and its exit code says whether it worked. In watch mode a failed re-run prints the same message and the command goes on watching, because the process outlives the run that failed.
 
 ### Astro integration
 

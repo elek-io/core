@@ -17,6 +17,7 @@ import {
 import {
   getCore,
   loadCompiler,
+  runOnChange,
   watchProjects,
   AUTO_GENERATED_HEADER,
   toPascalCase,
@@ -851,7 +852,7 @@ export const generateTypesAction = async ({
         source: 'core',
         message: `Regenerating types due to ${event} on "${path}"`,
       });
-      void generateTypesAs({ outDir, language, projects });
+      void runOnChange(() => generateTypesAs({ outDir, language, projects }));
     });
   }
 };

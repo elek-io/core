@@ -32,6 +32,8 @@ import {
   type GitCommit,
   collectionHistorySchema,
   flattenFieldDefinitions,
+  componentFileSchema,
+  type ComponentResolver,
   type FieldDefinition,
   type ProjectLanguages,
   type Uuid,
@@ -48,6 +50,10 @@ import {
   type EntryIssue,
 } from '../util/entryTransform.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
+import {
+  componentIdsOf,
+  preloadComponentResolver,
+} from '../util/componentResolver.js';
 import {
   applyMigrations,
   collectionMigrations,
@@ -395,6 +401,10 @@ export class CollectionService
                   entryId: Uuid;
                   values: Record<string, Value>;
                 }> = [];
+                const componentResolver = await this.buildComponentResolver(
+                  validatedProps.projectId,
+                  newFieldDefs
+                );
 
                 for (const entryReference of entryReferences) {
                   const entryResult = await this.transformAndWriteEntry({
@@ -406,6 +416,7 @@ export class CollectionService
                     changes,
                     languages,
                     resolutions,
+                    componentResolver,
                   });
 
                   allIssues.push(...entryResult.issues);
@@ -464,6 +475,30 @@ export class CollectionService
   }
 
   /**
+   * Pre-loads every Component the given field definitions reach, so the
+   * cascade can build a schema for a dynamic field.
+   *
+   * Reads the Component files directly rather than through `ComponentService`,
+   * which a Collection does not hold. A working-tree read parses strictly and
+   * does not migrate, which is what that service would do here too.
+   */
+  private async buildComponentResolver(
+    projectId: Uuid,
+    fieldDefinitions: FieldDefinition[]
+  ): Promise<ComponentResolver> {
+    return preloadComponentResolver(
+      componentIdsOf(fieldDefinitions),
+      async (componentId) => {
+        const componentFile = await this.jsonFileService.read(
+          this.pathTo.componentFile(projectId, componentId),
+          componentFileSchema
+        );
+        return componentFile.fieldDefinitions;
+      }
+    );
+  }
+
+  /**
    * Throws when another Collection already uses the given plural slug.
    *
    * The current Collection is excluded so re-saving with an unchanged slug is
@@ -501,6 +536,7 @@ export class CollectionService
     changes: FieldChange[];
     languages: ProjectLanguages;
     resolutions: UpdateCollectionProps['resolutions'];
+    componentResolver: ComponentResolver;
   }): Promise<{
     issues: EntryIssue[];
     entryId: Uuid;
@@ -517,6 +553,7 @@ export class CollectionService
       changes,
       languages,
       resolutions,
+      componentResolver,
     } = params;
 
     const entryFilePath = this.pathTo.entryFile(
@@ -537,7 +574,8 @@ export class CollectionService
       oldFieldDefs,
       newFieldDefs,
       changes,
-      languages
+      languages,
+      componentResolver
     );
 
     // Apply any provided resolutions. Not gated on transform
@@ -552,7 +590,11 @@ export class CollectionService
           (candidate) => candidate.slug === fieldSlug
         );
         if (fieldDef) {
-          const schema = getValueSchemaFromFieldDefinition(fieldDef, languages);
+          const schema = getValueSchemaFromFieldDefinition(
+            fieldDef,
+            languages,
+            componentResolver
+          );
           const parseResult = schema.safeParse(resolvedValue);
           if (!parseResult.success) {
             throw CoreError.badRequest(

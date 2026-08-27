@@ -20,6 +20,7 @@ import {
   projectFileSchema,
   projectFolderSchema,
   projectHistorySchema,
+  projectSchema,
   readProjectSchema,
   serviceTypeSchema,
   setRemoteOriginUrlProjectSchema,
@@ -1431,9 +1432,14 @@ export class ProjectService
 
   /**
    * Checks if given object is of type Project
+   *
+   * Validates against `projectSchema` rather than the file schema, so the
+   * `remoteOriginUrl` and `isProvisioned` a `Project` carries have to be
+   * there. A `project.json` read straight off disk is a `ProjectFile` and
+   * does not pass.
    */
   public isProject(obj: unknown): obj is Project {
-    return projectFileSchema.safeParse(obj).success;
+    return projectSchema.safeParse(obj).success;
   }
 
   /**

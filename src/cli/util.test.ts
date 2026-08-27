@@ -4,6 +4,7 @@ import {
   escapeForSingleQuotedString,
   isInsideGitDirectory,
   loadCompiler,
+  runOnChange,
 } from './util.js';
 
 // Stands in for an install without the optional peer dependency, where
@@ -69,5 +70,48 @@ describe('isInsideGitDirectory', () => {
     ['/home/nils/elek.io/projects/a/.gitattributes', 'another such name'],
   ])('watches %j, %s', (path) => {
     expect(isInsideGitDirectory(path)).toBe(false);
+  });
+});
+
+describe('runOnChange', () => {
+  it('prints a CoreError message and keeps watching', async () => {
+    // A watcher callback fires long after the binary's own try/catch has
+    // returned, so without this the failure is an unhandled rejection
+    const printed: unknown[] = [];
+    const spy = vi
+      .spyOn(console, 'error')
+      .mockImplementation((message: unknown) => {
+        printed.push(message);
+      });
+
+    await runOnChange(() =>
+      Promise.reject(CoreError.badRequest('Regeneration failed'))
+    );
+
+    expect(printed).toEqual(['Regeneration failed']);
+    spy.mockRestore();
+  });
+
+  it('prints anything else through String()', async () => {
+    const printed: unknown[] = [];
+    const spy = vi
+      .spyOn(console, 'error')
+      .mockImplementation((message: unknown) => {
+        printed.push(message);
+      });
+
+    await runOnChange(() => Promise.reject(new Error('boom')));
+
+    expect(printed).toEqual(['Error: boom']);
+    spy.mockRestore();
+  });
+
+  it('stays quiet on success', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await runOnChange(() => Promise.resolve('done'));
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

@@ -38,6 +38,10 @@ import {
   getUniqueFieldDefinitions,
 } from '../util/uniqueFieldValues.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
+import {
+  componentIdsOf,
+  preloadComponentResolver,
+} from '../util/componentResolver.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { CollectionService } from './CollectionService.js';
 import type { ComponentService } from './ComponentService.js';
@@ -597,63 +601,30 @@ export class EntryService
   }> {
     const resolvedFieldDefinitions = [...fieldDefinitions];
 
-    // First pass: resolve empty ofComponents arrays by loading all component IDs
-    const initialQueue: string[] = [];
     for (let index = 0; index < resolvedFieldDefinitions.length; index++) {
       const fieldDefinition = resolvedFieldDefinitions[index]!;
-      if (fieldDefinition.valueType === 'component') {
-        if (fieldDefinition.ofComponents.length > 0) {
-          initialQueue.push(...fieldDefinition.ofComponents);
-        } else {
-          const componentIds =
-            await this.componentService.listAllIds(projectId);
-          resolvedFieldDefinitions[index] = {
-            ...fieldDefinition,
-            ofComponents: componentIds,
-          };
-          initialQueue.push(...componentIds);
-        }
+      if (
+        fieldDefinition.valueType === 'component' &&
+        fieldDefinition.ofComponents.length === 0
+      ) {
+        resolvedFieldDefinitions[index] = {
+          ...fieldDefinition,
+          ofComponents: await this.componentService.listAllIds(projectId),
+        };
       }
     }
 
-    // BFS: load all referenced components into componentMap
-    const componentMap = new Map<string, FieldDefinition[]>();
-    const queue = [...initialQueue];
-
-    while (queue.length > 0) {
-      const componentId = queue.shift()!;
-      if (componentMap.has(componentId)) {
-        continue;
+    const resolver = await preloadComponentResolver(
+      componentIdsOf(resolvedFieldDefinitions),
+      async (componentId) => {
+        const component = await this.componentService.read({
+          projectId,
+          id: componentId,
+        });
+        return component.fieldDefinitions;
       }
+    );
 
-      const component = await this.componentService.read({
-        projectId,
-        id: componentId,
-      });
-      componentMap.set(componentId, component.fieldDefinitions);
-
-      for (const nestedFieldDef of component.fieldDefinitions) {
-        if (nestedFieldDef.valueType === 'component') {
-          for (const nestedComponentId of nestedFieldDef.ofComponents) {
-            if (!componentMap.has(nestedComponentId)) {
-              queue.push(nestedComponentId);
-            }
-          }
-        }
-      }
-    }
-
-    return {
-      resolver: (id: string) => {
-        const resolved = componentMap.get(id);
-        if (!resolved) {
-          throw new Error(
-            `Component "${id}" was not pre-loaded. This is an internal error.`
-          );
-        }
-        return resolved;
-      },
-      fieldDefinitions: resolvedFieldDefinitions,
-    };
+    return { resolver, fieldDefinitions: resolvedFieldDefinitions };
   }
 }

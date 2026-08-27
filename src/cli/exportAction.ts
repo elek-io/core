@@ -8,7 +8,7 @@ import type {
   ExportProps,
   Project,
 } from '../schema/index.js';
-import { getCore, watchProjects } from './index.js';
+import { getCore, runOnChange, watchProjects } from './index.js';
 
 async function exportFile({
   resolvedOutDir,
@@ -325,7 +325,9 @@ export const exportAction = async ({
         source: 'core',
         message: `Re-Exporting Projects due to ${event} on "${path}"`,
       });
-      void exportProjects({ outDir, projects, template, options });
+      void runOnChange(() =>
+        exportProjects({ outDir, projects, template, options })
+      );
     });
   }
 };

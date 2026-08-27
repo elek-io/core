@@ -7,6 +7,7 @@ import {
 import {
   getCore,
   loadCompiler,
+  runOnChange,
   watchProjects,
   AUTO_GENERATED_HEADER,
   toPascalCase,
@@ -348,13 +349,15 @@ export const generateApiClientAction = async ({
         source: 'core',
         message: `Regenerating API Client due to ${event} on "${path}"`,
       });
-      void generateApiClientAs({
-        outDir,
-        language,
-        format,
-        target,
-        options,
-      });
+      void runOnChange(() =>
+        generateApiClientAs({
+          outDir,
+          language,
+          format,
+          target,
+          options,
+        })
+      );
     });
   }
 };

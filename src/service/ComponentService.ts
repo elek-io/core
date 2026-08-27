@@ -33,6 +33,7 @@ import {
   collectionFileSchema,
   entryFileSchema,
   flattenFieldDefinitions,
+  type ComponentResolver,
   type FieldDefinition,
   type ProjectLanguages,
   type Uuid,
@@ -45,6 +46,10 @@ import {
 } from '../util/fieldDefinitionDiff.js';
 import { transformComponentValues } from '../util/componentTransform.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
+import {
+  componentIdsOf,
+  preloadComponentResolver,
+} from '../util/componentResolver.js';
 import type { EntryIssue } from '../util/entryTransform.js';
 import {
   applyMigrations,
@@ -471,6 +476,10 @@ export class ComponentService
 
     const filesToGitAdd: string[] = [];
     const allIssues: EntryIssue[] = [];
+    const componentResolver = await this.buildComponentResolver(
+      projectId,
+      newFieldDefs
+    );
 
     // Find all collections that reference this component
     const collectionsPath = this.pathTo.collections(projectId);
@@ -534,7 +543,8 @@ export class ComponentService
             newFieldDefs,
             changes,
             referencingDynamicFields,
-            languages
+            languages,
+            componentResolver
           );
 
           allIssues.push(...result.issues);
@@ -548,7 +558,8 @@ export class ComponentService
                 resolutions,
                 entryFile.id,
                 newFieldDefs,
-                languages
+                languages,
+                componentResolver
               );
             }
 
@@ -590,6 +601,23 @@ export class ComponentService
   }
 
   /**
+   * Pre-loads every Component the given field definitions reach, so the
+   * cascade can build a schema for a nested dynamic field.
+   */
+  private async buildComponentResolver(
+    projectId: Uuid,
+    fieldDefinitions: FieldDefinition[]
+  ): Promise<ComponentResolver> {
+    return preloadComponentResolver(
+      componentIdsOf(fieldDefinitions),
+      async (componentId) => {
+        const component = await this.read({ projectId, id: componentId });
+        return component.fieldDefinitions;
+      }
+    );
+  }
+
+  /**
    * Applies a single Entry's resolutions onto its final values in place.
    *
    * Each resolved value is validated against its field definition schema before
@@ -600,7 +628,8 @@ export class ComponentService
     resolutions: NonNullable<UpdateComponentProps['resolutions']>,
     entryId: Uuid,
     newFieldDefs: FieldDefinition[],
-    languages: ProjectLanguages
+    languages: ProjectLanguages,
+    componentResolver: ComponentResolver
   ): void {
     const entryResolutions = resolutions[entryId];
     if (!entryResolutions) return;
@@ -608,7 +637,11 @@ export class ComponentService
     for (const [fieldSlug, resolvedValue] of Object.entries(entryResolutions)) {
       const fieldDef = newFieldDefs.find((fd) => fd.slug === fieldSlug);
       if (fieldDef) {
-        const schema = getValueSchemaFromFieldDefinition(fieldDef, languages);
+        const schema = getValueSchemaFromFieldDefinition(
+          fieldDef,
+          languages,
+          componentResolver
+        );
         const parseResult = schema.safeParse(resolvedValue);
         if (!parseResult.success) {
           throw CoreError.badRequest(
@@ -775,9 +808,10 @@ export class ComponentService
    * Walks `ofComponents` looking for a cycle, throwing `BadRequest` when it
    * finds one.
    *
-   * An empty `ofComponents` means every Component of the Project, so the walk
-   * expands it to the whole slug index rather than stopping. `visited` is
-   * copied per branch, so a diamond is re-walked rather than pruned.
+   * An empty `ofComponents` is skipped rather than expanded to the whole slug
+   * index: it declares no edge, because the schema builder answers it with a
+   * permissive item schema and never recurses. `visited` is copied per
+   * branch, so a diamond is re-walked rather than pruned.
    */
   private async validateNoCircularReferences(
     componentId: string | null,
@@ -803,19 +837,19 @@ export class ComponentService
     }
 
     for (const fieldDefinition of componentFieldDefs) {
-      let componentIds: string[];
-
+      // An unconstrained dynamic field declares no edge in the reference
+      // graph. The schema builder answers an empty `ofComponents` with one
+      // permissive item schema and never recurses into it, so it cannot be
+      // part of a cycle. Expanding it to every Component in the Project
+      // reached the Component's own id and reported it as its own cycle.
       if (
-        fieldDefinition.valueType === 'component' &&
-        fieldDefinition.ofComponents.length > 0
+        fieldDefinition.valueType !== 'component' ||
+        fieldDefinition.ofComponents.length === 0
       ) {
-        componentIds = fieldDefinition.ofComponents;
-      } else {
-        const index = await this.getSlugIndex(projectId);
-        componentIds = Object.keys(index);
+        continue;
       }
 
-      for (const cId of componentIds) {
+      for (const cId of fieldDefinition.ofComponents) {
         const component = await this.read({ projectId, id: cId });
         await this.validateNoCircularReferences(
           cId,

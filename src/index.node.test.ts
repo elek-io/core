@@ -177,6 +177,22 @@ describe('Node.js', function () {
     expect(process.listenerCount('unhandledRejection')).toBe(baseUnhandled);
   });
 
+  it('disposes twice without hanging', async function () {
+    // Desktop disposes on quit and again on a signal, so a second call
+    // that never resolves takes the shutdown with it
+    const { core: disposedCore } = createTmpCore();
+
+    await disposedCore.dispose();
+    await expect(
+      Promise.race([
+        disposedCore.dispose(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('dispose() never resolved')), 5000)
+        ),
+      ])
+    ).resolves.toBeUndefined();
+  });
+
   it('still takes a log level without being told about error handlers', function () {
     // `log` holds more than one setting now, so its keys have to be
     // individually optional. Pinning the level must not force a caller to

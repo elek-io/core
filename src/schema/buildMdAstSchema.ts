@@ -464,11 +464,19 @@ export function buildMdAstSchemaForFeatures(
       message:
         'Empty markdown values must be serialised as null per language, not as a tree containing only an empty paragraph',
       path: ['children'],
-    })
-    .refine((root) => !exceedsMaxDepth(root, MAX_MDAST_DEPTH), {
+    });
+
+  // Piped in front of the object schema rather than refined behind it. zod
+  // recurses through the whole tree before a root level check runs, and an
+  // adversarially deep tree overflows the stack during that walk, so the
+  // check that would have caught it never happens.
+  const withinMaxDepth = z
+    .unknown()
+    .refine((value) => !exceedsMaxDepth(value, MAX_MDAST_DEPTH), {
       message: `Markdown tree exceeds maximum nesting depth of ${MAX_MDAST_DEPTH}`,
       path: ['children'],
     });
+  const guardedRootSchema = withinMaxDepth.pipe(rootSchema);
 
-  return isRequired ? rootSchema : rootSchema.nullable();
+  return isRequired ? guardedRootSchema : guardedRootSchema.nullable();
 }

@@ -215,6 +215,7 @@ class TailBuffer {
 export class LogService {
   private readonly logger: Logger;
   private readonly pathTo: PathTo;
+  private closePromise: Promise<void> | undefined;
 
   constructor(options: ElekIoCoreOptions, pathTo: PathTo) {
     this.pathTo = pathTo;
@@ -259,9 +260,7 @@ export class LogService {
    * has to be a declared attribute name.
    */
   public debug(props: LogProps) {
-    const { source, message, meta } = logSchema.parse(props);
-
-    this.logger.debug(message, { source, meta });
+    this.write('debug', props);
   }
 
   /**
@@ -274,9 +273,7 @@ export class LogService {
    * says.
    */
   public info(props: LogProps) {
-    const { source, message, meta } = logSchema.parse(props);
-
-    this.logger.info(message, { source, meta });
+    this.write('info', props);
   }
 
   /**
@@ -287,9 +284,7 @@ export class LogService {
    * Same payload rule as `debug`.
    */
   public warn(props: LogProps) {
-    const { source, message, meta } = logSchema.parse(props);
-
-    this.logger.warn(message, { source, meta });
+    this.write('warn', props);
   }
 
   /**
@@ -301,9 +296,7 @@ export class LogService {
    * `error.type` rather than pasted into the message.
    */
   public error(props: LogProps) {
-    const { source, message, meta } = logSchema.parse(props);
-
-    this.logger.error(message, { source, meta });
+    this.write('error', props);
   }
 
   /**
@@ -368,19 +361,46 @@ export class LogService {
   }
 
   /**
-   * Flushes and closes the logger, removing the process-level
-   * exception and rejection handlers it registered
+   * Hands one record to winston, unless the logger is closed.
+   *
+   * A write after `close()` is dropped rather than thrown, because winston
+   * ends the underlying stream and writing to an ended one raises
+   * `ERR_STREAM_WRITE_AFTER_END`. The payload is still validated, so a
+   * malformed one fails whether or not teardown has run.
+   */
+  private write(
+    level: 'debug' | 'info' | 'warn' | 'error',
+    props: LogProps
+  ): void {
+    const { source, message, meta } = logSchema.parse(props);
+
+    if (this.closePromise) {
+      return;
+    }
+
+    this.logger[level](message, { source, meta });
+  }
+
+  /**
+   * Flushes and closes the logger, removing the process-level exception and
+   * rejection handlers it registered.
+   *
+   * Safe to call twice and concurrently. The first call's promise is kept and
+   * handed back to every later one, because winston ends the underlying
+   * stream and an ended stream never emits `finish` again.
    */
   public close(): Promise<void> {
-    // Remove the process handlers first, synchronously, so an ended logger is
-    // never left with a live exception or rejection handler
-    this.logger.exceptions.unhandle();
-    this.logger.rejections.unhandle();
-    return new Promise<void>((resolve) => {
+    this.closePromise ??= new Promise<void>((resolve) => {
+      // Remove the process handlers first, synchronously, so an ended logger
+      // is never left with a live exception or rejection handler
+      this.logger.exceptions.unhandle();
+      this.logger.rejections.unhandle();
       // Graceful flush, ends each transport before emitting 'finish'
       this.logger.once('finish', () => resolve());
       this.logger.end();
     });
+
+    return this.closePromise;
   }
 
   /**

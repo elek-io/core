@@ -1,5 +1,13 @@
 import Fs from 'fs-extra';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  assert,
+  beforeAll,
+  describe,
+  expect,
+  it,
+} from 'vitest';
 import ElekIoCore from '../index.node.js';
 import core, {
   flattenFieldDefinitions,
@@ -1083,6 +1091,186 @@ describe('CollectionService - update entry resolutions', function () {
           },
         })
       ).rejects.toThrow(/Resolution validation failed/);
+    }
+  );
+});
+
+describe('CollectionService - cascade over a dynamic field', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let componentId: string;
+  let collectionId: string;
+  let entryId: string;
+  let blocksFieldId: string;
+  let titleFieldId: string;
+
+  const blocksField = (max: number | null) => ({
+    id: blocksFieldId,
+    slug: 'blocks',
+    valueType: 'component' as const,
+    fieldType: 'dynamic' as const,
+    label: { en: 'Blocks', de: 'Blocks' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false as const,
+    inputWidth: '12' as const,
+    ofComponents: [componentId],
+    min: null,
+    max,
+  });
+
+  const titleField = () => ({
+    id: titleFieldId,
+    slug: 'title',
+    valueType: 'string' as const,
+    fieldType: 'text' as const,
+    label: { en: 'Title', de: 'Title' },
+    description: null,
+    defaultValue: null,
+    isRequired: true,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12' as const,
+    min: null,
+    max: null,
+  });
+
+  beforeAll(async function () {
+    project = await createProject('CollectionService Dynamic Cascade Test');
+
+    const component = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Quote', de: 'Zitat' },
+      slug: 'quote',
+      description: null,
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'body',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Body', de: 'Text' },
+          description: null,
+          defaultValue: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+        },
+      ],
+    });
+    componentId = component.id;
+
+    titleFieldId = uuid();
+    blocksFieldId = uuid();
+    const collection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Article', de: 'Artikel' },
+        plural: { en: 'Articles', de: 'Artikel' },
+      },
+      description: { en: 'Articles', de: 'Artikel' },
+      slug: { singular: 'article', plural: 'articles' },
+      fieldDefinitions: [titleField(), blocksField(null)],
+    });
+    collectionId = collection.id;
+
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId,
+      values: {
+        title: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'Hello', de: 'Hallo' },
+        },
+        blocks: {
+          objectType: 'value',
+          valueType: 'component',
+          content: [
+            {
+              id: uuid(),
+              componentId,
+              values: {
+                body: {
+                  objectType: 'value',
+                  valueType: 'string',
+                  content: { en: 'Quoted', de: 'Zitiert' },
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+    entryId = entry.id;
+  }, 30000);
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  it(
+    'revalidates an updated dynamic field against its Components',
+    { timeout: 30000 },
+    async function () {
+      // Changing any property marks the field updated, which re-validates
+      // every existing value against the new schema. A component field needs
+      // a resolver to build that schema, and without one the update ends as
+      // Internal rather than doing what docs/schema-changes.md promises.
+      await expect(
+        core.collections.update({
+          projectId: project.id,
+          id: collectionId,
+          icon: 'home',
+          name: {
+            singular: { en: 'Article', de: 'Artikel' },
+            plural: { en: 'Articles', de: 'Artikel' },
+          },
+          description: { en: 'Articles', de: 'Artikel' },
+          slug: { singular: 'article', plural: 'articles' },
+          fieldDefinitions: [titleField(), blocksField(5)],
+        })
+      ).resolves.toMatchObject({ id: collectionId });
+
+      // The item survives, because it still fits the new schema
+      const entry = await core.entries.read({
+        projectId: project.id,
+        collectionId,
+        id: entryId,
+      });
+      const blocks = entry.values['blocks'];
+      assert(blocks?.valueType === 'component');
+      expect(blocks.content).toHaveLength(1);
+    }
+  );
+
+  it(
+    'raises a constraint_violation rather than an Internal when it no longer fits',
+    { timeout: 30000 },
+    async function () {
+      // The same path, on a value the new schema rejects. Core promises a
+      // Conflict carrying the issue, not a failure to build the schema.
+      await expect(
+        core.collections.update({
+          projectId: project.id,
+          id: collectionId,
+          icon: 'home',
+          name: {
+            singular: { en: 'Article', de: 'Artikel' },
+            plural: { en: 'Articles', de: 'Artikel' },
+          },
+          description: { en: 'Articles', de: 'Artikel' },
+          slug: { singular: 'article', plural: 'articles' },
+          fieldDefinitions: [
+            titleField(),
+            { ...blocksField(5), min: 2, isRequired: true },
+          ],
+        })
+      ).rejects.toMatchObject({ type: 'Conflict' });
     }
   );
 });

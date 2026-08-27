@@ -68,6 +68,22 @@ export function isInsideGitDirectory(path: string): boolean {
 }
 
 /**
+ * Runs one watch triggered regeneration, printing a failure the way the
+ * binary prints one and never rejecting.
+ *
+ * A watcher callback fires long after `elek`'s own try/catch has returned, so
+ * a rejection here would reach nothing but the process. The watcher keeps
+ * running, because one failed run is not a reason to stop watching.
+ */
+export async function runOnChange(task: () => Promise<unknown>): Promise<void> {
+  try {
+    await task();
+  } catch (error) {
+    console.error(error instanceof CoreError ? error.message : String(error));
+  }
+}
+
+/**
  * Loads tsdown, which compiles the generated TypeScript to JavaScript.
  *
  * The import is lazy and tsdown is an optional peer dependency, so the CLI

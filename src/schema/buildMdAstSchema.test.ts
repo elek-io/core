@@ -590,6 +590,19 @@ describe('buildMdAstSchemaForFeatures', () => {
       ).not.toThrow();
     });
 
+    it('answers an adversarially deep tree with an issue, not a RangeError', () => {
+      // The guard has to run before zod walks the tree, or the recursion
+      // that would find the overshoot overflows the stack first
+      const schema = buildMdAstSchemaForFeatures(
+        makeCtx({ blockquotes: true })
+      );
+
+      const result = schema.safeParse(nest('blockquote', 2000));
+
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]?.message).toMatch(/nesting depth/);
+    });
+
     it('rejects a blockquote chain one level deeper than MAX_MDAST_DEPTH', () => {
       const schema = buildMdAstSchemaForFeatures(
         makeCtx({ blockquotes: true })

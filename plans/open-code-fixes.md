@@ -11,7 +11,7 @@ Every item below reproduced against `HEAD` when it was triaged. Four `safety` it
 The five decisions are settled, so this is all implementation. Work it in stages and commit each one.
 
 1. ~~**The six one line fixes.**~~ Done.
-2. **The contained changes.**
+2. ~~**The contained changes.**~~ Done.
 3. **The settled decisions**, in the order they are written below. `datetime` belongs here rather than in stage 1, see the note at the end of that section.
 4. **The ten blocks**, written as the item each waits on lands, rather than saved for the end. A block written next to the fix is a block written by somebody who just read the code.
 5. **Finish.** `src/documentation-baseline.json` empties as `GitService.status` and `refNameToTagName` get theirs, so delete it and this plan.
@@ -19,17 +19,6 @@ The five decisions are settled, so this is all implementation. Work it in stages
 Tests first, as ever. Every item here reproduced against `HEAD`, so each one starts as a failing test.
 
 `pnpm test`, `pnpm lint`, `pnpm check-types` and `pnpm check-format` all pass today and are expected to at every commit. Anything changing behavior a consumer sees needs a changeset, and `GitService.status` definitely does.
-
-## Contained
-
-| Item | Where |
-| --- | --- |
-| `LogService.close()` never resolves on a second call, so `dispose()` hangs on a double dispose. Reproduced against the installed winston: the first `end()` resolves, the second never emits `finish` | `src/service/LogService.ts` |
-| `ProjectService.isProject` narrows to `Project` while validating `projectFileSchema`. `projectSchema` extends the file schema with `remoteOriginUrl` and `isProvisioned`, so a value holding neither passes the guard | `src/service/ProjectService.ts` |
-| `ComponentService.validateNoCircularReferences` expands an unconstrained `component` field to every id in the slug index, the target's own included, so `update` reports the Component as its own cycle. Once one such Component exists, creating a second with an unconstrained `component` field fails too, because the walk reaches the existing one twice | `src/service/ComponentService.ts` |
-| Neither cascade passes a `componentResolver`, so an updated dynamic field reaches `getValueSchemaFromFieldDefinition` without one and throws, ending as `Internal` instead of the strip-and-`Conflict` `docs/schema-changes.md` promises. Both call sites stop at the `languages` argument | `src/service/ComponentService.ts`, `src/service/CollectionService.ts` |
-| The mdast depth guard is a root-level `.refine`, so zod recurses through the tree before it runs. Reproduced on the installed zod: depth 500 returns the issue, depth 2000 throws `RangeError` out of `safeParse` | `src/schema/buildMdAstSchema.ts` |
-| The CLI actions have no `try/catch` at all, while `docs/error-handling.md` shows every one of them wrapping its body in one with `process.exit(1)` | `src/cli/` |
 
 ## Decisions, settled
 

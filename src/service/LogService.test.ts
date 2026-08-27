@@ -45,6 +45,61 @@ describe('LogService teardown', function () {
   });
 });
 
+describe('LogService double close', function () {
+  it('resolves a second close, so a double dispose does not hang', async function () {
+    // winston ends the underlying stream on the first call, and an ended
+    // stream never emits `finish` again
+    const log = new LogService(options, pathTo);
+
+    await log.close();
+    await expect(
+      Promise.race([
+        log.close(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('close() never resolved')), 5000)
+        ),
+      ])
+    ).resolves.toBeUndefined();
+  });
+
+  it('resolves both when two closes are in flight at once', async function () {
+    const log = new LogService(options, pathTo);
+
+    await expect(
+      Promise.race([
+        Promise.all([log.close(), log.close()]),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('close() never resolved')), 5000)
+        ),
+      ])
+    ).resolves.toEqual([undefined, undefined]);
+  });
+});
+
+describe('LogService writes after close', function () {
+  it('drops a record instead of throwing at the ended stream', function () {
+    // Teardown races the last in-flight service call, and a host that logs
+    // through core.logger may still hold it after dispose()
+    const log = new LogService(options, pathTo);
+
+    return log.close().then(() => {
+      expect(() =>
+        log.info({ source: 'core', message: 'after close' })
+      ).not.toThrow();
+    });
+  });
+
+  it('still rejects a malformed payload', function () {
+    const log = new LogService(options, pathTo);
+
+    return log.close().then(() => {
+      // @ts-expect-error a source the union does not carry, which is what
+      // the schema is there to catch whether or not teardown has run
+      expect(() => log.info({ source: 42, message: 'after close' })).toThrow();
+    });
+  });
+});
+
 describe('LogService exception handling', function () {
   it('does not let the console transport handle exceptions', function () {
     // The console transport writing an uncaught exception to a stdout that
