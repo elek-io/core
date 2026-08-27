@@ -10,7 +10,7 @@ Every item below reproduced against `HEAD` when it was triaged. Four `safety` it
 
 The five decisions are settled, so this is all implementation. Work it in stages and commit each one.
 
-1. **The six one line fixes.** Each is independent and each unblocks something.
+1. ~~**The six one line fixes.**~~ Done.
 2. **The contained changes.**
 3. **The settled decisions**, in the order they are written below. `datetime` belongs here rather than in stage 1, see the note at the end of that section.
 4. **The ten blocks**, written as the item each waits on lands, rather than saved for the end. A block written next to the fix is a block written by somebody who just read the code.
@@ -19,17 +19,6 @@ The five decisions are settled, so this is all implementation. Work it in stages
 Tests first, as ever. Every item here reproduced against `HEAD`, so each one starts as a failing test.
 
 `pnpm test`, `pnpm lint`, `pnpm check-types` and `pnpm check-format` all pass today and are expected to at every commit. Anything changing behavior a consumer sees needs a changeset, and `GitService.status` definitely does.
-
-## One line
-
-| Item | Where |
-| --- | --- |
-| `GitService.refNameToTagName` returns null for a decorated commit. `%D` on a tagged tip is `HEAD -> master, tag: 550e8400-...`, so stripping `tag: ` leaves a string that is not a UUID and `log()` reports `tag: null` on exactly the commit a Release just tagged | `src/service/GitService.ts` |
-| `getValueSchemaFromFieldDefinition` throws a plain `Error` for a missing resolver, so it escapes the `CoreError` promise | `src/schema/schemaFromFieldDefinition.ts` |
-| `getNumberValueContentSchemaFromFieldDefinition` guards with `if (fieldDefinition.min)`, so a range declared `0` to `100` enforces its ceiling and not its floor. Only the `number` and `range` field types can hold a `0` bound, every string length is `z.int().min(1).nullable()` | `src/schema/schemaFromFieldDefinition.ts` |
-| `watchProjects` filters with `path.includes('/.git/')`, a POSIX separator only | `src/cli/util.ts` |
-| `GitTagService.delete` has neither the read-only nor the provisioned-copy guard `create` carries | `src/service/GitTagService.ts` |
-| `elek()` constructs its Core without `log.hasProcessErrorHandlers: false`, while `docs/usage.md` says the Astro entry does that for you. Bounded: the Core is disposed in a `finally`, so the handlers are live only for the `astro:config:setup` hook, and `src/astro/core.ts` does pass the option | `src/index.astro.ts` |
 
 ## Contained
 

@@ -179,4 +179,47 @@ describe('GitService', function () {
     expect(changes.ahead).to.have.lengthOf(0);
     expect(changes.behind).to.have.lengthOf(0);
   });
+
+  it('should report the tag on a tagged tip in the log', async function () {
+    // A tagged tip is decorated `HEAD -> master, tag: <uuid>`, which is
+    // exactly the commit a Release just made, so the whole point of
+    // resolving a tag at all is the one case that has to work
+    const tag = await core.git.tags.create({
+      path: projectPath,
+      message: { type: 'release', version: '1.0.0' },
+    });
+
+    const commits = await core.git.log(projectPath, { limit: 1 });
+
+    expect(commits[0]?.tag?.id).toEqual(tag.id);
+
+    await core.git.tags.delete({ path: projectPath, id: tag.id });
+  });
+});
+
+describe('GitService.refNameToTagName', function () {
+  it.each([
+    ['tag: 550e8400-e29b-41d4-a716-446655440000', 'a bare decoration'],
+    [
+      'HEAD -> master, tag: 550e8400-e29b-41d4-a716-446655440000',
+      'the decoration of a tagged tip',
+    ],
+    [
+      'tag: 550e8400-e29b-41d4-a716-446655440000, origin/master',
+      'a tag next to a remote branch',
+    ],
+  ])('reads the tag out of %j, %s', function (refName) {
+    expect(core.git.refNameToTagName(refName)).toEqual(
+      '550e8400-e29b-41d4-a716-446655440000'
+    );
+  });
+
+  it.each([
+    ['', 'no decoration at all'],
+    ['HEAD -> master', 'a decoration carrying no tag'],
+    ['tag: v1.0.0', 'a tag not named with a UUID'],
+    ['HEAD -> master, origin/master', 'branches only'],
+  ])('returns null for %j, %s', function (refName) {
+    expect(core.git.refNameToTagName(refName)).toBeNull();
+  });
 });

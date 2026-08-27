@@ -47,14 +47,24 @@ export function getCore(): ElekIoCore {
  *
  * The initial scan is skipped so a first run does not fire one event per
  * existing file, and `.git` is ignored so Core's own git writes do not
- * retrigger the regeneration that caused them. That filter matches a POSIX
- * separator only.
+ * retrigger the regeneration that caused them.
  */
 export function watchProjects() {
   return chokidar.watch(getCore().util.pathTo.projects, {
     ignoreInitial: true, // Do not regenerate Client while chokidar first discovers all directories and files
-    ignored: (path) => path.includes('/.git/'), // Exclude all files inside .git directory of Project repositories
+    ignored: isInsideGitDirectory, // Exclude all files inside .git directory of Project repositories
   });
+}
+
+/**
+ * Whether the path points inside a Project's `.git` directory, whose churn
+ * says nothing about the content the generators read.
+ *
+ * Matches either separator, because chokidar hands back native paths and a
+ * POSIX-only test would watch every git internal on Windows.
+ */
+export function isInsideGitDirectory(path: string): boolean {
+  return /[/\\]\.git[/\\]/.test(path);
 }
 
 /**

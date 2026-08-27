@@ -126,10 +126,23 @@ export class GitTagService
   /**
    * Deletes a tag
    *
+   * Refused in read-only mode and on a provisioned copy, the same two guards
+   * `create` carries.
+   *
    * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---delete
    */
   public async delete(props: DeleteGitTagProps): Promise<void> {
+    this.assertNotReadOnly('delete');
+
     return this.validated('delete', deleteGitTagSchema, props, async () => {
+      // Backstop for callers that bypass the service layer. The
+      // services guard earlier through assertNotProvisioned.
+      if (await Fs.pathExists(Path.join(props.path, PROVISIONED_MARKER))) {
+        throw CoreError.preconditionFailed(
+          `Cannot delete a tag because "${props.path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+        );
+      }
+
       const args = ['tag', '--delete', props.id];
       await this.git(props.path, args);
     });

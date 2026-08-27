@@ -1131,7 +1131,8 @@ export class GitService {
    * made outside Core never appears.
    *
    * `tag` is resolved by reading the tag file, and comes back null when the
-   * decoration is not a bare `tag: <uuid>` or the tag cannot be read.
+   * commit carries no tag decoration, the tag is not named with a UUID, or
+   * the tag cannot be read.
    *
    * @see https://git-scm.com/docs/git-log
    */
@@ -1291,7 +1292,15 @@ export class GitService {
   }
 
   public refNameToTagName(refName: string) {
-    const tagName = refName.replace('tag: ', '').trim();
+    // `%D` lists every decoration of the commit, so a tagged tip reads
+    // `HEAD -> master, tag: <uuid>` and the tag has to be picked out of it
+    const tagName =
+      refName
+        .split(',')
+        .find((decoration) => decoration.trim().startsWith('tag: '))
+        ?.trim()
+        .slice('tag: '.length)
+        .trim() ?? '';
 
     // Return null for anything else than UUIDs (tag names are UUIDs)
     if (tagName === '' || uuidSchema.safeParse(tagName).success === false) {

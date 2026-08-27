@@ -164,6 +164,17 @@ describe('Read-only mode', function () {
     );
   });
 
+  it('should reject a direct git tag delete', async function () {
+    // The same backstop create carries, on the operation that throws a
+    // Release away rather than making one
+    await expectReadOnlyError(
+      readOnlyCore.git.tags.delete({
+        path: readOnlyCore.util.pathTo.project(project.id),
+        id: uuid(),
+      })
+    );
+  });
+
   it('should reject a direct git init', async function () {
     await expectReadOnlyError(
       readOnlyCore.git.init(Path.join(readOnlyDataDir, 'should-not-exist'))

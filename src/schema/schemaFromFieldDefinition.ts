@@ -6,7 +6,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { slug } from '../util/shared.js';
+import { CoreError, slug } from '../util/shared.js';
 import { slugSchema, uuidSchema, type Uuid } from './baseSchema.js';
 import type { ProjectLanguages } from './projectSchema.js';
 import type {
@@ -59,10 +59,12 @@ function getNumberValueContentSchemaFromFieldDefinition(
 ) {
   let schema = z.number();
 
-  if (fieldDefinition.min) {
+  // Compared against null rather than truthiness, because a number bound is
+  // the only one that can legitimately be 0
+  if (fieldDefinition.min !== null) {
     schema = schema.min(fieldDefinition.min);
   }
-  if (fieldDefinition.max) {
+  if (fieldDefinition.max !== null) {
     schema = schema.max(fieldDefinition.max);
   }
 
@@ -390,9 +392,9 @@ function getComponentValueContentSchemaFromFieldDefinition(
  * A `component` field needs a `componentResolver` to reach its sub-field
  * definitions.
  *
- * Throws a plain `Error` rather than a `CoreError`, so a caller converting
- * failures has to catch it: on a circular Component chain, on a `component`
- * field passed without a resolver, and on an unhandled `valueType`.
+ * Throws `Internal` for a `component` field passed without a resolver. The
+ * two unreachable guards, a circular Component chain and an unhandled
+ * `valueType`, still throw a plain `Error`.
  */
 export function getValueSchemaFromFieldDefinition(
   fieldDefinition: FieldDefinition,
@@ -431,7 +433,7 @@ export function getValueSchemaFromFieldDefinition(
       });
     case valueTypeSchema.enum.component: {
       if (!componentResolver) {
-        throw new Error(
+        throw CoreError.internal(
           'componentResolver is required for dynamic (component) field definitions'
         );
       }

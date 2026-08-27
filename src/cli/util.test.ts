@@ -1,6 +1,10 @@
 import { assert, describe, expect, it, vi } from 'vitest';
 import { CoreError } from '../util/shared.js';
-import { escapeForSingleQuotedString, loadCompiler } from './util.js';
+import {
+  escapeForSingleQuotedString,
+  isInsideGitDirectory,
+  loadCompiler,
+} from './util.js';
 
 // Stands in for an install without the optional peer dependency, where
 // resolving it rejects with ERR_MODULE_NOT_FOUND
@@ -40,5 +44,30 @@ describe('escapeForSingleQuotedString', () => {
     // A single quoted literal is one line of source, so nothing left in it
     // may end that line. generateTypesAction.test.ts transpiles the file
     expect(escaped).not.toMatch(/[\r\n]/);
+  });
+});
+
+describe('isInsideGitDirectory', () => {
+  it.each([
+    ['/home/nils/elek.io/projects/a/.git/index', 'a POSIX path'],
+    ['C:\\Users\\nils\\elek.io\\projects\\a\\.git\\index', 'a Windows path'],
+    ['/home/nils/elek.io/projects/a/.git/refs/heads/work', 'a nested ref'],
+  ])('ignores %j, %s', (path) => {
+    expect(isInsideGitDirectory(path)).toBe(true);
+  });
+
+  it.each([
+    ['/home/nils/elek.io/projects/a/project.json', 'a Project file'],
+    [
+      'C:\\Users\\nils\\elek.io\\projects\\a\\project.json',
+      'a Project file on Windows',
+    ],
+    [
+      '/home/nils/elek.io/projects/.gitignore',
+      'a name only starting with .git',
+    ],
+    ['/home/nils/elek.io/projects/a/.gitattributes', 'another such name'],
+  ])('watches %j, %s', (path) => {
+    expect(isInsideGitDirectory(path)).toBe(false);
   });
 });
