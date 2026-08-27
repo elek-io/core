@@ -1,8 +1,8 @@
 ---
-'@elek-io/core': major
+'@elek-io/core': minor
 ---
 
-Settled six questions the code and the docs disagreed on. Two of them change a public shape.
+Settled six questions the code and the docs disagreed on. Two of them change a public shape, which on a 0.x version arrives as a minor bump, so read the two headings below before upgrading.
 
 **`core.git.status()` returns a described status.** It used to return `{ filePath }[]`, read off field index 8 of every porcelain v2 line. That field is `undefined` for an untracked entry, the similarity score for a rename, and the first word only for a path holding a space, so the array was reliable for nothing but its length.
 
