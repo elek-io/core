@@ -98,17 +98,17 @@ export async function ensureCleanGitStatus(
   projectId: string
 ) {
   const status = await core.git.status(core.util.pathTo.project(projectId));
-  if (status.length > 0) {
+  if (!status.isClean) {
     // No attributes, so the vocabulary in logSchema.ts stays the one Core
     // itself writes. The status is in the message already
     core.logger.error({
       source: 'core',
       message: `Task "${
         task.name
-      }" finished with an unclean git status: ${JSON.stringify(status)}`,
+      }" finished with an unclean git status: ${JSON.stringify(status.files)}`,
     });
   }
-  expect(status.length).toEqual(0);
+  expect(status.files).toEqual([]);
 }
 
 /**

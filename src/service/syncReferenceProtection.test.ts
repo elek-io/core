@@ -491,7 +491,7 @@ describe('Synchronize reference protection', function () {
       )
     ).toBe(true);
     const status = await core.git.status(core.util.pathTo.project(project.id));
-    expect(status).toHaveLength(0);
+    expect(status.isClean).toBe(true);
   });
 
   it('lets the sync succeed once the dangling referrer is repaired', async function () {
@@ -589,7 +589,7 @@ describe('Synchronize reference protection', function () {
     // The rebase was aborted: the tree is clean and HEAD is the pre-sync commit,
     // so the repository was never left mid-rebase.
     const status = await core.git.status(core.util.pathTo.project(project.id));
-    expect(status).toHaveLength(0);
+    expect(status.isClean).toBe(true);
     const after = await core.projects.getChanges({ id: project.id });
     expect(after.ahead).toHaveLength(1);
     expect(after.behind).toHaveLength(1);

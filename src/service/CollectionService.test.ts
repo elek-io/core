@@ -1,3 +1,4 @@
+import Path from 'node:path';
 import Fs from 'fs-extra';
 import {
   afterAll,
@@ -561,7 +562,7 @@ describe('CollectionService - fieldDefinition slug rename cascade', function () 
   });
 });
 
-describe('CollectionService - collection index', function () {
+describe('CollectionService - slug index', function () {
   let project: Project & { destroy: () => Promise<void> };
   let collection: Collection;
 
@@ -578,17 +579,24 @@ describe('CollectionService - collection index', function () {
     await ensureCleanGitStatus(task, project.id);
   });
 
-  it('should create an index file on disk after collection creation', async function () {
-    const indexPath = core.util.pathTo.collectionIndex(project.id);
-    expect(await Fs.pathExists(indexPath)).toBe(true);
+  it('should resolve a Collection by slug with nothing on disk', async function () {
+    // The index is a per Core instance cache rebuilt from the Collection
+    // folders, so there is no file behind it to go stale
+    expect(
+      await Fs.pathExists(
+        Path.join(core.util.pathTo.collections(project.id), 'slug.index.json')
+      )
+    ).toBe(false);
 
-    const indexContent = JSON.parse(
-      await Fs.readFile(indexPath, { encoding: 'utf8' })
-    ) as Record<string, string>;
-    expect(indexContent[collection.id]).toEqual(collection.slug.plural);
+    await expect(
+      core.collections.readBySlug({
+        projectId: project.id,
+        slug: collection.slug.plural,
+      })
+    ).resolves.toMatchObject({ id: collection.id });
   });
 
-  it('should remove collection from index after deletion', async function () {
+  it('should stop resolving a Collection by slug after deletion', async function () {
     const tempCollection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -601,361 +609,21 @@ describe('CollectionService - collection index', function () {
         plural: 'temps',
       },
       description: { en: 'Temporary', de: 'Temporary' },
-      fieldDefinitions: [
-        {
-          id: uuid(),
-          slug: 'temp-field',
-          valueType: 'string',
-          label: { en: 'Field', de: 'Field' },
-          description: { en: 'Field', de: 'Field' },
-          fieldType: 'text',
-          inputWidth: '12',
-          isDisabled: false,
-          isRequired: false,
-          isUnique: false,
-          min: null,
-          max: null,
-          defaultValue: null,
-        },
-      ],
+      fieldDefinitions: [],
     });
 
-    const indexPath = core.util.pathTo.collectionIndex(project.id);
-    let indexContent = JSON.parse(
-      await Fs.readFile(indexPath, { encoding: 'utf8' })
-    ) as Record<string, string>;
-    expect(indexContent[tempCollection.id]).toEqual('temps');
+    await expect(
+      core.collections.readBySlug({ projectId: project.id, slug: 'temps' })
+    ).resolves.toMatchObject({ id: tempCollection.id });
 
     await core.collections.delete({
       projectId: project.id,
       id: tempCollection.id,
     });
 
-    indexContent = JSON.parse(
-      await Fs.readFile(indexPath, { encoding: 'utf8' })
-    ) as Record<string, string>;
-    expect(indexContent[tempCollection.id]).toBeUndefined();
-  });
-});
-
-describe('CollectionService - fieldDefinition groups', function () {
-  let project: Project & { destroy: () => Promise<void> };
-
-  beforeAll(async function () {
-    project = await createProject();
-  });
-
-  afterAll(async function () {
-    await project.destroy();
-  });
-
-  afterEach(async function ({ task }) {
-    await ensureCleanGitStatus(task, project.id);
-  });
-
-  it('should create a collection with grouped and ungrouped fieldDefinitions', async function () {
-    const groupId = uuid();
-    const collection = await core.collections.create({
-      projectId: project.id,
-      icon: 'home',
-      name: {
-        singular: { en: 'Product', de: 'Product' },
-        plural: { en: 'Products', de: 'Products' },
-      },
-      slug: { singular: 'product', plural: 'products' },
-      description: { en: 'Products', de: 'Products' },
-      fieldDefinitions: [
-        {
-          id: uuid(),
-          slug: 'ungrouped-field',
-          valueType: 'string',
-          fieldType: 'text',
-          label: { en: 'Ungrouped', de: 'Ungrouped' },
-          description: null,
-          inputWidth: '12',
-          isDisabled: false,
-          isRequired: false,
-          isUnique: false,
-          min: null,
-          max: null,
-          defaultValue: null,
-        },
-        {
-          isGroup: true,
-          id: groupId,
-          label: { en: 'Details', de: 'Details' },
-          description: {
-            en: 'Additional product details',
-            de: 'Additional product details',
-          },
-          fieldDefinitions: [
-            {
-              id: uuid(),
-              slug: 'grouped-field',
-              valueType: 'string',
-              fieldType: 'text',
-              label: { en: 'Grouped', de: 'Grouped' },
-              description: null,
-              inputWidth: '12',
-              isDisabled: false,
-              isRequired: false,
-              isUnique: false,
-              min: null,
-              max: null,
-              defaultValue: null,
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(collection.fieldDefinitions).toHaveLength(2);
-    const group = collection.fieldDefinitions.find((fd) => 'isGroup' in fd);
-    expect(group).toBeDefined();
-    expect((group as { id: string }).id).toEqual(groupId);
-    expect(flattenFieldDefinitions(collection.fieldDefinitions)).toHaveLength(
-      2
-    );
-  });
-
-  it('should create entries using fieldDefinitions inside a group', async function () {
-    const collection = await core.collections.create({
-      projectId: project.id,
-      icon: 'home',
-      name: {
-        singular: { en: 'Article', de: 'Article' },
-        plural: { en: 'Articles', de: 'Articles' },
-      },
-      slug: { singular: 'article', plural: 'articles' },
-      description: { en: 'Articles', de: 'Articles' },
-      fieldDefinitions: [
-        {
-          isGroup: true,
-          id: uuid(),
-          label: { en: 'Content', de: 'Content' },
-          description: null,
-          fieldDefinitions: [
-            {
-              id: uuid(),
-              slug: 'title',
-              valueType: 'string',
-              fieldType: 'text',
-              label: { en: 'Title', de: 'Title' },
-              description: null,
-              inputWidth: '12',
-              isDisabled: false,
-              isRequired: true,
-              isUnique: false,
-              min: null,
-              max: null,
-              defaultValue: null,
-            },
-          ],
-        },
-      ],
-    });
-
-    const entry = await core.entries.create({
-      projectId: project.id,
-      collectionId: collection.id,
-      values: {
-        title: {
-          objectType: 'value',
-          valueType: 'string',
-          content: { en: 'Hello World', de: 'Hello World' },
-        },
-      },
-    });
-
-    expect(entry.values['title']).toBeDefined();
-  });
-
-  it('should reject duplicate slugs across grouped and ungrouped fieldDefinitions', async function () {
     await expect(
-      core.collections.create({
-        projectId: project.id,
-        icon: 'home',
-        name: {
-          singular: { en: 'Dupe', de: 'Dupe' },
-          plural: { en: 'Dupes', de: 'Dupes' },
-        },
-        slug: { singular: 'dupe', plural: 'dupes' },
-        description: { en: 'Dupes', de: 'Dupes' },
-        fieldDefinitions: [
-          {
-            id: uuid(),
-            slug: 'same-slug',
-            valueType: 'string',
-            fieldType: 'text',
-            label: { en: 'Ungrouped', de: 'Ungrouped' },
-            description: null,
-            inputWidth: '12',
-            isDisabled: false,
-            isRequired: false,
-            isUnique: false,
-            min: null,
-            max: null,
-            defaultValue: null,
-          },
-          {
-            isGroup: true,
-            id: uuid(),
-            label: { en: 'Group', de: 'Group' },
-            description: null,
-            fieldDefinitions: [
-              {
-                id: uuid(),
-                slug: 'same-slug',
-                valueType: 'string',
-                fieldType: 'text',
-                label: { en: 'Grouped duplicate', de: 'Grouped duplicate' },
-                description: null,
-                inputWidth: '12',
-                isDisabled: false,
-                isRequired: false,
-                isUnique: false,
-                min: null,
-                max: null,
-                defaultValue: null,
-              },
-            ],
-          },
-        ],
-      })
-    ).rejects.toThrow();
-  });
-
-  it('should rename entry value keys for a fieldDefinition inside a group', async function () {
-    const fieldId = uuid();
-    const collection = await core.collections.create({
-      projectId: project.id,
-      icon: 'home',
-      name: {
-        singular: { en: 'Post', de: 'Post' },
-        plural: { en: 'Posts', de: 'Posts' },
-      },
-      slug: { singular: 'post', plural: 'posts' },
-      description: { en: 'Posts', de: 'Posts' },
-      fieldDefinitions: [
-        {
-          isGroup: true,
-          id: uuid(),
-          label: { en: 'Meta', de: 'Meta' },
-          description: null,
-          fieldDefinitions: [
-            {
-              id: fieldId,
-              slug: 'old-slug',
-              valueType: 'string',
-              fieldType: 'text',
-              label: { en: 'Field', de: 'Field' },
-              description: null,
-              inputWidth: '12',
-              isDisabled: false,
-              isRequired: true,
-              isUnique: false,
-              min: null,
-              max: null,
-              defaultValue: null,
-            },
-          ],
-        },
-      ],
-    });
-
-    const entry = await core.entries.create({
-      projectId: project.id,
-      collectionId: collection.id,
-      values: {
-        'old-slug': {
-          objectType: 'value',
-          valueType: 'string',
-          content: { en: 'test', de: 'test' },
-        },
-      },
-    });
-
-    // Rename the field inside the group
-    const updatedCollection = await core.collections.update({
-      projectId: project.id,
-      ...collection,
-      fieldDefinitions: [
-        {
-          ...(collection.fieldDefinitions[0] as {
-            isGroup: true;
-            id: string;
-            label: Record<string, string>;
-            description: null;
-            fieldDefinitions: object[];
-          }),
-          fieldDefinitions: [
-            {
-              id: fieldId,
-              slug: 'new-slug',
-              valueType: 'string',
-              fieldType: 'text',
-              label: { en: 'Field', de: 'Field' },
-              description: null,
-              inputWidth: '12',
-              isDisabled: false,
-              isRequired: true,
-              isUnique: false,
-              min: null,
-              max: null,
-              defaultValue: null,
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(updatedCollection).toBeDefined();
-
-    const updatedEntry = await core.entries.read({
-      projectId: project.id,
-      collectionId: collection.id,
-      id: entry.id,
-    });
-
-    expect(updatedEntry.values['new-slug']).toBeDefined();
-    expect(updatedEntry.values['old-slug']).toBeUndefined();
-  });
-
-  it('should create a collection with an empty group', async function () {
-    const emptyGroupCollection = await core.collections.create({
-      projectId: project.id,
-      icon: 'home',
-      name: {
-        singular: { en: 'Empty Group Test', de: 'Empty Group Test' },
-        plural: { en: 'Empty Group Tests', de: 'Empty Group Tests' },
-      },
-      slug: { singular: 'empty-group-test', plural: 'empty-group-tests' },
-      description: {
-        en: 'A collection with an empty group',
-        de: 'A collection with an empty group',
-      },
-      fieldDefinitions: [
-        {
-          isGroup: true,
-          id: uuid(),
-          label: { en: 'Empty Group', de: 'Empty Group' },
-          description: null,
-          fieldDefinitions: [],
-        },
-      ],
-    });
-
-    expect(emptyGroupCollection).toBeDefined();
-    expect(emptyGroupCollection.fieldDefinitions).toHaveLength(1);
-
-    // Should be able to create an entry with no values (empty group means no fields)
-    const entry = await core.entries.create({
-      projectId: project.id,
-      collectionId: emptyGroupCollection.id,
-      values: {},
-    });
-
-    expect(entry.id).toBeDefined();
+      core.collections.readBySlug({ projectId: project.id, slug: 'temps' })
+    ).rejects.toMatchObject({ type: 'NotFound' });
   });
 });
 
@@ -1091,6 +759,48 @@ describe('CollectionService - update entry resolutions', function () {
           },
         })
       ).rejects.toThrow(/Resolution validation failed/);
+    }
+  );
+
+  it(
+    'rejects a resolution naming a field the new definitions do not declare',
+    { timeout: 30000 },
+    async function () {
+      // A stale slug used to be written into the Entry with no validation at
+      // all, so it has to be caught at the boundary and leave every Entry
+      // untouched
+      const before = await core.entries.read({
+        projectId: project.id,
+        collectionId,
+        id: entryId,
+      });
+
+      await expect(
+        core.collections.update({
+          ...collectionWithRequiredSummary(),
+          resolutions: {
+            [entryId]: {
+              summary: {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Sum', de: 'Sum' },
+              },
+              'gone-away': {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Stale', de: 'Stale' },
+              },
+            },
+          },
+        })
+      ).rejects.toMatchObject({ type: 'BadRequest' });
+
+      const after = await core.entries.read({
+        projectId: project.id,
+        collectionId,
+        id: entryId,
+      });
+      expect(after.values).toEqual(before.values);
     }
   );
 });

@@ -234,14 +234,15 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Creates a release by:
-   * 1. Recomputing the diff (stateless)
-   * 2. Merging `work` into `production`
-   * 3. Updating the project version on `production`
-   * 4. Tagging on `production`
-   * 5. Switching back to `work` and merging `production` into it, which
-   *    fast-forwards the version commit across
-   * 6. Pushing `production` and the tag to `origin`, if a remote is set
+   * Merges `work` into `production`, writes the next version there and tags
+   * it, merges that back into `work`, then pushes `production` and the tag
+   * when a remote is set.
+   *
+   * Throws `PreconditionFailed` when nothing changed since the last release.
+   * A failure at any step unwinds every one before it, so nothing half made
+   * is left behind and the call can simply be retried.
+   *
+   * @see ../../docs/releases.md
    */
   public create(props: CreateReleaseProps): Promise<ReleaseResult> {
     return this.mutating('create', createReleaseSchema, props, async () => {
@@ -259,6 +260,20 @@ export class ReleaseService extends AbstractService {
       }
 
       const nextVersion = diff.nextVersion;
+
+      const workBefore = await this.tipOf(
+        projectPath,
+        projectBranchSchema.enum.work
+      );
+      // A cloned Project has no local `production` until the switch below
+      // creates it, so the remote's tip is where it would be created
+      const productionBefore =
+        (await this.tipOf(projectPath, projectBranchSchema.enum.production)) ??
+        (await this.tipOf(
+          projectPath,
+          `origin/${projectBranchSchema.enum.production}`
+        ));
+      let releaseTagId: string | null = null;
 
       try {
         await this.gitService.branches.switch(
@@ -287,6 +302,7 @@ export class ReleaseService extends AbstractService {
           path: projectPath,
           message: { type: 'release', version: nextVersion },
         });
+        releaseTagId = releaseTag.id;
         await this.gitService.branches.switch(
           projectPath,
           projectBranchSchema.enum.work
@@ -320,30 +336,24 @@ export class ReleaseService extends AbstractService {
           diff,
         };
       } catch (error) {
-        // Best-effort recovery: switch back to work branch
-        try {
-          await this.gitService.branches.switch(
-            projectPath,
-            projectBranchSchema.enum.work
-          );
-        } catch {
-          // Ignore recovery failure
-        }
+        await this.unwind(projectPath, releaseTagId, [
+          { name: projectBranchSchema.enum.production, tip: productionBefore },
+          { name: projectBranchSchema.enum.work, tip: workBefore },
+        ]);
         throw error;
       }
     });
   }
 
   /**
-   * Creates a preview release by:
-   * 1. Recomputing the diff (stateless)
-   * 2. Computing the preview version (e.g. 1.1.0-preview.3)
-   * 3. Updating the project version on `work`
-   * 4. Tagging on `work` (no merge into production)
-   * 5. Pushing the tag to `origin`, if a remote is set
+   * Writes a pre-release version such as `1.1.0-preview.3` onto `work`, tags
+   * it there and pushes the tag when a remote is set. It never touches
+   * `production`, so only `create` promotes content.
    *
-   * Preview releases are snapshots of the current work state.
-   * They don't promote to production - only full releases do.
+   * A failure unwinds the version commit and the tag, so a failed preview
+   * leaves `work` where it was.
+   *
+   * @see ../../docs/releases.md
    */
   public createPreview(
     props: CreatePreviewReleaseProps
@@ -378,6 +388,12 @@ export class ReleaseService extends AbstractService {
           updated: datetime(),
         };
 
+        const workBefore = await this.tipOf(
+          projectPath,
+          projectBranchSchema.enum.work
+        );
+        let previewTagId: string | null = null;
+
         try {
           await this.jsonFileService.update(
             updatedProjectFile,
@@ -393,6 +409,7 @@ export class ReleaseService extends AbstractService {
             path: projectPath,
             message: { type: 'preview', version: previewVersion },
           });
+          previewTagId = previewTag.id;
 
           // Previews are deployable, so the tag is published as well. The
           // `work` branch ref itself stays local to synchronize()
@@ -419,19 +436,89 @@ export class ReleaseService extends AbstractService {
             diff,
           };
         } catch (error) {
-          // Best-effort recovery: switch back to work branch
-          try {
-            await this.gitService.branches.switch(
-              projectPath,
-              projectBranchSchema.enum.work
-            );
-          } catch {
-            // Ignore recovery failure
-          }
+          await this.unwind(projectPath, previewTagId, [
+            { name: projectBranchSchema.enum.work, tip: workBefore },
+          ]);
           throw error;
         }
       }
     );
+  }
+
+  /**
+   * The commit a branch points at, or null when it does not resolve, which
+   * is what a Project without a local `production` branch answers.
+   */
+  private async tipOf(
+    projectPath: string,
+    branch: string
+  ): Promise<string | null> {
+    try {
+      return await this.gitService.revParse(projectPath, branch);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Undoes what a failed release already did and leaves the Project on
+   * `work`, because a half-finished release cannot be completed through the
+   * public API and is worse than none.
+   *
+   * Every step swallows its own failure and warns, so the caller sees the
+   * error that caused the unwind rather than one raised while undoing it.
+   *
+   * @see ../../docs/releases.md
+   */
+  private async unwind(
+    projectPath: string,
+    tagId: string | null,
+    branches: { name: string; tip: string | null }[]
+  ): Promise<void> {
+    if (tagId !== null) {
+      await this.recovering('delete the tag', () =>
+        this.gitService.tags.delete({ path: projectPath, id: tagId })
+      );
+    }
+
+    for (const { name, tip } of branches) {
+      if (tip === null) {
+        continue;
+      }
+      await this.recovering(`reset "${name}"`, async () => {
+        if ((await this.tipOf(projectPath, name)) === tip) {
+          return;
+        }
+        await this.gitService.branches.switch(projectPath, name);
+        await this.gitService.reset(projectPath, 'hard', tip);
+      });
+    }
+
+    await this.recovering('switch back to work', () =>
+      this.gitService.branches.switch(
+        projectPath,
+        projectBranchSchema.enum.work
+      )
+    );
+  }
+
+  /** One step of `unwind`, whose own failure may not replace the original. */
+  private async recovering(
+    step: string,
+    run: () => Promise<unknown>
+  ): Promise<void> {
+    try {
+      await run();
+    } catch (error) {
+      this.logService.warn({
+        source: 'core',
+        message: `Failed to ${step} while recovering from a failed release, the Project may need a manual reset`,
+        meta: {
+          'exception.message':
+            error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   }
 
   /**

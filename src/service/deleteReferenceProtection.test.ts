@@ -862,7 +862,7 @@ describe('Delete reference protection', function () {
       const status = await core.git.status(
         core.util.pathTo.project(project.id)
       );
-      expect(status.length).toBe(0);
+      expect(status.isClean).toBe(true);
       // The slug index still resolves the Collection.
       await expect(
         core.collections.readBySlug({

@@ -9,6 +9,43 @@ import type { Value } from '../schema/valueSchema.js';
 import { buildDefaultValue } from './defaultValueBuilder.js';
 import type { FieldChange } from './fieldDefinitionDiff.js';
 import { isDeepStrictEqual } from 'node:util';
+import { CoreError } from './shared.js';
+
+/**
+ * Rejects a resolution naming a field the new definitions do not declare,
+ * before anything on disk is touched.
+ *
+ * Such a slug used to be written into the Entry unvalidated, and throwing
+ * from inside the cascade instead would fail with some Entries rewritten and
+ * some not. Failing the whole update at the boundary leaves every one of them
+ * as it was.
+ *
+ * @see ../../docs/schema-changes.md
+ */
+export function assertResolutionSlugsAreKnown(
+  resolutions: Record<string, Record<string, Value>> | undefined,
+  newFieldDefinitions: FieldDefinition[]
+): void {
+  if (resolutions === undefined) {
+    return;
+  }
+
+  const declared = new Set(
+    newFieldDefinitions.map((fieldDefinition) => fieldDefinition.slug)
+  );
+
+  for (const [entryId, entryResolutions] of Object.entries(resolutions)) {
+    for (const fieldSlug of Object.keys(entryResolutions)) {
+      if (declared.has(fieldSlug)) {
+        continue;
+      }
+      // Ids and a field slug, both of which a log file may hold
+      throw CoreError.badRequest(
+        `Resolution for Entry "${entryId}" names field "${fieldSlug}", which the new field definitions do not declare`
+      );
+    }
+  }
+}
 
 export type EntryIssueType =
   | 'missing_required'

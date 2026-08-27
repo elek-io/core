@@ -3,8 +3,7 @@ import { objectTypeSchema, uuidSchema, versionSchema } from './baseSchema.js';
 
 /**
  * The envelope every object file shares, the five that carry an `objectType`.
- * `user.json`, the slug index files and the log files are not object files
- * and do not extend it.
+ * `user.json` and the log files are not object files and do not extend it.
  *
  * `objectType` also carries `value`, which never names a file of its own, it
  * lives inside an Entry file.
@@ -43,12 +42,3 @@ export const fileReferenceSchema = z.object({
   extension: z.string().optional(),
 });
 export type FileReference = z.infer<typeof fileReferenceSchema>;
-
-/**
- * Schema for entity slug index files
- * (e.g. collections/slug.index.json, components/slug.index.json).
- * Maps entity UUIDs to their slug values.
- * This is a local performance cache, not git-tracked.
- */
-export const slugIndexFileSchema = z.record(uuidSchema, z.string());
-export type SlugIndexFile = z.infer<typeof slugIndexFileSchema>;

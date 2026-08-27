@@ -18,7 +18,9 @@ import {
   type GitCloneOptions,
   type GitCommit,
   type GitInitOptions,
+  type GitFileStatus,
   type GitLogOptions,
+  type GitStatus,
   type GitSwitchOptions,
 } from '../schema/index.js';
 import { datetime } from '../util/shared.js';
@@ -167,6 +169,78 @@ function redactedCommand(args: readonly string[]): string {
  */
 function gitOutputCause(stderr: string, stdout: string): Error {
   return new Error(`${stderr}\n${stdout}`.trim());
+}
+
+/**
+ * The single letter porcelain v2 uses for a change, mapped onto the status a
+ * caller reads. A copy is reported as an addition, because the file is new,
+ * and a type change as a modification.
+ */
+const PORCELAIN_CHANGE_CODES: Record<string, GitFileStatus['status']> = {
+  A: 'added',
+  C: 'added',
+  M: 'modified',
+  T: 'modified',
+  D: 'deleted',
+  R: 'renamed',
+};
+
+/**
+ * Parses one porcelain v2 line into a file status, returning null for the
+ * header lines and for anything unrecognised.
+ *
+ * Read by line type rather than by a fixed field index, which is what the
+ * four types differ in: a rename carries an extra similarity score and an
+ * unmerged entry three more mode and hash columns. The path is the rest of
+ * the line, so one holding a space survives.
+ *
+ * @see https://git-scm.com/docs/git-status#_porcelain_format_version_2
+ */
+function parsePorcelainStatusLine(line: string): GitFileStatus | null {
+  const [type, ...fields] = line.split(' ');
+
+  // `? <path>` and `! <path>`, where the path starts right after the prefix.
+  // Ignored entries only appear with --ignored, which Core does not pass
+  if (type === '?' || type === '!') {
+    const path = line.slice(type.length + 1);
+    return path === '' ? null : { path, status: 'untracked', isStaged: false };
+  }
+
+  // `1 <XY> ...` and `2 <XY> ...` carry seven fields before the path, plus
+  // the rename score on a `2`. `u <XY> ...` carries nine.
+  const pathFieldIndex =
+    type === '1' ? 8 : type === '2' ? 9 : type === 'u' ? 10 : -1;
+  if (pathFieldIndex === -1) {
+    return null;
+  }
+
+  const xy = fields[0];
+  if (xy === undefined) {
+    return null;
+  }
+
+  const path = fields
+    .slice(pathFieldIndex - 1)
+    .join(' ')
+    // A rename entry names the new path and the old one, tab separated
+    .split('\t')[0];
+  if (path === undefined || path === '') {
+    return null;
+  }
+
+  if (type === 'u') {
+    return { path, status: 'unmerged', isStaged: false };
+  }
+
+  // X is the change staged in the index, Y the one still in the working
+  // tree, and a dot means unchanged there. A file carrying both is one
+  // entry, described by what is staged
+  const staged = xy[0] ?? '.';
+  const isStaged = staged !== '.';
+  const code = isStaged ? staged : (xy[1] ?? '.');
+  const status = PORCELAIN_CHANGE_CODES[code];
+
+  return status ? { path, status, isStaged } : null;
 }
 
 /**
@@ -454,23 +528,29 @@ export class GitService {
     await this.git(path, args);
   }
 
-  public async status(
-    path: string
-  ): Promise<{ filePath: string | undefined }[]> {
+  /**
+   * The working tree's state. `files` names every entry git reported, each
+   * path relative to the repository root, and a renamed one carries its new
+   * path rather than the pair.
+   *
+   * Ignored files never appear, because `git status` does not report them
+   * without `--ignored`.
+   *
+   * @see https://git-scm.com/docs/git-status#_porcelain_format_version_2
+   */
+  public async status(path: string): Promise<GitStatus> {
     const args = ['status', '--porcelain=2'];
     const result = await this.git(path, args);
-    return result.stdout
-      .split('\n')
-      .filter((line) => {
-        return line.trim() !== '';
-      })
-      .map((line) => {
-        const lineArr = line.trim().split(' ');
 
-        return {
-          filePath: lineArr[8],
-        };
+    const files = result.stdout
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .flatMap((line) => {
+        const parsed = parsePorcelainStatusLine(line);
+        return parsed ? [parsed] : [];
       });
+
+    return { isClean: files.length === 0, files };
   }
 
   public branches = {

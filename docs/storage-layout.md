@@ -29,12 +29,10 @@ Each Project is a self-contained git repository:
 |-- assets/
 |   |-- {assetId}.json                asset metadata (name, description, extension, mimeType, size)
 |-- collections/
-|   |-- slug.index.json               UUID -> slug cache (not committed)
 |   |-- {collectionId}/
 |   |   |-- collection.json           collection metadata: name, slug, icon, field definitions
 |   |   |-- {entryId}.json            an Entry: its values keyed by field slug
 |-- components/
-|   |-- slug.index.json               UUID -> slug cache (not committed)
 |   |-- {componentId}/
 |   |   |-- component.json            component metadata: name, slug, field definitions
 |-- lfs/
@@ -71,21 +69,23 @@ On top of that envelope:
 
 The `coreVersion` stamp on each file is what the migration chain reads when upgrading a Project.
 
-## Index files
+## The slug index
 
-`collections/slug.index.json` and `components/slug.index.json` are UUID-to-slug lookup caches. They let Core resolve a slug to an id without scanning every folder, and they back the uniqueness of Collection and Component slugs.
+Resolving a Collection or Component slug to an id, and checking that a new slug is free, both go through a UUID-to-slug map. It lives in memory, per Core instance, and is built by scanning the entity folders and reading each entity file the first time something needs it.
 
-They are **performance caches, not source of truth**:
+Nothing on disk backs it:
 
-- They are listed in the Project's `.gitignore` and never committed.
-- They are rebuilt from disk when missing or stale.
-- A failed index write is swallowed, and the cache heals itself on next access.
+- A Core that has just started rebuilds the map on the first slug lookup or slug-uniqueness check of a Project.
+- The map is dropped when the process ends, so it can never be stale across runs.
+- A Project written by an older Core may still carry `collections/slug.index.json` and `components/slug.index.json`. Nothing reads or writes them, and the generated `.gitignore` still names them so a leftover file does not show up as a change.
 
-Note that field-value uniqueness (`isUnique` and the `slug` field type) is **not** backed by an index file. It is enforced by scanning a Collection's Entries on each write (see [`fields.md`](./fields.md#uniqueness)), which keeps it correct for Entries brought in by a pull or merge that never passed through Core's write path.
+Writing the map back to disk would save that first scan, and it is not done because nothing invalidates such a file after a `pull`, `merge`, `switch` or `reset`. That would introduce a staleness bug the in-memory map does not have, since a fresh process always rebuilds.
+
+Field-value uniqueness (`isUnique` and the `slug` field type) does not use this map at all. It is enforced by scanning a Collection's Entries on each write (see [`fields.md`](./fields.md#uniqueness)), which keeps it correct for Entries brought in by a pull or merge that never passed through Core's write path.
 
 ## What is and isn't committed
 
-The generated `.gitignore` ignores all hidden files (`.*`) except `.gitignore`, `.gitattributes` and `.gitkeep` files, and also ignores the `slug.index.json` caches. Everything else - `project.json`, every `collection.json` / `component.json`, every Entry, asset metadata, and the binaries under `lfs/` - is committed.
+The generated `.gitignore` ignores all hidden files (`.*`) except `.gitignore`, `.gitattributes` and `.gitkeep` files, and also names the two `slug.index.json` paths an older Core may have left behind. Everything else - `project.json`, every `collection.json` / `component.json`, every Entry, asset metadata, and the binaries under `lfs/` - is committed.
 
 ## Line endings
 

@@ -25,6 +25,29 @@ describe('UNIX datetime', () => {
 
     schema.parse(created);
   });
+
+  it('reads 0 as the epoch rather than as absent', () => {
+    // The one value a falsy guard silently turned into now
+    expect(datetime(0)).toEqual('1970-01-01T00:00:00.000Z');
+  });
+
+  it('still answers an absent value with the current time', () => {
+    // Every internal caller stamps `created` and `updated` this way
+    const schema = z.string().datetime();
+
+    schema.parse(datetime());
+    schema.parse(datetime(undefined));
+    // An empty string is absent too, `new Date('')` is an invalid date
+    schema.parse(datetime(''));
+  });
+
+  it('converts the values it is given', () => {
+    expect(datetime(1000)).toEqual('1970-01-01T00:00:01.000Z');
+    expect(datetime('2024-03-01T12:00:00.000Z')).toEqual(
+      '2024-03-01T12:00:00.000Z'
+    );
+    expect(datetime(new Date(0))).toEqual('1970-01-01T00:00:00.000Z');
+  });
 });
 
 describe('Slug', () => {

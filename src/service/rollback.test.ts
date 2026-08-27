@@ -245,52 +245,32 @@ describe('Error handling and rollback', function () {
       expect(readCollection.id).toEqual(collection.id);
     });
 
-    it('should still work when index write fails (safeWriteIndex)', async function () {
-      const indexPath = Path.join(
-        core.util.pathTo.collections(project.id),
-        'slug.index.json'
-      );
+    it('should keep the slug index out of the Project folder', async function () {
+      // The index is a per Core instance cache with nothing on disk behind
+      // it, so there is no write left to fail and none to be swallowed
+      const newCollection = await core.collections.create({
+        projectId: project.id,
+        icon: 'plus',
+        name: {
+          singular: { en: 'Index Test', de: 'Index Test' },
+          plural: { en: 'Index Tests', de: 'Index Tests' },
+        },
+        slug: { singular: 'index-test', plural: 'index-tests' },
+        description: { en: 'Testing the index', de: 'Testing the index' },
+        fieldDefinitions: [],
+      });
 
-      try {
-        // Make slug.index.json read-only so safeWriteIndex fails with EACCES
-        await Fs.chmod(indexPath, 0o444);
+      expect(
+        await Fs.pathExists(
+          Path.join(core.util.pathTo.collections(project.id), 'slug.index.json')
+        )
+      ).toBe(false);
 
-        // Create should succeed - git commit works, safeWriteIndex swallows the error
-        const newCollection = await core.collections.create({
-          projectId: project.id,
-          icon: 'plus',
-          name: {
-            singular: { en: 'Index Test', de: 'Index Test' },
-            plural: { en: 'Index Tests', de: 'Index Tests' },
-          },
-          slug: { singular: 'index-test', plural: 'index-tests' },
-          description: {
-            en: 'Testing safeWriteIndex',
-            de: 'Testing safeWriteIndex',
-          },
-          fieldDefinitions: [],
-        });
-
-        // Restore permissions before assertions
-        await Fs.chmod(indexPath, 0o644);
-
-        // Entity was committed successfully - readable by ID
-        const readById = await core.collections.read({
-          projectId: project.id,
-          id: newCollection.id,
-        });
-        expect(readById.id).toEqual(newCollection.id);
-
-        // Readable by slug - triggers index rebuild from disk
-        const readBySlug = await core.collections.readBySlug({
-          projectId: project.id,
-          slug: newCollection.slug.plural,
-        });
-        expect(readBySlug.id).toEqual(newCollection.id);
-      } finally {
-        // Ensure permissions are always restored
-        await Fs.chmod(indexPath, 0o644).catch(() => {});
-      }
+      const readBySlug = await core.collections.readBySlug({
+        projectId: project.id,
+        slug: newCollection.slug.plural,
+      });
+      expect(readBySlug.id).toEqual(newCollection.id);
     });
   });
 
@@ -408,6 +388,95 @@ describe('Error handling and rollback', function () {
         id: component.id,
       });
       expect(readComponent.id).toEqual(component.id);
+    });
+  });
+
+  describe('ProjectService', function () {
+    let project: Project & { destroy: () => Promise<void> };
+
+    beforeAll(async function () {
+      project = await createProject('ProjectService Rollback Test');
+    });
+
+    afterAll(async function () {
+      await project.destroy();
+    });
+
+    afterEach(async function ({ task }) {
+      vi.restoreAllMocks();
+      await ensureCleanGitStatus(task, project.id);
+    });
+
+    it('should roll back a failed update and keep the Project file', async function () {
+      vi.spyOn(core.git, 'commit').mockRejectedValueOnce(
+        CoreError.internal('Simulated commit failure')
+      );
+
+      await expect(
+        core.projects.update({
+          id: project.id,
+          name: 'Renamed by a failing update',
+          description: project.description,
+          settings: project.settings,
+        })
+      ).rejects.toThrow('Simulated commit failure');
+
+      const read = await core.projects.read({ id: project.id });
+      expect(read.name).toEqual(project.name);
+    });
+
+    it('should roll back a failed delete and keep the Project', async function () {
+      vi.spyOn(Fs, 'remove').mockRejectedValueOnce(
+        new Error('Simulated removal failure')
+      );
+
+      await expect(
+        core.projects.delete({ id: project.id, force: true })
+      ).rejects.toThrow('Simulated removal failure');
+
+      expect(
+        await Fs.pathExists(core.util.pathTo.projectFile(project.id))
+      ).toBe(true);
+      await expect(
+        core.projects.read({ id: project.id })
+      ).resolves.toMatchObject({ id: project.id });
+    });
+
+    it('should remove the folder when create fails before git init', async function () {
+      // Nothing is a repository yet at that point, so a rollback that goes
+      // through delete() asks git about a folder git knows nothing about and
+      // its failure replaces the one the caller has to see
+      const countBefore = await core.projects.count();
+      vi.spyOn(core.git, 'init').mockRejectedValueOnce(
+        CoreError.internal('Simulated init failure')
+      );
+
+      await expect(
+        core.projects.create({
+          name: 'Never created',
+          description: 'Should not survive',
+          settings: { language: { default: 'en', supported: ['en'] } },
+        })
+      ).rejects.toThrow('Simulated init failure');
+
+      expect(await core.projects.count()).toEqual(countBefore);
+    });
+
+    it('should remove the folder when create fails after the first commit', async function () {
+      const countBefore = await core.projects.count();
+      vi.spyOn(core.git.branches, 'switch').mockRejectedValueOnce(
+        CoreError.internal('Simulated switch failure')
+      );
+
+      await expect(
+        core.projects.create({
+          name: 'Never created either',
+          description: 'Should not survive',
+          settings: { language: { default: 'en', supported: ['en'] } },
+        })
+      ).rejects.toThrow('Simulated switch failure');
+
+      expect(await core.projects.count()).toEqual(countBefore);
     });
   });
 

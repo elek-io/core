@@ -55,7 +55,7 @@ If `work` has commits ahead of `production` but the diff finds no classified cha
 5. switches back to `work` and merges `production` back in (so both branches share the version commit),
 6. pushes `production` and the new tag to `origin`, if a remote is set.
 
-A Release is the publish moment: the push makes the released content available to consumers that read from the remote, such as CI builds. A Project without a remote releases locally, nothing is pushed. If the push itself fails, the release exists locally and the error surfaces, synchronizing later completes the publish.
+A Release is the publish moment: the push makes the released content available to consumers that read from the remote, such as CI builds. A Project without a remote releases locally, nothing is pushed.
 
 ```typescript
 const result = await core.releases.create({ projectId: project.id });
@@ -74,6 +74,20 @@ After a full release, the Project's `version` field is identical on `work` and `
 3. pushes the tag to `origin`, if a remote is set.
 
 Previews are snapshots of the current `work` state for testing or sharing. Only `create()` promotes content to `production`. Pushing the preview tag uploads the commits it points at, but the `work` branch ref itself is only pushed by `synchronize()`.
+
+## When a release fails partway
+
+A release is a transaction you retry, not a state you resume. There is no public call that finishes a half-made release, so both `create()` and `createPreview()` undo what they already did before the error reaches you:
+
+- a tag they created is deleted,
+- every branch they moved is reset to the commit it was on,
+- the Project is left checked out on `work`.
+
+A failed push unwinds too, so a release is never left made-but-unpublished. Retry the same call once the remote is reachable and it produces the release the failed attempt would have.
+
+What recovery cannot reach is a ref that did arrive at the remote before the failure. `core.releases.list()` reads local tags, so compare against the remote when a push failed in a way that may have been partial.
+
+Recovery itself is best effort: a step that fails is logged at `warn` and the error you get is still the one that caused the failure, never one raised while undoing it. If those warnings appear, the Project needs a manual `git reset`.
 
 ## Reading releases
 

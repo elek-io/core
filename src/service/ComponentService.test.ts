@@ -1281,4 +1281,46 @@ describe('ComponentService - update entry resolutions', function () {
       ).rejects.toThrow(/Resolution validation failed/);
     }
   );
+
+  it(
+    'rejects a resolution naming a field the new definitions do not declare',
+    { timeout: 30000 },
+    async function () {
+      // A stale slug used to be written into the Entry with no validation at
+      // all, so it has to be caught at the boundary and leave every Entry
+      // untouched
+      const before = await core.entries.read({
+        projectId: project.id,
+        collectionId,
+        id: entryId,
+      });
+
+      await expect(
+        core.components.update({
+          ...heroWithRequiredSubtitle(),
+          resolutions: {
+            [entryId]: {
+              subtitle: {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Sub', de: 'Sub' },
+              },
+              'gone-away': {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Stale', de: 'Stale' },
+              },
+            },
+          },
+        })
+      ).rejects.toMatchObject({ type: 'BadRequest' });
+
+      const after = await core.entries.read({
+        projectId: project.id,
+        collectionId,
+        id: entryId,
+      });
+      expect(after.values).toEqual(before.values);
+    }
+  );
 });

@@ -358,18 +358,12 @@ describe('createPathTo', () => {
     expect(pathTo.componentFile('p1', 'c1')).toBe(
       Path.join(project, 'components', 'c1', 'component.json')
     );
-    expect(pathTo.componentIndex('p1')).toBe(
-      Path.join(project, 'components', 'slug.index.json')
-    );
     expect(pathTo.collections('p1')).toBe(Path.join(project, 'collections'));
     expect(pathTo.collection('p1', 'c1')).toBe(
       Path.join(project, 'collections', 'c1')
     );
     expect(pathTo.collectionFile('p1', 'c1')).toBe(
       Path.join(project, 'collections', 'c1', 'collection.json')
-    );
-    expect(pathTo.collectionIndex('p1')).toBe(
-      Path.join(project, 'collections', 'slug.index.json')
     );
     expect(pathTo.entries('p1', 'c1')).toBe(
       Path.join(project, 'collections', 'c1')

@@ -85,7 +85,9 @@ These are the same fields as the `UniqueValueConflict` thrown on a per-Entry cre
 
 ### The resolution workflow
 
-Retry the update with a `resolutions` map keyed by Entry id, then field slug, to the corrected `Value`. Resolutions are type-checked against the new field's schema, and an invalid one throws `BadRequest`. For a `unique_collision` the corrected `Value` must be unique within the Collection for that `language`, since reusing the colliding value just fails the scan again.
+Retry the update with a `resolutions` map keyed by Entry id, then field slug, to the corrected `Value`. Resolutions are type-checked against the new field's schema, and an invalid one throws `BadRequest`.
+
+A field slug the new definitions do not declare throws `BadRequest` too, naming the Entry and the slug. It is checked before anything is written, so a stale resolution fails the whole update rather than reaching one Entry. For a `unique_collision` the corrected `Value` must be unique within the Collection for that `language`, since reusing the colliding value just fails the scan again.
 
 ```typescript
 import { CoreError } from '@elek-io/core';

@@ -50,7 +50,10 @@ import {
   componentIdsOf,
   preloadComponentResolver,
 } from '../util/componentResolver.js';
-import type { EntryIssue } from '../util/entryTransform.js';
+import {
+  assertResolutionSlugsAreKnown,
+  type EntryIssue,
+} from '../util/entryTransform.js';
 import {
   applyMigrations,
   componentMigrations,
@@ -127,10 +130,10 @@ export class ComponentService
   }
 
   /**
-   * Writes the Component folder and its `component.json`, then commits. The
-   * slug index is written after the commit, its failure swallowed with a
-   * warning. Core generates the Component's `id`, but field-definition `id`s
-   * are caller-supplied and become the identity later updates match on.
+   * Writes the Component folder and its `component.json`, then commits, and
+   * puts the new slug into the in-memory index. Core generates the
+   * Component's `id`, but field-definition `id`s are caller-supplied and
+   * become the identity later updates match on.
    *
    * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
    * `Conflict` on a slug already in use, and `BadRequest` on a circular
@@ -212,7 +215,7 @@ export class ComponentService
         }, [componentPath]);
 
         index[id] = componentSlug;
-        await this.safeWriteSlugIndex(validatedProps.projectId, index);
+        this.setSlugIndex(validatedProps.projectId, index);
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toComponent(componentFile) as T;
       }
@@ -379,6 +382,8 @@ export class ComponentService
         const newFieldDefs = validatedProps.fieldDefinitions;
         const changes = diffFieldDefinitions(oldFieldDefs, newFieldDefs);
 
+        assertResolutionSlugsAreKnown(resolutions, newFieldDefs);
+
         await this.withGitRollback(projectPath, async () => {
           const filesToGitAdd: string[] = [componentFilePath];
 
@@ -415,7 +420,7 @@ export class ComponentService
         if (prevComponentFile.slug !== newSlug) {
           const index = await this.getSlugIndex(validatedProps.projectId);
           index[validatedProps.id] = newSlug;
-          await this.safeWriteSlugIndex(validatedProps.projectId, index);
+          this.setSlugIndex(validatedProps.projectId, index);
         }
 
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
@@ -620,8 +625,11 @@ export class ComponentService
   /**
    * Applies a single Entry's resolutions onto its final values in place.
    *
-   * Each resolved value is validated against its field definition schema before
-   * being written, throwing on a validation failure.
+   * Every slug is known to be declared by the new field definitions, because
+   * `update` rejects an unknown one at its boundary before any Entry is
+   * touched. Each value is validated against its field definition here and
+   * throws `BadRequest` when it does not fit, which fails the update inside
+   * the git rollback rather than midway through the Entries.
    */
   private applyEntryResolutions(
     finalValues: Record<string, Value>,
@@ -697,7 +705,7 @@ export class ComponentService
 
       const index = await this.getSlugIndex(props.projectId);
       delete index[props.id];
-      await this.safeWriteSlugIndex(props.projectId, index);
+      this.setSlugIndex(props.projectId, index);
     });
   }
 

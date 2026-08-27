@@ -12,77 +12,13 @@ The five decisions are settled, so this is all implementation. Work it in stages
 
 1. ~~**The six one line fixes.**~~ Done.
 2. ~~**The contained changes.**~~ Done.
-3. **The settled decisions**, in the order they are written below. `datetime` belongs here rather than in stage 1, see the note at the end of that section.
+3. ~~**The settled decisions.**~~ Done.
 4. **The ten blocks**, written as the item each waits on lands, rather than saved for the end. A block written next to the fix is a block written by somebody who just read the code.
 5. **Finish.** `src/documentation-baseline.json` empties as `GitService.status` and `refNameToTagName` get theirs, so delete it and this plan.
 
 Tests first, as ever. Every item here reproduced against `HEAD`, so each one starts as a failing test.
 
 `pnpm test`, `pnpm lint`, `pnpm check-types` and `pnpm check-format` all pass today and are expected to at every commit. Anything changing behavior a consumer sees needs a changeset, and `GitService.status` definitely does.
-
-## Decisions, settled
-
-All five were decided with Nils. Implement what is written here rather than re-opening them. Each unblocks at least one of the ten blocks below.
-
-### What `GitService.status` returns
-
-Return a described status rather than a bare array. The current parse reads field index 8 of every porcelain v2 line, which is `undefined` for an untracked entry, the similarity score for a rename, and truncated at the first space for a path containing one.
-
-```typescript
-{
-  isClean: boolean;
-  files: {
-    path: string;
-    status: 'added' |
-      'modified' |
-      'deleted' |
-      'renamed' |
-      'untracked' |
-      'unmerged';
-    isStaged: boolean;
-  }
-  [];
-}
-```
-
-Parse by the line-type prefix rather than by a fixed field index, and take the path as the rest of the line so a space survives. `ProjectService.synchronize` becomes `if (!status.isClean)` and puts `files` into the `PreconditionFailed` details, which finally tells a User which files are dirty. `src/test/util.ts` also reads this.
-
-Breaking for anyone reading `filePath` off the array, so it needs a changeset.
-
-### Whether `ProjectService` writes roll back
-
-They do, but `create` is not the same problem as the other two.
-
-- `update` and `delete` get `withGitRollback`, which is what `contributing/error-handling-internals.md` already claims and what four other services do.
-- `create` cannot use it. It runs `ensureDir`, then `git init`, then the first commit, so for most of its window there is no `HEAD` for `git reset --hard` to reach. Its rollback is to remove the directory it made.
-
-### What an unmatched resolution slug does
-
-Reject it, at the boundary rather than mid-write. Validate every resolution slug against the new field definitions before applying anything, so an unknown slug is a `BadRequest` naming it and no Entry is touched.
-
-Today `applyEntryResolutions` assigns `finalValues[fieldSlug]` outside the `if (fieldDef)` guard, so the value lands in the Entry with no validation at all. Throwing from inside that method instead would fail halfway through a write, which is worse than either.
-
-For a caller this means a stale resolution fails the whole schema change with a message saying which slug was not recognised.
-
-### Whether the slug index file is an export or a cache
-
-Stop writing `slug.index.json`. The in-memory index stays exactly as it is, `getSlugIndex` has 14 call sites and is load-bearing. What is dead is the file: `rebuildSlugIndexInternal` scans the entity folders and reads each entity file, and never reads the index file back.
-
-Correct the Index files section of `docs/storage-layout.md`, which tells a consumer it saves the folder scan.
-
-**Note reading it back as a future option**, in the doc rather than the source. It would save a cold scan, and the reason it is not being done now is that nothing invalidates it after a git operation, so it would introduce a staleness bug that does not exist today. Whoever picks it up later needs that reason, not just the idea.
-
-### What a release that fails partway leaves behind
-
-Nothing. A release is a transaction the User retries, not a half-finished state they resume, because a partly created release cannot be completed through the public API and would be worse in a UI.
-
-So recovery has to fully unwind rather than only switch back to `work`: delete the tag if one was created, reset the branch to where it was, then switch. `createPreview` needs real recovery instead of the identical no-op it carries today, since it never leaves `work` and so undoes nothing.
-
-### And one that was mis-sized
-
-`datetime()` was listed as a one line fix and is not quite. Phase 4 wrote a block documenting the falsy guard as deliberate, and `value === undefined` alone would make `datetime('')` throw `Invalid time value` rather than return now.
-
-Guard `value === undefined || value === ''`. That keeps every internal caller identical, since they all call `datetime()` with no argument to stamp `created` and `updated`, and changes only `datetime(0)`, which today silently returns now instead of the epoch. Rewrite the block, which currently states the old behavior as intended.
 
 ## The ten blocks waiting on them
 

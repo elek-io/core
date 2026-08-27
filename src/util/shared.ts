@@ -20,14 +20,18 @@ export function uuid(): Uuid {
 
 /**
  * Returns a string representing date and time in a simplified format based on
- * ISO 8601, always in UTC. Any falsy value counts as absent and yields the
- * current date and time, `0` and the empty string included.
+ * ISO 8601, always in UTC.
+ *
+ * An absent value yields now, which is how every `created` and `updated`
+ * stamp is made. Only `undefined` and the empty string count as absent, so
+ * `datetime(0)` is the epoch rather than now, and the empty string is in
+ * there because `new Date('')` is an invalid date.
  *
  * @example 'YYYY-MM-DDTHH:mm:ss.sssZ'
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString
  */
 export function datetime(value?: number | string | Date) {
-  if (!value) {
+  if (value === undefined || value === '') {
     return new Date().toISOString();
   }
   return new Date(value).toISOString();

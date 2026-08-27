@@ -46,6 +46,7 @@ import {
   type FieldChange,
 } from '../util/fieldDefinitionDiff.js';
 import {
+  assertResolutionSlugsAreKnown,
   transformEntryValues,
   type EntryIssue,
 } from '../util/entryTransform.js';
@@ -71,8 +72,8 @@ import type { LogService } from './LogService.js';
  * next to the Entries that belong to it. Every create, update and delete
  * commits.
  *
- * Slug lookups and slug uniqueness go through `slug.index.json`, a cache git
- * does not track and that rebuilds by scanning the folders when it misses.
+ * Slug lookups and slug uniqueness go through an in-memory index, rebuilt by
+ * scanning the Collection folders when it misses.
  *
  * @see ../../docs/storage-layout.md
  */
@@ -215,7 +216,7 @@ export class CollectionService
 
         // Update the index (not git-tracked, self-heals on failure)
         index[id] = slugPlural;
-        await this.safeWriteSlugIndex(validatedProps.projectId, index);
+        this.setSlugIndex(validatedProps.projectId, index);
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toCollection(collectionFile) as T;
       }
@@ -367,6 +368,8 @@ export class CollectionService
         );
         const changes = diffFieldDefinitions(oldFieldDefs, newFieldDefs);
 
+        assertResolutionSlugsAreKnown(resolutions, newFieldDefs);
+
         const newSlugPlural = slug(validatedProps.slug.plural);
 
         // If collection slug.plural changed, enforce uniqueness before mutating
@@ -465,7 +468,7 @@ export class CollectionService
         if (prevCollectionFile.slug.plural !== newSlugPlural) {
           const index = await this.getSlugIndex(validatedProps.projectId);
           index[validatedProps.id] = newSlugPlural;
-          await this.safeWriteSlugIndex(validatedProps.projectId, index);
+          this.setSlugIndex(validatedProps.projectId, index);
         }
 
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
@@ -739,7 +742,7 @@ export class CollectionService
         // Remove from index (not git-tracked, self-heals on failure)
         const index = await this.getSlugIndex(validatedProps.projectId);
         delete index[validatedProps.id];
-        await this.safeWriteSlugIndex(validatedProps.projectId, index);
+        this.setSlugIndex(validatedProps.projectId, index);
       }
     );
   }

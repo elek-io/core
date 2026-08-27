@@ -150,7 +150,8 @@ export class ProjectService
    * The Project is left checked out on `work`.
    *
    * Throws `PreconditionFailed` in read-only mode and `Unauthorized` when no
-   * User is set. A failure at any step force-deletes the half-created folder.
+   * User is set. A failure at any step removes the half-created folder, which
+   * is the only rollback available while there is no `HEAD` to reset to.
    *
    * @see ../../docs/git-and-sync.md
    */
@@ -201,7 +202,24 @@ export class ProjectService
           );
           return await this.toProject(projectFile);
         } catch (error) {
-          await this.delete({ id, force: true });
+          // Not withGitRollback and not delete(). For most of the window
+          // above there is no HEAD for a reset to reach, and delete() asks
+          // git about a folder that may not be a repository yet, whose
+          // failure would replace the one the caller has to see
+          await Fs.remove(projectPath).catch((removeError: unknown) =>
+            this.logService.error({
+              source: 'core',
+              message: `Failed to remove "${projectPath}" after a failed create, it has to be removed by hand`,
+              meta: {
+                'file.path': projectPath,
+                'exception.message':
+                  removeError instanceof Error
+                    ? removeError.message
+                    : String(removeError),
+              },
+            })
+          );
+          this.jsonFileService.clearCache();
           throw error;
         }
       }
@@ -773,7 +791,13 @@ export class ProjectService
   }
 
   /**
-   * Updates given Project
+   * Writes `project.json` and commits it.
+   *
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy.
+   * A failure between the write and the commit rolls the working tree back,
+   * so the Project on disk is the one before the call.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public update(props: UpdateProjectProps): Promise<Project> {
     return this.mutating(
@@ -794,17 +818,19 @@ export class ProjectService
           updated: datetime(),
         };
 
-        await this.jsonFileService.update(
-          projectFile,
-          filePath,
-          projectFileSchema
-        );
-        await this.gitService.add(projectPath, [filePath]);
-        await this.gitService.commit(projectPath, {
-          method: 'update',
-          reference: { objectType: 'project', id: projectFile.id },
+        return this.withGitRollback(projectPath, async () => {
+          await this.jsonFileService.update(
+            projectFile,
+            filePath,
+            projectFileSchema
+          );
+          await this.gitService.add(projectPath, [filePath]);
+          await this.gitService.commit(projectPath, {
+            method: 'update',
+            reference: { objectType: 'project', id: projectFile.id },
+          });
+          return await this.toProject(projectFile);
         });
-        return await this.toProject(projectFile);
       }
     );
   }
@@ -1238,10 +1264,10 @@ export class ProjectService
         // A rebase against uncommitted changes fails and could cost the user
         // work, so refuse a sync on a dirty tree before touching the remote.
         const uncommitted = await this.gitService.status(projectPath);
-        if (uncommitted.length > 0) {
+        if (!uncommitted.isClean) {
           throw CoreError.preconditionFailed(
             `Project "${props.id}" has uncommitted changes. Commit or discard them before synchronizing.`,
-            uncommitted
+            uncommitted.files
           );
         }
 
@@ -1294,11 +1320,14 @@ export class ProjectService
   }
 
   /**
-   * Deletes given Project
+   * Removes the whole Project folder, its history included, rather than only
+   * the Project file. Throws when the Project exists nowhere but here, or
+   * holds commits the remote does not, unless `force` is set.
    *
-   * Deletes the whole Project folder including the history, not only the config file.
-   * Throws in case a Project is only available locally and could be lost forever,
-   * or changes are not pushed to a remote yet.
+   * The guards run first, so a refused delete never touches the working tree,
+   * and only the removal itself rolls back.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public delete(props: DeleteProjectProps): Promise<void> {
     return this.mutating('delete', deleteProjectSchema, props, async () => {
@@ -1333,7 +1362,10 @@ export class ProjectService
         }
       }
 
-      await this.jsonFileService.delete(this.pathTo.project(props.id));
+      const projectPath = this.pathTo.project(props.id);
+      await this.withGitRollback(projectPath, async () => {
+        await this.jsonFileService.delete(projectPath);
+      });
     });
   }
 
@@ -1524,6 +1556,8 @@ export class ProjectService
       '!/**/.gitkeep',
       '',
       '# elek.io related ignores',
+      // Core stopped writing these, they are named so a copy an older Core
+      // left behind does not show up as a change. See docs/storage-layout.md
       'collections/slug.index.json',
       'components/slug.index.json',
     ];

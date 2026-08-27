@@ -1,9 +1,7 @@
 import Fs from 'fs-extra';
-import Path from 'node:path';
 import type { z } from '@hono/zod-openapi';
 import { CoreError } from '../util/shared.js';
 import {
-  slugIndexFileSchema,
   uuidSchema,
   type ElekIoCoreOptions,
   type ServiceType,
@@ -40,14 +38,7 @@ export abstract class AbstractSlugIndexedEntityService<
     super(type, options, pathTo, logService, gitService, jsonFileService);
   }
 
-  /**
-   * Path to the folder containing all entities of this type.
-   *
-   * `writeSlugIndex` puts `slug.index.json` inside it, and the generated
-   * `.gitignore` names only `collections/slug.index.json` and
-   * `components/slug.index.json`, so a subclass pointing anywhere else
-   * commits its cache file.
-   */
+  /** Path to the folder containing all entities of this type. */
   protected abstract entitiesPath(projectId: string): string;
   /** Path to a specific entity folder */
   protected abstract entityPath(projectId: string, id: string): string;
@@ -69,8 +60,8 @@ export abstract class AbstractSlugIndexedEntityService<
   protected abstract entityFileSchema: z.ZodTypeAny;
 
   /**
-   * Returns the cached slug index or rebuilds it from disk.
-   * Deduplicates concurrent rebuild calls for the same project.
+   * Returns the cached slug index, rebuilding it from the entity folders on a
+   * miss. Concurrent rebuilds of the same Project share one promise.
    */
   protected async getSlugIndex(
     projectId: string
@@ -94,17 +85,18 @@ export abstract class AbstractSlugIndexedEntityService<
   }
 
   /**
-   * Writes the index file to disk and updates the in-memory cache.
+   * Replaces the cached index for a Project.
+   *
+   * Nothing is written to disk. The index was mirrored into
+   * `slug.index.json` and never read back, so the file cost a write per
+   * mutation and bought nothing.
+   *
+   * @see ../../docs/storage-layout.md
    */
-  protected async writeSlugIndex(
+  protected setSlugIndex(
     projectId: string,
     index: Record<string, string>
-  ): Promise<void> {
-    const indexPath = Path.join(
-      this.entitiesPath(projectId),
-      'slug.index.json'
-    );
-    await this.jsonFileService.update(index, indexPath, slugIndexFileSchema);
+  ): void {
     this.cachedSlugIndex.set(projectId, index);
   }
 
@@ -118,34 +110,6 @@ export abstract class AbstractSlugIndexedEntityService<
    */
   protected invalidateSlugIndex(projectId: string): void {
     this.cachedSlugIndex.delete(projectId);
-  }
-
-  /**
-   * Writes the slug index file with automatic cache invalidation on failure.
-   *
-   * If the write fails, the in-memory cache is invalidated so the index
-   * rebuilds from disk on next access. The error is logged but not re-thrown,
-   * since the entity data was already successfully committed to git.
-   */
-  protected async safeWriteSlugIndex(
-    projectId: string,
-    index: Record<string, string>
-  ): Promise<void> {
-    try {
-      await this.writeSlugIndex(projectId, index);
-    } catch (error) {
-      this.invalidateSlugIndex(projectId);
-      this.logService.warn({
-        source: 'core',
-        message: `Failed to write ${this.type} slug index for project "${projectId}", cache invalidated: ${error instanceof Error ? error.message : String(error)}`,
-        meta: {
-          'elek.project.id': projectId,
-          'elek.object.type': this.type,
-          'exception.message':
-            error instanceof Error ? error.message : String(error),
-        },
-      });
-    }
   }
 
   /**
@@ -196,9 +160,7 @@ export abstract class AbstractSlugIndexedEntityService<
    * Rebuilds the slug index by scanning all entity folders on disk.
    *
    * An entity folder whose file will not read or parse is warned about and
-   * left out, so it cannot be resolved by slug until it parses. The rebuild
-   * also writes `slug.index.json` back, swallowing a failed write with a
-   * warning.
+   * left out, so it cannot be resolved by slug until it parses.
    */
   private async rebuildSlugIndexInternal(
     projectId: string
@@ -239,20 +201,6 @@ export abstract class AbstractSlugIndexedEntityService<
       }
     }
 
-    try {
-      await this.writeSlugIndex(projectId, index);
-    } catch (error) {
-      this.logService.warn({
-        source: 'core',
-        message: `Failed to write slug index during rebuild: ${error instanceof Error ? error.message : String(error)}`,
-        meta: {
-          'elek.project.id': projectId,
-          'elek.object.type': this.type,
-          'exception.message':
-            error instanceof Error ? error.message : String(error),
-        },
-      });
-    }
     return index;
   }
 }

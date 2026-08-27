@@ -69,6 +69,34 @@ export type VersionedGitTag = GitTag & {
 export const isVersionedTag = (tag: GitTag): tag is VersionedGitTag =>
   tag.message.type === 'release' || tag.message.type === 'preview';
 
+/**
+ * One entry of `git status`, as porcelain v2 reported it.
+ *
+ * `path` is the path relative to the repository root, and a renamed entry
+ * carries its new path rather than the pair. `isStaged` says whether the
+ * change is in the index, so a file both staged and changed again in the
+ * working tree is one entry carrying its staged state.
+ */
+export const gitFileStatusSchema = z.object({
+  path: z.string(),
+  status: z.enum([
+    'added',
+    'modified',
+    'deleted',
+    'renamed',
+    'untracked',
+    'unmerged',
+  ]),
+  isStaged: z.boolean(),
+});
+export type GitFileStatus = z.infer<typeof gitFileStatusSchema>;
+
+export const gitStatusSchema = z.object({
+  isClean: z.boolean(),
+  files: z.array(gitFileStatusSchema),
+});
+export type GitStatus = z.infer<typeof gitStatusSchema>;
+
 export const gitCommitSchema = z.object({
   /**
    * SHA-1 hash of the commit

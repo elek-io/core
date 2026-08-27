@@ -60,7 +60,7 @@ describe('Read-only mode', function () {
     const status = await readOnlyCore.git.status(
       readOnlyCore.util.pathTo.project(project.id)
     );
-    expect(status.length).toEqual(0);
+    expect(status.isClean).toBe(true);
   });
 
   it('should allow switching branches', async function () {
