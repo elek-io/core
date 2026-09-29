@@ -7,10 +7,15 @@ For a typed wrapper over this API, see [`api-clients.md`](./api-clients.md).
 ## Starting and stopping
 
 ```typescript
-core.api.start(31310); // default port
+await core.api.start(31310); // default port, resolves once listening
 core.api.isRunning(); // -> true
-core.api.stop();
+await core.api.stop(); // resolves once the port is released
 ```
+
+`start()` rejects with a `CoreError` instead of starting:
+
+- `Conflict` when something else holds the port
+- `PreconditionFailed` when the API is already running or still starting. Stop it first.
 
 Or from the CLI, without writing code:
 
@@ -18,7 +23,7 @@ Or from the CLI, without writing code:
 elek api:start [port]   # port defaults to 31310
 ```
 
-`ElekIoCore.dispose()` stops the API if it is running.
+`ElekIoCore.dispose()` stops the API if it is running, and the port is released once it resolves.
 
 When you embed Core yourself, the API only runs once you start it, with `core.api.start()` or `elek api:start`.
 

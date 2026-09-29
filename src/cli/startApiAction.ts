@@ -2,14 +2,12 @@ import type { ApiStartProps } from '../schema/cliSchema.js';
 import { getCore } from './index.js';
 
 /**
- * Starts Core's read-only local REST API on `port` and returns synchronously,
- * before the server is listening. The listening server keeps the Node process
- * alive, so `elek api:start` runs until it is killed and nothing here stops
- * it.
+ * Starts Core's read-only local REST API on `port` and resolves once it is
+ * listening. The listening server keeps the Node process alive, so
+ * `elek api:start` runs until it is killed and nothing here stops it.
  *
- * A second call replaces the tracked server without closing the first, and a
- * busy port arrives as an uncaught server `error` event rather than as a
- * thrown `CoreError`.
+ * A busy port rejects with a `Conflict` `CoreError`, which the CLI prints
+ * like any other failure.
  *
  * @see ../../docs/local-api.md
  */

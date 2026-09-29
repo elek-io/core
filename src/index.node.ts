@@ -360,20 +360,16 @@ export default class ElekIoCore {
   }
 
   /**
-   * Closes the logger, removing the process-level exception and rejection
-   * handlers, and asks the local API to stop.
+   * Stops the local API, then closes the logger, removing the process-level
+   * exception and rejection handlers. The port is released once this
+   * resolves.
    *
    * Safe to call twice: every later call awaits the first one's teardown,
    * and a record logged afterwards is dropped rather than thrown at the
    * ended stream.
-   *
-   * `LocalApi.stop()` is not awaited, so the port can still be held when
-   * this resolves.
    */
   public async dispose(): Promise<void> {
-    if (this.localApi.isRunning()) {
-      this.localApi.stop();
-    }
+    await this.localApi.stop();
     // Logged before closing so the final line is flushed
     this.logService.info({ source: 'core', message: 'Disposing elek.io Core' });
     await this.logService.close();

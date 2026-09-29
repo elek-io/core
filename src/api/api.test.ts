@@ -9,7 +9,7 @@ import type {
   Project,
 } from '../index.node.js';
 import Os from 'node:os';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createProject,
   createAsset,
@@ -61,20 +61,7 @@ describe('API', function () {
 
   it('should be able to start the API and verify it is running', async function () {
     const isRunningBefore = core.api.isRunning();
-    core.api.start(testApiPort);
-
-    await vi.waitFor(
-      () => {
-        const isCurrentlyRunning = core.api.isRunning();
-        if (isCurrentlyRunning === false) {
-          throw new Error('Server not started yet');
-        }
-      },
-      {
-        timeout: 10000,
-        interval: 20,
-      }
-    );
+    await core.api.start(testApiPort);
 
     const isRunningAfter = core.api.isRunning();
 
@@ -477,20 +464,7 @@ describe('API', function () {
 
   it('should be able to stop the API and verify it is not running anymore', async function () {
     const isRunningBefore = core.api.isRunning();
-    core.api.stop();
-
-    await vi.waitFor(
-      () => {
-        const isCurrentlyRunning = core.api.isRunning();
-        if (isCurrentlyRunning === true) {
-          throw new Error('Server is still running');
-        }
-      },
-      {
-        timeout: 10000,
-        interval: 20,
-      }
-    );
+    await core.api.stop();
 
     const isRunningAfter = core.api.isRunning();
 

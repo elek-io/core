@@ -343,9 +343,9 @@ await core.dispose();
 Core ships a local REST API (Hono + OpenAPI) for reading Project content - useful when building a static site or app against local data. It is read-only and never meant to be exposed to the internet.
 
 ```typescript
-core.api.start(31310); // default port
+await core.api.start(31310); // default port, resolves once listening
 core.api.isRunning(); // -> true
-core.api.stop();
+await core.api.stop(); // resolves once the port is released
 ```
 
 With the server running, interactive OpenAPI documentation is served at `http://localhost:31310/` and the schema at `http://localhost:31310/openapi.json`. You can also start it without writing code via the CLI (see below).

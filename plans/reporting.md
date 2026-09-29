@@ -743,7 +743,7 @@ On branch `reporting`, uncommitted at this milestone. 78 files, 1184 tests pass,
 
 ## What elek.io Desktop needs
 
-The plan's summary promised "none of the eight needs a change in the Desktop repository". Phase 2 made that false, and Desktop's `contributing/not-yet-implemented.md` is out of date in six places. Do these in the same commit as the `@elek-io/core` bump.
+The plan's summary promised "none of the eight needs a change in the Desktop repository". Phase 2 made that false, and Desktop's `contributing/not-yet-implemented.md` is out of date in seven places. Do these in the same commit as the `@elek-io/core` bump.
 
 1. Drop the summary input and the `SUMMARY_MAX_LENGTH` derivation at `report-dialog.tsx:71`. It reads `createBugReportSchema.shape.summary.maxLength` at module scope and now throws a `TypeError`, crashing the renderer rather than failing to compile.
 2. Bind the email input to `user.email` and build the `user` block from a `user.get()` prefill, instead of `contactEmail`.
@@ -751,6 +751,7 @@ The plan's summary promised "none of the eight needs a change in the Desktop rep
 4. Add `id: null` to the profile form's `defaultValues` in `user/profile.tsx`. Runtime-only, `tsc` will not catch it.
 5. Add `VersionSkew` and `RateLimited` to the `satisfies Record<CoreErrorType, true>` map in Desktop's `src/shared/ipcError.ts`.
 6. Rename `includeLogs` to `hasLogConsent` on a bug report, following Core's `is` or `has` prefix for boolean keys. `tsc` catches every site.
+7. Await `core.api.start()` and `core.api.stop()`, and tell the User a port is taken when `start()` rejects with `Conflict`. A start that is not awaited and fails becomes an unhandled rejection.
 
 Items 1 and 4 are the dangerous ones, because both are runtime failures a type check passes. Desktop does not have to wait for Cloud: a send against a Cloud that has not built the endpoint fails as `PreconditionFailed`, which is the case the dialog already keeps the user's text through.
 
