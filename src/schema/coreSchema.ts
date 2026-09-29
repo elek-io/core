@@ -61,7 +61,7 @@ export const elekIoCoreOptionsSchema = z.object({
   dataDir: z.string().trim().min(1),
   cloud: z.object({
     /**
-     * Base URL of the elek.io Cloud API
+     * Base URL of the elek.io Cloud API, http or https
      *
      * Everything Core does over the network other than git goes here,
      * which today is sending a report. A constant would make the call
@@ -72,7 +72,7 @@ export const elekIoCoreOptionsSchema = z.object({
      *
      * @default 'https://api.elek.io'
      */
-    url: z.url(),
+    url: z.url({ protocol: /^https?$/ }),
   }),
   /**
    * If set to true, Core never mutates a Project or its remote

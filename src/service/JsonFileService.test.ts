@@ -88,10 +88,15 @@ describe('JsonFileService.delete', function () {
     info.mockRestore();
   });
 
-  it('says nothing about a path that is not there, the way Fs.remove does', async function () {
+  it('neither fails nor logs for a path that is not there, since nothing was deleted', async function () {
+    const info = vi.spyOn(logService, 'info');
+
     await expect(
       jsonFileService.delete(Path.join(dataDir, 'never-existed.json'))
     ).resolves.toBeUndefined();
+
+    expect(info).not.toHaveBeenCalled();
+    info.mockRestore();
   });
 });
 

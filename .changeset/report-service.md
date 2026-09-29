@@ -13,13 +13,13 @@ const { id } = await core.cloud.reports.create({
     version: '0.5.0',
     runtime: { electron: '40.1.0', chrome: '142.0.0.0', node: '24.12.0' },
   },
-  includeLogs: true,
+  hasLogConsent: true,
 });
 ```
 
 This is the first thing Core does over the network that is not git. It sits under `core.cloud` rather than at the top level because elek.io Cloud is several APIs rather than one, so `core.cloud.reports` says which of them a call belongs to and leaves the others somewhere to land. Where it goes is the `cloud.url` option, so it is testable at every layer rather than a constant. No HTTP client came with it, only the `fetch` Node already has.
 
-**Core fills in exactly two things.** The Core version and the machine it is running on, and the log tail when a bug report consented to one. Everything else passes through from the caller, validated, and nothing else is added: `includeLogs` is consent to attaching a tail rather than part of the report, so it is answered by what `logs` holds and is never sent on.
+**Core fills in exactly two things.** The Core version and the machine it is running on, and the log tail when a bug report consented to one. Everything else passes through from the caller, validated, and nothing else is added: `hasLogConsent` is consent to attaching a tail rather than part of the report, so it is answered by what `logs` holds and is never sent on.
 
 **Who sent it is not read for you.** Core does not call `user.get()`, because the address somebody can be reached at belongs in the form that collected the report and is meant to stay editable there. Whatever is passed is what is sent, including `null` for a machine that has no User yet, which is exactly when a report is worth having.
 

@@ -285,6 +285,16 @@ describe('resolveCloudUrl', () => {
     vi.stubEnv('ELEK_IO_CLOUD_URL', undefined);
     expect(() => resolveCloudUrl('not a url')).toThrowError(/not a url/);
   });
+
+  it('throws on a URL that is not http or https, since a report is sent with fetch', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_URL', 'mailto:reports@elek.io');
+    expect(() => resolveCloudUrl()).toThrowError(/http or https/);
+
+    vi.stubEnv('ELEK_IO_CLOUD_URL', undefined);
+    expect(() => resolveCloudUrl('file:///etc/hosts')).toThrowError(
+      /http or https/
+    );
+  });
 });
 
 describe('resolveContentRef', () => {

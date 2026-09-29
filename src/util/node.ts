@@ -110,7 +110,7 @@ export function resolveCloudUrl(url?: string): string {
     elekIoCoreOptionsSchema.shape.cloud.shape.url.safeParse(candidate);
   if (!parsed.success) {
     throw CoreError.badRequest(
-      `ELEK_IO_CLOUD_URL must be a URL, got "${candidate}"`
+      `ELEK_IO_CLOUD_URL must be an http or https URL, got "${candidate}"`
     );
   }
   return parsed.data.replace(/\/+$/, '');

@@ -45,7 +45,7 @@ function bugReport(
     message: 'Deleting a Collection spins forever after confirming the dialog.',
     user,
     desktop,
-    includeLogs: false,
+    hasLogConsent: false,
     ...overrides,
   };
 }
@@ -240,9 +240,9 @@ describe('what leaves the machine', function () {
     const cloud = await startFakeCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
 
-    await core.cloud.reports.create(bugReport({ includeLogs: true }));
+    await core.cloud.reports.create(bugReport({ hasLogConsent: true }));
 
-    // includeLogs is consent to attaching a tail, not part of the report,
+    // hasLogConsent is consent to attaching a tail, not part of the report,
     // so it is answered by what `logs` holds and never sent on
     expect(Object.keys(cloud.received[0]?.body ?? {}).toSorted()).toEqual([
       'core',
@@ -317,7 +317,7 @@ describe('the log tail a report may attach', function () {
     const cloud = await startFakeCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
 
-    await core.cloud.reports.create(bugReport({ includeLogs: true }));
+    await core.cloud.reports.create(bugReport({ hasLogConsent: true }));
 
     const logs = logTailSchema.safeParse(cloud.received[0]?.body['logs']);
     expect(logs.success).toBe(true);
@@ -329,7 +329,7 @@ describe('the log tail a report may attach', function () {
     const cloud = await startFakeCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
 
-    await core.cloud.reports.create(bugReport({ includeLogs: false }));
+    await core.cloud.reports.create(bugReport({ hasLogConsent: false }));
 
     expect(cloud.received[0]?.body['logs']).toBeNull();
   });
@@ -340,10 +340,10 @@ describe('the log tail a report may attach', function () {
 
     // Feedback has no consent to give, so there is nothing that could
     // turn one on
-    await core.cloud.reports.create(feedbackReport({ includeLogs: true }));
+    await core.cloud.reports.create(feedbackReport({ hasLogConsent: true }));
 
     expect(cloud.received[0]?.body['logs']).toBeNull();
-    expect(cloud.received[0]?.body).not.toHaveProperty('includeLogs');
+    expect(cloud.received[0]?.body).not.toHaveProperty('hasLogConsent');
   });
 
   it('refuses a body over the cap rather than letting Cloud answer 413', async function () {
@@ -352,7 +352,7 @@ describe('the log tail a report may attach', function () {
     await seedIncompressibleLog(core.util.pathTo.logs);
 
     const error = await expectCoreError(
-      core.cloud.reports.create(bugReport({ includeLogs: true }))
+      core.cloud.reports.create(bugReport({ hasLogConsent: true }))
     );
 
     expect(error.type).toBe('BadRequest');

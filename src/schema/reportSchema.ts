@@ -50,7 +50,7 @@ export type CreateFeedbackReportProps = z.infer<
 export const createBugReportSchema = createReportBaseSchema.extend({
   type: z.literal(reportTypeSchema.enum.bug),
   /** Consent to attaching a log tail */
-  includeLogs: z.boolean(),
+  hasLogConsent: z.boolean(),
 });
 export type CreateBugReportProps = z.infer<typeof createBugReportSchema>;
 
@@ -74,7 +74,7 @@ export const reportRequestSchema = createReportBaseSchema.extend({
     arch: z.string(),
     osRelease: z.string(),
   }),
-  /** Only attach log tail when type is bug and the User checked includeLogs */
+  /** Only attach log tail when type is bug and hasLogConsent is true */
   logs: logTailSchema.nullable(),
 });
 export type ReportRequest = z.infer<typeof reportRequestSchema>;

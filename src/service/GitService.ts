@@ -9,6 +9,7 @@ import type {
   GitMergeOptions,
   GitMessage,
   LogAttributes,
+  LogProps,
 } from '../schema/index.js';
 import {
   gitCommitSchema,
@@ -1575,7 +1576,7 @@ export class GitService {
     }
 
     const command = redactedCommand(args);
-    const record = {
+    const record: LogProps = {
       source: 'core',
       message: `Executed "${command}" in ${result.durationMs}ms`,
       meta: {
@@ -1583,7 +1584,7 @@ export class GitService {
         'elek.duration_ms': result.durationMs,
         ...attributes,
       },
-    } as const;
+    };
     if (isMutatingGitCommand(args)) {
       this.logService.info(record);
     } else {

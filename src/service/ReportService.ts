@@ -81,7 +81,7 @@ export class ReportService extends AbstractService {
       createReportSchema,
       props,
       async (report) => {
-        // The parse is what drops includeLogs: it is consent to attaching
+        // The parse is what drops hasLogConsent: it is consent to attaching
         // a tail rather than part of the report, so the request never
         // carried it and `logs` is the answer to it
         const request = reportRequestSchema.parse({
@@ -95,7 +95,7 @@ export class ReportService extends AbstractService {
             osRelease: Os.release(),
           },
           logs:
-            report.type === 'bug' && report.includeLogs
+            report.type === 'bug' && report.hasLogConsent
               ? await this.logService.tail()
               : null,
         });

@@ -130,8 +130,8 @@ export class JsonFileService extends AbstractService {
   }
 
   /**
-   * Deletes a file or a folder on disk. Does nothing if the path does not
-   * exist, which is what `Fs.remove` does.
+   * Deletes a file or a folder on disk. A path that does not exist is not
+   * an error and is not logged, since nothing was deleted.
    *
    * Every service deletes through this, so a deletion is recorded in one
    * place and cannot serve what it removed: the cache is keyed by path,
@@ -139,7 +139,14 @@ export class JsonFileService extends AbstractService {
    * out. A folder takes everything below it with it.
    */
   public async delete(path: string): Promise<void> {
-    await Fs.remove(path);
+    if (await Fs.pathExists(path)) {
+      await Fs.remove(path);
+      this.logService.info({
+        source: 'core',
+        message: `Deleted "${path}"`,
+        meta: { 'file.path': path },
+      });
+    }
     this.cache.delete(path);
     const below = path + Path.sep;
     for (const cached of this.cache.keys()) {
@@ -147,11 +154,6 @@ export class JsonFileService extends AbstractService {
         this.cache.delete(cached);
       }
     }
-    this.logService.info({
-      source: 'core',
-      message: `Deleted "${path}"`,
-      meta: { 'file.path': path },
-    });
   }
 
   /**

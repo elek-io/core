@@ -482,7 +482,7 @@ Headers: `Content-Type: application/json`, `User-Agent: elek.io-core/<coreVersio
     "id": null,
   },
 
-  // Only when includeLogs is true. Null otherwise.
+  // Only when hasLogConsent is true. Null otherwise.
   "logs": {
     "encoding": "gzip+base64",
     "from": "2026-08-20T14:02:11.000Z",
@@ -502,7 +502,7 @@ Two notes for whoever builds Cloud:
 
 ## The log tail
 
-Lives on `LogService` as `core.logger.tail()`, **public**, not inside the report service. It is a log concern, it is testable on its own, and being public gives Desktop a "save my diagnostics to a file" button with no network involved, which is the offline half of the same capability. `ReportService` composes it when `includeLogs` is set.
+Lives on `LogService` as `core.logger.tail()`, **public**, not inside the report service. It is a log concern, it is testable on its own, and being public gives Desktop a "save my diagnostics to a file" button with no network involved, which is the offline half of the same capability. `ReportService` composes it when `hasLogConsent` is set.
 
 ### What the directory actually looks like
 
@@ -725,7 +725,7 @@ Landed on branch `reporting`, with its own changeset. 76 files, 1140 tests pass,
 
 On branch `reporting`, uncommitted at this milestone. 78 files, 1184 tests pass, lint, types, formatting and the build clean.
 
-- `src/service/ReportService.ts` - one `create()`, through `validated()` rather than `mutating()`, so read-only mode does not block a report. The request is built by spreading the validated report and letting `reportRequestSchema.parse` strip `includeLogs`, which is consent rather than part of the report, so a key added to the base flows through instead of needing a second copy of the field list.
+- `src/service/ReportService.ts` - one `create()`, through `validated()` rather than `mutating()`, so read-only mode does not block a report. The request is built by spreading the validated report and letting `reportRequestSchema.parse` strip `hasLogConsent`, which is consent rather than part of the report, so a key added to the base flows through instead of needing a second copy of the field list.
 - `src/service/CloudService.ts` - `core.cloud.reports.create(props)`. Two levels deep, which is new for Core.
 - `src/index.node.ts` and `src/service/index.ts` - constructed, exported, `public get cloud(): CloudService`.
 - No new dependency, global `fetch`. `AbortSignal.timeout(15_000)`, no retry, and the 2 MB body ceiling checked before sending.
@@ -743,13 +743,14 @@ On branch `reporting`, uncommitted at this milestone. 78 files, 1184 tests pass,
 
 ## What elek.io Desktop needs
 
-The plan's summary promised "none of the eight needs a change in the Desktop repository". Phase 2 made that false, and Desktop's `contributing/not-yet-implemented.md` is out of date in five places. Do these in the same commit as the `@elek-io/core` bump.
+The plan's summary promised "none of the eight needs a change in the Desktop repository". Phase 2 made that false, and Desktop's `contributing/not-yet-implemented.md` is out of date in six places. Do these in the same commit as the `@elek-io/core` bump.
 
 1. Drop the summary input and the `SUMMARY_MAX_LENGTH` derivation at `report-dialog.tsx:71`. It reads `createBugReportSchema.shape.summary.maxLength` at module scope and now throws a `TypeError`, crashing the renderer rather than failing to compile.
 2. Bind the email input to `user.email` and build the `user` block from a `user.get()` prefill, instead of `contactEmail`.
 3. Rename `describeClient(): ReportClient` and the field it fills to `desktop`, naming the type locally as `CreateReportBase['desktop']`.
 4. Add `id: null` to the profile form's `defaultValues` in `user/profile.tsx`. Runtime-only, `tsc` will not catch it.
 5. Add `VersionSkew` and `RateLimited` to the `satisfies Record<CoreErrorType, true>` map in Desktop's `src/shared/ipcError.ts`.
+6. Rename `includeLogs` to `hasLogConsent` on a bug report, following Core's `is` or `has` prefix for boolean keys. `tsc` catches every site.
 
 Items 1 and 4 are the dangerous ones, because both are runtime failures a type check passes. Desktop does not have to wait for Cloud: a send against a Cloud that has not built the endpoint fails as `PreconditionFailed`, which is the case the dialog already keeps the user's text through.
 
@@ -766,7 +767,7 @@ Port `0` rather than the `31310 + poolId` scheme `src/test/setup.ts` uses for th
 
 What to cover:
 
-- The body shape, asserted on the server side: `reporter` filled from `user.get()`, `contactEmail` overriding `reporter.email`, `core.version` matching `coreVersion`, `logs` present only when `includeLogs` is true.
+- The body shape, asserted on the server side: `reporter` filled from `user.get()`, `contactEmail` overriding `reporter.email`, `core.version` matching `coreVersion`, `logs` present only when `hasLogConsent` is true.
 - `reporter: null` when no User is set, and the call still succeeds.
 - Every row of the mapping table: 400, 401, 403, 413, 429, 500, a server that never answers (timeout), and a closed port (connection refused).
 - A 201 with a body that fails `reportSchema` throws `Internal`.

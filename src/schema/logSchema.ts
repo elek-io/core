@@ -123,7 +123,6 @@ export const logAttributeNames = [
   'elek.error.status_code',
   'elek.git.command',
   'elek.git.ref',
-  'elek.git.tag.type',
   'elek.log.repeat.count',
   'elek.log.repeat.last_timestamp',
   'elek.method',

@@ -60,7 +60,7 @@ The resolved options are exposed on `core.options`, and the running Core version
 - **`log.hostVersion`** is the version of your own application, written to `service.version` on every record you log with a `source` other than `core`.
   - Core stamps its own version on its own records and has no way to read yours, so without this the records you write carry no version at all, and a log file someone hands you on its own cannot be matched to the build that produced it.
   - It must be a semantic version. A value that is not one throws a `CoreError` rather than writing something the log file's own read contract would reject. See [`reporting.md`](./reporting.md) for what a log file and a report each carry.
-- **`cloud.url`** is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`.
+- **`cloud.url`** is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It has to be an http or https URL. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`.
   - A trailing slash is dropped, since Core appends a path to it.
   - A value that is not a URL throws a `CoreError`, rather than falling back to the default and sending to production on the strength of a typo.
 - **`isReadOnly`** puts Core into read-only mode, meant for environments that only consume content, such as CI builds. It takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.

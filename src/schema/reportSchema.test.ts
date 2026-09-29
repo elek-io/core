@@ -43,7 +43,7 @@ const bug = {
   message: 'Deleting a Collection spins forever after confirming the dialog.',
   user: localUser,
   desktop,
-  includeLogs: true,
+  hasLogConsent: true,
 };
 
 const feedback = {
@@ -63,17 +63,15 @@ describe('what a client asks Core to send', function () {
   });
 
   it('discriminates on the type, so a bug without its own fields is rejected', function () {
-    const { includeLogs: _includeLogs, ...withoutIncludeLogs } = bug;
+    const { hasLogConsent: _hasLogConsent, ...withoutLogConsent } = bug;
 
-    expect(createReportSchema.safeParse(withoutIncludeLogs).success).toBe(
-      false
-    );
+    expect(createReportSchema.safeParse(withoutLogConsent).success).toBe(false);
   });
 
   it('makes a bug report say whether to attach logs, never assuming it', function () {
     // Consent to sending a log file, so there is no such thing as a default
     expect(
-      createReportSchema.safeParse({ ...bug, includeLogs: false }).success
+      createReportSchema.safeParse({ ...bug, hasLogConsent: false }).success
     ).toBe(true);
   });
 
@@ -317,10 +315,10 @@ describe('what elek.io Cloud answers with', function () {
 
 describe('the types the renderer imports', function () {
   it('narrows a report by its type', function () {
-    const report: CreateReportProps = bug as CreateReportProps;
+    const report: CreateReportProps = createReportSchema.parse(bug);
 
     if (report.type === 'bug') {
-      expect(report.includeLogs).toBe(true);
+      expect(report.hasLogConsent).toBe(true);
     } else {
       expect.unreachable('the bug fixture is a bug report');
     }

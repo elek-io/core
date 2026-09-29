@@ -202,7 +202,7 @@ A tag is named with a fresh UUID rather than with its version, so the version li
 
 The trailers are the whole contract, which decides what Core can see:
 
-- `list()`, `count()` and `read()` drop any tag whose `Type:` trailer is missing or is not one of the three, and log a warning naming what they saw.
+- `list()`, `count()` and `read()` drop any tag whose `Type:` trailer is missing or is not one of the three.
 - A `v1.2.3` tag pushed by hand, and any lightweight tag, is therefore invisible to Core. `count()` counts Core's own tags rather than the repository's.
 - Tags come back newest first, sorted by the author date of the commit they point at rather than by when the tag was written, and `list()` returns all of them in one page.
 

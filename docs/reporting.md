@@ -22,7 +22,7 @@ const { id } = await core.cloud.reports.create({
     version: '0.5.0',
     runtime: { electron: '40.1.0', chrome: '142.0.0.0', node: '24.12.0' },
   },
-  includeLogs: true,
+  hasLogConsent: true,
 });
 ```
 
@@ -30,7 +30,7 @@ There are two types of report and they take different fields:
 
 | Type       | Fields                                                     |
 | ---------- | ---------------------------------------------------------- |
-| `bug`      | `message`, `user`, `desktop`, and `includeLogs`            |
+| `bug`      | `message`, `user`, `desktop`, and `hasLogConsent`          |
 | `feedback` | `message`, `user`, `desktop`. It never carries a log tail. |
 
 Three keys carry what the sender wrote:
@@ -92,7 +92,7 @@ Core fills in exactly two things, `core` and `logs`. Everything else passes thro
 
 `platform` and `arch` are the Node spellings (`linux`, `x64`), not the OpenTelemetry ones a log record carries. This describes the machine, and it is not a log record. `osRelease` is included because a desktop bug is often specific to one version of an operating system.
 
-`includeLogs` is consent to attaching a tail rather than part of the report, so it is answered by what `logs` holds and is never sent on. The request is `reportRequestSchema` and the answer is `reportResponseSchema`, both exported.
+`hasLogConsent` is consent to attaching a tail rather than part of the report, so it is answered by what `logs` holds and is never sent on. The request is `reportRequestSchema` and the answer is `reportResponseSchema`, both exported.
 
 ## The log tail
 

@@ -252,27 +252,21 @@ export class GitTagService
   }
 
   /**
-   * Parses git trailer values back into a GitTagMessage
+   * Parses git trailer values back into a GitTagMessage. Returns null for
+   * anything that is not one of Core's three shapes, so a tag Core did not
+   * write stays out of `list()`
    */
   private parseTagTrailers(
     type: string | undefined,
     version: string | undefined,
     coreVersion: string | undefined
   ): GitTagMessage | null {
-    switch (type) {
-      case 'upgrade':
-        return gitTagMessageSchema.parse({ type, coreVersion });
-      case 'release':
-      case 'preview':
-        return gitTagMessageSchema.parse({ type, version });
-      default:
-        this.logService.warn({
-          source: 'core',
-          message: `Tag has an invalid or missing Type trailer "${String(type)}" and will be ignored`,
-          meta: { 'elek.git.tag.type': type },
-        });
-        return null;
-    }
+    const parsed = gitTagMessageSchema.safeParse({
+      type,
+      version,
+      coreVersion,
+    });
+    return parsed.success ? parsed.data : null;
   }
 
   /**

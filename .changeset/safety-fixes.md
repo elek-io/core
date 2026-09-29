@@ -16,7 +16,7 @@ The shape check stays, and `new URL()` is now the oracle behind it: a relative U
 
 This is the one change that can reject content that validated before. A stored Entry holding such a link in a `markdown` Value now fails to parse on read, so the Entry does not open rather than the link becoming inert. Editing the link in the source file is the remedy. The URLs affected are the ones that were resolving somewhere other than where they appeared to.
 
-**A failed git command no longer carries the User's identity.** `CoreError.internal` was built from the raw argument list and raw `stderr`. Git echoes an offending argument back, so a failed `commit --author=` or `config --local user.name` put a name and email into the message, `logBoundaryError` wrote it at `error`, and a report sent with `includeLogs` shipped it to elek.io Cloud. `push()` and `rebase()` had the same defect.
+**A failed git command no longer carries the User's identity.** `CoreError.internal` was built from the raw argument list and raw `stderr`. Git echoes an offending argument back, so a failed `commit --author=` or `config --local user.name` put a name and email into the message, `logBoundaryError` wrote it at `error`, and a report sent with `hasLogConsent` shipped it to elek.io Cloud. `push()` and `rebase()` had the same defect.
 
 The message now carries the redacted command and the exit code. What git printed moves to the error's `cause`, which is thrown but never logged:
 
