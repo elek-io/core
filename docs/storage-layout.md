@@ -77,9 +77,10 @@ Nothing on disk backs it:
 
 - A Core that has just started rebuilds the map on the first slug lookup or slug-uniqueness check of a Project.
 - The map is dropped when the process ends, so it can never be stale across runs.
+- The map is also dropped whenever git changes a working tree under a running Core, on a clone, `pull`, `merge`, `rebase`, `switch` or hard `reset`. A slug lookup right after `core.projects.synchronize()` sees the synchronized slugs.
 - A Project written by an older Core may still carry `collections/slug.index.json` and `components/slug.index.json`. Nothing reads or writes them, and the generated `.gitignore` still names them so a leftover file does not show up as a change.
 
-Writing the map back to disk would save that first scan, and it is not done because nothing invalidates such a file after a `pull`, `merge`, `switch` or `reset`. That would introduce a staleness bug the in-memory map does not have, since a fresh process always rebuilds.
+Writing the map back to disk would save that first scan. It is not done, because a file outlives the process and would have to be kept in step with every change to the tree, while the in-memory map is simply dropped.
 
 Field-value uniqueness (`isUnique` and the `slug` field type) does not use this map at all. It is enforced by scanning a Collection's Entries on each write (see [`fields.md`](./fields.md#uniqueness)), which keeps it correct for Entries brought in by a pull or merge that never passed through Core's write path.
 

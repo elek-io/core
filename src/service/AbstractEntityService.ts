@@ -20,6 +20,7 @@ import {
   type PathTo,
 } from '../util/node.js';
 import { AbstractService } from './AbstractService.js';
+import type { CacheService } from './CacheService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -35,6 +36,7 @@ import type { LogService } from './LogService.js';
 export abstract class AbstractEntityService extends AbstractService {
   protected readonly gitService: GitService;
   protected readonly jsonFileService: JsonFileService;
+  protected readonly cacheService: CacheService;
 
   protected constructor(
     type: ServiceType,
@@ -42,11 +44,13 @@ export abstract class AbstractEntityService extends AbstractService {
     pathTo: PathTo,
     logService: LogService,
     gitService: GitService,
-    jsonFileService: JsonFileService
+    jsonFileService: JsonFileService,
+    cacheService: CacheService
   ) {
     super(type, options, pathTo, logService);
     this.gitService = gitService;
     this.jsonFileService = jsonFileService;
+    this.cacheService = cacheService;
   }
 
   /**
@@ -107,7 +111,7 @@ export abstract class AbstractEntityService extends AbstractService {
         );
       }
       try {
-        // A hard reset restores files on disk and clears the JSON file cache
+        // A hard reset restores files on disk and clears every cache
         // (handled centrally in GitService), so cached contents stay in sync
         await this.gitService.reset(projectPath, 'hard', 'HEAD');
       } catch (resetError) {
@@ -121,9 +125,9 @@ export abstract class AbstractEntityService extends AbstractService {
                 : String(resetError),
           },
         });
-        // The reset did not run to completion, so it could not clear the cache
-        // itself. Drop it defensively since disk state is now uncertain
-        this.jsonFileService.clearCache();
+        // The reset did not run to completion, so it could not clear the
+        // caches itself. Drop them defensively since disk state is now uncertain
+        this.cacheService.clear();
       }
       throw error;
     }

@@ -2,7 +2,7 @@
 '@elek-io/core': minor
 ---
 
-Fixed six bugs that each made a documented promise untrue.
+Fixed seven bugs that each made a documented promise untrue.
 
 **Disposing twice no longer hangs.** `LogService.close()` ended winston's underlying stream, and an ended stream never emits `finish` again, so a second `close()` returned a promise that never resolved and took `ElekIoCore.dispose()` with it. The first call's promise is now kept and handed back to every later one, so a double dispose and two concurrent disposes both resolve.
 
@@ -15,5 +15,7 @@ A write after `close()` is dropped rather than thrown along with it. It used to 
 **A deep markdown tree is rejected rather than fatal.** The nesting depth guard was a root-level `.refine`, which runs after zod has walked the whole tree. A tree deep enough to matter overflowed the stack during that walk, so `safeParse` threw `RangeError` instead of returning the issue. The guard now runs in front of the object schema.
 
 **`isProject` means Project.** The guard narrows to `Project` and validated against the file schema, so a `project.json` read straight off disk passed while carrying neither `remoteOriginUrl` nor `isProvisioned`. It validates against `projectSchema` now.
+
+**A slug resolves against the tree git left behind.** Collections and Components are looked up by slug through an in-memory index, and nothing dropped it when git changed the working tree. After `core.projects.synchronize()` pulled a renamed Collection, its old slug still resolved to it, and the slug another Collection now held could be taken a second time. The index is now dropped on every clone, pull, merge, rebase, switch and hard reset, together with the file cache.
 
 **A failed re-run in watch mode says so.** `elek export`, `elek generate:client` and `elek generate:types` discarded the promise of every watch triggered re-run, so a failure after the first run became an unhandled rejection. Each now prints the same message the binary prints and goes on watching.

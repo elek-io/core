@@ -70,7 +70,7 @@ Every entity create, update and delete is wrapped in `withGitRollback` (`src/ser
 
 1. Removes newly created files (from `cleanupPaths`)
 2. Runs `git reset --hard HEAD` to restore the working tree
-3. Clears the JSON file cache
+3. Clears every cache that mirrors the working tree, through `CacheService`
 4. Re-throws the **original** error (rollback failures are logged but swallowed)
 
 ```typescript

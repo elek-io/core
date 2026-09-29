@@ -62,6 +62,7 @@ import {
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
@@ -102,6 +103,7 @@ export class ComponentService
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService
   ) {
     super(
@@ -110,6 +112,7 @@ export class ComponentService
       pathTo,
       logService,
       jsonFileService,
+      cacheService,
       gitService
     );
 

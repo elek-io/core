@@ -67,6 +67,7 @@ import type { ComponentService } from './ComponentService.js';
 import type { EntryService } from './EntryService.js';
 import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { PathTo } from '../util/node.js';
@@ -119,6 +120,7 @@ export class ProjectService
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService,
     assetService: AssetService,
     collectionService: CollectionService,
@@ -132,7 +134,8 @@ export class ProjectService
       pathTo,
       logService,
       gitService,
-      jsonFileService
+      jsonFileService,
+      cacheService
     );
 
     this.coreVersion = coreVersion;
@@ -219,7 +222,7 @@ export class ProjectService
               },
             })
           );
-          this.jsonFileService.clearCache();
+          this.cacheService.clear();
           throw error;
         }
       }
@@ -258,7 +261,7 @@ export class ProjectService
         await Fs.move(tmpProjectPath, projectPath);
         // The clone changed location, cached reads must not serve
         // its tmp paths
-        this.jsonFileService.clearCache();
+        this.cacheService.clear();
         return await this.toProject(projectFile);
       } catch (error) {
         await this.jsonFileService.delete(tmpProjectPath);
@@ -564,7 +567,7 @@ export class ProjectService
       await Fs.move(stagingPath, this.pathTo.project(id));
       // The staged copy changed location, cached reads must not
       // serve its staging paths
-      this.jsonFileService.clearCache();
+      this.cacheService.clear();
     } catch (error) {
       await this.jsonFileService.delete(stagingPath);
       throw error;

@@ -300,9 +300,9 @@ Revisit only if a concrete debugging need appears that git history cannot answer
 
 **No `@opentelemetry/*` package, for now.** Checked against the real packages, not assumed:
 
-- `@opentelemetry/semantic-conventions` would verify 11 of the 36 attribute names: 8 from its stable entry point and 3 (`file.path`, `file.name`, `file.directory`) only from `/incubating`. The other 25 are `elek.` names it could never cover, and the 4 Resource keys are already pinned by `logResourceSchema` as a closed object.
-  - It is a dependency with no runtime cost and a monthly release cadence, for under a third of the vocabulary. `logAttributeNames` and its test cover all of it instead.
-  - All 15 Semantic Convention names Core uses were verified by hand against semconv 1.43.0, and `os.type` and `host.arch` carry exactly the values that enumeration defines.
+- `@opentelemetry/semantic-conventions` would verify only the Semantic Convention names, and `file.path`, `file.name` and `file.directory` only from `/incubating`. It can never cover the `elek.` names, which are most of the vocabulary, and the Resource keys are already pinned by `logResourceSchema` as a closed object.
+  - It is a dependency with no runtime cost and a monthly release cadence, for a minority of the vocabulary. `logAttributeNames` and its test cover all of it instead.
+  - The Semantic Convention names, attributes and Resource keys alike, were verified by hand against semconv 1.43.0, and `os.type` and `host.arch` carry exactly the values that enumeration defines.
 - `@opentelemetry/api-logs` does not describe this record. Its `LogRecord` has `timestamp?: TimeInput` in epoch nanoseconds, a `body`, a `severityText` and no per record Resource, so adopting it as the type would force the file format in the direction this document rejected.
   - It is also a `0.x` package that pulls `@opentelemetry/api` at runtime, for four numbers that already have a test.
 

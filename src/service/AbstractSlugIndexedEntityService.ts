@@ -8,6 +8,7 @@ import {
 } from '../schema/index.js';
 import { folders, type PathTo } from '../util/node.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
+import type { CacheService } from './CacheService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -17,8 +18,9 @@ import type { LogService } from './LogService.js';
  *
  * It holds a per-Project UUID to slug map, so an entity can be resolved and
  * slug uniqueness checked without scanning every folder. The map is derived
- * rather than authoritative: git ignores the file, the cache lives per Core
- * instance, and a miss rebuilds it from the entity folders.
+ * rather than authoritative: it lives in memory per Core instance, a miss
+ * rebuilds it from the entity folders, and `CacheService` drops it whenever
+ * git rewrites a working tree.
  */
 export abstract class AbstractSlugIndexedEntityService<
   TFile = unknown,
@@ -26,6 +28,8 @@ export abstract class AbstractSlugIndexedEntityService<
   private cachedSlugIndex: Map<string, Record<string, string>> = new Map();
   private rebuildPromise: Map<string, Promise<Record<string, string>>> =
     new Map();
+  /** Counts the clears, so a rebuild that spans one is not kept */
+  private generation = 0;
 
   protected constructor(
     type: ServiceType,
@@ -33,9 +37,18 @@ export abstract class AbstractSlugIndexedEntityService<
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService
   ) {
-    super(type, options, pathTo, logService, gitService, jsonFileService);
+    super(
+      type,
+      options,
+      pathTo,
+      logService,
+      gitService,
+      jsonFileService,
+      cacheService
+    );
   }
 
   /** Path to the folder containing all entities of this type. */
@@ -72,15 +85,21 @@ export abstract class AbstractSlugIndexedEntityService<
     const pending = this.rebuildPromise.get(projectId);
     if (pending) return pending;
 
+    const generation = this.generation;
     const promise = this.rebuildSlugIndexInternal(projectId);
     this.rebuildPromise.set(projectId, promise);
 
     try {
       const result = await promise;
-      this.cachedSlugIndex.set(projectId, result);
+      // A clear during the rebuild means it may have read the old tree
+      if (generation === this.generation) {
+        this.cachedSlugIndex.set(projectId, result);
+      }
       return result;
     } finally {
-      this.rebuildPromise.delete(projectId);
+      if (this.rebuildPromise.get(projectId) === promise) {
+        this.rebuildPromise.delete(projectId);
+      }
     }
   }
 
@@ -101,15 +120,16 @@ export abstract class AbstractSlugIndexedEntityService<
   }
 
   /**
-   * Drops the cached index for a Project, forcing a rebuild on next access.
+   * Drops the index of every Project, so the next lookup rebuilds it.
    *
-   * Nothing else drops this cache. `GitService` clears only the JSON file
-   * cache after a pull, checkout or hard reset, so any git operation that
-   * can change entity files under a live Core leaves this map stale, and a
-   * stale hit does not self-heal the way a miss does.
+   * Registered with `CacheService`, because a stale hit does not heal the
+   * way a miss does. It resolves a slug to an entity that no longer carries
+   * it, and lets a slug through as free that another entity now holds.
    */
-  protected invalidateSlugIndex(projectId: string): void {
-    this.cachedSlugIndex.delete(projectId);
+  public clearSlugIndex(): void {
+    this.cachedSlugIndex.clear();
+    this.rebuildPromise.clear();
+    this.generation++;
   }
 
   /**

@@ -28,6 +28,7 @@ import { entriesOf } from '../util/typedObject.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import { migrateEntryFile } from './migrations/index.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { PathTo } from '../util/node.js';
@@ -52,7 +53,8 @@ export class ReferenceService extends AbstractEntityService {
     pathTo: PathTo,
     logService: LogService,
     gitService: GitService,
-    jsonFileService: JsonFileService
+    jsonFileService: JsonFileService,
+    cacheService: CacheService
   ) {
     super(
       serviceTypeSchema.enum.Reference,
@@ -60,7 +62,8 @@ export class ReferenceService extends AbstractEntityService {
       pathTo,
       logService,
       gitService,
-      jsonFileService
+      jsonFileService,
+      cacheService
     );
 
     this.coreVersion = coreVersion;

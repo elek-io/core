@@ -14,7 +14,8 @@ import { CoreError } from '../util/shared.js';
  *
  * It holds a path-keyed in-memory cache shared by every service, correct only
  * while nothing outside it touches the files. Anything that moves the working
- * tree from underneath it, a pull or a rebase, has to `clearCache()`.
+ * tree from underneath it, a pull or a rebase, clears it through
+ * `CacheService`.
  */
 export class JsonFileService extends AbstractService {
   private cache: Map<string, unknown> = new Map();
@@ -159,10 +160,9 @@ export class JsonFileService extends AbstractService {
   /**
    * Clears the in-memory file cache.
    *
-   * Should be called after operations that modify files outside
-   * of JsonFileService (e.g. git pull, merge, branch switch or
-   * reset --hard), since the cache may hold stale data that no
-   * longer matches disk.
+   * Registered with `CacheService`. After anything that changes files outside
+   * this service, such as a pull, merge, switch or hard reset, call
+   * `CacheService.clear()` instead, which clears the slug indexes with it.
    */
   public clearCache(): void {
     const cleared = this.cache.size;

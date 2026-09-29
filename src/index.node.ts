@@ -9,6 +9,7 @@ import {
 } from './schema/index.js';
 import {
   AssetService,
+  CacheService,
   CloudService,
   CollectionService,
   ComponentService,
@@ -57,6 +58,7 @@ export default class ElekIoCore {
   private readonly userService: UserService;
   private readonly gitService: GitService;
   private readonly jsonFileService: JsonFileService;
+  private readonly cacheService: CacheService;
   private readonly assetService: AssetService;
   private readonly projectService: ProjectService;
   private readonly collectionService: CollectionService;
@@ -95,6 +97,7 @@ export default class ElekIoCore {
     this.utilities = { pathTo: this.pathTo };
 
     this.logService = new LogService(this.options, this.pathTo);
+    this.cacheService = new CacheService();
     this.jsonFileService = new JsonFileService(
       this.options,
       this.pathTo,
@@ -110,7 +113,7 @@ export default class ElekIoCore {
       this.pathTo,
       this.logService,
       this.userService,
-      this.jsonFileService
+      this.cacheService
     );
     this.referenceService = new ReferenceService(
       this.coreVersion,
@@ -118,7 +121,8 @@ export default class ElekIoCore {
       this.pathTo,
       this.logService,
       this.gitService,
-      this.jsonFileService
+      this.jsonFileService,
+      this.cacheService
     );
     this.collectionService = new CollectionService(
       this.coreVersion,
@@ -126,6 +130,7 @@ export default class ElekIoCore {
       this.pathTo,
       this.logService,
       this.jsonFileService,
+      this.cacheService,
       this.gitService,
       this.referenceService
     );
@@ -135,6 +140,7 @@ export default class ElekIoCore {
       this.pathTo,
       this.logService,
       this.jsonFileService,
+      this.cacheService,
       this.gitService
     );
     this.entryService = new EntryService(
@@ -143,6 +149,7 @@ export default class ElekIoCore {
       this.pathTo,
       this.logService,
       this.jsonFileService,
+      this.cacheService,
       this.gitService,
       this.collectionService,
       this.componentService,
@@ -154,6 +161,7 @@ export default class ElekIoCore {
       this.pathTo,
       this.logService,
       this.jsonFileService,
+      this.cacheService,
       this.gitService,
       this.referenceService
     );
@@ -163,6 +171,7 @@ export default class ElekIoCore {
       this.pathTo,
       this.logService,
       this.jsonFileService,
+      this.cacheService,
       this.gitService,
       this.assetService,
       this.collectionService,
@@ -185,6 +194,13 @@ export default class ElekIoCore {
       this.logService
     );
     this.cloudService = new CloudService(this.reportService);
+
+    // Every cache that mirrors a working tree, cleared together whenever
+    // git or Core changes one. See CacheService
+    this.cacheService.register(() => this.jsonFileService.clearCache());
+    this.cacheService.register(() => this.collectionService.clearSlugIndex());
+    this.cacheService.register(() => this.componentService.clearSlugIndex());
+
     this.localApi = new LocalApi(
       this.logService,
       this.projectService,

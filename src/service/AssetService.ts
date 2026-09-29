@@ -38,6 +38,7 @@ import { datetime, slug, uuid, CoreError } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
@@ -58,6 +59,7 @@ export class AssetService extends AbstractEntityService {
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService,
     referenceService: ReferenceService
   ) {
@@ -67,7 +69,8 @@ export class AssetService extends AbstractEntityService {
       pathTo,
       logService,
       gitService,
-      jsonFileService
+      jsonFileService,
+      cacheService
     );
 
     this.coreVersion = coreVersion;

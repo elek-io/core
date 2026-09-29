@@ -64,6 +64,7 @@ import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
@@ -105,6 +106,7 @@ export class CollectionService
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService,
     referenceService: ReferenceService
   ) {
@@ -114,6 +116,7 @@ export class CollectionService
       pathTo,
       logService,
       jsonFileService,
+      cacheService,
       gitService
     );
 

@@ -47,6 +47,7 @@ import type { CollectionService } from './CollectionService.js';
 import type { ComponentService } from './ComponentService.js';
 import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
@@ -76,6 +77,7 @@ export class EntryService
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService,
     collectionService: CollectionService,
     componentService: ComponentService,
@@ -87,7 +89,8 @@ export class EntryService
       pathTo,
       logService,
       gitService,
-      jsonFileService
+      jsonFileService,
+      cacheService
     );
 
     this.coreVersion = coreVersion;
