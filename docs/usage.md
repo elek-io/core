@@ -29,7 +29,7 @@ const core = new ElekIoCore();
 
 ### Options
 
-The constructor accepts an optional options object. All fields are optional and default as shown.
+The constructor accepts an optional options object. All fields are optional and default as shown. An option Core does not know throws a `CoreError` instead of being ignored.
 
 ```typescript
 const core = new ElekIoCore({
@@ -37,9 +37,7 @@ const core = new ElekIoCore({
     level: 'info', // 'error' | 'warn' | 'info' | 'debug' - default 'info'
     hasProcessErrorHandlers: true, // handle uncaught exceptions - default true
   },
-  file: {
-    cache: true, // cache files in memory to speed up access - default true
-  },
+  cache: true, // keep what Core reads from the files in memory - default true
   dataDir: '/path/to/data', // directory Core reads and writes data in - default ~/elek.io
   isReadOnly: false, // never mutate a Project or its remote - default false
 });
@@ -63,6 +61,8 @@ The resolved options are exposed on `core.options`, and the running Core version
 - **`cloud.url`** is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It has to be an http or https URL. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`.
   - A trailing slash is dropped, since Core appends a path to it.
   - A value that is not a URL throws a `CoreError`, rather than falling back to the default and sending to production on the strength of a typo.
+- **`cache`** decides whether Core keeps what it reads from a Project's files in memory between calls: parsed JSON files and the index that resolves Collection and Component slugs. It defaults to `true`, and everything kept is dropped whenever git changes a Project's working tree.
+  - Set it to `false` when another application writes the same files while this Core runs. The Astro loaders do that for you during `astro dev`.
 - **`isReadOnly`** puts Core into read-only mode, meant for environments that only consume content, such as CI builds. It takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
   - Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`.
   - In return, cloning and fetching work without a User being set, because nothing is ever committed.
@@ -594,9 +594,10 @@ Each loader watches only what it reads, so a Collection reloads when one of its 
 - Adding, removing or editing a **field definition** of a Collection
 - Adding, removing or editing a **Component**, or the fields of one
 - Changing a Project's **supported languages**, which every translatable Value is keyed by
+- Renaming a **Collection's plural slug**, which Astro names the collection after
 - Adding or removing a **Collection or Project**, which changes the set of collections `elekCollections()` returns
 
-The loaders notice the first three and stop rather than pretend. Instead of reloading Entries against a schema that no longer describes them, which would silently drop a new field or fail on a removed one, the build log says what happened:
+The loaders notice all but the last and stop rather than pretend. Instead of reloading Entries against a schema that no longer describes them, which would silently drop a new field or fail on a removed one, the build log says what happened:
 
 ```
 [elek-entries] The content model of Collection "posts" of Project "website" changed.

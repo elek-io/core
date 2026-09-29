@@ -55,7 +55,7 @@ export abstract class AbstractEntityService extends AbstractService {
 
   /**
    * Reads and parses `project.json`, through `JsonFileService`'s cache when
-   * `options.file.cache` is on.
+   * caching is on.
    *
    * A missing or schema-invalid file raises a raw fs error or a `ZodError`
    * here, becoming a `CoreError` only once the `validated()` boundary

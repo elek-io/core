@@ -8,7 +8,7 @@ let coreInstance: ElekIoCore | undefined;
  * entry has no side effect. Every later call returns that same instance,
  * configured from the ELEK_IO_* variables read once at construction.
  *
- * The file cache and the process error handlers are off on purpose, and the
+ * Caching and the process error handlers are off on purpose, and the
  * log level is left to ELEK_IO_LOG_LEVEL. Nothing disposes it, so a caller
  * must not call `dispose()` on what it hands back.
  *
@@ -18,7 +18,7 @@ let coreInstance: ElekIoCore | undefined;
 export function getCore(): ElekIoCore {
   if (!coreInstance) {
     coreInstance = new ElekIoCore({
-      file: { cache: false },
+      cache: false,
       log: { hasProcessErrorHandlers: false },
     });
   }

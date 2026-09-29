@@ -29,9 +29,7 @@ describe('Node.js', function () {
       },
     });
     const coreWithoutCache = new ElekIoCore({
-      file: {
-        cache: false,
-      },
+      cache: false,
     });
     onTestFinished(async () => {
       await defaultCore.dispose();
@@ -45,9 +43,7 @@ describe('Node.js', function () {
         level: 'info',
         hasProcessErrorHandlers: true,
       },
-      file: {
-        cache: true,
-      },
+      cache: true,
       dataDir: defaultDataDir,
       cloud: {
         url: 'https://api.elek.io',
@@ -61,9 +57,7 @@ describe('Node.js', function () {
         level: 'debug',
         hasProcessErrorHandlers: true,
       },
-      file: {
-        cache: true,
-      },
+      cache: true,
       dataDir: defaultDataDir,
       cloud: {
         url: 'https://api.elek.io',
@@ -77,9 +71,7 @@ describe('Node.js', function () {
         level: 'info',
         hasProcessErrorHandlers: true,
       },
-      file: {
-        cache: false,
-      },
+      cache: false,
       dataDir: defaultDataDir,
       cloud: {
         url: 'https://api.elek.io',
@@ -90,6 +82,19 @@ describe('Node.js', function () {
     expect(await Fs.pathExists(Path.join(defaultDataDir, 'projects'))).to.equal(
       true
     );
+  });
+
+  it('rejects an option it does not know, so a renamed or misspelled one cannot be ignored', function () {
+    // `file.cache` was replaced by `cache`. Ignoring the old key would turn
+    // caching back on for a host that turned it off
+    expect(
+      // @ts-expect-error The key no longer exists
+      () => new ElekIoCore({ file: { cache: false } })
+    ).toThrow(expect.objectContaining({ type: 'BadRequest' }));
+    expect(
+      // @ts-expect-error A misspelled key inside a known one
+      () => new ElekIoCore({ log: { levle: 'debug' } })
+    ).toThrow(expect.objectContaining({ type: 'BadRequest' }));
   });
 
   it('should respect the dataDir option', async function () {

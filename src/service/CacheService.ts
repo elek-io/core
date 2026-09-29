@@ -1,16 +1,23 @@
 /**
- * Clears every cache that mirrors a Project's working tree, in one call.
+ * Decides whether Core keeps what it derives from a Project's files, and
+ * clears all of it in one call.
  *
- * It holds no data. Each cache stays with the service that owns it and
- * registers how to clear itself, which the Core constructor does for all of
- * them in one place. Whatever changes a working tree under a running Core
- * calls `clear()`: a git command that rewrites it, a Project folder moved
- * into place, a rollback that could not finish.
+ * It holds no data. Each cache stays with its service, asks `isEnabled`
+ * before keeping anything and registers how to clear itself, all in the
+ * Core constructor. Whatever changes a working tree under a running Core
+ * calls `clear()`: a git command, a Project folder moved into place, a
+ * rollback that could not finish.
  *
  * @see ../../docs/storage-layout.md
  */
 export class CacheService {
+  /** The `cache` option, false when another application writes the files */
+  public readonly isEnabled: boolean;
   private readonly clears: (() => void)[] = [];
+
+  public constructor(isEnabled: boolean) {
+    this.isEnabled = isEnabled;
+  }
 
   /** Registers how one cache is cleared */
   public register(clear: () => void): void {

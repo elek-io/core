@@ -88,7 +88,7 @@ export default class ElekIoCore {
           ? {}
           : { hostVersion: parsedProps.data.log.hostVersion }),
       },
-      file: parsedProps.data?.file ?? { cache: true },
+      cache: parsedProps.data?.cache ?? true,
       dataDir: resolveDataDir(parsedProps.data?.dataDir),
       cloud: { url: resolveCloudUrl(parsedProps.data?.cloud?.url) },
       isReadOnly: resolveReadOnly(parsedProps.data?.isReadOnly),
@@ -97,11 +97,12 @@ export default class ElekIoCore {
     this.utilities = { pathTo: this.pathTo };
 
     this.logService = new LogService(this.options, this.pathTo);
-    this.cacheService = new CacheService();
+    this.cacheService = new CacheService(this.options.cache);
     this.jsonFileService = new JsonFileService(
       this.options,
       this.pathTo,
-      this.logService
+      this.logService,
+      this.cacheService
     );
     this.userService = new UserService(
       this.pathTo,
@@ -217,7 +218,7 @@ export default class ElekIoCore {
         'elek.options.log.level': this.options.log.level,
         'elek.options.log.has_process_error_handlers':
           this.options.log.hasProcessErrorHandlers,
-        'elek.options.file.cache': this.options.file.cache,
+        'elek.options.cache': this.options.cache,
         'elek.options.data_dir': this.options.dataDir,
         'elek.options.is_read_only': this.options.isReadOnly,
       },

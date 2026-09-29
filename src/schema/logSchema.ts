@@ -129,7 +129,7 @@ export const logAttributeNames = [
   'elek.object.id',
   'elek.object.type',
   'elek.options.data_dir',
-  'elek.options.file.cache',
+  'elek.options.cache',
   'elek.options.is_read_only',
   'elek.options.log.has_process_error_handlers',
   'elek.options.log.level',

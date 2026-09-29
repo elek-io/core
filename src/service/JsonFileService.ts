@@ -4,6 +4,7 @@ import type { z } from '@hono/zod-openapi';
 import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
 import { AbstractService } from './AbstractService.js';
+import type { CacheService } from './CacheService.js';
 import type { LogService } from './LogService.js';
 import { isFileNotFound, type PathTo } from '../util/node.js';
 import { CoreError } from '../util/shared.js';
@@ -13,19 +14,22 @@ import { CoreError } from '../util/shared.js';
  * which is what lets a mutation be logged in a single place.
  *
  * It holds a path-keyed in-memory cache shared by every service, correct only
- * while nothing outside it touches the files. Anything that moves the working
- * tree from underneath it, a pull or a rebase, clears it through
- * `CacheService`.
+ * while nothing outside it touches the files, and kept only while
+ * `CacheService` says caching is on. Anything that moves the working tree
+ * from underneath it, a pull or a rebase, clears it through `CacheService`.
  */
 export class JsonFileService extends AbstractService {
   private cache: Map<string, unknown> = new Map();
+  private readonly cacheService: CacheService;
 
   constructor(
     options: ElekIoCoreOptions,
     pathTo: PathTo,
-    logService: LogService
+    logService: LogService,
+    cacheService: CacheService
   ) {
     super(serviceTypeSchema.enum.JsonFile, options, pathTo, logService);
+    this.cacheService = cacheService;
   }
 
   /**
@@ -41,7 +45,7 @@ export class JsonFileService extends AbstractService {
     const parsedData: z.output<T> = schema.parse(data);
     const string = this.serialize(parsedData);
     await Fs.writeFile(path, string, { flag: 'wx', encoding: 'utf8' });
-    if (this.options.file.cache === true) {
+    if (this.cacheService.isEnabled) {
       this.cache.set(path, parsedData);
     }
     this.logService.info({
@@ -61,7 +65,7 @@ export class JsonFileService extends AbstractService {
     path: string,
     schema: T
   ): Promise<z.output<T>> {
-    if (this.options.file.cache === true && this.cache.has(path)) {
+    if (this.cacheService.isEnabled && this.cache.has(path)) {
       this.logService.debug({
         source: 'core',
         message: `Cache hit reading file "${path}"`,
@@ -79,7 +83,7 @@ export class JsonFileService extends AbstractService {
     const data = await this.readFile(path);
     const json = this.deserialize(data, path);
     const value: z.output<T> = schema.parse(json);
-    if (this.options.file.cache === true) {
+    if (this.cacheService.isEnabled) {
       this.cache.set(path, value);
     }
     return value;
@@ -119,7 +123,7 @@ export class JsonFileService extends AbstractService {
     const parsedData: z.output<T> = schema.parse(data);
     const string = this.serialize(parsedData);
     await Fs.writeFile(path, string, { flag: 'w', encoding: 'utf8' });
-    if (this.options.file.cache === true) {
+    if (this.cacheService.isEnabled) {
       this.cache.set(path, parsedData);
     }
     this.logService.info({

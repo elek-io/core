@@ -12,20 +12,26 @@ import {
   createProject,
 } from '../test/util.js';
 import { createPathTo } from '../util/node.js';
+import { CacheService } from './CacheService.js';
 import { JsonFileService } from './JsonFileService.js';
 import { LogService } from './LogService.js';
 
 const dataDir = Path.join(Os.tmpdir(), `elek-io-core-jsonfile-${uuid()}`);
 const options: ElekIoCoreOptions = {
   log: { level: 'debug', hasProcessErrorHandlers: false },
-  file: { cache: true },
+  cache: true,
   cloud: { url: 'https://api.elek.io' },
   dataDir,
   isReadOnly: false,
 };
 const pathTo = createPathTo(dataDir);
 const logService = new LogService(options, pathTo);
-const jsonFileService = new JsonFileService(options, pathTo, logService);
+const jsonFileService = new JsonFileService(
+  options,
+  pathTo,
+  logService,
+  new CacheService(options.cache)
+);
 const fileSchema = z.object({ id: z.string() });
 
 Fs.mkdirpSync(dataDir);

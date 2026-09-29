@@ -1,4 +1,5 @@
 import { describe, expect, it, onTestFinished } from 'vitest';
+import ElekIoCore from '../index.node.js';
 import core from '../test/setup.js';
 import {
   createCollection,
@@ -96,5 +97,48 @@ describe('caches after git rewrites the working tree', function () {
     await expect(createComponent(project.id)).rejects.toMatchObject({
       type: 'Conflict',
     });
+  }, 60000);
+});
+
+/**
+ * With `cache: false` nothing derived from the files is kept between calls,
+ * because another application writes them. That is how the Astro loaders run
+ * while elek.io Desktop edits the same Project.
+ */
+describe('caches with caching off', function () {
+  it('resolves a slug another Core just moved to a different Collection', async function () {
+    const project = await createProject();
+    onTestFinished(() => project.destroy());
+    const renamed = await createCollection(project.id);
+    // The loaders' Core, on the data directory the shared Core writes to
+    const reader = new ElekIoCore({
+      dataDir: core.options.dataDir,
+      cache: false,
+      log: { hasProcessErrorHandlers: false },
+    });
+    onTestFinished(() => reader.dispose());
+    await reader.collections.resolveCollectionId({
+      projectId: project.id,
+      idOrSlug: 'products',
+    });
+
+    // The writer renames the Collection and gives its slug to a new one
+    await core.collections.update({
+      projectId: project.id,
+      id: renamed.id,
+      icon: renamed.icon,
+      name: renamed.name,
+      description: renamed.description,
+      fieldDefinitions: renamed.fieldDefinitions,
+      slug: { singular: 'article', plural: 'articles' },
+    });
+    const replacement = await createCollection(project.id);
+
+    expect(
+      await reader.collections.resolveCollectionId({
+        projectId: project.id,
+        idOrSlug: 'products',
+      })
+    ).toBe(replacement.id);
   }, 60000);
 });

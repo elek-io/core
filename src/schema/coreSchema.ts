@@ -6,9 +6,11 @@ import { logLevelSchema, versionSchema } from './baseSchema.js';
  * environment variables have been applied. Core exposes it as `core.options`.
  *
  * A constructor takes the partial `constructorElekIoCoreSchema` below instead.
+ * Every object rejects a key it does not name, so a misspelled or renamed
+ * option fails instead of being ignored.
  */
-export const elekIoCoreOptionsSchema = z.object({
-  log: z.object({
+export const elekIoCoreOptionsSchema = z.strictObject({
+  log: z.strictObject({
     /**
      * The lowest level that should be logged
      *
@@ -38,18 +40,17 @@ export const elekIoCoreOptionsSchema = z.object({
      */
     hostVersion: versionSchema.optional(),
   }),
-  file: z.object({
-    /**
-     * Caches parsed JSON object files in memory, never Asset binaries. The
-     * map is per Core instance and unbounded, and is cleared after a git
-     * operation that changes the working tree.
-     *
-     * So a stale read needs a writer outside this Core instance.
-     *
-     * @default true
-     */
-    cache: z.boolean(),
-  }),
+  /**
+   * Whether Core keeps what it derives from a Project's files in memory
+   * between calls: parsed JSON files, never Asset binaries, and the slug
+   * indexes. All of it is cleared when git changes a working tree.
+   *
+   * Turn it off when another application writes the same files while this
+   * Core runs, as the Astro loaders do while elek.io Desktop edits.
+   *
+   * @default true
+   */
+  cache: z.boolean(),
   /**
    * The directory Core reads and writes data in
    *
@@ -59,7 +60,7 @@ export const elekIoCoreOptionsSchema = z.object({
    * @default '~/elek.io'
    */
   dataDir: z.string().trim().min(1),
-  cloud: z.object({
+  cloud: z.strictObject({
     /**
      * Base URL of the elek.io Cloud API, http or https
      *
@@ -97,7 +98,7 @@ export const constructorElekIoCoreSchema = elekIoCoreOptionsSchema
   .extend({ log: elekIoCoreOptionsSchema.shape.log.partial() })
   .partial({
     log: true,
-    file: true,
+    cache: true,
     cloud: true,
     dataDir: true,
     isReadOnly: true,

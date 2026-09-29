@@ -8,7 +8,7 @@ import { createPathTo } from '../util/node.js';
 
 const options: ElekIoCoreOptions = {
   log: { level: 'debug', hasProcessErrorHandlers: true },
-  file: { cache: true },
+  cache: true,
   cloud: { url: 'https://api.elek.io' },
   dataDir: Path.join(Os.tmpdir(), 'elek-io-core-logservice-test'),
   isReadOnly: false,

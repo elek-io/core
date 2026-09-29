@@ -74,13 +74,16 @@ export abstract class AbstractSlugIndexedEntityService<
 
   /**
    * Returns the cached slug index, rebuilding it from the entity folders on a
-   * miss. Concurrent rebuilds of the same Project share one promise.
+   * miss, and on every call when caching is off. Concurrent rebuilds of the
+   * same Project share one promise.
    */
   protected async getSlugIndex(
     projectId: string
   ): Promise<Record<string, string>> {
-    const cached = this.cachedSlugIndex.get(projectId);
-    if (cached) return cached;
+    if (this.cacheService.isEnabled) {
+      const cached = this.cachedSlugIndex.get(projectId);
+      if (cached) return cached;
+    }
 
     const pending = this.rebuildPromise.get(projectId);
     if (pending) return pending;
@@ -92,7 +95,7 @@ export abstract class AbstractSlugIndexedEntityService<
     try {
       const result = await promise;
       // A clear during the rebuild means it may have read the old tree
-      if (generation === this.generation) {
+      if (this.cacheService.isEnabled && generation === this.generation) {
         this.cachedSlugIndex.set(projectId, result);
       }
       return result;
@@ -104,7 +107,8 @@ export abstract class AbstractSlugIndexedEntityService<
   }
 
   /**
-   * Replaces the cached index for a Project.
+   * Replaces the cached index for a Project, and keeps nothing when caching
+   * is off.
    *
    * Nothing is written to disk. The index was mirrored into
    * `slug.index.json` and never read back, so the file cost a write per
@@ -116,7 +120,9 @@ export abstract class AbstractSlugIndexedEntityService<
     projectId: string,
     index: Record<string, string>
   ): void {
-    this.cachedSlugIndex.set(projectId, index);
+    if (this.cacheService.isEnabled) {
+      this.cachedSlugIndex.set(projectId, index);
+    }
   }
 
   /**

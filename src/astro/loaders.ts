@@ -4,7 +4,11 @@ import { z } from '@hono/zod-openapi';
 import Path from 'node:path';
 import Url from 'node:url';
 import Fs from 'fs-extra';
-import { assetSchema, flattenFieldDefinitions } from '../index.node.js';
+import {
+  assetSchema,
+  CoreError,
+  flattenFieldDefinitions,
+} from '../index.node.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
@@ -325,6 +329,12 @@ export function elekEntriesLoader<const T extends ElekConfig>(
    * a build it never matters, nothing reloads there.
    */
   let modelDigest: string | undefined;
+  /**
+   * The Collection the schema was built for. Astro names the collection
+   * after its plural slug, so a reload that resolves to another Collection,
+   * or to none, needs a restart just like a model change.
+   */
+  let collectionId: string | undefined;
 
   /**
    * Reads the Collection, the Project's languages and the Components,
@@ -376,10 +386,29 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     await logReadingProject(core, projectId, (message) =>
       context.logger.info(message)
     );
-    const resolvedCollectionId = await core.collections.resolveCollectionId({
-      projectId,
-      idOrSlug: props.collectionIdOrSlug,
-    });
+    let resolvedCollectionId: string;
+    if (collectionId === undefined) {
+      resolvedCollectionId = await core.collections.resolveCollectionId({
+        projectId,
+        idOrSlug: props.collectionIdOrSlug,
+      });
+    } else {
+      const current = await core.collections
+        .resolveCollectionId({ projectId, idOrSlug: props.collectionIdOrSlug })
+        .catch((error: unknown) => {
+          if (error instanceof CoreError && error.type === 'NotFound') {
+            return null;
+          }
+          throw error;
+        });
+      if (current !== collectionId) {
+        context.logger.warn(
+          `Collection "${props.collectionIdOrSlug}" of Project "${alias}" was renamed or replaced. Astro names a collection after the plural slug when it loads the content config, so restart the dev server to pick it up. Entries are not reloaded until then.`
+        );
+        return collectionId;
+      }
+      resolvedCollectionId = collectionId;
+    }
 
     if (modelDigest !== undefined) {
       const { digest } = await readModel(core);
@@ -438,6 +467,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
 
       // Remembered so a reload can tell that the model moved on
       modelDigest = model.digest;
+      collectionId = model.resolvedId;
 
       return {
         schema: buildEntryValuesSchema(

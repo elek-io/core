@@ -23,7 +23,7 @@ The loaders share one lazily created `ElekIoCore` and take no options of their o
 `elek()` keeps its own `core` option because it runs a second, short-lived, read-only Core for provisioning, in a different module graph, before the loaders exist.
 
 - `log.level` reaches the loaders through `ELEK_IO_LOG_LEVEL`, which is what a consumer silences Core with in a build.
-- `file.cache` is deliberately not exposed, the loaders pin it off (see below).
+- `cache` is deliberately not exposed, the loaders pin it off (see below).
 - Anything else that is ever needed is a new `ELEK_IO_` variable read at construction, not a prop.
 
 ## Watching content in dev
@@ -57,9 +57,12 @@ Two consequences for what is watched:
 - The Entries loader watches `pathTo.components(projectId)` even though it never reloads a Component. Without it, editing a Component that no Entry embeds yet changes nothing on disk that anyone watches, and the developer gets silence instead of the message.
 - `pathTo.entries()` is the Collection directory itself, so `collection.json` needs no separate watch.
 
-The set of collections is decided before any loader runs, so adding or removing a Collection cannot be detected here at all. The consumer documentation lists it as a restart case alongside the rest.
+Two changes touch the set of collections itself:
 
-The loaders' Core runs with `file: { cache: false }` ([`core.ts`](../src/astro/core.ts)) because of this feature. Core invalidates its JSON cache for writes it makes itself, and here another application owns the files, so a cached Project would keep serving content one edit behind and the watcher would look broken.
+- **Adding or removing a Collection** cannot be detected at all, because the set is decided before any loader runs. The consumer documentation lists it as a restart case alongside the rest.
+- **Renaming one** can. Astro names a collection after the plural slug, so the loader remembers the Collection it built the schema for, and a reload whose slug resolves to another Collection, or to none, stops with a restart message. The model digest cannot catch this, because the Collection taking over the slug may carry identical field definitions.
+
+The loaders' Core runs with `cache: false` ([`core.ts`](../src/astro/core.ts)) because of this feature. Core clears its caches for changes it makes itself, and here another application owns the files, so a cached Project would keep serving content one edit behind and the watcher would look broken. That covers the slug index too, so a renamed Collection resolves under its new slug right away.
 
 Each file is read once per sync either way. This was found the hard way: the first working version of the watcher reloaded on every edit and still rendered the old content.
 
