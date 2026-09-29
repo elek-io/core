@@ -55,9 +55,12 @@ Validated output (typed as Record<string, Value>)
 
 The `.pipe()` step exists purely for TypeScript type inference - it ensures the output type is `Record<string, Value>` rather than `Record<string, unknown>`. The static `valueSchema` must therefore accept nullable content values (see "Static value schemas accept nullable content" below).
 
-The `z.object()` in front of the pipe is keyed by field definition slug, and a `z.object()` strips what its shape does not name. A Value whose slug matches no field definition is therefore dropped rather than rejected: `EntryService.create` and `update` accept the call, write the Entry without that Value, and report nothing.
+The object in front of the pipe is keyed by field definition slug. Whether it rejects or strips a slug it does not name depends on who is asking:
 
-Only the slugs the Collection declares survive the pass, which is the invariant the generated types rely on. The cost is that a caller cannot tell a typo in a slug from a Value it never sent.
+- **Create and update** use a `z.strictObject()`. A Value whose slug matches no field definition fails with an `unrecognized_keys` issue, in an Entry's values and in a Component item's values alike. Stripped, a misspelled slug would vanish unreported, and a form opened before a field was renamed would lose its edit.
+- **Everything that reads stored Values** keeps the stripping `z.object()`: `getEntrySchemaFromFieldDefinitions`, which generated API clients parse responses with, and the re-validation in the Collection and Component cascades and in Entry migration. A client generated before a field was added has to keep parsing.
+
+Only the slugs the Collection declares reach an Entry either way, which is the invariant the generated types rely on.
 
 ### Admin metadata validation
 

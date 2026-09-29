@@ -320,8 +320,8 @@ export function getTranslatableMdAstValueContentSchemaFromFieldDefinition(
  * each discriminated by a `z.literal` componentId, unioned when the field
  * allows more than one Component.
  *
- * An item's `values` is a plain `z.object`, so a value slug the Component
- * does not declare is stripped rather than rejected.
+ * A value slug the Component does not declare is stripped, or rejected when
+ * `unknownSlugs` is `'reject'`, which is what a create or update asks for.
  *
  * Throws a plain `Error`, not a `CoreError`, when the `visited` set catches a
  * Component repeating in the generation chain.
@@ -330,7 +330,8 @@ function getComponentValueContentSchemaFromFieldDefinition(
   fieldDefinition: DynamicFieldDefinition,
   languages: ProjectLanguages,
   componentResolver: ComponentResolver,
-  visited: Set<string>
+  visited: Set<string>,
+  unknownSlugs: 'strip' | 'reject'
 ) {
   const componentSchemas = fieldDefinition.ofComponents.map((componentId) => {
     if (visited.has(componentId)) {
@@ -348,13 +349,15 @@ function getComponentValueContentSchemaFromFieldDefinition(
         componentFieldDefinition,
         languages,
         componentResolver,
-        branchedVisited
+        branchedVisited,
+        unknownSlugs
       );
     }
     return z.object({
       id: uuidSchema.readonly(),
       componentId: z.literal(componentId),
-      values: z.object(shape),
+      values:
+        unknownSlugs === 'reject' ? z.strictObject(shape) : z.object(shape),
     });
   });
 
@@ -390,7 +393,8 @@ function getComponentValueContentSchemaFromFieldDefinition(
 /**
  * Builds the zod schema that checks one Value against its field definition.
  * A `component` field needs a `componentResolver` to reach its sub-field
- * definitions.
+ * definitions. `unknownSlugs` decides what happens to a Component value slug
+ * the Component does not declare, stripped by default.
  *
  * Throws `Internal` for a `component` field passed without a resolver. The
  * two unreachable guards, a circular Component chain and an unhandled
@@ -400,7 +404,8 @@ export function getValueSchemaFromFieldDefinition(
   fieldDefinition: FieldDefinition,
   languages: ProjectLanguages,
   componentResolver?: ComponentResolver,
-  visited: Set<string> = new Set()
+  visited: Set<string> = new Set(),
+  unknownSlugs: 'strip' | 'reject' = 'strip'
 ) {
   switch (fieldDefinition.valueType) {
     case valueTypeSchema.enum.boolean:
@@ -442,7 +447,8 @@ export function getValueSchemaFromFieldDefinition(
           fieldDefinition,
           languages,
           componentResolver,
-          visited
+          visited,
+          unknownSlugs
         ),
       });
     }
@@ -467,8 +473,8 @@ export function getValueSchemaFromFieldDefinition(
 function getValuesShapeFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
   languages: ProjectLanguages,
-  componentResolver?: ComponentResolver,
-  visited?: Set<string>
+  componentResolver: ComponentResolver | undefined,
+  unknownSlugs: 'strip' | 'reject'
 ) {
   const shape: Record<string, z.ZodTypeAny> = {};
   for (const fieldDef of fieldDefinitions) {
@@ -476,7 +482,8 @@ function getValuesShapeFromFieldDefinitions(
       fieldDef,
       languages,
       componentResolver,
-      visited
+      new Set(),
+      unknownSlugs
     );
   }
   return shape;
@@ -487,24 +494,26 @@ function getValuesShapeFromFieldDefinitions(
  * `z.record(slugSchema, valueSchema)` so the output type is inferred as
  * `Record<string, Value>` rather than `Record<string, unknown>`.
  *
- * The `z.object` in front of that pipe is keyed by field definition slug, so
- * a Value whose slug matches no definition is stripped rather than rejected
- * and the Entry is written without it.
+ * A Value whose slug matches no field definition is stripped by default,
+ * which a reader of stored Entries needs. A create or update passes
+ * `'reject'` instead, so a misspelled slug fails rather than being dropped,
+ * in a Component item's values too.
  *
  * @see ../../contributing/language-scoped-validation.md
  */
 export function getValuesSchema(
   fieldDefinitions: FieldDefinition[],
   languages: ProjectLanguages,
-  componentResolver?: ComponentResolver
+  componentResolver?: ComponentResolver,
+  unknownSlugs: 'strip' | 'reject' = 'strip'
 ) {
-  return z
-    .object(
-      getValuesShapeFromFieldDefinitions(
-        fieldDefinitions,
-        languages,
-        componentResolver
-      )
-    )
-    .pipe(z.record(slugSchema, valueSchema));
+  const shape = getValuesShapeFromFieldDefinitions(
+    fieldDefinitions,
+    languages,
+    componentResolver,
+    unknownSlugs
+  );
+  const values =
+    unknownSlugs === 'reject' ? z.strictObject(shape) : z.object(shape);
+  return values.pipe(z.record(slugSchema, valueSchema));
 }

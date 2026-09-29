@@ -246,7 +246,7 @@ Translatable fields (`label`, `description`, and Entry Values) must carry a valu
 
 ### Creating an Entry
 
-Entry Values are keyed by the field definition's `slug`. Each Value declares its `objectType`, `valueType` and per-language `content`.
+Entry Values are keyed by the field definition's `slug`. Each Value declares its `objectType`, `valueType` and per-language `content`. A slug the Collection does not declare fails with `BadRequest` on `create` and `update`, in a Component item's values too, so a misspelled slug cannot drop a Value.
 
 ```typescript
 const entry = await core.entries.create({

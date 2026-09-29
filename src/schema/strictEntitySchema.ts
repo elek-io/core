@@ -216,8 +216,9 @@ export function getUpdateComponentSchemaFromLanguages(
  * generated API clients to validate responses.
  *
  * It demands a Value for every field definition slug. An unknown slug is
- * stripped rather than rejected, and a `componentResolver` is required
- * whenever a field definition is dynamic, or schema generation throws.
+ * stripped, so a client generated before a field was added still parses.
+ * A `componentResolver` is required whenever a field definition is
+ * dynamic, or schema generation throws.
  *
  * This variant validates a stored Entry, so it keeps `id`, `coreVersion`,
  * `created` and `updated`.
@@ -239,7 +240,8 @@ export function getEntrySchemaFromFieldDefinitions(
  * `collectionId` instead.
  *
  * This is the schema `EntryService.create` hands to `mutating()` as its
- * single validation pass.
+ * single validation pass. Unlike the anchor it rejects an unknown slug, so a
+ * misspelled one fails instead of being dropped.
  */
 export function getCreateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
@@ -248,7 +250,12 @@ export function getCreateEntrySchemaFromFieldDefinitions(
 ) {
   return z.object({
     ...createEntrySchema.shape,
-    values: getValuesSchema(fieldDefinitions, languages, componentResolver),
+    values: getValuesSchema(
+      fieldDefinitions,
+      languages,
+      componentResolver,
+      'reject'
+    ),
   });
 }
 
@@ -257,7 +264,8 @@ export function getCreateEntrySchemaFromFieldDefinitions(
  * `updateEntrySchema`, which keeps `id`.
  *
  * An update replaces `values` wholesale, so every field definition's Value
- * has to be sent, not only the changed ones.
+ * has to be sent, not only the changed ones. An unknown slug is rejected,
+ * as on create.
  */
 export function getUpdateEntrySchemaFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
@@ -266,6 +274,11 @@ export function getUpdateEntrySchemaFromFieldDefinitions(
 ) {
   return z.object({
     ...updateEntrySchema.shape,
-    values: getValuesSchema(fieldDefinitions, languages, componentResolver),
+    values: getValuesSchema(
+      fieldDefinitions,
+      languages,
+      componentResolver,
+      'reject'
+    ),
   });
 }

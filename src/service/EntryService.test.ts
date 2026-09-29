@@ -120,6 +120,47 @@ describe('EntryService', function () {
     expect(entry.values).toEqual(values);
   });
 
+  it('rejects creating an Entry with a value whose slug the Collection does not declare', async function () {
+    const countBefore = await core.entries.count({
+      projectId: project.id,
+      collectionId: collection.id,
+    });
+
+    // A misspelled slug, which would otherwise be dropped without a word
+    const creating = core.entries.create({
+      projectId: project.id,
+      collectionId: collection.id,
+      values: {
+        ...entry.values,
+        'product-nmae': entry.values['product-name']!,
+      },
+    });
+
+    await expect(creating).rejects.toMatchObject({ type: 'BadRequest' });
+    await expect(creating).rejects.toThrow('product-nmae');
+    expect(
+      await core.entries.count({
+        projectId: project.id,
+        collectionId: collection.id,
+      })
+    ).toEqual(countBefore);
+  });
+
+  it('rejects updating an Entry with a value whose slug the Collection does not declare', async function () {
+    const updating = core.entries.update({
+      projectId: project.id,
+      collectionId: collection.id,
+      id: entry.id,
+      values: {
+        ...entry.values,
+        'product-nmae': entry.values['product-name']!,
+      },
+    });
+
+    await expect(updating).rejects.toMatchObject({ type: 'BadRequest' });
+    await expect(updating).rejects.toThrow('product-nmae');
+  });
+
   it('should be able to get an Entry of a specific commit', async function () {
     const history = await core.entries.history({
       projectId: project.id,
@@ -309,6 +350,35 @@ describe('EntryService - component values', function () {
         },
       })
     ).rejects.toThrow();
+  });
+
+  it('rejects a Component value whose slug the Component does not declare', async function () {
+    const title: Value = {
+      objectType: 'value',
+      valueType: 'string',
+      content: { en: 'Welcome to our site', de: 'Welcome to our site' },
+    };
+
+    const creating = core.entries.create({
+      projectId: project.id,
+      collectionId: dynamicCollection.id,
+      values: {
+        blocks: {
+          objectType: 'value',
+          valueType: 'component',
+          content: [
+            {
+              id: uuid(),
+              componentId: component.id,
+              values: { title, titel: title },
+            },
+          ],
+        },
+      },
+    });
+
+    await expect(creating).rejects.toMatchObject({ type: 'BadRequest' });
+    await expect(creating).rejects.toThrow('titel');
   });
 });
 
