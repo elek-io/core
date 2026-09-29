@@ -1,6 +1,8 @@
-# Generated API Clients & Types
+# Generated API clients and types
 
-Core's CLI can generate typed artifacts from your Project content models: a runtime **API client** (`elek generate:client`) and standalone **TypeScript types** (`elek generate:types`). Both narrow translatable content to each Project's languages, so you get `Record<ProjectLanguage, T>` instead of the broad superset Core's own types expose. A field the Collection does not require is `null` in a language nobody filled in, and the generated type says so: `Record<ProjectLanguage, string | null>`.
+Core's CLI generates typed artifacts from your Project content models: a runtime **API client** (`elek generate:client`) and standalone **TypeScript types** (`elek generate:types`).
+
+Both narrow translatable content to each Project's languages, so you get `Record<ProjectLanguage, T>` instead of the broad superset Core's own types expose. A field the Collection does not require is `null` in a language nobody filled in, and the generated type says so: `Record<ProjectLanguage, string | null>`.
 
 For why the narrowing exists, see [`fields.md`](./fields.md#generated-client-types). For the API the client talks to, see [`local-api.md`](./local-api.md).
 
@@ -10,13 +12,13 @@ For why the narrowing exists, see [`fields.md`](./fields.md#generated-client-typ
 elek generate:client [outDir] [language] [format] [target] [--watch]
 ```
 
-| Argument   | Default      | Meaning                                                           |
-| ---------- | ------------ | ----------------------------------------------------------------- |
-| `outDir`   | `./.elek.io` | Where to write the generated files.                               |
-| `language` | `ts`         | `ts` for TypeScript source, or `js` for compiled JS plus `.d.ts`. |
-| `format`   | `esm`        | `esm` or `cjs`. Only applies when `language` is `js`.             |
-| `target`   | `es2020`     | JavaScript target. Only applies when `language` is `js`.          |
-| `--watch`  | off          | Regenerate automatically when Project content changes.            |
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `outDir` | `./.elek.io` | Where to write the generated files. |
+| `language` | `ts` | `ts` for TypeScript source, or `js` for compiled JS plus `.d.ts`. |
+| `format` | `esm` | `esm` or `cjs`. Only applies when `language` is `js`. |
+| `target` | `es2020` | JavaScript target. Only applies when `language` is `js`. |
+| `--watch` | off | Regenerate automatically when Project content changes. |
 
 This produces a typed client plus the supporting types in `outDir`. With `language: 'ts'` you get TypeScript source (`client.ts`) to bundle with your own toolchain. With `language: 'js'` the output is compiled to `.js` / `.mjs` with `.d.ts` declarations, where `format` and `target` control the module system and syntax level.
 
@@ -51,14 +53,20 @@ Each call fetches from `baseUrl` and validates the response against a Zod schema
 elek generate:types [outDir] [language] [projects] [--watch]
 ```
 
-| Argument   | Default      | Meaning                                                |
-| ---------- | ------------ | ------------------------------------------------------ |
-| `outDir`   | `./.elek.io` | Where to write the type files.                         |
-| `language` | `ts`         | `ts` for source, or `js` to emit `.d.ts` declarations. |
-| `projects` | `all`        | `all`, or a comma-separated list of Project ids.       |
-| `--watch`  | off          | Regenerate automatically when Project content changes. |
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `outDir` | `./.elek.io` | Where to write the type files. |
+| `language` | `ts` | `ts` for source, or `js` to emit `.d.ts` declarations. |
+| `projects` | `all` | `all`, or a comma-separated list of Project ids. |
+| `--watch` | off | Regenerate automatically when Project content changes. |
 
-Unlike `generate:client`, this emits **type definitions only - no runtime code**. For each Project it produces a narrowed `ProjectLanguage` union plus typed interfaces for every Collection, Component and Entry (with their values narrowed to the Project's languages), and id constants. Use these to type content you load yourself (for example through the [Astro integration](./usage.md#astro-integration) or your own fetch layer) without pulling in the client.
+Unlike `generate:client`, this emits **type definitions only - no runtime code**. For each Project it produces:
+
+- a `ProjectLanguage` union narrowed to that Project's languages
+- typed interfaces for every Collection, Component and Entry, with their values narrowed to the same languages
+- id constants
+
+Use these to type content you load yourself, through the [Astro integration](./usage.md#astro-integration) or your own fetch layer, without pulling in the client.
 
 A single Project writes `types.ts`. Multiple Projects write one `types-{projectId}.ts` per Project. With no Projects in the data directory nothing is written and the command exits successfully, for either language.
 
@@ -80,7 +88,7 @@ On **TypeScript 7** the compiler also needs a `tsconfig.json` in the project, ot
 
 Both commands default to `./.elek.io`. That directory is also the CLI's default for `elek export`, so keep generated artifacts and exports together or pass a different `outDir`.
 
-## See Also
+## See also
 
 - [`local-api.md`](./local-api.md) - the REST API the generated client reads from- [`usage.md`](./usage.md) - the CLI and the Astro integration in context
 - [`export.md`](./export.md) - exporting content to plain JSON instead

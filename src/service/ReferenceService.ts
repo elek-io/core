@@ -28,23 +28,21 @@ import { entriesOf } from '../util/typedObject.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import { migrateEntryFile } from './migrations/index.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { PathTo } from '../util/node.js';
 
 /**
- * Scans Entry references across a Project. It owns the three reference gates so
- * the entity services depend on one place through their constructor:
+ * Scans Entry references across a Project. It owns the three reference gates,
+ * so the entity services depend on one place through their constructor:
+ * `findEntriesReferencing` on delete, `validateValueReferences` on write and
+ * `findDanglingReferences` on sync.
  *
- *   - REVERSE, per target, on delete: `findEntriesReferencing` (which Entries
- *     still point at an Asset, Entry or Collection being deleted).
- *   - FORWARD, per Entry, on write: `validateValueReferences` (do an Entry's
- *     references resolve, with field-level MIME / resolver checks).
- *   - FORWARD, whole tree, on sync: `findDanglingReferences` (any reference
- *     whose target file is now absent in the integrated tree).
+ * Extends `AbstractEntityService` to reuse `listReferences` and
+ * `jsonFileService`. It only reads, so the inherited `gitService` is unused.
  *
- * Extends `AbstractEntityService` to reuse `listReferences` and `jsonFileService`.
- * It only reads, so the inherited `gitService` is unused.
+ * @see ../../contributing/reference-integrity.md
  */
 export class ReferenceService extends AbstractEntityService {
   private coreVersion: string;
@@ -55,7 +53,8 @@ export class ReferenceService extends AbstractEntityService {
     pathTo: PathTo,
     logService: LogService,
     gitService: GitService,
-    jsonFileService: JsonFileService
+    jsonFileService: JsonFileService,
+    cacheService: CacheService
   ) {
     super(
       serviceTypeSchema.enum.Reference,
@@ -63,7 +62,8 @@ export class ReferenceService extends AbstractEntityService {
       pathTo,
       logService,
       gitService,
-      jsonFileService
+      jsonFileService,
+      cacheService
     );
 
     this.coreVersion = coreVersion;
@@ -98,23 +98,15 @@ export class ReferenceService extends AbstractEntityService {
 
   /**
    * Finds every Entry in the Project whose values still reference the given
-   * target (an Asset, another Entry, or a whole Collection). Used by Asset,
-   * Entry and Collection delete to block deletions that would otherwise leave
-   * dangling references behind.
+   * target (an Asset, another Entry, or a whole Collection). Used by delete to
+   * block a deletion that would leave dangling references behind.
    *
-   * Scans every Entry in every Collection on demand (mirroring
-   * `EntryService.findUniqueValueConflicts`) rather than maintaining a persisted
-   * reverse index, which would go stale on a git pull/merge. Outdated Entry
-   * files brought in by a pull/merge are upgraded through the migration chain so
-   * their values are read instead of throwing.
+   * Scans every Entry on demand rather than maintaining a persisted reverse
+   * index, which would go stale on a pull or merge. Self-references never
+   * block. Returns one record per referring Entry, the first match within
+   * that Entry.
    *
-   * Self-references never block. For an Entry target, that Entry is skipped.
-   * For a Collection target, every Entry inside it is skipped, since the whole
-   * doomed set is being deleted and references between its Entries vanish
-   * cleanly. A Collection target matches any reference pointing into it,
-   * identified by the `collectionId` every Entry reference carries, plus a
-   * direct reference to the Collection as a whole. Returns one record per
-   * referring Entry (first match within that Entry).
+   * @see ../../contributing/reference-integrity.md
    */
   public async findEntriesReferencing(
     target: ReferenceTarget
@@ -223,16 +215,14 @@ export class ReferenceService extends AbstractEntityService {
 
   /**
    * Forward whole-tree integrity scan used by sync before pushing. Walks every
-   * Entry in every Collection, enumerates every reference it holds across the
-   * three carriers (flat, mdast, nested component) via `collectReferencesInValue`,
-   * and records each reference whose target file is absent on disk.
+   * Entry in every Collection and records each reference whose target file is
+   * absent on disk.
    *
-   * Pure existence only: no field definitions, no `ComponentResolver`, and no
-   * MIME or `ofCollections` checks (those are write-time concerns). Outdated
-   * Entry files brought in by a pull or rebase are upgraded through
-   * `readEntryFileMigrating`. Unlike `findEntriesReferencing` (reverse,
-   * first-match-per-Entry) this reports EVERY dangling reference, since each
-   * broken reference is a separate thing to repair.
+   * Pure existence only, no field definitions and no MIME checks. Unlike
+   * `findEntriesReferencing` this reports every dangling reference, since each
+   * one is a separate thing to repair.
+   *
+   * @see ../../contributing/reference-integrity.md
    */
   public async findDanglingReferences(
     projectId: string
@@ -305,42 +295,16 @@ export class ReferenceService extends AbstractEntityService {
   }
 
   /**
-   * Validates cross-entity reference targets on an Entry's values. Runs
-   * AFTER the per-field Zod schema has accepted the structural shape, as
-   * the first step inside `EntryService`'s `create` / `update` callback bodies.
+   * Validates cross-entity reference targets on an Entry's values. Runs after
+   * the per-field Zod schema accepted the structural shape, as the first step
+   * inside `EntryService`'s create and update callbacks.
    *
-   * What this checks (and the schema does not):
-   *   - Each referenced Asset's file exists on disk.
-   *   - Each referenced Asset's `mimeType` is in the field's
-   *     `ofAssetMimeTypes` allowlist (when non-empty).
-   *   - Each referenced Entry's file exists at the claimed
-   *     `<projectId>/<collectionId>/<entryId>` path.
+   * Checks that every referenced Asset and Entry file exists, and that a
+   * referenced Asset's `mimeType` is in the field's `ofAssetMimeTypes`
+   * allowlist. Tree shape and `ofCollections` are already enforced by the
+   * schema layer and are not re-checked.
    *
-   * What the schema layer already enforces (not re-checked here):
-   *   - Tree shape, allowed node types, allowed heading depths.
-   *   - `ofCollections` on `entryReference` claims (cheap structural check
-   *     using the `collectionId` already carried in the ref).
-   *
-   * Why `jsonFileService.read` directly instead of `assetService.read` /
-   * `entryService.read`:
-   *   - `AbstractService.validated` logs every `CoreError` before
-   *     re-throwing. For 10 references with 1 missing, the public read
-   *     path would emit a misleading `[NotFound] (Entry.read) …` log
-   *     line at the service boundary for an expected validator outcome.
-   *   - No need to re-run Zod on the input UUIDs (already validated by
-   *     the outer `create`/`update` schema).
-   *   - No recursive `validated()` nesting.
-   *
-   * The path-keyed cache on `JsonFileService` absorbs the duplicate-read
-   * case (one Asset referenced N times = 1 disk hit + cache reuse).
-   *
-   * This is the FORWARD reference gate (per Entry, on write). It walks the
-   * value tree driven by `fieldDefinitions` because it also enforces rules
-   * the reverse gate has no use for (`ofAssetMimeTypes`, descent through the
-   * `ComponentResolver`). The REVERSE gate (`findEntriesReferencing` then
-   * `collectReferencesInValue`) walks the same tree value-only, to extract
-   * reference ids for delete protection. The two stay separate on purpose.
-   * They already share the mdast carrier `collectMdAstRefs`.
+   * @see ../../contributing/reference-integrity.md
    */
   public async validateValueReferences(
     values: Record<string, Value>,
@@ -595,11 +559,12 @@ export class ReferenceService extends AbstractEntityService {
 //
 
 /**
- * `CoreError.notFound` predicate. `JsonFileService.read` wraps the
- * underlying ENOENT in `CoreError.notFound` (via `CoreError.fromUnknown`
- * — but actually the read path throws directly when the file is absent;
- * see `JsonFileService.read`'s `Fs.readFile` call). We catch both shapes
- * defensively.
+ * `CoreError.notFound` predicate. `JsonFileService.readFile` raises
+ * `CoreError.notFound` directly for an absent file, rather than letting an
+ * ENOENT through `CoreError.fromUnknown`.
+ *
+ * Both callers read through `jsonFileService`, so the `ENOENT` branch below
+ * is a defensive leftover rather than the one that fires.
  */
 function isNotFoundError(error: unknown): boolean {
   if (error instanceof CoreError && error.type === 'NotFound') {
@@ -618,13 +583,12 @@ function isNotFoundError(error: unknown): boolean {
 }
 
 /**
- * Returns every `entryReference` and `assetReference` node in an mdast
- * tree, along with the path of `children` indices from the root to the
- * node. Used by both reference gates to report the location of references.
+ * The one mdast carrier every gate walks: the write gate directly, the delete
+ * and sync gates through `collectReferencesInValue`.
  *
- * Hand-rolled because we need each node's index-path (the sequence of
- * `children` indices from the root), which the unist visitor APIs do not
- * provide directly.
+ * It returns every `entryReference` and `assetReference` node along with its
+ * `treePath`, the sequence of `children` indices from the root. Hand-rolled
+ * because the unist visitor APIs do not hand that path back.
  */
 function collectMdAstRefs(root: MdAstRoot): Array<{
   node: MdAstEntryReference | MdAstAssetReference;
@@ -706,17 +670,15 @@ type FoundReference = {
 };
 
 /**
- * Recursively collects every Asset/Entry reference held by a single `Value`,
- * descending through `dynamic`/component items so nested references are not
- * missed. Mirrors `collectMdAstRefs` in style: builds and returns an array.
+ * Recursively collects every Asset and Entry reference held by a single
+ * `Value`, descending through `dynamic` and component items so nested
+ * references are not missed.
  *
- * `fieldSlug` is the slug of the field holding `value`; `componentPath` is the
- * chain of `dynamic` field + item hops already traversed (empty at top level).
+ * Shared by the delete gate and the sync scan, the two that walk values
+ * without field definitions. `componentPath` carries the chain of hops
+ * already traversed.
  *
- * This is the shared value-only walker behind the REVERSE reference gates. It
- * backs `findEntriesReferencing` (delete protection) and `findDanglingReferences`
- * (sync integrity). The FORWARD write gate (`validateValueReferences`) keeps its
- * own field-definition driven walk because it also does MIME and resolver work.
+ * @see ../../contributing/reference-integrity.md
  */
 function collectReferencesInValue(
   value: Value,

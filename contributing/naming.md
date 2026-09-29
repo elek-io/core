@@ -29,6 +29,14 @@ The company name is elek.io. The full brand appears only in global namespaces, w
 
 The reasoning: these symbols arrive through an import from the scoped package, so the full brand is already on the same line. Repeating it in the symbol states the company twice, and the `elekIo` bigram misreads easily in camelCase. Precedent: Sanity.io ships `sanity()` from `@sanity/astro`, Snyk.io's CLI is `snyk`. Never write `elekIo*` in an identifier.
 
+## Service namespaces on `core`
+
+Every service hangs off `ElekIoCore` under a plural noun naming what it manages: `core.projects`, `core.collections`, `core.components`, `core.entries`, `core.assets`, `core.releases`, `core.references`. `core.git`, `core.user`, `core.api`, `core.logger` and `core.util` are singular because there is one of each.
+
+The namespace is one level deep everywhere except `core.cloud`, and that exception is deliberate. elek.io Cloud is several APIs rather than one, so `core.cloud.reports` says which of them a call belongs to, and the Management and Publish surfaces get somewhere to land without a rename later. `CloudService` exists only to hold that level, it owns no behavior of its own.
+
+The alternative was `core.reports`, flat like the rest. It was rejected because the next Cloud API would then sit beside it with nothing saying the two share a backend, an account and an outage.
+
 ## Astro entry exports
 
 Two conventions from the Astro ecosystem apply to `@elek-io/core/astro`:
@@ -36,3 +44,10 @@ Two conventions from the Astro ecosystem apply to `@elek-io/core/astro`:
 - The integration is product-named, like every Astro integration (`react()`, `sitemap()`, `starlight()`): `elek()`, not `elekIntegration()`. Its position inside `integrations: []` states its kind.
 - Loader factories carry the `Loader` suffix, like Starlight's `docsLoader` and the community loaders: `elekAssetsLoader()`, `elekEntriesLoader()`. The suffix separates them from functions that return collection definitions instead, like `elekCollections()`.
 - Config helpers follow the `define*` convention of `defineConfig` and `defineCollection`: `defineElekConfig()`.
+
+## See also
+
+- [`documentation.md`](./documentation.md) - how to write about the things you just named
+- [`astro-entry.md`](./astro-entry.md) - why the Astro entry exports carry the names they do
+- [`linting.md`](./linting.md) - the rules a linter does check
+- [`adding-a-field-type.md`](./adding-a-field-type.md) - the naming a new field type has to fit into

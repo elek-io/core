@@ -242,6 +242,22 @@ describe('mdAstLinkSchema URL scheme allowlist', () => {
   ])('rejects %s (%s)', (url) => {
     expect(() => parseLinkUrl(url)).toThrow();
   });
+
+  // Every one of these starts with a single slash, so it reads as
+  // site-relative, and every one resolves to https://evil.example.com/.
+  // A separator the shape check does not know is the recurring failure,
+  // which is why the check resolves the candidate instead of matching it
+  it.each([
+    ['/\\evil.example.com', 'backslash, which URL reads as a separator'],
+    ['/\t/evil.example.com', 'embedded tab, which URL removes'],
+    ['/\n/evil.example.com', 'embedded line feed, which URL removes'],
+    ['/\r/evil.example.com', 'embedded carriage return, which URL removes'],
+  ])('rejects %j (%s), which resolves off origin', (url) => {
+    expect(new URL(url, 'https://elek-io.invalid/').origin).toEqual(
+      'https://evil.example.com'
+    );
+    expect(() => parseLinkUrl(url)).toThrow();
+  });
 });
 
 describe('mdAstImageSchema URL scheme allowlist', () => {

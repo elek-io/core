@@ -21,5 +21,6 @@ export * from './userSchema.js';
 export * from './valueSchema.js';
 export * from './cliSchema.js';
 export * from './logSchema.js';
+export * from './reportSchema.js';
 export * from './releaseSchema.js';
 export * from './migrationSchema.js';

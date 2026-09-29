@@ -11,11 +11,16 @@ import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefi
 import type { EntryIssueType } from './entryTransform.js';
 
 /**
- * Transforms component item values within an entry when a Component's
- * fieldDefinitions change. Traverses all dynamic fields that reference
- * the changed component and rebuilds the nested values using UUID-based mapping.
+ * Rebuilds an Entry's component item values when a Component's field
+ * definitions change, matching definitions by UUID rather than by slug.
  *
- * Handles nested components recursively with cycle protection.
+ * The caller supplies the field list in `referencingDynamicFieldSlugs`, this
+ * does not discover it. The nested pass then re-enters every component-valued
+ * field, whatever Component it declares, with cycle protection.
+ *
+ * A matched item loses values whose definition is gone, gains
+ * `buildDefaultValue` or a `missing_required` issue for an added field, and
+ * has an updated field re-validated.
  */
 export function transformComponentValues(
   entryId: Uuid,
@@ -195,8 +200,12 @@ export function transformComponentValues(
 }
 
 /**
- * Recursively searches for and transforms nested component items
- * within a values record.
+ * Re-enters `transformComponentValues` once per component-valued field,
+ * whatever Component that field declares, with its own copy of `visited` per
+ * branch.
+ *
+ * So a Component reached down two paths is transformed on both, while a path
+ * that revisits a Component type stops.
  */
 function transformNestedComponentItems(
   entryId: Uuid,

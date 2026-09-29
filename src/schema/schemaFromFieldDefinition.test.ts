@@ -13,6 +13,7 @@ import {
   entrySchema,
   uuid,
 } from '../test/setup.js';
+import { CoreError } from '../util/shared.js';
 import type { ProjectLanguages } from './projectSchema.js';
 import { getValueSchemaFromFieldDefinition } from './schemaFromFieldDefinition.js';
 
@@ -804,16 +805,10 @@ describe('Dynamic zod schema from field definition', () => {
       })
     ).toThrow();
 
-    // @todo The following (and possible more) URLs are passing although they should not. Zod v4 should provide better parsing
-    // @see https://github.com/colinhacks/zod/issues/2236 and https://github.com/colinhacks/zod/pull/3049
-
-    // expect(() =>
-    //   requiredUrlValueschema.parse({...defaultStringValue, content: { en: 'https:/example.com/' } })
-    // ).toThrow();
-    // expect(() => requiredUrlValueschema.parse({...defaultStringValue, content: { en: 'https:example.com/' } })).toThrow();
-    // expect(() =>
-    //   requiredUrlValueschema.parse({...defaultStringValue, content: { en: 'https:.....///example.com/' } })
-    // ).toThrow();
+    // Accepted on purpose. "https:/example.com/", "https:example.com/" and
+    // "https:.....///example.com/" are valid per WHATWG and Node's own URL
+    // parser normalizes the first two to "https://example.com/", so there is
+    // nothing for zod to reject here.
 
     expect(() =>
       requiredUrlValueschema.parse({
@@ -2020,6 +2015,11 @@ describe('getValueSchemaFromFieldDefinition with empty ofComponents', () => {
       max: null,
     };
 
+    // A CoreError, not a plain one: docs/error-handling.md promises a
+    // consumer that CoreError is the whole catch
+    expect(() =>
+      getValueSchemaFromFieldDefinition(dynamicFieldDef, languages)
+    ).toThrow(CoreError);
     expect(() =>
       getValueSchemaFromFieldDefinition(dynamicFieldDef, languages)
     ).toThrow(
@@ -2168,5 +2168,72 @@ describe('slug Field definition value schema', () => {
         .join(' ');
       expect(messages).toContain('foo-bar');
     }
+  });
+});
+
+describe('a zero bound on a numeric Field definition', () => {
+  // `number` and `range` are the only field types whose bounds can hold a 0,
+  // every string length is z.int().min(1).nullable(). A truthiness guard
+  // therefore drops exactly the floor of a range declared from 0.
+  const zeroToHundred = {
+    id: uuid(),
+    slug: 'test-field',
+    valueType: 'number' as const,
+    fieldType: 'range' as const,
+    label: { en: 'Test' },
+    description: { en: 'Test' },
+    min: 0,
+    max: 100,
+    defaultValue: 50,
+    inputWidth: '12' as const,
+    isDisabled: false,
+    isRequired: true as const,
+    isUnique: false as const,
+  };
+
+  it('enforces a floor of 0', () => {
+    const schema = getValueSchemaFromFieldDefinition(zeroToHundred, languages);
+
+    expect(
+      schema.safeParse({
+        objectType: 'value',
+        valueType: 'number',
+        content: { en: -1 },
+      }).success
+    ).toBe(false);
+  });
+
+  it('enforces a ceiling of 0', () => {
+    const schema = getValueSchemaFromFieldDefinition(
+      { ...zeroToHundred, min: -100, max: 0, defaultValue: -50 },
+      languages
+    );
+
+    expect(
+      schema.safeParse({
+        objectType: 'value',
+        valueType: 'number',
+        content: { en: 1 },
+      }).success
+    ).toBe(false);
+  });
+
+  it('still accepts a value on either bound', () => {
+    const schema = getValueSchemaFromFieldDefinition(zeroToHundred, languages);
+
+    expect(
+      schema.safeParse({
+        objectType: 'value',
+        valueType: 'number',
+        content: { en: 0 },
+      }).success
+    ).toBe(true);
+    expect(
+      schema.safeParse({
+        objectType: 'value',
+        valueType: 'number',
+        content: { en: 100 },
+      }).success
+    ).toBe(true);
   });
 });

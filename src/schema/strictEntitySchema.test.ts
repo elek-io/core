@@ -393,6 +393,29 @@ describe('getEntrySchemaFromFieldDefinitions', () => {
     };
     expect(() => schema.parse(valid)).not.toThrow();
   });
+
+  it('strips a value whose slug matches no field definition, so a client generated before a field was added still parses', () => {
+    const schema = getEntrySchemaFromFieldDefinitions(
+      [titleFieldDef({ en: 'Title' })],
+      [...singleLanguage]
+    );
+    const value = {
+      objectType: 'value',
+      valueType: 'string',
+      content: { en: 'Hello' },
+    };
+
+    const parsed = schema.parse({
+      objectType: 'entry',
+      id: uuid(),
+      coreVersion: '0.16.0',
+      created: new Date().toISOString(),
+      updated: null,
+      values: { title: value, subtitle: value },
+    });
+
+    expect(parsed.values).not.toHaveProperty('subtitle');
+  });
 });
 
 describe('getCreateEntrySchemaFromFieldDefinitions', () => {

@@ -8,7 +8,8 @@ import { CoreError } from '../util/shared.js';
  */
 export interface ElekProjectDeclaration {
   /**
-   * ID of the Project
+   * The Project's own UUID, the one elek.io Desktop shows. Validated as a
+   * UUID when the config is declared rather than when a loader runs.
    */
   id: string;
   /**
@@ -20,9 +21,13 @@ export interface ElekProjectDeclaration {
    */
   remoteUrl?: string;
   /**
-   * The content state to read: a channel (`production`, `preview` or
-   * `draft`) or an exact Release version. The ELEK_IO_CHANNEL
-   * environment variable overrides this.
+   * What `elek()` provisions: a channel (`production`, `preview` or `draft`)
+   * or an exact Release version. Nothing else reads it, so on a Project
+   * declared without a `remoteUrl` it has no effect and the loaders read
+   * whatever the data directory already holds.
+   *
+   * The ELEK_IO_CHANNEL environment variable overrides it with a channel
+   * only, so an exact Release version there throws `BadRequest`.
    *
    * @default 'production'
    */
@@ -31,7 +36,11 @@ export interface ElekProjectDeclaration {
 
 export interface ElekConfig {
   /**
-   * The Projects this site consumes, keyed by an alias you choose
+   * The Projects this site consumes, keyed by an alias you choose.
+   *
+   * An alias has to match `^[a-z][a-zA-Z0-9]*$`, because it is concatenated
+   * into every derived collection key. `my-site` fails the config with a
+   * `BadRequest` rather than producing an unusable key at sync time.
    */
   projects: Record<string, ElekProjectDeclaration>;
 }
@@ -92,31 +101,16 @@ export function assertElekConfig(config: ElekConfig): void {
 }
 
 /**
- * Declares the elek.io Projects a site consumes, validating them right
- * away
+ * Declares the elek.io Projects a site consumes, validating them right away.
  *
- * The returned config is the single declaration both `astro.config`
- * and the content config import, so a Project id is written once. By
- * convention it lives in `elek.config.ts` in the project root, but the
- * filename is yours to choose, nothing discovers it automatically.
+ * The returned config is the single declaration both `astro.config` and the
+ * content config import, so a Project id is written once. By convention it
+ * lives in `elek.config.ts`, but nothing discovers it automatically.
  *
- * Returns the very object it was given, so the alias keys survive as
- * literal types and every loader can check them at compile time.
+ * Returns the very object it was given, so the alias keys survive as literal
+ * types and every loader can check them at compile time.
  *
- * @example
- * ```ts
- * // elek.config.ts
- * import { defineElekConfig } from '@elek-io/core/astro';
- *
- * export const config = defineElekConfig({
- *   projects: {
- *     website: {
- *       id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
- *       remoteUrl: 'https://github.com/acme/website-content.git',
- *     },
- *   },
- * });
- * ```
+ * @see ../../docs/usage.md
  */
 export function defineElekConfig<const T extends ElekConfig>(config: T): T {
   assertElekConfig(config);

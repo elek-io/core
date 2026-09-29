@@ -28,7 +28,15 @@ import type { GitService } from './GitService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * Service that manages CRUD functionality for GitTags
+ * Annotated git tags, each named with a generated UUID, carrying their kind in
+ * the message trailers: `Type` plus `Version`, or `Core-Version` for an
+ * upgrade. This is the mechanism behind Releases, preview Releases and Core
+ * upgrades.
+ *
+ * A tag stays local until something pushes it, and a tag without a `Type`
+ * trailer is invisible to every read here.
+ *
+ * @see ../../docs/git-and-sync.md
  */
 export class GitTagService
   extends AbstractService
@@ -118,13 +126,23 @@ export class GitTagService
   /**
    * Deletes a tag
    *
-   * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---delete
+   * Refused in read-only mode and on a provisioned copy, the same two guards
+   * `create` carries.
    *
-   * @param path  Path to the repository
-   * @param id    UUID of the tag to delete
+   * @see https://git-scm.com/docs/git-tag#Documentation/git-tag.txt---delete
    */
   public async delete(props: DeleteGitTagProps): Promise<void> {
+    this.assertNotReadOnly('delete');
+
     return this.validated('delete', deleteGitTagSchema, props, async () => {
+      // Backstop for callers that bypass the service layer. The
+      // services guard earlier through assertNotProvisioned.
+      if (await Fs.pathExists(Path.join(props.path, PROVISIONED_MARKER))) {
+        throw CoreError.preconditionFailed(
+          `Cannot delete a tag because "${props.path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+        );
+      }
+
       const args = ['tag', '--delete', props.id];
       await this.git(props.path, args);
     });
@@ -202,8 +220,6 @@ export class GitTagService
    *
    * Internally uses list(), so do not use count()
    * in conjuncion with it to avoid multiple git calls.
-   *
-   * @param path Path to the repository
    */
   public async count(props: CountGitTagsProps): Promise<number> {
     return this.validated('count', countGitTagsSchema, props, async () => {
@@ -236,32 +252,25 @@ export class GitTagService
   }
 
   /**
-   * Parses git trailer values back into a GitTagMessage
+   * Parses git trailer values back into a GitTagMessage. Returns null for
+   * anything that is not one of Core's three shapes, so a tag Core did not
+   * write stays out of `list()`
    */
   private parseTagTrailers(
     type: string | undefined,
     version: string | undefined,
     coreVersion: string | undefined
   ): GitTagMessage | null {
-    switch (type) {
-      case 'upgrade':
-        return gitTagMessageSchema.parse({ type, coreVersion });
-      case 'release':
-      case 'preview':
-        return gitTagMessageSchema.parse({ type, version });
-      default:
-        this.logService.warn({
-          source: 'core',
-          message: `Tag with ID "${type}" has an invalid or missing Type trailer and will be ignored`,
-        });
-        return null;
-    }
+    const parsed = gitTagMessageSchema.safeParse({
+      type,
+      version,
+      coreVersion,
+    });
+    return parsed.success ? parsed.data : null;
   }
 
   /**
    * Type guard for GitTag
-   *
-   * @param obj The object to check
    */
   private isGitTag(obj: unknown): obj is GitTag {
     return gitTagSchema.safeParse(obj).success;

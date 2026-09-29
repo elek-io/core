@@ -80,7 +80,7 @@ function entryRef(id: string, collectionId: string): Value {
 }
 
 /**
- * Direct, isolated tests of the forward scan `EntryService.findDanglingReferences`.
+ * Direct, isolated tests of the forward scan `ReferenceService.findDanglingReferences`.
  * Each test builds a valid tree, removes a target file from disk (simulating the
  * state a rebase can integrate), and asserts the scan reports the now-broken
  * reference. The whole-tree two-client sync behaviour is covered separately.
@@ -491,7 +491,7 @@ describe('Synchronize reference protection', function () {
       )
     ).toBe(true);
     const status = await core.git.status(core.util.pathTo.project(project.id));
-    expect(status).toHaveLength(0);
+    expect(status.isClean).toBe(true);
   });
 
   it('lets the sync succeed once the dangling referrer is repaired', async function () {
@@ -589,7 +589,7 @@ describe('Synchronize reference protection', function () {
     // The rebase was aborted: the tree is clean and HEAD is the pre-sync commit,
     // so the repository was never left mid-rebase.
     const status = await core.git.status(core.util.pathTo.project(project.id));
-    expect(status).toHaveLength(0);
+    expect(status.isClean).toBe(true);
     const after = await core.projects.getChanges({ id: project.id });
     expect(after.ahead).toHaveLength(1);
     expect(after.behind).toHaveLength(1);

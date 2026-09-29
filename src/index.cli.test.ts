@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 
-import { beforeAll, afterAll, expect, vi } from 'vitest';
+import { beforeAll, afterAll, expect } from 'vitest';
 import { it } from 'vitest';
 import { describe } from 'vitest';
 import type { Asset, Collection, Entry, Project } from './index.node.js';
@@ -34,7 +34,7 @@ describe('CLI', function () {
   }, 60000);
 
   afterAll(async function () {
-    core.api.stop();
+    await core.api.stop();
     await project1.destroy();
     await project2.destroy();
 
@@ -109,18 +109,7 @@ describe('CLI', function () {
   }, 10000);
 
   it('should be able to request a list of entries', async function () {
-    core.api.start(testApiPort);
-    await vi.waitFor(
-      () => {
-        if (core.api.isRunning() === false) {
-          throw new Error('Server not started yet');
-        }
-      },
-      {
-        timeout: 10000,
-        interval: 20,
-      }
-    );
+    await core.api.start(testApiPort);
 
     // Dynamically import the generated client because it is generated
     // during this files execution and not available at the start

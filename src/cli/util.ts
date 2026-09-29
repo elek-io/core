@@ -39,11 +39,48 @@ export function getCore(): ElekIoCore {
   return coreInstance;
 }
 
+/**
+ * An open watcher on the data directory's `projects` path, which the caller
+ * owns and nothing closes, so a command that calls this never exits on its
+ * own. It builds the CLI's Core through `getCore()` when none exists yet,
+ * which fixes the directory being watched.
+ *
+ * The initial scan is skipped so a first run does not fire one event per
+ * existing file, and `.git` is ignored so Core's own git writes do not
+ * retrigger the regeneration that caused them.
+ */
 export function watchProjects() {
   return chokidar.watch(getCore().util.pathTo.projects, {
     ignoreInitial: true, // Do not regenerate Client while chokidar first discovers all directories and files
-    ignored: (path) => path.includes('/.git/'), // Exclude all files inside .git directory of Project repositories
+    ignored: isInsideGitDirectory, // Exclude all files inside .git directory of Project repositories
   });
+}
+
+/**
+ * Whether the path points inside a Project's `.git` directory, whose churn
+ * says nothing about the content the generators read.
+ *
+ * Matches either separator, because chokidar hands back native paths and a
+ * POSIX-only test would watch every git internal on Windows.
+ */
+export function isInsideGitDirectory(path: string): boolean {
+  return /[/\\]\.git[/\\]/.test(path);
+}
+
+/**
+ * Runs one watch triggered regeneration, printing a failure the way the
+ * binary prints one and never rejecting.
+ *
+ * A watcher callback fires long after `elek`'s own try/catch has returned, so
+ * a rejection here would reach nothing but the process. The watcher keeps
+ * running, because one failed run is not a reason to stop watching.
+ */
+export async function runOnChange(task: () => Promise<unknown>): Promise<void> {
+  try {
+    await task();
+  } catch (error) {
+    console.error(error instanceof CoreError ? error.message : String(error));
+  }
 }
 
 /**
@@ -89,7 +126,17 @@ export function toPascalCase(slug: string): string {
 
 /**
  * Escapes a string for use inside a single-quoted TypeScript literal.
+ *
+ * A line break goes with the quote and the backslash. The literal is one
+ * line of source, so a raw one ends the line rather than the string and
+ * the generated file no longer parses. Three free-form inputs reach here:
+ * a textarea `defaultValue`, a string select's `option.value` and
+ * `ofAssetMimeTypes`.
  */
 export function escapeForSingleQuotedString(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n');
 }

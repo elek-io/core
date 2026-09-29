@@ -1,22 +1,26 @@
 import Fs from 'fs-extra';
-import Path from 'node:path';
 import type { z } from '@hono/zod-openapi';
 import { CoreError } from '../util/shared.js';
 import {
-  slugIndexFileSchema,
   uuidSchema,
   type ElekIoCoreOptions,
   type ServiceType,
 } from '../schema/index.js';
 import { folders, type PathTo } from '../util/node.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
+import type { CacheService } from './CacheService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * A service for entities that support UUID-to-slug indexing.
- * Subclasses must implement abstract methods to define entity paths and slug extraction.
+ * The base for entities addressable by slug as well as by UUID.
+ *
+ * It holds a per-Project UUID to slug map, so an entity can be resolved and
+ * slug uniqueness checked without scanning every folder. The map is derived
+ * rather than authoritative: it lives in memory per Core instance, a miss
+ * rebuilds it from the entity folders, a mutation drops its Project's index,
+ * and `CacheService` drops all of them whenever git rewrites a working tree.
  */
 export abstract class AbstractSlugIndexedEntityService<
   TFile = unknown,
@@ -24,6 +28,8 @@ export abstract class AbstractSlugIndexedEntityService<
   private cachedSlugIndex: Map<string, Record<string, string>> = new Map();
   private rebuildPromise: Map<string, Promise<Record<string, string>>> =
     new Map();
+  /** Counts the clears, so a rebuild that spans one is not kept */
+  private generation = 0;
 
   protected constructor(
     type: ServiceType,
@@ -31,95 +37,110 @@ export abstract class AbstractSlugIndexedEntityService<
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService
   ) {
-    super(type, options, pathTo, logService, gitService, jsonFileService);
+    super(
+      type,
+      options,
+      pathTo,
+      logService,
+      gitService,
+      jsonFileService,
+      cacheService
+    );
   }
 
-  /** Path to the folder containing all entities of this type */
+  /** Path to the folder containing all entities of this type. */
   protected abstract entitiesPath(projectId: string): string;
   /** Path to a specific entity folder */
   protected abstract entityPath(projectId: string, id: string): string;
   /** Path to the JSON file for a specific entity */
   protected abstract entityFilePath(projectId: string, id: string): string;
-  /** Extract the slug value from a parsed entity file */
+  /**
+   * Extract the slug value from a parsed entity file. It has to be unique
+   * across the Project: `lookupBySlug` scans the map and returns the first
+   * match, so a duplicate leaves one entity unreachable by slug while both
+   * stay in the index.
+   */
   protected abstract extractSlug(file: TFile): string;
-  /** Zod schema for validating entity files */
+  /**
+   * Zod schema for validating entity files. It has to parse into the same
+   * shape as the class's `TFile`, because `rebuildSlugIndexInternal` hands
+   * the parsed result to `extractSlug` through an unchecked assertion. The
+   * two agree by the subclass's construction, not by the type system.
+   */
   protected abstract entityFileSchema: z.ZodTypeAny;
 
   /**
-   * Returns the cached slug index or rebuilds it from disk.
-   * Deduplicates concurrent rebuild calls for the same project.
+   * Returns the cached slug index, rebuilding it from the entity folders on a
+   * miss, and on every call when caching is off. Concurrent rebuilds of the
+   * same Project share one promise.
    */
   protected async getSlugIndex(
     projectId: string
   ): Promise<Record<string, string>> {
-    const cached = this.cachedSlugIndex.get(projectId);
-    if (cached) return cached;
+    if (this.cacheService.isEnabled) {
+      const cached = this.cachedSlugIndex.get(projectId);
+      if (cached) return cached;
+    }
 
     const pending = this.rebuildPromise.get(projectId);
     if (pending) return pending;
 
+    const generation = this.generation;
     const promise = this.rebuildSlugIndexInternal(projectId);
     this.rebuildPromise.set(projectId, promise);
 
     try {
       const result = await promise;
-      this.cachedSlugIndex.set(projectId, result);
+      // A clear during the rebuild means it may have read the old tree
+      if (this.cacheService.isEnabled && generation === this.generation) {
+        this.cachedSlugIndex.set(projectId, result);
+      }
       return result;
     } finally {
-      this.rebuildPromise.delete(projectId);
+      if (this.rebuildPromise.get(projectId) === promise) {
+        this.rebuildPromise.delete(projectId);
+      }
     }
   }
 
   /**
-   * Writes the index file to disk and updates the in-memory cache.
-   */
-  protected async writeSlugIndex(
-    projectId: string,
-    index: Record<string, string>
-  ): Promise<void> {
-    const indexPath = Path.join(
-      this.entitiesPath(projectId),
-      'slug.index.json'
-    );
-    await this.jsonFileService.update(index, indexPath, slugIndexFileSchema);
-    this.cachedSlugIndex.set(projectId, index);
-  }
-
-  /**
-   * Invalidates the cached index for a project, forcing a rebuild on next access.
-   */
-  protected invalidateSlugIndex(projectId: string): void {
-    this.cachedSlugIndex.delete(projectId);
-  }
-
-  /**
-   * Writes the slug index file with automatic cache invalidation on failure.
+   * Drops one Project's index after a create, update or delete, so the next
+   * lookup rebuilds it from disk, which already holds the change.
    *
-   * If the write fails, the in-memory cache is invalidated so the index
-   * rebuilds from disk on next access. The error is logged but not re-thrown,
-   * since the entity data was already successfully committed to git.
+   * Never write an index back instead. One read before a git step can be
+   * outdated by a clear that lands during it, and writing it back would
+   * undo that clear. A rebuild still running may have read the folders
+   * before the change, so its result is not kept either.
    */
-  protected async safeWriteSlugIndex(
-    projectId: string,
-    index: Record<string, string>
-  ): Promise<void> {
-    try {
-      await this.writeSlugIndex(projectId, index);
-    } catch (error) {
-      this.invalidateSlugIndex(projectId);
-      this.logService.warn({
-        source: 'core',
-        message: `Failed to write ${this.type} slug index for project "${projectId}", cache invalidated: ${error instanceof Error ? error.message : String(error)}`,
-      });
-    }
+  protected dropSlugIndex(projectId: string): void {
+    this.cachedSlugIndex.delete(projectId);
+    this.rebuildPromise.delete(projectId);
+    this.generation++;
+  }
+
+  /**
+   * Drops the index of every Project, so the next lookup rebuilds it.
+   *
+   * Registered with `CacheService`, because a stale hit does not heal the
+   * way a miss does. It resolves a slug to an entity that no longer carries
+   * it, and lets a slug through as free that another entity now holds.
+   */
+  public clearSlugIndex(): void {
+    this.cachedSlugIndex.clear();
+    this.rebuildPromise.clear();
+    this.generation++;
   }
 
   /**
    * Resolves a UUID-or-slug string to a UUID.
-   * If the input matches UUID format, verifies the folder exists on disk first.
-   * Otherwise, looks up via the index. Rebuilds cache once on miss.
+   *
+   * Not an either/or: a UUID-shaped input is accepted only when its folder
+   * exists on disk, and otherwise falls through to the slug lookup and is
+   * reported as a slug. The lookup rebuilds the index once on a miss, then
+   * throws `NotFound` when neither the folder nor the index matches.
    */
   protected async resolveId(
     projectId: string,
@@ -159,6 +180,9 @@ export abstract class AbstractSlugIndexedEntityService<
 
   /**
    * Rebuilds the slug index by scanning all entity folders on disk.
+   *
+   * An entity folder whose file will not read or parse is warned about and
+   * left out, so it cannot be resolved by slug until it parses.
    */
   private async rebuildSlugIndexInternal(
     projectId: string
@@ -166,6 +190,7 @@ export abstract class AbstractSlugIndexedEntityService<
     this.logService.info({
       source: 'core',
       message: `Rebuilding ${this.type} slug index for Project "${projectId}"`,
+      meta: { 'elek.project.id': projectId, 'elek.object.type': this.type },
     });
 
     const index: Record<string, string> = {};
@@ -187,18 +212,17 @@ export abstract class AbstractSlugIndexedEntityService<
         this.logService.warn({
           source: 'core',
           message: `Skipping ${this.type} folder "${folder.name}" during slug index rebuild: ${error instanceof Error ? error.message : String(error)}`,
+          meta: {
+            'elek.project.id': projectId,
+            'elek.object.type': this.type,
+            'file.name': folder.name,
+            'exception.message':
+              error instanceof Error ? error.message : String(error),
+          },
         });
       }
     }
 
-    try {
-      await this.writeSlugIndex(projectId, index);
-    } catch (error) {
-      this.logService.warn({
-        source: 'core',
-        message: `Failed to write slug index during rebuild: ${error instanceof Error ? error.message : String(error)}`,
-      });
-    }
     return index;
   }
 }

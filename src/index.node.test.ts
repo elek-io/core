@@ -29,9 +29,7 @@ describe('Node.js', function () {
       },
     });
     const coreWithoutCache = new ElekIoCore({
-      file: {
-        cache: false,
-      },
+      cache: false,
     });
     onTestFinished(async () => {
       await defaultCore.dispose();
@@ -43,11 +41,13 @@ describe('Node.js', function () {
     expect(defaultCore.options).to.deep.equal({
       log: {
         level: 'info',
+        hasProcessErrorHandlers: true,
       },
-      file: {
-        cache: true,
-      },
+      cache: true,
       dataDir: defaultDataDir,
+      cloud: {
+        url: 'https://api.elek.io',
+      },
       isReadOnly: false,
     });
 
@@ -55,11 +55,13 @@ describe('Node.js', function () {
     expect(coreWithLogLevel.options).to.deep.equal({
       log: {
         level: 'debug',
+        hasProcessErrorHandlers: true,
       },
-      file: {
-        cache: true,
-      },
+      cache: true,
       dataDir: defaultDataDir,
+      cloud: {
+        url: 'https://api.elek.io',
+      },
       isReadOnly: false,
     });
 
@@ -67,17 +69,32 @@ describe('Node.js', function () {
     expect(coreWithoutCache.options).to.deep.equal({
       log: {
         level: 'info',
+        hasProcessErrorHandlers: true,
       },
-      file: {
-        cache: false,
-      },
+      cache: false,
       dataDir: defaultDataDir,
+      cloud: {
+        url: 'https://api.elek.io',
+      },
       isReadOnly: false,
     });
 
     expect(await Fs.pathExists(Path.join(defaultDataDir, 'projects'))).to.equal(
       true
     );
+  });
+
+  it('rejects an option it does not know, so a renamed or misspelled one cannot be ignored', function () {
+    // `file.cache` was replaced by `cache`. Ignoring the old key would turn
+    // caching back on for a host that turned it off
+    expect(
+      // @ts-expect-error The key no longer exists
+      () => new ElekIoCore({ file: { cache: false } })
+    ).toThrow(expect.objectContaining({ type: 'BadRequest' }));
+    expect(
+      // @ts-expect-error A misspelled key inside a known one
+      () => new ElekIoCore({ log: { levle: 'debug' } })
+    ).toThrow(expect.objectContaining({ type: 'BadRequest' }));
   });
 
   it('should respect the dataDir option', async function () {
@@ -148,6 +165,47 @@ describe('Node.js', function () {
     const { core: optionCore } = createTmpCore({ log: { level: 'debug' } });
 
     expect(optionCore.options.log.level).toEqual('debug');
+  });
+
+  it('registers no process error handlers when the host owns them', function () {
+    // The Astro entry does this, because inside a build the host owns the
+    // process. See contributing/logging.md.
+    const baseUncaught = process.listenerCount('uncaughtException');
+    const baseUnhandled = process.listenerCount('unhandledRejection');
+
+    const { core: quietCore } = createTmpCore({
+      log: { hasProcessErrorHandlers: false },
+    });
+
+    expect(quietCore.options.log.hasProcessErrorHandlers).toBe(false);
+    expect(process.listenerCount('uncaughtException')).toBe(baseUncaught);
+    expect(process.listenerCount('unhandledRejection')).toBe(baseUnhandled);
+  });
+
+  it('disposes twice without hanging', async function () {
+    // Desktop disposes on quit and again on a signal, so a second call
+    // that never resolves takes the shutdown with it
+    const { core: disposedCore } = createTmpCore();
+
+    await disposedCore.dispose();
+    await expect(
+      Promise.race([
+        disposedCore.dispose(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('dispose() never resolved')), 5000)
+        ),
+      ])
+    ).resolves.toBeUndefined();
+  });
+
+  it('still takes a log level without being told about error handlers', function () {
+    // `log` holds more than one setting now, so its keys have to be
+    // individually optional. Pinning the level must not force a caller to
+    // also pin the handlers, and vice versa.
+    const { core: levelOnly } = createTmpCore({ log: { level: 'warn' } });
+
+    expect(levelOnly.options.log.level).toEqual('warn');
+    expect(levelOnly.options.log.hasProcessErrorHandlers).toBe(true);
   });
 
   it('should treat an empty ELEK_IO_LOG_LEVEL as unset', function () {
@@ -245,11 +303,6 @@ describe('Node.js', function () {
     'should be able to create a complete Project with Assets, Collections and Entries',
     { timeout: 30000 },
     async function () {
-      /**
-       * @todo:
-       * - Should the description be optional? -> Yes
-       * - Should the description be an object with language keys? -> Yes
-       */
       const project = await core.projects.create({
         name: 'elek.io Website',
         description: 'The official elek.io website',
@@ -1435,10 +1488,6 @@ describe('Node.js', function () {
         },
       });
 
-      /**
-       * @todo:
-       * - Should allow for sections of field definitions to visually group them.
-       */
       const productsCollection = await core.collections.create({
         projectId: project.id,
         icon: 'home',
@@ -2010,10 +2059,6 @@ describe('Node.js', function () {
         },
       });
 
-      /**
-       * @todo:
-       * - Conditional fields based on other field values e.g. if "External Link" is true, the "Target page" field is not visible and the "URL" field is shown.
-       */
       const navigationItemComponent = await core.components.create({
         projectId: project.id,
         name: {
@@ -2111,12 +2156,6 @@ describe('Node.js', function () {
         ],
       });
 
-      /**
-       * @todo:
-       * - Should the user define field definition IDs or should they be generated?
-       * - Should the description be optional? -> Yes
-       * - Field definitions need a valueType of "reference" with the fieldType of "slug" and ofField referencing a field definition ID of the same collection to be able to generate slugs based on another field.
-       */
       const navigationCollection = await core.collections.create({
         projectId: project.id,
         icon: 'home',

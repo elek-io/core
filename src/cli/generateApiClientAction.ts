@@ -7,6 +7,7 @@ import {
 import {
   getCore,
   loadCompiler,
+  runOnChange,
   watchProjects,
   AUTO_GENERATED_HEADER,
   toPascalCase,
@@ -18,33 +19,15 @@ import CodeBlockWriter from 'code-block-writer';
 import assert from 'node:assert';
 
 /**
- * API Client generator
+ * Writes a typed API client to the single `outFile`, overwriting it, from the
+ * local Projects and their Collections. No Entry is read.
  *
- * Generates an API client with full type safety in given folder
- * based on the locally available Projects, Collections and Entries.
- * Uses a generated schema based on the field definitions
- * of Collections to provide correct types for available Entries.
+ * Every Project id, Collection plural slug and flattened field definition is
+ * baked into the emitted source, so the client is a snapshot and has to be
+ * regenerated when the content model changes. `typesMap` decides which types
+ * file each Project's Entry types are imported from.
  *
- * @example
- * Usage: Import the generated client and use it to access the local content API
- *
- * ```ts
- * import { apiClient } from './.elek.io/client.js';
- *
- * const client = await apiClient({
- *   baseUrl: 'http://localhost:31310',
- *   apiKey: '<token>'
- * }).content.v1;
- *
- * const entries = await client
- *   .projects['d9920ad7-07b8-41c4-84f7-5d6babf0f800']
- *   .collections['blog-posts']
- *   .entries.list({
- *     limit: 10,
- *   })
- *
- * console.log(entries);
- * ```
+ * @see ../../docs/api-clients.md
  */
 async function generateApiClient(
   outFile: string,
@@ -121,9 +104,20 @@ async function generateApiClient(
 
   // API client function
   writer.writeLine(`/**`);
-  writer.writeLine(` * elek.io Client`);
+  writer.writeLine(` * Typed client for the elek.io local API.`);
   writer.writeLine(` * `);
-  writer.writeLine(` * Used to access elek.io APIs.`);
+  writer.writeLine(
+    ` * Validates baseUrl and apiKey, throwing a ZodError on a bad one, and`
+  );
+  writer.writeLine(
+    ` * needs the local API already running at baseUrl. Each list() validates`
+  );
+  writer.writeLine(
+    ` * the response against the Collection's field definitions, so an API`
+  );
+  writer.writeLine(
+    ` * error response surfaces as a ZodError rather than as its own envelope.`
+  );
   writer.writeLine(` */`);
   writer.writeLine(
     `export function apiClient({ baseUrl, apiKey }: ApiClientProps) {`
@@ -322,6 +316,18 @@ async function generateApiClientAs({
   }
 }
 
+/**
+ * Writes into the caller's project: it creates `outDir`, then `types.ts` or
+ * one `types-{projectId}.ts` per Project plus `client.ts`, overwriting on
+ * every run without removing files of Projects that are gone.
+ *
+ * `language: 'js'` compiles those through the lazily imported optional peer
+ * `tsdown` and deletes the `.ts` sources, so an install without `tsdown` and
+ * `typescript` throws `PreconditionFailed`. With `options.watch` it resolves
+ * after the first generation and leaves a watcher running.
+ *
+ * @see ../../docs/api-clients.md
+ */
 export const generateApiClientAction = async ({
   outDir,
   language,
@@ -343,13 +349,15 @@ export const generateApiClientAction = async ({
         source: 'core',
         message: `Regenerating API Client due to ${event} on "${path}"`,
       });
-      void generateApiClientAs({
-        outDir,
-        language,
-        format,
-        target,
-        options,
-      });
+      void runOnChange(() =>
+        generateApiClientAs({
+          outDir,
+          language,
+          format,
+          target,
+          options,
+        })
+      );
     });
   }
 };

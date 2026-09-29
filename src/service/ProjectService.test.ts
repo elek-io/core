@@ -121,6 +121,17 @@ describe('ProjectService', function () {
     expect(core.projects.isProject({ objectType: 'project' })).toBe(false);
   });
 
+  it('should not identify a Project file as a Project', function () {
+    // The guard narrows to Project, which carries remoteOriginUrl and
+    // isProvisioned on top of what the file on disk holds. Passing the file
+    // through would hand a caller a Project missing both.
+    const { remoteOriginUrl, isProvisioned, ...projectFile } = project;
+
+    expect(remoteOriginUrl === undefined).toBe(false);
+    expect(isProvisioned).toBe(false);
+    expect(core.projects.isProject(projectFile)).toBe(false);
+  });
+
   it('should throw when trying to upgrade a Project to the same version of Core', async function ({
     task,
   }) {

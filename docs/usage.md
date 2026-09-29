@@ -10,7 +10,12 @@ For the data model these examples build on (Projects, Collections, Entries, Valu
 npm install @elek-io/core zod dugite
 ```
 
-Core declares `zod` and `dugite` as required peer dependencies, so you install them alongside Core. `dugite` is the git binding the Node entry point runs every Project operation through, see [git and sync](./git-and-sync.md). `zod` is what Core authors its schemas with: a compatible version (`zod@^4.3.6`) that resolves to a single copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage. Three more peers are optional and only needed by one feature each: `astro` for the [Astro integration](#astro-integration), `tsdown` and `typescript` for [compiling generated clients and types to JavaScript](./api-clients.md#compiling-to-javascript).
+Core declares `zod` and `dugite` as required peer dependencies, so you install them alongside Core:
+
+- `dugite` is the git binding the Node entry point runs every Project operation through, see [git and sync](./git-and-sync.md).
+- `zod` is what Core authors its schemas with. Use a compatible version (`zod@^4.3.6`) that resolves to a single copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage.
+
+Three more peers are optional and needed by one feature each: `astro` for the [Astro integration](#astro-integration), and `tsdown` plus `typescript` for [compiling generated clients and types to JavaScript](./api-clients.md#compiling-to-javascript).
 
 You still install zod as above. As a convenience, Core also re-exports `z`, so in your own code you can import it from `@elek-io/core` instead of from `zod` directly. It is the same `z` plus `@hono/zod-openapi`'s `.openapi()` extension.
 
@@ -24,16 +29,15 @@ const core = new ElekIoCore();
 
 ### Options
 
-The constructor accepts an optional options object. All fields are optional and default as shown.
+The constructor accepts an optional options object. All fields are optional and default as shown. An option Core does not know throws a `CoreError` instead of being ignored.
 
 ```typescript
 const core = new ElekIoCore({
   log: {
     level: 'info', // 'error' | 'warn' | 'info' | 'debug' - default 'info'
+    hasProcessErrorHandlers: true, // handle uncaught exceptions - default true
   },
-  file: {
-    cache: true, // cache files in memory to speed up access - default true
-  },
+  cache: true, // keep what Core reads from the files in memory - default true
   dataDir: '/path/to/data', // directory Core reads and writes data in - default ~/elek.io
   isReadOnly: false, // never mutate a Project or its remote - default false
 });
@@ -41,30 +45,91 @@ const core = new ElekIoCore({
 
 The resolved options are exposed on `core.options`, and the running Core version on `core.coreVersion`.
 
-`dataDir` sets the data directory everything lives in, see [`storage-layout.md`](./storage-layout.md). It takes precedence over the `ELEK_IO_DATA_DIR` environment variable, which takes precedence over the default `~/elek.io`. Relative paths are resolved against the current working directory once at construction. `~` is not expanded, that is a shell feature, so pass an absolute path or let the shell expand it. The directory does not need to exist, Core creates it. An empty or whitespace-only value throws a `CoreError`. The resolved absolute path is exposed as `core.options.dataDir`, and `core.util.pathTo` builds every path from it.
-
-`log.level` is the lowest level Core writes, one of `error`, `warn`, `info` and `debug`. It takes precedence over the `ELEK_IO_LOG_LEVEL` environment variable, which takes precedence over the default `info`. A value that is none of the four throws a `CoreError`, so a typo says so instead of quietly leaving the logs as they were. Set it to `error` where Core is a library inside another tool's output, such as an Astro build.
-
-`isReadOnly` puts Core into read-only mode, meant for environments that only consume content, such as CI builds. Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`. In return, cloning and fetching work without a User being set, because nothing is ever committed. The option takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
+- **`dataDir`** sets the data directory everything lives in, see [`storage-layout.md`](./storage-layout.md). It takes precedence over the `ELEK_IO_DATA_DIR` environment variable, which takes precedence over the default `~/elek.io`.
+  - Relative paths are resolved against the current working directory once at construction. `~` is not expanded, that is a shell feature, so pass an absolute path or let the shell expand it.
+  - The directory does not need to exist, Core creates it. An empty or whitespace-only value throws a `CoreError`.
+  - The resolved absolute path is exposed as `core.options.dataDir`, and `core.util.pathTo` builds every path from it.
+- **`log.level`** is the lowest level Core writes, one of `error`, `warn`, `info` and `debug`. It takes precedence over the `ELEK_IO_LOG_LEVEL` environment variable, which takes precedence over the default `info`.
+  - A value that is none of the four throws a `CoreError`, so a typo says so instead of quietly leaving the logs as they were.
+  - Set it to `error` where Core is a library inside another tool's output, such as an Astro build.
+- **`log.hasProcessErrorHandlers`** decides whether Core registers `process.on('uncaughtException')` and `process.on('unhandledRejection')`, which is what writes an uncaught error into the log file before the process goes down. It defaults to `true`.
+  - Set it to `false` where the host owns its own error handling, such as inside a build. The Astro entry does that for you.
+  - `dispose()` removes the handlers again either way.
+- **`log.hostVersion`** is the version of your own application, written to `service.version` on every record you log with a `source` other than `core`.
+  - Core stamps its own version on its own records and has no way to read yours, so without this the records you write carry no version at all, and a log file someone hands you on its own cannot be matched to the build that produced it.
+  - It must be a semantic version. A value that is not one throws a `CoreError` rather than writing something the log file's own read contract would reject. See [`reporting.md`](./reporting.md) for what a log file and a report each carry.
+- **`cloud.url`** is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It has to be an http or https URL. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`.
+  - A trailing slash is dropped, since Core appends a path to it.
+  - A value that is not a URL throws a `CoreError`, rather than falling back to the default and sending to production on the strength of a typo.
+- **`cache`** decides whether Core keeps what it reads from a Project's files in memory between calls: parsed JSON files and the index that resolves Collection and Component slugs. It defaults to `true`, and everything kept is dropped whenever git changes a Project's working tree.
+  - Set it to `false` when another application writes the same files while this Core runs. The Astro loaders do that for you during `astro dev`.
+- **`isReadOnly`** puts Core into read-only mode, meant for environments that only consume content, such as CI builds. It takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
+  - Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`.
+  - In return, cloning and fetching work without a User being set, because nothing is ever committed.
 
 ### Environment variables
 
 Core reads its environment variables once at construction, never at import. All of them use the `ELEK_IO_` prefix with SCREAMING_SNAKE_CASE names. An empty or whitespace-only value counts as unset. When a constructor option covers the same setting, the option wins over the environment.
 
-| Variable                           | Purpose                                                          | Default          |
-| ---------------------------------- | ---------------------------------------------------------------- | ---------------- |
-| `ELEK_IO_DATA_DIR`                 | The directory Core reads and writes data in                      | `~/elek.io`      |
-| `ELEK_IO_LOG_LEVEL`                | The lowest level Core logs                                       | `info`           |
-| `ELEK_IO_READ_ONLY`                | Set to `true` to put Core into read-only mode                    | unset            |
-| `ELEK_IO_REMOTE_ACCESS_TOKEN`      | Token for authenticating git operations against a private remote | unset            |
-| `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN`   | `x-access-token` |
-| `ELEK_IO_CHANNEL`                  | The channel provisioning follows, overrides configured refs      | unset            |
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `ELEK_IO_DATA_DIR` | The directory Core reads and writes data in | `~/elek.io` |
+| `ELEK_IO_LOG_LEVEL` | The lowest level Core logs | `info` |
+| `ELEK_IO_READ_ONLY` | Set to `true` to put Core into read-only mode | unset |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN` | Token for authenticating git operations against a private remote | unset |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN` | `x-access-token` |
+| `ELEK_IO_CHANNEL` | The channel provisioning follows, overrides configured refs | unset |
+| `ELEK_IO_CLOUD_URL` | Base URL of the elek.io Cloud API | `https://api.elek.io` |
 
-`ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git per invocation through an askpass helper. It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches. Prompts are disabled, a missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it. While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before. The token applies to HTTP(S) remotes only, SSH remotes authenticate through the ambient SSH setup like ssh-agent.
+`ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git per invocation through an askpass helper:
 
-On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room. See the limitation in [`features.md`](./features.md#intentional-constraints). macOS and Linux allow 1024 and 4096 characters and are not affected.
+- It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches.
+- Prompts are disabled. A missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it.
+- While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before.
+- It applies to HTTP(S) remotes only. SSH remotes authenticate through the ambient SSH setup like ssh-agent.
+
+On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room.
+
+See the limitation in [`features.md`](./features.md#intentional-constraints). macOS and Linux allow 1024 and 4096 characters and are not affected.
 
 The environment variable is what makes a packaged app configurable from the outside. For example, an end to end test can point a packaged Electron app at a disposable data directory by injecting `ELEK_IO_DATA_DIR` at launch, without redirecting `HOME` or adding test-only code paths.
+
+### Log files
+
+Core writes to the console and to daily rotated files under `<dataDir>/logs`, kept 30 days. A log file is one JSON object per line, following the [OpenTelemetry Logs Data Model](https://opentelemetry.io/docs/specs/otel/logs/data-model/):
+
+```json
+{
+  "timestamp": "2026-08-21T14:02:11.000Z",
+  "level": "info",
+  "severityNumber": 9,
+  "message": "Created file \"/home/you/elek.io/projects/<uuid>/collections/<uuid>/<uuid>.json\"",
+  "resource": {
+    "service.name": "core",
+    "service.version": "0.24.0",
+    "os.type": "linux",
+    "host.arch": "amd64"
+  },
+  "attributes": { "file.path": "..." }
+}
+```
+
+`attributes` uses flat dotted [Semantic Convention](https://opentelemetry.io/docs/specs/semconv/) names where one exists (`error.type`, `code.function.name`, `file.path`, `http.request.method`) and the `elek.` namespace for the rest (`elek.project.id`, `elek.collection.id`, `elek.object.type`, `elek.method`). No `@opentelemetry/*` package is involved, the shape is just the shape.
+
+What each level carries is a promise rather than an accident:
+
+| Level | What lands in it |
+| --- | --- |
+| `error` | a failure at a service method boundary, and anything Core could not recover from |
+| `warn` | something anomalous Core recovered from, such as a file it skipped |
+| `info` | **what happened**: every file created, updated or deleted, every git command that changed a repository or a remote, and the Project level events |
+| `debug` | **how it happened**: reads, cache hits and misses, and the git commands that only asked something |
+
+So `info`, the default, is enough to reconstruct what was done and in what order, and `debug` adds how Core did it. An application that ships Core to end users can run at `info` and still have a diagnostic record.
+
+A log file holds ids, paths, counts and error messages. It never holds the content of an Entry, the name of a Project, Collection or Asset, or the git signature of the User. It does hold the absolute data directory, which includes the account name, because it is written for the machine it is on. Anything that ships a log file elsewhere is responsible for scrubbing that prefix.
+
+`resource['service.name']` is the `source` the record was logged with, so your own records stay distinguishable from Core's in the same file. `service.version` is Core's version on Core's records, and yours on yours when you set the `log.hostVersion` option above. Set it: a log file someone sends you without a report around it has no other way to say which build wrote it.
 
 ## Setting the User (required before writing)
 
@@ -181,7 +246,7 @@ Translatable fields (`label`, `description`, and Entry Values) must carry a valu
 
 ### Creating an Entry
 
-Entry Values are keyed by the field definition's `slug`. Each Value declares its `objectType`, `valueType` and per-language `content`.
+Entry Values are keyed by the field definition's `slug`. Each Value declares its `objectType`, `valueType` and per-language `content`. A slug the Collection does not declare fails with `BadRequest` on `create` and `update`, in a Component item's values too, so a misspelled slug cannot drop a Value.
 
 ```typescript
 const entry = await core.entries.create({
@@ -278,9 +343,9 @@ await core.dispose();
 Core ships a local REST API (Hono + OpenAPI) for reading Project content - useful when building a static site or app against local data. It is read-only and never meant to be exposed to the internet.
 
 ```typescript
-core.api.start(31310); // default port
+await core.api.start(31310); // default port, resolves once listening
 core.api.isRunning(); // -> true
-core.api.stop();
+await core.api.stop(); // resolves once the port is released
 ```
 
 With the server running, interactive OpenAPI documentation is served at `http://localhost:31310/` and the schema at `http://localhost:31310/openapi.json`. You can also start it without writing code via the CLI (see below).
@@ -290,11 +355,12 @@ With the server running, interactive OpenAPI documentation is served at `http://
 The package installs an `elek` binary. Run a command with `--help` to see all arguments and options.
 
 - `elek generate:client [outDir] [language] [format] [target]` - generate a JS/TS API client. `--watch` regenerates on content changes.
-- `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported.
-  Both generators emit TypeScript by default. Passing `js` compiles it, which needs `tsdown` and `typescript` installed as dev dependencies of your project, see [compiling to JavaScript](./api-clients.md#compiling-to-javascript).
+- `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported. Both generators emit TypeScript by default. Passing `js` compiles it, which needs `tsdown` and `typescript` installed as dev dependencies of your project, see [compiling to JavaScript](./api-clients.md#compiling-to-javascript).
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
-- `elek provision --project <id> --url <url>` - provision a copy of a Project from its remote into the data directory, e.g. in CI. `--ref` selects a channel (`production` for the latest Release, `preview` for the latest preview Release, `draft` for the tip of the work branch) or an exact Release version, and is overridden by the `ELEK_IO_CHANNEL` environment variable. Runs read-only, so no User is required. Authentication against private remotes uses `ELEK_IO_REMOTE_ACCESS_TOKEN`. See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
+- `elek provision --project <id> --url <url>` - provision a copy of a Project from its remote into the data directory, for example in CI. It runs read-only, so no User is required, and private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`.
+  - `--ref` selects a channel (`production` for the latest Release, `preview` for the latest preview Release, `draft` for the tip of the work branch) or an exact Release version. The `ELEK_IO_CHANNEL` environment variable overrides it.
+  - See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
 
 The global `--data-dir <path>` option sets the data directory for any command, e.g. `elek --data-dir /path/to/data export`. It overrides the `ELEK_IO_DATA_DIR` environment variable and defaults to `~/elek.io`, see [Options](#options).
 
@@ -347,7 +413,12 @@ export const collections = {
 };
 ```
 
-`elekCollections()` reads the content model of every declared Project and derives one Astro collection per elek.io Collection, plus one for the Project's Assets. A Project aliased `website` with a `products` and a `blog-posts` Collection produces `websiteProducts`, `websiteBlogPosts` and `websiteAssets`, which is what `getCollection('websiteProducts')` then expects. Keys are always alias-prefixed, also when a single Project is declared, so adding a second Project later never renames the first one's collections. Two Collections that would derive the same key fail the build naming both sides rather than one silently winning.
+`elekCollections()` reads the content model of every declared Project and derives one Astro collection per elek.io Collection, plus one for the Project's Assets.
+
+A Project aliased `website` with a `products` and a `blog-posts` Collection produces `websiteProducts`, `websiteBlogPosts` and `websiteAssets`, which is what `getCollection('websiteProducts')` then expects.
+
+- Keys are always alias-prefixed, also when a single Project is declared, so adding a second Project later never renames the first one's collections.
+- Two Collections that would derive the same key fail the build naming both sides rather than one silently winning.
 
 Called like that, with no second argument, it derives **everything** and says so in a warning. That is the shape to start with, before you know what a Project holds. Replace it with a selection before you ship, see [Choosing what to derive](#choosing-what-to-derive).
 
@@ -399,7 +470,8 @@ That derives `websitePages`, `shopProducts`, `blogPosts`, `websiteAssets` and `s
 
 One rule covers both keys. **A key you leave out contributes nothing, and so does an alias you leave out of a key.** So `{ collections: { website: ['pages'] } }` derives one collection and no Assets at all.
 
-Name Collections by their plural slug or their id, the same two a loader's `collectionIdOrSlug` takes. Under `assets`, `true` takes the default directories and an object sets `imageDir` for image binaries and `publicDir` for every other file.
+- Name Collections by their plural slug or their id, the same two a loader's `collectionIdOrSlug` takes.
+- Under `assets`, `true` takes the default directories, and an object sets `imageDir` for image binaries and `publicDir` for every other file.
 
 Deriving less is worth doing. An unread Collection costs a file read and a schema validation per Entry on every sync, and an unread Assets collection copies every binary of its Project into the site each time.
 
@@ -502,20 +574,30 @@ public/elek/
 
 Those are the only entries the integration needs. Everything else it produces goes through Astro's content store, which lives in `.astro` during development and in `node_modules/.astro` during a build, both of which a standard Astro `.gitignore` already covers.
 
-All loaders share one Core instance, which the loaders themselves take no options for. What configures it are the `ELEK_IO_*` environment variables of the build: set `ELEK_IO_DATA_DIR` to read from a data directory other than `~/elek.io`, `ELEK_IO_LOG_LEVEL` to `error` to keep Core out of the build output, `ELEK_IO_CHANNEL` to switch the content state deployment-wide and `ELEK_IO_REMOTE_ACCESS_TOKEN` to authenticate against a private remote. See [Environment variables](#environment-variables) for the full list, and note that it is the full list: a setting without an environment variable cannot be changed for the loaders' Core today.
+All loaders share one Core instance, and the loaders themselves take no options for it. What configures it are the `ELEK_IO_*` environment variables of the build:
+
+- `ELEK_IO_DATA_DIR` reads from a data directory other than `~/elek.io`.
+- `ELEK_IO_LOG_LEVEL` set to `error` keeps Core out of the build output.
+- `ELEK_IO_CHANNEL` switches the content state deployment-wide.
+- `ELEK_IO_REMOTE_ACCESS_TOKEN` authenticates against a private remote.
+
+See [Environment variables](#environment-variables) for the full list, and note that it is the full list. A setting without an environment variable cannot be changed for the loaders' Core.
 
 ### Local development
 
-While `astro dev` runs, the loaders watch the Projects they read. Editing an Entry or an Asset in the Desktop app updates the open page a moment later, without restarting the dev server. Each loader watches only what it reads, so a Collection reloads when one of its own Entries changes and Assets reload on their own. The Project's git history is not watched, so committing in the Desktop app does not trigger a reload by itself.
+While `astro dev` runs, the loaders watch the Projects they read. Editing an Entry or an Asset in the Desktop app updates the open page a moment later, without restarting the dev server.
+
+Each loader watches only what it reads, so a Collection reloads when one of its own Entries changes and Assets reload on their own. The Project's git history is not watched, so committing in the Desktop app does not trigger a reload by itself.
 
 **Content edits are live, model edits need a restart.** Astro builds a collection's schema and its TypeScript types once, when it loads the content config, and offers no way to rebuild them while the server runs. So changing the content model means restarting `astro dev`:
 
 - Adding, removing or editing a **field definition** of a Collection
 - Adding, removing or editing a **Component**, or the fields of one
 - Changing a Project's **supported languages**, which every translatable Value is keyed by
+- Renaming a **Collection's plural slug**, which Astro names the collection after
 - Adding or removing a **Collection or Project**, which changes the set of collections `elekCollections()` returns
 
-The loaders notice the first three and stop rather than pretend. Instead of reloading Entries against a schema that no longer describes them, which would silently drop a new field or fail on a removed one, the build log says what happened:
+The loaders notice all but the last and stop rather than pretend. Instead of reloading Entries against a schema that no longer describes them, which would silently drop a new field or fail on a removed one, the build log says what happened:
 
 ```
 [elek-entries] The content model of Collection "posts" of Project "website" changed.
@@ -529,15 +611,23 @@ Content editing carries on as normal after the restart. Adding or removing a who
 
 The loaders read from the local data directory, which is empty on a CI runner. The `elek()` integration fills it: it provisions every Project of the config from its remote before Astro's content sync runs.
 
-Each declaration takes an optional `ref`: a channel (`production`, `preview` or `draft`, default `production`) or an exact Release version, overridden by the `ELEK_IO_CHANNEL` environment variable, which accepts channels only. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`. The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated. A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content. Without the integration, a missing Project fails the build with an error pointing here. The underlying behavior is documented in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
+Each declaration takes an optional `ref`, a channel (`production`, `preview` or `draft`, default `production`) or an exact Release version. The `ELEK_IO_CHANNEL` environment variable overrides it and accepts channels only. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`.
 
-`elek()` provisions every declared Project that has a `remoteUrl`. A Project that only ever comes from the local data directory, for example one the Desktop app manages, is declared without one: the integration skips it, says so in the build log and leaves it to the loaders. So one config can mix a Project fetched from its remote with a local one. A config in which no Project has a `remoteUrl` fails while `astro.config` is read, naming the aliases, since there is nothing left for the integration to do. A site whose Projects are all local needs no integration at all.
+- The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated.
+- A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content.
+- Without the integration, a missing Project fails the build with an error pointing here. The underlying behavior is documented in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
+
+`elek()` provisions every declared Project that has a `remoteUrl`. A Project that only ever comes from the local data directory, for example one the Desktop app manages, is declared without one. The integration skips it, says so in the build log and leaves it to the loaders.
+
+- One config can therefore mix a Project fetched from its remote with a local one.
+- A config in which no Project has a `remoteUrl` fails while `astro.config` is read, naming the aliases, because there is nothing left for the integration to do.
+- A site whose Projects are all local needs no integration at all.
 
 Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (production)`.
 
 For rendering `markdown` field Values (including the required `html`, `assetReference` and `entryReference` handlers), see [`markdown-content.md`](./markdown-content.md).
 
-## See Also
+## See also
 
 - [`concepts.md`](./concepts.md) - the data model these examples build on
 - [`fields.md`](./fields.md) - full field type reference

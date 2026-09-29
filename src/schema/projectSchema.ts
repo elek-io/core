@@ -42,11 +42,8 @@ export const projectSettingsSchema = z.object({
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 
 /**
- * The non-empty tuple of languages a Project supports. Derived from the
- * Project schema so that any change to the schema flows through the type.
- *
- * Used by strict entity factories and code generators to type the
- * `languages` parameter, carrying the non-empty guarantee end-to-end.
+ * The value is validated non-empty and duplicate-free, so index 0 is always a
+ * language and a `.find()` over it never has to guard for an empty tuple.
  */
 export type ProjectLanguages = ProjectSettings['language']['supported'];
 
@@ -157,9 +154,14 @@ export type CloneProjectProps = z.infer<typeof cloneProjectSchema>;
 /**
  * The channels provisioning can follow
  *
- * `production` is the latest Release, `preview` the latest preview
- * Release, `draft` the tip of the work branch. Channels exist for
- * every Project, so they are safe to set deployment-wide.
+ * `production` is the latest Release, `preview` the latest preview Release,
+ * `draft` the tip of the work branch. A channel name is Project-independent,
+ * unlike a version pin, which is what makes `ELEK_IO_CHANNEL` safe to set
+ * deployment-wide.
+ *
+ * Resolving one can still fail per Project: `production` and `preview` throw
+ * `PreconditionFailed` when nothing has been published, and `draft` throws
+ * `NotFound` when the remote has no `work` branch.
  */
 export const contentChannelSchema = z.enum(['production', 'preview', 'draft']);
 export type ContentChannel = z.infer<typeof contentChannelSchema>;

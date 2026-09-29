@@ -138,6 +138,7 @@ const router = createRouter()
         projectId,
         idOrSlug: collectionIdOrSlug,
       });
+      c.set('collectionId', id);
       const data = await c.var.collectionService.read({ projectId, id });
 
       return c.json(data, 200);

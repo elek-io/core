@@ -1,2 +1,4 @@
 pnpm-lock.yaml
 src/test/tmp/project-export.json
+CHANGELOG.md
+.changeset/README.md

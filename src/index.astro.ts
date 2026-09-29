@@ -56,33 +56,15 @@ interface ElekIntegrationProps {
 }
 
 /**
- * Astro integration that provisions every Project of the elek config
- * from its remote before Astro's content sync runs, so the loaders
- * find them in the data directory - also on CI runners that start
- * with an empty one.
+ * Astro integration that provisions every Project of the elek config from its
+ * remote before Astro's content sync runs, so the loaders find them in the
+ * data directory, also on CI runners that start with an empty one.
  *
- * A Project declared without a `remoteUrl` only ever comes from the
- * local data directory, so it is skipped and left to the loaders. A
- * config in which no Project has one fails, the integration would have
- * nothing to do.
+ * A Project declared without a `remoteUrl` is skipped and left to the loaders,
+ * and a config in which no Project has one fails. Runs on its own short-lived
+ * read-only Core, so no User is required and nothing is ever mutated.
  *
- * Runs on its own short-lived read-only Core, so no User is required
- * and nothing is ever mutated. A locally existing Project managed by
- * another application (e.g. the Desktop app) is left untouched, so
- * local development keeps reading the live working copy. Private
- * remotes authenticate through the ELEK_IO_REMOTE_ACCESS_TOKEN environment variable.
- *
- * @example
- * ```js
- * // astro.config.mjs
- * import { defineConfig } from 'astro/config';
- * import { elek } from '@elek-io/core/astro';
- * import { config } from './elek.config';
- *
- * export default defineConfig({
- *   integrations: [elek({ config })],
- * });
- * ```
+ * @see ../docs/provisioning.md
  */
 export function elek(props: ElekIntegrationProps): AstroIntegration {
   assertElekConfig(props.config);
@@ -125,7 +107,13 @@ export function elek(props: ElekIntegrationProps): AstroIntegration {
         // An own short-lived Core, disposed after provisioning: the
         // loaders' shared instance lives in another module graph and
         // both coordinate through the data directory and env vars only
-        const core = new ElekIoCore({ ...props.core, isReadOnly: true });
+        const core = new ElekIoCore({
+          ...props.core,
+          isReadOnly: true,
+          // Inside a build the host owns the process, which is what
+          // docs/usage.md promises of this entry
+          log: { ...props.core?.log, hasProcessErrorHandlers: false },
+        });
         try {
           for (const project of projects) {
             const ref = resolveContentRef(project.ref);

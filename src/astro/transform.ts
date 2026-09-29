@@ -1,12 +1,13 @@
 import type { Value } from '../schema/valueSchema.js';
 
 /**
- * Transforms an elek.io Entry's values record into a flat object
- * keyed by field definition slug. Each value's translatable content
- * is preserved as-is.
+ * Drops the `Value` envelope (`objectType`, `valueType`) and hoists `content`,
+ * which is why a page reads `entry.data.title.en`. Component items keep their
+ * nesting, so the result is not flat.
  *
- * For component (dynamic) fields, the nested values within each
- * component item are recursively transformed.
+ * This stripped shape is exactly what `buildEntryValuesSchema` validates and
+ * `buildEntryValuesTypeString` types. Not to be confused with the unrelated
+ * `transformEntryValues` in `src/util/entryTransform.ts`.
  */
 export function transformEntryValues(values: Record<string, Value>) {
   const result: Record<string, unknown> = {};

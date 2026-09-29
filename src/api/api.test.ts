@@ -8,7 +8,8 @@ import type {
   Entry,
   Project,
 } from '../index.node.js';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import Os from 'node:os';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createProject,
   createAsset,
@@ -17,6 +18,16 @@ import {
   createEntry,
 } from '../test/util.js';
 import core, { testApiPort } from '../test/setup.js';
+
+const externalAddress = externalIpv4();
+
+/** The parts of the served OpenAPI document the tests below assert on */
+interface OpenApiDocument {
+  openapi: string;
+  info: { title: string; version: string };
+  paths: Record<string, unknown>;
+  components?: { schemas?: Record<string, unknown> };
+}
 
 const app = createTestApi(
   router,
@@ -50,25 +61,113 @@ describe('API', function () {
 
   it('should be able to start the API and verify it is running', async function () {
     const isRunningBefore = core.api.isRunning();
-    core.api.start(testApiPort);
-
-    await vi.waitFor(
-      () => {
-        const isCurrentlyRunning = core.api.isRunning();
-        if (isCurrentlyRunning === false) {
-          throw new Error('Server not started yet');
-        }
-      },
-      {
-        timeout: 10000,
-        interval: 20,
-      }
-    );
+    await core.api.start(testApiPort);
 
     const isRunningAfter = core.api.isRunning();
 
     expect(isRunningBefore).toEqual(false);
     expect(isRunningAfter).toEqual(true);
+  });
+
+  it('answers on loopback', async function () {
+    const response = await fetch(
+      `http://127.0.0.1:${testApiPort}/content/v1/projects/count`
+    );
+
+    expect(response.status).toEqual(200);
+  });
+
+  it.skipIf(externalAddress === null)(
+    'does not answer on any other address of this machine',
+    async function () {
+      // Without a hostname node listens on every interface, so a read API
+      // over every local Project is on the network while the log line and
+      // docs/local-api.md both say localhost
+      await expect(
+        fetch(
+          `http://${externalAddress}:${testApiPort}/content/v1/projects/count`,
+          {
+            signal: AbortSignal.timeout(5000),
+          }
+        )
+      ).rejects.toThrow();
+    }
+  );
+
+  it('serves the OpenAPI document', async function () {
+    // Only a real server reaches `.doc()`, the in-process client below is
+    // typed off the routes and never requests this path
+    const response = await fetch(
+      `http://127.0.0.1:${testApiPort}/openapi.json`
+    );
+
+    expect(response.status).toEqual(200);
+    expect(response.headers.get('content-type')).toContain('application/json');
+
+    const document = (await response.json()) as OpenApiDocument;
+
+    expect(document.openapi).toEqual('3.0.0');
+    expect(document.info.title).toEqual('elek.io local API');
+    expect(document.info.version).toBeDefined();
+    expect(Object.keys(document.paths).length).toBeGreaterThan(0);
+  });
+
+  it('documents every route the reference UI lists', async function () {
+    const response = await fetch(
+      `http://127.0.0.1:${testApiPort}/openapi.json`
+    );
+    const document = (await response.json()) as OpenApiDocument;
+
+    // The paths docs/local-api.md promises, in the OpenAPI `{param}` form
+    const documented = [
+      '/content/v1/projects',
+      '/content/v1/projects/count',
+      '/content/v1/projects/{projectId}',
+      '/content/v1/projects/{projectId}/collections',
+      '/content/v1/projects/{projectId}/collections/count',
+      '/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}',
+      '/content/v1/projects/{projectId}/components',
+      '/content/v1/projects/{projectId}/components/count',
+      '/content/v1/projects/{projectId}/components/{componentIdOrSlug}',
+      '/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}/entries',
+      '/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}/entries/count',
+      '/content/v1/projects/{projectId}/collections/{collectionIdOrSlug}/entries/{entryId}',
+      '/content/v1/projects/{projectId}/assets',
+      '/content/v1/projects/{projectId}/assets/count',
+      '/content/v1/projects/{projectId}/assets/{assetId}',
+    ];
+
+    expect(Object.keys(document.paths).toSorted()).toEqual(
+      documented.toSorted()
+    );
+  });
+
+  it('resolves every $ref in the OpenAPI document', async function () {
+    // A recursive schema without a component name makes the generator
+    // inline itself until the stack runs out, so the whole document fails
+    const response = await fetch(
+      `http://127.0.0.1:${testApiPort}/openapi.json`
+    );
+    const document = (await response.json()) as OpenApiDocument;
+    const components = Object.keys(document.components?.schemas ?? {});
+
+    expect(components).toContain('MdAstBlockNode');
+    expect(components).toContain('MdAstPhrasingNode');
+
+    const dangling = refsIn(document).filter(
+      (ref) => components.includes(ref) === false
+    );
+    expect(dangling).toEqual([]);
+  });
+
+  it('serves the reference UI pointing at the OpenAPI document', async function () {
+    const response = await fetch(`http://127.0.0.1:${testApiPort}/`);
+
+    expect(response.status).toEqual(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+
+    const html = await response.text();
+    expect(html).toContain('/openapi.json');
   });
 
   // Projects
@@ -348,36 +447,24 @@ describe('API', function () {
     expect(body.message).toEqual('Not Found - /this-does-not-exist');
   });
 
-  it('should return 500 for internal errors', async function () {
+  it('should return 404 in the CoreError envelope for an entity that does not exist', async function () {
     const res = await app.request(
       `/content/v1/projects/${crypto.randomUUID()}`
     );
 
-    expect(res.status).toEqual(500);
+    expect(res.status).toEqual(404);
     const body = (await res.json()) as {
-      error: { type: string; message: string };
+      error: { type: string; message: string; statusCode: number };
     };
     expect(body.error).toBeDefined();
-    expect(body.error.type).toBe('Internal');
+    expect(body.error.type).toBe('NotFound');
+    expect(body.error.statusCode).toBe(404);
     expect(body.error.message).toBeDefined();
   });
 
   it('should be able to stop the API and verify it is not running anymore', async function () {
     const isRunningBefore = core.api.isRunning();
-    core.api.stop();
-
-    await vi.waitFor(
-      () => {
-        const isCurrentlyRunning = core.api.isRunning();
-        if (isCurrentlyRunning === true) {
-          throw new Error('Server is still running');
-        }
-      },
-      {
-        timeout: 10000,
-        interval: 20,
-      }
-    );
+    await core.api.stop();
 
     const isRunningAfter = core.api.isRunning();
 
@@ -385,3 +472,46 @@ describe('API', function () {
     expect(isRunningAfter).toEqual(false);
   });
 });
+
+/**
+ * Names of every `#/components/schemas/<name>` a document references, so a
+ * schema the generator failed to emit shows up as a dangling reference.
+ */
+function refsIn(document: OpenApiDocument): string[] {
+  const refs = new Set<string>();
+
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (typeof node !== 'object' || node === null) {
+      return;
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (key === '$ref' && typeof value === 'string') {
+        refs.add(value.replace('#/components/schemas/', ''));
+      } else {
+        walk(value);
+      }
+    }
+  };
+
+  walk(document);
+  return [...refs];
+}
+
+/**
+ * An IPv4 address of this machine that is not loopback, or null when it
+ * has none, which is what a sandboxed runner looks like.
+ */
+function externalIpv4(): string | null {
+  for (const addresses of Object.values(Os.networkInterfaces())) {
+    for (const address of addresses ?? []) {
+      if (address.family === 'IPv4' && address.internal === false) {
+        return address.address;
+      }
+    }
+  }
+  return null;
+}

@@ -367,6 +367,11 @@ describe('buildMdAstSchemaForFeatures', () => {
         'vbscript:msgbox(1)',
         'file:///etc/passwd',
         '//evil.example.com',
+        // Site-relative in shape, cross-origin once resolved
+        '/\\evil.example.com',
+        '/\t/evil.example.com',
+        '/\n/evil.example.com',
+        '/\r/evil.example.com',
       ]) {
         expect(() => schema.parse(linkTree(url)), url).toThrow();
       }
@@ -583,6 +588,19 @@ describe('buildMdAstSchemaForFeatures', () => {
       expect(() =>
         schema.parse(nest('blockquote', MAX_MDAST_DEPTH))
       ).not.toThrow();
+    });
+
+    it('answers an adversarially deep tree with an issue, not a RangeError', () => {
+      // The guard has to run before zod walks the tree, or the recursion
+      // that would find the overshoot overflows the stack first
+      const schema = buildMdAstSchemaForFeatures(
+        makeCtx({ blockquotes: true })
+      );
+
+      const result = schema.safeParse(nest('blockquote', 2000));
+
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]?.message).toMatch(/nesting depth/);
     });
 
     it('rejects a blockquote chain one level deeper than MAX_MDAST_DEPTH', () => {

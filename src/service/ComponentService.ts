@@ -33,6 +33,7 @@ import {
   collectionFileSchema,
   entryFileSchema,
   flattenFieldDefinitions,
+  type ComponentResolver,
   type FieldDefinition,
   type ProjectLanguages,
   type Uuid,
@@ -45,16 +46,35 @@ import {
 } from '../util/fieldDefinitionDiff.js';
 import { transformComponentValues } from '../util/componentTransform.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
-import type { EntryIssue } from '../util/entryTransform.js';
-import { applyMigrations, componentMigrations } from './migrations/index.js';
+import {
+  componentIdsOf,
+  preloadComponentResolver,
+} from '../util/componentResolver.js';
+import {
+  assertResolutionSlugsAreKnown,
+  type EntryIssue,
+} from '../util/entryTransform.js';
+import {
+  applyMigrations,
+  componentMigrations,
+  migrating,
+} from './migrations/index.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * Service that manages CRUD functionality for Component files on disk
+ * A Component is the folder `components/<uuid>/`, holding `component.json`. It
+ * is a reusable bundle of field definitions that a Collection's dynamic fields
+ * embed by reference rather than by copy.
+ *
+ * An update cascades into every Entry holding the Component, and the file plus
+ * every rewritten Entry land in one commit.
+ *
+ * @see ../../docs/schema-changes.md
  */
 export class ComponentService
   extends AbstractSlugIndexedEntityService<ComponentFile>
@@ -83,6 +103,7 @@ export class ComponentService
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService
   ) {
     super(
@@ -91,6 +112,7 @@ export class ComponentService
       pathTo,
       logService,
       jsonFileService,
+      cacheService,
       gitService
     );
 
@@ -98,7 +120,11 @@ export class ComponentService
   }
 
   /**
-   * Resolves a UUID-or-slug string to a component UUID.
+   * Resolves a UUID-or-slug string to a Component UUID.
+   *
+   * A UUID is accepted only when that Component folder exists on disk,
+   * otherwise it falls back to the slug index, rebuilt once on a miss.
+   * Throws `NotFound` when neither matches.
    */
   public async resolveComponentId(
     props: ResolveComponentIdProps
@@ -107,12 +133,16 @@ export class ComponentService
   }
 
   /**
-   * Creates a new Component
+   * Writes the Component folder and its `component.json`, then commits, and
+   * puts the new slug into the in-memory index. Core generates the
+   * Component's `id`, but field-definition `id`s are caller-supplied and
+   * become the identity later updates match on.
    *
-   * Core generates the Component's `id`, but field-definition `id`s are
-   * caller-supplied (pass a UUID per field definition, for example via
-   * `uuid()`). They become the stable identity used to match field definitions
-   * on later updates, see `update`.
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
+   * `Conflict` on a slug already in use, and `BadRequest` on a circular
+   * `ofComponents` reference.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public async create<T extends Component = Component>(
     props: CreateComponentProps
@@ -151,9 +181,14 @@ export class ComponentService
 
         const index = await this.getSlugIndex(validatedProps.projectId);
 
-        if (Object.values(index).includes(componentSlug)) {
+        // Named by id, never by the slug the caller sent, which the
+        // service boundary would log. See contributing/logging.md
+        const clashing = Object.entries(index).find(
+          ([, existing]) => existing === componentSlug
+        );
+        if (clashing) {
           throw CoreError.conflict(
-            `Component slug "${componentSlug}" is already in use by another component`
+            `Component slug is already in use by Component "${clashing[0]}"`
           );
         }
 
@@ -182,8 +217,8 @@ export class ComponentService
           });
         }, [componentPath]);
 
-        index[id] = componentSlug;
-        await this.safeWriteSlugIndex(validatedProps.projectId, index);
+        // The next lookup rebuilds from disk, which now holds the Component
+        this.dropSlugIndex(validatedProps.projectId);
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toComponent(componentFile) as T;
       }
@@ -191,7 +226,12 @@ export class ComponentService
   }
 
   /**
-   * Returns a Component by ID
+   * Returns a Component by ID.
+   *
+   * With `commitHash` the file is read out of git history and run through the
+   * migration chain, so a historical read can additionally throw
+   * `VersionSkew` or `BadRequest`. A working-tree read parses strictly and
+   * does not migrate.
    */
   public async read<T extends Component = Component>(
     props: ReadComponentProps
@@ -229,7 +269,11 @@ export class ComponentService
   }
 
   /**
-   * Reads a Component by its slug
+   * Reads a Component by its slug, resolved through the slug index, throwing
+   * `NotFound` when no Component carries it. A UUID is accepted too, because
+   * this goes through `resolveComponentId`.
+   *
+   * `commitHash` is forwarded to `read`.
    */
   public async readBySlug<T extends Component = Component>(
     props: ReadBySlugComponentProps
@@ -246,7 +290,12 @@ export class ComponentService
   }
 
   /**
-   * Returns the commit history of a Component
+   * The git log filtered to the Component's own `component.json` on the
+   * current branch, newest first and unpaginated. Each returned `hash` is
+   * what `read({ commitHash })` takes.
+   *
+   * An unknown or never-committed Component yields an empty array rather
+   * than an error.
    */
   public async history(props: ComponentHistoryProps): Promise<GitCommit[]> {
     return this.validated(
@@ -268,20 +317,16 @@ export class ComponentService
   }
 
   /**
-   * Updates given Component
+   * Field definitions are matched by `id`. Send back the `id` of every one
+   * you want to keep, a missing or changed `id` counts as a new field and
+   * removes the Entry data keyed to the old one. The Component file and every
+   * Entry the cascade rewrites land in one commit that rolls back as a unit.
    *
-   * Field definitions are matched by `id`. Send back the `id` of every field
-   * definition you want to keep so Core matches it to the existing one and
-   * preserves the entry data stored under it, even across slug renames or type
-   * changes. A field definition with no `id` (or a changed `id`) is treated as
-   * new, so the old field and the entry data keyed to it is removed. Ids are
-   * caller-supplied (Core does not generate them), so always round-trip the
-   * ids you read.
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
+   * `Conflict` on a taken slug or an ambiguous change, carrying structured
+   * issues, and `BadRequest` on a circular reference.
    *
-   * Handles fieldDefinition change cascade across all entries that reference
-   * this Component. Deterministic changes (slug renames, field removals,
-   * additions with defaults) are applied automatically. Ambiguous changes
-   * throw CoreError.conflict() with structured issues.
+   * @see ../../docs/schema-changes.md
    */
   public async update<T extends Component = Component>(
     props: UpdateComponentProps
@@ -340,6 +385,8 @@ export class ComponentService
         const newFieldDefs = validatedProps.fieldDefinitions;
         const changes = diffFieldDefinitions(oldFieldDefs, newFieldDefs);
 
+        assertResolutionSlugsAreKnown(resolutions, newFieldDefs);
+
         await this.withGitRollback(projectPath, async () => {
           const filesToGitAdd: string[] = [componentFilePath];
 
@@ -372,11 +419,8 @@ export class ComponentService
           });
         });
 
-        // Update index after successful commit
         if (prevComponentFile.slug !== newSlug) {
-          const index = await this.getSlugIndex(validatedProps.projectId);
-          index[validatedProps.id] = newSlug;
-          await this.safeWriteSlugIndex(validatedProps.projectId, index);
+          this.dropSlugIndex(validatedProps.projectId);
         }
 
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
@@ -402,7 +446,7 @@ export class ComponentService
     );
     if (existingUuid && existingUuid[0] !== componentId) {
       throw CoreError.conflict(
-        `Component slug "${newSlug}" is already in use by another component`
+        `Component slug is already in use by Component "${existingUuid[0]}"`
       );
     }
   }
@@ -437,6 +481,10 @@ export class ComponentService
 
     const filesToGitAdd: string[] = [];
     const allIssues: EntryIssue[] = [];
+    const componentResolver = await this.buildComponentResolver(
+      projectId,
+      newFieldDefs
+    );
 
     // Find all collections that reference this component
     const collectionsPath = this.pathTo.collections(projectId);
@@ -500,7 +548,8 @@ export class ComponentService
             newFieldDefs,
             changes,
             referencingDynamicFields,
-            languages
+            languages,
+            componentResolver
           );
 
           allIssues.push(...result.issues);
@@ -514,7 +563,8 @@ export class ComponentService
                 resolutions,
                 entryFile.id,
                 newFieldDefs,
-                languages
+                languages,
+                componentResolver
               );
             }
 
@@ -556,17 +606,38 @@ export class ComponentService
   }
 
   /**
+   * Pre-loads every Component the given field definitions reach, so the
+   * cascade can build a schema for a nested dynamic field.
+   */
+  private async buildComponentResolver(
+    projectId: Uuid,
+    fieldDefinitions: FieldDefinition[]
+  ): Promise<ComponentResolver> {
+    return preloadComponentResolver(
+      componentIdsOf(fieldDefinitions),
+      async (componentId) => {
+        const component = await this.read({ projectId, id: componentId });
+        return component.fieldDefinitions;
+      }
+    );
+  }
+
+  /**
    * Applies a single Entry's resolutions onto its final values in place.
    *
-   * Each resolved value is validated against its field definition schema before
-   * being written, throwing on a validation failure.
+   * Every slug is known to be declared by the new field definitions, because
+   * `update` rejects an unknown one at its boundary before any Entry is
+   * touched. Each value is validated against its field definition here and
+   * throws `BadRequest` when it does not fit, which fails the update inside
+   * the git rollback rather than midway through the Entries.
    */
   private applyEntryResolutions(
     finalValues: Record<string, Value>,
     resolutions: NonNullable<UpdateComponentProps['resolutions']>,
     entryId: Uuid,
     newFieldDefs: FieldDefinition[],
-    languages: ProjectLanguages
+    languages: ProjectLanguages,
+    componentResolver: ComponentResolver
   ): void {
     const entryResolutions = resolutions[entryId];
     if (!entryResolutions) return;
@@ -574,7 +645,11 @@ export class ComponentService
     for (const [fieldSlug, resolvedValue] of Object.entries(entryResolutions)) {
       const fieldDef = newFieldDefs.find((fd) => fd.slug === fieldSlug);
       if (fieldDef) {
-        const schema = getValueSchemaFromFieldDefinition(fieldDef, languages);
+        const schema = getValueSchemaFromFieldDefinition(
+          fieldDef,
+          languages,
+          componentResolver
+        );
         const parseResult = schema.safeParse(resolvedValue);
         if (!parseResult.success) {
           throw CoreError.badRequest(
@@ -590,7 +665,13 @@ export class ComponentService
   /**
    * Deletes given Component
    *
-   * Blocks deletion if the Component is still referenced by a Collection or another Component.
+   * Blocks the delete with `Conflict` when a Collection or another Component
+   * still references it. An unconstrained `component` field, one whose
+   * `ofComponents` is empty, counts as referencing every Component, so a
+   * single one anywhere in the Project blocks every delete.
+   *
+   * The `Conflict` names the referring entities in its message text only,
+   * with no structured cause.
    */
   public async delete(props: DeleteComponentProps): Promise<void> {
     return this.mutating('delete', deleteComponentSchema, props, async () => {
@@ -614,7 +695,7 @@ export class ComponentService
       const componentPath = this.pathTo.component(props.projectId, props.id);
 
       await this.withGitRollback(projectPath, async () => {
-        await Fs.remove(componentPath);
+        await this.jsonFileService.delete(componentPath);
         await this.gitService.add(projectPath, [componentPath]);
         await this.gitService.commit(projectPath, {
           method: 'delete',
@@ -622,12 +703,20 @@ export class ComponentService
         });
       });
 
-      const index = await this.getSlugIndex(props.projectId);
-      delete index[props.id];
-      await this.safeWriteSlugIndex(props.projectId, index);
+      this.dropSlugIndex(props.projectId);
     });
   }
 
+  /**
+   * One page of Components, in whatever order the filesystem returns the
+   * folders rather than any sort.
+   *
+   * `limit` defaults to 15 and `limit: 0` returns everything from `offset`.
+   * `total` counts every Component folder in the Project rather than the
+   * page, and a Component whose file fails to read or validate is logged and
+   * dropped while still counted in `total`, so one broken Component never
+   * fails the call.
+   */
   public async list<T extends Component = Component>(
     props: ListComponentsProps
   ): Promise<PaginatedList<T>> {
@@ -663,6 +752,12 @@ export class ComponentService
     });
   }
 
+  /**
+   * Counts the folders under `components/` whose name parses as a UUID,
+   * without opening `component.json`. So it counts a Component whose file is
+   * missing or unreadable, can exceed the length of what `list` returns, and
+   * can disagree with `listAllIds`, which reads the slug index instead.
+   */
   public async count(props: CountComponentsProps): Promise<number> {
     return this.validated('count', countComponentsSchema, props, async () => {
       const refs = await this.listReferences(
@@ -689,18 +784,24 @@ export class ComponentService
   }
 
   /**
-   * Migrates a potentially outdated Component file to the current schema
+   * Migrates a potentially outdated Component file to the current schema.
+   *
+   * Throws `BadRequest` when the file does not match what Core expects, with
+   * the underlying `ZodError` as its cause, and `VersionSkew` when it was
+   * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedComponentFile: unknown) {
-    const loose = migrateComponentSchema.parse(
-      potentiallyOutdatedComponentFile
-    );
-    const migrated = applyMigrations(
-      loose,
-      componentMigrations,
-      this.coreVersion
-    );
-    return componentFileSchema.parse(migrated);
+    return migrating('Component', () => {
+      const loose = migrateComponentSchema.parse(
+        potentiallyOutdatedComponentFile
+      );
+      const migrated = applyMigrations(
+        loose,
+        componentMigrations,
+        this.coreVersion
+      );
+      return componentFileSchema.parse(migrated);
+    });
   }
 
   private toComponent(componentFile: ComponentFile): Component {
@@ -710,8 +811,13 @@ export class ComponentService
   }
 
   /**
-   * Validates that no circular references exist in dynamic field definitions.
-   * Walks the tree of ofComponents references to detect cycles.
+   * Walks `ofComponents` looking for a cycle, throwing `BadRequest` when it
+   * finds one.
+   *
+   * An empty `ofComponents` is skipped rather than expanded to the whole slug
+   * index: it declares no edge, because the schema builder answers it with a
+   * permissive item schema and never recurses. `visited` is copied per
+   * branch, so a diamond is re-walked rather than pruned.
    */
   private async validateNoCircularReferences(
     componentId: string | null,
@@ -737,19 +843,19 @@ export class ComponentService
     }
 
     for (const fieldDefinition of componentFieldDefs) {
-      let componentIds: string[];
-
+      // An unconstrained dynamic field declares no edge in the reference
+      // graph. The schema builder answers an empty `ofComponents` with one
+      // permissive item schema and never recurses into it, so it cannot be
+      // part of a cycle. Expanding it to every Component in the Project
+      // reached the Component's own id and reported it as its own cycle.
       if (
-        fieldDefinition.valueType === 'component' &&
-        fieldDefinition.ofComponents.length > 0
+        fieldDefinition.valueType !== 'component' ||
+        fieldDefinition.ofComponents.length === 0
       ) {
-        componentIds = fieldDefinition.ofComponents;
-      } else {
-        const index = await this.getSlugIndex(projectId);
-        componentIds = Object.keys(index);
+        continue;
       }
 
-      for (const cId of componentIds) {
+      for (const cId of fieldDefinition.ofComponents) {
         const component = await this.read({ projectId, id: cId });
         await this.validateNoCircularReferences(
           cId,
@@ -762,9 +868,12 @@ export class ComponentService
   }
 
   /**
-   * Finds dynamic field slugs that (transitively) reference the given componentId.
-   * A dynamic field references a component if its ofComponents contains the componentId,
-   * or if any of its ofComponents' own fieldDefinitions transitively reference it.
+   * Finds dynamic field slugs that reference the given componentId, directly
+   * or transitively.
+   *
+   * A dynamic field matches when its `ofComponents` is empty, which means
+   * every Component, when it lists the id, or when one of the Components it
+   * does list transitively references it.
    */
   private async findDynamicFieldsReferencingComponent(
     fieldDefinitions: FieldDefinition[],
@@ -870,7 +979,11 @@ export class ComponentService
   }
 
   /**
-   * Checks if any field definition in the array references the given componentId
+   * The one place the empty-`ofComponents` rule is decided, for both delete
+   * protection and the update cascade: a `component` field matches when its
+   * `ofComponents` lists the id, or when the list is empty.
+   *
+   * Per array and not transitive, the callers walk.
    */
   private areFieldDefinitionsReferencingComponent(
     fieldDefinitions: FieldDefinition[],

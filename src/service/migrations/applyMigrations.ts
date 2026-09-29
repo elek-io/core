@@ -3,6 +3,15 @@ import type { Migration } from '../../schema/migrationSchema.js';
 import type { Version } from '../../schema/baseSchema.js';
 import { CoreError } from '../../util/shared.js';
 
+/**
+ * Walks `data` forward to `targetVersion`, one registered migration at a time.
+ * It clones its input and reads no disk.
+ *
+ * Two decisions the loop does not explain: data whose `coreVersion` is newer
+ * than `targetVersion` throws `VersionSkew` naming both versions rather than
+ * being stamped down, and an older version with no migration whose `from`
+ * matches is assumed backward-compatible and simply stamped to the target.
+ */
 export function applyMigrations(
   data: Record<string, unknown>,
   migrations: Migration[],

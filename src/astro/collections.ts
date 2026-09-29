@@ -13,9 +13,14 @@ import { getCore, ensureProjectAvailable } from './core.js';
 type ElekCollection = ReturnType<typeof defineCollection>;
 
 /**
- * Where the binaries of one Project's Assets are saved. `imageDir`
- * takes the images, `publicDir` every other file. `true` takes both
- * defaults.
+ * Where the binaries of one Project's Assets are saved. `imageDir` takes the
+ * images, `publicDir` every other file, and `true` takes both defaults.
+ *
+ * A relative path resolves against the Astro project root. `imageDir` has to
+ * stay inside the project for `astro:assets` to process an image, and
+ * `publicDir` inside Astro's own `publicDir` for the file to be served. An
+ * Asset landing outside either is still saved and stored, with `src` or `href`
+ * null and a warning, rather than failing the build.
  */
 export type ElekAssetsOption = true | { imageDir?: string; publicDir?: string };
 
@@ -141,43 +146,16 @@ function assertAssetsReachable(
 }
 
 /**
- * Derives an Astro content collection for every elek.io Collection of
- * every Project the config declares, plus one Assets collection per
- * Project.
+ * Derives Astro content collections from the elek.io Collections the options
+ * name. That object is the complete list, nothing outside it is derived, and
+ * with no options at all it derives everything and warns. Keys are the alias
+ * plus the plural slug in PascalCase (`websitePosts`), Assets `${alias}Assets`.
  *
- * Keys are the Project alias followed by the Collection's plural slug
- * in PascalCase (`websitePosts`), always prefixed, also when a single
- * Project is declared. The Assets collection of a Project is
- * `${alias}Assets`.
+ * Reads the content model from disk. Throws `Conflict` on a key two sources
+ * derive, `BadRequest` on a selection naming nothing, deriving nothing, or
+ * leaving out Assets a derived Collection can reference.
  *
- * Reads the content model from disk, so the Projects have to be in the
- * data directory already. In a build that is what the elek()
- * integration takes care of, it runs before the content config loads.
- *
- * Called without options it derives everything and warns, which is the
- * exploration step. An options object is the complete list instead: a
- * key left out contributes nothing, and so does an alias left out of a
- * key.
- *
- * @example
- * ```ts
- * // src/content.config.ts
- * import { elekCollections } from '@elek-io/core/astro';
- * import { config } from '../elek.config';
- *
- * // Everything, to find your way around a Project. Warns.
- * export const collections = {
- *   ...(await elekCollections(config)),
- * };
- *
- * // What to ship: exactly what the site reads
- * export const collections = {
- *   ...(await elekCollections(config, {
- *     collections: { website: ['pages'], shop: ['products'] },
- *     assets: { website: { imageDir: './src/media' }, shop: true },
- *   })),
- * };
- * ```
+ * @see ../../docs/usage.md
  */
 export async function elekCollections<const T extends ElekConfig>(
   config: T,
@@ -268,6 +246,10 @@ export async function elekCollections<const T extends ElekConfig>(
   if (options === undefined) {
     core.logger.warn({
       source: 'core',
+      meta: {
+        'elek.collection.count': keys.length,
+        'elek.project.count': Object.keys(declared.projects).length,
+      },
       message: `elekCollections() derived all ${String(keys.length)} collections of ${String(Object.keys(declared.projects).length)} Project(s), because it was called without a selection. That is meant for finding your way around a Project: it reads content this site may never use, and an Assets collection copies every binary of its Project into the site on each sync. Name what the site reads before shipping, for example elekCollections(config, { collections: { ${Object.keys(declared.projects)[0] ?? 'website'}: ['posts'] }, assets: { ${Object.keys(declared.projects)[0] ?? 'website'}: true } }).`,
     });
   }

@@ -62,6 +62,7 @@ const router = createRouter()
         projectId,
         idOrSlug: collectionIdOrSlug,
       });
+      c.set('collectionId', collectionId);
       const data = await c.var.entryService.list({
         projectId,
         collectionId,
@@ -114,6 +115,7 @@ const router = createRouter()
         projectId,
         idOrSlug: collectionIdOrSlug,
       });
+      c.set('collectionId', collectionId);
       const data = await c.var.entryService.count({ projectId, collectionId });
 
       return c.json(data, 200);
@@ -167,6 +169,7 @@ const router = createRouter()
         projectId,
         idOrSlug: collectionIdOrSlug,
       });
+      c.set('collectionId', collectionId);
       const data = await c.var.entryService.read({
         projectId,
         collectionId,

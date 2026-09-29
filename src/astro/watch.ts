@@ -35,13 +35,13 @@ export interface WatchContentProps {
  * Reloads a collection while `astro dev` runs, whenever a file below
  * one of the given paths changes.
  *
- * The watcher belongs to vite and covers the whole Astro project, so
- * every handler fires for every file the site has. Matching the changed
- * path against `paths` is what keeps an edit somewhere else from
- * reloading Project content.
+ * The `paths` sit under the elek.io data directory, outside the Astro
+ * project, so `watcher.add` is what extends vite's watcher to them. The
+ * watcher then covers both, and every handler fires for every file, so
+ * matching against `paths` is what keeps an unrelated edit from reloading.
  *
- * Runs never overlap: a change arriving during a run queues exactly one
- * more, so a burst cannot pile up reads of the same Collection.
+ * Runs never overlap: a change arriving during a run queues exactly one more,
+ * so a burst cannot pile up reads of the same Collection.
  */
 export function watchContent(props: WatchContentProps): void {
   const { watcher, paths, onChange, onError } = props;

@@ -15,7 +15,7 @@ import {
   buildModelDigest,
 } from './schema.js';
 
-/** Markdown features with everything disabled — tests opt in. */
+/** Markdown features with everything disabled, tests opt in. */
 const offMarkdownFeatures: MarkdownFeatures = {
   headings: [],
   blockquotes: false,

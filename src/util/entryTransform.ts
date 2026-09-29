@@ -9,6 +9,43 @@ import type { Value } from '../schema/valueSchema.js';
 import { buildDefaultValue } from './defaultValueBuilder.js';
 import type { FieldChange } from './fieldDefinitionDiff.js';
 import { isDeepStrictEqual } from 'node:util';
+import { CoreError } from './shared.js';
+
+/**
+ * Rejects a resolution naming a field the new definitions do not declare,
+ * before anything on disk is touched.
+ *
+ * Such a slug used to be written into the Entry unvalidated, and throwing
+ * from inside the cascade instead would fail with some Entries rewritten and
+ * some not. Failing the whole update at the boundary leaves every one of them
+ * as it was.
+ *
+ * @see ../../docs/schema-changes.md
+ */
+export function assertResolutionSlugsAreKnown(
+  resolutions: Record<string, Record<string, Value>> | undefined,
+  newFieldDefinitions: FieldDefinition[]
+): void {
+  if (resolutions === undefined) {
+    return;
+  }
+
+  const declared = new Set(
+    newFieldDefinitions.map((fieldDefinition) => fieldDefinition.slug)
+  );
+
+  for (const [entryId, entryResolutions] of Object.entries(resolutions)) {
+    for (const fieldSlug of Object.keys(entryResolutions)) {
+      if (declared.has(fieldSlug)) {
+        continue;
+      }
+      // Ids and a field slug, both of which a log file may hold
+      throw CoreError.badRequest(
+        `Resolution for Entry "${entryId}" names field "${fieldSlug}", which the new field definitions do not declare`
+      );
+    }
+  }
+}
 
 export type EntryIssueType =
   | 'missing_required'
@@ -44,18 +81,16 @@ export interface TransformResult {
 }
 
 /**
- * Transforms entry values based on field definition changes.
+ * Rebuilds an Entry's values record on a field definition change, matching by
+ * UUID, so a slug swap or a rename plus an add with the same slug is safe.
  *
- * Rebuilds the values record from scratch using UUID-based mapping
- * to safely handle slug swaps, renames + add-with-same-slug, etc.
+ * Two deterministic transforms destroy content the caller then writes
+ * straight to disk: a value whose definition is gone is dropped, and a
+ * narrowed `ofComponents` or `ofCollections` strips the items and Entry
+ * references no longer allowed. Asset references stay, an empty allowlist
+ * strips nothing, and a non-deterministic change raises an issue instead.
  *
- * Deterministic transforms are applied automatically:
- * - Slug renames (same UUID, different slug)
- * - Field removals (strip orphaned keys)
- * - Field additions with defaults or optional fields
- * - Disallowed component items / collection references (auto-stripped)
- *
- * Non-deterministic changes produce issues that require user resolution.
+ * @see ../../docs/schema-changes.md
  */
 export function transformEntryValues(
   entryId: Uuid,

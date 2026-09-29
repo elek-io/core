@@ -2,7 +2,14 @@
 
 Projects live in the local data directory. On your machine the Desktop app keeps that directory filled. A build environment such as a CI runner starts empty, so any pipeline that consumes your content needs to get it there first. That step is called provisioning: Core fetches a Project from its remote into the data directory, read-only, and leaves it there for whatever your pipeline does next.
 
-What comes next is up to you. Building an Astro site has a zero-step path through the `elek()` integration. Astro is the framework we focused on first, integrations for more frameworks will follow. But once a Project is provisioned it is a regular local Project, so everything else works too: reading it programmatically with `ElekIoCore`, exporting JSON with `elek export`, generating types and clients, or running your own scripts.
+What comes next is up to you. Building an Astro site has a zero-step path through the `elek()` integration, the framework we focused on first, and integrations for more frameworks will follow.
+
+Once a Project is provisioned it is a regular local Project, so everything else works too:
+
+- reading it programmatically with `ElekIoCore`
+- exporting JSON with `elek export`
+- generating types and clients
+- running your own scripts
 
 ## What a CI environment sees
 
@@ -56,11 +63,15 @@ export default defineConfig({
 });
 ```
 
-Your `content.config.ts` imports the same config and references each Project by its alias, see [`usage.md`](./usage.md#astro-integration). On your own machine, where the Project is managed by the Desktop app, the integration detects that and leaves the copy untouched, so `astro dev` keeps reading your live drafts. Without the integration, a build on an empty runner fails with an error pointing here.
+Your `content.config.ts` imports the same config and references each Project by its alias, see [`usage.md`](./usage.md#astro-integration).
+
+On your own machine, where the Project is managed by the Desktop app, the integration detects that and leaves the copy untouched, so `astro dev` keeps reading your live drafts. Without the integration, a build on an empty runner fails with an error pointing here.
 
 ## Authentication for private remotes
 
-Set the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable to a read token for the content repository (for example a GitHub fine-grained PAT with contents read access, or a GitLab project access token). The token is handed to git per invocation and never written into URLs, logs or config. Some providers expect a specific username alongside the token, set `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` then, it defaults to `x-access-token`. A public remote needs no token at all.
+Set the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable to a read token for the content repository, for example a GitHub fine-grained PAT with contents read access, or a GitLab project access token. The token is handed to git per invocation and never written into URLs, logs or config.
+
+Some providers expect a specific username alongside the token, set `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` then, it defaults to `x-access-token`. A public remote needs no token at all.
 
 SSH remote URLs work as well. They authenticate through the runner's ambient SSH setup, for example a deploy key loaded into ssh-agent, the token does not apply to SSH.
 
@@ -126,7 +137,11 @@ Which content state provisioning fetches is the `ref`. It is either a channel, w
 
 Set the ref per Project in the integration config or via `--ref` on `elek provision`. The `ELEK_IO_CHANNEL` environment variable overrides both and applies to every Project of a deployment, so one variable can repoint a whole pipeline. Because it is deployment-wide, it accepts channels only, exact versions are per-Project decisions and belong into the configuration.
 
-For a content staging site, create a second deployment (a separate provider project or a dedicated workflow) with `ELEK_IO_CHANNEL=preview` for the latest published previews, or `ELEK_IO_CHANNEL=draft` for the raw editing state, and protect it from public access. Do not wire drafts into the provider's regular pull request previews, those URLs are shareable and would expose unpublished content alongside every code review.
+For a content staging site, create a second deployment, a separate provider project or a dedicated workflow:
+
+- `ELEK_IO_CHANNEL=preview` gives it the latest published previews, `ELEK_IO_CHANNEL=draft` the raw editing state.
+- Protect it from public access.
+- Do not wire drafts into the provider's regular pull request previews. Those URLs are shareable and would expose unpublished content alongside every code review.
 
 Pinning a version gives reproducible pipelines: the same ref always produces the same content. The pipeline then no longer moves when editors publish, until you change the pin.
 
@@ -136,7 +151,9 @@ A Release pushes the published content to the remote, but your pipeline only run
 
 ## How provisioning behaves
 
-The first run clones the Project into the data directory and writes a marker file. Later runs fetch and hard-reset that copy to the requested ref, so a reachable remote always decides what the copy holds, including a cached copy on a reused runner. A copy without the marker belongs to another application (for example the Desktop app) and is never touched. Details in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
+The first run clones the Project into the data directory and writes a marker file. Later runs fetch and hard-reset that copy to the requested ref, so a reachable remote always decides what the copy holds, including a cached copy on a reused runner.
+
+A copy without the marker belongs to another application, for example the Desktop app, and is never touched. Details in [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
 
 ### Building offline
 
@@ -153,9 +170,20 @@ Three failures deliberately stay hard, because building anyway would hide someth
 
 Everything the remote answers stays a hard failure too. "No Release has been published yet", an unknown version, a remote holding a different Project and `VersionSkew` are answers from a reachable remote, not outages.
 
-Programmatically, `provision()` returns `{ project, source, warning }`. The `source` states where the content came from (`remote`, `local-pin`, `local-fallback`, or `local-managed` for a copy another application owns) and `warning` carries the fallback text, non-null exactly when the source is `local-fallback`.
+Programmatically, `provision()` returns `{ project, source, warning }`. The `source` states where the content came from:
 
-Because every provision run overwrites the copy, a provisioned copy is read-only for everyone: any attempt to edit it, also through the Desktop app, throws a `CoreError` of type `PreconditionFailed` instead of losing the edits to the next build. Applications can recognize a provisioned copy through the `isProvisioned` field on the `Project`. To work on the Project again, delete the provisioned copy and clone it.
+| `source` | Meaning |
+| --- | --- |
+| `remote` | Fetched from the remote |
+| `local-pin` | An exact version pin the copy already held |
+| `local-fallback` | The remote could not be reached, the copy on disk was used |
+| `local-managed` | A copy another application owns, left untouched |
+
+`warning` carries the fallback text, and is non-null exactly when the source is `local-fallback`.
+
+Because every provision run overwrites the copy, a provisioned copy is read-only for everyone. Any attempt to edit it, also through the Desktop app, throws a `CoreError` of type `PreconditionFailed` instead of losing the edits to the next build.
+
+Applications can recognize a provisioned copy through the `isProvisioned` field on the `Project`. To work on the Project again, delete the provisioned copy and clone it.
 
 ## Troubleshooting
 
@@ -167,7 +195,7 @@ Because every provision run overwrites the copy, a provisioned copy is read-only
 - **"Could not reach the remote ... building with the copy already in the data directory"**: the fetch failed and the build continued on the cached copy, see [Building offline](#building-offline). The warning names the git failure. The published content did not reach that build, so re-run it once the remote is reachable again.
 - **Project not found, pointing at `elek()`**: the Astro loaders ran without the Project being present. Add the integration, or make sure `ELEK_IO_DATA_DIR` points at the directory that holds it.
 
-## See Also
+## See also
 
 - [`usage.md`](./usage.md) - the programmatic API, the CLI, the Astro integration and all environment variables
 - [`export.md`](./export.md) - exporting provisioned content to plain JSON
