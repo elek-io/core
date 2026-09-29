@@ -19,8 +19,8 @@ import type { LogService } from './LogService.js';
  * It holds a per-Project UUID to slug map, so an entity can be resolved and
  * slug uniqueness checked without scanning every folder. The map is derived
  * rather than authoritative: it lives in memory per Core instance, a miss
- * rebuilds it from the entity folders, and `CacheService` drops it whenever
- * git rewrites a working tree.
+ * rebuilds it from the entity folders, a mutation drops its Project's index,
+ * and `CacheService` drops all of them whenever git rewrites a working tree.
  */
 export abstract class AbstractSlugIndexedEntityService<
   TFile = unknown,
@@ -107,22 +107,18 @@ export abstract class AbstractSlugIndexedEntityService<
   }
 
   /**
-   * Replaces the cached index for a Project, and keeps nothing when caching
-   * is off.
+   * Drops one Project's index after a create, update or delete, so the next
+   * lookup rebuilds it from disk, which already holds the change.
    *
-   * Nothing is written to disk. The index was mirrored into
-   * `slug.index.json` and never read back, so the file cost a write per
-   * mutation and bought nothing.
-   *
-   * @see ../../docs/storage-layout.md
+   * Never write an index back instead. One read before a git step can be
+   * outdated by a clear that lands during it, and writing it back would
+   * undo that clear. A rebuild still running may have read the folders
+   * before the change, so its result is not kept either.
    */
-  protected setSlugIndex(
-    projectId: string,
-    index: Record<string, string>
-  ): void {
-    if (this.cacheService.isEnabled) {
-      this.cachedSlugIndex.set(projectId, index);
-    }
+  protected dropSlugIndex(projectId: string): void {
+    this.cachedSlugIndex.delete(projectId);
+    this.rebuildPromise.delete(projectId);
+    this.generation++;
   }
 
   /**

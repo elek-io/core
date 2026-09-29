@@ -1,6 +1,8 @@
-import { describe, expect, it, onTestFinished } from 'vitest';
+import { exec as gitExec } from 'dugite';
+import Fs from 'fs-extra';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import ElekIoCore from '../index.node.js';
-import core from '../test/setup.js';
+import core, { type Collection } from '../test/setup.js';
 import {
   createCollection,
   createComponent,
@@ -140,5 +142,72 @@ describe('caches with caching off', function () {
         idOrSlug: 'products',
       })
     ).toBe(replacement.id);
+  }, 60000);
+});
+
+/**
+ * A mutation of a Collection or Component used to write the index it read
+ * before its git step back into the cache. A clear landing during that step,
+ * from a sync pulling in the background, was then undone.
+ */
+describe('caches while a Collection is being created', function () {
+  /** A Collection like `renamed`, under another slug */
+  function createLike(
+    projectId: string,
+    like: Collection,
+    slug: { singular: string; plural: string }
+  ) {
+    return core.collections.create({
+      projectId,
+      icon: like.icon,
+      name: like.name,
+      description: like.description,
+      fieldDefinitions: like.fieldDefinitions,
+      slug,
+    });
+  }
+
+  it('keeps a clear that lands while the create commits', async function () {
+    const project = await createProject();
+    onTestFinished(() => project.destroy());
+    const projectPath = core.util.pathTo.project(project.id);
+    const products = await createCollection(project.id);
+    const posts = await createLike(project.id, products, {
+      singular: 'post',
+      plural: 'posts',
+    });
+    // Warms the index, so the create below reads it from the cache
+    await core.collections.readBySlug({ projectId: project.id, slug: 'posts' });
+
+    // While the create commits, "posts" becomes "articles" and the caches
+    // are cleared, the way a pull running alongside it would
+    const commit = core.git.commit.bind(core.git);
+    vi.spyOn(core.git, 'commit').mockImplementationOnce(
+      async (path, message) => {
+        await commit(path, message);
+        const filePath = core.util.pathTo.collectionFile(project.id, posts.id);
+        const file: unknown = await Fs.readJson(filePath);
+        await Fs.writeJson(filePath, {
+          ...Object(file),
+          slug: { singular: 'article', plural: 'articles' },
+        });
+        await gitExec(['commit', '--all', '-m', 'Pulled'], projectPath);
+        await core.git.reset(projectPath, 'hard', 'HEAD');
+      }
+    );
+    await createLike(project.id, products, {
+      singular: 'news-item',
+      plural: 'news',
+    });
+
+    await expect(
+      core.collections.readBySlug({ projectId: project.id, slug: 'posts' })
+    ).rejects.toMatchObject({ type: 'NotFound' });
+    await expect(
+      createLike(project.id, products, {
+        singular: 'article',
+        plural: 'articles',
+      })
+    ).rejects.toMatchObject({ type: 'Conflict' });
   }, 60000);
 });

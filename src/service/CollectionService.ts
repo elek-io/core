@@ -217,9 +217,8 @@ export class CollectionService
           });
         }, [collectionPath]);
 
-        // Update the index (not git-tracked, self-heals on failure)
-        index[id] = slugPlural;
-        this.setSlugIndex(validatedProps.projectId, index);
+        // The next lookup rebuilds from disk, which now holds the Collection
+        this.dropSlugIndex(validatedProps.projectId);
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toCollection(collectionFile) as T;
       }
@@ -467,11 +466,8 @@ export class CollectionService
           });
         });
 
-        // Update index after successful commit
         if (prevCollectionFile.slug.plural !== newSlugPlural) {
-          const index = await this.getSlugIndex(validatedProps.projectId);
-          index[validatedProps.id] = newSlugPlural;
-          this.setSlugIndex(validatedProps.projectId, index);
+          this.dropSlugIndex(validatedProps.projectId);
         }
 
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
@@ -742,10 +738,7 @@ export class CollectionService
           });
         });
 
-        // Remove from index (not git-tracked, self-heals on failure)
-        const index = await this.getSlugIndex(validatedProps.projectId);
-        delete index[validatedProps.id];
-        this.setSlugIndex(validatedProps.projectId, index);
+        this.dropSlugIndex(validatedProps.projectId);
       }
     );
   }

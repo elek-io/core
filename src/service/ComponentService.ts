@@ -217,8 +217,8 @@ export class ComponentService
           });
         }, [componentPath]);
 
-        index[id] = componentSlug;
-        this.setSlugIndex(validatedProps.projectId, index);
+        // The next lookup rebuilds from disk, which now holds the Component
+        this.dropSlugIndex(validatedProps.projectId);
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toComponent(componentFile) as T;
       }
@@ -419,11 +419,8 @@ export class ComponentService
           });
         });
 
-        // Update index after successful commit
         if (prevComponentFile.slug !== newSlug) {
-          const index = await this.getSlugIndex(validatedProps.projectId);
-          index[validatedProps.id] = newSlug;
-          this.setSlugIndex(validatedProps.projectId, index);
+          this.dropSlugIndex(validatedProps.projectId);
         }
 
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
@@ -706,9 +703,7 @@ export class ComponentService
         });
       });
 
-      const index = await this.getSlugIndex(props.projectId);
-      delete index[props.id];
-      this.setSlugIndex(props.projectId, index);
+      this.dropSlugIndex(props.projectId);
     });
   }
 
