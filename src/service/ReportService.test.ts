@@ -296,6 +296,23 @@ describe('what leaves the machine', function () {
     });
   });
 
+  it('refuses a machine the contract cannot describe rather than sending it', async function () {
+    // Linux caps a release at 64 characters, so this is a cap gone wrong,
+    // and a failure naming the field says so where a substitute would not
+    const cloud = await startFakeCloud(accepted);
+    const { core } = createTmpCore({ cloud: { url: cloud.url } });
+    vi.spyOn(Os, 'release').mockReturnValue('6'.repeat(65));
+    onTestFinished(function () {
+      vi.restoreAllMocks();
+    });
+
+    const error = await expectCoreError(core.cloud.reports.create(bugReport()));
+
+    expect(error.type).toBe('BadRequest');
+    expect(error.message).toContain('osRelease');
+    expect(cloud.received).toHaveLength(0);
+  });
+
   it('still sends while Core is in read-only mode', async function () {
     const cloud = await startFakeCloud(accepted);
     const { core } = createTmpCore({
@@ -359,6 +376,29 @@ describe('the log tail a report may attach', function () {
     // Refused here rather than on the wire, so nothing was sent
     expect(cloud.received).toHaveLength(0);
   }, 60000);
+
+  it('refuses a tail at the cap once the rest of the body is added', async function () {
+    // The tail alone is within the contract here, so what refuses it is
+    // the ceiling on the whole body
+    const cloud = await startFakeCloud(accepted);
+    const { core } = createTmpCore({ cloud: { url: cloud.url } });
+    const tail = await core.logger.tail();
+    vi.spyOn(core.logger, 'tail').mockResolvedValue({
+      ...tail,
+      data: 'AAAA'.repeat(512 * 1024),
+    });
+    onTestFinished(function () {
+      vi.restoreAllMocks();
+    });
+
+    const error = await expectCoreError(
+      core.cloud.reports.create(bugReport({ hasLogConsent: true }))
+    );
+
+    expect(error.type).toBe('BadRequest');
+    expect(error.message).toContain('bytes');
+    expect(cloud.received).toHaveLength(0);
+  });
 });
 
 describe('what a caller is told when it does not arrive', function () {

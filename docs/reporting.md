@@ -41,7 +41,7 @@ Three keys carry what the sender wrote:
 
 **Core does not read the User for you.** What you pass is what is sent. All of it is self-declared and none of it is proof of anything. Whether a sender is who they claim is a question a credential answers, never a question the body answers.
 
-Inside `desktop`, `version` is a semantic version while the three runtime versions are plain strings, because a Chrome version has four segments and an application may not have been able to read one at all.
+Inside `desktop`, `version` is a semantic version while the three runtime versions are not, because a Chrome version has four segments. Send `unknown` for one the application could not read.
 
 The schemas are exported from the browser entry as well as the node one, so a renderer that cannot touch the filesystem still validates a form against the same schema Core will, and a character counter reads its cap off `createBugReportSchema.shape.message.maxLength` rather than from a copy of the number.
 
@@ -93,6 +93,22 @@ Core fills in exactly two things, `core` and `logs`. Everything else passes thro
 `platform` and `arch` are the Node spellings (`linux`, `x64`), not the OpenTelemetry ones a log record carries. This describes the machine, and it is not a log record. `osRelease` is included because a desktop bug is often specific to one version of an operating system.
 
 `hasLogConsent` is consent to attaching a tail rather than part of the report, so it is answered by what `logs` holds and is never sent on. The request is `reportRequestSchema` and the answer is `reportResponseSchema`, both exported.
+
+## Limits
+
+elek.io Cloud enforces the same limits, so a report that passes the schema is never refused for its shape. A length counts UTF-16 code units, as `String.length` does, so an emoji counts as two.
+
+| Field | Limit |
+| --- | --- |
+| `message` | 10 to 5000, no control characters except tabs and line breaks |
+| `user` | A User, whose `name` and `email` carry their own limits, see [`usage.md`](./usage.md#setting-the-user-required-before-writing) |
+| `desktop.version`, `core.version` | A semantic version of up to 64 |
+| `desktop.runtime.*` | Up to 64 digits, letters, `.`, `+` and `-` |
+| `core.platform`, `core.arch` | Up to 32 lowercase letters, digits and `_` |
+| `core.osRelease` | Up to 64 printable ASCII characters |
+| `logs.data` | Base64, up to 2 MB |
+
+Core validates what it fills in as well. A `core` value or a log tail outside its limit is a `BadRequest`, and nothing is sent.
 
 ## The log tail
 

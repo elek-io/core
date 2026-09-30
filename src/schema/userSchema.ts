@@ -5,6 +5,15 @@ import { gitSignatureSchema } from './gitSchema.js';
 export const userTypeSchema = z.enum(['local', 'cloud']);
 
 export const baseUserSchema = gitSignatureSchema.extend({
+  /**
+   * Capped here rather than on the git signature, which also reads the
+   * authors of commits nobody made through Core. elek.io Cloud holds an
+   * account and a report to the same caps
+   */
+  name: gitSignatureSchema.shape.name
+    .max(256)
+    .regex(/^[^\p{Cc}]+$/u, 'Name must not contain control characters'),
+  email: z.email().max(254),
   userType: userTypeSchema,
   language: supportedLanguageSchema,
   /**

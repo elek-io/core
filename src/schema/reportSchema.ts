@@ -6,9 +6,26 @@ import { cloudUserSchema, localUserSchema } from './userSchema.js';
 export const reportTypeSchema = z.enum(['bug', 'feedback']);
 export type ReportType = z.infer<typeof reportTypeSchema>;
 
+/*
+ * Every string below is capped, because elek.io Cloud takes a report from
+ * anybody and enforces the same caps. A length counts UTF-16 code units,
+ * as `String.length` and a `maxlength` attribute do, so an emoji is two.
+ * No field takes a control character, since Postgres refuses a NUL.
+ */
+
+/** A version a runtime reported, or the `unknown` Desktop sends instead */
+const runtimeVersionSchema = z.string().max(64).regex(/^[0-9A-Za-z.+-]+$/);
+
 export const createReportBaseSchema = z.object({
   type: reportTypeSchema,
-  message: z.string().min(10).max(5000),
+  message: z
+    .string()
+    .min(10)
+    .max(5000)
+    .regex(
+      /^(?:[^\p{Cc}]|[\t\n\r])*$/u,
+      'Message must not contain control characters other than tabs and line breaks'
+    ),
   /**
    * Who sent the report and who to answer
    *
@@ -25,16 +42,15 @@ export const createReportBaseSchema = z.object({
     .discriminatedUnion('userType', [localUserSchema, cloudUserSchema])
     .nullable(),
   desktop: z.object({
-    version: versionSchema,
+    version: versionSchema.max(64),
     /**
-     * Plain strings rather than versions: a Chrome version has four
-     * segments, and Desktop sends `unknown` for one Electron did not
-     * report
+     * Not semantic versions: a Chrome version has four segments, and
+     * Desktop sends `unknown` for one Electron did not report
      */
     runtime: z.object({
-      electron: z.string(),
-      chrome: z.string(),
-      node: z.string(),
+      electron: runtimeVersionSchema,
+      chrome: runtimeVersionSchema,
+      node: runtimeVersionSchema,
     }),
   }),
 });
@@ -69,13 +85,20 @@ export type CreateReportProps = z.infer<typeof createReportSchema>;
  */
 export const reportRequestSchema = createReportBaseSchema.extend({
   core: z.object({
-    version: versionSchema,
-    platform: z.string(),
-    arch: z.string(),
-    osRelease: z.string(),
+    version: versionSchema.max(64),
+    /** Node's spelling, such as `linux` or `x64` */
+    platform: z.string().max(32).regex(/^[a-z0-9_]+$/),
+    arch: z.string().max(32).regex(/^[a-z0-9_]+$/),
+    /** Printable ASCII. Linux caps its own release string at 64 */
+    osRelease: z.string().max(64).regex(/^[\x20-\x7E]+$/),
   }),
-  /** Only attach log tail when type is bug and hasLogConsent is true */
-  logs: logTailSchema.nullable(),
+  /**
+   * Only attach log tail when type is bug and hasLogConsent is true. The
+   * data is capped at the ceiling the whole body is held to
+   */
+  logs: logTailSchema
+    .extend({ data: z.base64().max(2 * 1024 * 1024) })
+    .nullable(),
 });
 export type ReportRequest = z.infer<typeof reportRequestSchema>;
 

@@ -150,6 +150,8 @@ await core.user.set({
 
 `core.user.get()` returns the current `User` or `null` if none is set (a fresh install has no User).
 
+`name` takes up to 256 characters, with no `|` and no control characters, and `email` is an address of up to 254. A length counts UTF-16 code units, as `String.length` does. `core.user.set()` throws `BadRequest` past either limit. A `user.json` written by an older Core that breaks one reads back as `null`, the same as no User, so set the User again.
+
 The `localApi` settings are a stored preference for elek.io clients. `isEnabled` records whether the local API should auto-start, which elek.io Desktop acts on, but Core itself does not. When using Core directly, start the API with `core.api.start()` or `elek api:start` (see [`local-api.md`](./local-api.md)).
 
 ## Working with content

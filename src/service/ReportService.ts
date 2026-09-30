@@ -84,7 +84,7 @@ export class ReportService extends AbstractService {
         // The parse is what drops hasLogConsent: it is consent to attaching
         // a tail rather than part of the report, so the request never
         // carried it and `logs` is the answer to it
-        const request = reportRequestSchema.parse({
+        const parsed = reportRequestSchema.safeParse({
           ...report,
           core: {
             version: this.coreVersion,
@@ -99,6 +99,13 @@ export class ReportService extends AbstractService {
               ? await this.logService.tail()
               : null,
         });
+        // What the caller passed was validated on the way in, so only what
+        // Core added can fail here: a tail too large for the contract, or a
+        // machine value outside it, which Node and the kernel already bound
+        if (parsed.success === false) {
+          throw CoreError.badRequest(parsed.error.message, parsed.error);
+        }
+        const request = parsed.data;
 
         const body = JSON.stringify(request);
         const bytes = Buffer.byteLength(body, 'utf8');

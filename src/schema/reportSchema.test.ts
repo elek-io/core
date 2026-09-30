@@ -85,6 +85,35 @@ describe('what a client asks Core to send', function () {
     ).toBe(false);
   });
 
+  it('takes line breaks and tabs in a message, and no other control character', function () {
+    // elek.io Cloud stores the message, and Postgres refuses a NUL outright
+    const message = 'First line\n\tindented\r\nthird line';
+
+    expect(createReportSchema.safeParse({ ...bug, message }).success).toBe(
+      true
+    );
+    for (const control of ['\u0000', '\u0007', '\u001B', '\u0085']) {
+      expect(
+        createReportSchema.safeParse({ ...bug, message: `${message}${control}` })
+          .success
+      ).toBe(false);
+    }
+  });
+
+  it('counts a length the way String.length does, so an emoji is two', function () {
+    // The unit a counter has to use, and the one elek.io Cloud counts in
+    const emoji = '\u{1F600}';
+
+    expect(
+      createReportSchema.safeParse({ ...bug, message: emoji.repeat(2500) })
+        .success
+    ).toBe(true);
+    expect(
+      createReportSchema.safeParse({ ...bug, message: emoji.repeat(2501) })
+        .success
+    ).toBe(false);
+  });
+
   it('exposes the cap as maxLength, which is what a counter reads', function () {
     // Read off the schema rather than hand-copied, so a cap that changes
     // here cannot drift from the number under a field
@@ -140,6 +169,25 @@ describe('the Desktop block, which Core cannot know', function () {
       createReportSchema.safeParse({
         ...bug,
         desktop: { ...desktop, version: 'latest' },
+      }).success
+    ).toBe(false);
+  });
+
+  it.each([
+    ['a version over 64 characters', { version: `1.0.0-${'a'.repeat(59)}` }],
+    [
+      'a runtime version over 64 characters',
+      { runtime: { ...desktop.runtime, node: '1'.repeat(65) } },
+    ],
+    [
+      'a runtime version holding more than a version',
+      { runtime: { ...desktop.runtime, chrome: '142.0.0.0 <b>' } },
+    ],
+  ])('rejects a Desktop block with %s', function (_reason, wrong) {
+    expect(
+      createReportSchema.safeParse({
+        ...bug,
+        desktop: { ...desktop, ...wrong },
       }).success
     ).toBe(false);
   });
@@ -216,6 +264,15 @@ describe('who a report is from', function () {
     ['an id that is not null', { id: 'nope' }],
     ['a userType nobody has', { userType: 'admin' }],
     ['no language, which every User has', { language: undefined }],
+    // The languages Core offers rather than any language tag, so nothing
+    // but one of them reaches a server anybody can call
+    ['a language Core does not offer', { language: 'tlh' }],
+    ['a name over 256 characters', { name: 'N'.repeat(257) }],
+    ['a name holding a control character', { name: 'Nils\u0000' }],
+    [
+      'an email over 254 characters',
+      { email: `me@${'a'.repeat(248)}.com` },
+    ],
   ])('rejects a local sender with %s', function (_reason, wrong) {
     expect(
       createReportSchema.safeParse({ ...bug, user: { ...localUser, ...wrong } })
@@ -228,6 +285,11 @@ describe('who a report is from', function () {
     ['no id, which every Cloud User has', { id: undefined }],
     ['an id that is not a uuid', { id: 'nope' }],
     ['no language, which every User has', { language: undefined }],
+    ['a name over 256 characters', { name: 'N'.repeat(257) }],
+    [
+      'an email over 254 characters',
+      { email: `me@${'a'.repeat(248)}.com` },
+    ],
   ])('rejects a Cloud sender with %s', function (_reason, wrong) {
     expect(
       createReportSchema.safeParse({ ...bug, user: { ...cloudUser, ...wrong } })
@@ -294,6 +356,42 @@ describe('the request elek.io Cloud is built against', function () {
         ...request,
         core: { ...request.core, osRelease: undefined },
       }).success
+    ).toBe(false);
+  });
+
+  // Each on its own, so one wrong value is not hidden behind another
+  it.each([
+    ['a version over 64 characters', { version: `1.0.0-${'a'.repeat(59)}` }],
+    ['a platform over 32 characters', { platform: 'l'.repeat(33) }],
+    ['a platform that is not a Node spelling', { platform: 'Linux 6' }],
+    ['an arch over 32 characters', { arch: 'x'.repeat(33) }],
+    ['an arch that is not a Node spelling', { arch: 'x86-64' }],
+    ['an osRelease over 64 characters', { osRelease: '6'.repeat(65) }],
+    ['an osRelease that is not printable ASCII', { osRelease: '6.19\u0000' }],
+  ])('rejects a machine with %s', function (_reason, wrong) {
+    expect(
+      reportRequestSchema.safeParse({
+        ...request,
+        core: { ...request.core, ...wrong },
+      }).success
+    ).toBe(false);
+  });
+
+  it('holds the log tail to base64 under the ceiling the whole body has', function () {
+    const withData = function (data: string) {
+      return { ...request, logs: { ...request.logs, data } };
+    };
+
+    expect(reportRequestSchema.safeParse(withData('not base64!')).success).toBe(
+      false
+    );
+    expect(
+      reportRequestSchema.safeParse(withData('AAAA'.repeat(512 * 1024)))
+        .success
+    ).toBe(true);
+    expect(
+      reportRequestSchema.safeParse(withData('AAAA'.repeat(512 * 1024 + 1)))
+        .success
     ).toBe(false);
   });
 });

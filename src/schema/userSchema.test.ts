@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { gitSignatureSchema } from './gitSchema.js';
 import {
   cloudUserSchema,
   localUserSchema,
@@ -105,5 +106,48 @@ describe('a User and the machine they use it on', function () {
   it('names the settings on their own, so both kinds carry the same ones', function () {
     expect(Object.keys(userSettingsSchema.shape)).toEqual(['localApi']);
     expect(userSettingsSchema.safeParse(settings).success).toBe(true);
+  });
+});
+
+describe('what a name and an address may be', function () {
+  // The same caps elek.io Cloud holds an account and a report to, so a
+  // User is never refused there for something Core took
+  const kinds = [
+    ['a local User', localUserSchema, { userType: 'local', id: null }],
+    ['a Cloud User', cloudUserSchema, { userType: 'cloud', id: uuid() }],
+  ] as const;
+
+  it.each(kinds)('takes %s at every cap', function (_kind, schema, kind) {
+    const user = {
+      ...identity,
+      ...kind,
+      name: 'N'.repeat(256),
+      email: `me@${'a'.repeat(247)}.com`,
+    };
+
+    expect(user.email).toHaveLength(254);
+    expect(schema.safeParse(user).success).toBe(true);
+  });
+
+  it.each(kinds)('refuses %s over a cap', function (_kind, schema, kind) {
+    for (const wrong of [
+      { name: 'N'.repeat(257) },
+      { name: 'John\u0000Doe' },
+      { name: 'John | Doe' },
+      { email: `me@${'a'.repeat(248)}.com` },
+    ]) {
+      expect(schema.safeParse({ ...identity, ...kind, ...wrong }).success).toBe(
+        false
+      );
+    }
+  });
+
+  it('leaves the git signature of a commit alone', function () {
+    // History holds commits nobody made through Core, and reading one must
+    // not fail on a name longer than a User may have
+    expect(
+      gitSignatureSchema.safeParse({ ...identity, name: 'N'.repeat(300) })
+        .success
+    ).toBe(true);
   });
 });
