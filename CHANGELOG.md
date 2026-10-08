@@ -1,5 +1,332 @@
 # @elek-io/core
 
+## 0.24.0
+
+### Minor Changes
+
+- b94ef55: The `file.cache` option is now `cache`, and it covers every cache Core keeps, not only parsed files.
+
+  **One switch for everything Core keeps in memory.** `cache: false` also stops Core from keeping the index that resolves Collection and Component slugs. With only the file cache off, a Core reading files another application writes, as the Astro loaders do during `astro dev`, kept resolving a Collection under the slug it had before the Desktop app renamed it. Rename `file: { cache }` to `cache`.
+
+  **An unknown option throws.** The constructor ignored keys it did not know, so a leftover `file.cache` would have been dropped without a word and caching turned back on. An option Core does not know, at any level, now throws a `BadRequest`.
+
+  **The Astro loaders notice a renamed Collection.** Astro names a collection after a Collection's plural slug, so renaming it, or giving its slug to another Collection, needs a restart of `astro dev`. The Entries loader now says so and stops reloading, the way it does for a changed content model, instead of failing the reload or loading the other Collection.
+
+  The log attribute `elek.options.file.cache` is now `elek.options.cache`.
+
+- 89fa62d: Fixed seven bugs that each made a documented promise untrue.
+
+  **Disposing twice no longer hangs.** `LogService.close()` ended winston's underlying stream, and an ended stream never emits `finish` again, so a second `close()` returned a promise that never resolved and took `ElekIoCore.dispose()` with it. The first call's promise is now kept and handed back to every later one, so a double dispose and two concurrent disposes both resolve.
+
+  A write after `close()` is dropped rather than thrown along with it. It used to raise `ERR_STREAM_WRITE_AFTER_END`, which is what a host still holding `core.logger` saw, and what `dispose()` itself hit on its second run. The payload is still validated, so a malformed record fails whether or not teardown has run.
+
+  **A dynamic field survives a schema change.** Neither the Collection cascade nor the Component cascade passed a `componentResolver`, so an updated `dynamic` field reached schema generation without one and the update failed as `Internal`. What `docs/schema-changes.md` promises for that field, re-validating the existing value and raising a `Conflict` when it no longer fits, could not happen at all. Both cascades now pre-load the Components their field definitions reach.
+
+  **A Component can hold any Component.** `create` and `update` walked a dynamic field with an empty `ofComponents` as if it named every Component in the Project, its own id included, so updating such a Component reported it as its own cycle and a second one could not be created. An empty `ofComponents` declares no edge, because schema generation answers it with a permissive item schema and never recurses, so the cycle check skips it.
+
+  **A deep markdown tree is rejected rather than fatal.** The nesting depth guard was a root-level `.refine`, which runs after zod has walked the whole tree. A tree deep enough to matter overflowed the stack during that walk, so `safeParse` threw `RangeError` instead of returning the issue. The guard now runs in front of the object schema.
+
+  **`isProject` means Project.** The guard narrows to `Project` and validated against the file schema, so a `project.json` read straight off disk passed while carrying neither `remoteOriginUrl` nor `isProvisioned`. It validates against `projectSchema` now.
+
+  **A slug resolves against the tree git left behind.** Collections and Components are looked up by slug through an in-memory index, and nothing dropped it when git changed the working tree. After `core.projects.synchronize()` pulled a renamed Collection, its old slug still resolved to it, and the slug another Collection now held could be taken a second time. The index is now dropped on every clone, pull, merge, rebase, switch and hard reset, together with the file cache.
+
+  **A failed re-run in watch mode says so.** `elek export`, `elek generate:client` and `elek generate:types` discarded the promise of every watch triggered re-run, so a failure after the first run became an unhandled rejection. Each now prints the same message the binary prints and goes on watching.
+
+- 8d82210: `core.api.start()` and `core.api.stop()` return promises that settle once the port is bound or released.
+
+  **`start()` says when it fails.** A busy port surfaced as an uncaught server `error` event while `start()` returned normally, so a caller could not tell a failed start from a running one. `start()` now resolves once the API is listening and rejects with `Conflict` when something else holds the port.
+
+  **A second `start()` no longer strands the first server.** It replaced the tracked server, so the first one kept answering and neither `stop()` nor `dispose()` could close it until the process ended. A start while the API is running or still starting now rejects with `PreconditionFailed`.
+
+  **`stop()` and `dispose()` release the port before they resolve**, so restarting on the same port right away works. Code that called `start()` and then polled `isRunning()` can await `start()` instead.
+
+- d34604e: Add the `log.hostVersion` option, so the records an application logs through Core can say which build of it wrote them.
+
+  ```ts
+  const core = new ElekIoCore({ log: { hostVersion: '0.3.4' } });
+
+  core.logger.error({ source: 'desktop', message: 'Uncaught error: ...' });
+  // resource: { 'service.name': 'desktop', 'service.version': '0.3.4', ... }
+  ```
+
+  `service.version` was previously set only on Core's own records, because Core cannot read the version of a host that logs through it. That left a gap: a record an application logged carried nothing but `service.name` and the platform, so a log file handed over on its own could not be matched to a build. A report carries the application's version in its body, but somebody who zips `<dataDir>/logs` and mails it sends no body.
+
+  An application that declares nothing is unchanged. Those records stay unversioned rather than borrowing Core's version, which would read as a lie to whoever opens the file, and a declared version never reaches a record Core emitted.
+
+  The value must be a semantic version. A value that is not one throws a `CoreError` at construction, because `logRecordSchema` validates `service.version` on the way back in and an unparseable one would make every record of that run invisible to `core.logger.tail()`.
+
+- ded3c80: Make Core's log file worth reading: what a User did now lands at `info`, and every record follows the OpenTelemetry log data model.
+
+  **`info` records what happened.** Creating, updating and deleting a file sat at `debug`, and so did every git command. An application that ships Core to end users runs it at `info`, so a log file from a real machine held errors and nothing anyone did. Those lines are `info` now, together with the git commands that change a repository or a remote: `commit`, `add`, `push`, `pull`, `fetch`, `clone`, `init`, `merge`, `rebase`, `reset`, `switch`, LFS transfers, `remote add`, `config --local` writes and creating or deleting a branch or tag. What stays at `debug` is how Core did it: cache hits and misses, `status`, `log`, `rev-parse`, `--version` and the other reads. Running at `debug` records what it always did, only better sorted.
+
+  **Deleting something is recorded at all.** Ten places removed files and folders directly, so deleting an Entry, a Collection or a whole Project left no trace at any level. `JsonFileService` has a `delete` now and everything goes through it, which also fixes a bug: the file cache kept what was deleted, so reading a deleted Entry back handed out the deleted Entry instead of failing.
+
+  **Every record follows the [OpenTelemetry log data model](https://opentelemetry.io/docs/specs/otel/logs/data-model/).** A line carries `severityNumber` next to `level`, a `resource` naming what emitted it (`service.name`, `service.version`, `os.type`, `host.arch`) and `attributes` with flat dotted [Semantic Convention](https://opentelemetry.io/docs/specs/semconv/) names: `error.type`, `code.function.name`, `file.path`, `http.request.method`, and the `elek.` namespace for what has no convention (`elek.project.id`, `elek.collection.id`, `elek.object.type`, `elek.method`). No `@opentelemetry/*` package comes with it. The shape is nearly free now and expensive to change once something parses it.
+
+  That structure replaces string parsing on both ends. A service boundary logged `[BadRequest] (Asset.create) message` and callers picked it apart again, so the type and the method are attributes and the message is the message. A commit line carries the same ids the commit itself carries as trailers, so a log line and the commit it produced join without either being parsed. The record is also built key by key rather than from whatever winston left lying around, which keeps `process.argv`, `process.cwd` and the rest of winston's own uncaught exception block out of a file you may hand to someone else. The exception type, message and stack are kept, as `exception.*` attributes.
+
+  The names themselves are declared rather than left to each call site. `logAttributeNames` is exported and lists every attribute Core writes, grouped by whether a Semantic Convention covers it, and `LogProps` accepts only those names for a `source: 'core'` record, so a misspelled or undeclared one fails the build instead of quietly writing a key nobody queries. `LogProps` is a discriminated union now, so a host logging through `core.logger` keeps a free `meta` exactly as before. A test checks what reached a log file, for the paths a type cannot see. No `@opentelemetry/*` package comes with any of this: the conventions package would cover 11 of the 36 attribute names, three of them from its unstable entry point, and the `@opentelemetry/api-logs` record type describes a different shape than a log file line.
+
+  If you read Core's log files with your own tooling, the record shape changed and the old shape is not written any more. `LogProps` did not change, so calls into `core.logger` are unaffected, though `meta` should now use flat dotted keys.
+
+- a35e7a3: Stop Core's log files carrying things they should not, and stop the logger feeding itself.
+
+  Three fixes, all in what Core writes down. They matter now because a log file is about to become attachable to a bug report, and none of it was safe to send.
+
+  **Upgrading a Project no longer logs what you wrote.** The upgrade path logged every entity file whole, before and after, at `info`. An Entry file carries every authored Value in every language, so anyone who had upgraded had their content sitting in a log file. It now records the versions it moved between, and for an Entry the number of Values and their field slugs. Git history already holds the real before and after at the exact commit, which is a better record than a log line ever was.
+
+  **Project names are out of the log files too.** `elek provision` wrote the Project's name into Core's log; it writes the id now. A name buys a log reader nothing, since the id resolves to the object the moment the repository is on hand, and it is the one part of a line that reads as somebody's words. Build output from the Astro integration is unchanged and still names the Project it read, because that is your own terminal and never goes into a file.
+
+  **Git commands no longer carry your name and email.** Core logs each command it runs, and three of them put your identity on the command line: the `--author` of every commit, and the two `git config --local user.*` writes. They are redacted now. Credentials embedded in a remote URL go the same way. Ids, paths and flags are untouched, since those are what make a log line worth reading.
+
+  **A broken pipe cannot take the process with it any more.** Both log transports handled uncaught exceptions, including the console. So a console write that failed became a new uncaught exception, which was written to the console again. In an Astro build whose stdout had closed, that ran at 5450 records a second for thirteen minutes. Only the log file handles exceptions now, because the sink it writes to is not the one that failed.
+
+  Alongside it, `log.hasProcessErrorHandlers` controls whether Core registers process-level `uncaughtException` and `unhandledRejection` handlers at all. It defaults to `true`, which is what Core has always done, so nothing changes unless you ask it to. `@elek-io/core/astro` now sets it to `false`, because inside a build the host owns the process.
+
+  Two smaller things came with it. A git command taking 100ms or more was logged as a warning, which on Windows and Intel macOS meant every clone, merge and LFS transfer during entirely normal operation. Duration is recorded as a value now instead of deciding the severity. And `log`'s settings are individually optional, so pinning one no longer forces you to pin the other.
+
+- 3878617: Add `core.logger.tail()`, which reads the last 24 hours of log files back as one blob you can hand to someone else.
+
+  ```ts
+  const tail = await core.logger.tail();
+  // { encoding: 'gzip+base64', from, to, isTruncated: false, data: 'H4sIAAAA...' }
+  ```
+
+  It is on the logger rather than inside anything that sends it, because collecting diagnostics and sending them are two different things. A "save my diagnostics to a file" button needs the first and no network at all.
+
+  **What comes back is safe to share.** Core decides what it writes down at the call site, so its own records are already clean. What the tail adds is the short list a call site never saw: the home directory prefix becomes `~`, key names on Sentry's default denylist are dropped out of the `meta` an application logs through `core.logger`, and a git signature, a credential in a URL or an address anywhere in the text is redacted. Nothing is silently removed. What came out says what it was, and a record that changed carries `redaction.masked.count` and `redaction.redacted.count`, the two the OpenTelemetry Collector's redaction processor stamps, so a reader can tell a deliberate gap from an empty one.
+
+  **Ids, paths and timestamps stay exact.** They are not noise, they are the join: a tail plus the repository replays what happened, in order, with the commit for every step. Hashing or truncating an id would buy nothing and destroy that. Only the account name comes out of a path, and the structure below it is kept.
+
+  **A run of identical records collapses into one and a count.** This is what makes a tail small enough to attach. A measured day was 78 MB, and two thirds of it was a single stack repeating up to 5450 times a second. Collapsed it came to 0.04 MB, and 4 KB gzipped, without losing anything a reader needs. `elek.log.repeat.count` and `elek.log.repeat.last_timestamp` say how many there were and how long it ran. An ordinary day is 1 to 25 KB, so `isTruncated` is expected to stay `false`.
+
+  Records are read oldest first, streamed line by line and gunzipped on the way, so a very large file is never held in memory. Files a rotation never gzipped are read as they are, a half written last line is skipped rather than throwing, and a file that will not decompress gives up what it already read. A line is a record or it is nothing: `logRecordSchema` is the gate, so a log file written by a Core older than that shape is skipped rather than guessed at.
+
+  `logTailSchema` describes what `tail()` returns and is exported, along with the `LogTail` type.
+
+  Two limits worth knowing. winston has no per transport flush, so a tail collected immediately after a crash can be missing the last few lines, which are usually the interesting ones. `tail()` writes a marker and yields before reading to give the stream a chance to drain, but the gap is real. And a tail is personal data whatever it scrubs, because the ids in it resolve against the repository. Redaction lowers what it carries. It does not change what it is.
+
+- 31ce4a8: Every public `migrate` method now throws a `CoreError` instead of a raw `ZodError` when a file on disk does not match what Core expects.
+
+  ```ts
+  try {
+    core.entries.migrate(JSON.parse(content));
+  } catch (error) {
+    // Previously a ZodError, which no `instanceof CoreError` branch caught
+    if (error instanceof CoreError && error.type === 'BadRequest') {
+      // error.cause is the ZodError, so the issues are still there
+    }
+  }
+  ```
+
+  `docs/error-handling.md` promises that all services throw `CoreError` on failure, and this was the one place that did not hold. It matters more than the five methods suggest, because `migrate` sits on every read path: reading a malformed Entry, Asset, Collection, Component or Project raised an error a consumer catching `CoreError` never saw.
+
+  The type is `BadRequest`, with the `ZodError` kept as `cause` so nothing is lost. A `VersionSkew` raised while applying migrations still passes through unchanged, since a file written by a newer Core is a different failure from a file Core cannot read at all.
+
+  Anyone catching `ZodError` around a read or a `migrate` call has to catch `CoreError` instead.
+
+- bfd111c: Reading something that is not there now fails with `NotFound`, the way `docs/error-handling.md` has always said it does. It used to fail with `Internal`, so the local API answered `500` for a missing Entry.
+
+  ```ts
+  try {
+    await core.entries.read({ projectId, collectionId, id });
+  } catch (error) {
+    // Previously Internal / 500, carrying Node's raw ENOENT message
+    if (error instanceof CoreError && error.type === 'NotFound') {
+      // ...
+    }
+  }
+  ```
+
+  Node reports a missing file with an `ENOENT` code rather than a type, and nothing turned that into a `CoreError`, so it reached `CoreError.fromUnknown`, which types everything it does not recognise as `Internal`. `JsonFileService` now answers a missing file with `CoreError.notFound`, and every entity read goes through it.
+
+  It affects reading a Project, Collection, Component, Entry or Asset by id, and listing or counting the contents of a parent that does not exist. Addressing a Collection or Component **by slug** already answered `NotFound`, so the two forms disagreed for the same condition and now agree.
+
+  The same change closes a second gap. `entries.create` and `collections.create` read the Project's languages between the boundary's pre-parse and the validation that follows it, which sits outside every `try`, so creating in a Project that does not exist threw a raw `Error` that no `instanceof CoreError` branch caught. That read is one of the reads above, so it now raises a `CoreError` like everything else.
+
+  Anyone branching on `statusCode` or `type` sees `404` and `NotFound` where they saw `500` and `Internal`. Nothing is added to `CoreErrorType`, so a `satisfies Record<CoreErrorType, true>` map still compiles.
+
+- fff8f8c: Cap every field of a report, with the same limits elek.io Cloud enforces.
+
+  elek.io Cloud (theoretically) takes a report from anybody, so it bounds every string it stores. Core now holds the report schemas to the same numbers, so a report that passes them is never refused by Cloud for its shape, and a form built on them can show every limit before anything is sent.
+
+  | Field | Limit |
+  | --- | --- |
+  | `message` | 10 to 5000, no control characters except tabs and line breaks |
+  | `user` | A User, whose `name` and `email` now carry limits of their own |
+  | `desktop.version`, `core.version` | A semantic version of up to 64 |
+  | `desktop.runtime.*` | Up to 64 digits, letters, `.`, `+` and `-` |
+  | `core.platform`, `core.arch` | Up to 32 lowercase letters, digits and `_` |
+  | `core.osRelease` | Up to 64 printable ASCII characters |
+  | `logs.data` | Base64, up to 2 MB |
+
+  A length counts UTF-16 code units, as `String.length` does, so an emoji counts as two. That is the unit a character counter has to use.
+
+  **A report's `user` is a User and nothing looser.** Its `name` and `email` are held to the User's own limits, so one prefilled from `core.user.get()` always passes. Its `language` stays one of the languages Core supports rather than any language tag, because that is all a User can have.
+
+  **What Core fills in is validated like the rest.** A `core` value or a log tail outside its limit is a `BadRequest` and nothing is sent, as a body over 2 MB already was. Node's values and the operating system's own limits leave the `core` block no room to fail.
+
+- f8479d6: Add the schemas a report is made of, a `RateLimited` error type and a configurable elek.io Cloud URL.
+
+  The service that sends a report comes next. These are the parts around it that other repositories need first: an application building a report form imports the schemas, and elek.io Cloud is built against the request they describe.
+
+  **The schemas.** `createBugReportSchema` and `createFeedbackReportSchema` describe what an application collects, both extending `createReportBaseSchema`, and `createReportSchema` is the discriminated union of the two. A report is a message, who sent it and what they were running. A bug adds whether to attach logs, which is consent.
+
+  They are exported from the browser entry, so a renderer that cannot touch the filesystem can still validate a form against the same schema Core will, and the cap is readable off the schema (`createBugReportSchema.shape.message.maxLength`) rather than copied into a character counter.
+
+  Who sent it is the User, both kinds of them, or null when there is no User yet. It is prefilled from `user.get()` and meant to stay editable, so somebody can be reached at an address other than the one their commits are signed with, and so a report still has a way back on a broken first run, which is when the button matters most. All of it is self-declared and none of it is proof of anything: whether a sender is who they claim is what a session says once Cloud sign-in exists, never what a body says.
+
+  What they were running is the one part Core cannot know, so elek.io Desktop hands over its own version and the Electron, Chrome and Node versions underneath it.
+
+  `reportRequestSchema` is the whole body Core sends and `reportResponseSchema` is what comes back. The request extends the same base, so the cap a form enforces and the cap Cloud is promised are the same one, and adds the two things only Core knows: the Core version and machine it ran on, and the log tail when it was asked for.
+
+  **`RateLimited`, a new `CoreError` type**, mapping to 429. Sending a report is the first thing Core does over the network that is not git, and being turned away for sending too much is not the same as a precondition failing. Anything switching exhaustively on `CoreErrorType` gains a case.
+
+  **`cloud.url`, a new option**, defaulting to `https://api.elek.io` and overridable through `ELEK_IO_CLOUD_URL`. A hardcoded host would make an outbound call untestable at every layer, from Core's own suite to an application's end to end run. A trailing slash is dropped. A value that is not an http or https URL throws rather than falling back, because falling back would send to production on the strength of a typo.
+
+- c4319c0: Add `core.cloud.reports.create()`, which sends a bug report or feedback to elek.io Cloud.
+
+  ```ts
+  const { id } = await core.cloud.reports.create({
+    type: 'bug',
+    message: 'Deleting a Collection spins forever after confirming the dialog.',
+    user: await core.user.get(),
+    desktop: {
+      version: '0.5.0',
+      runtime: { electron: '40.1.0', chrome: '142.0.0.0', node: '24.12.0' },
+    },
+    hasLogConsent: true,
+  });
+  ```
+
+  This is the first thing Core does over the network that is not git. It sits under `core.cloud` rather than at the top level because elek.io Cloud is several APIs rather than one, so `core.cloud.reports` says which of them a call belongs to and leaves the others somewhere to land. Where it goes is the `cloud.url` option, so it is testable at every layer rather than a constant. No HTTP client came with it, only the `fetch` Node already has.
+
+  **Core fills in exactly two things.** The Core version and the machine it is running on, and the log tail when a bug report consented to one. Everything else passes through from the caller, validated, and nothing else is added: `hasLogConsent` is consent to attaching a tail rather than part of the report, so it is answered by what `logs` holds and is never sent on.
+
+  **Who sent it is not read for you.** Core does not call `user.get()`, because the address somebody can be reached at belongs in the form that collected the report and is meant to stay editable there. Whatever is passed is what is sent, including `null` for a machine that has no User yet, which is exactly when a report is worth having.
+
+  **Feedback never carries logs.** There is nothing on it that could turn one on, so a tail is attached only to a bug report that asked for one. What a tail holds and what it does not is `core.logger.tail()`'s answer, unchanged by being sent somewhere.
+
+  **There is no retry.** A retry after a timeout can duplicate a report elek.io Cloud already accepted, and Core cannot tell the difference from the outside. Core waits 15 seconds and hands the failure back, so sending again is a decision somebody makes rather than one Core makes for them. What comes back is typed: `BadRequest` for a rejected body, `Unauthorized` for a refused credential, `RateLimited` for too much sent from here recently, `PreconditionFailed` for a Cloud that could not be reached or did not answer, and `Internal` for a Cloud that failed or answered a created report with something that is not one. A 201 whose body does not parse throws rather than handing a caller something unvalidated.
+
+  Two smaller decisions. Read-only mode does not block a report, because `isReadOnly` protects a Project and its remote and a report mutates nothing local, so being unable to write is a reason to send one. And a body over 2 MB is refused here instead of on the wire, since base64 inflates a gzipped tail by a third and the caller learns the same thing without the round trip.
+
+  The whole feature is a privacy feature, so the report itself never reaches a log file. A failure is recorded at the service boundary with the error type, the method and the status code, and never with what somebody wrote. Cloud's own answer is deliberately not read into the error message either, because it can echo back what was sent.
+
+  All of it is documented in `docs/reporting.md`, which also covers what a log tail contains and what it does not.
+
+- e01192e: Fixed five safety bugs. Three concern what leaves a User's machine, one concerns what the local API is reachable from, and one breaks a generated file.
+
+  **The local API binds loopback only.** `LocalApi.start()` passed no `hostname`, so `@hono/node-server` bound every interface and anything on the network could read every local Project through an API that called itself local. It now binds `127.0.0.1`, and the startup line names the address it actually bound instead of asserting `localhost`. There is deliberately no option to widen it.
+
+  **A relative markdown link can no longer resolve to another origin.** `mdAstLinkUrlSchema` rejected `//evil.com` but accepted `/\evil.com`, and an embedded tab, LF or CR did the same thing, because `new URL()` normalises all four into a protocol-relative URL:
+
+  ```ts
+  new URL('/\\evil.com', 'https://example.com').href; // https://evil.com/
+  ```
+
+  The shape check stays, and `new URL()` is now the oracle behind it: a relative URL has to keep the origin it was resolved against. Pattern matching is what let the first one through, so the fix does not add the missing characters to the regex.
+
+  This is the one change that can reject content that validated before. A stored Entry holding such a link in a `markdown` Value now fails to parse on read, so the Entry does not open rather than the link becoming inert. Editing the link in the source file is the remedy. The URLs affected are the ones that were resolving somewhere other than where they appeared to.
+
+  **A failed git command no longer carries the User's identity.** `CoreError.internal` was built from the raw argument list and raw `stderr`. Git echoes an offending argument back, so a failed `commit --author=` or `config --local user.name` put a name and email into the message, `logBoundaryError` wrote it at `error`, and a report sent with `hasLogConsent` shipped it to elek.io Cloud. `push()` and `rebase()` had the same defect.
+
+  The message now carries the redacted command and the exit code. What git printed moves to the error's `cause`, which is thrown but never logged:
+
+  ```ts
+  catch (error) {
+    if (error instanceof CoreError) {
+      error.message; // the redacted command and the exit code
+      error.cause; // what git actually printed
+    }
+  }
+  ```
+
+  Anything that showed `error.message` verbatim to a user shows less than it did. The local API already serves `err.cause.stack`, so the diagnostic survives. Redacting `stderr` in place was rejected because git's output is localised, so matching on English phrasing is already broken on a German or Japanese machine.
+
+  **A file that will not parse no longer quotes itself into a log.** V8 puts a window of the input into its own `JSON.parse` message, and for a short entity file that window is authored content. `CoreError` now names the path, and V8's text moves to `cause`. The type is unchanged.
+
+  **A newline no longer breaks the generated types file.** `escapeForSingleQuotedString` escaped the quote and the backslash only, so a line break reached a single-quoted TypeScript literal verbatim and ended the line rather than the string. Three free-form inputs reach it: a textarea `defaultValue`, a string select's `option.value` and `ofAssetMimeTypes`.
+
+  The log privacy sweep now drives failure paths as well as service calls, which is why the git leak survived the previous sweep. A git command that fails, a file that will not parse and a schema that rejects all run with a User-typed string in play.
+
+- cc4e55b: Settled six questions the code and the docs disagreed on. Two of them change a public shape, which on a 0.x version arrives as a minor bump, so read the two headings below before upgrading.
+
+  **`core.git.status()` returns a described status.** It used to return `{ filePath }[]`, read off field index 8 of every porcelain v2 line. That field is `undefined` for an untracked entry, the similarity score for a rename, and the first word only for a path holding a space, so the array was reliable for nothing but its length.
+
+  ```ts
+  const status = await core.git.status(projectPath);
+  // { isClean: false, files: [{ path: 'a file.txt', status: 'modified', isStaged: false }] }
+  ```
+
+  Lines are read by their type prefix now and the path is taken as the rest of the line. `status` is one of `added`, `modified`, `deleted`, `renamed`, `untracked` and `unmerged`, and `isStaged` says whether the change is in the index. `projects.synchronize()` puts `files` into the `PreconditionFailed` it raises on a dirty tree, so a caller can finally say which files are in the way.
+
+  Anyone reading `filePath` off the returned array has to move to `files[].path`, and a `status.length > 0` check becomes `!status.isClean`.
+
+  **`slug.index.json` is not written any more.** The UUID-to-slug map is what resolves a slug and enforces slug uniqueness, and it lives in memory per Core instance. The file next to it was written on every mutation and never read back, not even by the rebuild, which scans the entity folders instead.
+
+  The map is unchanged, so nothing about resolving or creating by slug behaves differently. `core.util.pathTo.collectionIndex` and `core.util.pathTo.componentIndex` are gone with the file, as is the exported `slugIndexFileSchema`. A Project written by an older Core keeps its leftover files, and the generated `.gitignore` still names them so they do not show up as changes. `docs/storage-layout.md` says why reading such a file back is not a free optimisation.
+
+  **A failed release leaves nothing behind.** `releases.create()` and `releases.createPreview()` recovered by switching back to `work`, which for a preview undid nothing at all, because a preview never leaves `work`. A failed preview kept its version commit and possibly an unpushed tag, and a full release that failed after tagging kept the merge, the version commit and the tag.
+
+  Both now unwind: the tag is deleted, every branch they moved is reset to the commit it was on, and the Project is left on `work`. A push failure unwinds too, so a release is never made-but-unpublished, and the same call can simply be retried. Recovery is best effort and warns about a step it could not complete.
+
+  **`ProjectService` writes roll back.** `update` is wrapped in `withGitRollback`, which is what `contributing/error-handling-internals.md` already claimed of every entity write, so a failure between writing `project.json` and committing it no longer leaves the tree modified. `delete` rolls back its removal, with the guards left outside so a refused delete never touches the working tree.
+
+  `create` cannot use the wrapper, because for most of its window there is no `HEAD` to reset to. It removes the folder it made instead of routing through `delete()`, which asked git about a folder that may not be a repository yet and replaced the error the caller has to see with its own.
+
+  **An unmatched resolution slug is refused.** A `resolutions` entry naming a field the new definitions do not declare was written into the Entry with no validation at all. Both `collections.update()` and `components.update()` now check every resolution slug before anything is written and throw `BadRequest` naming the Entry and the slug, so a stale resolution fails the whole update rather than reaching one Entry.
+
+  **`datetime(0)` is the epoch.** The guard was `!value`, so the one numeric value that is falsy came back as the current time. It reads `undefined` and the empty string as absent now, which keeps every internal caller identical, since they all stamp `created` and `updated` by calling it with no argument.
+
+- ca03194: Fixed six small bugs, each of which made Core do something other than what its own documentation says.
+
+  **A numeric bound of 0 is enforced.** `getNumberValueContentSchemaFromFieldDefinition` guarded its bounds with truthiness, so a `number` or `range` field declared from `0` to `100` enforced its ceiling and not its floor, and one declared from `-100` to `0` enforced its floor and not its ceiling. Those two field types are the only ones whose bounds can hold a `0`, because every string length is at least `1`.
+
+  A Value outside such a bound is rejected now where it was accepted before, which is what the field definition asked for in the first place.
+
+  **A tagged tip reports its tag.** `git log --format=%D` lists every decoration of a commit, so the tip of a branch carrying a tag reads `HEAD -> master, tag: <uuid>`. `refNameToTagName` stripped `tag: ` out of that whole string and then rejected what was left for not being a UUID, so `core.git.log()` answered `tag: null` on exactly the commit a Release had just tagged. It reads the tag out of the decoration list now.
+
+  **Deleting a git tag is guarded.** `core.git.tags.delete()` carried neither the read-only guard nor the provisioned-copy guard that `create` has, so a read-only Core could throw a Release away and a provisioned copy could be mutated. Both now throw `PreconditionFailed`, as every other mutation on those two does.
+
+  **A missing `componentResolver` throws a `CoreError`.** `getValueSchemaFromFieldDefinition` threw a plain `Error` for a `component` field passed without a resolver, so it escaped the promise that `CoreError` is the whole catch. It throws `Internal` now.
+
+  **The Astro entry owns no process error handlers.** `docs/usage.md` says the Astro entry sets `log.hasProcessErrorHandlers` to `false` for you, because inside a build the host owns the process. `elek()` did not, so its short-lived Core registered `uncaughtException` and `unhandledRejection` for the duration of the `astro:config:setup` hook. The loaders' own Core always passed the option.
+
+  **The CLI watcher ignores `.git` on Windows.** `elek generate:*` in watch mode filtered on a POSIX separator only, so on Windows every one of Core's own git writes retriggered the regeneration that caused them.
+
+- 77c52e9: `core.entries.create()` and `core.entries.update()` reject a Value whose slug the Collection does not declare, instead of dropping it.
+
+  Values were checked against an object keyed by field slug that stripped every key it did not name. A misspelled slug was accepted, the Entry was written without that Value and nothing was reported. A form opened before a field was renamed lost its edit the same way, since the rename had moved the stored Value to the new slug. Both now fail with a `BadRequest` naming the slug, in a Component item's values inside a dynamic field too.
+
+  Reading is unchanged. `getEntrySchemaFromFieldDefinitions`, which generated API clients parse responses with, still strips a slug it does not know, so a client generated before a field was added keeps working.
+
+- f8479d6: Give every User an account id, empty for one who has not signed in.
+
+  `localUserSchema` now carries `id: null` where `cloudUserSchema` carries the account id, so both kinds of User have the key and reading `user.id` no longer means checking which kind you are holding first. Which kind and which account stay in step: a local User with an account id and a Cloud User without one are both shapes nothing can hold, because each kind narrows the id the same way it already narrows `userType`.
+
+  **This invalidates an existing `user.json`.** A file written before this has no `id`, and `core.user.get()` answers `null` for a User it cannot read, so it will report that no User is set. Setting the User again writes a file that reads. Anything calling `core.user.set()` passes `id: null` for a local User now.
+
+  The split between who somebody is and how their machine is set up moved with it. `userSettingsSchema` holds `localApi`, and the file on disk is a User plus their settings, so a User on its own is identity and says nothing about the machine it was set up on. That is what makes one safe to put in a bug report.
+
+- fff8f8c: Cap a User's `name` at 256 characters and `email` at 254, and refuse a control character in a name.
+
+  These are the limits elek.io Cloud holds an account and a report to, so a User Core accepts is never refused there. A length counts UTF-16 code units, as `String.length` does. `core.user.set()` throws `BadRequest` past either limit, and a `|` in a name stays refused as before.
+
+  **A `user.json` that breaks a limit reads back as `null`.** `core.user.get()` already treats a file that no longer matches the schema as no User at all, so a name over 256 characters written by an older Core has to be set again.
+
+  The git signature of a commit is not capped. History can hold commits nobody made through Core, and reading one must not fail on a name longer than a User may have.
+
+### Patch Changes
+
+- 442d24a: Fix `GET /openapi.json` on the local API, which answered 500 with a two byte body.
+
+  The document is generated from every registered route's Zod schemas, and `@hono/zod-openapi` inlines a schema unless it carries an OpenAPI component name. Three of Core's schemas are recursive - `Value`, because a component Value holds items whose own values are Values, and the two mdast node unions - so the generator inlined them until the stack ran out and no document was produced at all. Each of the three is named now, which turns the nested occurrences into a `$ref` and ends the walk.
+
+  With it, the Scalar reference UI at `GET /` renders the API rather than an empty page. Nothing about the endpoints, their requests or their responses changed, only whether the document describing them is served.
+
+  The generated client (`elek generate:client`) is unaffected, since it is built from a Project's field definitions rather than from this document.
+
 ## 0.23.0
 
 ### Minor Changes
@@ -238,28 +565,13 @@
 
 - 6f9ae1f: Make the data directory configurable
 
-  Core previously stored everything under a hardcoded `~/elek.io`. The root is now
-  configurable in two ways: pass `dataDir` to the `ElekIoCore` constructor, or set the
-  `ELEK_IO_DATA_DIR` environment variable. The constructor option wins over the
-  environment variable, which wins over the `~/elek.io` default. Relative paths are
-  resolved against the current working directory. The CLI accepts a global `--data-dir`
-  option and the Astro loaders accept `dataDir` through their existing `core` options.
-  The resolved absolute path is exposed as `core.options.dataDir` and `core.util.pathTo`
-  reflects it per instance.
+  Core previously stored everything under a hardcoded `~/elek.io`. The root is now configurable in two ways: pass `dataDir` to the `ElekIoCore` constructor, or set the `ELEK_IO_DATA_DIR` environment variable. The constructor option wins over the environment variable, which wins over the `~/elek.io` default. Relative paths are resolved against the current working directory. The CLI accepts a global `--data-dir` option and the Astro loaders accept `dataDir` through their existing `core` options. The resolved absolute path is exposed as `core.options.dataDir` and `core.util.pathTo` reflects it per instance.
 
-  Nothing changes for existing setups. Without the option or the environment variable,
-  Core keeps using `~/elek.io`. Reading the environment variable inside Core makes it
-  possible to isolate a packaged app's data in end to end tests without redirecting
-  `HOME`, which stalls Electron on Windows CI.
+  Nothing changes for existing setups. Without the option or the environment variable, Core keeps using `~/elek.io`. Reading the environment variable inside Core makes it possible to isolate a packaged app's data in end to end tests without redirecting `HOME`, which stalls Electron on Windows CI.
 
-  Constructor validation errors are now thrown as `CoreError.badRequest` instead of a
-  raw `ZodError`, matching how every service boundary reports invalid input. The
-  original `ZodError` stays attached as the cause. Importing the CLI also no longer
-  creates directories as a side effect, the CLI creates its Core instance on first use.
+  Constructor validation errors are now thrown as `CoreError.badRequest` instead of a raw `ZodError`, matching how every service boundary reports invalid input. The original `ZodError` stays attached as the cause. Importing the CLI also no longer creates directories as a side effect, the CLI creates its Core instance on first use.
 
-  `core.util` is narrowed to expose only `pathTo`. It previously leaked the whole
-  internal util module, including `workingDirectory` and internal helpers, which no
-  consumer uses.
+  `core.util` is narrowed to expose only `pathTo`. It previously leaked the whole internal util module, including `workingDirectory` and internal helpers, which no consumer uses.
 
 ## 0.20.0
 
@@ -267,26 +579,17 @@
 
 - 8470556: **Breaking:** `zod` is now a peer dependency instead of a bundled runtime dependency.
 
-  Core authors all of its schemas with zod v4, and zod v4 brands every schema with its
-  exact version. When Core shipped its own copy of zod, a consumer that installed a
-  different (even another 4.x) zod ended up with two physical copies, so a schema built
-  with Core's zod was not assignable to anything typed against the consumer's zod. This
-  broke downstream type-checking, for example feeding Core schemas into
-  `@hookform/resolvers`' `zodResolver`.
+  Core authors all of its schemas with zod v4, and zod v4 brands every schema with its exact version. When Core shipped its own copy of zod, a consumer that installed a different (even another 4.x) zod ended up with two physical copies, so a schema built with Core's zod was not assignable to anything typed against the consumer's zod. This broke downstream type-checking, for example feeding Core schemas into `@hookform/resolvers`' `zodResolver`.
 
-  Declaring `zod` as a peer dependency means the consumer supplies the single shared
-  copy, so Core and the consumer always brand-match.
+  Declaring `zod` as a peer dependency means the consumer supplies the single shared copy, so Core and the consumer always brand-match.
 
-  Migration: install a compatible zod alongside `@elek-io/core` and make sure it resolves
-  to a single copy.
+  Migration: install a compatible zod alongside `@elek-io/core` and make sure it resolves to a single copy.
 
   ```bash
   npm install zod@^4.3.6
   ```
 
-  You still install zod yourself. As a convenience, Core also re-exports `z`, so in your
-  own code you can import it from `@elek-io/core` instead of from `zod` directly. It is the
-  same `z` with `@hono/zod-openapi`'s `.openapi()` extension:
+  You still install zod yourself. As a convenience, Core also re-exports `z`, so in your own code you can import it from `@elek-io/core` instead of from `zod` directly. It is the same `z` with `@hono/zod-openapi`'s `.openapi()` extension:
 
   ```ts
   import { z } from '@elek-io/core';
@@ -298,19 +601,11 @@
 
 - 8470556: Narrow the optional `astro` peer dependency from `>=6.0.0` to `^6.0.0`.
 
-  The `/astro` entry requires astro 6: it uses the `Loader.createSchema` method (added in
-  astro 6.0.0) and astro 6's zod v4 Loader schema typing, both of which are absent in astro
-  5.x. The Content Layer `Loader` API changes across astro majors, so `>=6.0.0` would
-  optimistically (and untested) allow a future astro 7. Capping at `^6.0.0` keeps the range
-  to the verified major. No current consumer is affected, since the latest astro is 6.x.
+  The `/astro` entry requires astro 6: it uses the `Loader.createSchema` method (added in astro 6.0.0) and astro 6's zod v4 Loader schema typing, both of which are absent in astro 5.x. The Content Layer `Loader` API changes across astro majors, so `>=6.0.0` would optimistically (and untested) allow a future astro 7. Capping at `^6.0.0` keeps the range to the verified major. No current consumer is affected, since the latest astro is 6.x.
 
 - 8470556: Widen the `dugite` peer dependency from the exact `3.2.2` to `^3.0.0`.
 
-  Core only uses dugite's functional `exec` API (with `IGitStringResult`, `parseError` and
-  `GitError`), which has existed since dugite 3.0.0. Pinning the exact version forced every
-  consumer onto one dugite release and risked a peer conflict. The wider range lets a
-  consumer satisfy Core's peer with any dugite 3.x they already have, so they keep a single
-  copy. This is not a breaking change. Consumers on dugite 3.2.2 are unaffected.
+  Core only uses dugite's functional `exec` API (with `IGitStringResult`, `parseError` and `GitError`), which has existed since dugite 3.0.0. Pinning the exact version forced every consumer onto one dugite release and risked a peer conflict. The wider range lets a consumer satisfy Core's peer with any dugite 3.x they already have, so they keep a single copy. This is not a breaking change. Consumers on dugite 3.2.2 are unaffected.
 
 ## 0.19.1
 
@@ -473,8 +768,7 @@
 
 ### Minor Changes
 
-- 1b1c0ce: Added local API endpoints for Projects, Assets, Collections and Entries. Also added custom logger middleware that uses our LogService.
-  Removed the ability to directly resolve Entry reference Values - this needs to now be handled Client-side.
+- 1b1c0ce: Added local API endpoints for Projects, Assets, Collections and Entries. Also added custom logger middleware that uses our LogService. Removed the ability to directly resolve Entry reference Values - this needs to now be handled Client-side.
 
 ## 0.12.0
 
@@ -492,18 +786,7 @@
 
 ### Minor Changes
 
-- 9b3afaa: Git messages are now stringified JSON containing more information about the operation like the object type and ID.
-  Git commits now contain the tag objects directly, instead of just the reference.
-  Projects now have a "production" and a "work" branch.
-  Returned Projects now contain remoteOriginUrl without the need of calling this method separately.
-  Projects now have a protection against deletion if there is no remote yet or the local Project has changes not present on the remote yet.
-  If Projets have to be deleted anyway, there now is a "force" option to do so.
-  Changed Project upgrade to work with an additional upgrade branch and then squash merge it back into work branch.
-  Removed old file based upgrade.
-  Added git merge and branch delete method.
-  Added support for most file types to be used as Assets.
-  Added more tests and converted clone related tests from using a remote Github repository to a local one.
-  Removed return for logging methods and added timestamp to CLI output.
+- 9b3afaa: Git messages are now stringified JSON containing more information about the operation like the object type and ID. Git commits now contain the tag objects directly, instead of just the reference. Projects now have a "production" and a "work" branch. Returned Projects now contain remoteOriginUrl without the need of calling this method separately. Projects now have a protection against deletion if there is no remote yet or the local Project has changes not present on the remote yet. If Projets have to be deleted anyway, there now is a "force" option to do so. Changed Project upgrade to work with an additional upgrade branch and then squash merge it back into work branch. Removed old file based upgrade. Added git merge and branch delete method. Added support for most file types to be used as Assets. Added more tests and converted clone related tests from using a remote Github repository to a local one. Removed return for logging methods and added timestamp to CLI output.
 
 ## 0.10.0
 
