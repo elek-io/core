@@ -14,7 +14,10 @@ export type ReportType = z.infer<typeof reportTypeSchema>;
  */
 
 /** A version a runtime reported, or the `unknown` Desktop sends instead */
-const runtimeVersionSchema = z.string().max(64).regex(/^[0-9A-Za-z.+-]+$/);
+const runtimeVersionSchema = z
+  .string()
+  .max(64)
+  .regex(/^[0-9A-Za-z.+-]+$/);
 
 export const createReportBaseSchema = z.object({
   type: reportTypeSchema,
@@ -87,10 +90,19 @@ export const reportRequestSchema = createReportBaseSchema.extend({
   core: z.object({
     version: versionSchema.max(64),
     /** Node's spelling, such as `linux` or `x64` */
-    platform: z.string().max(32).regex(/^[a-z0-9_]+$/),
-    arch: z.string().max(32).regex(/^[a-z0-9_]+$/),
+    platform: z
+      .string()
+      .max(32)
+      .regex(/^[a-z0-9_]+$/),
+    arch: z
+      .string()
+      .max(32)
+      .regex(/^[a-z0-9_]+$/),
     /** Printable ASCII. Linux caps its own release string at 64 */
-    osRelease: z.string().max(64).regex(/^[\x20-\x7E]+$/),
+    osRelease: z
+      .string()
+      .max(64)
+      .regex(/^[\x20-\x7E]+$/),
   }),
   /**
    * Only attach log tail when type is bug and hasLogConsent is true. The

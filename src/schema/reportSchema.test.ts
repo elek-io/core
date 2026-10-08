@@ -94,8 +94,10 @@ describe('what a client asks Core to send', function () {
     );
     for (const control of ['\u0000', '\u0007', '\u001B', '\u0085']) {
       expect(
-        createReportSchema.safeParse({ ...bug, message: `${message}${control}` })
-          .success
+        createReportSchema.safeParse({
+          ...bug,
+          message: `${message}${control}`,
+        }).success
       ).toBe(false);
     }
   });
@@ -269,10 +271,7 @@ describe('who a report is from', function () {
     ['a language Core does not offer', { language: 'tlh' }],
     ['a name over 256 characters', { name: 'N'.repeat(257) }],
     ['a name holding a control character', { name: 'Nils\u0000' }],
-    [
-      'an email over 254 characters',
-      { email: `me@${'a'.repeat(248)}.com` },
-    ],
+    ['an email over 254 characters', { email: `me@${'a'.repeat(248)}.com` }],
   ])('rejects a local sender with %s', function (_reason, wrong) {
     expect(
       createReportSchema.safeParse({ ...bug, user: { ...localUser, ...wrong } })
@@ -286,10 +285,7 @@ describe('who a report is from', function () {
     ['an id that is not a uuid', { id: 'nope' }],
     ['no language, which every User has', { language: undefined }],
     ['a name over 256 characters', { name: 'N'.repeat(257) }],
-    [
-      'an email over 254 characters',
-      { email: `me@${'a'.repeat(248)}.com` },
-    ],
+    ['an email over 254 characters', { email: `me@${'a'.repeat(248)}.com` }],
   ])('rejects a Cloud sender with %s', function (_reason, wrong) {
     expect(
       createReportSchema.safeParse({ ...bug, user: { ...cloudUser, ...wrong } })
@@ -386,8 +382,7 @@ describe('the request elek.io Cloud is built against', function () {
       false
     );
     expect(
-      reportRequestSchema.safeParse(withData('AAAA'.repeat(512 * 1024)))
-        .success
+      reportRequestSchema.safeParse(withData('AAAA'.repeat(512 * 1024))).success
     ).toBe(true);
     expect(
       reportRequestSchema.safeParse(withData('AAAA'.repeat(512 * 1024 + 1)))
