@@ -2,19 +2,13 @@
  * `Object.keys` and `Object.entries`, typed to the object's own keys.
  *
  * TypeScript widens both to `string`, because a JavaScript object may carry
- * keys its type does not mention. The objects Core walks with these cannot:
- * a Value's `content` is a `partialRecord` keyed by the supported languages,
- * a `MarkdownFeatures` object by its declared flags. Both are built by Core
- * from a schema, so their key type is exactly what the type says.
+ * keys its type does not mention. The objects Core walks with these cannot,
+ * they are built by Core from a schema. The narrowing needs one assertion,
+ * which lives here so no call site needs its own.
  *
- * The narrowing needs one assertion, which lives here so no call site needs
- * its own. That is the whole reason these exist, and the reason this file is
- * the only place `typescript/no-unsafe-type-assertion` is disabled outside
- * the exemptions listed in `contributing/linting.md`.
+ * Only reach for these when the key type is guaranteed by construction.
  *
- * Only reach for these when the key type is guaranteed by construction. For
- * an object that crosses a trust boundary (parsed JSON, user input) validate
- * it with a schema instead.
+ * @see ../../contributing/linting.md
  */
 
 /**

@@ -15,6 +15,7 @@ export const serviceTypeSchema = z.enum([
   'Value',
   'Release',
   'Reference',
+  'Report',
 ]);
 export type ServiceType = z.infer<typeof serviceTypeSchema>;
 
@@ -25,6 +26,15 @@ export interface PaginatedList<T> {
   list: T[];
 }
 
+/**
+ * The zod counterpart of the `PaginatedList<T>` interface above.
+ *
+ * The local API describes its list responses with it in OpenAPI, and the
+ * generated API client parses responses through it, so the two shapes have to
+ * stay in step.
+ *
+ * `total` is how many objects exist, not how many `list` holds.
+ */
 export function paginatedListOf<T extends z.ZodTypeAny>(schema: T) {
   return z.object({
     total: z.number(),
@@ -40,7 +50,9 @@ export interface PaginationOptions {
 }
 
 /**
- * Implements create, read, update and delete methods
+ * `props: never` is deliberate. It lets every implementing service declare
+ * its own props type while this interface pins only the method names and the
+ * return types.
  */
 export interface CrudService<T> {
   create: (props: never) => Promise<T>;
@@ -50,19 +62,26 @@ export interface CrudService<T> {
 }
 
 /**
- * Implements list and count methods additionally
- * to create, read, update and delete
+ * A service that can also page through its objects: `list` returns a
+ * `PaginatedList` while `count` reports the whole set.
  */
 export interface CrudServiceWithListCount<T> extends CrudService<T> {
   /**
-   * Returns a list of this services objects
+   * One page, and the contract every implementation owes its own block,
+   * because a concrete block replaces this one in the consumer's editor
+   * rather than adding to it.
    *
-   * Does not return objects where the schema validation fails.
-   * If that is the case, upgrade the Client and then Project to the latest version.
+   * `limit` defaults to 15 and `limit: 0` returns everything from `offset`.
+   * `total` counts the references on disk rather than the page. Anything that
+   * fails to read, a missing file, an IO error or a schema rejection, is
+   * dropped with a logged warning instead of failing the call, so `list` can
+   * be shorter than both `limit` and `total`.
    */
   list: (...props: never[]) => Promise<PaginatedList<T>>;
   /**
-   * Returns the total number of this services objects
+   * Counts file references without reading or validating one, so it reports
+   * the same number `list` returns as `total` and includes objects `list`
+   * silently skips. The two can therefore disagree.
    */
   count: (...props: never[]) => Promise<number>;
 }

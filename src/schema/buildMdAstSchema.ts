@@ -1,21 +1,14 @@
 /**
  * Per-field mdast schema construction.
  *
- * `buildMdAstSchemaForFeatures` narrows the fully-permissive mdast tree
- * schema (from `valueSchema.ts`) to only those node types enabled by a
- * field's `features` config. The resulting schema:
- *   - rejects nodes whose `type` isn't in the allowed set
- *   - enforces `ofCollections` structurally on `entryReference` node
- *     `collectionId` claims
- *   - rejects `headings` of depths outside the configured set
- *   - enforces block-count `min`/`max` on the root's children array
- *   - accepts `null` when the field is not required (matching the existing
- *     pattern for text/number/boolean fields at
- *     `schemaFromFieldDefinition.ts:118-122`)
+ * `buildMdAstSchemaForFeatures` narrows the fully-permissive mdast tree schema
+ * from `valueSchema.ts` to the node types a field's `features` config enables,
+ * and applies the structural limits that config carries.
  *
- * Reference-existence and `ofAssetMimeTypes` checks are NOT done here -
- * those live in `EntryService.validateValueReferences` because they
- * require IO (read the target asset/entry file).
+ * Reference existence and `ofAssetMimeTypes` are not checked here, they need
+ * IO and live in `ReferenceService.validateValueReferences`.
+ *
+ * @see ../../contributing/markdown-internals.md
  */
 
 import { z } from '@hono/zod-openapi';
@@ -66,8 +59,9 @@ function exceedsMaxDepth(root: unknown, maxDepth: number): boolean {
 }
 
 /**
- * Heading depth - one of 1..6. Empty array on the field config disables
- * headings entirely.
+ * Heading depth. A field's `headings` array is an exact allowlist rather than
+ * a ceiling, so `[2, 3]` rejects a depth 1 heading, and an empty array
+ * disables headings entirely.
  */
 export const markdownHeadingDepthSchema = z.union([
   z.literal(1),
@@ -100,7 +94,9 @@ export const markdownFeaturesSchema = z.object({
    * Raw HTML node (mdast `html`). Same flag covers both block and inline
    * contexts. SECURITY: enabling this allows authors to embed arbitrary
    * HTML - including scripts. Consumer renderers MUST sanitize the output
-   * (e.g. DOMPurify). Core does not sanitize. See docs/markdown-content.md.
+   * (e.g. DOMPurify). Core does not sanitize.
+   *
+   * @see ../../docs/markdown-content.md
    */
   rawHtml: z.boolean(),
   tables: z.boolean(),
@@ -112,9 +108,10 @@ export const markdownFeaturesSchema = z.object({
   strong: z.boolean(),
   inlineCode: z.boolean(),
   /**
-   * mdast `link` with absolute http(s)/mailto URL. Covers `[text](url)`
-   * and CommonMark autolinks `<url>` (which parse to `link` nodes). GFM
-   * `autolinkLiteral` (bare URLs in body text) is excluded entirely.
+   * mdast `link` nodes whose URL passes Core's scheme allowlist, which
+   * `mdAstLinkUrlSchema` defines. Covers `[text](url)` and CommonMark
+   * autolinks `<url>`, which parse to `link` nodes. GFM `autolinkLiteral`,
+   * a bare URL in body text, is excluded entirely.
    */
   externalLinks: z.boolean(),
   /** Custom `entryReference` node (typed reference to another Entry). */
@@ -149,19 +146,15 @@ export interface BuildMdAstSchemaContext {
 }
 
 /**
- * Builds a Zod schema that validates an `MdAstRoot | null` against the
- * given features and ofCollections.
+ * Validates an `MdAstRoot | null` against a field's whole configuration, not
+ * only its features map. `null` is accepted when `isRequired` is false, and
+ * empty content is `null` per language rather than an empty tree: a present
+ * root always holds at least one block, and one whose only child is an empty
+ * paragraph is rejected. `min` and `max` bound the block count above that
+ * floor, an `entryReference.collectionId` has to be in a non-empty
+ * `ofCollections`, and nesting past `MAX_MDAST_DEPTH` is rejected.
  *
- * Behaviour:
- *   - `null` accepted when `isRequired === false`; rejected when `true`.
- *   - Tree shape: only allowed node types per the features map.
- *   - Block count: at least `effectiveMin` and at most `max ?? Infinity`,
- *     where `effectiveMin = min ?? (isRequired ? 1 : 0)` - mirrors
- *     `.min(1)` for required strings.
- *   - Empty-paragraph-only trees are rejected (Desktop normalizes to
- *     null).
- *   - `entryReference.collectionId` must be in `ofCollections` when that
- *     array is non-empty.
+ * @see ../../contributing/markdown-internals.md
  */
 export function buildMdAstSchemaForFeatures(
   ctx: BuildMdAstSchemaContext
@@ -356,12 +349,10 @@ export function buildMdAstSchemaForFeatures(
   }
 
   if (features.lists) {
-    // listItem can carry a `checked` boolean when taskListItems is enabled.
-    // We don't structurally couple them - features.taskListItems false +
-    // listItem.checked = boolean would still pass the tree shape. The
-    // field-definition-level refinement `taskListItems requires lists`
-    // (in fieldSchema.ts) catches the inverse (taskListItems without
-    // lists), which is the real misconfiguration.
+    // listItem carries a `checked` boolean only when taskListItems is on,
+    // below it is narrowed to null. The field-definition-level refinement
+    // `taskListItems requires lists` (in fieldSchema.ts) catches the inverse
+    // misconfiguration, taskListItems without lists.
     const listItemFieldSchema: z.ZodType<{
       type: 'listItem';
       spread: boolean | null;
@@ -473,11 +464,19 @@ export function buildMdAstSchemaForFeatures(
       message:
         'Empty markdown values must be serialised as null per language, not as a tree containing only an empty paragraph',
       path: ['children'],
-    })
-    .refine((root) => !exceedsMaxDepth(root, MAX_MDAST_DEPTH), {
+    });
+
+  // Piped in front of the object schema rather than refined behind it. zod
+  // recurses through the whole tree before a root level check runs, and an
+  // adversarially deep tree overflows the stack during that walk, so the
+  // check that would have caught it never happens.
+  const withinMaxDepth = z
+    .unknown()
+    .refine((value) => !exceedsMaxDepth(value, MAX_MDAST_DEPTH), {
       message: `Markdown tree exceeds maximum nesting depth of ${MAX_MDAST_DEPTH}`,
       path: ['children'],
     });
+  const guardedRootSchema = withinMaxDepth.pipe(rootSchema);
 
-  return isRequired ? rootSchema : rootSchema.nullable();
+  return isRequired ? guardedRootSchema : guardedRootSchema.nullable();
 }

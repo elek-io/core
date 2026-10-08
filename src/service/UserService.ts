@@ -12,7 +12,12 @@ import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * Service to handle the User that is currently working with Core
+ * The one User per data directory, stored in `user.json` beside the Projects
+ * rather than inside one, so it is never committed.
+ *
+ * Every commit Core makes is authored with it.
+ *
+ * @see ../../docs/storage-layout.md
  */
 export class UserService {
   private readonly pathTo: PathTo;
@@ -30,7 +35,12 @@ export class UserService {
   }
 
   /**
-   * Returns the User currently working with Core
+   * Returns the User currently working with Core, or null.
+   *
+   * `null` means no `user.json` has been written yet, but also any other read
+   * failure, a `user.json` that no longer matches `userFileSchema` included,
+   * because the read is caught, logged at info and turned into null. This
+   * call never throws.
    */
   public async get(): Promise<User | null> {
     try {
@@ -45,9 +55,12 @@ export class UserService {
   }
 
   /**
-   * Sets the User currently working with Core
+   * Sets the User currently working with Core, so every git operation is
+   * signed with them.
    *
-   * By doing so all git operations are done with the signature of this User
+   * Overwrites `user.json` in the data directory, creating it when absent, so
+   * calling it again replaces the previous User. Throws `BadRequest` when
+   * `props` fails `setUserSchema`.
    */
   public async set(props: SetUserProps): Promise<User> {
     const parsed = setUserSchema.safeParse(props);
@@ -67,7 +80,9 @@ export class UserService {
     }
 
     await this.jsonFileService.update(userFile, userFilePath, userFileSchema);
-    this.logService.debug({
+    // The identity every later commit is signed with, so it belongs in
+    // the record of what happened
+    this.logService.info({
       source: 'core',
       message: 'Updated User',
     });

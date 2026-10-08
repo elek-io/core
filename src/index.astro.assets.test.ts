@@ -8,19 +8,15 @@ import { createProject } from './test/util.js';
 import type { Asset, Project } from './index.node.js';
 
 /**
- * Own test file on purpose, every sync() spins up a full Astro
- * pipeline in the worker process.
+ * Own test file on purpose, every sync() spins up a full Astro pipeline in the
+ * worker process.
  *
- * Asserts what the loader hands to Astro, which is where Core's
- * responsibility ends. Astro replaces the stored marker with its own
- * image metadata when a page reads the entry, and that replacement
- * cannot be exercised here: rendering needs a dev server or a build,
- * and neither survives this environment (a dev server inside a vitest
- * worker never routes, and a build stages its output in the current
- * working directory whenever the site root sits outside of it, then
- * renames across filesystems). What proves the handover instead is
- * that Astro collected the image as an import of its own, see the
- * marker section in contributing/astro-entry.md.
+ * Asserts what the loader hands to Astro, which is where Core's responsibility
+ * ends. Astro's own substitution needs a rendered page, which this environment
+ * cannot produce, so what proves the handover is that Astro collected the
+ * image as an import of its own.
+ *
+ * @see ../contributing/testing.md
  */
 describe('Assets through astro:assets', function () {
   let project: Project & { destroy: () => Promise<void> };

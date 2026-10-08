@@ -60,7 +60,7 @@ describe('Read-only mode', function () {
     const status = await readOnlyCore.git.status(
       readOnlyCore.util.pathTo.project(project.id)
     );
-    expect(status.length).toEqual(0);
+    expect(status.isClean).toBe(true);
   });
 
   it('should allow switching branches', async function () {
@@ -160,6 +160,17 @@ describe('Read-only mode', function () {
       readOnlyCore.git.tags.create({
         path: readOnlyCore.util.pathTo.project(project.id),
         message: { type: 'release', version: '1.0.0' },
+      })
+    );
+  });
+
+  it('should reject a direct git tag delete', async function () {
+    // The same backstop create carries, on the operation that throws a
+    // Release away rather than making one
+    await expectReadOnlyError(
+      readOnlyCore.git.tags.delete({
+        path: readOnlyCore.util.pathTo.project(project.id),
+        id: uuid(),
       })
     );
   });

@@ -1,4 +1,4 @@
-# Language-Scoped Validation
+# Language-scoped validation
 
 How Core guarantees that translatable content - admin metadata and Entry values - carries exactly the languages a Project supports, both at runtime and in generated code. This is a design-level reference for the two-layer schema approach behind that guarantee.
 
@@ -27,9 +27,9 @@ Core's exported TypeScript types remain broad (`Partial<Record<SupportedLanguage
 
 There are two distinct schema layers for translatable content:
 
-**Static schemas** (`baseSchema.ts`, `valueSchema.ts`) define the broad structural types used for file I/O, type exports, and the `.pipe()` step in dynamic schema generation. These use `z.partialRecord(supportedLanguageSchema, ...)` and accept any subset of the 24 supported languages.
-
-**Strict entity schemas** (`strictEntitySchema.ts`) generate language-aware validation schemas at runtime using `z.record(z.enum(languages), ...)`. These require exactly the Project's supported languages to be present. Every factory in this file takes a required `languages: ProjectLanguages` parameter - a non-empty tuple type derived from the Project schema (`ProjectSettings['language']['supported']`) so the non-empty guarantee flows end-to-end without casts.
+- **Static schemas** (`baseSchema.ts`, `valueSchema.ts`) define the broad structural types used for file I/O, type exports, and the `.pipe()` step in dynamic schema generation. These use `z.partialRecord(supportedLanguageSchema, ...)` and accept any subset of the 24 supported languages.
+- **Strict entity schemas** (`strictEntitySchema.ts`) generate language-aware validation schemas at runtime using `z.record(z.enum(languages), ...)`. These require exactly the Project's supported languages to be present.
+  - Every factory in this file takes a required `languages: ProjectLanguages` parameter, a non-empty tuple type derived from the Project schema (`ProjectSettings['language']['supported']`), so the non-empty guarantee flows end-to-end without casts.
 
 ### Entry value validation flow
 
@@ -55,6 +55,13 @@ Validated output (typed as Record<string, Value>)
 
 The `.pipe()` step exists purely for TypeScript type inference - it ensures the output type is `Record<string, Value>` rather than `Record<string, unknown>`. The static `valueSchema` must therefore accept nullable content values (see "Static value schemas accept nullable content" below).
 
+The object in front of the pipe is keyed by field definition slug. Whether it rejects or strips a slug it does not name depends on who is asking:
+
+- **Create and update** use a `z.strictObject()`. A Value whose slug matches no field definition fails with an `unrecognized_keys` issue, in an Entry's values and in a Component item's values alike. Stripped, a misspelled slug would vanish unreported, and a form opened before a field was renamed would lose its edit.
+- **Everything that reads stored Values** keeps the stripping `z.object()`: `getEntrySchemaFromFieldDefinitions`, which generated API clients parse responses with, and the re-validation in the Collection and Component cascades and in Entry migration. A client generated before a field was added has to keep parsing.
+
+Only the slugs the Collection declares reach an Entry either way, which is the invariant the generated types rely on.
+
 ### Admin metadata validation
 
 Collection names, Component names, and field definition labels are validated using `.superRefine()` layered onto the existing static `createCollectionSchema` / `updateCollectionSchema` / `createComponentSchema` / `updateComponentSchema`. The refinement walks translatable admin fields and records a `ZodError` issue for any language key missing on any field:
@@ -66,30 +73,16 @@ export function getCreateCollectionSchemaFromLanguages(
 ) {
   const ts = strictTranslatableString(languages);
   return createCollectionSchema.superRefine((val, ctx) => {
-    checkStrictTranslatable(val.name.singular, ts, ctx, ['name', 'singular']);
-    checkStrictTranslatable(val.name.plural, ts, ctx, ['name', 'plural']);
-    checkStrictTranslatable(val.description, ts, ctx, ['description']);
-    for (const [i, fd] of flattenFieldDefinitions(
-      val.fieldDefinitions
-    ).entries()) {
-      checkStrictTranslatable(fd.label, ts, ctx, [
-        'fieldDefinitions',
-        i,
-        'label',
-      ]);
-      checkStrictTranslatable(
-        fd.description,
-        ts,
-        ctx,
-        ['fieldDefinitions', i, 'description'],
-        true
-      );
-    }
+    checkCollectionAdminMetadata(val, ctx, ts);
   });
 }
 ```
 
-`.superRefine()` attaches to the existing schema (which is a `ZodEffects` once the internal `fieldDefinitionSlugUniquenessSuperRefinement` is added) without rewriting any field definition schema. Issue paths are preserved - a missing `de` key on `fieldDefinitions[2].label` reports at `['fieldDefinitions', 2, 'label', 'de']`. All issues aggregate into a single `ZodError`.
+`checkCollectionAdminMetadata` is shared with the update factory. It walks `fieldDefinitions` rather than flattening them, because a group's children are nested and a flattened index would address a definition the User never edited. A group's own label and description are admin metadata too, so they are checked alongside its children.
+
+`.superRefine()` attaches to the existing schema (which is a `ZodEffects` once the internal `fieldDefinitionSlugUniquenessSuperRefinement` is added) without rewriting any field definition schema.
+
+Issue paths are preserved, so a missing `de` key on the label of the third field inside the second group reports at `['fieldDefinitions', 1, 'fieldDefinitions', 2, 'label', 'de']`. All issues aggregate into a single `ZodError`.
 
 ### Service-side preamble
 
@@ -137,9 +130,14 @@ export type BlogPostsCollection = Omit<Collection, 'name' | 'description' | 'fie
 };
 ```
 
-Values nested inside component items are narrowed too. The CLI generator emits a per-Component-per-field discriminated union for every dynamic field - both at the Collection level and inside Component value interfaces - so drilling into `xCollectionValues.blocks.content[0].values['<dynamic-field>'].content[0].values['<leaf>'].content` resolves to `Record<ProjectLanguage, T>`. The Astro integration emits named per-Component value types (`HeroComponentValues`) plus prefixed Item types (`BlogPostsBlocksItem`, `HeroSubBlocksItem`) referenced from a Zod discriminated union for `parseData` validation.
+Values nested inside component items are narrowed too:
 
-Item types use the same prefixing convention across both generators: collection-level dynamic fields produce `${CollectionPascal}${FieldPascal}Item`, and component-level dynamic fields produce `${ComponentPascal}${FieldPascal}Item`. If a referenced Component cannot be found in the Project, generation throws `Component "${id}" referenced by dynamic field "${slug}" not found in project` rather than silently emitting a permissive type.
+- The CLI generator emits a per-Component-per-field discriminated union for every dynamic field, both at the Collection level and inside Component value interfaces, so drilling into `xCollectionValues.blocks.content[0].values['<dynamic-field>'].content[0].values['<leaf>'].content` resolves to `Record<ProjectLanguage, T>`.
+- The Astro integration emits named per-Component value types (`HeroComponentValues`) plus prefixed Item types (`BlogPostsBlocksItem`, `HeroSubBlocksItem`) referenced from a Zod discriminated union for `parseData` validation.
+
+Item types use the same prefixing convention across both generators: collection-level dynamic fields produce `${CollectionPascal}${FieldPascal}Item`, and component-level dynamic fields produce `${ComponentPascal}${FieldPascal}Item`.
+
+If a referenced Component cannot be found in the Project, generation throws `Component "${id}" referenced by dynamic field "${slug}" not found in project` rather than silently emitting a permissive type.
 
 The generated API client embeds the Project languages and passes them to `getEntrySchemaFromFieldDefinitions()` for strict runtime validation of API responses.
 
@@ -151,11 +149,15 @@ Project languages are runtime data (`project.settings.language.supported`). Type
 
 ### Why `.superRefine()` instead of rewriting static schemas
 
-Field definition schemas use `.refine()` / `.superRefine()` internally (min/max, default-in-options, unique-has-no-default, slug uniqueness), so they carry refinements that limit how they can be reshaped (`.extend()` cannot overwrite an existing key on them, only `.safeExtend()` can). Rewriting the ~15 field definition schemas as language-parameterised factories would be invasive and gains nothing observable. `.superRefine()` appends validation onto any schema, including refined ones, so the strict factories layer language-completeness checks on top without touching the underlying structure.
+Field definition schemas use `.refine()` and `.superRefine()` internally (min/max, default-in-options, unique-has-no-default, slug uniqueness), so they carry refinements that limit how they can be reshaped. `.extend()` cannot overwrite an existing key on them, only `.safeExtend()` can.
+
+Rewriting the ~15 field definition schemas as language-parameterised factories would be invasive and gains nothing observable. `.superRefine()` appends validation onto any schema, including refined ones, so the strict factories layer language-completeness checks on top without touching the underlying structure.
 
 ### Why the async preamble lives above `validated()`
 
-Building the strict schema requires runtime data (languages, and for entries the Collection + Component resolver) that must be read from disk. Hoisting those reads above `this.validated()` lets the fully-strict schema be passed in, giving each method a single validation pass. `parseOrThrow` handles the tiny pre-parse needed to extract IDs for the reads, producing the same error log + `CoreError.badRequest` wrapping as `validated()` does.
+Building the strict schema requires runtime data (languages, and for entries the Collection and Component resolver) that must be read from disk. Hoisting those reads above `this.validated()` lets the fully-strict schema be passed in, giving each method a single validation pass.
+
+`parseOrThrow` handles the tiny pre-parse needed to extract IDs for the reads, producing the same error log and `CoreError.badRequest` wrapping as `validated()` does.
 
 ### Static value schemas accept nullable content
 
@@ -183,20 +185,20 @@ The strict schema is what enforces required-ness: required fields use `z.string(
 
 ## Files overview
 
-| File                                      | Role                                                                                                                                                                                            |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/schema/strictEntitySchema.ts`        | All strict entity schema factories (Collection / Component / Entry × Create / Update) + `strictTranslatableRecordOf` / `strictTranslatableString` primitives + `checkStrictTranslatable` helper |
-| `src/schema/schemaFromFieldDefinition.ts` | Low-level value-from-FD builders used by the strict entity factories                                                                                                                            |
-| `src/schema/valueSchema.ts`               | Static value schemas with nullable content for pipe compatibility                                                                                                                               |
-| `src/schema/projectSchema.ts`             | `.nonempty()` on supported languages array. Exports `ProjectLanguages` type used by every strict factory                                                                                        |
-| `src/service/AbstractService.ts`          | `parseOrThrow` helper, `validated()` delegates to it                                                                                                                                            |
-| `src/service/AbstractEntityService.ts`    | `readProjectFile` / `readProjectLanguages` helpers                                                                                                                                              |
-| `src/service/EntryService.ts`             | Preamble reads Project + Collection + builds ComponentResolver, passes strict Entry schema to `validated()`                                                                                     |
-| `src/service/CollectionService.ts`        | Preamble reads Project languages, passes strict Collection schema to `validated()`                                                                                                              |
-| `src/service/ComponentService.ts`         | Preamble reads Project languages, passes strict Component schema to `validated()`                                                                                                               |
-| `src/astro/schema.ts`                     | Emits `Record<ProjectLanguage, T>` in generated Astro types                                                                                                                                     |
-| `src/cli/generateTypesAction.ts`          | Emits `ProjectLanguage` type and narrowed interfaces                                                                                                                                            |
-| `src/cli/generateApiClientAction.ts`      | Embeds Project languages in generated API client                                                                                                                                                |
+| File | Role |
+| --- | --- |
+| `src/schema/strictEntitySchema.ts` | All strict entity schema factories (Collection / Component / Entry × Create / Update) + `strictTranslatableRecordOf` / `strictTranslatableString` primitives + `checkStrictTranslatable` helper |
+| `src/schema/schemaFromFieldDefinition.ts` | Low-level value-from-FD builders used by the strict entity factories |
+| `src/schema/valueSchema.ts` | Static value schemas with nullable content for pipe compatibility |
+| `src/schema/projectSchema.ts` | `.nonempty()` on supported languages array. Exports `ProjectLanguages` type used by every strict factory |
+| `src/service/AbstractService.ts` | `parseOrThrow` helper, `validated()` delegates to it |
+| `src/service/AbstractEntityService.ts` | `readProjectFile` / `readProjectLanguages` helpers |
+| `src/service/EntryService.ts` | Preamble reads Project + Collection + builds ComponentResolver, passes strict Entry schema to `validated()` |
+| `src/service/CollectionService.ts` | Preamble reads Project languages, passes strict Collection schema to `validated()` |
+| `src/service/ComponentService.ts` | Preamble reads Project languages, passes strict Component schema to `validated()` |
+| `src/astro/schema.ts` | Emits `Record<ProjectLanguage, T>` in generated Astro types |
+| `src/cli/generateTypesAction.ts` | Emits `ProjectLanguage` type and narrowed interfaces |
+| `src/cli/generateApiClientAction.ts` | Embeds Project languages in generated API client |
 
 ## Adding a new translatable field
 
@@ -206,7 +208,7 @@ If you add a new translatable field to a schema (e.g., a new `subtitle` on Colle
 2. Add a `checkStrictTranslatable` call for it in the relevant factory in `strictEntitySchema.ts` (or in the shared `checkCollectionAdminMetadata` / `checkComponentAdminMetadata` helper)
 3. Update `generateTypesAction.ts` if the field should appear in generated narrow types
 
-## See Also
+## See also
 
 - [`fields.md`](../docs/fields.md) - the field system and translatable Value shapes
 - [`concepts.md`](../docs/concepts.md) - Projects and their supported languages

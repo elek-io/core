@@ -1,4 +1,3 @@
-import Fs from 'fs-extra';
 import { z } from '@hono/zod-openapi';
 import {
   countEntriesSchema,
@@ -39,16 +38,29 @@ import {
   getUniqueFieldDefinitions,
 } from '../util/uniqueFieldValues.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
+import {
+  componentIdsOf,
+  preloadComponentResolver,
+} from '../util/componentResolver.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { CollectionService } from './CollectionService.js';
 import type { ComponentService } from './ComponentService.js';
 import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * Service that manages CRUD functionality for Entry files on disk
+ * An Entry is one JSON file inside its Collection's folder, and every mutation
+ * commits it.
+ *
+ * The optional `T extends Entry` on `read`, `create`, `update` and `list` is
+ * the caller's own narrowing claim and is never checked. Core validates
+ * against `entryFileSchema`, and on a write against the Collection's field
+ * definitions, nothing further.
+ *
+ * @see ../../docs/storage-layout.md
  */
 export class EntryService
   extends AbstractEntityService
@@ -65,6 +77,7 @@ export class EntryService
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService,
     collectionService: CollectionService,
     componentService: ComponentService,
@@ -76,7 +89,8 @@ export class EntryService
       pathTo,
       logService,
       gitService,
-      jsonFileService
+      jsonFileService,
+      cacheService
     );
 
     this.coreVersion = coreVersion;
@@ -86,7 +100,15 @@ export class EntryService
   }
 
   /**
-   * Creates a new Entry for given Collection
+   * Creates an Entry in the given Collection, then commits it.
+   *
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
+   * `BadRequest` when a Value fails the Collection's field definitions or
+   * points at something that is not there, and `Conflict` when a unique field
+   * repeats a value another Entry already holds. Nothing is written unless
+   * all three pass, and a failure mid-write rolls the working tree back.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public async create<T extends Entry = Entry>(
     props: CreateEntryProps
@@ -185,9 +207,15 @@ export class EntryService
   }
 
   /**
-   * Returns an Entry from given Collection by ID
+   * Returns an Entry from given Collection by ID, and with `commitHash` the
+   * version at that commit.
    *
-   * If a commit hash is provided, the Entry is read from history
+   * A historical read parses the blob at that commit and runs it through
+   * `migrate()`, so an Entry written by an older Core is upgraded in memory.
+   * A normal read parses the file as stored and fails when it predates the
+   * current schema.
+   *
+   * A missing Entry surfaces as `NotFound`.
    */
   public read<T extends Entry = Entry>(props: ReadEntryProps): Promise<T> {
     return this.validated('read', readEntrySchema, props, async () => {
@@ -212,7 +240,10 @@ export class EntryService
   }
 
   /**
-   * Returns the commit history of an Entry
+   * The git log scoped to that Entry's file, newest commit first, including
+   * the commit that deleted the Entry.
+   *
+   * An id that never existed returns an empty array rather than throwing.
    */
   public history(props: EntryHistoryProps): Promise<GitCommit[]> {
     return this.validated('history', entryHistorySchema, props, async () => {
@@ -227,7 +258,16 @@ export class EntryService
   }
 
   /**
-   * Updates an Entry of given Collection with new Values
+   * Replaces the Entry's Values wholesale and commits. Every field the
+   * Collection defines has to be present, or the call is a `BadRequest`, and
+   * `updated` is stamped on write.
+   *
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
+   * `BadRequest` when a Value fails the field definitions or points at
+   * something that is not there, and `Conflict` when a unique field repeats
+   * another Entry's value. A failure mid-write rolls the working tree back.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public async update<T extends Entry = Entry>(
     props: UpdateEntryProps
@@ -328,11 +368,14 @@ export class EntryService
   }
 
   /**
-   * Deletes given Entry from it's Collection
+   * Deletes the Entry from its Collection and commits the removal.
    *
-   * Blocks deletion if the Entry is still referenced by another Entry's values
-   * (a flat reference field, an mdast node, or a reference nested in a
-   * `dynamic`/component block). A self-reference does not block.
+   * Blocked when another Entry's values still reference it, through a flat
+   * reference field, an mdast node, or a reference nested in a
+   * `dynamic`/component block. That raises `Conflict` with the referring
+   * Entries as its cause. A self-reference does not block.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public delete(props: DeleteEntryProps): Promise<void> {
     return this.mutating('delete', deleteEntrySchema, props, async () => {
@@ -362,7 +405,7 @@ export class EntryService
       );
 
       return this.withGitRollback(projectPath, async () => {
-        await Fs.remove(entryFilePath);
+        await this.jsonFileService.delete(entryFilePath);
         await this.gitService.add(projectPath, [entryFilePath]);
         await this.gitService.commit(projectPath, {
           method: 'delete',
@@ -376,6 +419,15 @@ export class EntryService
     });
   }
 
+  /**
+   * One page of a Collection's Entries, in directory read order rather than
+   * any sort.
+   *
+   * `limit` defaults to 15 and `limit: 0` returns every Entry from `offset`.
+   * `total` counts the Entry files in the Collection rather than the page,
+   * and an Entry that fails to read is dropped with a logged warning instead
+   * of failing the call, so `list` can be shorter than both.
+   */
   public list<T extends Entry = Entry>(
     props: ListEntriesProps
   ): Promise<PaginatedList<T>> {
@@ -411,6 +463,14 @@ export class EntryService
     });
   }
 
+  /**
+   * Counts the Entry files in the Collection folder, skipping
+   * `collection.json`, without parsing any of them. One directory read, so it
+   * can exceed the number of Entries `list` manages to return.
+   *
+   * Throws `NotFound` for a Collection that is not there, rather than
+   * answering 0.
+   */
   public count(props: CountEntriesProps): Promise<number> {
     return this.validated('count', countEntriesSchema, props, async () => {
       const entryReferences = await this.listReferences(
@@ -423,21 +483,31 @@ export class EntryService
   }
 
   /**
-   * Checks if given object is of type Entry
+   * A full, deep `entrySchema` parse that never throws and returns false
+   * instead.
+   *
+   * It checks no Values against any Collection's field definitions, so an
+   * object can pass here and still be rejected by `create` or `update`.
    */
   public isEntry(obj: unknown): obj is Entry {
     return entrySchema.safeParse(obj).success;
   }
 
   /**
-   * Migrates an potentially outdated Entry file to the current schema
+   * Migrates a potentially outdated Entry file to the current schema.
+   *
+   * Throws `BadRequest` when the file does not match what Core expects, with
+   * the underlying `ZodError` as its cause, and `VersionSkew` when it was
+   * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedEntryFile: unknown): EntryFile {
     return migrateEntryFile(this.coreVersion, potentiallyOutdatedEntryFile);
   }
 
   /**
-   * Creates an Entry from given EntryFile by resolving it's Values
+   * The one seam between the on-disk `EntryFile` and the returned `Entry`,
+   * kept so the two can diverge. Today it is a plain spread, and Values come
+   * back exactly as stored.
    */
   private toEntry(entryFile: EntryFile): Entry {
     return {
@@ -516,12 +586,14 @@ export class EntryService
   }
 
   /**
-   * Pre-loads all Components referenced (transitively) by the given field definitions
-   * and returns a synchronous ComponentResolver for use during schema generation.
+   * Pre-loads every Component the given field definitions reach, transitively,
+   * and returns a synchronous `ComponentResolver` for schema generation.
    *
-   * When a dynamic field has an empty ofComponents array (meaning "all allowed"),
-   * all project components are loaded and the returned field definitions have
-   * ofComponents populated with the full list of component IDs.
+   * A top-level dynamic field with an empty `ofComponents` is expanded: the
+   * Project's Components are loaded and the returned definition carries the
+   * full id list. The walk does not rewrite a dynamic field nested inside a
+   * Component, so an empty nested `ofComponents` stays empty and the schema
+   * falls back to its permissive record item schema.
    */
   private async buildComponentResolver(
     fieldDefinitions: FieldDefinition[],
@@ -532,63 +604,30 @@ export class EntryService
   }> {
     const resolvedFieldDefinitions = [...fieldDefinitions];
 
-    // First pass: resolve empty ofComponents arrays by loading all component IDs
-    const initialQueue: string[] = [];
     for (let index = 0; index < resolvedFieldDefinitions.length; index++) {
       const fieldDefinition = resolvedFieldDefinitions[index]!;
-      if (fieldDefinition.valueType === 'component') {
-        if (fieldDefinition.ofComponents.length > 0) {
-          initialQueue.push(...fieldDefinition.ofComponents);
-        } else {
-          const componentIds =
-            await this.componentService.listAllIds(projectId);
-          resolvedFieldDefinitions[index] = {
-            ...fieldDefinition,
-            ofComponents: componentIds,
-          };
-          initialQueue.push(...componentIds);
-        }
+      if (
+        fieldDefinition.valueType === 'component' &&
+        fieldDefinition.ofComponents.length === 0
+      ) {
+        resolvedFieldDefinitions[index] = {
+          ...fieldDefinition,
+          ofComponents: await this.componentService.listAllIds(projectId),
+        };
       }
     }
 
-    // BFS: load all referenced components into componentMap
-    const componentMap = new Map<string, FieldDefinition[]>();
-    const queue = [...initialQueue];
-
-    while (queue.length > 0) {
-      const componentId = queue.shift()!;
-      if (componentMap.has(componentId)) {
-        continue;
+    const resolver = await preloadComponentResolver(
+      componentIdsOf(resolvedFieldDefinitions),
+      async (componentId) => {
+        const component = await this.componentService.read({
+          projectId,
+          id: componentId,
+        });
+        return component.fieldDefinitions;
       }
+    );
 
-      const component = await this.componentService.read({
-        projectId,
-        id: componentId,
-      });
-      componentMap.set(componentId, component.fieldDefinitions);
-
-      for (const nestedFieldDef of component.fieldDefinitions) {
-        if (nestedFieldDef.valueType === 'component') {
-          for (const nestedComponentId of nestedFieldDef.ofComponents) {
-            if (!componentMap.has(nestedComponentId)) {
-              queue.push(nestedComponentId);
-            }
-          }
-        }
-      }
-    }
-
-    return {
-      resolver: (id: string) => {
-        const resolved = componentMap.get(id);
-        if (!resolved) {
-          throw new Error(
-            `Component "${id}" was not pre-loaded. This is an internal error.`
-          );
-        }
-        return resolved;
-      },
-      fieldDefinitions: resolvedFieldDefinitions,
-    };
+    return { resolver, fieldDefinitions: resolvedFieldDefinitions };
   }
 }

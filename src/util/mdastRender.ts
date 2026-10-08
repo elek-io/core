@@ -1,17 +1,14 @@
 /**
- * Internal generic primitive — a typed fold over an MdAstRoot. Every node
- * type has a required handler in `MdastRenderersBase<T>`; the walk descends
- * depth-first and calls each parent handler with its already-rendered
- * children, then the root handler at the top to combine.
+ * A typed fold over an MdAstRoot. Every node type has a required handler in
+ * `MdastRenderersBase<T>`, the walk descends depth-first and calls each parent
+ * handler with its already-rendered children, then the root handler combines.
  *
- * Framework-agnostic: T is the consumer's element type. Framework-specific
- * wrappers (`@elek-io/core/astro` and friends) bind T to their JSX flavour,
- * supply defaults for the safe standard node types, and expose only the
- * required overrides to consumers.
+ * Framework-agnostic, `T` is the consumer's element type. A framework wrapper
+ * such as the astro entry binds `T` to its JSX flavour and defaults every node
+ * type that has a safe default, so only the three unsafe keys are required and
+ * every other one stays optional over its default.
  *
- * Not exported from `@elek-io/core` — kept internal until a non-Astro
- * consumer demands a public lower-level API. Exposing later is a
- * non-breaking change.
+ * @see ../../contributing/markdown-internals.md
  */
 
 import type {
@@ -89,7 +86,9 @@ export interface MdastRenderersBase<T> {
 
 /**
  * Node types a consumer must render explicitly, because no default is safe
- * in any framework. See docs/markdown-content.md for the reasoning.
+ * in any framework. The reasoning is in the doc below.
+ *
+ * @see ../../docs/markdown-content.md
  */
 export const REQUIRED_RENDERER_KEYS = [
   'html',
@@ -119,6 +118,17 @@ export type FrameworkRenderers<T> = Pick<
 > &
   Partial<Pick<MdastRenderersBase<T>, DefaultedRendererKey>>;
 
+/**
+ * The framework-agnostic rendering primitive, as opposed to the bound one the
+ * astro entry exports. `renderers` is total here, all 24 node types required
+ * with no defaults merged, which is what a binding does for you. `T` is the
+ * caller's element type.
+ *
+ * The walk is depth-first and a parent handler receives its already-rendered
+ * children. An unknown node type throws a plain `Error`, not a `CoreError`.
+ *
+ * @see ../../docs/markdown-content.md
+ */
 export function mdastRender<T>(
   root: MdAstRoot,
   renderers: MdastRenderersBase<T>
@@ -160,7 +170,9 @@ const blockContainerTypes = new Set<string>([
  * `inlineCode` and `code` values. Block-level siblings (blocks, list items,
  * table rows and cells) are joined with `separator`, which defaults to a
  * space; inline content keeps its own spacing. Raw html and image/reference
- * alt text are not included. See docs/markdown-content.md.
+ * alt text are not included.
+ *
+ * @see ../../docs/markdown-content.md
  */
 export function extractText(node: MdAstAnyNode, separator = ' '): string {
   if (node.type === 'text') return node.value;

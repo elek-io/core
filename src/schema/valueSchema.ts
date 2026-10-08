@@ -115,10 +115,11 @@ export type ComponentValue = z.infer<typeof componentValueSchema>;
 // are first-class typed nodes (entryReference / assetReference).
 //
 // These are the fully-permissive schemas: every modelled node type is
-// accepted. Per-field narrowing (based on the field's `features` config)
-// happens via `buildMdAstSchemaForField` in `./buildMdAstSchema.ts`. The
-// permissive version here is what a raw entry JSON conforms to when
-// loaded without a field-definition context.
+// accepted. Per-field narrowing happens via `buildMdAstSchemaForFeatures` in
+// `./buildMdAstSchema.ts`, which narrows by more than the `features` map: it
+// also applies `ofCollections`, the block `min` and `max` count and
+// MAX_MDAST_DEPTH. The permissive version here is what a raw entry JSON
+// conforms to when loaded without a field-definition context.
 //
 // `position` info (start/end source coordinates emitted by markdown
 // parsers) is intentionally NOT part of any node schema. The mdast spec
@@ -163,7 +164,7 @@ export const mdAstHtmlSchema = z.object({
 export type MdAstHtml = z.infer<typeof mdAstHtmlSchema>;
 
 /**
- * External image URL. Internal assets use `assetReference` instead — the
+ * External image URL. Internal assets use `assetReference` instead, the
  * `image` node is for external sources only. Allows `http`/`https`; rejects
  * relative paths (use the asset library), `data:` URIs (payload bloat, SVG
  * XSS), and exotic schemes.
@@ -225,10 +226,11 @@ export interface MdAstLink {
 }
 /**
  * Custom node: typed reference to an Entry stored in the same Project.
- * Carries both `collectionId` and `entryId` - Core's filesystem layout
- * (`projects/<pid>/collections/<cid>/entries/<eid>/…`) requires both for
- * path resolution, and the schema-level `ofCollections` constraint check
- * (in `buildMdAstSchemaForField`) uses `collectionId` directly.
+ *
+ * Both ids are carried because an Entry is addressed by its Collection as
+ * well as by itself, and because the `ofCollections` constraint check in
+ * `buildMdAstSchemaForFeatures` reads `collectionId` directly, refining only
+ * when `ofCollections` is non-empty.
  */
 export interface MdAstEntryReference {
   type: 'entryReference';
@@ -273,20 +275,50 @@ export const mdAstDeleteSchema: z.ZodType<MdAstDelete> = z.object({
 });
 
 /**
- * External link URL. Internal entries use `entryReference` instead — the
- * `link` node is for external destinations only. Accepts:
- *  - `http`/`https` absolute URLs
- *  - `mailto:` and `tel:` for contact links
- *  - site-relative (`/path`), sibling/parent-relative (`./`, `../`), and
- *    fragment-only (`#section`) URLs
+ * The origin a relative link has to keep. Reserved by RFC 2606, so it
+ * resolves to nothing and can only ever be the yardstick it is here.
+ */
+const RELATIVE_LINK_BASE = new URL('https://elek-io.invalid/');
+
+/**
+ * True when a relative link stays on the site it is relative to.
  *
- * Rejects exotic schemes (`javascript:`, `data:`, `file:`, `vbscript:`) and
- * protocol-relative URLs (`//host`, which inherit the page's scheme and
- * make a malicious target indistinguishable from a benign one).
+ * `new URL()` is what a renderer resolves the value with, so it is the
+ * oracle rather than a pattern: a backslash, a tab, a line feed and a
+ * carriage return each read as a separator there, and `/\evil.com` leaves
+ * the origin while looking site-relative. Matching those one at a time is
+ * what let it through, and the next separator would go the same way.
+ */
+function keepsItsOrigin(url: string): boolean {
+  try {
+    return (
+      new URL(url, RELATIVE_LINK_BASE).origin === RELATIVE_LINK_BASE.origin
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * External link URL. Internal entries use `entryReference` instead, the
+ * `link` node is for external destinations only. Accepts `http`, `https`,
+ * `mailto` and `tel` absolute URLs, site-relative (`/path`), sibling and
+ * parent-relative (`./`, `../`) and fragment-only (`#section`) forms.
+ *
+ * Rejects exotic schemes (`javascript:`, `data:`, `file:`, `vbscript:`),
+ * protocol-relative URLs (`//host`) and any relative form that resolves
+ * off the origin it is relative to.
+ *
+ * @see ../../docs/markdown-content.md
  */
 export const mdAstLinkUrlSchema = z.union([
   z.url({ protocol: /^(https?|mailto|tel)$/ }),
-  z.string().regex(/^\/(?!\/)|^\.\.?\/|^#/),
+  z
+    .string()
+    .regex(/^\/(?!\/)|^\.\.?\/|^#/)
+    .refine(keepsItsOrigin, {
+      message: 'Relative link URL resolves to another origin',
+    }),
 ]);
 
 export const mdAstLinkSchema: z.ZodType<MdAstLink> = z.object({
@@ -315,21 +347,27 @@ export const mdAstEntryReferenceSchema: z.ZodType<MdAstEntryReference> =
  * are annotated with `z.ZodType<T>`, which hides the literal discriminator
  * field from `z.discriminatedUnion`'s type-level check. Runtime cost is
  * negligible for a 12-member union.
+ *
+ * Named for OpenAPI because this is where the phrasing cycle closes.
+ *
+ * @see ../../contributing/openapi-document.md
  */
-export const mdAstPhrasingNodeSchema: z.ZodType<MdAstPhrasingNode> = z.union([
-  mdAstTextSchema,
-  mdAstInlineCodeSchema,
-  mdAstBreakSchema,
-  mdAstHtmlSchema,
-  mdAstImageSchema,
-  mdAstFootnoteReferenceSchema,
-  mdAstAssetReferenceSchema,
-  mdAstEmphasisSchema,
-  mdAstStrongSchema,
-  mdAstDeleteSchema,
-  mdAstLinkSchema,
-  mdAstEntryReferenceSchema,
-]);
+export const mdAstPhrasingNodeSchema: z.ZodType<MdAstPhrasingNode> = z
+  .union([
+    mdAstTextSchema,
+    mdAstInlineCodeSchema,
+    mdAstBreakSchema,
+    mdAstHtmlSchema,
+    mdAstImageSchema,
+    mdAstFootnoteReferenceSchema,
+    mdAstAssetReferenceSchema,
+    mdAstEmphasisSchema,
+    mdAstStrongSchema,
+    mdAstDeleteSchema,
+    mdAstLinkSchema,
+    mdAstEntryReferenceSchema,
+  ])
+  .openapi('MdAstPhrasingNode');
 
 //
 // Non-recursive block nodes
@@ -472,18 +510,24 @@ export const mdAstFootnoteDefinitionSchema: z.ZodType<MdAstFootnoteDefinition> =
  * Union of all block-level node types. Same `mdAstHtmlSchema` appears in
  * both block and phrasing unions - the mdast spec uses a single `html`
  * node type for both contexts.
+ *
+ * Named for OpenAPI because this is where the block cycle closes.
+ *
+ * @see ../../contributing/openapi-document.md
  */
-export const mdAstBlockNodeSchema: z.ZodType<MdAstBlockNode> = z.union([
-  mdAstParagraphSchema,
-  mdAstHeadingSchema,
-  mdAstBlockquoteSchema,
-  mdAstListSchema,
-  mdAstCodeSchema,
-  mdAstThematicBreakSchema,
-  mdAstHtmlSchema,
-  mdAstTableSchema,
-  mdAstFootnoteDefinitionSchema,
-]);
+export const mdAstBlockNodeSchema: z.ZodType<MdAstBlockNode> = z
+  .union([
+    mdAstParagraphSchema,
+    mdAstHeadingSchema,
+    mdAstBlockquoteSchema,
+    mdAstListSchema,
+    mdAstCodeSchema,
+    mdAstThematicBreakSchema,
+    mdAstHtmlSchema,
+    mdAstTableSchema,
+    mdAstFootnoteDefinitionSchema,
+  ])
+  .openapi('MdAstBlockNode');
 
 /**
  * Returns true if the tree contains exactly one child that is an empty
@@ -509,14 +553,13 @@ export function isEmptyParagraphOnly(root: {
 }
 
 /**
- * Markdown abstract syntax tree (mdast) - structured representation of body content.
+ * The root of a markdown value's node tree, as stored.
  *
- * Recommended for rendering: walk the tree via `node.type` and emit per-node
- * components/HTML. Gives full control over how entryReference / assetReference
- * nodes render (resolve to your URL structure of choice).
+ * A parsed root holds at least one block, and a tree whose only child is an
+ * empty paragraph is rejected, because empty markdown is serialised as `null`
+ * per language rather than as an empty tree.
  *
- * See docs/markdown-content.md for rendering patterns and security notes
- * (especially around `rawHtml`-enabled fields).
+ * @see ../../docs/markdown-content.md
  */
 export const mdAstRootSchema = z
   .object({
@@ -545,10 +588,20 @@ export const mdastValueSchema = directValueBaseSchema.extend({
 });
 export type MdAstValue = z.infer<typeof mdastValueSchema>;
 
-export const valueSchema = z.union([
-  directValueSchema,
-  referencedValueSchema,
-  componentValueSchema,
-  mdastValueSchema,
-]);
+/**
+ * Union of every Value shape an Entry can hold.
+ *
+ * Named for OpenAPI because a component Value holds items whose own values
+ * are Values again.
+ *
+ * @see ../../contributing/openapi-document.md
+ */
+export const valueSchema = z
+  .union([
+    directValueSchema,
+    referencedValueSchema,
+    componentValueSchema,
+    mdastValueSchema,
+  ])
+  .openapi('Value');
 export type Value = z.infer<typeof valueSchema>;

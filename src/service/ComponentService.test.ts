@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, assert, beforeAll, describe, expect, it } from 'vitest';
 import core, {
   type ComponentValue,
   type DirectStringValue,
@@ -348,6 +348,67 @@ describe('ComponentService', function () {
     // Clean up
     await core.components.delete({ projectId: project.id, id: compB.id });
     await core.components.delete({ projectId: project.id, id: compA.id });
+  });
+
+  it('should allow an unconstrained dynamic field', async function () {
+    // An empty ofComponents means "any Component", which the schema builder
+    // answers with one permissive item schema and never recurses into. It
+    // declares no edge, so it can be part of no cycle.
+    //
+    // Its own Project, because a Component holding such a field counts as
+    // referencing every other one, which protects them all from deletion.
+    const ownProject = await createProject('Unconstrained Dynamic Field Test');
+    const unconstrained = (slugSuffix: string) => ({
+      id: uuid(),
+      slug: `blocks-${slugSuffix}`,
+      valueType: 'component' as const,
+      fieldType: 'dynamic' as const,
+      label: { en: 'Blocks', de: 'Blocks' },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: false as const,
+      inputWidth: '12' as const,
+      ofComponents: [],
+      min: null,
+      max: null,
+    });
+
+    try {
+      const first = await core.components.create({
+        projectId: ownProject.id,
+        name: { en: 'Any One', de: 'Any One' },
+        slug: 'any-one',
+        description: null,
+        fieldDefinitions: [unconstrained('one')],
+      });
+
+      // Updating it walked every Component in the Project, its own id
+      // included, and reported the Component as its own cycle
+      await expect(
+        core.components.update({
+          projectId: ownProject.id,
+          id: first.id,
+          name: { en: 'Any One', de: 'Any One' },
+          slug: 'any-one',
+          description: null,
+          fieldDefinitions: [unconstrained('one')],
+        })
+      ).resolves.toMatchObject({ id: first.id });
+
+      // And creating a second one reached the first twice on the same walk
+      await expect(
+        core.components.create({
+          projectId: ownProject.id,
+          name: { en: 'Any Two', de: 'Any Two' },
+          slug: 'any-two',
+          description: null,
+          fieldDefinitions: [unconstrained('two')],
+        })
+      ).resolves.toMatchObject({ slug: 'any-two' });
+    } finally {
+      await ownProject.destroy();
+    }
   });
 
   it('should reject duplicate component slugs', async function () {
@@ -777,7 +838,7 @@ describe('ComponentService - read at a commit', function () {
       const creationHash =
         historyAfterCreate[historyAfterCreate.length - 1]!.hash;
 
-      // A metadata-only update (name) — no field definition changes.
+      // A metadata-only update (name), no field definition changes.
       await core.components.update({
         projectId: project.id,
         id: component.id,
@@ -860,6 +921,193 @@ describe('ComponentService - update slug conflict', function () {
 
       await core.components.delete({ projectId: project.id, id: alpha.id });
       await core.components.delete({ projectId: project.id, id: beta.id });
+    }
+  );
+});
+
+describe('ComponentService - cascade over a nested dynamic field', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let subComponentId: string;
+  let quoteComponentId: string;
+  let collectionId: string;
+  let entryId: string;
+  let nestedFieldId: string;
+  let bodyFieldId: string;
+
+  const nestedField = (max: number | null) => ({
+    id: nestedFieldId,
+    slug: 'nested',
+    valueType: 'component' as const,
+    fieldType: 'dynamic' as const,
+    label: { en: 'Nested', de: 'Verschachtelt' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false as const,
+    inputWidth: '12' as const,
+    ofComponents: [subComponentId],
+    min: null,
+    max,
+  });
+
+  const bodyField = () => ({
+    id: bodyFieldId,
+    slug: 'body',
+    valueType: 'string' as const,
+    fieldType: 'text' as const,
+    label: { en: 'Body', de: 'Text' },
+    description: null,
+    defaultValue: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12' as const,
+    min: null,
+    max: null,
+  });
+
+  beforeAll(async function () {
+    project = await createProject('ComponentService Nested Cascade Test');
+
+    const sub = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Sub', de: 'Sub' },
+      slug: 'sub',
+      description: null,
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'caption',
+          valueType: 'string',
+          fieldType: 'text',
+          label: { en: 'Caption', de: 'Beschriftung' },
+          description: null,
+          defaultValue: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          min: null,
+          max: null,
+        },
+      ],
+    });
+    subComponentId = sub.id;
+
+    bodyFieldId = uuid();
+    nestedFieldId = uuid();
+    const quote = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Quote', de: 'Zitat' },
+      slug: 'quote',
+      description: null,
+      fieldDefinitions: [bodyField(), nestedField(null)],
+    });
+    quoteComponentId = quote.id;
+
+    const collection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Article', de: 'Artikel' },
+        plural: { en: 'Articles', de: 'Artikel' },
+      },
+      description: { en: 'Articles', de: 'Artikel' },
+      slug: { singular: 'article', plural: 'articles' },
+      fieldDefinitions: [
+        {
+          id: uuid(),
+          slug: 'blocks',
+          valueType: 'component',
+          fieldType: 'dynamic',
+          label: { en: 'Blocks', de: 'Blocks' },
+          description: null,
+          isRequired: false,
+          isDisabled: false,
+          isUnique: false,
+          inputWidth: '12',
+          ofComponents: [quoteComponentId],
+          min: null,
+          max: null,
+        },
+      ],
+    });
+    collectionId = collection.id;
+
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId,
+      values: {
+        blocks: {
+          objectType: 'value',
+          valueType: 'component',
+          content: [
+            {
+              id: uuid(),
+              componentId: quoteComponentId,
+              values: {
+                body: {
+                  objectType: 'value',
+                  valueType: 'string',
+                  content: { en: 'Quoted', de: 'Zitiert' },
+                },
+                nested: {
+                  objectType: 'value',
+                  valueType: 'component',
+                  content: [
+                    {
+                      id: uuid(),
+                      componentId: subComponentId,
+                      values: {
+                        caption: {
+                          objectType: 'value',
+                          valueType: 'string',
+                          content: { en: 'Sub', de: 'Sub' },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+    entryId = entry.id;
+  }, 30000);
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  it(
+    'revalidates an updated nested dynamic field against its Components',
+    { timeout: 30000 },
+    async function () {
+      // Changing any property marks the field updated, which re-validates
+      // every existing item against the new schema. A component field needs
+      // a resolver to build that schema, and without one the cascade ends as
+      // Internal rather than doing what docs/schema-changes.md promises.
+      await expect(
+        core.components.update({
+          projectId: project.id,
+          id: quoteComponentId,
+          name: { en: 'Quote', de: 'Zitat' },
+          slug: 'quote',
+          description: null,
+          fieldDefinitions: [bodyField(), nestedField(5)],
+        })
+      ).resolves.toMatchObject({ id: quoteComponentId });
+
+      const entry = await core.entries.read({
+        projectId: project.id,
+        collectionId,
+        id: entryId,
+      });
+      const blocks = entry.values['blocks'];
+      assert(blocks?.valueType === 'component');
+      expect(blocks.content).toHaveLength(1);
     }
   );
 });
@@ -1031,6 +1279,48 @@ describe('ComponentService - update entry resolutions', function () {
           },
         })
       ).rejects.toThrow(/Resolution validation failed/);
+    }
+  );
+
+  it(
+    'rejects a resolution naming a field the new definitions do not declare',
+    { timeout: 30000 },
+    async function () {
+      // A stale slug used to be written into the Entry with no validation at
+      // all, so it has to be caught at the boundary and leave every Entry
+      // untouched
+      const before = await core.entries.read({
+        projectId: project.id,
+        collectionId,
+        id: entryId,
+      });
+
+      await expect(
+        core.components.update({
+          ...heroWithRequiredSubtitle(),
+          resolutions: {
+            [entryId]: {
+              subtitle: {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Sub', de: 'Sub' },
+              },
+              'gone-away': {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Stale', de: 'Stale' },
+              },
+            },
+          },
+        })
+      ).rejects.toMatchObject({ type: 'BadRequest' });
+
+      const after = await core.entries.read({
+        projectId: project.id,
+        collectionId,
+        id: entryId,
+      });
+      expect(after.values).toEqual(before.values);
     }
   );
 });

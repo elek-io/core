@@ -4,4 +4,5 @@ export { collectionMigrations } from './collectionMigrations.js';
 export { componentMigrations } from './componentMigrations.js';
 export { entryMigrations } from './entryMigrations.js';
 export { migrateEntryFile } from './migrateEntryFile.js';
+export { migrating } from './migrating.js';
 export { projectMigrations } from './projectMigrations.js';

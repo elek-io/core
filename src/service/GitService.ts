@@ -5,7 +5,12 @@ import { exec as gitExec, GitError, parseError } from 'dugite';
 import PQueue from 'p-queue';
 import Path from 'node:path';
 import { CoreError } from '../util/shared.js';
-import type { GitMergeOptions, GitMessage } from '../schema/index.js';
+import type {
+  GitMergeOptions,
+  GitMessage,
+  LogAttributes,
+  LogProps,
+} from '../schema/index.js';
 import {
   gitCommitSchema,
   gitMessageSchema,
@@ -14,41 +19,33 @@ import {
   type GitCloneOptions,
   type GitCommit,
   type GitInitOptions,
+  type GitFileStatus,
   type GitLogOptions,
+  type GitStatus,
   type GitSwitchOptions,
 } from '../schema/index.js';
 import { datetime } from '../util/shared.js';
 import { GitTagService } from './GitTagService.js';
-import type { JsonFileService } from './JsonFileService.js';
+import type { CacheService } from './CacheService.js';
 import type { LogService } from './LogService.js';
 import type { UserService } from './UserService.js';
-import type { LogProps } from '../schema/index.js';
 import { PROVISIONED_MARKER, type PathTo } from '../util/node.js';
-
-/**
- * Service that manages Git functionality
- *
- * Uses dugite Node.js bindings for Git to be fully compatible
- * and be able to leverage Git LFS functionality
- * @see https://github.com/desktop/dugite
- *
- * Heavily inspired by the GitHub Desktop app
- * @see https://github.com/desktop/desktop
- *
- * Git operations are sequential!
- * We use a FIFO queue to translate async calls
- * into a sequence of git operations
- *
- * @todo All public methods should recieve only a single object as parameter and the type should be defined through the shared library to be accessible in Core and Client
- */
 
 /**
  * Options for the internal `git` runner: dugite's execution options plus
  * `tolerateNonZero`, which returns the result on a non-zero exit instead of
  * throwing, so the caller can classify the failure itself (used by `rebase`
- * and `push`). `tolerateNonZero` is stripped before the options reach dugite.
+ * and `push`), and `attributes` for the log record. Both are stripped
+ * before the options reach dugite.
  */
-type GitCommandOptions = IGitExecutionOptions & { tolerateNonZero?: boolean };
+type GitCommandOptions = IGitExecutionOptions & {
+  tolerateNonZero?: boolean;
+  /**
+   * Attributes added to the log record of this command, for the context
+   * only the caller has. Stripped before the options reach dugite.
+   */
+  attributes?: LogAttributes;
+};
 
 /**
  * Builds the environment for git commands.
@@ -131,6 +128,244 @@ export function classifyAuthError(
   );
 }
 
+const REDACTED = '[redacted]';
+
+/**
+ * Redacts the User's identity out of a git command line before it is written
+ * down, in a log record or in an error message.
+ *
+ * Three places put one on a command line: `commit --author`, `config --local
+ * user.name` and `config --local user.email`. Credentials embedded in a remote
+ * URL go too. Everything else is left exactly as it is, because ids, paths and
+ * flags are what make a log line resolvable against the repository.
+ *
+ * @see ../../contributing/logging.md
+ */
+export function redactGitArgs(args: readonly string[]): string[] {
+  return args.map((arg, index) => {
+    if (arg.startsWith('--author=')) {
+      return `--author=${REDACTED}`;
+    }
+    const previous = args[index - 1];
+    if (previous === 'user.name' || previous === 'user.email') {
+      return REDACTED;
+    }
+    // scheme://userinfo@host, never the SSH shorthand git@host:org/repo,
+    // where the user is part of the address rather than a credential
+    return arg.replace(/^([a-zA-Z][\w+.-]*:\/\/)[^/@]+@/, `$1${REDACTED}@`);
+  });
+}
+
+/** The command line as it may be written down. */
+function redactedCommand(args: readonly string[]): string {
+  return `git ${redactGitArgs(args).join(' ')}`;
+}
+
+/**
+ * What git said, as the cause of the error rather than part of its
+ * message. A message is read by whoever made the call and by whoever the
+ * log file is handed to, and this text is only safe for the first.
+ *
+ * @see ../../contributing/logging.md
+ */
+function gitOutputCause(stderr: string, stdout: string): Error {
+  return new Error(`${stderr}\n${stdout}`.trim());
+}
+
+/**
+ * The single letter porcelain v2 uses for a change, mapped onto the status a
+ * caller reads. A copy is reported as an addition, because the file is new,
+ * and a type change as a modification.
+ */
+const PORCELAIN_CHANGE_CODES: Record<string, GitFileStatus['status']> = {
+  A: 'added',
+  C: 'added',
+  M: 'modified',
+  T: 'modified',
+  D: 'deleted',
+  R: 'renamed',
+};
+
+/**
+ * Parses one porcelain v2 line into a file status, returning null for the
+ * header lines and for anything unrecognised.
+ *
+ * Read by line type rather than by a fixed field index, which is what the
+ * four types differ in: a rename carries an extra similarity score and an
+ * unmerged entry three more mode and hash columns. The path is the rest of
+ * the line, so one holding a space survives.
+ *
+ * @see https://git-scm.com/docs/git-status#_porcelain_format_version_2
+ */
+function parsePorcelainStatusLine(line: string): GitFileStatus | null {
+  const [type, ...fields] = line.split(' ');
+
+  // `? <path>` and `! <path>`, where the path starts right after the prefix.
+  // Ignored entries only appear with --ignored, which Core does not pass
+  if (type === '?' || type === '!') {
+    const path = line.slice(type.length + 1);
+    return path === '' ? null : { path, status: 'untracked', isStaged: false };
+  }
+
+  // `1 <XY> ...` and `2 <XY> ...` carry seven fields before the path, plus
+  // the rename score on a `2`. `u <XY> ...` carries nine.
+  const pathFieldIndex =
+    type === '1' ? 8 : type === '2' ? 9 : type === 'u' ? 10 : -1;
+  if (pathFieldIndex === -1) {
+    return null;
+  }
+
+  const xy = fields[0];
+  if (xy === undefined) {
+    return null;
+  }
+
+  const path = fields
+    .slice(pathFieldIndex - 1)
+    .join(' ')
+    // A rename entry names the new path and the old one, tab separated
+    .split('\t')[0];
+  if (path === undefined || path === '') {
+    return null;
+  }
+
+  if (type === 'u') {
+    return { path, status: 'unmerged', isStaged: false };
+  }
+
+  // X is the change staged in the index, Y the one still in the working
+  // tree, and a dot means unchanged there. A file carrying both is one
+  // entry, described by what is staged
+  const staged = xy[0] ?? '.';
+  const isStaged = staged !== '.';
+  const code = isStaged ? staged : (xy[1] ?? '.');
+  const status = PORCELAIN_CHANGE_CODES[code];
+
+  return status ? { path, status, isStaged } : null;
+}
+
+/**
+ * Commands that only ask the repository something. Everything else
+ * changes it, a remote or the installation's configuration.
+ */
+const READING_GIT_COMMANDS = new Set([
+  'status',
+  'log',
+  'show',
+  'diff',
+  'rev-parse',
+  'rev-list',
+  'ls-files',
+  'ls-tree',
+  'ls-remote',
+  'cat-file',
+  'check-ref-format',
+  'check-ignore',
+  'describe',
+  'for-each-ref',
+  'symbolic-ref',
+  'shortlog',
+  'blame',
+  'var',
+  'help',
+]);
+
+/** Flags that turn a ref command into a listing */
+const LISTING_REF_FLAGS = new Set([
+  '--list',
+  '-l',
+  '--show-current',
+  '--contains',
+  '--no-contains',
+  '--points-at',
+  '--merged',
+  '--no-merged',
+  '-a',
+  '--all',
+  '-v',
+  '--verbose',
+]);
+
+/** Flags that turn a config command into a lookup */
+const READING_CONFIG_FLAGS = new Set([
+  '--get',
+  '--get-all',
+  '--get-regexp',
+  '--get-urlmatch',
+  '--list',
+  '-l',
+]);
+
+const READING_REMOTE_SUBCOMMANDS = new Set(['show', 'get-url']);
+
+const READING_LFS_SUBCOMMANDS = new Set([
+  'env',
+  'version',
+  'status',
+  'ls-files',
+  'locks',
+]);
+
+/**
+ * True when the command changes a repository, a remote or the git
+ * configuration, which is what decides whether it is logged at `info` or
+ * at `debug`.
+ *
+ * `info` is the whole of what a packaged elek.io Desktop records, so a
+ * mutation belongs in it and a read does not. A command nobody classified
+ * counts as a mutation: a noisy line is a smaller failure than a line
+ * that should have been there and is not.
+ *
+ * @see ../../contributing/logging.md
+ */
+export function isMutatingGitCommand(args: readonly string[]): boolean {
+  const nonFlags = args.filter((arg) => !arg.startsWith('-'));
+  const command = nonFlags[0];
+
+  if (command === undefined) {
+    // `git --version` and `git --exec-path` ask the installation about itself
+    return false;
+  }
+  if (READING_GIT_COMMANDS.has(command)) {
+    return false;
+  }
+
+  switch (command) {
+    case 'branch':
+    case 'tag':
+      // Listing, everything else creates, deletes or moves a ref
+      return !args.some((arg) => LISTING_REF_FLAGS.has(arg));
+    case 'config':
+      return !args.some((arg) => READING_CONFIG_FLAGS.has(arg));
+    case 'remote': {
+      const subcommand = nonFlags[1];
+      // `git remote` on its own lists the remotes
+      return (
+        subcommand !== undefined && !READING_REMOTE_SUBCOMMANDS.has(subcommand)
+      );
+    }
+    case 'lfs': {
+      const subcommand = nonFlags[1];
+      return (
+        subcommand !== undefined && !READING_LFS_SUBCOMMANDS.has(subcommand)
+      );
+    }
+    default:
+      return true;
+  }
+}
+
+/**
+ * Runs real git through the dugite bindings, so Git LFS works. Every command
+ * goes through a FIFO queue of concurrency 1, so calls against one Core are
+ * serialized rather than racing, and every command line is logged, a mutation
+ * at `info` and a read at `debug`, with the User's identity redacted out of
+ * it. The remote token is read from `ELEK_IO_REMOTE_ACCESS_TOKEN` once at
+ * construction, never at import.
+ *
+ * @see https://github.com/desktop/dugite
+ * @see ../../contributing/git-credentials.md
+ */
 export class GitService {
   private version: string | null;
   private gitPath: string | null;
@@ -142,14 +377,14 @@ export class GitService {
   private logService: LogService;
   private gitTagService: GitTagService;
   private userService: UserService;
-  private jsonFileService: JsonFileService;
+  private cacheService: CacheService;
 
   public constructor(
     options: ElekIoCoreOptions,
     pathTo: PathTo,
     logService: LogService,
     userService: UserService,
-    jsonFileService: JsonFileService
+    cacheService: CacheService
   ) {
     this.version = null;
     this.gitPath = null;
@@ -171,7 +406,7 @@ export class GitService {
       'x-access-token';
     this.logService = logService;
     this.userService = userService;
-    this.jsonFileService = jsonFileService;
+    this.cacheService = cacheService;
 
     void this.updateVersion();
     void this.updateGitPath();
@@ -185,12 +420,15 @@ export class GitService {
   }
 
   /**
-   * Create an empty Git repository or reinitialize an existing one
+   * Create an empty Git repository or reinitialize an existing one. Fails
+   * when the path does not exist, it initializes into a directory rather than
+   * creating one. It also writes the local git config and installs the Git
+   * LFS filters, so it has to run before any file below `lfs/` is added.
+   *
+   * Throws `PreconditionFailed` in read-only mode, and `Unauthorized` when no
+   * User is set, since the config carries the commit identity.
    *
    * @see https://git-scm.com/docs/git-init
-   *
-   * @param path    Path to initialize in. Fails if path does not exist
-   * @param options Options specific to the init operation
    */
   public async init(
     path: string,
@@ -214,16 +452,15 @@ export class GitService {
   }
 
   /**
-   * Clone a repository into a directory
+   * Clone a repository into a directory, which has to exist and be empty.
+   *
+   * The `lfs` option decides how much is downloaded: the default fetches
+   * every LFS object of the whole history so Assets work offline, `current`
+   * only the checked-out ref, which is what a build clone wants. A bare clone
+   * skips both LFS and the local config. Outside read-only mode it writes
+   * that config, so it throws `Unauthorized` when no User is set.
    *
    * @see https://git-scm.com/docs/git-clone
-   *
-   * @todo Implement progress callback / events
-   *
-   * @param url     The remote repository URL to clone from
-   * @param path    The destination path for the cloned repository.
-   *                Which is only working if the directory is existing and empty.
-   * @param options Options specific to the clone operation
    */
   public async clone(
     url: string,
@@ -274,16 +511,13 @@ export class GitService {
 
     // A clone materializes a fresh working tree, so drop any cache for paths a
     // previous repository at this location may have populated
-    this.jsonFileService.clearCache();
+    this.cacheService.clear();
   }
 
   /**
    * Add file contents to the index
    *
    * @see https://git-scm.com/docs/git-add
-   *
-   * @param path  Path to the repository
-   * @param files Files to add
    */
   public async add(path: string, files: string[]): Promise<void> {
     const relativePathsFromRepositoryRoot = files.map((filePath) => {
@@ -295,32 +529,40 @@ export class GitService {
     await this.git(path, args);
   }
 
-  public async status(
-    path: string
-  ): Promise<{ filePath: string | undefined }[]> {
+  /**
+   * The working tree's state. `files` names every entry git reported, each
+   * path relative to the repository root, and a renamed one carries its new
+   * path rather than the pair.
+   *
+   * Ignored files never appear, because `git status` does not report them
+   * without `--ignored`.
+   *
+   * @see https://git-scm.com/docs/git-status#_porcelain_format_version_2
+   */
+  public async status(path: string): Promise<GitStatus> {
     const args = ['status', '--porcelain=2'];
     const result = await this.git(path, args);
-    return result.stdout
-      .split('\n')
-      .filter((line) => {
-        return line.trim() !== '';
-      })
-      .map((line) => {
-        const lineArr = line.trim().split(' ');
 
-        return {
-          filePath: lineArr[8],
-        };
+    const files = result.stdout
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .flatMap((line) => {
+        const parsed = parsePorcelainStatusLine(line);
+        return parsed ? [parsed] : [];
       });
+
+    return { isClean: files.length === 0, files };
   }
 
   public branches = {
     /**
-     * List branches
+     * List branches, split by the `remotes/` prefix git prints.
+     *
+     * The `*` marker is stripped, so `branches.current` is what identifies
+     * the checked-out branch. Git's `origin/HEAD -> origin/main` symref line
+     * comes back verbatim in `remote` and is not a branch name.
      *
      * @see https://www.git-scm.com/docs/git-branch
-     *
-     * @param path  Path to the repository
      */
     list: async (
       path: string
@@ -351,8 +593,6 @@ export class GitService {
      * Returns the name of the current branch. In detached HEAD state, an empty string is returned.
      *
      * @see https://www.git-scm.com/docs/git-branch#Documentation/git-branch.txt---show-current
-     *
-     * @param path  Path to the repository
      */
     current: async (path: string): Promise<string> => {
       const args = ['branch', '--show-current'];
@@ -363,10 +603,6 @@ export class GitService {
      * Switch branches
      *
      * @see https://git-scm.com/docs/git-switch/
-     *
-     * @param path    Path to the repository
-     * @param branch  Name of the branch to switch to
-     * @param options Options specific to the switch operation
      */
     switch: async (
       path: string,
@@ -397,15 +633,12 @@ export class GitService {
       await this.git(path, args);
       // Switching branches rewrites the working tree, so cached file contents
       // may no longer match disk
-      this.jsonFileService.clearCache();
+      this.cacheService.clear();
     },
     /**
      * Delete a branch
      *
      * @see https://git-scm.com/docs/git-branch#Documentation/git-branch.txt---delete
-     *
-     * @param path Path to the repository
-     * @param branch Name of the branch to delete
      */
     delete: async (
       path: string,
@@ -427,8 +660,6 @@ export class GitService {
      * Returns a list of currently tracked remotes
      *
      * @see https://git-scm.com/docs/git-remote
-     *
-     * @param path  Path to the repository
      */
     list: async (path: string): Promise<string[]> => {
       const args = ['remote'];
@@ -439,8 +670,6 @@ export class GitService {
     },
     /**
      * Returns true if the `origin` remote exists, otherwise false
-     *
-     * @param path  Path to the repository
      */
     hasOrigin: async (path: string): Promise<boolean> => {
       const remotes = await this.remotes.list(path);
@@ -455,8 +684,6 @@ export class GitService {
      * Git LFS endpoint is broken or absent.
      *
      * @see https://git-scm.com/docs/git-ls-remote
-     *
-     * @param path  Path to the repository
      */
     isOriginReachable: async (path: string): Promise<boolean> => {
       try {
@@ -472,8 +699,6 @@ export class GitService {
      * Throws if `origin` remote is added already.
      *
      * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emaddem
-     *
-     * @param path  Path to the repository
      */
     addOrigin: async (path: string, url: string): Promise<void> => {
       const args = ['remote', 'add', 'origin', url.trim()];
@@ -485,8 +710,6 @@ export class GitService {
      * Throws if no `origin` remote is added yet.
      *
      * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emget-urlem
-     *
-     * @param path  Path to the repository
      */
     getOriginUrl: async (path: string): Promise<string | null> => {
       const args = ['remote', 'get-url', 'origin'];
@@ -500,8 +723,6 @@ export class GitService {
      * Throws if no `origin` remote is added yet.
      *
      * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emset-urlem
-     *
-     * @param path  Path to the repository
      */
     setOriginUrl: async (path: string, url: string): Promise<void> => {
       const args = ['remote', 'set-url', 'origin', url.trim()];
@@ -527,8 +748,6 @@ export class GitService {
      * cleaned to a pointer automatically.
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-install.adoc
-     *
-     * @param path  Path to the repository
      */
     install: async (path: string): Promise<void> => {
       await this.git(path, ['lfs', 'install', '--local']);
@@ -540,8 +759,6 @@ export class GitService {
      * without LFS objects, so it is safe to call unconditionally.
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-fetch.adoc
-     *
-     * @param path  Path to the repository
      */
     fetchAll: async (path: string): Promise<void> => {
       await this.git(path, ['lfs', 'fetch', '--all']);
@@ -551,8 +768,6 @@ export class GitService {
      * the `origin` remote into the local LFS store
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-fetch.adoc
-     *
-     * @param path Path to the repository
      */
     fetch: async (path: string): Promise<void> => {
       await this.git(path, ['lfs', 'fetch', 'origin']);
@@ -561,8 +776,6 @@ export class GitService {
      * Materializes (smudges) working-tree files from the local LFS store
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-checkout.adoc
-     *
-     * @param path  Path to the repository
      */
     checkout: async (path: string): Promise<void> => {
       await this.git(path, ['lfs', 'checkout']);
@@ -575,24 +788,21 @@ export class GitService {
      * `smudge`.
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/spec.md
-     *
-     * @param content  The content to check
      */
     isPointer: (content: string): boolean => {
       return content.startsWith('version https://git-lfs.github.com/spec/v1');
     },
     /**
-     * Converts an LFS pointer into the real file content
+     * Reads a pointer on stdin and writes the bytes to stdout, which resolves
+     * a binary Asset read from history. `filePath` is only for the progress
+     * bar.
      *
-     * Reads a pointer on stdin and writes the bytes to stdout. With the
-     * fetch-all guarantee the object is always present locally, so this does
-     * not reach the network. Used to resolve a binary asset read from history.
+     * After a default clone every object of the history is local, so this
+     * stays offline. A clone made with `lfs: 'current'`, which a provisioned
+     * copy gets, holds only the checked-out ref, so smudging a blob from
+     * another ref does reach the remote.
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-smudge.adoc
-     *
-     * @param path      Path to the repository
-     * @param pointer   The LFS pointer content to resolve
-     * @param filePath  Path of the file the pointer belongs to (used for the progress bar)
      */
     smudge: async (
       path: string,
@@ -628,13 +838,9 @@ export class GitService {
      * Run before the ref push so an upload failure is attributable. If the
      * remote does not support Git LFS, has it disabled, or its LFS endpoint is
      * unreachable, throws a descriptive `PreconditionFailed`. A genuine host or
-     * auth outage - where plain git transport also fails - is surfaced
-     * unchanged.
+     * auth outage, where plain git transport also fails, is surfaced unchanged.
      *
      * @see https://github.com/git-lfs/git-lfs/blob/main/docs/man/git-lfs-push.adoc
-     *
-     * @param path    Path to the repository
-     * @param options Options specific to the push operation
      */
     push: async (
       path: string,
@@ -669,7 +875,14 @@ export class GitService {
   };
 
   /**
-   * Join two development histories together
+   * Join two development histories together.
+   *
+   * `squash` stages the merged result without creating a commit, so the
+   * caller has to commit afterwards, which is what the Project upgrade flow
+   * does.
+   *
+   * A conflict throws `Internal` and leaves the tree mid-merge, rather than
+   * aborting it the way `rebase` does.
    *
    * @see https://git-scm.com/docs/git-merge
    */
@@ -689,27 +902,20 @@ export class GitService {
     await this.git(path, args);
     // Merging rewrites the working tree, so cached file contents may no longer
     // match disk
-    this.jsonFileService.clearCache();
+    this.cacheService.clear();
   }
 
   /**
    * Rebase the current branch onto `onto` (for example `origin/work`).
    *
-   * A controlled rebase that tells three outcomes apart from the raw result:
-   *   - clean success: the working tree now holds the integrated state.
-   *   - textual conflict: aborts the rebase so the tree is left clean, never
-   *     mid-rebase, then throws `PreconditionFailed`.
-   *   - any other failure: throws `Internal`, so an unrecognised failure stays
-   *     loud rather than silently leaving a half-applied rebase.
+   * A clean success leaves the working tree holding the integrated state. A
+   * textual conflict aborts the rebase, so the tree is never left mid-rebase,
+   * and throws `PreconditionFailed`. Any other failure throws `Internal`.
    *
-   * Conflicts are classified with dugite's own `parseError` + `GitError`, the
-   * maintained mapping of git output to error codes that GitHub Desktop relies
-   * on, rather than bespoke regexes.
+   * Conflicts are classified with dugite's own `parseError` and `GitError`
+   * rather than with bespoke regexes.
    *
    * @see https://git-scm.com/docs/git-rebase
-   *
-   * @param path Path to the repository
-   * @param onto The ref to rebase the current branch onto
    */
   public async rebase(path: string, onto: string): Promise<void> {
     const result = await this.git(path, ['rebase', onto], {
@@ -719,7 +925,7 @@ export class GitService {
     if (result.exitCode === 0) {
       // Rebasing rewrites the working tree, so cached file contents may no
       // longer match disk
-      this.jsonFileService.clearCache();
+      this.cacheService.clear();
       return;
     }
 
@@ -738,9 +944,8 @@ export class GitService {
     }
 
     throw CoreError.internal(
-      `Git rebase onto "${onto}" failed with exit code "${
-        result.exitCode
-      }" and message "${`${result.stderr}\n${result.stdout}`.trim()}"`
+      `Git rebase onto "${onto}" failed with exit code "${result.exitCode}"`,
+      gitOutputCause(result.stderr, result.stdout)
     );
   }
 
@@ -749,25 +954,18 @@ export class GitService {
    * working tree.
    *
    * @see https://git-scm.com/docs/git-rebase#Documentation/git-rebase.txt---abort
-   *
-   * @param path Path to the repository
    */
   public async rebaseAbort(path: string): Promise<void> {
     await this.git(path, ['rebase', '--abort']);
     // Aborting restores files on disk, so cached file contents may no longer
     // match disk
-    this.jsonFileService.clearCache();
+    this.cacheService.clear();
   }
 
   /**
    * Reset current HEAD to the specified state
    *
-   * @todo maybe add more options
    * @see https://git-scm.com/docs/git-reset
-   *
-   * @param path    Path to the repository
-   * @param mode    Modifies the working tree depending on given mode
-   * @param commit  Resets the current branch head to this commit / tag
    */
   public async reset(
     path: string,
@@ -779,7 +977,7 @@ export class GitService {
     // A hard reset restores files on disk, so cached file contents may no longer
     // match disk. A soft reset only moves HEAD and leaves the working tree alone
     if (mode === 'hard') {
-      this.jsonFileService.clearCache();
+      this.cacheService.clear();
     }
   }
 
@@ -791,9 +989,6 @@ export class GitService {
    * fetched history.
    *
    * @see https://www.git-scm.com/docs/git-fetch
-   *
-   * @param path    Path to the repository
-   * @param options Options specific to the fetch operation
    */
   public async fetch(
     path: string,
@@ -816,9 +1011,6 @@ export class GitService {
    * Resolves a revision to the commit hash it points to
    *
    * @see https://git-scm.com/docs/git-rev-parse
-   *
-   * @param path Path to the repository
-   * @param rev  The revision to resolve, e.g. `HEAD` or a tag name
    */
   public async revParse(path: string, rev: string): Promise<string> {
     const result = await this.git(path, ['rev-parse', rev]);
@@ -829,8 +1021,6 @@ export class GitService {
    * Lists the ref names a remote repository advertises, without cloning
    *
    * @see https://git-scm.com/docs/git-ls-remote
-   *
-   * @param url The remote repository URL
    */
   public async lsRemote(url: string): Promise<string[]> {
     const result = await this.git('', ['ls-remote', '--quiet', url]);
@@ -844,35 +1034,34 @@ export class GitService {
   }
 
   /**
-   * Fetch from and integrate (rebase or merge) with a local branch
+   * Fetch from `origin` and rebase the local branch onto it. Always a rebase:
+   * `setLocalConfig` sets `pull.rebase` in every repository `init` or `clone`
+   * touches.
+   *
+   * A conflict is not aborted here, so the working tree is left mid-rebase
+   * and `Internal` is thrown.
    *
    * @see https://git-scm.com/docs/git-pull
-   *
-   * @param path Path to the repository
    */
   public async pull(path: string): Promise<void> {
     const args = ['pull'];
     await this.git(path, args);
     // Pulling integrates remote changes into the working tree, so cached file
     // contents may no longer match disk
-    this.jsonFileService.clearCache();
+    this.cacheService.clear();
   }
 
   /**
-   * Update remote refs along with associated objects to remote `origin`
+   * Update remote refs and their objects on `origin`, LFS objects first so an
+   * upload failure is attributable. By default the current branch is pushed,
+   * `refs` the named branches or tags, `all` every branch.
    *
-   * The LFS objects are uploaded first in an explicit `git lfs push`, so that
-   * an upload failure is attributable and can be turned into a descriptive
-   * error. The ordinary ref push then runs with `--no-verify` to skip the
-   * now-redundant pre-push hook.
+   * Throws `PreconditionFailed` in read-only mode, on a provisioned copy, on
+   * a non-fast-forward rejection and on an unusable LFS endpoint,
+   * `BadRequest` when `all` and `refs` are combined, `Unauthorized` when the
+   * remote rejects the credentials.
    *
-   * By default the current branch is pushed. The `refs` option pushes the
-   * named branches or tags instead, the `all` option pushes all branches.
-   *
-   * @see https://git-scm.com/docs/git-push
-   *
-   * @param path    Path to the repository
-   * @param options Options specific to the push operation
+   * @see ../../docs/git-and-sync.md
    */
   public async push(
     path: string,
@@ -941,18 +1130,23 @@ export class GitService {
         );
       }
       throw CoreError.internal(
-        `Git push to origin failed with exit code "${result.exitCode}" and message "${message}"`
+        `Git push to origin failed with exit code "${result.exitCode}"`,
+        gitOutputCause(result.stderr, result.stdout)
       );
     }
   }
 
   /**
-   * Record changes to the repository
+   * Records what is already staged, so `add` has to run first. `message` is a
+   * structured reference rather than free text: the commit message is
+   * generated from it, a capitalized `<method> <objectType> <id>` subject
+   * plus `Method:`, `Object-Type:`, `Object-Id:` and `Collection-Id:`
+   * trailers, which `log()` parses back out.
+   *
+   * Throws `BadRequest` when `message` fails its schema, and `Unauthorized`
+   * when no User is set.
    *
    * @see https://git-scm.com/docs/git-commit
-   *
-   * @param path    Path to the repository
-   * @param message An object describing the changes
    */
   public async commit(path: string, message: GitMessage): Promise<void> {
     if (this.options.isReadOnly) {
@@ -998,19 +1192,30 @@ export class GitService {
       `--message=${fullMessage}`,
       `--author=${user.name} <${user.email}>`,
     ];
-    await this.git(path, args);
+    // The same ids the commit carries as trailers, so a log line and the
+    // commit it produced join without parsing either
+    await this.git(path, args, {
+      attributes: {
+        'elek.method': message.method,
+        'elek.object.type': message.reference.objectType,
+        'elek.object.id': message.reference.id,
+        ...(message.reference.collectionId
+          ? { 'elek.collection.id': message.reference.collectionId }
+          : {}),
+      },
+    });
   }
 
   /**
-   * Gets local commit history
+   * Local commit history, filtered through `isGitCommit`, so any commit not
+   * carrying Core's own trailers is silently dropped. A merge commit or one
+   * made outside Core never appears.
+   *
+   * `tag` is resolved by reading the tag file, and comes back null when the
+   * commit carries no tag decoration, the tag is not named with a UUID, or
+   * the tag cannot be read.
    *
    * @see https://git-scm.com/docs/git-log
-   *
-   * @todo Check if there is a need to trim the git commit message of chars
-   * @todo Use this method in a service. Decide if we need a HistoryService for example
-   *
-   * @param path    Path to the repository
-   * @param options Options specific to the log operation
    */
   public async log(
     path: string,
@@ -1130,16 +1335,15 @@ export class GitService {
   }
 
   /**
-   * Lists directory entries at a specific commit
+   * Lists directory entries at a specific commit, for example to detect
+   * deleted Collections when comparing branches. `treePath` may be absolute
+   * or repository relative, the repository prefix is stripped either way.
    *
-   * Useful for discovering what files/folders existed at a past commit,
-   * e.g. to detect deleted collections when comparing branches.
+   * The entries are last path segments rather than repository-relative paths.
+   * A missing path or ref yields an empty array rather than throwing, so an
+   * empty result does not tell nothing-there from does-not-exist.
    *
    * @see https://git-scm.com/docs/git-ls-tree
-   *
-   * @param path      Path to the repository
-   * @param treePath  Relative path within the repository to list
-   * @param commitRef Commit hash, branch name, or other git ref
    */
   public async listTreeAtCommit(
     path: string,
@@ -1168,8 +1372,24 @@ export class GitService {
     }
   }
 
+  /**
+   * Picks the tag out of a `%D` decoration list, or null when there is none.
+   *
+   * A tagged tip reads `HEAD -> master, tag: <uuid>`, so the tag has to be
+   * found among the decorations rather than stripped off the front. Core's
+   * own tags are named with a UUID, which is what separates one from a tag
+   * somebody else put on the same commit, and anything else answers null.
+   */
   public refNameToTagName(refName: string) {
-    const tagName = refName.replace('tag: ', '').trim();
+    // `%D` lists every decoration of the commit, so a tagged tip reads
+    // `HEAD -> master, tag: <uuid>` and the tag has to be picked out of it
+    const tagName =
+      refName
+        .split(',')
+        .find((decoration) => decoration.trim().startsWith('tag: '))
+        ?.trim()
+        .slice('tag: '.length)
+        .trim() ?? '';
 
     // Return null for anything else than UUIDs (tag names are UUIDs)
     if (tagName === '' || uuidSchema.safeParse(tagName).success === false) {
@@ -1214,9 +1434,6 @@ export class GitService {
    * This method checks if given name matches the required format
    *
    * @see https://git-scm.com/docs/git-check-ref-format
-   *
-   * @param path Path to the repository
-   * @param name Name to check
    */
   private async checkBranchOrTagName(
     path: string,
@@ -1280,9 +1497,11 @@ export class GitService {
   }
 
   /**
-   * Sets the git config of given local repository from ElekIoCoreOptions
+   * Writes the local git config of the repository.
    *
-   * @param path Path to the repository
+   * The identity comes from `userService.get()`, and `Unauthorized` is thrown
+   * when there is none. It also sets `push.autoSetupRemote` and
+   * `pull.rebase`, which is what makes every Core pull a rebase.
    */
   private async setLocalConfig(path: string): Promise<void> {
     const user = await this.userService.get();
@@ -1316,26 +1535,26 @@ export class GitService {
 
   /**
    * Type guard for GitCommit
-   *
-   * @param obj The object to check
    */
   private isGitCommit(obj: unknown): obj is GitCommit {
     return gitCommitSchema.safeParse(obj).success;
   }
 
   /**
-   * Wraps the execution of any git command
-   * to use a FIFO queue for sequential processing
+   * The single choke point every git command goes through. Nothing should
+   * call `gitExec` directly, or it loses all of this.
    *
-   * @param path Path to the repository
-   * @param args Arguments to append after the `git` command
+   * The credential environment is built inside the queue, the command is
+   * timed, redacted and logged at `info` or `debug`, and a non-zero exit is
+   * classified into `Unauthorized` or `Internal`, unless `tolerateNonZero`
+   * hands the result back for the caller to classify.
    */
   private async git(
     path: string,
     args: string[],
     options: GitCommandOptions = {}
   ): Promise<IGitStringResult> {
-    const { tolerateNonZero, ...execOptions } = options;
+    const { tolerateNonZero, attributes, ...execOptions } = options;
     const result = await this.queue.add(async () => {
       // Every git invocation gets the credential environment, so remote
       // operations and on-demand LFS smudges authenticate the same way
@@ -1350,21 +1569,26 @@ export class GitService {
 
     if (!result) {
       throw CoreError.internal(
-        `Git ${this.version} (${this.gitPath}) command "git ${args.join(
-          ' '
+        `Git ${this.version} (${this.gitPath}) command "${redactedCommand(
+          args
         )}" executed for "${path}" failed to return a result`
       );
     }
 
-    const gitLog: LogProps = {
+    const command = redactedCommand(args);
+    const record: LogProps = {
       source: 'core',
-      message: `Executed "git ${args.join(' ')}" in ${result.durationMs}ms`,
-      meta: { command: `git ${args.join(' ')}` },
+      message: `Executed "${command}" in ${result.durationMs}ms`,
+      meta: {
+        'elek.git.command': command,
+        'elek.duration_ms': result.durationMs,
+        ...attributes,
+      },
     };
-    if (result.durationMs >= 100) {
-      this.logService.warn(gitLog);
+    if (isMutatingGitCommand(args)) {
+      this.logService.info(record);
     } else {
-      this.logService.debug(gitLog);
+      this.logService.debug(record);
     }
 
     if (result.gitResult.exitCode !== 0 && tolerateNonZero !== true) {
@@ -1376,14 +1600,11 @@ export class GitService {
         throw authError;
       }
       throw CoreError.internal(
-        `Git ${this.version} (${this.gitPath}) command "git ${args.join(
-          ' '
-        )}" executed for "${path}" failed with exit code "${
-          result.gitResult.exitCode
-        }" and message "${
-          result.gitResult.stderr.toString().trim() ||
-          result.gitResult.stdout.toString().trim()
-        }"`
+        `Git ${this.version} (${this.gitPath}) command "${command}" executed for "${path}" failed with exit code "${result.gitResult.exitCode}"`,
+        gitOutputCause(
+          result.gitResult.stderr.toString(),
+          result.gitResult.stdout.toString()
+        )
       );
     }
 

@@ -8,27 +8,30 @@ import { type Uuid } from '../schema/baseSchema.js';
 export * from './mdastRender.js';
 
 /**
- * Returns a new UUID
+ * A v4, randomly generated id.
+ *
+ * The one reason a consumer calls it: field-definition ids are
+ * caller-supplied, so `collections.create()` and `components.create()` expect
+ * one `uuid()` per field definition.
  */
 export function uuid(): Uuid {
   return generateUuid();
 }
 
 /**
- * Returns a string representing date and time
- * in a simplified format based on ISO 8601.
- * The timezone is always UTC.
+ * Returns a string representing date and time in a simplified format based on
+ * ISO 8601, always in UTC.
  *
- * - If value is not given, the current date and time is used
- * - If value is given, it's converted to above representation and UTC timezone
+ * An absent value yields now, which is how every `created` and `updated`
+ * stamp is made. Only `undefined` and the empty string count as absent, so
+ * `datetime(0)` is the epoch rather than now, and the empty string is in
+ * there because `new Date('')` is an invalid date.
  *
  * @example 'YYYY-MM-DDTHH:mm:ss.sssZ'
- *
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/toISOString
- * @see https://en.wikipedia.org/wiki/ISO_8601
  */
 export function datetime(value?: number | string | Date) {
-  if (!value) {
+  if (value === undefined || value === '') {
     return new Date().toISOString();
   }
   return new Date(value).toISOString();
@@ -71,6 +74,7 @@ export type CoreErrorType =
   | 'PreconditionFailed'
   | 'UpgradeFailed'
   | 'VersionSkew'
+  | 'RateLimited'
   | 'Internal';
 
 const statusCodes: Record<CoreErrorType, number> = {
@@ -81,9 +85,22 @@ const statusCodes: Record<CoreErrorType, number> = {
   PreconditionFailed: 412,
   UpgradeFailed: 422,
   VersionSkew: 422,
+  RateLimited: 429,
   Internal: 500,
 };
 
+/**
+ * The only error a service method throws, so `error instanceof CoreError` is
+ * the whole catch.
+ *
+ * `type` is the nine-way discriminant to branch on. `statusCode` is the HTTP
+ * status the local API answers with and is not unique, `UpgradeFailed` and
+ * `VersionSkew` are both 422. `cause` keeps whatever was originally thrown.
+ *
+ * The factories below only pick a `type`, so none of them repeats this.
+ *
+ * @see ../../docs/error-handling.md
+ */
 export class CoreError extends Error {
   public readonly type: CoreErrorType;
   public readonly statusCode: number;
@@ -95,30 +112,81 @@ export class CoreError extends Error {
     this.statusCode = statusCodes[type];
   }
 
+  /** The Project, entity or git object the id or slug names is not on disk. */
   static notFound(message: string, cause?: unknown) {
     return new CoreError('NotFound', message, cause);
   }
+  /**
+   * Input Core cannot accept: a failed boundary parse, whose `ZodError`
+   * arrives as `cause`, an unsupported Asset MIME type, a malformed
+   * `ELEK_IO_` value.
+   */
   static badRequest(message: string, cause?: unknown) {
     return new CoreError('BadRequest', message, cause);
   }
+  /**
+   * No User is configured for a commit, or the remote rejected the
+   * credential. The remote refusing, as opposed to `preconditionFailed`,
+   * which is Core refusing.
+   */
   static unauthorized(message: string, cause?: unknown) {
     return new CoreError('Unauthorized', message, cause);
   }
+  /**
+   * The input is valid but the current state refuses it: a slug or unique
+   * Value another Entry already holds, uncommitted changes, or deleting
+   * content something still references.
+   */
   static conflict(message: string, cause?: unknown) {
     return new CoreError('Conflict', message, cause);
   }
+  /**
+   * The write is refused before it runs, in read-only mode, on a provisioned
+   * copy, or with no remote configured. `mutating()` raises it before the
+   * input is even parsed.
+   */
   static preconditionFailed(message: string, cause?: unknown) {
     return new CoreError('PreconditionFailed', message, cause);
   }
+  /**
+   * A Project upgrade cannot run: the Project file carries no readable Core
+   * version, the Project is newer than the installed Core, or it is already
+   * current and `force` was not set.
+   */
   static upgradeFailed(message: string, cause?: unknown) {
     return new CoreError('UpgradeFailed', message, cause);
   }
+  /**
+   * Data on disk was written by a newer Core than the one installed, so
+   * migrations refuse to run and the fix is a dependency bump. Shares 422
+   * with `UpgradeFailed`, which is why `type` is the discriminant.
+   */
   static versionSkew(message: string, cause?: unknown) {
     return new CoreError('VersionSkew', message, cause);
   }
+  /**
+   * elek.io Cloud refused because this client passed its rate limit. Only
+   * reporting reaches the Cloud, so nothing else raises it.
+   */
+  static rateLimited(message: string, cause?: unknown) {
+    return new CoreError('RateLimited', message, cause);
+  }
+  /**
+   * Core's own failure, or one nobody planned for: a failed git command, an
+   * unreadable file, a Cloud 5xx. Not a caller's to fix, which is what
+   * separates it from `badRequest`.
+   */
   static internal(message: string, cause?: unknown) {
     return new CoreError('Internal', message, cause);
   }
+  /**
+   * Wraps anything caught into `Internal`, taking the message from
+   * `e.message` for an `Error` and `String(e)` otherwise, keeping the
+   * original as `cause`.
+   *
+   * It does not pass a `CoreError` through, it flattens one to `Internal` and
+   * 500, so guard the way `AbstractService.validated()` does.
+   */
   static fromUnknown(e: unknown) {
     return new CoreError(
       'Internal',

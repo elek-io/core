@@ -1,26 +1,25 @@
 import Fs from 'fs-extra';
 import ElekIoCore, { CoreError } from '../index.node.js';
 
-/**
- * Lazily-created, process-wide ElekIoCore. Created on first use so that
- * importing @elek-io/core/astro has no side effects. Configured through
- * the ELEK_IO_* environment variables, which are read once here.
- *
- * The log level is left to ELEK_IO_LOG_LEVEL rather than passed, since
- * an option would win over the variable and there would be no way to
- * quieten Core inside an Astro build.
- *
- * The file cache is off on purpose. Core only invalidates it for writes
- * it performs itself, while here another application owns the files:
- * the Desktop app edits a Project while `astro dev` reads it, and a
- * cached Project would keep serving content one edit behind. Every file
- * is read once per sync either way, so there is nothing to gain.
- */
 let coreInstance: ElekIoCore | undefined;
+
+/**
+ * The process-wide ElekIoCore, created on first call so importing the astro
+ * entry has no side effect. Every later call returns that same instance,
+ * configured from the ELEK_IO_* variables read once at construction.
+ *
+ * Caching and the process error handlers are off on purpose, and the
+ * log level is left to ELEK_IO_LOG_LEVEL. Nothing disposes it, so a caller
+ * must not call `dispose()` on what it hands back.
+ *
+ * @see ../../contributing/astro-entry.md
+ * @see ../../contributing/logging.md
+ */
 export function getCore(): ElekIoCore {
   if (!coreInstance) {
     coreInstance = new ElekIoCore({
-      file: { cache: false },
+      cache: false,
+      log: { hasProcessErrorHandlers: false },
     });
   }
   return coreInstance;
@@ -45,8 +44,12 @@ export async function ensureProjectAvailable(
 }
 
 /**
- * Logs which content state a loader is about to read, so every build
- * states its source and ref
+ * Logs what a loader is about to read, so a build states its content state
+ * rather than leaving it to be guessed from the output.
+ *
+ * The line carries the Project's name and version, the data directory, and a
+ * source label: `draft` on the `work` branch, the branch name on any other,
+ * and the literal `Release tag` when HEAD is detached.
  */
 export async function logReadingProject(
   core: ElekIoCore,

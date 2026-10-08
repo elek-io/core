@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { sync } from 'astro';
+import { afterAll, assert, beforeAll, describe, expect, it } from 'vitest';
+import { sync, type HookParameters } from 'astro';
 import Os from 'node:os';
 import Path from 'node:path';
 import Fs from 'fs-extra';
@@ -206,6 +206,34 @@ export const collections = {
 
     expect(() => elek({ config: mixed })).not.toThrow();
   });
+
+  it('should register no process error handlers while provisioning', async function () {
+    // Inside a build the host owns the process, and docs/usage.md tells a
+    // consumer the Astro entry sets that up for them. The Core is disposed
+    // in a finally, so the handlers are only observable while the hook runs,
+    // which the logger call in front of every provision reaches into.
+    const integration = elek({ config });
+    const setup = integration.hooks['astro:config:setup'];
+    assert(setup);
+
+    const baseUncaught = process.listenerCount('uncaughtException');
+    const baseUnhandled = process.listenerCount('unhandledRejection');
+    const duringProvision: number[] = [];
+    const record = () => {
+      duringProvision.push(
+        process.listenerCount('uncaughtException') - baseUncaught,
+        process.listenerCount('unhandledRejection') - baseUnhandled
+      );
+    };
+
+    await setup({
+      logger: { info: record, warn: record, error: record, debug: record },
+      // The hook reads nothing else off its parameters
+    } as unknown as HookParameters<'astro:config:setup'>);
+
+    expect(duringProvision.length).toBeGreaterThan(0);
+    expect(duringProvision.every((count) => count === 0)).toBe(true);
+  }, 120000);
 
   // What elek() then does with such a config is asserted through a real
   // sync in src/index.astro.mixed.test.ts, which needs its own file

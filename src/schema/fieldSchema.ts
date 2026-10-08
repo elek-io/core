@@ -120,17 +120,15 @@ const numberDefaultWithinRangeRefinement: [
 ];
 
 /**
- * A unique field may not carry a non-null default value: a shared default
+ * A unique field may not carry a non-null default value. A shared default
  * could only ever be valid for a single Entry, and adding such a field to a
  * populated Collection would stamp the same value into every Entry at once.
- * Slug fields enforce this structurally (defaultValue is always null).
+ * Slug fields enforce this structurally, their `defaultValue` is always null.
  *
- * This is a per-field rule (it reads only `isUnique` and `defaultValue`), so it
- * lives on the shared string base rather than the string union. An editor that
- * validates a single field against its per-type schema before saving then
- * rejects the combination up front, same as the min/max default rules above.
- * Building it into the base means every string field type carries it, current
- * and future ones alike.
+ * It reads only `isUnique` and `defaultValue`, so it lives on the shared
+ * string base and every string field type carries it.
+ *
+ * @see ../../contributing/adding-a-field-type.md
  */
 const uniqueFieldCannotHaveDefaultRefinement: [
   (data: { isUnique: boolean; defaultValue: unknown }) => boolean,
@@ -160,10 +158,13 @@ export const slugSeparatorSchema = z
   });
 
 /**
- * Validates that fieldDefinition slugs are unique within their parent fieldDefinitions array.
- * Handles both FieldDefinitions and FieldDefinitionGroups.
+ * Enforces slug uniqueness across the whole Collection or Component, not
+ * within a group: the walk flattens groups into one `seen` set, so a
+ * definition inside a group collides with a top-level one.
  *
- * Use this refinement via the superRefine method, not the standard refine.
+ * The issue lands on the second and later occurrences, at their nested path.
+ *
+ * Use it through `superRefine`, not `refine`.
  */
 export const fieldDefinitionSlugUniquenessSuperRefinement = (
   fieldDefinitionsOrGroups: FieldDefinitionOrGroup[],
@@ -185,8 +186,11 @@ export const fieldDefinitionSlugUniquenessSuperRefinement = (
 };
 
 /**
- * Base Field definition
- * Contains all common properties across all Field definitions
+ * The properties every field definition family shares.
+ *
+ * `isUnique` is declared here for all of them, but only string field types
+ * may set it true. The number, boolean, reference, dynamic and markdown bases
+ * narrow it to `z.literal(false)`, and `slug` narrows it to `z.literal(true)`.
  */
 export const fieldDefinitionBaseSchema = z.object({
   id: uuidSchema.readonly(),
@@ -405,7 +409,12 @@ export const toggleFieldDefinitionSchema =
 export type ToggleFieldDefinition = z.infer<typeof toggleFieldDefinitionSchema>;
 
 /**
- * Union of all direct Field definitions
+ * The direct families, meaning the `string`, `number` and `boolean` value
+ * types, whose content is stored inline in the Entry file rather than as a
+ * reference to something else.
+ *
+ * `fieldType: 'select'` appears twice in this union, once per value type.
+ * The discriminator is `valueType`, not `fieldType`.
  */
 export const directFieldDefinitionSchema = z.union([
   stringFieldDefinitionSchema,
@@ -433,7 +442,7 @@ export const assetFieldDefinitionSchema = referenceFieldDefinitionBaseSchema
     max: z.int().min(1).nullable(),
     /**
      * Allowed MIME types for referenced Assets. Empty array = any MIME.
-     * Enforced at write time by `EntryService.validateValueReferences`,
+     * Enforced at write time by `ReferenceService.validateValueReferences`,
      * which reads each referenced Asset's `mimeType` and compares against
      * this list. Schema-level enforcement isn't possible because asset
      * references carry only `id` - MIME info lives on the asset file.
@@ -454,7 +463,12 @@ export const entryFieldDefinitionSchema = referenceFieldDefinitionBaseSchema
 export type EntryFieldDefinition = z.infer<typeof entryFieldDefinitionSchema>;
 
 /**
- * Union of all reference Field definitions
+ * The reference families. A reference field stores ids alone, so nothing
+ * about a target is checked when a definition or a value parses here.
+ *
+ * `ofCollections` is enforced by the value schema `schemaFromFieldDefinition`
+ * builds, and target existence plus `ofAssetMimeTypes` at write time, by
+ * `ReferenceService.validateValueReferences`.
  */
 export const referenceFieldDefinitionSchema = z.union([
   assetFieldDefinitionSchema,
@@ -465,8 +479,11 @@ export type ReferenceFieldDefinition = z.infer<
 >;
 
 /**
- * A dynamic field definition references one or more Components.
- * Entry data contains an ordered array of polymorphic component items.
+ * A dynamic field embeds Components by reference, and its Entry data is an
+ * ordered array of polymorphic component items.
+ *
+ * An empty `ofComponents` allows any Component of the Project, it is not an
+ * invalid definition. A non-empty one restricts to the listed ids.
  */
 export const dynamicFieldDefinitionSchema = fieldDefinitionBaseSchema
   .extend({
@@ -487,18 +504,15 @@ export type DynamicFieldDefinition = z.infer<
 //
 
 /**
- * A markdown field stores rich body content as a structured mdast tree
- * (one tree per language). The writer experience is markdown-style; the
- * storage shape is the structured AST. See `docs/markdown-content.md`.
+ * A markdown field stores rich body content as a structured mdast tree, one
+ * tree per language. The writer experience is markdown-style, the storage
+ * shape is the structured AST.
  *
- * The per-field schema (constructed by `buildMdAstSchemaForFeatures`) is
- * what actually validates an entry's tree at write time - it narrows the
- * permissive `mdAstRootSchema` to only the node types enabled in the
- * `features` config, enforces `ofCollections` structurally on
- * `entryReference` nodes, and applies block-count min/max.
+ * `buildMdAstSchemaForFeatures` builds the per-field schema that validates a
+ * tree at write time. Existence and MIME validation lives in
+ * `ReferenceService.validateValueReferences`, because both need IO.
  *
- * Existence + MIME validation lives in `EntryService.validateValueReferences`
- * because both require IO (read the target asset/entry file).
+ * @see ../../contributing/markdown-internals.md
  */
 export const markdownFieldDefinitionSchema = fieldDefinitionBaseSchema
   .extend({
@@ -572,10 +586,12 @@ export const fieldDefinitionSchema = z.union([
 export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
 
 /**
- * A group of Field definitions, displayed as a named fieldset in the UI.
- * Groups are purely presentational and do not affect entry data or validation.
- * Ordering is determined by position in the parent array (supports drag-and-drop).
- * Groups can contain direct, reference and dynamic field definitions but not nested groups.
+ * A group of field definitions, displayed as a named fieldset. Purely
+ * presentational, it affects neither Entry data nor validation, and ordering
+ * follows position in the parent array.
+ *
+ * A group holds any field definition, markdown included, except another
+ * group.
  */
 export const fieldDefinitionGroupSchema = z.object({
   isGroup: z.literal(true),
@@ -587,7 +603,8 @@ export const fieldDefinitionGroupSchema = z.object({
 export type FieldDefinitionGroup = z.infer<typeof fieldDefinitionGroupSchema>;
 
 /**
- * Union of a FieldDefinition or a FieldDefinitionGroup,
+ * Only a Collection's `fieldDefinitions` accepts this union. A Component
+ * takes a flat `FieldDefinition[]` and rejects groups.
  */
 export const fieldDefinitionOrGroupSchema = z.union([
   fieldDefinitionGroupSchema,
@@ -598,8 +615,12 @@ export type FieldDefinitionOrGroup = z.infer<
 >;
 
 /**
- * Flattens a mixed array of FieldDefinitions and FieldDefinitionGroups
- * into a flat array of FieldDefinitions.
+ * Flattens groups away, preserving order with a group's children spliced in
+ * place.
+ *
+ * An index into the result no longer addresses a definition in the original
+ * array, so anything building an issue path has to use
+ * `flattenFieldDefinitionsWithPaths` instead.
  */
 export function flattenFieldDefinitions(
   fieldDefinitionsOrGroups: FieldDefinitionOrGroup[]
@@ -716,9 +737,11 @@ export const slugSourceReferencesSuperRefinement = (
  * Nested-component uniqueness has an ambiguous scope (within-item vs
  * within-entry vs collection vs project) and Components are reused across
  * Collections, so we deliberately defer it rather than advertise an unenforced
- * flag. See docs/features.md.
+ * flag.
  *
  * Use via superRefine on a Component's `fieldDefinitions` array.
+ *
+ * @see ../../docs/features.md
  */
 export const forbidUniqueAndSlugInComponentSuperRefinement = (
   fieldDefinitions: FieldDefinition[],

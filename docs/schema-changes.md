@@ -1,10 +1,10 @@
-# Schema Changes
+# Schema changes
 
 What happens to existing content when you edit a Collection's or Component's field definitions. Changing a schema in elek.io Core is not just a metadata edit - Core cascades the change into every affected Entry so stored content stays valid against its schema, all in a single commit.
 
 For the field types this operates on, see [`fields.md`](./fields.md). For the data model, see [`concepts.md`](./concepts.md).
 
-## The golden rule: Field definitions are matched by `id`
+## The golden rule: field definitions are matched by `id`
 
 Every field definition has a stable `id` (UUID). The cascade matches old and new definitions **by `id`, never by `slug`**.
 
@@ -22,16 +22,16 @@ When you call `core.collections.update()` or `core.components.update()`, always 
 
 Core diffs old vs new definitions into three categories - `added`, `removed`, `updated` (any property differs) - and transforms each affected Entry accordingly.
 
-| Change                                                         | Effect on existing Entries                                                       | Data loss?            | Needs resolution?                                              |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------------- |
-| **Add** an optional field                                      | Value populated with the default (or `null` / empty per language)                | No                    | No                                                             |
-| **Add** a required field with a default                        | Value populated with the default, replicated to every language                   | No                    | No                                                             |
-| **Add** a required field, no default                           | -                                                                                | No                    | **Yes** (`missing_required`)                                   |
-| **Remove** a field                                             | Value is dropped from every Entry                                                | **Yes, permanent**    | No (silent)                                                    |
-| **Rename** a field's `slug` (same `id`)                        | Value is moved to the new slug, content preserved                                | No                    | No                                                             |
-| **Change** a field's type / constraints                        | Old value re-validated against the new schema, kept if it passes                 | Only if it can't pass | **Yes** if it fails (`type_mismatch` / `constraint_violation`) |
-| **Turn** a field unique (`isUnique` on, or add a `slug` field) | Existing values scanned for cross-Entry duplicates per language                  | No                    | **Yes** if duplicates exist (`unique_collision`)               |
-| **Narrow** `ofComponents` / `ofCollections`                    | Component items / Entry references no longer allowed are stripped (per language) | **Yes, permanent**    | No (silent)                                                    |
+| Change | Effect on existing Entries | Data loss? | Needs resolution? |
+| --- | --- | --- | --- |
+| **Add** an optional field | Value populated with the default (or `null` / empty per language) | No | No |
+| **Add** a required field with a default | Value populated with the default, replicated to every language | No | No |
+| **Add** a required field, no default | - | No | **Yes** (`missing_required`) |
+| **Remove** a field | Value is dropped from every Entry | **Yes, permanent** | No (silent) |
+| **Rename** a field's `slug` (same `id`) | Value is moved to the new slug, content preserved | No | No |
+| **Change** a field's type / constraints | Old value re-validated against the new schema, kept if it passes | Only if it can't pass | **Yes** if it fails (`type_mismatch` / `constraint_violation`) |
+| **Turn** a field unique (`isUnique` on, or add a `slug` field) | Existing values scanned for cross-Entry duplicates per language | No | **Yes** if duplicates exist (`unique_collision`) |
+| **Narrow** `ofComponents` / `ofCollections` | Component items / Entry references no longer allowed are stripped (per language) | **Yes, permanent** | No (silent) |
 
 ### Deterministic transforms are applied automatically
 
@@ -42,7 +42,7 @@ Renames, removals, additions with a usable default, and allowlist narrowing are 
 
 There is no separate confirmation step for these - the commit is made as part of the update. Treat field removal and allowlist narrowing as destructive operations.
 
-### Default values for added Fields
+### Default values for added fields
 
 A newly added field's value is built per its type:
 
@@ -75,11 +75,19 @@ The unresolved issues are attached as the **`cause`** of the thrown `Conflict` e
 }
 ```
 
-A `unique_collision` issue is shaped a little differently. It sets `transformedValues` to `{}` and has no `currentValue`. Instead it carries `value` (the colliding string), `language` (the slot it collides in), and `conflictingEntryId` (the kept Entry that already holds the value). These are the same fields as the `UniqueValueConflict` thrown on a per-Entry create or update, so an editor renders both the same way.
+A `unique_collision` issue is shaped a little differently. It sets `transformedValues` to `{}`, has no `currentValue`, and carries three fields of its own:
+
+- `value`, the colliding string
+- `language`, the slot it collides in
+- `conflictingEntryId`, the kept Entry that already holds the value
+
+These are the same fields as the `UniqueValueConflict` thrown on a per-Entry create or update, so an editor renders both the same way.
 
 ### The resolution workflow
 
-Retry the update with a `resolutions` map keyed by Entry id, then field slug, to the corrected `Value`. Resolutions are type-checked against the new field's schema, and an invalid one throws `BadRequest`. For a `unique_collision` the corrected `Value` must be unique within the Collection for that `language`, since reusing the colliding value just fails the scan again.
+Retry the update with a `resolutions` map keyed by Entry id, then field slug, to the corrected `Value`. Resolutions are type-checked against the new field's schema, and an invalid one throws `BadRequest`.
+
+A field slug the new definitions do not declare throws `BadRequest` too, naming the Entry and the slug. It is checked before anything is written, so a stale resolution fails the whole update rather than reaching one Entry. For a `unique_collision` the corrected `Value` must be unique within the Collection for that `language`, since reusing the colliding value just fails the scan again.
 
 ```typescript
 import { CoreError } from '@elek-io/core';
@@ -128,7 +136,7 @@ The whole cascade is transactional. The Collection (or Component) file and every
 - **No deleting a referenced Component.** `core.components.delete()` throws `Conflict` if any Collection or Component still references the Component. Remove the references first.
 - **Collection / Component slug uniqueness** is enforced per Project. Field-definition slugs need not be globally unique - they are matched by `id`, which is what makes renames safe.
 
-## See Also
+## See also
 
 - [`fields.md`](./fields.md) - field definition shapes and constraints- [`error-handling.md`](./error-handling.md) - `CoreError`, `Conflict`, and `withGitRollback`
 - [`usage.md`](./usage.md) - creating and updating Collections, Components and Entries

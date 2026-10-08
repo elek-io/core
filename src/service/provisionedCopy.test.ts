@@ -161,6 +161,15 @@ describe('Provisioned copy', function () {
     );
   });
 
+  it('should reject a direct git tag delete on a provisioned copy', async function () {
+    await expectProvisionedError(
+      core.git.tags.delete({
+        path: core.util.pathTo.project(seed.projectId),
+        id: uuid(),
+      })
+    );
+  });
+
   it('should reject a direct git push from a provisioned copy', async function () {
     await expectProvisionedError(
       core.git.push(core.util.pathTo.project(seed.projectId))

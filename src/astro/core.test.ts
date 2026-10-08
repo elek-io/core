@@ -21,7 +21,7 @@ describe('getCore', () => {
     // The Desktop app writes the Project while astro dev reads it, and
     // Core only invalidates its cache for writes it makes itself, so a
     // cached read would serve content one edit behind
-    expect(getCore().options.file.cache).toBe(false);
+    expect(getCore().options.cache).toBe(false);
   });
 
   it('takes its log level from the environment', () => {

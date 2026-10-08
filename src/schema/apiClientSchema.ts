@@ -1,9 +1,11 @@
 import { z } from '@hono/zod-openapi';
 
 /**
- * Pagination schema used by the generated API client.
- * Both limit and offset are optional - the entire object is optional too,
- * allowing `entries.list()` to be called without arguments.
+ * Pagination for the generated API client. The whole object is optional so
+ * `entries.list()` can be called with no arguments at all.
+ *
+ * Omitting them leaves the API's own defaults in place, `limit` 15 and
+ * `offset` 0. `limit: 0` returns everything from `offset` on.
  */
 export const paginationSchema = z
   .object({
@@ -14,7 +16,11 @@ export const paginationSchema = z
 export type PaginationProps = z.infer<typeof paginationSchema>;
 
 /**
- * Schema for the generated API client constructor props.
+ * Constructor props for the generated `apiClient({ baseUrl, apiKey })`, which
+ * parses them at construction. A `baseUrl` that is not a URL therefore throws
+ * there rather than on the first request.
+ *
+ * `apiKey` is sent as an `Authorization: Bearer` header on every call.
  */
 export const apiClientSchema = z.object({
   baseUrl: z.url(),

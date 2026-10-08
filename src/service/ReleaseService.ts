@@ -46,10 +46,13 @@ import type { ProjectService } from './ProjectService.js';
 import type { PathTo } from '../util/node.js';
 
 /**
- * Service that manages Release functionality
+ * Diffs the `work` branch against `production` to compute a semver bump from
+ * what actually changed.
  *
- * A release diffs the current `work` branch against the `production` branch
- * to determine what changed, computes a semver bump, and merges work into production.
+ * `create()` then promotes `work` to `production` and tags it. `createPreview()`
+ * only tags a snapshot on `work` and never touches `production`.
+ *
+ * @see ../../docs/releases.md
  */
 export class ReleaseService extends AbstractService {
   private gitService: GitService;
@@ -99,10 +102,15 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Prepares a release by diffing the current `work` branch against `production`.
+   * Diffs the current `work` branch against `production` and returns a
+   * read-only summary plus the computed next version. With no changes, both
+   * `bump` and `nextVersion` are null.
    *
-   * Returns a read-only summary of all changes and the computed next version.
-   * If there are no changes, the next version and bump will be null.
+   * Throws `PreconditionFailed` unless the Project is checked out on `work`.
+   * Writes nothing, to disk or to git.
+   *
+   * A `work` branch merely ahead in commits, with no classified change, still
+   * yields a `patch` bump.
    */
   public prepare(props: PrepareReleaseProps): Promise<ReleaseDiff> {
     return this.validated('prepare', prepareReleaseSchema, props, async () => {
@@ -226,14 +234,15 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Creates a release by:
-   * 1. Recomputing the diff (stateless)
-   * 2. Merging `work` into `production`
-   * 3. Updating the project version on `production`
-   * 4. Tagging on `production`
-   * 5. Merging `production` back into `work` (fast-forward to sync the version commit)
-   * 6. Switching back to `work`
-   * 7. Pushing `production` and the tag to `origin`, if a remote is set
+   * Merges `work` into `production`, writes the next version there and tags
+   * it, merges that back into `work`, then pushes `production` and the tag
+   * when a remote is set.
+   *
+   * Throws `PreconditionFailed` when nothing changed since the last release.
+   * A failure at any step unwinds every one before it, so nothing half made
+   * is left behind and the call can simply be retried.
+   *
+   * @see ../../docs/releases.md
    */
   public create(props: CreateReleaseProps): Promise<ReleaseResult> {
     return this.mutating('create', createReleaseSchema, props, async () => {
@@ -251,6 +260,20 @@ export class ReleaseService extends AbstractService {
       }
 
       const nextVersion = diff.nextVersion;
+
+      const workBefore = await this.tipOf(
+        projectPath,
+        projectBranchSchema.enum.work
+      );
+      // A cloned Project has no local `production` until the switch below
+      // creates it, so the remote's tip is where it would be created
+      const productionBefore =
+        (await this.tipOf(projectPath, projectBranchSchema.enum.production)) ??
+        (await this.tipOf(
+          projectPath,
+          `origin/${projectBranchSchema.enum.production}`
+        ));
+      let releaseTagId: string | null = null;
 
       try {
         await this.gitService.branches.switch(
@@ -279,6 +302,7 @@ export class ReleaseService extends AbstractService {
           path: projectPath,
           message: { type: 'release', version: nextVersion },
         });
+        releaseTagId = releaseTag.id;
         await this.gitService.branches.switch(
           projectPath,
           projectBranchSchema.enum.work
@@ -300,6 +324,11 @@ export class ReleaseService extends AbstractService {
         this.logService.info({
           source: 'core',
           message: `Released version ${nextVersion} (${diff.bump} bump)`,
+          meta: {
+            'elek.project.id': props.projectId,
+            'elek.release.version': nextVersion,
+            'elek.release.bump': diff.bump,
+          },
         });
 
         return {
@@ -307,30 +336,24 @@ export class ReleaseService extends AbstractService {
           diff,
         };
       } catch (error) {
-        // Best-effort recovery: switch back to work branch
-        try {
-          await this.gitService.branches.switch(
-            projectPath,
-            projectBranchSchema.enum.work
-          );
-        } catch {
-          // Ignore recovery failure
-        }
+        await this.unwind(projectPath, releaseTagId, [
+          { name: projectBranchSchema.enum.production, tip: productionBefore },
+          { name: projectBranchSchema.enum.work, tip: workBefore },
+        ]);
         throw error;
       }
     });
   }
 
   /**
-   * Creates a preview release by:
-   * 1. Recomputing the diff (stateless)
-   * 2. Computing the preview version (e.g. 1.1.0-preview.3)
-   * 3. Updating the project version on `work`
-   * 4. Tagging on `work` (no merge into production)
-   * 5. Pushing the tag to `origin`, if a remote is set
+   * Writes a pre-release version such as `1.1.0-preview.3` onto `work`, tags
+   * it there and pushes the tag when a remote is set. It never touches
+   * `production`, so only `create` promotes content.
    *
-   * Preview releases are snapshots of the current work state.
-   * They don't promote to production - only full releases do.
+   * A failure unwinds the version commit and the tag, so a failed preview
+   * leaves `work` where it was.
+   *
+   * @see ../../docs/releases.md
    */
   public createPreview(
     props: CreatePreviewReleaseProps
@@ -365,6 +388,12 @@ export class ReleaseService extends AbstractService {
           updated: datetime(),
         };
 
+        const workBefore = await this.tipOf(
+          projectPath,
+          projectBranchSchema.enum.work
+        );
+        let previewTagId: string | null = null;
+
         try {
           await this.jsonFileService.update(
             updatedProjectFile,
@@ -380,6 +409,7 @@ export class ReleaseService extends AbstractService {
             path: projectPath,
             message: { type: 'preview', version: previewVersion },
           });
+          previewTagId = previewTag.id;
 
           // Previews are deployable, so the tag is published as well. The
           // `work` branch ref itself stays local to synchronize()
@@ -394,6 +424,11 @@ export class ReleaseService extends AbstractService {
           this.logService.info({
             source: 'core',
             message: `Preview released version ${previewVersion} (${diff.bump} bump)`,
+            meta: {
+              'elek.project.id': props.projectId,
+              'elek.release.version': previewVersion,
+              'elek.release.bump': diff.bump,
+            },
           });
 
           return {
@@ -401,15 +436,9 @@ export class ReleaseService extends AbstractService {
             diff,
           };
         } catch (error) {
-          // Best-effort recovery: switch back to work branch
-          try {
-            await this.gitService.branches.switch(
-              projectPath,
-              projectBranchSchema.enum.work
-            );
-          } catch {
-            // Ignore recovery failure
-          }
+          await this.unwind(projectPath, previewTagId, [
+            { name: projectBranchSchema.enum.work, tip: workBefore },
+          ]);
           throw error;
         }
       }
@@ -417,7 +446,86 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads the project file as it exists at a given git ref
+   * The commit a branch points at, or null when it does not resolve, which
+   * is what a Project without a local `production` branch answers.
+   */
+  private async tipOf(
+    projectPath: string,
+    branch: string
+  ): Promise<string | null> {
+    try {
+      return await this.gitService.revParse(projectPath, branch);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Undoes what a failed release already did and leaves the Project on
+   * `work`, because a half-finished release cannot be completed through the
+   * public API and is worse than none.
+   *
+   * Every step swallows its own failure and warns, so the caller sees the
+   * error that caused the unwind rather than one raised while undoing it.
+   *
+   * @see ../../docs/releases.md
+   */
+  private async unwind(
+    projectPath: string,
+    tagId: string | null,
+    branches: { name: string; tip: string | null }[]
+  ): Promise<void> {
+    if (tagId !== null) {
+      await this.recovering('delete the tag', () =>
+        this.gitService.tags.delete({ path: projectPath, id: tagId })
+      );
+    }
+
+    for (const { name, tip } of branches) {
+      if (tip === null) {
+        continue;
+      }
+      await this.recovering(`reset "${name}"`, async () => {
+        if ((await this.tipOf(projectPath, name)) === tip) {
+          return;
+        }
+        await this.gitService.branches.switch(projectPath, name);
+        await this.gitService.reset(projectPath, 'hard', tip);
+      });
+    }
+
+    await this.recovering('switch back to work', () =>
+      this.gitService.branches.switch(
+        projectPath,
+        projectBranchSchema.enum.work
+      )
+    );
+  }
+
+  /** One step of `unwind`, whose own failure may not replace the original. */
+  private async recovering(
+    step: string,
+    run: () => Promise<unknown>
+  ): Promise<void> {
+    try {
+      await run();
+    } catch (error) {
+      this.logService.warn({
+        source: 'core',
+        message: `Failed to ${step} while recovering from a failed release, the Project may need a manual reset`,
+        meta: {
+          'exception.message':
+            error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  /**
+   * Reads the project file as it exists at a given git ref.
+   *
+   * Every failure is swallowed and returns null, which `diffProject()` reads
+   * as the first-release case rather than as an error.
    */
   private async getProjectAtRef(
     projectId: string,
@@ -438,7 +546,12 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads asset metadata files as they exist at a given git ref
+   * Reads asset metadata files as they exist at a given git ref.
+   *
+   * Lossy on purpose: a file that cannot be read is logged at debug, and one
+   * that fails `assetFileSchema` is dropped with no log at all. So a corrupt
+   * Asset reads as absent at that ref, and the diff reports it as added or
+   * deleted.
    */
   private async getAssetsAtRef(
     projectId: string,
@@ -472,6 +585,7 @@ export class ReleaseService extends AbstractService {
         this.logService.debug({
           source: 'core',
           message: `Skipping asset "${fileName}" at ref "${ref}" during release diff`,
+          meta: { 'file.name': fileName, 'elek.git.ref': ref },
         });
       }
     }
@@ -480,7 +594,11 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads entry files for a single collection as they exist at a given git ref
+   * Reads entry files for a single Collection as they exist at a given git
+   * ref, filtering `collection.json` out of the list.
+   *
+   * Lossy the same way `getAssetsAtRef` is: an unreadable or invalid file
+   * reads as absent at that ref.
    */
   private async getEntriesAtRef(
     projectId: string,
@@ -521,6 +639,11 @@ export class ReleaseService extends AbstractService {
         this.logService.debug({
           source: 'core',
           message: `Skipping entry "${fileName}" in collection "${collectionId}" at ref "${ref}" during release diff`,
+          meta: {
+            'file.name': fileName,
+            'elek.collection.id': collectionId,
+            'elek.git.ref': ref,
+          },
         });
       }
     }
@@ -529,7 +652,11 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads collections as they exist at a given git ref (branch or commit)
+   * Reads Collections as they exist at a given git ref, branch or commit.
+   *
+   * Lossy the same way `getAssetsAtRef` is: a folder whose `collection.json`
+   * is unreadable or fails its schema is skipped, so it reads as absent at
+   * that ref.
    */
   private async getCollectionsAtRef(
     projectId: string,
@@ -564,6 +691,7 @@ export class ReleaseService extends AbstractService {
         this.logService.debug({
           source: 'core',
           message: `Skipping folder "${folderName}" at ref "${ref}" during release diff`,
+          meta: { 'file.name': folderName, 'elek.git.ref': ref },
         });
       }
     }
@@ -572,7 +700,10 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads component files as they exist at a given git ref
+   * Reads component files as they exist at a given git ref.
+   *
+   * Lossy the same way `getCollectionsAtRef` is: a folder whose file is
+   * unreadable or invalid reads as absent at that ref.
    */
   private async getComponentsAtRef(
     projectId: string,
@@ -607,6 +738,7 @@ export class ReleaseService extends AbstractService {
         this.logService.debug({
           source: 'core',
           message: `Skipping component folder "${folderName}" at ref "${ref}" during release diff`,
+          meta: { 'file.name': folderName, 'elek.git.ref': ref },
         });
       }
     }
@@ -747,7 +879,11 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Checks if there are any commits between two refs
+   * Checks if there are any commits between two refs.
+   *
+   * A failed `git log` returns true, so a Project whose `production` branch
+   * holds no commits yet is treated as having changes and `prepare()` falls
+   * back to a `patch` bump.
    */
   private async hasCommitsBetween(
     projectPath: string,
@@ -1420,7 +1556,13 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Counts existing preview tags for a given base version since the last full release.
+   * Counts existing preview tags for a given base version since the last full
+   * release.
+   *
+   * It walks `GitTagService.list` in the order that method returns, newest
+   * first by the tagged commit's author date, and stops at the first
+   * `release` tag, skipping `upgrade` tags. Changing that sort order silently
+   * breaks preview numbering.
    */
   private async countPreviewsSinceLastRelease(
     projectPath: string,

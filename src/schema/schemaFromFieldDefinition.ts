@@ -6,7 +6,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
-import { slug } from '../util/shared.js';
+import { CoreError, slug } from '../util/shared.js';
 import { slugSchema, uuidSchema, type Uuid } from './baseSchema.js';
 import type { ProjectLanguages } from './projectSchema.js';
 import type {
@@ -50,7 +50,8 @@ function getBooleanValueContentSchemaFromFieldDefinition() {
 }
 
 /**
- * Number Values can have min and max values and can be required or not
+ * An optional field returns `.nullable()`, not `.optional()`, so the language
+ * slot still has to be present holding `null`.
  */
 function getNumberValueContentSchemaFromFieldDefinition(
   fieldDefinition:
@@ -58,10 +59,12 @@ function getNumberValueContentSchemaFromFieldDefinition(
 ) {
   let schema = z.number();
 
-  if (fieldDefinition.min) {
+  // Compared against null rather than truthiness, because a number bound is
+  // the only one that can legitimately be 0
+  if (fieldDefinition.min !== null) {
     schema = schema.min(fieldDefinition.min);
   }
-  if (fieldDefinition.max) {
+  if (fieldDefinition.max !== null) {
     schema = schema.max(fieldDefinition.max);
   }
 
@@ -73,8 +76,13 @@ function getNumberValueContentSchemaFromFieldDefinition(
 }
 
 /**
- * String Values can have different formats (email, url, ipv4, date, time, ...)
- * and can have min and max length and can be required or not
+ * A required string always gets `.min(1)`, so an empty string is rejected
+ * even with no `min` configured. An optional one is nullable rather than
+ * optional, so the language slot still has to be present.
+ *
+ * A `slug` field takes a separate branch that ignores `min` and `max` and
+ * demands a value already canonical for the field's `separator`, `lowercase`
+ * and `decamelize` settings.
  */
 function getStringValueContentSchemaFromFieldDefinition(
   fieldDefinition: StringFieldDefinition
@@ -161,8 +169,11 @@ function getStringValueContentSchemaFromFieldDefinition(
 }
 
 /**
- * Reference Values can reference either Assets or Entries,
- * can have min / max number of references and can be required or not
+ * Content is always an array and never `null`, so an optional field is an
+ * empty array and `isRequired` only adds `min(1)` on top of `min` and `max`.
+ *
+ * An Entry reference is refined against `ofCollections` when that list is
+ * non-empty, and left unconstrained when it is empty.
  */
 function getReferenceValueContentSchemaFromFieldDefinition(
   fieldDefinition: AssetFieldDefinition | EntryFieldDefinition
@@ -208,6 +219,17 @@ function getReferenceValueContentSchemaFromFieldDefinition(
   return schema;
 }
 
+/**
+ * Lifts a single field's content schema into the per-language record every
+ * Value carries. `z.record(z.enum(languages), ...)` requires exactly the
+ * Project's languages, rejecting a missing key and a key outside the tuple,
+ * which is what turns a partial record into a complete one at runtime.
+ *
+ * Each slot here holds a string bounded by the field's rules, or `null` when
+ * the field is optional.
+ *
+ * @see ../../contributing/language-scoped-validation.md
+ */
 export function getTranslatableStringValueContentSchemaFromFieldDefinition(
   fieldDefinition: StringFieldDefinition,
   languages: ProjectLanguages
@@ -218,6 +240,11 @@ export function getTranslatableStringValueContentSchemaFromFieldDefinition(
   );
 }
 
+/**
+ * The same language-completeness envelope as the string wrapper above. Each
+ * slot holds a number bounded by the field's `min` and `max`, or `null` when
+ * the field is optional.
+ */
 export function getTranslatableNumberValueContentSchemaFromFieldDefinition(
   fieldDefinition:
     NumberFieldDefinition | RangeFieldDefinition | NumberSelectFieldDefinition,
@@ -229,6 +256,12 @@ export function getTranslatableNumberValueContentSchemaFromFieldDefinition(
   );
 }
 
+/**
+ * The same language-completeness envelope as the string wrapper above.
+ *
+ * It takes no field definition, because boolean fields are always required:
+ * there is nothing to narrow, and no slot is ever `null`.
+ */
 export function getTranslatableBooleanValueContentSchemaFromFieldDefinition(
   languages: ProjectLanguages
 ) {
@@ -238,6 +271,14 @@ export function getTranslatableBooleanValueContentSchemaFromFieldDefinition(
   );
 }
 
+/**
+ * The same language-completeness envelope as the string wrapper above. Each
+ * slot holds an array of Asset or Entry references rather than a nullable
+ * scalar, so an optional field is an empty array.
+ *
+ * An Entry reference must belong to `ofCollections` when that list is
+ * non-empty.
+ */
 export function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
   fieldDefinition: AssetFieldDefinition | EntryFieldDefinition,
   languages: ProjectLanguages
@@ -249,9 +290,14 @@ export function getTranslatableReferenceValueContentSchemaFromFieldDefinition(
 }
 
 /**
- * Builds the per-language content schema for a markdown field. Each
- * language slot accepts either `null` (when not required) or an
- * `MdAstRoot` narrowed to the field's `features` configuration.
+ * The same language-completeness envelope as the string wrapper above. Each
+ * slot holds `null`, when the field is not required, or an `MdAstRoot`
+ * narrowed by the whole field definition.
+ *
+ * That is more than `features`: `min` and `max` apply as block counts, Entry
+ * references are restricted to `ofCollections`, and an empty root, a root
+ * holding only an empty paragraph and nesting past `MAX_MDAST_DEPTH` are all
+ * rejected.
  */
 export function getTranslatableMdAstValueContentSchemaFromFieldDefinition(
   fieldDefinition: MarkdownFieldDefinition,
@@ -270,16 +316,22 @@ export function getTranslatableMdAstValueContentSchemaFromFieldDefinition(
 }
 
 /**
- * Generates the content schema for a dynamic (component) field.
- * For each referenced Component, builds a per-component item schema with a
- * z.literal componentId discriminator and a strict values object.
- * Returns a z.array of the union (or single schema if only one component).
+ * Content schema for a dynamic field: an array of per-Component item schemas,
+ * each discriminated by a `z.literal` componentId, unioned when the field
+ * allows more than one Component.
+ *
+ * A value slug the Component does not declare is stripped, or rejected when
+ * `unknownSlugs` is `'reject'`, which is what a create or update asks for.
+ *
+ * Throws a plain `Error`, not a `CoreError`, when the `visited` set catches a
+ * Component repeating in the generation chain.
  */
 function getComponentValueContentSchemaFromFieldDefinition(
   fieldDefinition: DynamicFieldDefinition,
   languages: ProjectLanguages,
   componentResolver: ComponentResolver,
-  visited: Set<string>
+  visited: Set<string>,
+  unknownSlugs: 'strip' | 'reject'
 ) {
   const componentSchemas = fieldDefinition.ofComponents.map((componentId) => {
     if (visited.has(componentId)) {
@@ -297,13 +349,15 @@ function getComponentValueContentSchemaFromFieldDefinition(
         componentFieldDefinition,
         languages,
         componentResolver,
-        branchedVisited
+        branchedVisited,
+        unknownSlugs
       );
     }
     return z.object({
       id: uuidSchema.readonly(),
       componentId: z.literal(componentId),
-      values: z.object(shape),
+      values:
+        unknownSlugs === 'reject' ? z.strictObject(shape) : z.object(shape),
     });
   });
 
@@ -337,15 +391,21 @@ function getComponentValueContentSchemaFromFieldDefinition(
 }
 
 /**
- * Generates a zod schema to check a Value based on given Field definition.
- * For component (dynamic) fields, requires a componentResolver to look up
- * sub-field definitions and a visited set for circular reference protection.
+ * Builds the zod schema that checks one Value against its field definition.
+ * A `component` field needs a `componentResolver` to reach its sub-field
+ * definitions. `unknownSlugs` decides what happens to a Component value slug
+ * the Component does not declare, stripped by default.
+ *
+ * Throws `Internal` for a `component` field passed without a resolver. The
+ * two unreachable guards, a circular Component chain and an unhandled
+ * `valueType`, still throw a plain `Error`.
  */
 export function getValueSchemaFromFieldDefinition(
   fieldDefinition: FieldDefinition,
   languages: ProjectLanguages,
   componentResolver?: ComponentResolver,
-  visited: Set<string> = new Set()
+  visited: Set<string> = new Set(),
+  unknownSlugs: 'strip' | 'reject' = 'strip'
 ) {
   switch (fieldDefinition.valueType) {
     case valueTypeSchema.enum.boolean:
@@ -378,7 +438,7 @@ export function getValueSchemaFromFieldDefinition(
       });
     case valueTypeSchema.enum.component: {
       if (!componentResolver) {
-        throw new Error(
+        throw CoreError.internal(
           'componentResolver is required for dynamic (component) field definitions'
         );
       }
@@ -387,7 +447,8 @@ export function getValueSchemaFromFieldDefinition(
           fieldDefinition,
           languages,
           componentResolver,
-          visited
+          visited,
+          unknownSlugs
         ),
       });
     }
@@ -412,8 +473,8 @@ export function getValueSchemaFromFieldDefinition(
 function getValuesShapeFromFieldDefinitions(
   fieldDefinitions: FieldDefinition[],
   languages: ProjectLanguages,
-  componentResolver?: ComponentResolver,
-  visited?: Set<string>
+  componentResolver: ComponentResolver | undefined,
+  unknownSlugs: 'strip' | 'reject'
 ) {
   const shape: Record<string, z.ZodTypeAny> = {};
   for (const fieldDef of fieldDefinitions) {
@@ -421,29 +482,38 @@ function getValuesShapeFromFieldDefinitions(
       fieldDef,
       languages,
       componentResolver,
-      visited
+      new Set(),
+      unknownSlugs
     );
   }
   return shape;
 }
 
 /**
- * Builds a values schema that validates each field individually
- * and pipes through `z.record(slugSchema, valueSchema)` so
- * the output type is correctly inferred as `Record<string, Value>`.
+ * Validates each field individually, then pipes through
+ * `z.record(slugSchema, valueSchema)` so the output type is inferred as
+ * `Record<string, Value>` rather than `Record<string, unknown>`.
+ *
+ * A Value whose slug matches no field definition is stripped by default,
+ * which a reader of stored Entries needs. A create or update passes
+ * `'reject'` instead, so a misspelled slug fails rather than being dropped,
+ * in a Component item's values too.
+ *
+ * @see ../../contributing/language-scoped-validation.md
  */
 export function getValuesSchema(
   fieldDefinitions: FieldDefinition[],
   languages: ProjectLanguages,
-  componentResolver?: ComponentResolver
+  componentResolver?: ComponentResolver,
+  unknownSlugs: 'strip' | 'reject' = 'strip'
 ) {
-  return z
-    .object(
-      getValuesShapeFromFieldDefinitions(
-        fieldDefinitions,
-        languages,
-        componentResolver
-      )
-    )
-    .pipe(z.record(slugSchema, valueSchema));
+  const shape = getValuesShapeFromFieldDefinitions(
+    fieldDefinitions,
+    languages,
+    componentResolver,
+    unknownSlugs
+  );
+  const values =
+    unknownSlugs === 'reject' ? z.strictObject(shape) : z.object(shape);
+  return values.pipe(z.record(slugSchema, valueSchema));
 }

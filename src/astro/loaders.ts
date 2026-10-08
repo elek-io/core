@@ -4,7 +4,11 @@ import { z } from '@hono/zod-openapi';
 import Path from 'node:path';
 import Url from 'node:url';
 import Fs from 'fs-extra';
-import { assetSchema, flattenFieldDefinitions } from '../index.node.js';
+import {
+  assetSchema,
+  CoreError,
+  flattenFieldDefinitions,
+} from '../index.node.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
@@ -48,22 +52,31 @@ export interface ElekEntriesLoaderProps<T extends ElekConfig> {
   config: T;
   /** Alias of the Project in config.projects */
   project: keyof T['projects'] & string;
-  /** Collection UUID or slug */
+  /**
+   * The Collection's id or its plural slug, the pair `resolveCollectionId`
+   * accepts and the slug the derived collection key is built from. A miss
+   * throws `NotFound` while the collection loads, not at config time.
+   */
   collectionIdOrSlug: string;
 }
 
 /**
- * Where a Project saves its image binaries when the loader is left to
- * decide. Below `src/` so `astro:assets` can pick them up, and per
- * alias so two Projects never write into the same directory.
+ * Where a Project saves its image binaries when the loader is left to decide.
+ * Below `src/` so `astro:assets` can pick them up, and per alias so two
+ * Projects never write into the same directory.
+ *
+ * Exported for this file's tests. Nothing re-exports it, so it is not part of
+ * the astro entry's surface.
  */
 export function defaultImageDir(alias: string): string {
   return Path.join('src', 'elek', alias, 'images');
 }
 
 /**
- * Where a Project saves every other binary. Below `public/`, which
- * Astro copies into the build as it is, so they keep a stable URL.
+ * Where a Project saves every other binary. Below `public/`, which Astro
+ * copies into the build as it is, so they keep a stable URL.
+ *
+ * Exported for this file's tests, the same as `defaultImageDir` above.
  */
 export function defaultPublicDir(alias: string): string {
   return Path.join('public', 'elek', alias, 'assets');
@@ -94,7 +107,9 @@ function hasImageExtension(extension: string): boolean {
  * Astro's marker for "resolve this string as an image import". Astro's
  * own image() schema helper emits the same prefix, the content store
  * picks it up and the runtime replaces the value with the resolved
- * ImageMetadata. See contributing/astro-entry.md.
+ * ImageMetadata.
+ *
+ * @see ../../contributing/astro-entry.md
  */
 const IMAGE_IMPORT_PREFIX = '__ASTRO_IMAGE_';
 
@@ -112,24 +127,15 @@ function toRelativePosix(from: string, path: string): string | null {
 }
 
 /**
- * Astro content loader for elek.io Assets.
+ * Astro content loader for elek.io Assets, which also writes their binaries
+ * into the Astro project as it loads: images below `imageDir` so
+ * `astro:assets` processes them, everything else below `publicDir` so Astro
+ * serves it. Both default to a directory named after the Project's alias.
  *
- * Reads and saves Assets from a Project and exposes them through
- * Astro's content collection system.
+ * An Asset landing outside those directories is still stored, with `src` or
+ * `href` null and a warning, rather than failing the build.
  *
- * @example
- * ```ts
- * // src/content.config.ts
- * import { defineCollection } from 'astro:content';
- * import { elekAssetsLoader } from '@elek-io/core/astro';
- * import { config } from '../elek.config';
- *
- * export const collections = {
- *   assets: defineCollection({
- *     loader: elekAssetsLoader({ config, project: 'website' }),
- *   });
- * };
- * ```
+ * @see ../../docs/usage.md
  */
 export function elekAssetsLoader<const T extends ElekConfig>(
   props: ElekAssetsLoaderProps<T>
@@ -300,28 +306,15 @@ export function elekAssetsLoader<const T extends ElekConfig>(
 }
 
 /**
- * Astro content loader for elek.io Collection Entries.
+ * Astro content loader for elek.io Collection Entries, which also supplies
+ * Astro with the Collection's schema and its generated `Entry` type. Both are
+ * built from the content model once, when Astro loads the content config.
  *
- * Reads all Entries from a Collection and exposes them through
- * Astro's content collection system.
+ * In dev it reloads Entries as they change. A change to the content model
+ * stops it instead, with a log line saying the dev server has to be
+ * restarted, because Astro can rebuild neither the schema nor the types.
  *
- * @example
- * ```ts
- * // src/content.config.ts
- * import { defineCollection } from 'astro:content';
- * import { elekEntriesLoader } from '@elek-io/core/astro';
- * import { config } from '../elek.config';
- *
- * export const collections = {
- *   posts: defineCollection({
- *     loader: elekEntriesLoader({
- *       config,
- *       project: 'website',
- *       collectionIdOrSlug: 'posts',
- *     }),
- *   });
- * };
- * ```
+ * @see ../../docs/usage.md
  */
 export function elekEntriesLoader<const T extends ElekConfig>(
   props: ElekEntriesLoaderProps<T>
@@ -336,6 +329,12 @@ export function elekEntriesLoader<const T extends ElekConfig>(
    * a build it never matters, nothing reloads there.
    */
   let modelDigest: string | undefined;
+  /**
+   * The Collection the schema was built for. Astro names the collection
+   * after its plural slug, so a reload that resolves to another Collection,
+   * or to none, needs a restart just like a model change.
+   */
+  let collectionId: string | undefined;
 
   /**
    * Reads the Collection, the Project's languages and the Components,
@@ -387,10 +386,29 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     await logReadingProject(core, projectId, (message) =>
       context.logger.info(message)
     );
-    const resolvedCollectionId = await core.collections.resolveCollectionId({
-      projectId,
-      idOrSlug: props.collectionIdOrSlug,
-    });
+    let resolvedCollectionId: string;
+    if (collectionId === undefined) {
+      resolvedCollectionId = await core.collections.resolveCollectionId({
+        projectId,
+        idOrSlug: props.collectionIdOrSlug,
+      });
+    } else {
+      const current = await core.collections
+        .resolveCollectionId({ projectId, idOrSlug: props.collectionIdOrSlug })
+        .catch((error: unknown) => {
+          if (error instanceof CoreError && error.type === 'NotFound') {
+            return null;
+          }
+          throw error;
+        });
+      if (current !== collectionId) {
+        context.logger.warn(
+          `Collection "${props.collectionIdOrSlug}" of Project "${alias}" was renamed or replaced. Astro names a collection after the plural slug when it loads the content config, so restart the dev server to pick it up. Entries are not reloaded until then.`
+        );
+        return collectionId;
+      }
+      resolvedCollectionId = collectionId;
+    }
 
     if (modelDigest !== undefined) {
       const { digest } = await readModel(core);
@@ -449,6 +467,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
 
       // Remembered so a reload can tell that the model moved on
       modelDigest = model.digest;
+      collectionId = model.resolvedId;
 
       return {
         schema: buildEntryValuesSchema(

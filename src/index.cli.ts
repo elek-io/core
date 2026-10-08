@@ -110,10 +110,10 @@ program
   .command('api:start')
   .description('Starts the local API')
   .argument('[port]', 'The port to run the local API on', '31310')
-  .action((port) => {
+  .action(async (port) => {
     const props = apiStartSchema.parse({ port });
 
-    startApiAction(props);
+    await startApiAction(props);
   });
 
 program

@@ -1,24 +1,14 @@
 /**
- * Compile-time drift detection between our MdAst* types and the upstream
+ * Compile-time drift detection between Core's MdAst* types and the upstream
  * mdast spec types from `@types/mdast`.
  *
- * Purpose: when `@types/mdast` updates, these assertions fail at compile
- * time if upstream:
- *   - adds a new required scalar field to a node type we model
- *   - changes the shape of an existing scalar field (e.g. narrows `depth`)
- *   - renames a field
+ * The check is one-directional assignability, so an assertion fails when
+ * Core's type stops being assignable to upstream's: a required scalar field
+ * added, one Core widened narrowed again, or a rename to a required name. An
+ * upstream widening passes, and so do an added optional field, a removed
+ * field, a rename to an optional name and a change in a children shape.
  *
- * Acceptable false negatives (we don't try to catch these):
- *   - upstream adds an optional field - additive; we can ignore until needed
- *   - upstream removes a field - we may keep it deliberately
- *   - children-shape changes - our recursive types are structurally distinct
- *     from upstream's (we omit `position`/`data` from every node), so a deep
- *     children comparison is fragile. We compare only the non-recursive,
- *     non-metadata fields per node.
- *
- * Why we keep `@types/mdast` as a devDep: this drift check is the sole
- * runtime-zero reason. Our schemas are hand-written for Zod, and inferred
- * types are derived via `z.infer<typeof xSchema>` - not from `@types/mdast`.
+ * @see ../../contributing/markdown-internals.md
  */
 
 import type {
@@ -72,8 +62,11 @@ import type {
 } from './valueSchema.js';
 
 /**
- * Compares our type against the upstream type with `position`, `data`, and
- * `children` removed. Catches drift in scalar fields and `type` literals.
+ * Catches drift in scalar fields and `type` literals. `position` and `data`
+ * are excluded because Core's recursive types omit them on every node, and
+ * `children` because a deep comparison through them would be fragile.
+ *
+ * @see ../../contributing/markdown-internals.md
  */
 type MatchesUpstream<Ours, Upstream> =
   Ours extends Omit<Upstream, 'position' | 'data' | 'children'> ? true : false;

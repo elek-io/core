@@ -42,7 +42,9 @@ export const createAssetSchema = assetFileSchema
   .extend({
     projectId: uuidSchema.readonly(),
     /**
-     * Path of the file to add as a new Asset
+     * The file to add as a new Asset. `create()` copies it into the Project
+     * and leaves the source where it is, deriving `extension`, `mimeType`
+     * and `size` from it, so an unrecognized type throws `BadRequest`.
      */
     filePath: z.string().readonly(),
   });
@@ -78,7 +80,9 @@ export const updateAssetSchema = assetFileSchema
   .extend({
     projectId: uuidSchema.readonly(),
     /**
-     * Path of the new file to update the Asset with
+     * Passing it replaces the binary and re-derives `extension`, `mimeType`
+     * and `size`. Omitting it updates the metadata alone and leaves the
+     * current binary in place.
      */
     newFilePath: z.string().readonly().optional(),
   });

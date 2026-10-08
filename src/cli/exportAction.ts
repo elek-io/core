@@ -8,7 +8,7 @@ import type {
   ExportProps,
   Project,
 } from '../schema/index.js';
-import { getCore, watchProjects } from './index.js';
+import { getCore, runOnChange, watchProjects } from './index.js';
 
 async function exportFile({
   resolvedOutDir,
@@ -294,6 +294,17 @@ async function exportProjects({
   }
 }
 
+/**
+ * Writes the export into the caller's own project. It creates `outDir` and
+ * writes JSON there, `nested` one file per run, `separate` a folder tree per
+ * Project that also copies in every Asset binary and rewrites that Asset's
+ * `absolutePath` to the copy. A re-run overwrites but never removes a file
+ * for content that is gone, and references inside Entry values stay
+ * unresolved ids. With `options.watch` it resolves after the first export
+ * while a watcher goes on re-exporting, so the process stays alive.
+ *
+ * @see ../../docs/export.md
+ */
 export const exportAction = async ({
   outDir,
   projects,
@@ -314,7 +325,9 @@ export const exportAction = async ({
         source: 'core',
         message: `Re-Exporting Projects due to ${event} on "${path}"`,
       });
-      void exportProjects({ outDir, projects, template, options });
+      void runOnChange(() =>
+        exportProjects({ outDir, projects, template, options })
+      );
     });
   }
 };

@@ -1,31 +1,40 @@
 import Fs from 'fs-extra';
+import Path from 'node:path';
 import type { z } from '@hono/zod-openapi';
 import type { ElekIoCoreOptions } from '../schema/coreSchema.js';
 import { serviceTypeSchema } from '../schema/serviceSchema.js';
 import { AbstractService } from './AbstractService.js';
+import type { CacheService } from './CacheService.js';
 import type { LogService } from './LogService.js';
-import type { PathTo } from '../util/node.js';
+import { isFileNotFound, type PathTo } from '../util/node.js';
+import { CoreError } from '../util/shared.js';
 
 /**
- * Service that manages CRUD functionality for JSON files on disk
+ * The one chokepoint every JSON file write and delete in Core goes through,
+ * which is what lets a mutation be logged in a single place.
+ *
+ * It holds a path-keyed in-memory cache shared by every service, correct only
+ * while nothing outside it touches the files, and kept only while
+ * `CacheService` says caching is on. Anything that moves the working tree
+ * from underneath it, a pull or a rebase, clears it through `CacheService`.
  */
 export class JsonFileService extends AbstractService {
   private cache: Map<string, unknown> = new Map();
+  private readonly cacheService: CacheService;
 
   constructor(
     options: ElekIoCoreOptions,
     pathTo: PathTo,
-    logService: LogService
+    logService: LogService,
+    cacheService: CacheService
   ) {
     super(serviceTypeSchema.enum.JsonFile, options, pathTo, logService);
+    this.cacheService = cacheService;
   }
 
   /**
    * Creates a new file on disk. Fails if path already exists
    *
-   * @param data Data to write into the file
-   * @param path Path to write the file to
-   * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
   public async create<T extends z.ZodTypeAny>(
@@ -36,12 +45,13 @@ export class JsonFileService extends AbstractService {
     const parsedData: z.output<T> = schema.parse(data);
     const string = this.serialize(parsedData);
     await Fs.writeFile(path, string, { flag: 'wx', encoding: 'utf8' });
-    if (this.options.file.cache === true) {
+    if (this.cacheService.isEnabled) {
       this.cache.set(path, parsedData);
     }
-    this.logService.debug({
+    this.logService.info({
       source: 'core',
       message: `Created file "${path}"`,
+      meta: { 'file.path': path },
     });
     return parsedData;
   }
@@ -49,18 +59,17 @@ export class JsonFileService extends AbstractService {
   /**
    * Reads the content of a file on disk. Fails if path does not exist
    *
-   * @param path Path to read the file from
-   * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
   public async read<T extends z.ZodTypeAny>(
     path: string,
     schema: T
   ): Promise<z.output<T>> {
-    if (this.options.file.cache === true && this.cache.has(path)) {
+    if (this.cacheService.isEnabled && this.cache.has(path)) {
       this.logService.debug({
         source: 'core',
         message: `Cache hit reading file "${path}"`,
+        meta: { 'file.path': path },
       });
       const json = this.cache.get(path);
       return schema.parse(json);
@@ -69,11 +78,12 @@ export class JsonFileService extends AbstractService {
     this.logService.debug({
       source: 'core',
       message: `Cache miss reading file "${path}"`,
+      meta: { 'file.path': path },
     });
-    const data = await Fs.readFile(path, { flag: 'r', encoding: 'utf8' });
-    const json = this.deserialize(data);
+    const data = await this.readFile(path);
+    const json = this.deserialize(data, path);
     const value: z.output<T> = schema.parse(json);
-    if (this.options.file.cache === true) {
+    if (this.cacheService.isEnabled) {
       this.cache.set(path, value);
     }
     return value;
@@ -88,26 +98,21 @@ export class JsonFileService extends AbstractService {
    *
    * Does not read from or write to cache.
    *
-   * @param path Path to read the file from
    * @returns Unvalidated content of the file from disk
    */
   public async unsafeRead(path: string): Promise<unknown> {
-    const data = await Fs.readFile(path, { flag: 'r', encoding: 'utf8' });
+    const data = await this.readFile(path);
     this.logService.warn({
       source: 'core',
       message: `Unsafe reading of file "${path}"`,
+      meta: { 'file.path': path },
     });
-    return this.deserialize(data);
+    return this.deserialize(data, path);
   }
 
   /**
-   * Overwrites an existing file on disk
+   * Overwrites an existing file on disk, creating it when it is not there.
    *
-   * @todo Check how to error out if the file does not exist already
-   *
-   * @param data Data to write into the file
-   * @param path Path to the file to overwrite
-   * @param schema Schema of the file to validate against
    * @returns Validated content of the file from disk
    */
   public async update<T extends z.ZodTypeAny>(
@@ -118,23 +123,50 @@ export class JsonFileService extends AbstractService {
     const parsedData: z.output<T> = schema.parse(data);
     const string = this.serialize(parsedData);
     await Fs.writeFile(path, string, { flag: 'w', encoding: 'utf8' });
-    if (this.options.file.cache === true) {
+    if (this.cacheService.isEnabled) {
       this.cache.set(path, parsedData);
     }
-    this.logService.debug({
+    this.logService.info({
       source: 'core',
       message: `Updated file "${path}"`,
+      meta: { 'file.path': path },
     });
     return parsedData;
   }
 
   /**
+   * Deletes a file or a folder on disk. A path that does not exist is not
+   * an error and is not logged, since nothing was deleted.
+   *
+   * Every service deletes through this, so a deletion is recorded in one
+   * place and cannot serve what it removed: the cache is keyed by path,
+   * so a file read before it was deleted would otherwise still be handed
+   * out. A folder takes everything below it with it.
+   */
+  public async delete(path: string): Promise<void> {
+    if (await Fs.pathExists(path)) {
+      await Fs.remove(path);
+      this.logService.info({
+        source: 'core',
+        message: `Deleted "${path}"`,
+        meta: { 'file.path': path },
+      });
+    }
+    this.cache.delete(path);
+    const below = path + Path.sep;
+    for (const cached of this.cache.keys()) {
+      if (cached.startsWith(below)) {
+        this.cache.delete(cached);
+      }
+    }
+  }
+
+  /**
    * Clears the in-memory file cache.
    *
-   * Should be called after operations that modify files outside
-   * of JsonFileService (e.g. git pull, merge, branch switch or
-   * reset --hard), since the cache may hold stale data that no
-   * longer matches disk.
+   * Registered with `CacheService`. After anything that changes files outside
+   * this service, such as a pull, merge, switch or hard reset, call
+   * `CacheService.clear()` instead, which clears the slug indexes with it.
    */
   public clearCache(): void {
     const cleared = this.cache.size;
@@ -142,14 +174,53 @@ export class JsonFileService extends AbstractService {
     this.logService.debug({
       source: 'core',
       message: `Cleared JSON file cache (${cleared} elements)`,
+      meta: { 'elek.cache.cleared_count': cleared },
     });
+  }
+
+  /**
+   * Reads a file, answering a missing one with `CoreError.notFound`.
+   *
+   * This is the one place that knows a file is not there, and every entity
+   * read reaches it, so it is where the `NotFound` in the error table comes
+   * from. Without it Node's raw `ENOENT` travelled up to `fromUnknown`,
+   * which types everything it does not recognise as `Internal`, and a
+   * missing Entry answered 500.
+   *
+   * @see ../../docs/error-handling.md
+   */
+  private async readFile(path: string): Promise<string> {
+    try {
+      return await Fs.readFile(path, { flag: 'r', encoding: 'utf8' });
+    } catch (error) {
+      if (isFileNotFound(error)) {
+        throw CoreError.notFound(`File "${path}" does not exist`);
+      }
+      throw error;
+    }
   }
 
   private serialize(data: unknown): string {
     return JSON.stringify(data, null, 2);
   }
 
-  private deserialize(data: string): unknown {
-    return JSON.parse(data);
+  /**
+   * Parses a file's content, naming the file rather than quoting it.
+   *
+   * V8 quotes a window of the input back in its own parse failure, and for
+   * an entity file that window is authored content. The path says which
+   * file broke, the cause keeps what V8 said for whoever debugs it.
+   *
+   * @see ../../contributing/logging.md
+   */
+  private deserialize(data: string, path: string): unknown {
+    try {
+      return JSON.parse(data);
+    } catch (error) {
+      throw CoreError.internal(
+        `File "${path}" does not hold valid JSON`,
+        error
+      );
+    }
   }
 }

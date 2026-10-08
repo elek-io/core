@@ -12,19 +12,31 @@ import {
   type ServiceType,
   type Uuid,
 } from '../schema/index.js';
-import { files, folders, isNotEmpty, type PathTo } from '../util/node.js';
+import {
+  files,
+  folders,
+  isFileNotFound,
+  isNotEmpty,
+  type PathTo,
+} from '../util/node.js';
 import { AbstractService } from './AbstractService.js';
+import type { CacheService } from './CacheService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * A service for entities that are stored as files or folders on disk.
- * Provides listing of file and folder references.
+ * The base every entity service extends, for entities stored as files or
+ * folders on disk. It hands them three things:
+ *
+ * - git-backed writes that roll the working tree back when the body throws
+ * - list reads that tolerate a single unreadable file rather than failing
+ * - reference listing over a Project's folders
  */
 export abstract class AbstractEntityService extends AbstractService {
   protected readonly gitService: GitService;
   protected readonly jsonFileService: JsonFileService;
+  protected readonly cacheService: CacheService;
 
   protected constructor(
     type: ServiceType,
@@ -32,15 +44,22 @@ export abstract class AbstractEntityService extends AbstractService {
     pathTo: PathTo,
     logService: LogService,
     gitService: GitService,
-    jsonFileService: JsonFileService
+    jsonFileService: JsonFileService,
+    cacheService: CacheService
   ) {
     super(type, options, pathTo, logService);
     this.gitService = gitService;
     this.jsonFileService = jsonFileService;
+    this.cacheService = cacheService;
   }
 
   /**
-   * Reads and parses the project file for the given project id.
+   * Reads and parses `project.json`, through `JsonFileService`'s cache when
+   * caching is on.
+   *
+   * A missing or schema-invalid file raises a raw fs error or a `ZodError`
+   * here, becoming a `CoreError` only once the `validated()` boundary
+   * converts it. So callers must not reach for this outside one.
    */
   protected async readProjectFile(projectId: Uuid): Promise<ProjectFile> {
     return this.jsonFileService.read(
@@ -61,16 +80,15 @@ export abstract class AbstractEntityService extends AbstractService {
   }
 
   /**
-   * Wraps an operation with automatic git rollback on failure.
+   * Runs an operation and, when it throws, removes every `cleanupPaths` entry
+   * and resets the working tree before re-throwing the original error.
    *
-   * On error:
-   * 1. Removes any files/dirs specified in `cleanupPaths` (for newly created files)
-   * 2. Runs `git reset --hard HEAD` to restore the working tree
-   * 3. Re-throws the original error
+   * The reset is `git reset --hard HEAD`, so it is repository wide and keeps
+   * whatever the operation already committed. A body that has to be
+   * all-or-nothing therefore makes exactly one commit. It also leaves
+   * untracked files alone, which is what `cleanupPaths` is for.
    *
-   * @param projectPath  Path to the project's git repository
-   * @param operation    The async operation to execute
-   * @param cleanupPaths Optional paths to remove before git reset (for create operations)
+   * @see ../../contributing/error-handling-internals.md
    */
   protected async withGitRollback<T>(
     projectPath: string,
@@ -85,21 +103,31 @@ export abstract class AbstractEntityService extends AbstractService {
           this.logService.error({
             source: 'core',
             message: `Failed to remove "${cleanupPath}" during rollback: ${e instanceof Error ? e.message : String(e)}`,
+            meta: {
+              'file.path': cleanupPath,
+              'exception.message': e instanceof Error ? e.message : String(e),
+            },
           })
         );
       }
       try {
-        // A hard reset restores files on disk and clears the JSON file cache
+        // A hard reset restores files on disk and clears every cache
         // (handled centrally in GitService), so cached contents stay in sync
         await this.gitService.reset(projectPath, 'hard', 'HEAD');
       } catch (resetError) {
         this.logService.error({
           source: 'core',
           message: `Failed to reset working tree during rollback, manual git reset may be needed: ${resetError instanceof Error ? resetError.message : String(resetError)}`,
+          meta: {
+            'exception.message':
+              resetError instanceof Error
+                ? resetError.message
+                : String(resetError),
+          },
         });
-        // The reset did not run to completion, so it could not clear the cache
-        // itself. Drop it defensively since disk state is now uncertain
-        this.jsonFileService.clearCache();
+        // The reset did not run to completion, so it could not clear the
+        // caches itself. Drop them defensively since disk state is now uncertain
+        this.cacheService.clear();
       }
       throw error;
     }
@@ -119,7 +147,7 @@ export abstract class AbstractEntityService extends AbstractService {
           source: 'core',
           message: `collectResults: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
           meta: {
-            error:
+            'exception.message':
               r.reason instanceof Error ? r.reason.message : String(r.reason),
           },
         });
@@ -131,9 +159,13 @@ export abstract class AbstractEntityService extends AbstractService {
   /**
    * Returns a list of all file references of given project and type
    *
-   * @param type File type of the references wanted
-   * @param projectId Project to get all asset references from
-   * @param collectionId Only needed when requesting files of type "Entry"
+   * Every type but `project` needs a `projectId`, and `entry` needs a
+   * `collectionId` as well. A missing one throws `BadRequest`, an
+   * unsupported type `Internal`, and a directory that is not there
+   * `NotFound`.
+   *
+   * A file or folder whose name does not parse is warned about and dropped
+   * rather than failing the list.
    */
   protected async listReferences(
     type: ObjectType,
@@ -190,7 +222,7 @@ export abstract class AbstractEntityService extends AbstractService {
   }
 
   private async getFolderReferences(path: string): Promise<FileReference[]> {
-    const possibleFolders = await folders(path);
+    const possibleFolders = await folders(path).catch(notFoundIfMissing(path));
     const results = possibleFolders.map((possibleFolder) => {
       const parsed = fileReferenceSchema.safeParse({
         id: possibleFolder.name,
@@ -203,6 +235,7 @@ export abstract class AbstractEntityService extends AbstractService {
       this.logService.warn({
         source: 'core',
         message: `Function "getFolderReferences" is ignoring folder "${possibleFolder.name}" in "${path}" as it does not match the expected format`,
+        meta: { 'file.name': possibleFolder.name, 'file.directory': path },
       });
 
       return null;
@@ -226,7 +259,7 @@ export abstract class AbstractEntityService extends AbstractService {
     path: string,
     ignore: string[]
   ): Promise<FileReference[]> {
-    const possibleFiles = await files(path);
+    const possibleFiles = await files(path).catch(notFoundIfMissing(path));
     const results = possibleFiles.map((possibleFile) => {
       if (ignore.includes(possibleFile.name)) {
         return null;
@@ -246,6 +279,7 @@ export abstract class AbstractEntityService extends AbstractService {
       this.logService.warn({
         source: 'core',
         message: `Function "getFileReferences" is ignoring file "${possibleFile.name}" in "${path}" as it does not match the expected format`,
+        meta: { 'file.name': possibleFile.name, 'file.directory': path },
       });
 
       return null;
@@ -253,4 +287,21 @@ export abstract class AbstractEntityService extends AbstractService {
 
     return results.filter(isNotEmpty);
   }
+}
+
+/**
+ * Turns a missing directory into the `NotFound` an absent entity answers
+ * with, so listing the Entries of a Collection that is not there fails the
+ * same way reading it does. Anything else a read of the directory raises is
+ * a real failure and passes through.
+ *
+ * @see ../../docs/error-handling.md
+ */
+function notFoundIfMissing(path: string): (error: unknown) => never {
+  return (error) => {
+    if (isFileNotFound(error)) {
+      throw CoreError.notFound(`Directory "${path}" does not exist`);
+    }
+    throw error;
+  };
 }

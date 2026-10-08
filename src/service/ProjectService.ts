@@ -20,6 +20,7 @@ import {
   projectFileSchema,
   projectFolderSchema,
   projectHistorySchema,
+  projectSchema,
   readProjectSchema,
   serviceTypeSchema,
   setRemoteOriginUrlProjectSchema,
@@ -52,7 +53,11 @@ import {
   type UpgradeProjectProps,
   type VersionedGitTag,
 } from '../schema/index.js';
-import { applyMigrations, projectMigrations } from './migrations/index.js';
+import {
+  applyMigrations,
+  migrating,
+  projectMigrations,
+} from './migrations/index.js';
 import { isNotEmpty, PROVISIONED_MARKER } from '../util/node.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
@@ -62,6 +67,7 @@ import type { ComponentService } from './ComponentService.js';
 import type { EntryService } from './EntryService.js';
 import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { PathTo } from '../util/node.js';
@@ -91,7 +97,11 @@ interface ProvisionFetch {
 }
 
 /**
- * Service that manages CRUD functionality for Project files on disk
+ * A Project is a git repository under the data directory, and every mutating
+ * call commits. Beyond create, read, update and delete this service clones,
+ * provisions, synchronizes, upgrades and switches branches.
+ *
+ * @see ../../docs/git-and-sync.md
  */
 export class ProjectService
   extends AbstractEntityService
@@ -110,6 +120,7 @@ export class ProjectService
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService,
     assetService: AssetService,
     collectionService: CollectionService,
@@ -123,7 +134,8 @@ export class ProjectService
       pathTo,
       logService,
       gitService,
-      jsonFileService
+      jsonFileService,
+      cacheService
     );
 
     this.coreVersion = coreVersion;
@@ -135,7 +147,16 @@ export class ProjectService
   }
 
   /**
-   * Creates a new Project
+   * Creates the Project folder with its `assets`, `collections`, `components`
+   * and `lfs` subfolders, writes `.gitignore` and `.gitattributes`, then
+   * initializes a git repository whose first commit lands on `production`.
+   * The Project is left checked out on `work`.
+   *
+   * Throws `PreconditionFailed` in read-only mode and `Unauthorized` when no
+   * User is set. A failure at any step removes the half-created folder, which
+   * is the only rollback available while there is no `HEAD` to reset to.
+   *
+   * @see ../../docs/git-and-sync.md
    */
   public create(props: CreateProjectProps): Promise<Project> {
     return this.mutating(
@@ -184,7 +205,24 @@ export class ProjectService
           );
           return await this.toProject(projectFile);
         } catch (error) {
-          await this.delete({ id, force: true });
+          // Not withGitRollback and not delete(). For most of the window
+          // above there is no HEAD for a reset to reach, and delete() asks
+          // git about a folder that may not be a repository yet, whose
+          // failure would replace the one the caller has to see
+          await Fs.remove(projectPath).catch((removeError: unknown) =>
+            this.logService.error({
+              source: 'core',
+              message: `Failed to remove "${projectPath}" after a failed create, it has to be removed by hand`,
+              meta: {
+                'file.path': projectPath,
+                'exception.message':
+                  removeError instanceof Error
+                    ? removeError.message
+                    : String(removeError),
+              },
+            })
+          );
+          this.cacheService.clear();
           throw error;
         }
       }
@@ -192,11 +230,13 @@ export class ProjectService
   }
 
   /**
-   * Clones a Project by URL
+   * Clones a Project by URL into a full working copy for editing: whole
+   * history and every LFS object. To consume content in a build, see
+   * `provision()` instead.
    *
-   * Creates a full working copy for editing: whole history, every LFS
-   * object and a User set for committing. To consume content in a
-   * build, see provision().
+   * Throws `Unauthorized` when no User is set and `Conflict` when the Project
+   * id already exists locally. On a read-only Core the clone runs without a
+   * git identity, so the copy is readable but cannot commit.
    */
   public clone(props: CloneProjectProps): Promise<Project> {
     return this.validated('clone', cloneProjectSchema, props, async () => {
@@ -221,45 +261,26 @@ export class ProjectService
         await Fs.move(tmpProjectPath, projectPath);
         // The clone changed location, cached reads must not serve
         // its tmp paths
-        this.jsonFileService.clearCache();
+        this.cacheService.clear();
         return await this.toProject(projectFile);
       } catch (error) {
-        await Fs.remove(tmpProjectPath);
+        await this.jsonFileService.delete(tmpProjectPath);
         throw error;
       }
     });
   }
 
   /**
-   * Ensures a provisioned copy of the Project exists in the data
-   * directory at the given ref, provisioning it from the remote when
-   * needed. Idempotent, meant to run before every build.
+   * Ensures a provisioned copy of the Project exists in the data directory at
+   * the given ref, provisioning it from the remote when needed. Idempotent,
+   * meant to run before every build.
    *
-   * A provisioned copy consumes content, it is not for editing. It is
-   * created as a build-mode clone (shallow, single ref, only the LFS
-   * objects of the checked-out ref) and later runs fetch and hard-reset
-   * it, so a reachable remote decides what it holds. To work on a Project, use
-   * clone() instead: a working copy with full history, every LFS
-   * object and a User set for committing. clone() throws if the
-   * Project is already present, provision() converges it.
+   * A provisioned copy consumes content, it is not for editing. Use `clone()`
+   * to work on a Project instead. Runs on a read-only Core without a User.
+   * A refresh keeps building when the remote cannot be reached, and the
+   * returned `source` states where the content came from.
    *
-   * Three cases, decided by the provisioning marker:
-   * - Missing: provisioned as a fresh build-mode clone, marker written.
-   * - Present with the marker: fetched and hard-reset to the ref.
-   * - Present without the marker: a working copy managed by another
-   *   application (e.g. Desktop), left untouched.
-   *
-   * `ref` is a channel (`production` for the latest Release,
-   * `preview` for the latest preview Release, `draft` for the tip of
-   * the work branch) or an exact Release version, default
-   * `production`. Runs on a read-only Core without a User being set.
-   *
-   * A refresh keeps building when the remote cannot be reached: an
-   * exact version the copy already holds skips the network entirely,
-   * and a failed fetch falls back to the copy on disk with a loud
-   * warning. The returned `source` states which of the two happened.
-   *
-   * @see docs/provisioning.md and docs/git-and-sync.md
+   * @see ../../docs/provisioning.md
    */
   public provision(props: ProvisionProjectProps): Promise<ProvisionResult> {
     return this.validated(
@@ -283,6 +304,7 @@ export class ProjectService
           this.logService.info({
             source: 'core',
             message: `Project "${id}" is managed by another application, leaving it untouched`,
+            meta: { 'elek.project.id': id },
           });
         } else if (!exists) {
           await this.provisionClone(id, url, ref);
@@ -291,6 +313,7 @@ export class ProjectService
           this.logService.info({
             source: 'core',
             message: `Project "${id}" already holds the pinned version ${ref}, skipping the remote`,
+            meta: { 'elek.project.id': id, 'elek.git.ref': ref },
           });
         } else {
           try {
@@ -310,7 +333,11 @@ export class ProjectService
         let warning: string | null = null;
         if (cause !== null) {
           warning = await this.composeFallbackWarning(project, ref, cause);
-          this.logService.warn({ source: 'core', message: warning });
+          this.logService.warn({
+            source: 'core',
+            message: warning,
+            meta: { 'elek.project.id': id, 'elek.git.ref': ref },
+          });
         }
 
         return { project, source, warning };
@@ -540,9 +567,9 @@ export class ProjectService
       await Fs.move(stagingPath, this.pathTo.project(id));
       // The staged copy changed location, cached reads must not
       // serve its staging paths
-      this.jsonFileService.clearCache();
+      this.cacheService.clear();
     } catch (error) {
-      await Fs.remove(stagingPath);
+      await this.jsonFileService.delete(stagingPath);
       throw error;
     }
   }
@@ -748,7 +775,11 @@ export class ProjectService
   }
 
   /**
-   * Returns the commit history of a Project
+   * `history` holds the commits that touched `project.json` alone, while
+   * `fullHistory` holds every commit in the repository, Assets, Collections
+   * and Entries included.
+   *
+   * Both are read straight from git, with no pagination.
    */
   public history(props: ProjectHistoryProps): Promise<ProjectHistoryResult> {
     return this.validated('history', projectHistorySchema, props, async () => {
@@ -763,7 +794,13 @@ export class ProjectService
   }
 
   /**
-   * Updates given Project
+   * Writes `project.json` and commits it.
+   *
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy.
+   * A failure between the write and the commit rolls the working tree back,
+   * so the Project on disk is the one before the call.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public update(props: UpdateProjectProps): Promise<Project> {
     return this.mutating(
@@ -784,25 +821,31 @@ export class ProjectService
           updated: datetime(),
         };
 
-        await this.jsonFileService.update(
-          projectFile,
-          filePath,
-          projectFileSchema
-        );
-        await this.gitService.add(projectPath, [filePath]);
-        await this.gitService.commit(projectPath, {
-          method: 'update',
-          reference: { objectType: 'project', id: projectFile.id },
+        return this.withGitRollback(projectPath, async () => {
+          await this.jsonFileService.update(
+            projectFile,
+            filePath,
+            projectFileSchema
+          );
+          await this.gitService.add(projectPath, [filePath]);
+          await this.gitService.commit(projectPath, {
+            method: 'update',
+            reference: { objectType: 'project', id: projectFile.id },
+          });
+          return await this.toProject(projectFile);
         });
-        return await this.toProject(projectFile);
       }
     );
   }
 
   /**
-   * Upgrades given Project to the current version of Core
+   * Migrates and commits every Asset, Component, Collection and Entry file on
+   * a temporary `upgrade/core-<from>-to-<to>` branch, squash-merges that into
+   * `work` and records an `upgrade` tag. A failure leaves `work` untouched.
    *
-   * Needed when a new Core version is requiring changes to existing files or structure.
+   * Throws `UpgradeFailed` when the Project was written by a newer Core or is
+   * already up to date without `force`, and `PreconditionFailed` in read-only
+   * mode and on a provisioned copy.
    */
   public upgrade(props: UpgradeProjectProps): Promise<void> {
     return this.mutating('upgrade', upgradeProjectSchema, props, async () => {
@@ -830,6 +873,11 @@ export class ProjectService
       this.logService.info({
         source: 'core',
         message: `Attempting to upgrade Project "${props.id}" from Core version ${currentProjectFile.coreVersion} to ${this.coreVersion}`,
+        meta: {
+          'elek.project.id': props.id,
+          'elek.upgrade.from_version': this.coreVersionOf(currentProjectFile),
+          'elek.upgrade.to_version': this.coreVersion,
+        },
       });
 
       const upgradeBranchName = `upgrade/core-${currentProjectFile.coreVersion}-to-${this.coreVersion}`;
@@ -897,8 +945,9 @@ export class ProjectService
           source: 'core',
           message: `Successfully upgraded Project "${props.id}" to Core version "${this.coreVersion}"`,
           meta: {
-            previous: currentProjectFile,
-            migrated: migratedProjectFile,
+            'elek.project.id': props.id,
+            'elek.upgrade.from_version': this.coreVersionOf(currentProjectFile),
+            'elek.upgrade.to_version': this.coreVersion,
           },
         });
       } catch (error) {
@@ -906,6 +955,19 @@ export class ProjectService
         throw error;
       }
     });
+  }
+
+  /**
+   * Reads the Core version out of an entity file that has not been validated
+   * against a schema yet, without asserting a shape onto it.
+   *
+   * The upgrade path reads files that may predate the current schema, so
+   * `unsafeRead` hands back `unknown` on purpose.
+   */
+  private coreVersionOf(file: unknown): string | null {
+    const coreVersionCarrier = z.object({ coreVersion: z.string() });
+    const parsed = coreVersionCarrier.safeParse(file);
+    return parsed.success ? parsed.data.coreVersion : null;
   }
 
   /**
@@ -1023,6 +1085,14 @@ export class ProjectService
   }
 
   public branches = {
+    /**
+     * Fetches from `origin` first when the Project has one, so `remote`
+     * reflects the remote as of the call and an unreachable remote fails the
+     * call rather than returning a stale list. A Project without an origin
+     * skips the fetch and returns local branches only.
+     *
+     * Remote entries carry their `origin/` prefix.
+     */
     list: (
       props: ListBranchesProjectProps
     ): Promise<{ local: string[]; remote: string[] }> => {
@@ -1041,6 +1111,18 @@ export class ProjectService
         }
       );
     },
+    /**
+     * The checked-out branch name, or an empty string when HEAD is detached,
+     * which is the state a provisioned copy sits in on a Release tag.
+     *
+     * Reads local git only, no network and no side effect.
+     */
+    /**
+     * The checked-out branch name, or an empty string when HEAD is detached,
+     * which is the state a provisioned copy sits in on a Release tag.
+     *
+     * Reads local git only, no network and no side effect.
+     */
     current: (props: CurrentBranchProjectProps): Promise<string> => {
       return this.validated(
         'branches.current',
@@ -1052,6 +1134,15 @@ export class ProjectService
         }
       );
     },
+    /**
+     * Moves the Project's working tree, so every subsequent create, update
+     * and delete commits to whatever branch is now current. Switching back to
+     * `work` is the caller's job.
+     *
+     * Throws `PreconditionFailed` on a provisioned copy, and git fails on
+     * uncommitted changes unless `options.discardChanges` is set, which
+     * throws that work away. Not blocked in read-only mode.
+     */
     switch: (props: SwitchBranchProjectProps): Promise<void> => {
       return this.validated(
         'branches.switch',
@@ -1074,7 +1165,9 @@ export class ProjectService
   /**
    * Updates the remote origin URL of given Project
    *
-   * @todo maybe add this logic to the update method
+   * Its own method rather than part of `update`, because a remote is git state
+   * rather than a field of `project.json`. `remoteOriginUrl` is derived in
+   * `toProject` by asking git, so `update` has no file to write it into.
    */
   public setRemoteOriginUrl(
     props: SetRemoteOriginUrlProjectProps
@@ -1153,23 +1246,13 @@ export class ProjectService
    * Integrates remote changes of `origin` and pushes local commits, refusing to
    * push a state that would strand a dangling reference.
    *
-   * A rebase can integrate two individually valid changes (one client deletes a
-   * target after the last reference to it is removed, another adds a reference
-   * to that same target) into a tree with a dangling reference and no textual
-   * conflict. To stop that state ever reaching the shared remote, the integrated
-   * tree is scanned for dangling references BEFORE the push and the push is
-   * blocked if any are found (`ReferenceService.findDanglingReferences`). The
-   * integrated commits stay local so the user can repair them through Core's own
-   * (integrity-gated) delete/update and synchronize again.
+   * The integrated tree is scanned for dangling references before the push, and
+   * the push is blocked if any are found. The integrated commits stay local, so
+   * they can be repaired through Core's own delete or update and synchronized
+   * again. A blocked sync performs no remote mutation, and the scope is the
+   * current `work` tree only.
    *
-   * The transaction is: refuse on a dirty tree, then fetch, controlled rebase
-   * (a textual conflict aborts cleanly rather than leaving the repository
-   * mid-rebase), top up LFS, scan, and push inside a bounded non-fast-forward
-   * retry loop. A blocked sync performs no remote mutation, since every gate
-   * throws before the push.
-   *
-   * Scope is the current `work` tree only; released `production` history is not
-   * reconciled here.
+   * @see ../../contributing/reference-integrity.md
    */
   public synchronize(props: SynchronizeProjectProps): Promise<void> {
     return this.mutating(
@@ -1184,10 +1267,10 @@ export class ProjectService
         // A rebase against uncommitted changes fails and could cost the user
         // work, so refuse a sync on a dirty tree before touching the remote.
         const uncommitted = await this.gitService.status(projectPath);
-        if (uncommitted.length > 0) {
+        if (!uncommitted.isClean) {
           throw CoreError.preconditionFailed(
             `Project "${props.id}" has uncommitted changes. Commit or discard them before synchronizing.`,
-            uncommitted
+            uncommitted.files
           );
         }
 
@@ -1240,11 +1323,14 @@ export class ProjectService
   }
 
   /**
-   * Deletes given Project
+   * Removes the whole Project folder, its history included, rather than only
+   * the Project file. Throws when the Project exists nowhere but here, or
+   * holds commits the remote does not, unless `force` is set.
    *
-   * Deletes the whole Project folder including the history, not only the config file.
-   * Throws in case a Project is only available locally and could be lost forever,
-   * or changes are not pushed to a remote yet.
+   * The guards run first, so a refused delete never touches the working tree,
+   * and only the removal itself rolls back.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public delete(props: DeleteProjectProps): Promise<void> {
     return this.mutating('delete', deleteProjectSchema, props, async () => {
@@ -1256,7 +1342,7 @@ export class ProjectService
         this.pathTo.projectProvisionedMarker(props.id)
       );
       if (isProvisioned) {
-        await Fs.remove(this.pathTo.project(props.id));
+        await this.jsonFileService.delete(this.pathTo.project(props.id));
         return;
       }
 
@@ -1279,12 +1365,21 @@ export class ProjectService
         }
       }
 
-      await Fs.remove(this.pathTo.project(props.id));
+      const projectPath = this.pathTo.project(props.id);
+      await this.withGitRollback(projectPath, async () => {
+        await this.jsonFileService.delete(projectPath);
+      });
     });
   }
 
   /**
-   * Lists outdated Projects that need to be upgraded
+   * Walks every Project folder in the data directory and returns the
+   * in-memory migrated `ProjectFile` of each Project older than the installed
+   * Core. Writes nothing.
+   *
+   * A Project written by a newer Core is skew rather than outdated and is
+   * left out, and one whose file cannot be read or parsed is skipped silently
+   * rather than throwing.
    */
   public async listOutdated(): Promise<ProjectFile[]> {
     const projectReferences = await this.listReferences(
@@ -1315,6 +1410,15 @@ export class ProjectService
     return results.filter(isNotEmpty);
   }
 
+  /**
+   * One page of the Projects in the data directory, provisioned copies
+   * included, in whatever order the filesystem returns the folders.
+   *
+   * `limit` defaults to 15 and `limit: 0` returns everything from `offset`.
+   * `total` counts every Project folder while `list` holds only those that
+   * could be read, so a Project whose `project.json` is missing or fails
+   * validation is logged and dropped and a page can be short.
+   */
   public async list(
     props?: ListProjectsProps
   ): Promise<PaginatedList<Project>> {
@@ -1351,6 +1455,11 @@ export class ProjectService
     };
   }
 
+  /**
+   * Counts the Project folders in the data directory, so it matches the
+   * `total` a `list` reports and can exceed the number of Projects `list`
+   * manages to return. Touches no git and reads no `project.json`.
+   */
   public async count(): Promise<number> {
     const refs = await this.listReferences(objectTypeSchema.enum.project);
     return refs.length;
@@ -1358,22 +1467,33 @@ export class ProjectService
 
   /**
    * Checks if given object is of type Project
+   *
+   * Validates against `projectSchema` rather than the file schema, so the
+   * `remoteOriginUrl` and `isProvisioned` a `Project` carries have to be
+   * there. A `project.json` read straight off disk is a `ProjectFile` and
+   * does not pass.
    */
   public isProject(obj: unknown): obj is Project {
-    return projectFileSchema.safeParse(obj).success;
+    return projectSchema.safeParse(obj).success;
   }
 
   /**
-   * Migrates an potentially outdated Project file to the current schema
+   * Migrates a potentially outdated Project file to the current schema.
+   *
+   * Throws `BadRequest` when the file does not match what Core expects, with
+   * the underlying `ZodError` as its cause, and `VersionSkew` when it was
+   * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedFile: unknown): ProjectFile {
-    const loose = migrateProjectSchema.parse(potentiallyOutdatedFile);
-    const migrated = applyMigrations(
-      loose,
-      projectMigrations,
-      this.coreVersion
-    );
-    return projectFileSchema.parse(migrated);
+    return migrating('Project', () => {
+      const loose = migrateProjectSchema.parse(potentiallyOutdatedFile);
+      const migrated = applyMigrations(
+        loose,
+        projectMigrations,
+        this.coreVersion
+      );
+      return projectFileSchema.parse(migrated);
+    });
   }
 
   /**
@@ -1427,7 +1547,6 @@ export class ProjectService
    * Joined with LF instead of `Os.EOL`, so the file is byte identical no
    * matter which OS created the Project.
    *
-   * @todo Add general things to ignore
    * @see https://github.com/github/gitignore/tree/master/Global
    */
   private async createGitignore(path: string): Promise<void> {
@@ -1440,6 +1559,8 @@ export class ProjectService
       '!/**/.gitkeep',
       '',
       '# elek.io related ignores',
+      // Core stopped writing these, they are named so a copy an older Core
+      // left behind does not show up as a change. See docs/storage-layout.md
       'collections/slug.index.json',
       'components/slug.index.json',
     ];
@@ -1449,18 +1570,12 @@ export class ProjectService
   /**
    * Writes the Projects .gitattributes file to disk
    *
-   * Checks out every text file with LF on every platform. Core writes LF and
-   * is the only writer inside a Project, but `core.autocrlf` is a per machine
-   * git setting Core does not control, so without this a Windows checkout can
-   * still convert files to CRLF. A Project shared across operating systems
-   * would then conflict on every line of every file.
+   * Checks out every text file with LF on every platform, so a Project shared
+   * across operating systems does not conflict on every line. Tracks every
+   * binary Asset under `lfs/` with Git LFS, keeping the `.gitkeep` placeholder
+   * out of it, since the last matching pattern wins.
    *
-   * Tracks every binary Asset under `lfs/` with Git LFS so they are stored as
-   * pointers in history while the bytes are offloaded. The `.gitkeep`
-   * placeholder is kept out of LFS (last matching pattern wins, so the
-   * catch-all above must stay first).
-   *
-   * @see https://git-lfs.com
+   * @see ../../docs/storage-layout.md
    */
   private async createGitattributes(path: string): Promise<void> {
     const lines = [
@@ -1488,8 +1603,11 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${assetFilePath}"`,
           meta: {
-            previous: prevAssetFile,
-            migrated: migratedAssetFile,
+            'elek.project.id': projectId,
+            'elek.object.type': objectType,
+            'file.path': assetFilePath,
+            'elek.upgrade.from_version': this.coreVersionOf(prevAssetFile),
+            'elek.upgrade.to_version': this.coreVersion,
           },
         });
         return;
@@ -1511,8 +1629,11 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${componentFilePath}"`,
           meta: {
-            previous: prevComponentFile,
-            migrated: migratedComponentFile,
+            'elek.project.id': projectId,
+            'elek.object.type': objectType,
+            'file.path': componentFilePath,
+            'elek.upgrade.from_version': this.coreVersionOf(prevComponentFile),
+            'elek.upgrade.to_version': this.coreVersion,
           },
         });
         return;
@@ -1534,8 +1655,11 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${collectionFilePath}"`,
           meta: {
-            previous: prevCollectionFile,
-            migrated: migratedCollectionFile,
+            'elek.project.id': projectId,
+            'elek.object.type': objectType,
+            'file.path': collectionFilePath,
+            'elek.upgrade.from_version': this.coreVersionOf(prevCollectionFile),
+            'elek.upgrade.to_version': this.coreVersion,
           },
         });
         return;
@@ -1563,8 +1687,15 @@ export class ProjectService
           source: 'core',
           message: `Upgraded ${objectType} "${entryFilePath}"`,
           meta: {
-            previous: prevEntryFile,
-            migrated: migratedEntryFile,
+            'elek.project.id': projectId,
+            'elek.collection.id': collectionId,
+            'elek.object.type': objectType,
+            'file.path': entryFilePath,
+            'elek.upgrade.from_version': this.coreVersionOf(prevEntryFile),
+            'elek.upgrade.to_version': this.coreVersion,
+            'elek.entry.value.count': Object.keys(migratedEntryFile.values)
+              .length,
+            'elek.entry.value.slugs': Object.keys(migratedEntryFile.values),
           },
         });
         return;

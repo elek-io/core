@@ -1,4 +1,4 @@
-# elek.io Core Documentation
+# elek.io Core documentation
 
 Consumer documentation for `@elek-io/core`. These docs ship inside the published package, so a developer or AI coding agent always has version-matched references for the exact Core version in use, with no network lookup.
 
@@ -33,3 +33,4 @@ New to elek.io Core? Read [`concepts.md`](./concepts.md) for the data model, the
 - [`git-and-sync.md`](./git-and-sync.md) - the branch model, commits and synchronizing with a remote
 - [`storage-layout.md`](./storage-layout.md) - where Projects and their files live on disk
 - [`error-handling.md`](./error-handling.md) - `CoreError` and how to catch failures
+- [`reporting.md`](./reporting.md) - sending a report to elek.io Cloud, and handing a window of log files over

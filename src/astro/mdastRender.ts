@@ -1,30 +1,5 @@
 /// <reference types="astro/astro-jsx" />
 
-/**
- * Astro-bound `mdastRender`. Takes an `MdAstRoot` and a renderers override
- * object; returns an Astro JSX element ready to interpolate in an `.astro`
- * file.
- *
- * Three keys are required from the consumer (`html`, `assetReference`,
- * `entryReference`) — defaults can't be safe and correct for those, and
- * content editors can flip the corresponding `features` flags or extend
- * `ofCollections` at any time, so the type system forces a documented
- * decision per key. Choosing `() => null` is valid and documents "render
- * nothing if this ever appears."
- *
- * Every other node type has a default that emits a plain semantic HTML
- * element — no class names, no `rel`/`target`, no slug ids, no syntax
- * highlighting. Consumers override only what they want to change.
- *
- * Defaults are constructed via `renderTemplate` and `addAttribute`, the
- * same two functions the Astro compiler emits into every compiled
- * `.astro` file, so the result is a value Astro's `renderChild` renders
- * in any position. Building them from `astro/jsx-runtime` instead would
- * produce a vnode, which only the page-level render pass unwraps, so the
- * rendered markdown would collapse to "[object Object]" as soon as it
- * sat inside an `.astro` component. See contributing/astro-entry.md.
- */
-
 import { renderTemplate, addAttribute } from 'astro/runtime/server/index.js';
 import {
   mdastRender as primitive,
@@ -67,6 +42,11 @@ function renderHeading(
   }
 }
 
+/**
+ * The default renderer for every node type that has a safe one, so a consumer
+ * overrides only what they care about. Spread under an override object, which
+ * is what `mdastRender` below does.
+ */
 export const astroDefaults: Pick<
   MdastRenderersBase<AstroElement>,
   DefaultedRendererKey
@@ -102,6 +82,16 @@ export const astroDefaults: Pick<
     renderTemplate`<sup><a${addAttribute(`#fn-${node.identifier}`, 'href')}>${node.label ?? node.identifier}</a></sup>`,
 };
 
+/**
+ * Astro-bound `mdastRender`, returning something ready to interpolate in an
+ * `.astro` file. Overrides are merged over `astroDefaults` per key, so only
+ * `html`, `assetReference` and `entryReference` have to be supplied.
+ *
+ * The result is a `renderTemplate` output rather than a JSX vnode, which is
+ * what makes it render the same in a page, nested, and through a slot.
+ *
+ * @see ../../contributing/astro-entry.md
+ */
 export function mdastRender(
   root: MdAstRoot,
   overrides: MdastAstroRenderers

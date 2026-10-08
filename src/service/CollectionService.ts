@@ -32,6 +32,8 @@ import {
   type GitCommit,
   collectionHistorySchema,
   flattenFieldDefinitions,
+  componentFileSchema,
+  type ComponentResolver,
   type FieldDefinition,
   type ProjectLanguages,
   type Uuid,
@@ -44,20 +46,37 @@ import {
   type FieldChange,
 } from '../util/fieldDefinitionDiff.js';
 import {
+  assertResolutionSlugsAreKnown,
   transformEntryValues,
   type EntryIssue,
 } from '../util/entryTransform.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
-import { applyMigrations, collectionMigrations } from './migrations/index.js';
+import {
+  componentIdsOf,
+  preloadComponentResolver,
+} from '../util/componentResolver.js';
+import {
+  applyMigrations,
+  collectionMigrations,
+  migrating,
+} from './migrations/index.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * Service that manages CRUD functionality for Collection files on disk
+ * A Collection is the folder `collections/<uuid>/`, holding `collection.json`
+ * next to the Entries that belong to it. Every create, update and delete
+ * commits.
+ *
+ * Slug lookups and slug uniqueness go through an in-memory index, rebuilt by
+ * scanning the Collection folders when it misses.
+ *
+ * @see ../../docs/storage-layout.md
  */
 export class CollectionService
   extends AbstractSlugIndexedEntityService<CollectionFile>
@@ -87,6 +106,7 @@ export class CollectionService
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService,
     referenceService: ReferenceService
   ) {
@@ -96,6 +116,7 @@ export class CollectionService
       pathTo,
       logService,
       jsonFileService,
+      cacheService,
       gitService
     );
 
@@ -104,7 +125,11 @@ export class CollectionService
   }
 
   /**
-   * Resolves a UUID-or-slug string to a collection UUID.
+   * Resolves a UUID-or-slug string to a Collection UUID.
+   *
+   * Throws `NotFound` when the string matches neither a Collection folder nor
+   * an indexed slug. A UUID whose folder does not exist is not returned as
+   * is, it falls through to the slug lookup and throws.
    */
   public async resolveCollectionId(
     props: ResolveCollectionIdProps
@@ -152,10 +177,15 @@ export class CollectionService
 
         const index = await this.getSlugIndex(validatedProps.projectId);
 
-        // Enforce collection slug uniqueness via index
-        if (Object.values(index).includes(slugPlural)) {
+        // Enforce collection slug uniqueness via index. The clashing
+        // Collection is named by id, never by the slug the caller sent,
+        // which the service boundary would log. See contributing/logging.md
+        const clashing = Object.entries(index).find(
+          ([, existing]) => existing === slugPlural
+        );
+        if (clashing) {
           throw CoreError.conflict(
-            `Collection slug "${slugPlural}" is already in use by another collection`
+            `Collection slug is already in use by Collection "${clashing[0]}"`
           );
         }
 
@@ -187,9 +217,8 @@ export class CollectionService
           });
         }, [collectionPath]);
 
-        // Update the index (not git-tracked, self-heals on failure)
-        index[id] = slugPlural;
-        await this.safeWriteSlugIndex(validatedProps.projectId, index);
+        // The next lookup rebuilds from disk, which now holds the Collection
+        this.dropSlugIndex(validatedProps.projectId);
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toCollection(collectionFile) as T;
       }
@@ -237,7 +266,12 @@ export class CollectionService
   }
 
   /**
-   * Reads a Collection by its slug
+   * Reads a Collection by its slug, resolved through the slug index, which
+   * rebuilds from disk once on a miss. An unknown slug throws `NotFound`
+   * rather than returning null.
+   *
+   * `commitHash` is forwarded, so a slug can be read as it was at that
+   * commit.
    */
   public async readBySlug<T extends Collection = Collection>(
     props: ReadBySlugCollectionProps
@@ -254,7 +288,11 @@ export class CollectionService
   }
 
   /**
-   * Returns the commit history of a Collection
+   * The git log scoped to the Collection's own `collection.json`, newest
+   * first and unpaginated. An Entry-only commit never appears, while an
+   * update that cascades into Entries does.
+   *
+   * Reads git without touching the working tree.
    */
   public async history(props: CollectionHistoryProps): Promise<GitCommit[]> {
     return this.validated(
@@ -276,25 +314,16 @@ export class CollectionService
   }
 
   /**
-   * Updates given Collection
+   * Updates given Collection, enforcing Collection slug uniqueness.
    *
    * Field definitions are matched by `id`. Send back the `id` of every field
-   * definition you want to keep so Core matches it to the existing one and
-   * preserves the entry data stored under it, even across slug renames or type
-   * changes. A field definition with no `id` (or a changed `id`) is treated as
-   * new, so the old field and the entry data keyed to it is removed. Ids are
-   * caller-supplied (Core does not generate them), so always round-trip the
-   * ids you read.
+   * definition you want to keep, a missing or changed `id` counts as a new
+   * field and removes the Entry data keyed to the old one. Deterministic
+   * changes cascade automatically, a change that needs a decision throws
+   * `Conflict` with structured `EntryIssue[]` the caller can retry with
+   * `resolutions`.
    *
-   * Handles fieldDefinition change cascade:
-   * - Slug renames, field additions (with defaults), field removals, and
-   *   disallowed component/reference stripping are applied automatically.
-   * - Changes requiring user decisions (required field with no default,
-   *   type mismatches, constraint violations) throw CoreError.conflict()
-   *   with structured EntryIssue[] as cause.
-   * - The caller can retry with `resolutions` to resolve all issues.
-   *
-   * Also enforces collection slug uniqueness.
+   * @see ../../docs/schema-changes.md
    */
   public async update<T extends Collection = Collection>(
     props: UpdateCollectionProps
@@ -341,6 +370,8 @@ export class CollectionService
         );
         const changes = diffFieldDefinitions(oldFieldDefs, newFieldDefs);
 
+        assertResolutionSlugsAreKnown(resolutions, newFieldDefs);
+
         const newSlugPlural = slug(validatedProps.slug.plural);
 
         // If collection slug.plural changed, enforce uniqueness before mutating
@@ -375,6 +406,10 @@ export class CollectionService
                   entryId: Uuid;
                   values: Record<string, Value>;
                 }> = [];
+                const componentResolver = await this.buildComponentResolver(
+                  validatedProps.projectId,
+                  newFieldDefs
+                );
 
                 for (const entryReference of entryReferences) {
                   const entryResult = await this.transformAndWriteEntry({
@@ -386,6 +421,7 @@ export class CollectionService
                     changes,
                     languages,
                     resolutions,
+                    componentResolver,
                   });
 
                   allIssues.push(...entryResult.issues);
@@ -430,15 +466,36 @@ export class CollectionService
           });
         });
 
-        // Update index after successful commit
         if (prevCollectionFile.slug.plural !== newSlugPlural) {
-          const index = await this.getSlugIndex(validatedProps.projectId);
-          index[validatedProps.id] = newSlugPlural;
-          await this.safeWriteSlugIndex(validatedProps.projectId, index);
+          this.dropSlugIndex(validatedProps.projectId);
         }
 
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- T is the caller's narrowing claim, see contributing/linting.md
         return this.toCollection(collectionFile) as T;
+      }
+    );
+  }
+
+  /**
+   * Pre-loads every Component the given field definitions reach, so the
+   * cascade can build a schema for a dynamic field.
+   *
+   * Reads the Component files directly rather than through `ComponentService`,
+   * which a Collection does not hold. A working-tree read parses strictly and
+   * does not migrate, which is what that service would do here too.
+   */
+  private async buildComponentResolver(
+    projectId: Uuid,
+    fieldDefinitions: FieldDefinition[]
+  ): Promise<ComponentResolver> {
+    return preloadComponentResolver(
+      componentIdsOf(fieldDefinitions),
+      async (componentId) => {
+        const componentFile = await this.jsonFileService.read(
+          this.pathTo.componentFile(projectId, componentId),
+          componentFileSchema
+        );
+        return componentFile.fieldDefinitions;
       }
     );
   }
@@ -460,7 +517,7 @@ export class CollectionService
     );
     if (existingUuid && existingUuid[0] !== currentId) {
       throw CoreError.conflict(
-        `Collection slug "${newSlugPlural}" is already in use by another collection`
+        `Collection slug is already in use by Collection "${existingUuid[0]}"`
       );
     }
   }
@@ -481,6 +538,7 @@ export class CollectionService
     changes: FieldChange[];
     languages: ProjectLanguages;
     resolutions: UpdateCollectionProps['resolutions'];
+    componentResolver: ComponentResolver;
   }): Promise<{
     issues: EntryIssue[];
     entryId: Uuid;
@@ -497,6 +555,7 @@ export class CollectionService
       changes,
       languages,
       resolutions,
+      componentResolver,
     } = params;
 
     const entryFilePath = this.pathTo.entryFile(
@@ -517,7 +576,8 @@ export class CollectionService
       oldFieldDefs,
       newFieldDefs,
       changes,
-      languages
+      languages,
+      componentResolver
     );
 
     // Apply any provided resolutions. Not gated on transform
@@ -532,7 +592,11 @@ export class CollectionService
           (candidate) => candidate.slug === fieldSlug
         );
         if (fieldDef) {
-          const schema = getValueSchemaFromFieldDefinition(fieldDef, languages);
+          const schema = getValueSchemaFromFieldDefinition(
+            fieldDef,
+            languages,
+            componentResolver
+          );
           const parseResult = schema.safeParse(resolvedValue);
           if (!parseResult.success) {
             throw CoreError.badRequest(
@@ -625,16 +689,16 @@ export class CollectionService
   }
 
   /**
-   * Deletes given Collection (folder), including it's Entries
+   * Deletes the Collection folder, its Entries and its field definitions,
+   * which live inside `collection.json`. The Components a `dynamic` field
+   * definition referenced survive, they belong to the Project.
    *
-   * Blocks deletion if a surviving Entry outside this Collection still
-   * references into it (a flat reference field, an mdast node, or a reference
-   * nested in a `dynamic`/component block), which would otherwise leave a
-   * dangling reference behind. References between Entries that are all being
-   * deleted together do not block. The thrown `Conflict` carries the list of
-   * referring Entries, mirroring Asset and Entry delete protection.
+   * A surviving Entry outside this Collection that still references into it
+   * blocks the delete with `Conflict`, carrying the referring Entries, the
+   * same protection Asset and Entry delete carry. References between Entries
+   * that are all going together do not block.
    *
-   * The Fields that Collection used are not deleted.
+   * @see ../../contributing/reference-integrity.md
    */
   public async delete(props: DeleteCollectionProps): Promise<void> {
     return this.mutating(
@@ -666,7 +730,7 @@ export class CollectionService
         );
 
         await this.withGitRollback(projectPath, async () => {
-          await Fs.remove(collectionPath);
+          await this.jsonFileService.delete(collectionPath);
           await this.gitService.add(projectPath, [collectionPath]);
           await this.gitService.commit(projectPath, {
             method: 'delete',
@@ -674,14 +738,20 @@ export class CollectionService
           });
         });
 
-        // Remove from index (not git-tracked, self-heals on failure)
-        const index = await this.getSlugIndex(validatedProps.projectId);
-        delete index[validatedProps.id];
-        await this.safeWriteSlugIndex(validatedProps.projectId, index);
+        this.dropSlugIndex(validatedProps.projectId);
       }
     );
   }
 
+  /**
+   * One page of Collections, in whatever order the filesystem returns the
+   * folders rather than any sort.
+   *
+   * `limit` defaults to 15 and `limit: 0` returns everything from `offset`.
+   * `total` counts the Collection folders on disk while `list` holds only
+   * those that read and validate, so a `collection.json` failing its schema
+   * is dropped with a warning and the two numbers disagree.
+   */
   public async list<T extends Collection = Collection>(
     props: ListCollectionsProps
   ): Promise<PaginatedList<T>> {
@@ -722,6 +792,11 @@ export class CollectionService
     );
   }
 
+  /**
+   * Counts the UUID-named folders under `collections/` without reading or
+   * validating a single `collection.json`. Cheap, and higher than the length
+   * of what `list` returns whenever a file fails to parse.
+   */
   public async count(props: CountCollectionsProps): Promise<number> {
     return this.validated(
       'count',
@@ -738,31 +813,43 @@ export class CollectionService
   }
 
   /**
-   * Checks if given object is of type Collection
+   * Parses against the full Collection file schema, so `id`, `objectType`,
+   * `created`, `updated` and the field definition slug and slug-source
+   * refinements all have to be present and valid.
+   *
+   * A half-built object about to be passed to `create` therefore returns
+   * false. It never throws.
    */
   public isCollection(obj: unknown): obj is Collection {
     return collectionFileSchema.safeParse(obj).success;
   }
 
   /**
-   * Migrates an potentially outdated Collection file to the current schema
+   * Migrates a potentially outdated Collection file to the current schema.
+   *
+   * Throws `BadRequest` when the file does not match what Core expects, with
+   * the underlying `ZodError` as its cause, and `VersionSkew` when it was
+   * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedCollectionFile: unknown) {
-    const loose = migrateCollectionSchema.parse(
-      potentiallyOutdatedCollectionFile
-    );
-    const migrated = applyMigrations(
-      loose,
-      collectionMigrations,
-      this.coreVersion
-    );
-    return collectionFileSchema.parse(migrated);
+    return migrating('Collection', () => {
+      const loose = migrateCollectionSchema.parse(
+        potentiallyOutdatedCollectionFile
+      );
+      const migrated = applyMigrations(
+        loose,
+        collectionMigrations,
+        this.coreVersion
+      );
+      return collectionFileSchema.parse(migrated);
+    });
   }
 
   /**
-   * Creates an Collection from given CollectionFile
-   *
-   * @param collectionFile   The CollectionFile to convert
+   * The one seam between the on-disk `CollectionFile` and the returned
+   * `Collection`. Today it is a plain spread, because `Collection` is
+   * `collectionFileSchema.openapi('Collection')` and the two shapes are
+   * identical. It is kept for the point where they diverge.
    */
   private toCollection(collectionFile: CollectionFile): Collection {
     return {

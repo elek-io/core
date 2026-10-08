@@ -58,8 +58,44 @@ export type VersionedGitTag = GitTag & {
   message: Extract<GitTagMessage, { type: 'release' | 'preview' }>;
 };
 
+/**
+ * Narrows a `GitTag` to one carrying a Project version, so
+ * `.filter(isVersionedTag)` keeps the `release` and `preview` tags and drops
+ * the Core upgrade tags a Project's tag list also holds.
+ *
+ * An upgrade tag carries `coreVersion` and no `version`, so this guard is
+ * what makes `tag.message.version` reachable without a cast.
+ */
 export const isVersionedTag = (tag: GitTag): tag is VersionedGitTag =>
   tag.message.type === 'release' || tag.message.type === 'preview';
+
+/**
+ * One entry of `git status`, as porcelain v2 reported it.
+ *
+ * `path` is the path relative to the repository root, and a renamed entry
+ * carries its new path rather than the pair. `isStaged` says whether the
+ * change is in the index, so a file both staged and changed again in the
+ * working tree is one entry carrying its staged state.
+ */
+export const gitFileStatusSchema = z.object({
+  path: z.string(),
+  status: z.enum([
+    'added',
+    'modified',
+    'deleted',
+    'renamed',
+    'untracked',
+    'unmerged',
+  ]),
+  isStaged: z.boolean(),
+});
+export type GitFileStatus = z.infer<typeof gitFileStatusSchema>;
+
+export const gitStatusSchema = z.object({
+  isClean: z.boolean(),
+  files: z.array(gitFileStatusSchema),
+});
+export type GitStatus = z.infer<typeof gitStatusSchema>;
 
 export const gitCommitSchema = z.object({
   /**
@@ -87,11 +123,11 @@ export const gitCloneOptionsSchema = z.object({
    */
   depth: z.number(),
   /**
-   * Clone only the history leading to the tip of a single branch, either specified by the --branch option or the primary branch remote’s HEAD points at. Further fetches into the resulting repository will only update the remote-tracking branch for the branch this option was used for the initial cloning. If the HEAD at the remote did not point at any branch when --single-branch clone was made, no remote-tracking branch is created.
+   * Clone only the history leading to the tip of a single branch, either specified by the --branch option or the primary branch remote's HEAD points at. Further fetches into the resulting repository will only update the remote-tracking branch for the branch this option was used for the initial cloning. If the HEAD at the remote did not point at any branch when --single-branch clone was made, no remote-tracking branch is created.
    */
   singleBranch: z.boolean(),
   /**
-   * Instead of pointing the newly created HEAD to the branch pointed to by the cloned repository’s HEAD, point to <name> branch instead. In a non-bare repository, this is the branch that will be checked out. --branch can also take tags and detaches the HEAD at that commit in the resulting repository.
+   * Instead of pointing the newly created HEAD to the branch pointed to by the cloned repository's HEAD, point to <name> branch instead. In a non-bare repository, this is the branch that will be checked out. --branch can also take tags and detaches the HEAD at that commit in the resulting repository.
    */
   branch: z.string(),
   /**
@@ -163,7 +199,9 @@ export const gitLogOptionsSchema = z.object({
   /**
    * Only list commits that are between given SHAs or tag names
    *
-   * Note that the commits of from and to are not included in the result
+   * `from` is exclusive and `to` is inclusive, which is git's own `from..to`
+   * range. This is what `core.projects.getChanges()` returns as `ahead` and
+   * `behind`, so a tip commit is counted.
    */
   between: z.object({
     /**

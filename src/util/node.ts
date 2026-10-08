@@ -2,6 +2,7 @@ import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
 import { logLevelSchema, type LogLevel } from '../schema/baseSchema.js';
+import { elekIoCoreOptionsSchema } from '../schema/coreSchema.js';
 import {
   contentChannelSchema,
   projectFolderSchema,
@@ -89,13 +90,48 @@ export function resolveContentRef(ref?: string): string {
 }
 
 /**
+ * Resolves the base URL of the elek.io Cloud API
+ *
+ * Precedence: the given URL wins over the ELEK_IO_CLOUD_URL environment
+ * variable, which wins over the default `https://api.elek.io`. An empty
+ * or whitespace-only value counts as unset. A trailing slash is dropped,
+ * since a path is appended to this.
+ *
+ * Something that is not a URL throws rather than falling back, because
+ * falling back would send a report to production on the strength of a
+ * typo in a staging setup.
+ */
+export function resolveCloudUrl(url?: string): string {
+  const fromArg = url?.trim();
+  const fromEnv = process.env['ELEK_IO_CLOUD_URL']?.trim();
+  const candidate = fromArg || fromEnv || 'https://api.elek.io';
+  // The same rule the option is validated by, rather than a second one
+  const parsed =
+    elekIoCoreOptionsSchema.shape.cloud.shape.url.safeParse(candidate);
+  if (!parsed.success) {
+    throw CoreError.badRequest(
+      `ELEK_IO_CLOUD_URL must be an http or https URL, got "${candidate}"`
+    );
+  }
+  return parsed.data.replace(/\/+$/, '');
+}
+
+/**
  * Name of the marker file whose presence identifies a provisioned copy
  * of a Project. A dotfile, so the Project's gitignore covers it.
  */
 export const PROVISIONED_MARKER = '.elek-provisioned';
 
 /**
- * Creates a collection of often used paths, rooted at the given data directory
+ * Builds the often used paths, rooted at the given data directory. Every
+ * returned function only assembles a string, none of them touch disk.
+ *
+ * Two layout facts a caller would otherwise get wrong: `entries()` is the
+ * Collection folder itself, because Entries are files inside it, and an Asset
+ * has two paths, `assetFile()` for the metadata under `assets/` and `asset()`
+ * for the binary under `lfs/`.
+ *
+ * @see ../../docs/storage-layout.md
  */
 export function createPathTo(dataDir: string) {
   const pathTo = {
@@ -130,9 +166,6 @@ export function createPathTo(dataDir: string) {
     componentFile: (projectId: string, id: string) => {
       return Path.join(pathTo.component(projectId, id), 'component.json');
     },
-    componentIndex: (projectId: string) => {
-      return Path.join(pathTo.components(projectId), 'slug.index.json');
-    },
 
     collections: (projectId: string): string => {
       return Path.join(
@@ -145,9 +178,6 @@ export function createPathTo(dataDir: string) {
     },
     collectionFile: (projectId: string, id: string) => {
       return Path.join(pathTo.collection(projectId, id), 'collection.json');
-    },
-    collectionIndex: (projectId: string) => {
-      return Path.join(pathTo.collections(projectId), 'slug.index.json');
     },
 
     entries: (projectId: string, collectionId: string): string => {
@@ -178,10 +208,9 @@ export function createPathTo(dataDir: string) {
 export type PathTo = ReturnType<typeof createPathTo>;
 
 /**
- * Used as parameter for filter() methods to assure,
- * only values not null, undefined or empty strings are returned
- *
- * @param value Value to check
+ * Narrows out null, undefined and strings holding nothing but whitespace, so a
+ * `filter()` keeps only values worth passing on. Whitespace counts as empty
+ * here, the same rule the ELEK_IO_ resolvers above read a value by.
  */
 export function isNotEmpty<T>(value: T | null | undefined): value is T {
   if (value === null || value === undefined) {
@@ -193,6 +222,22 @@ export function isNotEmpty<T>(value: T | null | undefined): value is T {
     }
   }
   return true;
+}
+
+/**
+ * Whether a caught error is Node's "no such file or directory".
+ *
+ * `fs` reports a missing path with an `ENOENT` code rather than a type, so
+ * this is the one place that knows the shape. Callers turn it into the
+ * `NotFound` that `docs/error-handling.md` promises.
+ */
+export function isFileNotFound(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'ENOENT'
+  );
 }
 
 /**

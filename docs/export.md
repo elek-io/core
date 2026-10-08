@@ -8,16 +8,27 @@
 elek export [outDir] [projects] [template] [--watch]
 ```
 
-| Argument   | Default      | Meaning                                                 |
-| ---------- | ------------ | ------------------------------------------------------- |
-| `outDir`   | `./.elek.io` | Where to write the export.                              |
-| `projects` | `all`        | `all`, or a comma-separated list of Project ids.        |
-| `template` | `nested`     | `nested` (one JSON file) or `separate` (a folder tree). |
-| `--watch`  | off          | Re-export automatically when Project content changes.   |
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `outDir` | `./.elek.io` | Where to write the export. |
+| `projects` | `all` | `all`, or a comma-separated list of Project ids. |
+| `template` | `nested` | `nested` (one JSON file) or `separate` (a folder tree). |
+| `--watch` | off | Re-export automatically when Project content changes. |
 
 ## What an export contains
 
-Each Project is exported with its content inlined: `assets`, `collections` (each with its `entries`), and `components` as arrays on the Project object. References inside Entry values are kept as **ids, not resolved** - a consumer cross-references them against the exported Assets and Entries. Every object keeps its full metadata envelope (`id`, `coreVersion`, `created`, `updated`, and so on).
+Each Project is exported with its content inlined as `assets`, `components` and `collections` on the Project object, each Collection carrying its own `entries`. The `nested` template makes all four objects keyed for lookup rather than arrays:
+
+| Key on the Project       | Keyed by               |
+| ------------------------ | ---------------------- |
+| `assets`                 | Asset id               |
+| `components`             | Component slug         |
+| `collections`            | Collection plural slug |
+| `collections[x].entries` | Entry id               |
+
+The `separate` template writes the same content as arrays in its own files instead, see below.
+
+References inside Entry values are kept as **ids, not resolved** - a consumer cross-references them against the exported Assets and Entries. Every object keeps its full metadata envelope (`id`, `coreVersion`, `created`, `updated`, and so on).
 
 Whether the actual Asset **binaries** are included depends on the template.
 
@@ -60,7 +71,7 @@ Best when you want browsable files and the binaries alongside them.
 
 `--watch` keeps the export current: it watches the Projects directory (ignoring `.git`) with chokidar and re-runs the same export on any change. Useful as a background step while developing against the exported JSON.
 
-## See Also
+## See also
 
 - [`storage-layout.md`](./storage-layout.md) - the on-disk source the export reads from
 - [`local-api.md`](./local-api.md) - reading content over HTTP instead of exporting

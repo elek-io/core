@@ -179,4 +179,168 @@ describe('GitService', function () {
     expect(changes.ahead).to.have.lengthOf(0);
     expect(changes.behind).to.have.lengthOf(0);
   });
+
+  it('should report the tag on a tagged tip in the log', async function () {
+    // A tagged tip is decorated `HEAD -> master, tag: <uuid>`, which is
+    // exactly the commit a Release just made, so the whole point of
+    // resolving a tag at all is the one case that has to work
+    const tag = await core.git.tags.create({
+      path: projectPath,
+      message: { type: 'release', version: '1.0.0' },
+    });
+
+    const commits = await core.git.log(projectPath, { limit: 1 });
+
+    expect(commits[0]?.tag?.id).toEqual(tag.id);
+
+    await core.git.tags.delete({ path: projectPath, id: tag.id });
+  });
+});
+
+describe('GitService.status', function () {
+  let statusProject: Project & { destroy: () => Promise<void> };
+  let statusProjectPath = '';
+  // A space in the name, because porcelain v2 puts the path last and a
+  // parse splitting the line on spaces truncates it at the first one
+  const trackedName = 'a tracked file.txt';
+  let trackedPath = '';
+
+  beforeAll(async function () {
+    statusProject = await createProject('GitService Status Test');
+    statusProjectPath = core.util.pathTo.project(statusProject.id);
+    trackedPath = Path.join(statusProjectPath, trackedName);
+
+    await Fs.writeFile(trackedPath, 'first');
+    await core.git.add(statusProjectPath, [trackedPath]);
+    await core.git.commit(statusProjectPath, {
+      method: 'update',
+      reference: { objectType: 'project', id: statusProject.id },
+    });
+  });
+
+  afterAll(async function () {
+    await statusProject.destroy();
+  });
+
+  it('reports a committed tree as clean', async function () {
+    const status = await core.git.status(statusProjectPath);
+
+    expect(status.isClean).toBe(true);
+    expect(status.files).toEqual([]);
+  });
+
+  it('names an untracked file', async function () {
+    const untrackedPath = Path.join(statusProjectPath, 'an untracked one.txt');
+    await Fs.writeFile(untrackedPath, 'x');
+
+    const status = await core.git.status(statusProjectPath);
+
+    expect(status.isClean).toBe(false);
+    expect(status.files).toEqual([
+      { path: 'an untracked one.txt', status: 'untracked', isStaged: false },
+    ]);
+
+    await Fs.remove(untrackedPath);
+  });
+
+  it('names a file modified in the working tree', async function () {
+    await Fs.writeFile(trackedPath, 'second');
+
+    const status = await core.git.status(statusProjectPath);
+
+    expect(status.files).toEqual([
+      { path: trackedName, status: 'modified', isStaged: false },
+    ]);
+
+    await Fs.writeFile(trackedPath, 'first');
+  });
+
+  it('says when the same change is staged', async function () {
+    await Fs.writeFile(trackedPath, 'second');
+    await core.git.add(statusProjectPath, [trackedPath]);
+
+    const status = await core.git.status(statusProjectPath);
+
+    expect(status.files).toEqual([
+      { path: trackedName, status: 'modified', isStaged: true },
+    ]);
+
+    await Fs.writeFile(trackedPath, 'first');
+    await core.git.add(statusProjectPath, [trackedPath]);
+  });
+
+  it('names a deleted file', async function () {
+    await Fs.remove(trackedPath);
+
+    const status = await core.git.status(statusProjectPath);
+
+    expect(status.files).toEqual([
+      { path: trackedName, status: 'deleted', isStaged: false },
+    ]);
+
+    await Fs.writeFile(trackedPath, 'first');
+  });
+
+  it('names a renamed file by its new path', async function () {
+    const renamedName = 'a renamed file.txt';
+    const renamedPath = Path.join(statusProjectPath, renamedName);
+    await Fs.move(trackedPath, renamedPath);
+    await core.git.add(statusProjectPath, [trackedPath, renamedPath]);
+
+    const status = await core.git.status(statusProjectPath);
+
+    // A rename entry carries new and old path in one field, and only the
+    // new one describes what is on disk now
+    expect(status.files).toEqual([
+      { path: renamedName, status: 'renamed', isStaged: true },
+    ]);
+
+    await Fs.move(renamedPath, trackedPath);
+    await core.git.add(statusProjectPath, [trackedPath, renamedPath]);
+  });
+
+  it('lists every dirty file at once', async function () {
+    const untrackedPath = Path.join(statusProjectPath, 'another one.txt');
+    await Fs.writeFile(untrackedPath, 'x');
+    await Fs.writeFile(trackedPath, 'second');
+
+    const status = await core.git.status(statusProjectPath);
+
+    expect(status.isClean).toBe(false);
+    expect(status.files).toHaveLength(2);
+    expect(status.files.map((file) => file.status).toSorted()).toEqual([
+      'modified',
+      'untracked',
+    ]);
+
+    await Fs.remove(untrackedPath);
+    await Fs.writeFile(trackedPath, 'first');
+  });
+});
+
+describe('GitService.refNameToTagName', function () {
+  it.each([
+    ['tag: 550e8400-e29b-41d4-a716-446655440000', 'a bare decoration'],
+    [
+      'HEAD -> master, tag: 550e8400-e29b-41d4-a716-446655440000',
+      'the decoration of a tagged tip',
+    ],
+    [
+      'tag: 550e8400-e29b-41d4-a716-446655440000, origin/master',
+      'a tag next to a remote branch',
+    ],
+  ])('reads the tag out of %j, %s', function (refName) {
+    expect(core.git.refNameToTagName(refName)).toEqual(
+      '550e8400-e29b-41d4-a716-446655440000'
+    );
+  });
+
+  it.each([
+    ['', 'no decoration at all'],
+    ['HEAD -> master', 'a decoration carrying no tag'],
+    ['tag: v1.0.0', 'a tag not named with a UUID'],
+    ['HEAD -> master, origin/master', 'branches only'],
+  ])('returns null for %j, %s', function (refName) {
+    expect(core.git.refNameToTagName(refName)).toBeNull();
+  });
 });

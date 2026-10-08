@@ -29,16 +29,25 @@ import {
   assetHistorySchema,
 } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
-import { applyMigrations, assetMigrations } from './migrations/index.js';
+import {
+  applyMigrations,
+  assetMigrations,
+  migrating,
+} from './migrations/index.js';
 import { datetime, slug, uuid, CoreError } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { ReferenceService } from './ReferenceService.js';
 import type { GitService } from './GitService.js';
+import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 
 /**
- * Service that manages CRUD functionality for Asset files on disk
+ * An Asset is two files, the binary under `lfs/` tracked by Git LFS and a JSON
+ * metadata sidecar under `assets/`. Every mutating method writes both and
+ * commits them together, so the pair never drifts apart in history.
+ *
+ * @see ../../docs/asset-management.md
  */
 export class AssetService extends AbstractEntityService {
   private readonly coreVersion: string;
@@ -50,6 +59,7 @@ export class AssetService extends AbstractEntityService {
     pathTo: PathTo,
     logService: LogService,
     jsonFileService: JsonFileService,
+    cacheService: CacheService,
     gitService: GitService,
     referenceService: ReferenceService
   ) {
@@ -59,7 +69,8 @@ export class AssetService extends AbstractEntityService {
       pathTo,
       logService,
       gitService,
-      jsonFileService
+      jsonFileService,
+      cacheService
     );
 
     this.coreVersion = coreVersion;
@@ -67,7 +78,15 @@ export class AssetService extends AbstractEntityService {
   }
 
   /**
-   * Creates a new Asset
+   * Copies the file at `filePath` into the Project, writes the JSON sidecar
+   * and commits both. `name` is slugified on write, and `extension`,
+   * `mimeType` and `size` are derived from the file rather than passed in.
+   *
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
+   * and `BadRequest` for a file type Core cannot recognise. A failure
+   * mid-write rolls the working tree back.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public create(props: CreateAssetProps): Promise<Asset> {
     return this.mutating(
@@ -130,9 +149,12 @@ export class AssetService extends AbstractEntityService {
   }
 
   /**
-   * Returns an Asset by ID
+   * Returns an Asset by ID, and with `commitHash` the version at that commit.
    *
-   * If a commit hash is provided, the Asset is read from history
+   * A historical read has a side effect: it extracts the binary into Core's
+   * tmp directory, resolving an LFS pointer against the local store, so an
+   * unfetched blob fails. The returned `absolutePath` points at that temp
+   * copy, which the next Core construction deletes.
    */
   public read(props: ReadAssetProps): Promise<Asset> {
     return this.validated('read', readAssetSchema, props, async () => {
@@ -184,7 +206,11 @@ export class AssetService extends AbstractEntityService {
   }
 
   /**
-   * Returns the commit history of an Asset
+   * The git log of the Asset's JSON metadata file, so it holds the commits
+   * Core wrote through `create`, `update` and `delete` rather than the
+   * binary's own history.
+   *
+   * Each entry's `hash` is what `read` and `save` accept as `commitHash`.
    */
   public history(props: AssetHistoryProps): Promise<GitCommit[]> {
     return this.validated('history', assetHistorySchema, props, async () => {
@@ -195,7 +221,12 @@ export class AssetService extends AbstractEntityService {
   }
 
   /**
-   * Copies an Asset to given file path on disk
+   * Copies an Asset's binary to `filePath`, overwriting a file already there.
+   * The parent directory has to exist. With `commitHash` it saves that
+   * historical version rather than the current one.
+   *
+   * Unlike the other write methods it writes nothing inside the Project, so
+   * it works in read-only mode and on a provisioned copy.
    */
   public save(props: SaveAssetProps): Promise<void> {
     return this.validated('save', saveAssetSchema, props, async () => {
@@ -205,9 +236,16 @@ export class AssetService extends AbstractEntityService {
   }
 
   /**
-   * Updates given Asset
+   * Rewrites the sidecar and commits it, slugifying `name`. With
+   * `newFilePath` it also replaces the binary, re-deriving `extension`,
+   * `mimeType` and `size`, and deletes the previous binary only when the new
+   * extension differs.
    *
-   * Use the optional "newFilePath" prop to update the Asset itself
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
+   * and `BadRequest` for an unrecognised file type. A failure mid-write rolls
+   * the working tree back.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public update(props: UpdateAssetProps): Promise<Asset> {
     return this.mutating(
@@ -263,7 +301,7 @@ export class AssetService extends AbstractEntityService {
             // the file we just copied in.
             const pathsToStage = [assetPath];
             if (prevAssetPath !== assetPath) {
-              await Fs.remove(prevAssetPath);
+              await this.jsonFileService.delete(prevAssetPath);
               pathsToStage.push(prevAssetPath);
             }
             await this.gitService.add(projectPath, pathsToStage);
@@ -297,7 +335,14 @@ export class AssetService extends AbstractEntityService {
   }
 
   /**
-   * Deletes given Asset
+   * Removes the binary and its sidecar in one commit, after checking that
+   * nothing points at the Asset. It throws `Conflict` naming every Entry that
+   * still references it, with those Entries as the error's cause.
+   *
+   * `extension` has to be the stored one. A mismatch leaves the binary on
+   * disk and still commits the sidecar removal.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
   public delete(props: DeleteAssetProps): Promise<void> {
     return this.mutating('delete', deleteAssetSchema, props, async () => {
@@ -327,8 +372,8 @@ export class AssetService extends AbstractEntityService {
       );
 
       return this.withGitRollback(projectPath, async () => {
-        await Fs.remove(assetPath);
-        await Fs.remove(assetFilePath);
+        await this.jsonFileService.delete(assetPath);
+        await this.jsonFileService.delete(assetFilePath);
         await this.gitService.add(projectPath, [assetFilePath, assetPath]);
         await this.gitService.commit(projectPath, {
           method: 'delete',
@@ -338,6 +383,15 @@ export class AssetService extends AbstractEntityService {
     });
   }
 
+  /**
+   * One page of Assets, built from the JSON sidecars in `assets/` alone. No
+   * binary is opened, and the order is whatever the filesystem returns.
+   *
+   * `limit` defaults to 15 and `limit: 0` returns everything from `offset`.
+   * `total` counts every Asset in the Project rather than the page, and an
+   * Asset whose sidecar cannot be read is left out with a logged warning
+   * rather than failing the call, so `list` can be shorter than both.
+   */
   public list(props: ListAssetsProps): Promise<PaginatedList<Asset>> {
     return this.validated('list', listAssetsSchema, props, async () => {
       const offset = props.offset || 0;
@@ -369,6 +423,11 @@ export class AssetService extends AbstractEntityService {
     });
   }
 
+  /**
+   * Counts the JSON sidecars in `assets/` without opening one, so it equals
+   * the `total` a `list` reports. It still counts an Asset `list` had to drop
+   * as unreadable, and one whose binary was never fetched.
+   */
   public count(props: CountAssetsProps): Promise<number> {
     return this.validated('count', countAssetsSchema, props, async () => {
       const refs = await this.listReferences(
@@ -380,27 +439,25 @@ export class AssetService extends AbstractEntityService {
   }
 
   /**
-   * Checks if given object is of type Asset
+   * A shape check against `assetSchema` that touches no disk, so it does not
+   * mean the Asset exists in a Project. An `AssetFile` read off disk fails
+   * it, because it carries no `absolutePath`.
    */
   public isAsset(obj: unknown): obj is Asset {
     return assetSchema.safeParse(obj).success;
   }
 
-  /**
-   * Returns the size of a file in bytes
-   *
-   * @param path Path of the file to get the size from
-   */
   private async getFileSize(path: string): Promise<number> {
     const stats = await Fs.stat(path);
     return stats.size;
   }
 
   /**
-   * Creates an Asset from given AssetFile
+   * Creates an Asset from given AssetFile.
    *
-   * @param projectId   The project's ID
-   * @param assetFile   The AssetFile to convert
+   * With a `commitHash` the returned `absolutePath` points at the extracted
+   * copy in Core's tmp directory rather than at the Project's binary under
+   * `lfs/`.
    */
   private toAsset(
     projectId: string,
@@ -418,10 +475,12 @@ export class AssetService extends AbstractEntityService {
   }
 
   /**
-   * Returns the found and supported extension as well as mime type,
-   * otherwise throws an error
+   * Maps the path's extension to a MIME type through `mime.getType`, then
+   * back to the canonical extension through `mime.getExtension`. The file
+   * itself is never opened, and nothing is checked against a support list, so
+   * `photo.jpeg` is stored with extension `jpg`.
    *
-   * @param filePath Path to the file to check
+   * Either failed lookup throws `BadRequest`.
    */
   private getFileType(filePath: string): {
     extension: string;
@@ -429,15 +488,20 @@ export class AssetService extends AbstractEntityService {
   } {
     const mimeType = mime.getType(filePath);
 
+    // Neither message names the file. The path is the one the User picked
+    // on their own disk, so it carries the name they gave it, and the
+    // service boundary logs a message. See contributing/logging.md
     if (mimeType === null) {
-      throw CoreError.badRequest(`Unsupported MIME type of file "${filePath}"`);
+      throw CoreError.badRequest(
+        'The file has no MIME type Core recognises, so it cannot be stored as an Asset'
+      );
     }
 
     const extension = mime.getExtension(mimeType);
 
     if (extension === null) {
       throw CoreError.badRequest(
-        `Unsupported extension for MIME type "${mimeType}" of file "${filePath}"`
+        `No file extension is known for MIME type "${mimeType}"`
       );
     }
 
@@ -448,11 +512,21 @@ export class AssetService extends AbstractEntityService {
   }
 
   /**
-   * Migrates a potentially outdated Asset file to the current schema
+   * Migrates a potentially outdated Asset file to the current schema.
+   *
+   * Throws `BadRequest` when the file does not match what Core expects, with
+   * the underlying `ZodError` as its cause, and `VersionSkew` when it was
+   * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedAssetFile: unknown) {
-    const loose = migrateAssetSchema.parse(potentiallyOutdatedAssetFile);
-    const migrated = applyMigrations(loose, assetMigrations, this.coreVersion);
-    return assetFileSchema.parse(migrated);
+    return migrating('Asset', () => {
+      const loose = migrateAssetSchema.parse(potentiallyOutdatedAssetFile);
+      const migrated = applyMigrations(
+        loose,
+        assetMigrations,
+        this.coreVersion
+      );
+      return assetFileSchema.parse(migrated);
+    });
   }
 }

@@ -18,7 +18,11 @@ import { trimTrailingSlash } from 'hono/trailing-slash';
 import { CoreError } from '../../util/shared.js';
 
 /**
- * Creates a new OpenAPIHono router with default settings
+ * A router carrying the `defaultHook` that turns a failed zod request
+ * validation into `422` with `{ success: false, error: { name, issues } }`.
+ *
+ * Every router built here answers a bad request the same way, so no handler
+ * validates its own path or query parameters.
  */
 export function createRouter() {
   return new OpenAPIHono<ApiEnv>({
@@ -45,7 +49,14 @@ export function createRouter() {
 }
 
 /**
- * Creates a new OpenAPIHono instance, injects services into context and adds error handling
+ * The router stack every request passes through: a request id, a trailing
+ * slash trim, CORS restricted to `http://localhost`, the services injected
+ * into the context, and the request logger.
+ *
+ * It also installs the error envelopes, one for a `CoreError`, one for
+ * anything else thrown, and one for a path no route matched.
+ *
+ * @see ../../../docs/local-api.md
  */
 export default function createApi(
   logService: LogService,
@@ -126,6 +137,14 @@ export default function createApi(
   return api;
 }
 
+/**
+ * Mounts one router on exactly the stack `createApi` builds, so a route test
+ * meets the real middleware and the real error envelope rather than a bare
+ * handler.
+ *
+ * The OpenAPI document and the Scalar UI are left off on purpose, they belong
+ * to `LocalApi` rather than to a route.
+ */
 export function createTestApi<S extends Schema>(
   router: Api<S>,
   logService: LogService,
