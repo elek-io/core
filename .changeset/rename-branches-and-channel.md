@@ -14,24 +14,4 @@ The `production` branch is now `main`, the `work` branch is now `draft`, and the
 
 **With a remote, a Release compares against the remote's `main`.** `core.releases.prepare()` reads the remote as last fetched and never fetches. `create()` and `createPreview()` fetch first, LFS objects included, and `create()` builds on the remote's `main`. A local `main` that is missing after a clone, or behind after another working copy released, no longer changes the bump. All three throw `PreconditionFailed` before changing anything when `draft` lacks commits of the remote's `draft`, which needs a `synchronize()` first, and when `draft` lacks commits of the remote's `main`, the local `main` holds commits the remote's lacks, or there is no `main` anywhere. Without a remote, Releases compare against the local `main` and push nothing, as before.
 
-**Nothing is migrated, and the old names are not accepted.** A channel or ref of `production` is refused like any unknown value. `ELEK_IO_CHANNEL=production` throws a `BadRequest`, and so does a `ref` of `production` in `core.projects.provision()`, `elek provision --ref` or `defineElekConfig()`. Rename the branches before this version of Core works on a Project: on one that still has `production` and `work`, `core.releases` throws `PreconditionFailed`, `core.projects.upgrade()` fails switching to `draft` and `core.projects.clone()` of its remote throws `PreconditionFailed`. Release tags are untouched, so exact version pins keep resolving.
-
-What to change by hand:
-
-1. Replace `ELEK_IO_CHANNEL=production` and every `ref` of `production` with `release`. A ref you never set needs nothing. Code that names a branch, such as `core.projects.branches.switch()`, uses `main` and `draft`.
-2. Rename the branches in each existing Project:
-
-   ```bash
-   git branch -m production main
-   git branch -m work draft
-   ```
-
-3. Do the same on its remote, and set the default branch to `main` at your git host before deleting the old branches:
-
-   ```bash
-   git push --set-upstream origin main draft
-   # set the default branch to main at your git host, then
-   git push origin --delete production work
-   ```
-
-   Every other working copy of the Project runs step 2, then `git fetch --prune`, `git branch --set-upstream-to=origin/main main` and `git branch --set-upstream-to=origin/draft draft`.
+**Nothing is migrated, and the old names are not accepted.** A channel or ref of `production` is refused like any unknown value. `ELEK_IO_CHANNEL=production` throws a `BadRequest`, and so does a `ref` of `production` in `core.projects.provision()`, `elek provision --ref` or `defineElekConfig()`. Replace them with `release`, and name the branches `main` and `draft` in code that names one, such as `core.projects.branches.switch()`. A Project created by an earlier Core is not supported.
