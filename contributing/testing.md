@@ -59,7 +59,10 @@ Tests should reproduce the environment users actually have, and an artificial fi
 
 The vitest `testTimeout` is raised to 15s in [`vitest.config.ts`](../vitest.config.ts) because git-heavy tests that finish in ~3s on the fast runners need 7s or more on Windows and Intel macOS. Parallel test files add CPU contention between workers on the 3 to 4 core CI runners, which is another reason the value stays generous.
 
-Individual tests known to be heavier (full Project lifecycles) override it with 30s or more.
+Overrides for heavier work:
+
+- Individual tests known to be heavier (full Project lifecycles) override it with 30s or more.
+- Hooks are not covered by `testTimeout`. They run under vitest's own 10s `hookTimeout`, so a `beforeAll` that clones a remote passes its own timeout, 60s like the provisioning suites, or it times out on Windows first.
 
 When a test times out, vitest cannot abort its still-running async work, so leftover Projects can leak into later tests. Since every test file has its own data directory, that leak is confined to the file that timed out and cannot break other files. Generous timeouts still protect against the within-file cascade.
 

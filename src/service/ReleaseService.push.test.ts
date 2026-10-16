@@ -16,7 +16,7 @@ describe('ReleaseService push', function () {
     remotePath = Path.join(core.util.pathTo.tmp, remoteProject.id);
     project = await core.projects.clone({ url: remotePath });
     await createCollection(project.id);
-  });
+  }, 60000);
 
   afterAll(async function () {
     await core.projects.delete({ id: project.id, force: true });
