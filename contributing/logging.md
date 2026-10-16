@@ -22,7 +22,7 @@ Never:
 - **a name, or the slug made from one**: of a Project, Collection, Component, Entry or Asset. Anything a User typed that identifies one object, not only what they wrote into a field
 - a User's name or email, including inside a git command line
 - **a path the User chose**, such as the file an Asset was created from, which carries the name they gave it
-- the remote access token, which today only ever travels by environment variable
+- a credential: the remote access token, or the elek.io Cloud token, which travel by environment variable or argument and never inside a file Core writes
 
 **Names go even though they are not content.** They buy a reader nothing: every line already carries the id, and an id resolves to the object, its name included, the moment the repository is on hand. A name is the one part of a line that reads as somebody's words, and it is the part that survives being read by someone the User never expected to read it. So it goes, and the ids stay.
 

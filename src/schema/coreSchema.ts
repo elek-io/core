@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { logLevelSchema, versionSchema } from './baseSchema.js';
+import { cloudTokenSchema } from './cloudSchema.js';
 
 /**
  * The fully resolved option set, once the defaults and the `ELEK_IO_`
@@ -64,9 +65,9 @@ export const elekIoCoreOptionsSchema = z.strictObject({
     /**
      * Base URL of the elek.io Cloud API, http or https
      *
-     * Everything Core does over the network other than git goes here,
-     * which today is sending a report. A constant would make the call
-     * untestable at every layer, so it is configuration.
+     * Everything Core does over the network other than git goes here.
+     * A constant would make every call untestable at every layer, so it
+     * is configuration.
      *
      * Overrides the ELEK_IO_CLOUD_URL environment variable.
      * A trailing slash is dropped, since a path is appended to this.
@@ -95,7 +96,25 @@ export const constructorElekIoCoreSchema = elekIoCoreOptionsSchema
   // optional. Without this, opting out of the process error handlers
   // would force a caller to pin the level too, and the Astro entry
   // deliberately leaves the level to ELEK_IO_LOG_LEVEL.
-  .extend({ log: elekIoCoreOptionsSchema.shape.log.partial() })
+  .extend({
+    log: elekIoCoreOptionsSchema.shape.log.partial(),
+    cloud: elekIoCoreOptionsSchema.shape.cloud
+      .extend({
+        /**
+         * A bearer token for elek.io Cloud, which every Cloud call carries
+         * until Cloud answers 401
+         *
+         * Core keeps it in memory and never writes it anywhere, so it is not
+         * part of `core.options` either.
+         *
+         * Overrides the ELEK_IO_CLOUD_TOKEN environment variable.
+         *
+         * @see ../../docs/usage.md
+         */
+        token: cloudTokenSchema,
+      })
+      .partial(),
+  })
   .partial({
     log: true,
     cache: true,

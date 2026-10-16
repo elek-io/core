@@ -1,0 +1,211 @@
+import type { ZodType } from 'zod';
+import { cloudErrorResponseSchema } from '../schema/cloudSchema.js';
+import type { LogService } from '../service/LogService.js';
+import { CoreError, type CoreErrorType } from './shared.js';
+
+/**
+ * A refusal one call reads differently from the shared mapping, such as the
+ * 403 signing in answers for an address that is not verified yet.
+ */
+export interface CloudRefusal {
+  status: number;
+  /**
+   * The `code` the answer has to carry for this to match, or absent to match
+   * the status alone. Read to pick the type, never written into the message
+   */
+  code?: string;
+  type: CoreErrorType;
+  /** Says what was refused. The status is appended */
+  message: string;
+}
+
+/** One call to elek.io Cloud, as `CloudClient.request()` takes it */
+export interface CloudRequest {
+  method: 'GET' | 'POST';
+  /** Appended to the configured Cloud URL, which never ends in a slash */
+  path: string;
+  /** The serialized JSON body, sent with its content type */
+  body?: string;
+  /** What is sent, as a noun the messages name, like `the report` */
+  subject: string;
+  /** Checked in order before the shared mapping */
+  refusals?: readonly CloudRefusal[];
+}
+
+/**
+ * The one seam every elek.io Cloud call goes through: the base URL, the
+ * bearer token, the timeout and the mapping of a refusal onto a `CoreError`.
+ * It holds the token in memory and nowhere else.
+ *
+ * It never retries, and it never reads an answer's body into a message,
+ * because a body can echo what was sent and a message reaches a log file.
+ *
+ * @see ../../contributing/cloud.md
+ */
+export class CloudClient {
+  /** How long a call waits for an answer. Nothing retries after it */
+  public static readonly timeoutMs = 15_000;
+
+  private readonly url: string;
+  private readonly userAgent: string;
+  private readonly logService: LogService;
+  private token: string | null;
+
+  public constructor(
+    url: string,
+    coreVersion: string,
+    token: string | null,
+    logService: LogService
+  ) {
+    this.url = url;
+    this.userAgent = `elek.io-core/${coreVersion}`;
+    this.token = token;
+    this.logService = logService;
+  }
+
+  /** Whether Core holds a token, which every call then carries */
+  public get hasToken(): boolean {
+    return this.token !== null;
+  }
+
+  /** Keeps a token for every later call, replacing the one held before */
+  public keep(token: string): void {
+    this.token = token;
+  }
+
+  /** Drops the token, so later calls carry none */
+  public forget(): void {
+    this.token = null;
+  }
+
+  /**
+   * Sends one request and returns the answer when Cloud accepted it.
+   *
+   * Throws `PreconditionFailed` when Cloud is unreachable or silent for 15
+   * seconds, and the type a refusal maps to otherwise. A 401 forgets the
+   * token it was sent with first, because it means the session is gone.
+   */
+  public async request(request: CloudRequest): Promise<Response> {
+    const url = `${this.url}${request.path}`;
+    const sentToken = this.token;
+    const headers: Record<string, string> = { 'User-Agent': this.userAgent };
+    if (request.body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+    }
+    if (sentToken !== null) {
+      headers['Authorization'] = `Bearer ${sentToken}`;
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: request.method,
+        headers,
+        ...(request.body === undefined ? {} : { body: request.body }),
+        signal: AbortSignal.timeout(CloudClient.timeoutMs),
+      });
+    } catch (error) {
+      throw CoreError.preconditionFailed(
+        `Could not reach elek.io Cloud at "${url}"`,
+        error
+      );
+    }
+
+    if (response.ok) {
+      return response;
+    }
+    // Compared rather than only checked, so a token kept while this call
+    // was in flight is not the one forgotten
+    if (response.status === 401 && sentToken !== null) {
+      if (this.token === sentToken) {
+        this.token = null;
+        this.logService.info({
+          source: 'core',
+          message:
+            'Forgot the elek.io Cloud token, because elek.io Cloud answered 401',
+          meta: { 'http.response.status_code': response.status },
+        });
+      }
+    }
+    throw await refusalOf(response, request, url);
+  }
+
+  /**
+   * Reads an accepted answer through `schema`, or throws `Internal` rather
+   * than hand a caller something unvalidated.
+   */
+  public async parse<T>(
+    response: Response,
+    schema: ZodType<T>,
+    subject: string
+  ): Promise<T> {
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      throw CoreError.internal(
+        `elek.io Cloud accepted ${subject} but did not answer with JSON`,
+        error
+      );
+    }
+
+    const parsed = schema.safeParse(payload);
+    if (parsed.success === false) {
+      throw CoreError.internal(
+        `elek.io Cloud accepted ${subject} but answered with something else: ${parsed.error.message}`,
+        parsed.error
+      );
+    }
+    return parsed.data;
+  }
+}
+
+/**
+ * The error a refusal is handed back as. A refusal the call names wins over
+ * the shared mapping, and the body is read only when one could match.
+ */
+async function refusalOf(
+  response: Response,
+  request: CloudRequest,
+  url: string
+): Promise<CoreError> {
+  const candidates = (request.refusals ?? []).filter(function (refusal) {
+    return refusal.status === response.status;
+  });
+  if (candidates.length > 0) {
+    const code = await codeOf(response);
+    const match = candidates.find(function (refusal) {
+      return refusal.code === undefined || refusal.code === code;
+    });
+    if (match !== undefined) {
+      return new CoreError(match.type, `${match.message} (${response.status})`);
+    }
+  }
+
+  const detail = `elek.io Cloud answered ${response.status} to ${request.subject} at "${url}"`;
+  switch (response.status) {
+    // The body was rejected, which is something a caller can act on
+    case 400:
+    case 413:
+      return CoreError.badRequest(detail);
+    // No credential, one that is gone, or one that does not carry this
+    case 401:
+    case 403:
+      return CoreError.unauthorized(detail);
+    case 429:
+      return CoreError.rateLimited(detail);
+    // 5xx, and anything else nobody planned for. Not a caller's to fix
+    default:
+      return CoreError.internal(detail);
+  }
+}
+
+/** The `code` of a refusal, or null when the answer carries none */
+async function codeOf(response: Response): Promise<string | null> {
+  try {
+    const parsed = cloudErrorResponseSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data.code : null;
+  } catch {
+    return null;
+  }
+}

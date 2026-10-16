@@ -15,6 +15,7 @@ import {
   isNotEmpty,
   files,
   folders,
+  resolveCloudToken,
   resolveCloudUrl,
   resolveContentRef,
   resolveDataDir,
@@ -294,6 +295,47 @@ describe('resolveCloudUrl', () => {
     expect(() => resolveCloudUrl('file:///etc/hosts')).toThrowError(
       /http or https/
     );
+  });
+});
+
+describe('resolveCloudToken', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('holds no token when nothing is configured', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_TOKEN', undefined);
+
+    expect(resolveCloudToken()).toBeNull();
+  });
+
+  it('returns the ELEK_IO_CLOUD_TOKEN environment variable when set', () => {
+    // What a command line tool or a script hands Core a session through
+    vi.stubEnv('ELEK_IO_CLOUD_TOKEN', 'session-from-the-environment');
+
+    expect(resolveCloudToken()).toBe('session-from-the-environment');
+  });
+
+  it('prefers the given token over the environment variable', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_TOKEN', 'session-from-the-environment');
+
+    expect(resolveCloudToken('session-from-the-option')).toBe(
+      'session-from-the-option'
+    );
+  });
+
+  it('treats an empty or whitespace-only value as unset', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_TOKEN', '   ');
+
+    expect(resolveCloudToken()).toBeNull();
+  });
+
+  it('throws on a token no header can carry, without repeating it', () => {
+    // A credential is not repeated into a message, which reaches a log file
+    vi.stubEnv('ELEK_IO_CLOUD_TOKEN', 'zqx canary 41be7c');
+
+    expect(() => resolveCloudToken()).toThrowError(/ELEK_IO_CLOUD_TOKEN/);
+    expect(() => resolveCloudToken()).not.toThrowError(/zqx/);
   });
 });
 

@@ -8,6 +8,7 @@ import {
   type ElekIoCoreOptions,
   type ReportResponse,
 } from '../schema/index.js';
+import type { CloudClient } from '../util/cloud.js';
 import type { PathTo } from '../util/node.js';
 import { CoreError } from '../util/shared.js';
 import { AbstractService } from './AbstractService.js';
@@ -29,16 +30,6 @@ export class ReportService extends AbstractService {
   private static readonly path = '/management/v1/reports';
 
   /**
-   * How long Core waits for an answer before giving up.
-   *
-   * There is no retry behind this. A retry after a timeout can duplicate a
-   * report elek.io Cloud already accepted and Core cannot tell the
-   * difference, so a timeout is handed back and sending again is the
-   * User's decision.
-   */
-  private static readonly timeoutMs = 15_000;
-
-  /**
    * Ceiling on the serialized body, checked before it is sent.
    *
    * Base64 inflates a gzipped tail by a third, so the 1 MB a log blob may
@@ -48,27 +39,29 @@ export class ReportService extends AbstractService {
   private static readonly maxBytes = 2 * 1024 * 1024;
 
   private readonly coreVersion: string;
+  private readonly cloudClient: CloudClient;
 
   public constructor(
     coreVersion: string,
     options: ElekIoCoreOptions,
     pathTo: PathTo,
-    logService: LogService
+    logService: LogService,
+    cloudClient: CloudClient
   ) {
     super(serviceTypeSchema.enum.Report, options, pathTo, logService);
 
     this.coreVersion = coreVersion;
+    this.cloudClient = cloudClient;
   }
 
   /**
    * Sends a report and returns the id elek.io Cloud filed it under.
    *
    * Throws `BadRequest` for a rejected or over-2 MB body, `Unauthorized`,
-   * `RateLimited`, `PreconditionFailed` when Cloud is unreachable or silent
-   * for 15 seconds, and `Internal` otherwise.
-   *
-   * Read-only mode does not block it, and Core never retries, so sending
-   * again after a timeout can duplicate a report Cloud already accepted.
+   * where a 401 also forgets the token it carried, `RateLimited`,
+   * `PreconditionFailed` when Cloud is unreachable or silent for 15 seconds,
+   * and `Internal` otherwise. Read-only mode does not block it, and Core
+   * never retries, so sending again after a timeout can duplicate a report.
    *
    * @see ../../docs/reporting.md
    */
@@ -115,87 +108,18 @@ export class ReportService extends AbstractService {
           );
         }
 
-        const url = `${this.options.cloud.url}${ReportService.path}`;
-        let response: Response;
-        try {
-          response = await fetch(url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': `elek.io-core/${this.coreVersion}`,
-            },
-            body,
-            signal: AbortSignal.timeout(ReportService.timeoutMs),
-          });
-        } catch (error) {
-          throw CoreError.preconditionFailed(
-            `Could not reach elek.io Cloud at "${url}"`,
-            error
-          );
-        }
-
-        if (response.ok === false) {
-          throw ReportService.errorForStatus(response.status, url);
-        }
-
-        return await ReportService.parseResponse(response);
+        const response = await this.cloudClient.request({
+          method: 'POST',
+          path: ReportService.path,
+          body,
+          subject: 'the report',
+        });
+        return await this.cloudClient.parse(
+          response,
+          reportResponseSchema,
+          'the report'
+        );
       }
     );
-  }
-
-  /**
-   * Maps what elek.io Cloud answered onto the error types a caller
-   * switches on.
-   *
-   * The answer's own body is deliberately not read into the message. It
-   * can echo back what was sent, and a boundary error message is written
-   * to a log file, which is the one place a report must never reach.
-   */
-  private static errorForStatus(status: number, url: string): CoreError {
-    const detail = `elek.io Cloud answered ${status} for the report sent to "${url}"`;
-
-    switch (status) {
-      // The body was rejected, which is something a caller can act on
-      case 400:
-      case 413:
-        return CoreError.badRequest(detail);
-      // No credential, or one that does not carry this
-      case 401:
-      case 403:
-        return CoreError.unauthorized(detail);
-      case 429:
-        return CoreError.rateLimited(detail);
-      // 5xx, and anything else nobody planned for. Not a caller's to fix
-      default:
-        return CoreError.internal(detail);
-    }
-  }
-
-  /**
-   * Parses an accepted report, or throws rather than handing a caller
-   * something unvalidated
-   */
-  private static async parseResponse(
-    response: Response
-  ): Promise<ReportResponse> {
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch (error) {
-      throw CoreError.internal(
-        'elek.io Cloud accepted the report but did not answer with JSON',
-        error
-      );
-    }
-
-    const parsed = reportResponseSchema.safeParse(payload);
-    if (parsed.success === false) {
-      throw CoreError.internal(
-        `elek.io Cloud accepted the report but answered with something else: ${parsed.error.message}`,
-        parsed.error
-      );
-    }
-
-    return parsed.data;
   }
 }

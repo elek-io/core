@@ -61,6 +61,10 @@ The resolved options are exposed on `core.options`, and the running Core version
 - **`cloud.url`** is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It has to be an http or https URL. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`.
   - A trailing slash is dropped, since Core appends a path to it.
   - A value that is not a URL throws a `CoreError`, rather than falling back to the default and sending to production on the strength of a typo.
+- **`cloud.token`** is a bearer token every elek.io Cloud call carries, a report included. It takes precedence over the `ELEK_IO_CLOUD_TOKEN` environment variable, and there is no default.
+  - Core keeps it in memory and never writes it to disk, so it is not part of `core.options` either.
+  - Core forgets it when elek.io Cloud answers 401, and the calls after that carry none.
+  - A value holding whitespace or anything outside printable ASCII throws a `CoreError` of type `BadRequest`, whose message never repeats it.
 - **`cache`** decides whether Core keeps what it reads from a Project's files in memory between calls: parsed JSON files and the index that resolves Collection and Component slugs. It defaults to `true`, and everything kept is dropped whenever git changes a Project's working tree.
   - Set it to `false` when another application writes the same files while this Core runs. The Astro loaders do that for you during `astro dev`.
 - **`isReadOnly`** puts Core into read-only mode, meant for environments that only consume content, such as CI builds. It takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
@@ -80,6 +84,7 @@ Core reads its environment variables once at construction, never at import. All 
 | `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN` | `x-access-token` |
 | `ELEK_IO_CHANNEL` | The channel provisioning follows, overrides configured refs | unset |
 | `ELEK_IO_CLOUD_URL` | Base URL of the elek.io Cloud API | `https://api.elek.io` |
+| `ELEK_IO_CLOUD_TOKEN` | Bearer token for elek.io Cloud, for a command line tool or a script | unset |
 
 `ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git per invocation through an askpass helper:
 
