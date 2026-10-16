@@ -59,9 +59,21 @@ Tests should reproduce the environment users actually have, and an artificial fi
 
 The vitest `testTimeout` is raised to 15s in [`vitest.config.ts`](../vitest.config.ts) because git-heavy tests that finish in ~3s on the fast runners need 7s or more on Windows and Intel macOS. Parallel test files add CPU contention between workers on the 3 to 4 core CI runners, which is another reason the value stays generous.
 
-Individual tests known to be heavier (full Project lifecycles) override it with 30s or more.
+Overrides for heavier work:
+
+- Individual tests known to be heavier (full Project lifecycles) override it with 30s or more.
+- Hooks are not covered by `testTimeout`. They run under vitest's own 10s `hookTimeout`, so a `beforeAll` that clones a remote passes its own timeout, 60s like the provisioning suites, or it times out on Windows first.
 
 When a test times out, vitest cannot abort its still-running async work, so leftover Projects can leak into later tests. Since every test file has its own data directory, that leak is confined to the file that timed out and cannot break other files. Generous timeouts still protect against the within-file cascade.
+
+## Console output
+
+The shared test Core in [`src/test/setup.ts`](../src/test/setup.ts) logs at `debug`, so every git command prints a line. `silent: 'passed-only'` in [`vitest.config.ts`](../vitest.config.ts) drops the console output of passing tests and keeps that of failing ones, which holds the context a failure needs, such as the git command a timed out hook was running.
+
+- Without it, a CI test step printed about 49,000 lines and the failure was the last 44.
+- The default reporter stays rather than `minimal`, which also drops the result line of every passing file. Those durations tell a slow runner apart from a hanging test.
+- The Astro suites write Astro's own output past vitest's console capture, so it still prints.
+- Run by an AI agent, vitest picks its `agent` reporter, which hides passing files whatever the config says. Unset `AI_AGENT` and `CLAUDECODE` to see what CI prints.
 
 ## Parallel test files
 

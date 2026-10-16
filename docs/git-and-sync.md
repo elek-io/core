@@ -82,7 +82,35 @@ await core.projects.setRemoteOriginUrl({
   id: project.id,
   url: 'https://github.com/acme/website-content.git',
 });
+await core.projects.synchronize({ id: project.id });
 ```
+
+Connect a Project to an empty repository. Create it at your git host without a README, a license or a `.gitignore`, because each of them gives the repository a history of its own, and Core refuses a remote holding anything but the Project.
+
+### The first push
+
+The first `synchronize()` against a remote without `draft` sends `main`, `draft` and the Project's Release and preview tags in one `git push --atomic`:
+
+- The remote takes every ref or none, so it never holds `draft` without `main`. The exception is a ref the remote hides with git's `receive.hideRefs`, which git refuses on its own while the other refs land.
+- The tags include every Release made before the Project had a remote. Upgrade tags stay local, as they do for a Release.
+- The LFS objects of every pushed ref are uploaded first, so a clone of the remote gets every Asset.
+- Afterwards the local `main` tracks `origin/main` and `draft` tracks `origin/draft`, and every later `synchronize()` integrates and pushes as usual.
+
+A remote that does not support atomic pushes throws `PreconditionFailed` and receives no ref, as it does for a Release. The LFS objects go first, so they may already be uploaded. After the first push, check that the repository's default branch at your git host is `main`, see [The branch model](#the-branch-model).
+
+### Which remotes synchronize() accepts
+
+A branch on the remote holds this Project when it shares history with the local `draft`. Core never merges unrelated histories and never force pushes, so a refused remote stays as it was.
+
+| The remote holds | `synchronize()` |
+| --- | --- |
+| no refs at all | makes the first push |
+| this Project's `main` and `draft` | integrates and pushes the current branch |
+| this Project's `draft` alone | integrates and pushes the current branch, the next Release adds `main` |
+| this Project's `main` alone | makes the first push, when the local `main` contains the remote's |
+| anything else, such as a README a git host created | throws `PreconditionFailed` and pushes nothing |
+
+A remote's `main` holding commits the local `main` lacks, with no `draft` beside it, throws `PreconditionFailed` as well. Synchronize the working copy that pushed that `main` instead.
 
 ## Inspecting changes against the remote
 
@@ -94,6 +122,8 @@ const { ahead, behind } = await core.projects.getChanges({ id: project.id });
 // behind -> remote commits not yet pulled
 ```
 
+Before the first push the remote has no branch of that name, so every commit of the local branch is in `ahead` and `behind` is empty.
+
 ## Synchronizing
 
 `synchronize()` integrates `origin` into the current branch, then pushes it. That is `draft` in day to day use. The `main` branch and the Release tags are published by `core.releases` instead, always together with `draft`, see [Tags](#tags).
@@ -102,16 +132,17 @@ const { ahead, behind } = await core.projects.getChanges({ id: project.id });
 await core.projects.synchronize({ id: project.id });
 ```
 
-One call, four steps, and nothing reaches the remote until the last:
+One call, five steps, and nothing reaches the remote until the last:
 
 1. **Refuse a dirty working tree** with `PreconditionFailed`. A rebase against uncommitted changes fails and could cost you work, so commit or discard first.
-2. **Fetch and rebase** onto `origin/<branch>` rather than pulling, then top up the LFS objects of every ref so switching branches works offline.
-3. **Scan the integrated tree** for dangling references, throwing `Conflict` if it finds any. The integrated commits stay local, so you can repair them through Core's own update or delete and synchronize again.
-4. **Push**, uploading the LFS objects first, see [Git LFS](#git-lfs).
+2. **Check the remote** and fetch, refusing a remote that holds anything but this Project. A remote without `draft` skips step 3 and gets [the first push](#the-first-push) in step 5.
+3. **Rebase** onto `origin/<branch>` rather than pulling, then top up the LFS objects of every ref so switching branches works offline.
+4. **Scan the integrated tree** for dangling references, throwing `Conflict` if it finds any. The integrated commits stay local, so you can repair them through Core's own update or delete and synchronize again.
+5. **Push**, uploading the LFS objects first, see [Git LFS](#git-lfs).
 
 A remote that advanced between the fetch and the push rejects the push as non-fast-forward. Core answers that by re-integrating and trying again, up to five attempts before the `PreconditionFailed` reaches you.
 
-There is still no pre-check for a remote. Without an `origin` or an upstream the underlying git command fails and surfaces as `Internal` carrying git's own message.
+There is no pre-check for an `origin`. Without one the underlying git command fails and surfaces as `Internal` carrying git's own message.
 
 ## Cloning an existing Project
 
@@ -201,7 +232,7 @@ Core tells that apart from a plain network or auth outage by probing the remote 
 `delete()` removes the entire Project folder, including its history - so by default it guards against losing unsynchronized work:
 
 - No `origin` and `force !== true` → throws `PreconditionFailed` (the Project exists only locally).
-- Has `origin`, `force !== true`, and local commits are ahead of the remote → throws `Conflict` (unpushed changes).
+- Has `origin`, `force !== true`, and local commits are ahead of the remote → throws `Conflict` (unpushed changes). Before the first push every commit is ahead.
 - `force: true` skips both checks and deletes unconditionally.
 
 ```typescript
@@ -228,12 +259,14 @@ The trailers are the whole contract, which decides what Core can see:
 
 When a remote `origin` is set, `core.releases` pushes at creation time, in one atomic push: a full Release pushes `main`, `draft` and its tag, a preview Release pushes `draft` and its tag. Upgrade tags are not pushed. See [`releases.md`](./releases.md#the-atomic-push).
 
+Tags made before the Project had a remote reach it with [the first push](#the-first-push).
+
 ## Errors during git operations
 
 | Error type | When |
 | --- | --- |
 | `Unauthorized` (401) | A commit is attempted with no User set, or the remote rejects the credentials on a push. Cloning needs no User. |
-| `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree or a rebase conflict, or a push fails because the remote does not support Git LFS or, for a Release, atomic pushes. |
+| `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree, a rebase conflict or a remote holding anything but the Project, or a push fails because the remote does not support Git LFS or, for a Release or a first push, atomic pushes. |
 | `Conflict` (409) | `clone()` targets an already-present Project, a guarded `delete()` has unpushed commits, or `synchronize()` would integrate dangling references. |
 | `BadRequest` (400) | A `core.git.push()` combines the `all` and `refs` options, which are mutually exclusive. |
 | `Internal` (500) | The underlying git command exits non-zero (no upstream, merge conflict, network, ...). |

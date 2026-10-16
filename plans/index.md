@@ -11,4 +11,5 @@ Plans are committed and reach `main`, so an idea survives until someone picks it
 - [`git-service-object-parameters.md`](./git-service-object-parameters.md) - give every public `GitService` method one props object, a breaking change
 - [`gitignore-os-junk.md`](./gitignore-os-junk.md) - the non-dot OS files a generated Project `.gitignore` still misses
 - [`project-description-shape.md`](./project-description-shape.md) - whether a Project description becomes optional and translatable like a Collection's
+- [`release-on-an-empty-remote.md`](./release-on-an-empty-remote.md) - a Release or preview made before the first push strands tags or lands `draft` alone
 - [`reporting.md`](./reporting.md) - Core's half of in-app reporting, and the request shape elek.io Cloud should be built against

@@ -104,7 +104,7 @@ Previews are snapshots of the current `draft` state for testing or sharing. Only
 
 ## The atomic push
 
-With a remote, a Release publishes its refs in one `git push --atomic`. The remote takes every ref or none, so a rejected ref leaves it as it was, and the Release unwinds like any failed one.
+With a remote, a Release publishes its refs in one `git push --atomic`. The remote takes every ref or none, so a rejected ref leaves it as it was, and the Release unwinds like any failed one. The exception is a ref the remote hides with git's `receive.hideRefs`, which git refuses on its own while the other refs land.
 
 | Case | What Core does |
 | --- | --- |
@@ -114,6 +114,8 @@ With a remote, a Release publishes its refs in one `git push --atomic`. The remo
 | The remote does not support atomic pushes | git refuses before sending anything, `PreconditionFailed`. |
 
 Core does not fall back to separate pushes on a remote without atomic pushes, because a push that lands `main` without `draft` breaks the rule a Release keeps. Releasing to such a remote needs a git host that supports them.
+
+Connected to a new, empty remote, a Project synchronizes before its first Release there. The first push of `synchronize()` sends `main`, `draft` and the tags of every earlier Release, see [`git-and-sync.md`](./git-and-sync.md#the-first-push). A Release sends only its own tag, and a preview Release sends `draft` without `main`.
 
 ## When a release fails partway
 

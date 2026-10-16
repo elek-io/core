@@ -380,6 +380,17 @@ export class GitService {
       }
     },
     /**
+     * Lists the ref names the `origin` remote advertises, branches and tags
+     * alike, so an empty result means an empty remote. Asks the remote
+     * rather than the remote-tracking refs, which a fetch never prunes.
+     *
+     * @see https://git-scm.com/docs/git-ls-remote
+     */
+    listOriginRefs: async (path: string): Promise<string[]> => {
+      const result = await this.git(path, ['ls-remote', '--quiet', 'origin']);
+      return this.advertisedRefNames(result.stdout);
+    },
+    /**
      * Adds the `origin` remote with given URL
      *
      * Throws if `origin` remote is added already.
@@ -739,13 +750,35 @@ export class GitService {
    */
   public async lsRemote(url: string): Promise<string[]> {
     const result = await this.git('', ['ls-remote', '--quiet', url]);
-    return result.stdout
-      .split('\n')
-      .map((line) => line.trim().split('\t')[1])
-      .filter(
-        (ref): ref is string =>
-          ref !== undefined && ref !== '' && !ref.endsWith('^{}')
-      );
+    return this.advertisedRefNames(result.stdout);
+  }
+
+  /**
+   * The best common ancestor of two commits, or null when their histories
+   * share none, as with a repository created elsewhere. Reads local history
+   * only. Throws `Internal` when either revision does not resolve.
+   *
+   * @see https://git-scm.com/docs/git-merge-base
+   */
+  public async mergeBase(
+    path: string,
+    a: string,
+    b: string
+  ): Promise<string | null> {
+    const result = await this.git(path, ['merge-base', a, b], {
+      tolerateNonZero: true,
+    });
+    switch (result.exitCode) {
+      case 0:
+        return result.stdout.trim();
+      case 1:
+        return null;
+      default:
+        throw CoreError.internal(
+          `Git merge-base of "${a}" and "${b}" failed with exit code "${result.exitCode}"`,
+          gitOutputCause(result.stderr, result.stdout)
+        );
+    }
   }
 
   /**
@@ -767,9 +800,9 @@ export class GitService {
   }
 
   /**
-   * Update remote refs and their objects on `origin`, LFS objects first so an
-   * upload failure is attributable. Pushes the current branch, or `refs`, or
-   * `all` branches. `atomic` lands every ref or none.
+   * Updates `origin` with the current branch, `refs` or `all` branches, LFS
+   * objects first so an upload failure is attributable. `atomic` lands every
+   * ref or none, and `setUpstream` makes each pushed branch track the remote's.
    *
    * Throws `PreconditionFailed` in read-only mode, on a provisioned copy, on
    * a non-fast-forward rejection, on an unusable LFS endpoint and on an
@@ -785,6 +818,7 @@ export class GitService {
       atomic: boolean;
       force: boolean;
       refs: string[];
+      setUpstream: boolean;
     }>
   ): Promise<void> {
     if (this.options.isReadOnly) {
@@ -825,6 +859,10 @@ export class GitService {
 
     if (options?.atomic === true) {
       args = [...args, '--atomic'];
+    }
+
+    if (options?.setUpstream === true) {
+      args = [...args, '--set-upstream'];
     }
 
     if (options?.refs) {
@@ -1129,6 +1167,20 @@ export class GitService {
     }
 
     return tagName;
+  }
+
+  /**
+   * The ref names of `git ls-remote` output, without the peeled `^{}` lines
+   * git prints for annotated tags
+   */
+  private advertisedRefNames(stdout: string): string[] {
+    return stdout
+      .split('\n')
+      .map((line) => line.trim().split('\t')[1])
+      .filter(
+        (ref): ref is string =>
+          ref !== undefined && ref !== '' && !ref.endsWith('^{}')
+      );
   }
 
   /**

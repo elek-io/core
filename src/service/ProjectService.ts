@@ -1184,13 +1184,14 @@ export class ProjectService
   }
 
   /**
-   * Returns the differences of the given Projects current branch
-   * between the local and remote `origin` (commits ahead & behind)
+   * Fetches `origin`, then returns the commits of the current branch the
+   * remote lacks as `ahead` and the remote's commits it lacks as `behind`.
+   * Before the first push, while the remote has no branch of that name,
+   * every local commit is `ahead` and `behind` is empty.
    *
-   * Throws an error if the Project does not have a remote origin.
+   * Throws `PreconditionFailed` when the Project has no remote `origin`.
    *
-   * - `behind` contains a list of commits on the current branch that are available on the remote `origin` but not yet locally
-   * - `ahead` contains a list of commits on the current branch that are available locally but not yet on the remote `origin`
+   * @see ../../docs/git-and-sync.md
    */
   public getChanges(props: GetChangesProjectProps) {
     return this.validated(
@@ -1210,7 +1211,17 @@ export class ProjectService
 
         const currentBranch =
           await this.gitService.branches.current(projectPath);
+        // Asked of the remote, because a fetch never prunes the
+        // remote-tracking ref of a branch the remote no longer holds
+        const remoteRefs =
+          await this.gitService.remotes.listOriginRefs(projectPath);
         await this.gitService.fetch(projectPath);
+
+        if (!remoteRefs.includes(`refs/heads/${currentBranch}`)) {
+          // Nothing of the branch reached the remote yet. The log of HEAD
+          // is the log of the current branch
+          return { behind: [], ahead: await this.gitService.log(projectPath) };
+        }
 
         const behind = await this.gitService.log(projectPath, {
           between: {
@@ -1231,15 +1242,15 @@ export class ProjectService
   }
 
   /**
-   * Integrates remote changes of `origin` and pushes local commits, refusing to
-   * push a state that would strand a dangling reference.
+   * Integrates the changes of `origin` into the current branch and pushes it.
+   * A remote without `draft`, such as a new and empty one, gets the first
+   * push instead: `main`, `draft` and the Release tags in one atomic push.
    *
-   * The integrated tree is scanned for dangling references before the push, and
-   * the push is blocked if any are found. The integrated commits stay local, so
-   * they can be repaired through Core's own delete or update and synchronized
-   * again. A blocked sync performs no remote mutation, and the scope is the
-   * current `draft` tree only.
+   * A refused sync pushes no ref: `PreconditionFailed` for a remote holding
+   * anything but this Project or lacking atomic pushes for the first push,
+   * `Conflict` for dangling references, whose commits stay local for repair.
    *
+   * @see ../../docs/git-and-sync.md
    * @see ../../contributing/reference-integrity.md
    */
   public synchronize(props: SynchronizeProjectProps): Promise<void> {
@@ -1267,14 +1278,26 @@ export class ProjectService
         // Bounded so a remote that keeps advancing cannot spin this forever.
         const maxAttempts = 5;
         for (let attempt = 1; ; attempt += 1) {
+          // Asked of the remote rather than read off the remote-tracking refs,
+          // which a fetch never prunes and which a remote's tags never reach
+          const remoteRefs =
+            await this.gitService.remotes.listOriginRefs(projectPath);
+          await this.gitService.fetch(projectPath);
+          const firstPushRefs = await this.firstPushRefs(
+            props.id,
+            projectPath,
+            remoteRefs
+          );
+
           // Integrate the remote into the working tree without pushing yet.
           // `lfs.fetchAll` (not `git lfs pull`) tops up every ref's objects so
           // switching branches works offline. A textual conflict aborts cleanly
           // inside `rebase` and surfaces a `PreconditionFailed`, leaving the
           // repository in a recoverable, non-mid-rebase state.
-          await this.gitService.fetch(projectPath);
-          await this.gitService.rebase(projectPath, `origin/${branch}`);
-          await this.gitService.lfs.fetchAll(projectPath);
+          if (firstPushRefs === null) {
+            await this.gitService.rebase(projectPath, `origin/${branch}`);
+            await this.gitService.lfs.fetchAll(projectPath);
+          }
 
           // Validate the integrated tree BEFORE pushing, so a dangling state
           // never reaches the shared remote.
@@ -1288,7 +1311,14 @@ export class ProjectService
           }
 
           try {
-            await this.gitService.push(projectPath);
+            // The first push lands `main` and `draft` together or not at
+            // all, as a Release does, with no fallback to separate pushes
+            await this.gitService.push(
+              projectPath,
+              firstPushRefs === null
+                ? undefined
+                : { refs: firstPushRefs, atomic: true, setUpstream: true }
+            );
             return;
           } catch (error) {
             // A non-fast-forward rejection means the remote advanced between the
@@ -1308,6 +1338,62 @@ export class ProjectService
         }
       }
     );
+  }
+
+  /**
+   * The refs of the first push when the remote holds no `draft`, or null
+   * when it holds this Project's `draft` for synchronize() to integrate.
+   * Refuses a remote holding anything else, a README a git host created
+   * included, and a `main` the local `main` does not contain, because either
+   * push would leave `main` and `draft` apart. Upgrade tags stay local.
+   *
+   * @see ../../contributing/releases.md
+   */
+  private async firstPushRefs(
+    id: string,
+    projectPath: string,
+    remoteRefs: string[]
+  ): Promise<string[] | null> {
+    const { draft, main } = projectBranchSchema.enum;
+    const remoteBranches = [main, draft].filter((branch) =>
+      remoteRefs.includes(`refs/heads/${branch}`)
+    );
+
+    const holdsSomethingElse = CoreError.preconditionFailed(
+      `The remote of Project "${id}" holds something other than this Project, so nothing was pushed. Core never merges unrelated histories. Connect the Project to an empty repository, created without a README, license or .gitignore.`
+    );
+    if (remoteRefs.length > 0 && remoteBranches.length === 0) {
+      throw holdsSomethingElse;
+    }
+    for (const branch of remoteBranches) {
+      const base = await this.gitService.mergeBase(
+        projectPath,
+        draft,
+        `origin/${branch}`
+      );
+      if (base === null) {
+        throw holdsSomethingElse;
+      }
+    }
+
+    if (remoteBranches.includes(draft)) {
+      return null;
+    }
+
+    if (remoteBranches.includes(main)) {
+      const { local } = await this.gitService.branches.list(projectPath);
+      const containsRemoteMain =
+        local.includes(main) &&
+        (await this.gitService.isAncestor(projectPath, `origin/${main}`, main));
+      if (!containsRemoteMain) {
+        throw CoreError.preconditionFailed(
+          `The remote holds the "${main}" of Project "${id}" without "${draft}", and that "${main}" holds commits the local "${main}" lacks, so nothing was pushed. Synchronize the working copy that pushed it instead, because a push from here would leave "${main}" and "${draft}" apart.`
+        );
+      }
+    }
+
+    const { list } = await this.gitService.tags.list({ path: projectPath });
+    return [main, draft, ...list.filter(isVersionedTag).map((tag) => tag.id)];
   }
 
   /**
