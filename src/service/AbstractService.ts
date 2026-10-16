@@ -9,11 +9,9 @@ import type { LogService } from './LogService.js';
  * The service boundary every public method enters through. `validated()` and
  * `mutating()` parse the input, log any failure once with the service type
  * and the method as attributes, and normalize whatever the body throws into a
- * `CoreError`. That normalization is what makes the promise in
- * `docs/error-handling.md` hold.
- *
- * So the invariant a subclass carries is that no public method returns or
- * throws without passing through one of the two.
+ * `CoreError`, which is what makes the promise in `docs/error-handling.md`
+ * hold. So no public method returns or throws without passing through one
+ * of the two, or through `guarded()` for a method that takes no input.
  *
  * @see ../../contributing/error-handling-internals.md
  */
@@ -151,8 +149,20 @@ export abstract class AbstractService {
     body: (props: TSchema) => Promise<TResult>
   ): Promise<TResult> {
     const parsed = this.parseOrThrow(context, schema, data);
+    return this.guarded(context, () => body(parsed));
+  }
+
+  /**
+   * The boundary `validated()` runs its body in, for a public method that
+   * takes no input and so has nothing to parse. Whatever the body throws is
+   * logged once and normalized into a `CoreError`.
+   */
+  protected async guarded<TResult>(
+    context: string,
+    body: () => Promise<TResult>
+  ): Promise<TResult> {
     try {
-      return await body(parsed);
+      return await body();
     } catch (error) {
       const coreError =
         error instanceof CoreError ? error : CoreError.fromUnknown(error);

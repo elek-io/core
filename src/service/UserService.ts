@@ -1,5 +1,4 @@
 import {
-  userTypeSchema,
   setUserSchema,
   userFileSchema,
   type SetUserProps,
@@ -60,7 +59,8 @@ export class UserService {
    *
    * Overwrites `user.json` in the data directory, creating it when absent, so
    * calling it again replaces the previous User. Throws `BadRequest` when
-   * `props` fails `setUserSchema`.
+   * `props` fails `setUserSchema`. Setting a `cloud` User signs nobody in,
+   * `core.cloud.account.signIn()` does and sets the User itself.
    */
   public async set(props: SetUserProps): Promise<User> {
     const parsed = setUserSchema.safeParse(props);
@@ -73,11 +73,6 @@ export class UserService {
     const userFile: UserFile = {
       ...props,
     };
-
-    if (userFile.userType === userTypeSchema.enum.cloud) {
-      // Try logging in the user
-      // Return error on failure
-    }
 
     await this.jsonFileService.update(userFile, userFilePath, userFileSchema);
     // The identity every later commit is signed with, so it belongs in

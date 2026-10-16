@@ -101,15 +101,16 @@ export const constructorElekIoCoreSchema = elekIoCoreOptionsSchema
     cloud: elekIoCoreOptionsSchema.shape.cloud
       .extend({
         /**
-         * A bearer token for elek.io Cloud, which every Cloud call carries
-         * until Cloud answers 401
+         * A bearer token for elek.io Cloud, which every call using a session
+         * carries until Core signs out or Cloud answers 401
          *
-         * Core keeps it in memory and never writes it anywhere, so it is not
-         * part of `core.options` either.
+         * A host persists the token and passes it back here. Core keeps it in
+         * memory and never writes it anywhere, so it is not part of
+         * `core.options` either.
          *
          * Overrides the ELEK_IO_CLOUD_TOKEN environment variable.
          *
-         * @see ../../docs/usage.md
+         * @see ../../docs/cloud-account.md
          */
         token: cloudTokenSchema,
       })

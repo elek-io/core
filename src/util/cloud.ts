@@ -1,4 +1,4 @@
-import type { ZodType } from 'zod';
+import type { ZodError, ZodType } from 'zod';
 import { cloudErrorResponseSchema } from '../schema/cloudSchema.js';
 import type { LogService } from '../service/LogService.js';
 import { CoreError, type CoreErrorType } from './shared.js';
@@ -30,7 +30,18 @@ export interface CloudRequest {
   subject: string;
   /** Checked in order before the shared mapping */
   refusals?: readonly CloudRefusal[];
+  /**
+   * Sent without the token Core holds, for a call that starts a session
+   * rather than uses one. Its 401 then says nothing about that session
+   */
+  isAnonymous?: boolean;
 }
+
+/**
+ * Told the token Core keeps, or null once it drops one. A host persisting
+ * the token updates its copy here, and may do so asynchronously
+ */
+export type CloudTokenListener = (token: string | null) => void | Promise<void>;
 
 /**
  * The one seam every elek.io Cloud call goes through: the base URL, the
@@ -49,6 +60,7 @@ export class CloudClient {
   private readonly url: string;
   private readonly userAgent: string;
   private readonly logService: LogService;
+  private readonly listeners = new Set<CloudTokenListener>();
   private token: string | null;
 
   public constructor(
@@ -63,19 +75,30 @@ export class CloudClient {
     this.logService = logService;
   }
 
-  /** Whether Core holds a token, which every call then carries */
+  /** Whether Core holds a token, which every call but an anonymous one carries */
   public get hasToken(): boolean {
     return this.token !== null;
   }
 
   /** Keeps a token for every later call, replacing the one held before */
   public keep(token: string): void {
-    this.token = token;
+    this.change(token);
   }
 
   /** Drops the token, so later calls carry none */
   public forget(): void {
-    this.token = null;
+    this.change(null);
+  }
+
+  /**
+   * Tells `listener` every token Core keeps and drops from here on, never
+   * the one it started with. Returns the function that removes it again.
+   */
+  public onTokenChange(listener: CloudTokenListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   /**
@@ -87,7 +110,7 @@ export class CloudClient {
    */
   public async request(request: CloudRequest): Promise<Response> {
     const url = `${this.url}${request.path}`;
-    const sentToken = this.token;
+    const sentToken = request.isAnonymous === true ? null : this.token;
     const headers: Record<string, string> = { 'User-Agent': this.userAgent };
     if (request.body !== undefined) {
       headers['Content-Type'] = 'application/json';
@@ -118,7 +141,7 @@ export class CloudClient {
     // was in flight is not the one forgotten
     if (response.status === 401 && sentToken !== null) {
       if (this.token === sentToken) {
-        this.token = null;
+        this.change(null);
         this.logService.info({
           source: 'core',
           message:
@@ -152,12 +175,51 @@ export class CloudClient {
     const parsed = schema.safeParse(payload);
     if (parsed.success === false) {
       throw CoreError.internal(
-        `elek.io Cloud accepted ${subject} but answered with something else: ${parsed.error.message}`,
+        `elek.io Cloud accepted ${subject} but answered with something else at ${issuesOf(parsed.error)}`,
         parsed.error
       );
     }
     return parsed.data;
   }
+
+  /**
+   * Sets the token and tells every listener, when it changed. A listener is
+   * the host's, so one that fails is logged and the others still run.
+   */
+  private change(token: string | null): void {
+    if (this.token === token) {
+      return;
+    }
+    this.token = token;
+    for (const listener of this.listeners) {
+      try {
+        void Promise.resolve(listener(token)).catch(() => {
+          this.listenerFailed();
+        });
+      } catch {
+        this.listenerFailed();
+      }
+    }
+  }
+
+  /** What a failed listener leaves in the log. Its error is the host's text */
+  private listenerFailed(): void {
+    this.logService.warn({
+      source: 'core',
+      message: 'A listener of the elek.io Cloud token failed',
+    });
+  }
+}
+
+/**
+ * Where an answer went wrong, as the path and code of each issue. Never the
+ * issue messages, so what Cloud answered cannot reach a message however the
+ * schema reports it
+ */
+function issuesOf(error: ZodError): string {
+  return error.issues
+    .map((issue) => `${issue.path.join('.') || '<root>'} (${issue.code})`)
+    .join(', ');
 }
 
 /**

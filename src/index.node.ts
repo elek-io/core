@@ -8,6 +8,7 @@ import {
   type ElekIoCoreOptions,
 } from './schema/index.js';
 import {
+  AccountService,
   AssetService,
   CacheService,
   CloudService,
@@ -70,6 +71,7 @@ export default class ElekIoCore {
   private readonly referenceService: ReferenceService;
   private readonly releaseService: ReleaseService;
   private readonly cloudClient: CloudClient;
+  private readonly accountService: AccountService;
   private readonly reportService: ReportService;
   private readonly cloudService: CloudService;
   private readonly localApi: LocalApi;
@@ -209,7 +211,17 @@ export default class ElekIoCore {
       this.logService,
       this.cloudClient
     );
-    this.cloudService = new CloudService(this.reportService);
+    this.accountService = new AccountService(
+      this.options,
+      this.pathTo,
+      this.logService,
+      this.cloudClient,
+      this.userService
+    );
+    this.cloudService = new CloudService(
+      this.accountService,
+      this.reportService
+    );
 
     // Every cache that mirrors a working tree, cleared together whenever
     // git or Core changes one. See CacheService
@@ -358,8 +370,8 @@ export default class ElekIoCore {
   }
 
   /**
-   * Everything Core does against elek.io Cloud, which today is
-   * sending a bug report or feedback
+   * Everything Core does against elek.io Cloud: signing in to an account
+   * and sending a bug report or feedback
    */
   public get cloud(): CloudService {
     return this.cloudService;

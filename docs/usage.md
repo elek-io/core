@@ -61,9 +61,10 @@ The resolved options are exposed on `core.options`, and the running Core version
 - **`cloud.url`** is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It has to be an http or https URL. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`.
   - A trailing slash is dropped, since Core appends a path to it.
   - A value that is not a URL throws a `CoreError`, rather than falling back to the default and sending to production on the strength of a typo.
-- **`cloud.token`** is a bearer token every elek.io Cloud call carries, a report included. It takes precedence over the `ELEK_IO_CLOUD_TOKEN` environment variable, and there is no default.
+- **`cloud.token`** is a bearer token every elek.io Cloud call using the session carries, a report included. It takes precedence over the `ELEK_IO_CLOUD_TOKEN` environment variable, and there is no default.
+  - It is how a host hands back the token `core.cloud.account.signIn()` answered, see [`cloud-account.md`](./cloud-account.md#the-token).
   - Core keeps it in memory and never writes it to disk, so it is not part of `core.options` either.
-  - Core forgets it when elek.io Cloud answers 401, and the calls after that carry none.
+  - Core forgets it on `signOut()` and when elek.io Cloud answers 401, and the calls after that carry none.
   - A value holding whitespace or anything outside printable ASCII throws a `CoreError` of type `BadRequest`, whose message never repeats it.
 - **`cache`** decides whether Core keeps what it reads from a Project's files in memory between calls: parsed JSON files and the index that resolves Collection and Component slugs. It defaults to `true`, and everything kept is dropped whenever git changes a Project's working tree.
   - Set it to `false` when another application writes the same files while this Core runs. The Astro loaders do that for you during `astro dev`.
@@ -153,7 +154,10 @@ await core.user.set({
 });
 ```
 
-`core.user.get()` returns the current `User` or `null` if none is set (a fresh install has no User).
+`core.user.get()` returns the current `User` or `null` if none is set (a fresh install has no User). There are two kinds of User:
+
+- A `local` User has an `id` of `null`.
+- A `cloud` User carries the `id` of the elek.io account it signed in to. Setting one signs nobody in. `core.cloud.account.signIn()` signs in and sets the `cloud` User itself, see [`cloud-account.md`](./cloud-account.md).
 
 `name` takes up to 256 characters, with no `|` and no control characters, and `email` is an address of up to 254. A length counts UTF-16 code units, as `String.length` does. `core.user.set()` throws `BadRequest` past either limit. A `user.json` written by an older Core that breaks one reads back as `null`, the same as no User, so set the User again.
 

@@ -37,6 +37,17 @@ The namespace is one level deep everywhere except `core.cloud`, and that excepti
 
 The alternative was `core.reports`, flat like the rest. It was rejected because the next Cloud API would then sit beside it with nothing saying the two share a backend, an account and an outage.
 
+### The account
+
+The session Core signs in to hangs off `core.cloud.account`, singular because Core holds one session at a time. Why the names:
+
+- `account` rather than `session`. `signUp()` creates the account and can answer no session at all, and verifying an address or resetting a password act on the account too. `session.signUp()` reads as creating a session.
+- `signUp()`, `signIn()` and `signOut()` rather than the CRUD verbs. They are the words a sign in form and its reader use, and `create()` would not say whether it makes an account or a session.
+- `read()` keeps the CRUD verb, because it reads the account of the session and changes nothing but a dead token.
+- The sign up result's `outcome` is `session` or `verification`, one lowercase word each like Core's other enum values, naming what the caller has next.
+- `hasToken` follows the boolean rule above.
+- `onTokenChange()` takes the `on<Event>` shape of Node and DOM listeners and returns its own remover, so there is no `off` method to pair with it.
+
 ## Astro entry exports
 
 Two conventions from the Astro ecosystem apply to `@elek-io/core/astro`:

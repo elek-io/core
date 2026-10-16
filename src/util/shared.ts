@@ -125,17 +125,17 @@ export class CoreError extends Error {
     return new CoreError('BadRequest', message, cause);
   }
   /**
-   * No User is configured for a commit, or the remote rejected the
-   * credential. The remote refusing, as opposed to `preconditionFailed`,
-   * which is Core refusing.
+   * No User is configured for a commit, or the remote or elek.io Cloud
+   * rejected the credential. The remote refusing, as opposed to
+   * `preconditionFailed`, which is Core refusing.
    */
   static unauthorized(message: string, cause?: unknown) {
     return new CoreError('Unauthorized', message, cause);
   }
   /**
    * The input is valid but the current state refuses it: a slug or unique
-   * Value another Entry already holds, uncommitted changes, or deleting
-   * content something still references.
+   * Value another Entry already holds, uncommitted changes, deleting content
+   * something still references, or an elek.io address not verified yet.
    */
   static conflict(message: string, cause?: unknown) {
     return new CoreError('Conflict', message, cause);
@@ -166,7 +166,7 @@ export class CoreError extends Error {
   }
   /**
    * elek.io Cloud refused because this client passed its rate limit. Only
-   * reporting reaches the Cloud, so nothing else raises it.
+   * the `core.cloud` calls reach it, so nothing else raises it.
    */
   static rateLimited(message: string, cause?: unknown) {
     return new CoreError('RateLimited', message, cause);

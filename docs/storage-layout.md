@@ -12,7 +12,7 @@ Core works under a single data directory, `~/elek.io` by default. The root is co
 | --- | --- | --- |
 | `pathTo.projects` | `~/elek.io/projects` | All Projects, one folder each |
 | `pathTo.project(id)` | `~/elek.io/projects/{projectId}` | A single Project (a git repository) |
-| `pathTo.userFile` | `~/elek.io/user.json` | The current User set via `core.user.set()` |
+| `pathTo.userFile` | `~/elek.io/user.json` | The current User set via `core.user.set()` or by signing in to elek.io Cloud, never the session's token |
 | `pathTo.tmp` | `~/elek.io/tmp` | Scratch space (emptied on Core startup) |
 
 The User file is global, not per-Project. There is one `user.json` per data directory.
