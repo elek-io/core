@@ -302,10 +302,10 @@ describe('resolveContentRef', () => {
     vi.unstubAllEnvs();
   });
 
-  it('provisions the production channel when nothing is configured', () => {
+  it('provisions the release channel when nothing is configured', () => {
     vi.stubEnv('ELEK_IO_CHANNEL', undefined);
 
-    expect(resolveContentRef()).toBe('production');
+    expect(resolveContentRef()).toBe('release');
   });
 
   it('returns the given ref when the environment variable is unset', () => {
@@ -322,7 +322,7 @@ describe('resolveContentRef', () => {
     // without touching the configuration of a single Project
     vi.stubEnv('ELEK_IO_CHANNEL', 'preview');
 
-    expect(resolveContentRef('production')).toBe('preview');
+    expect(resolveContentRef('release')).toBe('preview');
     expect(resolveContentRef('1.2.3')).toBe('preview');
   });
 
@@ -339,7 +339,16 @@ describe('resolveContentRef', () => {
 
     expect(() => resolveContentRef()).toThrow(CoreError);
     expect(() => resolveContentRef()).toThrow(
-      'ELEK_IO_CHANNEL must be "production", "preview" or "draft", got "1.2.3"'
+      'ELEK_IO_CHANNEL must be "release", "preview" or "draft", got "1.2.3"'
+    );
+  });
+
+  it('rejects production, which is not a channel', () => {
+    vi.stubEnv('ELEK_IO_CHANNEL', 'production');
+
+    expect(() => resolveContentRef()).toThrow(CoreError);
+    expect(() => resolveContentRef()).toThrow(
+      'ELEK_IO_CHANNEL must be "release", "preview" or "draft", got "production"'
     );
   });
 });

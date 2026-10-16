@@ -149,8 +149,8 @@ export class ProjectService
   /**
    * Creates the Project folder with its `assets`, `collections`, `components`
    * and `lfs` subfolders, writes `.gitignore` and `.gitattributes`, then
-   * initializes a git repository whose first commit lands on `production`.
-   * The Project is left checked out on `work`.
+   * initializes a git repository whose first commit lands on `main`.
+   * The Project is left checked out on `draft`.
    *
    * Throws `PreconditionFailed` in read-only mode and `Unauthorized` when no
    * User is set. A failure at any step removes the half-created folder, which
@@ -184,7 +184,7 @@ export class ProjectService
           await this.createGitignore(projectPath);
           await this.createGitattributes(projectPath);
           await this.gitService.init(projectPath, {
-            initialBranch: projectBranchSchema.enum.production,
+            initialBranch: projectBranchSchema.enum.main,
           });
           await this.jsonFileService.create(
             projectFile,
@@ -198,7 +198,7 @@ export class ProjectService
           });
           await this.gitService.branches.switch(
             projectPath,
-            projectBranchSchema.enum.work,
+            projectBranchSchema.enum.draft,
             {
               create: true,
             }
@@ -289,7 +289,7 @@ export class ProjectService
       props,
       async (validatedProps) => {
         const { id, url } = validatedProps;
-        const ref = validatedProps.ref ?? contentChannelSchema.enum.production;
+        const ref = validatedProps.ref ?? contentChannelSchema.enum.release;
         const projectPath = this.pathTo.project(id);
         const markerPath = this.pathTo.projectProvisionedMarker(id);
 
@@ -431,21 +431,18 @@ export class ProjectService
     const branch = await this.gitService.branches.current(
       this.pathTo.project(project.id)
     );
-    const state =
-      branch === projectBranchSchema.enum.work
-        ? 'draft'
-        : branch || 'Release tag';
+    const state = branch || 'Release tag';
     return `Could not reach the remote of Project "${project.id}" to provision "${ref}", building with the copy already in the data directory: version ${project.version} (${state}). The content may be outdated. Cause: ${cause}`;
   }
 
   /**
    * Maps a channel ref to the branch it follows, or null for refs
-   * that resolve through tags (`production`, `preview` and exact
+   * that resolve through tags (`release`, `preview` and exact
    * versions)
    */
   private refToBranch(ref: string): string | null {
     if (ref === contentChannelSchema.enum.draft) {
-      return projectBranchSchema.enum.work;
+      return projectBranchSchema.enum.draft;
     }
     return null;
   }
@@ -686,7 +683,7 @@ export class ProjectService
    * Resolves a channel or exact version to its tag and checks it out
    * with a detached HEAD, discarding local modifications
    *
-   * `production` resolves to the newest Release tag, `preview` to the
+   * `release` resolves to the newest Release tag, `preview` to the
    * newest preview tag, both by semver. Resolution is strictly against
    * the tags the remote advertises, which keeps stale local tags of a
    * previously configured remote out. Their objects are already
@@ -705,11 +702,11 @@ export class ProjectService
 
     let match: VersionedGitTag | null = null;
     if (
-      ref === contentChannelSchema.enum.production ||
+      ref === contentChannelSchema.enum.release ||
       ref === contentChannelSchema.enum.preview
     ) {
       const type =
-        ref === contentChannelSchema.enum.production ? 'release' : 'preview';
+        ref === contentChannelSchema.enum.release ? 'release' : 'preview';
       for (const tag of versionedTags) {
         if (tag.message.type !== type) {
           continue;
@@ -841,7 +838,7 @@ export class ProjectService
   /**
    * Migrates and commits every Asset, Component, Collection and Entry file on
    * a temporary `upgrade/core-<from>-to-<to>` branch, squash-merges that into
-   * `work` and records an `upgrade` tag. A failure leaves `work` untouched.
+   * `draft` and records an `upgrade` tag. A failure leaves `draft` untouched.
    *
    * Throws `UpgradeFailed` when the Project was written by a newer Core or is
    * already up to date without `force`, and `PreconditionFailed` in read-only
@@ -916,7 +913,7 @@ export class ProjectService
         });
         await this.gitService.branches.switch(
           projectPath,
-          projectBranchSchema.enum.work
+          projectBranchSchema.enum.draft
         );
         await this.gitService.merge(projectPath, upgradeBranchName, {
           squash: true,
@@ -971,7 +968,7 @@ export class ProjectService
   }
 
   /**
-   * Switches to the work branch and verifies the Project can be upgraded.
+   * Switches to the draft branch and verifies the Project can be upgraded.
    *
    * Throws when the Projects Core version is ahead of the current Core version,
    * or when it is already up to date and the upgrade was not forced.
@@ -983,10 +980,10 @@ export class ProjectService
     force: boolean | undefined
   ): Promise<Record<string, unknown> & { coreVersion: string }> {
     const currentBranch = await this.gitService.branches.current(projectPath);
-    if (currentBranch !== projectBranchSchema.enum.work) {
+    if (currentBranch !== projectBranchSchema.enum.draft) {
       await this.gitService.branches.switch(
         projectPath,
-        projectBranchSchema.enum.work
+        projectBranchSchema.enum.draft
       );
     }
 
@@ -1062,7 +1059,7 @@ export class ProjectService
   /**
    * Best-effort cleanup after a failed upgrade.
    *
-   * Switches back to the work branch and removes the upgrade branch, swallowing
+   * Switches back to the draft branch and removes the upgrade branch, swallowing
    * any error so the original upgrade failure is the one that surfaces.
    */
   private async cleanupFailedUpgrade(
@@ -1072,7 +1069,7 @@ export class ProjectService
     try {
       await this.gitService.branches.switch(
         projectPath,
-        projectBranchSchema.enum.work
+        projectBranchSchema.enum.draft
       );
       await this.gitService.branches.delete(
         projectPath,
@@ -1137,7 +1134,7 @@ export class ProjectService
     /**
      * Moves the Project's working tree, so every subsequent create, update
      * and delete commits to whatever branch is now current. Switching back to
-     * `work` is the caller's job.
+     * `draft` is the caller's job.
      *
      * Throws `PreconditionFailed` on a provisioned copy, and git fails on
      * uncommitted changes unless `options.discardChanges` is set, which
@@ -1250,7 +1247,7 @@ export class ProjectService
    * the push is blocked if any are found. The integrated commits stay local, so
    * they can be repaired through Core's own delete or update and synchronized
    * again. A blocked sync performs no remote mutation, and the scope is the
-   * current `work` tree only.
+   * current `draft` tree only.
    *
    * @see ../../contributing/reference-integrity.md
    */

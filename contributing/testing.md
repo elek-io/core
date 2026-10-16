@@ -127,7 +127,7 @@ Three more paths are left uncovered on purpose. Each is listed so the next perso
 - **`--watch` on `elek export`, `generate:types` and `generate:client`.** Each is the same six-line wrapper that logs and hands `watchProjects()` to the same regenerate call. A test would start a watcher that never settles and assert the wrapper rather than the watching.
   - The debouncing and overlap handling that is worth proving lives in `watchContent` and is covered by [`src/astro/watch.test.ts`](../src/astro/watch.test.ts).
 - **Auth failures on `push` and the generic git runner.** Both classify the stderr of a remote that rejected a credential, which the local bare remotes cannot produce, for the reason in the credentials limitation above.
-- **A remote without a `work` branch.** Provisioning the `draft` channel refuses one, but no Core operation produces such a remote. The fixture would have to be built by hand purely to read the error message back.
+- **A remote without a `draft` branch.** Provisioning the `draft` channel refuses one, but no Core operation produces such a remote. The fixture would have to be built by hand purely to read the error message back.
 
 ### Worker count: do not set it
 

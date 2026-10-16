@@ -46,11 +46,11 @@ import type { ProjectService } from './ProjectService.js';
 import type { PathTo } from '../util/node.js';
 
 /**
- * Diffs the `work` branch against `production` to compute a semver bump from
- * what actually changed.
+ * Diffs the `draft` branch against `main` to compute a semver bump from what
+ * actually changed.
  *
- * `create()` then promotes `work` to `production` and tags it. `createPreview()`
- * only tags a snapshot on `work` and never touches `production`.
+ * `create()` then promotes `draft` into `main` and tags it. `createPreview()`
+ * only tags a snapshot on `draft` and never touches `main`.
  *
  * @see ../../docs/releases.md
  */
@@ -102,90 +102,90 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Diffs the current `work` branch against `production` and returns a
-   * read-only summary plus the computed next version. With no changes, both
-   * `bump` and `nextVersion` are null.
+   * Diffs the current `draft` branch against `main` and returns a read-only
+   * summary plus the computed next version. With no changes, both `bump` and
+   * `nextVersion` are null.
    *
-   * Throws `PreconditionFailed` unless the Project is checked out on `work`.
+   * Throws `PreconditionFailed` unless the Project is checked out on `draft`.
    * Writes nothing, to disk or to git.
    *
-   * A `work` branch merely ahead in commits, with no classified change, still
+   * A `draft` branch merely ahead in commits, with no classified change, still
    * yields a `patch` bump.
    */
   public prepare(props: PrepareReleaseProps): Promise<ReleaseDiff> {
     return this.validated('prepare', prepareReleaseSchema, props, async () => {
       const projectPath = this.pathTo.project(props.projectId);
-      const productionRef = projectBranchSchema.enum.production;
+      const releasedRef = projectBranchSchema.enum.main;
 
       const currentBranch = await this.gitService.branches.current(projectPath);
-      if (currentBranch !== projectBranchSchema.enum.work) {
+      if (currentBranch !== projectBranchSchema.enum.draft) {
         throw CoreError.preconditionFailed(
-          `Not on work branch (currently on "${currentBranch}")`
+          `Not on draft branch (currently on "${currentBranch}")`
         );
       }
 
       const project = await this.projectService.read({ id: props.projectId });
       const currentVersion = project.version;
 
-      const productionProject = await this.getProjectAtRef(
+      const releasedProject = await this.getProjectAtRef(
         props.projectId,
         projectPath,
-        productionRef
+        releasedRef
       );
-      const projectDiff = this.diffProject(project, productionProject);
+      const projectDiff = this.diffProject(project, releasedProject);
 
       const currentCollections = await this.getCollectionsAtRef(
         props.projectId,
         projectPath,
-        projectBranchSchema.enum.work
+        projectBranchSchema.enum.draft
       );
-      const productionCollections = await this.getCollectionsAtRef(
+      const releasedCollections = await this.getCollectionsAtRef(
         props.projectId,
         projectPath,
-        productionRef
+        releasedRef
       );
       const collectionDiff = this.diffCollections(
         currentCollections,
-        productionCollections
+        releasedCollections
       );
 
       const currentAssets = await this.getAssetsAtRef(
         props.projectId,
         projectPath,
-        projectBranchSchema.enum.work
+        projectBranchSchema.enum.draft
       );
-      const productionAssets = await this.getAssetsAtRef(
+      const releasedAssets = await this.getAssetsAtRef(
         props.projectId,
         projectPath,
-        productionRef
+        releasedRef
       );
-      const assetDiff = this.diffAssets(currentAssets, productionAssets);
+      const assetDiff = this.diffAssets(currentAssets, releasedAssets);
 
       const currentComponents = await this.getComponentsAtRef(
         props.projectId,
         projectPath,
-        projectBranchSchema.enum.work
+        projectBranchSchema.enum.draft
       );
-      const productionComponents = await this.getComponentsAtRef(
+      const releasedComponents = await this.getComponentsAtRef(
         props.projectId,
         projectPath,
-        productionRef
+        releasedRef
       );
       const componentDiff = this.diffComponents(
         currentComponents,
-        productionComponents
+        releasedComponents
       );
 
       const allCollectionIds = new Set([
         ...currentCollections.map((c) => c.id),
-        ...productionCollections.map((c) => c.id),
+        ...releasedCollections.map((c) => c.id),
       ]);
 
       const entryDiff = await this.diffEntries(
         props.projectId,
         projectPath,
         allCollectionIds,
-        productionRef
+        releasedRef
       );
 
       // Combine bumps from all diffs
@@ -205,8 +205,8 @@ export class ReleaseService extends AbstractService {
       if (!finalBump) {
         const hasContentChanges = await this.hasCommitsBetween(
           projectPath,
-          productionRef,
-          projectBranchSchema.enum.work
+          releasedRef,
+          projectBranchSchema.enum.draft
         );
         if (hasContentChanges) {
           finalBump = 'patch';
@@ -234,9 +234,9 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Merges `work` into `production`, writes the next version there and tags
-   * it, merges that back into `work`, then pushes `production` and the tag
-   * when a remote is set.
+   * Merges `draft` into `main`, writes the next version there and tags it,
+   * merges that back into `draft`, then pushes `main` and the tag when a
+   * remote is set.
    *
    * Throws `PreconditionFailed` when nothing changed since the last release.
    * A failure at any step unwinds every one before it, so nothing half made
@@ -261,26 +261,29 @@ export class ReleaseService extends AbstractService {
 
       const nextVersion = diff.nextVersion;
 
-      const workBefore = await this.tipOf(
+      const draftBefore = await this.tipOf(
         projectPath,
-        projectBranchSchema.enum.work
+        projectBranchSchema.enum.draft
       );
-      // A cloned Project has no local `production` until the switch below
+      // A cloned Project may have no local `main` until the switch below
       // creates it, so the remote's tip is where it would be created
-      const productionBefore =
-        (await this.tipOf(projectPath, projectBranchSchema.enum.production)) ??
+      const mainBefore =
+        (await this.tipOf(projectPath, projectBranchSchema.enum.main)) ??
         (await this.tipOf(
           projectPath,
-          `origin/${projectBranchSchema.enum.production}`
+          `origin/${projectBranchSchema.enum.main}`
         ));
       let releaseTagId: string | null = null;
 
       try {
         await this.gitService.branches.switch(
           projectPath,
-          projectBranchSchema.enum.production
+          projectBranchSchema.enum.main
         );
-        await this.gitService.merge(projectPath, projectBranchSchema.enum.work);
+        await this.gitService.merge(
+          projectPath,
+          projectBranchSchema.enum.draft
+        );
 
         const updatedProjectFile = {
           ...diff.project,
@@ -305,19 +308,16 @@ export class ReleaseService extends AbstractService {
         releaseTagId = releaseTag.id;
         await this.gitService.branches.switch(
           projectPath,
-          projectBranchSchema.enum.work
+          projectBranchSchema.enum.draft
         );
-        await this.gitService.merge(
-          projectPath,
-          projectBranchSchema.enum.production
-        );
+        await this.gitService.merge(projectPath, projectBranchSchema.enum.main);
 
         // A Release is the publish moment, so the remote receives
-        // `production` and the tag once the local release is complete
+        // `main` and the tag once the local release is complete
         const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
         if (hasOrigin) {
           await this.gitService.push(projectPath, {
-            refs: [projectBranchSchema.enum.production, releaseTag.id],
+            refs: [projectBranchSchema.enum.main, releaseTag.id],
           });
         }
 
@@ -337,8 +337,8 @@ export class ReleaseService extends AbstractService {
         };
       } catch (error) {
         await this.unwind(projectPath, releaseTagId, [
-          { name: projectBranchSchema.enum.production, tip: productionBefore },
-          { name: projectBranchSchema.enum.work, tip: workBefore },
+          { name: projectBranchSchema.enum.main, tip: mainBefore },
+          { name: projectBranchSchema.enum.draft, tip: draftBefore },
         ]);
         throw error;
       }
@@ -346,12 +346,12 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Writes a pre-release version such as `1.1.0-preview.3` onto `work`, tags
+   * Writes a pre-release version such as `1.1.0-preview.3` onto `draft`, tags
    * it there and pushes the tag when a remote is set. It never touches
-   * `production`, so only `create` promotes content.
+   * `main`, so only `create` promotes content.
    *
    * A failure unwinds the version commit and the tag, so a failed preview
-   * leaves `work` where it was.
+   * leaves `draft` where it was.
    *
    * @see ../../docs/releases.md
    */
@@ -388,9 +388,9 @@ export class ReleaseService extends AbstractService {
           updated: datetime(),
         };
 
-        const workBefore = await this.tipOf(
+        const draftBefore = await this.tipOf(
           projectPath,
-          projectBranchSchema.enum.work
+          projectBranchSchema.enum.draft
         );
         let previewTagId: string | null = null;
 
@@ -412,7 +412,7 @@ export class ReleaseService extends AbstractService {
           previewTagId = previewTag.id;
 
           // Previews are deployable, so the tag is published as well. The
-          // `work` branch ref itself stays local to synchronize()
+          // `draft` branch ref itself stays local to synchronize()
           const hasOrigin =
             await this.gitService.remotes.hasOrigin(projectPath);
           if (hasOrigin) {
@@ -437,7 +437,7 @@ export class ReleaseService extends AbstractService {
           };
         } catch (error) {
           await this.unwind(projectPath, previewTagId, [
-            { name: projectBranchSchema.enum.work, tip: workBefore },
+            { name: projectBranchSchema.enum.draft, tip: draftBefore },
           ]);
           throw error;
         }
@@ -447,7 +447,7 @@ export class ReleaseService extends AbstractService {
 
   /**
    * The commit a branch points at, or null when it does not resolve, which
-   * is what a Project without a local `production` branch answers.
+   * is what a Project without a local `main` branch answers.
    */
   private async tipOf(
     projectPath: string,
@@ -462,7 +462,7 @@ export class ReleaseService extends AbstractService {
 
   /**
    * Undoes what a failed release already did and leaves the Project on
-   * `work`, because a half-finished release cannot be completed through the
+   * `draft`, because a half-finished release cannot be completed through the
    * public API and is worse than none.
    *
    * Every step swallows its own failure and warns, so the caller sees the
@@ -494,10 +494,10 @@ export class ReleaseService extends AbstractService {
       });
     }
 
-    await this.recovering('switch back to work', () =>
+    await this.recovering('switch back to draft', () =>
       this.gitService.branches.switch(
         projectPath,
-        projectBranchSchema.enum.work
+        projectBranchSchema.enum.draft
       )
     );
   }
@@ -754,7 +754,7 @@ export class ReleaseService extends AbstractService {
    */
   private diffComponents(
     currentComponents: ComponentFile[],
-    productionComponents: ComponentFile[]
+    releasedComponents: ComponentFile[]
   ): {
     bump: SemverBump | null;
     componentChanges: ComponentChange[];
@@ -765,10 +765,10 @@ export class ReleaseService extends AbstractService {
     let highestBump: SemverBump | null = null;
 
     const currentById = new Map(currentComponents.map((c) => [c.id, c]));
-    const productionById = new Map(productionComponents.map((c) => [c.id, c]));
+    const releasedById = new Map(releasedComponents.map((c) => [c.id, c]));
 
-    // Deleted components (in production but not in current) - MAJOR
-    for (const [id] of productionById) {
+    // Deleted components (released but not in current) - MAJOR
+    for (const [id] of releasedById) {
       if (!currentById.has(id)) {
         componentChanges.push({
           componentId: id,
@@ -779,9 +779,9 @@ export class ReleaseService extends AbstractService {
       }
     }
 
-    // New components (in current but not in production) - MINOR
+    // New components (in current but not released) - MINOR
     for (const [id] of currentById) {
-      if (!productionById.has(id)) {
+      if (!releasedById.has(id)) {
         componentChanges.push({
           componentId: id,
           changeType: 'added',
@@ -793,13 +793,13 @@ export class ReleaseService extends AbstractService {
 
     // Matched components - diff their field definitions
     for (const [id, currentComponent] of currentById) {
-      const productionComponent = productionById.get(id);
-      if (!productionComponent) continue;
+      const releasedComponent = releasedById.get(id);
+      if (!releasedComponent) continue;
 
       const changes = this.diffComponentFieldDefinitions(
         id,
         currentComponent.fieldDefinitions,
-        productionComponent.fieldDefinitions
+        releasedComponent.fieldDefinitions
       );
 
       componentFieldChanges.push(...changes);
@@ -819,15 +819,15 @@ export class ReleaseService extends AbstractService {
   private diffComponentFieldDefinitions(
     componentId: string,
     currentFields: FieldDefinition[],
-    productionFields: FieldDefinition[]
+    releasedFields: FieldDefinition[]
   ): ComponentFieldChange[] {
     const changes: ComponentFieldChange[] = [];
 
     const currentById = new Map(currentFields.map((f) => [f.id, f]));
-    const productionById = new Map(productionFields.map((f) => [f.id, f]));
+    const releasedById = new Map(releasedFields.map((f) => [f.id, f]));
 
     // Deleted fields - MAJOR
-    for (const [id, field] of productionById) {
+    for (const [id, field] of releasedById) {
       if (!currentById.has(id)) {
         changes.push({
           componentId,
@@ -841,7 +841,7 @@ export class ReleaseService extends AbstractService {
 
     // New fields - MINOR
     for (const [id, field] of currentById) {
-      if (!productionById.has(id)) {
+      if (!releasedById.has(id)) {
         changes.push({
           componentId,
           fieldId: id,
@@ -854,13 +854,13 @@ export class ReleaseService extends AbstractService {
 
     // Matched fields - compare property by property
     for (const [id, currentField] of currentById) {
-      const productionField = productionById.get(id);
-      if (!productionField) continue;
+      const releasedField = releasedById.get(id);
+      if (!releasedField) continue;
 
       const fieldChanges = this.diffSingleField(
         componentId,
         currentField,
-        productionField
+        releasedField
       );
 
       // Map FieldChange to ComponentFieldChange
@@ -881,7 +881,7 @@ export class ReleaseService extends AbstractService {
   /**
    * Checks if there are any commits between two refs.
    *
-   * A failed `git log` returns true, so a Project whose `production` branch
+   * A failed `git log` returns true, so a Project whose `main` branch
    * holds no commits yet is treated as having changes and `prepare()` falls
    * back to a `patch` bump.
    */
@@ -896,7 +896,7 @@ export class ReleaseService extends AbstractService {
       });
       return commits.length > 0;
     } catch {
-      // If production branch has no commits yet (first release scenario),
+      // If the main branch has no commits yet (first release scenario),
       // treat as having changes
       return true;
     }
@@ -909,7 +909,7 @@ export class ReleaseService extends AbstractService {
    */
   private diffCollections(
     currentCollections: CollectionFile[],
-    productionCollections: CollectionFile[]
+    releasedCollections: CollectionFile[]
   ): {
     bump: SemverBump | null;
     collectionChanges: CollectionChange[];
@@ -920,10 +920,10 @@ export class ReleaseService extends AbstractService {
     let highestBump: SemverBump | null = null;
 
     const currentById = new Map(currentCollections.map((c) => [c.id, c]));
-    const productionById = new Map(productionCollections.map((c) => [c.id, c]));
+    const releasedById = new Map(releasedCollections.map((c) => [c.id, c]));
 
-    // Deleted collections (in production but not in current)
-    for (const [id] of productionById) {
+    // Deleted collections (released but not in current)
+    for (const [id] of releasedById) {
       if (!currentById.has(id)) {
         collectionChanges.push({
           collectionId: id,
@@ -934,9 +934,9 @@ export class ReleaseService extends AbstractService {
       }
     }
 
-    // New collections (in current but not in production)
+    // New collections (in current but not released)
     for (const [id] of currentById) {
-      if (!productionById.has(id)) {
+      if (!releasedById.has(id)) {
         collectionChanges.push({
           collectionId: id,
           changeType: 'added',
@@ -948,13 +948,13 @@ export class ReleaseService extends AbstractService {
 
     // Matched collections - diff their field definitions
     for (const [id, currentCollection] of currentById) {
-      const productionCollection = productionById.get(id);
-      if (!productionCollection) continue;
+      const releasedCollection = releasedById.get(id);
+      if (!releasedCollection) continue;
 
       const changes = this.diffFieldDefinitions(
         id,
         flattenFieldDefinitions(currentCollection.fieldDefinitions),
-        flattenFieldDefinitions(productionCollection.fieldDefinitions)
+        flattenFieldDefinitions(releasedCollection.fieldDefinitions)
       );
 
       fieldChanges.push(...changes);
@@ -968,21 +968,21 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Diffs the project file between current and production.
+   * Diffs the project file between current and released.
    *
    * Skips immutable/system-managed fields (id, objectType, created, updated, version, coreVersion).
    */
   private diffProject(
     current: ProjectFile,
-    production: ProjectFile | null
+    released: ProjectFile | null
   ): {
     bump: SemverBump | null;
     projectChanges: ProjectChange[];
   } {
     const projectChanges: ProjectChange[] = [];
 
-    // No production project means first release - no changes to report
-    if (!production) {
+    // No released project means first release - no changes to report
+    if (!released) {
       return { bump: null, projectChanges };
     }
 
@@ -990,7 +990,7 @@ export class ReleaseService extends AbstractService {
 
     // MAJOR: default language changed
     if (
-      current.settings.language.default !== production.settings.language.default
+      current.settings.language.default !== released.settings.language.default
     ) {
       projectChanges.push({
         changeType: 'defaultLanguageChanged',
@@ -1001,9 +1001,9 @@ export class ReleaseService extends AbstractService {
 
     // MAJOR: supported language removed
     const currentSupported = new Set(current.settings.language.supported);
-    const productionSupported = new Set(production.settings.language.supported);
+    const releasedSupported = new Set(released.settings.language.supported);
 
-    for (const lang of productionSupported) {
+    for (const lang of releasedSupported) {
       if (!currentSupported.has(lang)) {
         projectChanges.push({
           changeType: 'supportedLanguageRemoved',
@@ -1016,7 +1016,7 @@ export class ReleaseService extends AbstractService {
 
     // MINOR: supported language added
     for (const lang of currentSupported) {
-      if (!productionSupported.has(lang)) {
+      if (!releasedSupported.has(lang)) {
         projectChanges.push({
           changeType: 'supportedLanguageAdded',
           bump: 'minor',
@@ -1027,12 +1027,12 @@ export class ReleaseService extends AbstractService {
     }
 
     // PATCH: name, description
-    if (current.name !== production.name) {
+    if (current.name !== released.name) {
       projectChanges.push({ changeType: 'nameChanged', bump: 'patch' });
       highestBump = this.higherBump(highestBump, 'patch');
     }
 
-    if (current.description !== production.description) {
+    if (current.description !== released.description) {
       projectChanges.push({
         changeType: 'descriptionChanged',
         bump: 'patch',
@@ -1048,7 +1048,7 @@ export class ReleaseService extends AbstractService {
    */
   private diffAssets(
     currentAssets: AssetFile[],
-    productionAssets: AssetFile[]
+    releasedAssets: AssetFile[]
   ): {
     bump: SemverBump | null;
     assetChanges: AssetChange[];
@@ -1057,10 +1057,10 @@ export class ReleaseService extends AbstractService {
     let highestBump: SemverBump | null = null;
 
     const currentById = new Map(currentAssets.map((a) => [a.id, a]));
-    const productionById = new Map(productionAssets.map((a) => [a.id, a]));
+    const releasedById = new Map(releasedAssets.map((a) => [a.id, a]));
 
-    // Deleted assets (in production but not in current) - MAJOR
-    for (const [id] of productionById) {
+    // Deleted assets (released but not in current) - MAJOR
+    for (const [id] of releasedById) {
       if (!currentById.has(id)) {
         assetChanges.push({
           assetId: id,
@@ -1071,9 +1071,9 @@ export class ReleaseService extends AbstractService {
       }
     }
 
-    // New assets (in current but not in production) - MINOR
+    // New assets (in current but not released) - MINOR
     for (const [id] of currentById) {
-      if (!productionById.has(id)) {
+      if (!releasedById.has(id)) {
         assetChanges.push({ assetId: id, changeType: 'added', bump: 'minor' });
         highestBump = this.higherBump(highestBump, 'minor');
       }
@@ -1081,14 +1081,14 @@ export class ReleaseService extends AbstractService {
 
     // Modified assets - compare properties
     for (const [id, current] of currentById) {
-      const production = productionById.get(id);
-      if (!production) continue;
+      const released = releasedById.get(id);
+      if (!released) continue;
 
       // Binary changed (extension, mimeType, or size differ) - PATCH
       if (
-        current.extension !== production.extension ||
-        current.mimeType !== production.mimeType ||
-        current.size !== production.size
+        current.extension !== released.extension ||
+        current.mimeType !== released.mimeType ||
+        current.size !== released.size
       ) {
         assetChanges.push({
           assetId: id,
@@ -1100,8 +1100,8 @@ export class ReleaseService extends AbstractService {
 
       // Metadata changed (name or description differ) - PATCH
       if (
-        current.name !== production.name ||
-        current.description !== production.description
+        current.name !== released.name ||
+        current.description !== released.description
       ) {
         assetChanges.push({
           assetId: id,
@@ -1116,13 +1116,13 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Diffs entries across all collections between current and production.
+   * Diffs entries across all collections between current and released.
    */
   private async diffEntries(
     projectId: string,
     projectPath: string,
     allCollectionIds: Set<string>,
-    productionRef: string
+    releasedRef: string
   ): Promise<{
     bump: SemverBump | null;
     entryChanges: EntryChange[];
@@ -1135,20 +1135,20 @@ export class ReleaseService extends AbstractService {
         projectId,
         projectPath,
         collectionId,
-        projectBranchSchema.enum.work
+        projectBranchSchema.enum.draft
       );
-      const productionEntries = await this.getEntriesAtRef(
+      const releasedEntries = await this.getEntriesAtRef(
         projectId,
         projectPath,
         collectionId,
-        productionRef
+        releasedRef
       );
 
       const currentById = new Map(currentEntries.map((e) => [e.id, e]));
-      const productionById = new Map(productionEntries.map((e) => [e.id, e]));
+      const releasedById = new Map(releasedEntries.map((e) => [e.id, e]));
 
       // Deleted entries - MAJOR
-      for (const [id] of productionById) {
+      for (const [id] of releasedById) {
         if (!currentById.has(id)) {
           entryChanges.push({
             collectionId,
@@ -1162,7 +1162,7 @@ export class ReleaseService extends AbstractService {
 
       // New entries - MINOR
       for (const [id] of currentById) {
-        if (!productionById.has(id)) {
+        if (!releasedById.has(id)) {
           entryChanges.push({
             collectionId,
             entryId: id,
@@ -1175,10 +1175,10 @@ export class ReleaseService extends AbstractService {
 
       // Modified entries - PATCH
       for (const [id, current] of currentById) {
-        const production = productionById.get(id);
-        if (!production) continue;
+        const released = releasedById.get(id);
+        if (!released) continue;
 
-        if (isDeepStrictEqual(current.values, production.values) === false) {
+        if (isDeepStrictEqual(current.values, released.values) === false) {
           entryChanges.push({
             collectionId,
             entryId: id,
@@ -1202,15 +1202,15 @@ export class ReleaseService extends AbstractService {
   private diffFieldDefinitions(
     collectionId: string,
     currentFields: FieldDefinition[],
-    productionFields: FieldDefinition[]
+    releasedFields: FieldDefinition[]
   ): FieldChange[] {
     const changes: FieldChange[] = [];
 
     const currentById = new Map(currentFields.map((f) => [f.id, f]));
-    const productionById = new Map(productionFields.map((f) => [f.id, f]));
+    const releasedById = new Map(releasedFields.map((f) => [f.id, f]));
 
     // Deleted fields
-    for (const [id, field] of productionById) {
+    for (const [id, field] of releasedById) {
       if (!currentById.has(id)) {
         changes.push({
           collectionId,
@@ -1224,7 +1224,7 @@ export class ReleaseService extends AbstractService {
 
     // New fields
     for (const [id, field] of currentById) {
-      if (!productionById.has(id)) {
+      if (!releasedById.has(id)) {
         changes.push({
           collectionId,
           fieldId: id,
@@ -1237,13 +1237,13 @@ export class ReleaseService extends AbstractService {
 
     // Matched fields - compare property by property
     for (const [id, currentField] of currentById) {
-      const productionField = productionById.get(id);
-      if (!productionField) continue;
+      const releasedField = releasedById.get(id);
+      if (!releasedField) continue;
 
       const fieldChanges = this.diffSingleField(
         collectionId,
         currentField,
-        productionField
+        releasedField
       );
 
       changes.push(...fieldChanges);
@@ -1260,7 +1260,7 @@ export class ReleaseService extends AbstractService {
   private diffSingleField(
     collectionId: string,
     current: FieldDefinition,
-    production: FieldDefinition
+    released: FieldDefinition
   ): FieldChange[] {
     const base = {
       collectionId,
@@ -1269,9 +1269,9 @@ export class ReleaseService extends AbstractService {
     };
 
     return [
-      ...this.collectMajorFieldChanges(base, current, production),
-      ...this.collectMinorFieldChanges(base, current, production),
-      ...this.collectPatchFieldChanges(base, current, production),
+      ...this.collectMajorFieldChanges(base, current, released),
+      ...this.collectMinorFieldChanges(base, current, released),
+      ...this.collectPatchFieldChanges(base, current, released),
     ];
   }
 
@@ -1281,23 +1281,23 @@ export class ReleaseService extends AbstractService {
   private collectMajorFieldChanges(
     base: Pick<FieldChange, 'collectionId' | 'fieldId' | 'fieldSlug'>,
     current: FieldDefinition,
-    production: FieldDefinition
+    released: FieldDefinition
   ): FieldChange[] {
     const changes: FieldChange[] = [];
 
-    if (current.valueType !== production.valueType) {
+    if (current.valueType !== released.valueType) {
       changes.push({ ...base, changeType: 'valueTypeChanged', bump: 'major' });
     }
 
-    if (current.fieldType !== production.fieldType) {
+    if (current.fieldType !== released.fieldType) {
       changes.push({ ...base, changeType: 'fieldTypeChanged', bump: 'major' });
     }
 
-    if (current.slug !== production.slug) {
+    if (current.slug !== released.slug) {
       changes.push({ ...base, changeType: 'slugChanged', bump: 'major' });
     }
 
-    if (this.isMinMaxTightened(current, production)) {
+    if (this.isMinMaxTightened(current, released)) {
       changes.push({
         ...base,
         changeType: 'minMaxTightened',
@@ -1305,7 +1305,7 @@ export class ReleaseService extends AbstractService {
       });
     }
 
-    if (production.isRequired === true && current.isRequired === false) {
+    if (released.isRequired === true && current.isRequired === false) {
       changes.push({
         ...base,
         changeType: 'isRequiredToNotRequired',
@@ -1313,7 +1313,7 @@ export class ReleaseService extends AbstractService {
       });
     }
 
-    if (production.isUnique === true && current.isUnique === false) {
+    if (released.isUnique === true && current.isUnique === false) {
       changes.push({
         ...base,
         changeType: 'isUniqueToNotUnique',
@@ -1321,11 +1321,11 @@ export class ReleaseService extends AbstractService {
       });
     }
 
-    if (current.fieldType === 'entry' && production.fieldType === 'entry') {
+    if (current.fieldType === 'entry' && released.fieldType === 'entry') {
       if (
         isDeepStrictEqual(
           current.ofCollections.toSorted(),
-          production.ofCollections.toSorted()
+          released.ofCollections.toSorted()
         ) === false
       ) {
         changes.push({
@@ -1336,13 +1336,13 @@ export class ReleaseService extends AbstractService {
       }
     }
 
-    if (current.fieldType === 'slug' && production.fieldType === 'slug') {
+    if (current.fieldType === 'slug' && released.fieldType === 'slug') {
       // Changing the slug format re-canonicalises every value, breaking any
       // consumer relying on the slugs.
       if (
-        current.separator !== production.separator ||
-        current.lowercase !== production.lowercase ||
-        current.decamelize !== production.decamelize
+        current.separator !== released.separator ||
+        current.lowercase !== released.lowercase ||
+        current.decamelize !== released.decamelize
       ) {
         changes.push({
           ...base,
@@ -1361,11 +1361,11 @@ export class ReleaseService extends AbstractService {
   private collectMinorFieldChanges(
     base: Pick<FieldChange, 'collectionId' | 'fieldId' | 'fieldSlug'>,
     current: FieldDefinition,
-    production: FieldDefinition
+    released: FieldDefinition
   ): FieldChange[] {
     const changes: FieldChange[] = [];
 
-    if (production.isRequired === false && current.isRequired === true) {
+    if (released.isRequired === false && current.isRequired === true) {
       changes.push({
         ...base,
         changeType: 'isNotRequiredToRequired',
@@ -1373,7 +1373,7 @@ export class ReleaseService extends AbstractService {
       });
     }
 
-    if (production.isUnique === false && current.isUnique === true) {
+    if (released.isUnique === false && current.isUnique === true) {
       changes.push({
         ...base,
         changeType: 'isNotUniqueToUnique',
@@ -1390,11 +1390,11 @@ export class ReleaseService extends AbstractService {
   private collectPatchFieldChanges(
     base: Pick<FieldChange, 'collectionId' | 'fieldId' | 'fieldSlug'>,
     current: FieldDefinition,
-    production: FieldDefinition
+    released: FieldDefinition
   ): FieldChange[] {
     const changes: FieldChange[] = [];
 
-    if (this.isMinMaxLoosened(current, production)) {
+    if (this.isMinMaxLoosened(current, released)) {
       changes.push({
         ...base,
         changeType: 'minMaxLoosened',
@@ -1402,12 +1402,12 @@ export class ReleaseService extends AbstractService {
       });
     }
 
-    if (isDeepStrictEqual(current.label, production.label) === false) {
+    if (isDeepStrictEqual(current.label, released.label) === false) {
       changes.push({ ...base, changeType: 'labelChanged', bump: 'patch' });
     }
 
     if (
-      isDeepStrictEqual(current.description, production.description) === false
+      isDeepStrictEqual(current.description, released.description) === false
     ) {
       changes.push({
         ...base,
@@ -1418,8 +1418,8 @@ export class ReleaseService extends AbstractService {
 
     if (
       'defaultValue' in current &&
-      'defaultValue' in production &&
-      isDeepStrictEqual(current.defaultValue, production.defaultValue) === false
+      'defaultValue' in released &&
+      isDeepStrictEqual(current.defaultValue, released.defaultValue) === false
     ) {
       changes.push({
         ...base,
@@ -1428,7 +1428,7 @@ export class ReleaseService extends AbstractService {
       });
     }
 
-    if (current.inputWidth !== production.inputWidth) {
+    if (current.inputWidth !== released.inputWidth) {
       changes.push({
         ...base,
         changeType: 'inputWidthChanged',
@@ -1436,7 +1436,7 @@ export class ReleaseService extends AbstractService {
       });
     }
 
-    if (current.isDisabled !== production.isDisabled) {
+    if (current.isDisabled !== released.isDisabled) {
       changes.push({
         ...base,
         changeType: 'isDisabledChanged',
@@ -1448,10 +1448,10 @@ export class ReleaseService extends AbstractService {
     // stored data, so unlike ofCollectionsChanged this is non-breaking.
     if (
       current.fieldType === 'slug' &&
-      production.fieldType === 'slug' &&
+      released.fieldType === 'slug' &&
       isDeepStrictEqual(
         current.ofFieldDefinitions.toSorted(),
-        production.ofFieldDefinitions.toSorted()
+        released.ofFieldDefinitions.toSorted()
       ) === false
     ) {
       changes.push({
@@ -1472,29 +1472,21 @@ export class ReleaseService extends AbstractService {
    */
   private isMinMaxTightened(
     current: FieldDefinition,
-    production: FieldDefinition
+    released: FieldDefinition
   ): boolean {
     const currentMin = this.getMinMax(current, 'min');
-    const productionMin = this.getMinMax(production, 'min');
+    const releasedMin = this.getMinMax(released, 'min');
     const currentMax = this.getMinMax(current, 'max');
-    const productionMax = this.getMinMax(production, 'max');
+    const releasedMax = this.getMinMax(released, 'max');
 
     // Tightened min: was null (unbounded) and now has value, or increased
-    if (currentMin !== null && productionMin === null) return true;
-    if (
-      currentMin !== null &&
-      productionMin !== null &&
-      currentMin > productionMin
-    )
+    if (currentMin !== null && releasedMin === null) return true;
+    if (currentMin !== null && releasedMin !== null && currentMin > releasedMin)
       return true;
 
     // Tightened max: was null (unbounded) and now has value, or decreased
-    if (currentMax !== null && productionMax === null) return true;
-    if (
-      currentMax !== null &&
-      productionMax !== null &&
-      currentMax < productionMax
-    )
+    if (currentMax !== null && releasedMax === null) return true;
+    if (currentMax !== null && releasedMax !== null && currentMax < releasedMax)
       return true;
 
     return false;
@@ -1507,29 +1499,21 @@ export class ReleaseService extends AbstractService {
    */
   private isMinMaxLoosened(
     current: FieldDefinition,
-    production: FieldDefinition
+    released: FieldDefinition
   ): boolean {
     const currentMin = this.getMinMax(current, 'min');
-    const productionMin = this.getMinMax(production, 'min');
+    const releasedMin = this.getMinMax(released, 'min');
     const currentMax = this.getMinMax(current, 'max');
-    const productionMax = this.getMinMax(production, 'max');
+    const releasedMax = this.getMinMax(released, 'max');
 
     // Loosened min: had value and now null (unbounded), or decreased
-    if (currentMin === null && productionMin !== null) return true;
-    if (
-      currentMin !== null &&
-      productionMin !== null &&
-      currentMin < productionMin
-    )
+    if (currentMin === null && releasedMin !== null) return true;
+    if (currentMin !== null && releasedMin !== null && currentMin < releasedMin)
       return true;
 
     // Loosened max: had value and now null (unbounded), or increased
-    if (currentMax === null && productionMax !== null) return true;
-    if (
-      currentMax !== null &&
-      productionMax !== null &&
-      currentMax > productionMax
-    )
+    if (currentMax === null && releasedMax !== null) return true;
+    if (currentMax !== null && releasedMax !== null && currentMax > releasedMax)
       return true;
 
     return false;

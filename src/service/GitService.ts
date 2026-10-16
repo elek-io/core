@@ -906,7 +906,7 @@ export class GitService {
   }
 
   /**
-   * Rebase the current branch onto `onto` (for example `origin/work`).
+   * Rebase the current branch onto `onto` (for example `origin/draft`).
    *
    * A clean success leaves the working tree holding the integrated state. A
    * textual conflict aborts the rebase, so the tree is never left mid-rebase,

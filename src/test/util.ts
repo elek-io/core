@@ -146,7 +146,7 @@ export async function createLocalRemoteRepository() {
  * Creates a local bare remote seeded with a released Project.
  *
  * The remote holds a Collection and an Asset, one preview and one
- * full Release, and a synchronized work branch. The local working
+ * full Release, and a synchronized draft branch. The local working
  * copy is removed again, so the remote is the only place the
  * Project exists. Used by provisioning tests.
  */

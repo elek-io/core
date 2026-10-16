@@ -45,6 +45,26 @@ Two conventions from the Astro ecosystem apply to `@elek-io/core/astro`:
 - Loader factories carry the `Loader` suffix, like Starlight's `docsLoader` and the community loaders: `elekAssetsLoader()`, `elekEntriesLoader()`. The suffix separates them from functions that return collection definitions instead, like `elekCollections()`.
 - Config helpers follow the `define*` convention of `defineConfig` and `defineCollection`: `defineElekConfig()`.
 
+## Branches and channels
+
+A Project has two branches, `projectBranchSchema`, and provisioning follows three channels, `contentChannelSchema`:
+
+| Name | Kind | Holds |
+| --- | --- | --- |
+| `main` | branch | the released state, which only `core.releases.create()` moves |
+| `draft` | branch and channel | every edit, and the channel that reads that branch |
+| `release` | channel | the newest Release tag |
+| `preview` | channel | the newest preview tag |
+
+Why these names:
+
+- Every git host points a new repository's default branch at `main`, and a clone checks out the default branch, so released content is what a clone shows.
+- `draft` is the branch and the channel that reads it, so nobody translates between the two. The Astro build log and the provisioning fallback warning print the branch name as is.
+- `release` matches the word Desktop uses, Release, and the `Type: release` trailer of the tag it resolves to. `preview` likewise matches its tag type.
+- `released` was the first pick and was rejected. `draft` and `preview` are nouns, so a participle is the odd one out, and making the set consistent would take `drafted` and `previewed`.
+
+They replace `production` for the released branch and the channel, and `work` for the editing branch. The rename shipped without a migration, and the old names are refused like any unknown value. Do not add them back as aliases, because an alias keeps both vocabularies alive in every doc, error message and log line.
+
 ## See also
 
 - [`documentation.md`](./documentation.md) - how to write about the things you just named

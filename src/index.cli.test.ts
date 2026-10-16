@@ -410,19 +410,19 @@ describe('CLI', function () {
         '--url',
         seed.remotePath,
         '--ref',
-        'production',
+        'release',
       ],
       options: {
         env: { ...process.env, ELEK_IO_CHANNEL: 'draft' },
       },
     });
 
-    // The draft channel follows the work branch
+    // The draft channel follows the draft branch
     const head = await fs.readFile(
       `./.elek.io/provision-ref-data-dir/projects/${seed.projectId}/.git/HEAD`,
       'utf-8'
     );
-    expect(head).toContain('refs/heads/work');
+    expect(head).toContain('refs/heads/draft');
   }, 60000);
 
   it('should reject an exact version in ELEK_IO_CHANNEL', async function () {

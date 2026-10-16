@@ -52,7 +52,7 @@ describe('isInsideGitDirectory', () => {
   it.each([
     ['/home/nils/elek.io/projects/a/.git/index', 'a POSIX path'],
     ['C:\\Users\\nils\\elek.io\\projects\\a\\.git\\index', 'a Windows path'],
-    ['/home/nils/elek.io/projects/a/.git/refs/heads/work', 'a nested ref'],
+    ['/home/nils/elek.io/projects/a/.git/refs/heads/draft', 'a nested ref'],
   ])('ignores %j, %s', (path) => {
     expect(isInsideGitDirectory(path)).toBe(true);
   });

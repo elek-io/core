@@ -69,7 +69,7 @@ export function resolveLogLevel(level?: LogLevel): LogLevel {
  * Resolves the content ref to provision
  *
  * Precedence: the ELEK_IO_CHANNEL environment variable wins over the
- * given ref, which wins over the default `production`. The
+ * given ref, which wins over the default `release`. The
  * environment variable applies to every Project of a deployment, so
  * it only accepts channels, never exact versions. Versions are
  * per-Project decisions and belong into configuration. An empty or
@@ -81,12 +81,12 @@ export function resolveContentRef(ref?: string): string {
     const channel = contentChannelSchema.safeParse(fromEnv);
     if (!channel.success) {
       throw CoreError.badRequest(
-        `ELEK_IO_CHANNEL must be "production", "preview" or "draft", got "${fromEnv}". Pin exact versions per Project through the ref option instead.`
+        `ELEK_IO_CHANNEL must be "release", "preview" or "draft", got "${fromEnv}". Pin exact versions per Project through the ref option instead.`
       );
     }
     return channel.data;
   }
-  return ref?.trim() || 'production';
+  return ref?.trim() || contentChannelSchema.enum.release;
 }
 
 /**

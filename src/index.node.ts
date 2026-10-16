@@ -333,7 +333,7 @@ export default class ElekIoCore {
   }
 
   /**
-   * Releases. Diffs the `work` branch against `production`, computes the
+   * Releases. Diffs the `draft` branch against `main`, computes the
    * semver bump from what changed, and merges, leaving a tagged snapshot.
    *
    * @see ../docs/releases.md

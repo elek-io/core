@@ -361,7 +361,7 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
 - `elek provision --project <id> --url <url>` - provision a copy of a Project from its remote into the data directory, for example in CI. It runs read-only, so no User is required, and private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`.
-  - `--ref` selects a channel (`production` for the latest Release, `preview` for the latest preview Release, `draft` for the tip of the work branch) or an exact Release version. The `ELEK_IO_CHANNEL` environment variable overrides it.
+  - `--ref` selects a channel (`release` for the latest Release, `preview` for the latest preview Release, `draft` for the tip of the draft branch) or an exact Release version. The `ELEK_IO_CHANNEL` environment variable overrides it.
   - See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
 
 The global `--data-dir <path>` option sets the data directory for any command, e.g. `elek --data-dir /path/to/data export`. It overrides the `ELEK_IO_DATA_DIR` environment variable and defaults to `~/elek.io`, see [Options](#options).
@@ -613,7 +613,7 @@ Content editing carries on as normal after the restart. Adding or removing a who
 
 The loaders read from the local data directory, which is empty on a CI runner. The `elek()` integration fills it: it provisions every Project of the config from its remote before Astro's content sync runs.
 
-Each declaration takes an optional `ref`, a channel (`production`, `preview` or `draft`, default `production`) or an exact Release version. The `ELEK_IO_CHANNEL` environment variable overrides it and accepts channels only. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`.
+Each declaration takes an optional `ref`, a channel (`release`, `preview` or `draft`, default `release`) or an exact Release version. The `ELEK_IO_CHANNEL` environment variable overrides it and accepts channels only. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`.
 
 - The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated.
 - A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content.
@@ -625,7 +625,7 @@ Each declaration takes an optional `ref`, a channel (`production`, `preview` or 
 - A config in which no Project has a `remoteUrl` fails while `astro.config` is read, naming the aliases, because there is nothing left for the integration to do.
 - A site whose Projects are all local needs no integration at all.
 
-Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (production)`.
+Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (Release tag)`. The label is the checked-out branch, or `Release tag` for a Release or a pinned version.
 
 For rendering `markdown` field Values (including the required `html`, `assetReference` and `entryReference` handlers), see [`markdown-content.md`](./markdown-content.md).
 
@@ -635,7 +635,7 @@ For rendering `markdown` field Values (including the required `html`, `assetRefe
 - [`fields.md`](./fields.md) - full field type reference
 - [`schema-changes.md`](./schema-changes.md) - how editing field definitions cascades into existing Entries
 - [`git-and-sync.md`](./git-and-sync.md) - branches, commits and synchronizing with a remote
-- [`releases.md`](./releases.md) - tagged snapshots and promoting `work` to `production`
+- [`releases.md`](./releases.md) - tagged snapshots and promoting `draft` into `main`
 - [`asset-management.md`](./asset-management.md) - creating, reading and deleting Assets
 - [`storage-layout.md`](./storage-layout.md) - where Projects and their files live on disk
 - [`local-api.md`](./local-api.md) - the read-only REST API reference

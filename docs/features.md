@@ -40,7 +40,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 - **Migration on read** - historical data is run through the migration chain on read, so it always comes back in the current schema shape. See [`usage.md`](./usage.md#reading-from-history).
 - **Transactional writes** - create / update / delete operations are wrapped in an automatic git rollback that restores the working tree on failure. See [`error-handling.md`](./error-handling.md).
 - **Releases** - tagged snapshots of a Project at a point in time, managed through git tags.
-- **Branching** - content work happens on a `work` branch, with `production` reserved for released content.
+- **Branching** - content edits happen on a `draft` branch, with `main` reserved for released content.
 
 ## Schema evolution
 
@@ -122,7 +122,7 @@ For how these compare to other CMS platforms and where Core leads, see [`compari
 - [`references.md`](./references.md) - how references work end to end, including write-time and delete-time integrity
 - [`schema-changes.md`](./schema-changes.md) - how editing field definitions cascades into existing content
 - [`git-and-sync.md`](./git-and-sync.md) - the branch model and synchronizing with a remote
-- [`releases.md`](./releases.md) - tagged snapshots and promoting `work` to `production`
+- [`releases.md`](./releases.md) - tagged snapshots and promoting `draft` into `main`
 - [`asset-management.md`](./asset-management.md) - the two-file Asset model
 - [`storage-layout.md`](./storage-layout.md) - where Projects and their files live on disk
 - [`local-api.md`](./local-api.md) - the read-only REST API reference

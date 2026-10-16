@@ -44,7 +44,7 @@ The invariant is about the files under `pathTo.logs`. It does not cover output C
 
 Two places do that on purpose and keep their names:
 
-- [`astro/core.ts`](../src/astro/core.ts) `logReadingProject`, which the loaders call with Astro's `context.logger`. Its `Reading Project "Website" version 1.4.0 (production)` line is documented consumer behavior in [`usage.md`](../docs/usage.md).
+- [`astro/core.ts`](../src/astro/core.ts) `logReadingProject`, which the loaders call with Astro's `context.logger`. Its `Reading Project "Website" version 1.4.0 (Release tag)` line is documented consumer behavior in [`usage.md`](../docs/usage.md).
 - [`index.astro.ts`](../src/index.astro.ts), which uses the `logger` Astro hands to `astro:config:setup`.
 
 A build that will not say which Project it read is worse at its job, and none of that output leaves the machine.

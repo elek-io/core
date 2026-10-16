@@ -66,17 +66,17 @@ describe('Read-only mode', function () {
   it('should allow switching branches', async function () {
     await readOnlyCore.projects.branches.switch({
       id: project.id,
-      branch: 'production',
+      branch: 'main',
     });
 
     const branch = await readOnlyCore.projects.branches.current({
       id: project.id,
     });
-    expect(branch).toEqual('production');
+    expect(branch).toEqual('main');
 
     await readOnlyCore.projects.branches.switch({
       id: project.id,
-      branch: 'work',
+      branch: 'draft',
     });
   });
 

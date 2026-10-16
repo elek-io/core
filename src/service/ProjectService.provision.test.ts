@@ -45,7 +45,7 @@ describe('ProjectService provision', function () {
     vi.unstubAllEnvs();
   });
 
-  it('should provision a missing Project from the remote at production', async function () {
+  it('should provision a missing Project from the remote at the release channel', async function () {
     const { project, source, warning } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
@@ -60,7 +60,7 @@ describe('ProjectService provision', function () {
         readOnlyCore.util.pathTo.projectProvisionedMarker(seed.projectId)
       )
     ).toBe(true);
-    // The production channel checks out the latest Release tag,
+    // The release channel checks out the latest Release tag,
     // detaching HEAD
     expect(
       await readOnlyCore.projects.branches.current({ id: seed.projectId })
@@ -117,7 +117,7 @@ describe('ProjectService provision', function () {
   }, 30000);
 
   it('should provision the draft channel when asked', async function () {
-    // The remote work branch was synchronized before the second
+    // The remote draft branch was synchronized before the second
     // Release, so it still holds the first released version
     const { project: provisioned } = await readOnlyCore.projects.provision({
       id: seed.projectId,
@@ -126,13 +126,13 @@ describe('ProjectService provision', function () {
     });
 
     expect(provisioned.version).toEqual(seed.releaseVersion);
-    // The draft channel follows the work branch
+    // The draft channel follows the draft branch
     expect(
       await readOnlyCore.projects.branches.current({ id: seed.projectId })
-    ).toEqual('work');
+    ).toEqual('draft');
   }, 30000);
 
-  it('should clone the work branch when the draft channel is provisioned into an empty data directory', async function () {
+  it('should clone the draft branch when the draft channel is provisioned into an empty data directory', async function () {
     // A cold CI runner building a preview deploy takes a different
     // path than the refresh above: a channel that follows a branch is
     // cloned from that branch, while a Release channel clones the
@@ -155,7 +155,7 @@ describe('ProjectService provision', function () {
       expect(provisioned.id).toEqual(seed.projectId);
       expect(
         await draftCore.projects.branches.current({ id: seed.projectId })
-      ).toEqual('work');
+      ).toEqual('draft');
       // The content came along, not just the branch
       const { total } = await draftCore.collections.list({
         projectId: seed.projectId,
@@ -177,7 +177,7 @@ describe('ProjectService provision', function () {
     });
     expect(provisioned.version).toEqual(seed.previewVersion);
 
-    // A newer preview supersedes it, while production stays put
+    // A newer preview supersedes it, while the release channel stays put
     const project = await core.projects.clone({ url: seed.remotePath });
     await createAsset(project.id);
     const newerPreview = await core.releases.createPreview({
@@ -192,12 +192,12 @@ describe('ProjectService provision', function () {
     });
     expect(refreshed.version).toEqual(newerPreview.version);
 
-    const { project: production } = await readOnlyCore.projects.provision({
+    const { project: latestRelease } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
-      ref: 'production',
+      ref: 'release',
     });
-    expect(production.version).toEqual(secondReleaseVersion);
+    expect(latestRelease.version).toEqual(secondReleaseVersion);
   }, 60000);
 
   it('should provision a pinned Release version with a detached HEAD', async function () {
@@ -244,19 +244,22 @@ describe('ProjectService provision', function () {
   }, 30000);
 
   it('should throw BadRequest for an invalid ref', async function () {
-    let error: unknown = null;
-    try {
-      await readOnlyCore.projects.provision({
-        id: seed.projectId,
-        url: seed.remotePath,
-        ref: 'not a valid ref',
-      });
-    } catch (e) {
-      error = e;
-    }
+    // production is no channel, it is refused like any other unknown ref
+    for (const ref of ['not a valid ref', 'production']) {
+      let error: unknown = null;
+      try {
+        await readOnlyCore.projects.provision({
+          id: seed.projectId,
+          url: seed.remotePath,
+          ref,
+        });
+      } catch (e) {
+        error = e;
+      }
 
-    expect(error).toBeInstanceOf(CoreError);
-    expect(error instanceof CoreError && error.type).toEqual('BadRequest');
+      expect(error).toBeInstanceOf(CoreError);
+      expect(error instanceof CoreError && error.type).toEqual('BadRequest');
+    }
   });
 
   it('should leave a copy without the marker untouched', async function () {
@@ -267,7 +270,7 @@ describe('ProjectService provision', function () {
 
     // The copy is detached at the preview version from the previous
     // test. Without the marker it belongs to another application, so
-    // asking for production must not touch it
+    // asking for the release channel must not touch it
     const { project: provisioned } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
@@ -505,7 +508,7 @@ describe('ProjectService provision', function () {
       expect(source).toEqual('local-fallback');
       expect(project.version).toEqual(offlineSeed.releaseVersion);
       expect(warning).toContain(offlineSeed.projectId);
-      expect(warning).toContain('production');
+      expect(warning).toContain('release');
       expect(warning).toContain(offlineSeed.releaseVersion);
 
       // The copy is still readable

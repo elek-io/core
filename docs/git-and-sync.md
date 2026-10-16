@@ -17,24 +17,26 @@ Two levels of API are available:
 
 A Project uses exactly two branches, defined by `projectBranchSchema` (`src/schema/projectSchema.ts`):
 
-- **`production`** - the stable, released state of the content.
-- **`work`** - where all editing happens.
+- **`main`** - the stable, released state of the content.
+- **`draft`** - where all editing happens.
 
-When `core.projects.create()` runs, it initializes the repository with `production` as the initial branch, makes the first commit there, then creates and switches to `work`. After creation you are on `work`, and every subsequent content change is committed there.
+When `core.projects.create()` runs, it initializes the repository with `main` as the initial branch, makes the first commit there, then creates and switches to `draft`. After creation you are on `draft`, and every subsequent content change is committed there.
 
-`work` is promoted to `production` through **Releases** (tagged snapshots managed by `core.releases`). Day-to-day create / update / delete operations never touch `production` directly.
+`draft` is promoted into `main` through **Releases** (tagged snapshots managed by `core.releases`). Day-to-day create / update / delete operations never touch `main` directly.
+
+Set `main` as the default branch of the repository at your git host. A clone then shows released content.
 
 ```typescript
 const { local, remote } = await core.projects.branches.list({
   id: project.id,
 });
-// local  -> ['production', 'work']
-// remote -> ['origin/production', 'origin/work'], empty without an origin
+// local  -> ['draft', 'main']
+// remote -> ['origin/draft', 'origin/main'], empty without an origin
 
 const branch = await core.projects.branches.current({ id: project.id });
-// branch -> 'work'
+// branch -> 'draft'
 
-await core.projects.branches.switch({ id: project.id, branch: 'production' });
+await core.projects.branches.switch({ id: project.id, branch: 'main' });
 ```
 
 ## Commits and the User signature
@@ -81,7 +83,7 @@ const { ahead, behind } = await core.projects.getChanges({ id: project.id });
 
 ## Synchronizing
 
-`synchronize()` integrates `origin` into the current branch, then pushes it. That is `work` in day to day use. The `production` branch and the Release tags are published by `core.releases` instead, see below.
+`synchronize()` integrates `origin` into the current branch, then pushes it. That is `draft` in day to day use. The `main` branch and the Release tags are published by `core.releases` instead, see below.
 
 ```typescript
 await core.projects.synchronize({ id: project.id });
@@ -108,6 +110,12 @@ const project = await core.projects.clone({
 });
 ```
 
+The clone checks out the remote's default branch, which is `main` when the remote is set up as described in [The branch model](#the-branch-model). Core does not switch it to `draft`. Switch before editing, because `core.releases` refuses to run on any other branch:
+
+```typescript
+await core.projects.branches.switch({ id: project.id, branch: 'draft' });
+```
+
 After cloning, Core fetches the whole LFS history into the local store and materializes the working-tree binaries, so all Assets (including older versions) are available offline. See [Git LFS](#git-lfs).
 
 ## Provisioning a copy for builds
@@ -120,13 +128,13 @@ A local copy of a Project is one of two kinds. A **working copy** is created by 
 const { project, source, warning } = await core.projects.provision({
   id: '<project-id>',
   url: 'https://github.com/acme/website-content.git',
-  // A channel ('production' | 'preview' | 'draft') or an exact
-  // Release version - default 'production'
-  ref: 'production',
+  // A channel ('release' | 'preview' | 'draft') or an exact
+  // Release version - default 'release'
+  ref: 'release',
 });
 ```
 
-The channels resolve against the tags the remote advertises: `production` checks out the newest Release tag, `preview` the newest preview Release tag (both by semver, with a detached HEAD), and `draft` follows the `work` branch. An exact version checks out that Release's tag.
+The channels resolve against the tags the remote advertises: `release` checks out the newest Release tag, `preview` the newest preview Release tag (both by semver, with a detached HEAD), and `draft` follows the `draft` branch. An exact version checks out that Release's tag.
 
 Three cases, decided by a provisioning marker file inside the Project directory:
 
@@ -134,7 +142,7 @@ Three cases, decided by a provisioning marker file inside the Project directory:
 - **Present with the marker**: the copy is fetched and hard-reset to the ref, so a reachable remote decides what it holds.
 - **Present without the marker**: a working copy managed by another application (for example the Desktop app), left untouched.
 
-An unknown version throws `NotFound` listing the available versions. Provisioning the `production` or `preview` channel of a Project that never published a Release or preview throws `PreconditionFailed` naming the fix.
+An unknown version throws `NotFound` listing the available versions. Provisioning the `release` or `preview` channel of a Project that never published a Release or preview throws `PreconditionFailed` naming the fix.
 
 The returned `source` states where the content came from, and a refresh keeps building when the remote cannot be reached:
 
@@ -206,7 +214,7 @@ The trailers are the whole contract, which decides what Core can see:
 - A `v1.2.3` tag pushed by hand, and any lightweight tag, is therefore invisible to Core. `count()` counts Core's own tags rather than the repository's.
 - Tags come back newest first, sorted by the author date of the commit they point at rather than by when the tag was written, and `list()` returns all of them in one page.
 
-When a remote `origin` is set, `core.releases` pushes at creation time: a full Release pushes `production` and its tag, a preview Release pushes its tag. Upgrade tags are not pushed. See [`releases.md`](./releases.md).
+When a remote `origin` is set, `core.releases` pushes at creation time: a full Release pushes `main` and its tag, a preview Release pushes its tag. Upgrade tags are not pushed. See [`releases.md`](./releases.md).
 
 ## Errors during git operations
 
@@ -225,5 +233,6 @@ See [`error-handling.md`](./error-handling.md) for the full error model.
 ## See also
 
 - [`usage.md`](./usage.md) - setting the User, creating and reading content
-- [`releases.md`](./releases.md) - promoting `work` to `production` as tagged, versioned snapshots- [`concepts.md`](./concepts.md) - Projects, Releases and the rest of the data model
+- [`releases.md`](./releases.md) - promoting `draft` into `main` as tagged, versioned snapshots
+- [`concepts.md`](./concepts.md) - Projects, Releases and the rest of the data model
 - [`error-handling.md`](./error-handling.md) - `CoreError` types and patterns

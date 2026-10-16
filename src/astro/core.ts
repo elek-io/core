@@ -48,8 +48,8 @@ export async function ensureProjectAvailable(
  * rather than leaving it to be guessed from the output.
  *
  * The line carries the Project's name and version, the data directory, and a
- * source label: `draft` on the `work` branch, the branch name on any other,
- * and the literal `Release tag` when HEAD is detached.
+ * source label: the branch name, or the literal `Release tag` when HEAD is
+ * detached.
  */
 export async function logReadingProject(
   core: ElekIoCore,
@@ -58,7 +58,7 @@ export async function logReadingProject(
 ): Promise<void> {
   const project = await core.projects.read({ id: projectId });
   const branch = await core.projects.branches.current({ id: projectId });
-  const source = branch === 'work' ? 'draft' : branch || 'Release tag';
+  const source = branch || 'Release tag';
   log(
     `Reading Project "${project.name}" version ${project.version} (${source}) from "${core.options.dataDir}"`
   );

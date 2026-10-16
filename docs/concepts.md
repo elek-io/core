@@ -66,5 +66,6 @@ Are tagged snapshots of a Project at a specific point in time, managed through g
 - [`markdown-content.md`](./markdown-content.md) - how rich `markdown` Values are stored and rendered
 - [`asset-management.md`](./asset-management.md) - the two-file Asset model, creating, reading and deleting Assets
 - [`git-and-sync.md`](./git-and-sync.md) - the branch model and synchronizing with a remote
-- [`releases.md`](./releases.md) - tagged snapshots and promoting `work` to `production`
-- [`storage-layout.md`](./storage-layout.md) - where Projects and their files live on disk- [`error-handling.md`](./error-handling.md) - `CoreError` and validation error patterns
+- [`releases.md`](./releases.md) - tagged snapshots and promoting `draft` into `main`
+- [`storage-layout.md`](./storage-layout.md) - where Projects and their files live on disk
+- [`error-handling.md`](./error-handling.md) - `CoreError` and validation error patterns
