@@ -61,13 +61,13 @@ describe('GitService', function () {
   it('should be able to get the current Branch name', async function () {
     const currentBranch = await core.git.branches.current(projectPath);
 
-    expect(currentBranch).toEqual('work');
+    expect(currentBranch).toEqual('draft');
   });
 
   it('should be able to get all available Branch names', async function () {
     const branches = await core.git.branches.list(projectPath);
 
-    expect(branches.local).to.contain('production').and.to.contain('work');
+    expect(branches.local).to.contain('main').and.to.contain('draft');
   });
 
   it('should be able to tell that there is no remote origin yet', async function () {
@@ -133,7 +133,7 @@ describe('GitService', function () {
     // Both reach git as arguments that contradict each other, so the
     // caller is told rather than left with whatever git makes of it
     await expect(
-      core.git.push(projectPath, { all: true, refs: ['work'] })
+      core.git.push(projectPath, { all: true, refs: ['draft'] })
     ).rejects.toThrow(/mutually exclusive/);
   });
 

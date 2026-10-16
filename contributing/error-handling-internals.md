@@ -22,6 +22,11 @@ That is why a failure mode belongs at the site that knows it. Node reports a mis
 
 The log record carries the type, the method and the status code as the `error.type`, `code.function.name` and `elek.error.status_code` attributes, rather than packing them into the message string. Its message is the error's, except for a validation failure, which is logged as the shape of its issues. See [`logging.md`](./logging.md).
 
+| Method | Parses | Then |
+| --- | --- | --- |
+| `validated()` | the input, against its schema | runs the body through `guarded()` |
+| `guarded()` | nothing, for a public method that takes no input like `core.cloud.account.signOut()` | runs the body, logs a failure once and normalizes it |
+
 ### `mutating()` - the envelope a write goes through
 
 A method that changes a Project, its content or its remote uses `this.mutating()` rather than `validated()`. It is `validated()` with one thing in front: `assertNotReadOnly()`, called before the input is parsed, because a write is refused in read-only mode whatever its input says.

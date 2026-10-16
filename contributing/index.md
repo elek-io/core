@@ -10,6 +10,7 @@ About to change an area? Read its doc first, so you change behavior on purpose r
 
 - [`documentation.md`](./documentation.md) - how to write on each documentation surface, and what the tools enforce
 - [`naming.md`](./naming.md) - how things are named in the source, and the exceptions that mirror external tools
+- [`source-layout.md`](./source-layout.md) - where schemas, types, constants and helpers live, so a service file opens with its class
 - [`testing.md`](./testing.md) - how the suite creates real Projects, and why it is slow by design
 - [`toolchain.md`](./toolchain.md) - what Core builds, tests, lints and formats with, and why each tool was picked
 
@@ -24,8 +25,11 @@ About to change an area? Read its doc first, so you change behavior on purpose r
 ## Platform
 
 - [`git-credentials.md`](./git-credentials.md) - why git authenticates through an askpass helper, and what to keep intact
+- [`git-identity.md`](./git-identity.md) - why a Project is changed through Core only, and who a commit is signed as
+- [`releases.md`](./releases.md) - why a clone lands on `draft`, which `main` a Release compares against, and why it pushes atomically
 - [`error-handling-internals.md`](./error-handling-internals.md) - how `CoreError` and validation work inside Core
 - [`logging.md`](./logging.md) - what a log file may contain, and why names never appear in one
+- [`cloud.md`](./cloud.md) - the one seam every elek.io Cloud call goes through, and the token it holds
 - [`astro-entry.md`](./astro-entry.md) - the design and invariants behind `@elek-io/core/astro`
 - [`openapi-document.md`](./openapi-document.md) - how `GET /openapi.json` is generated, and the rule a recursive schema has to follow
 

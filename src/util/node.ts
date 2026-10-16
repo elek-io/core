@@ -2,6 +2,7 @@ import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
 import { logLevelSchema, type LogLevel } from '../schema/baseSchema.js';
+import { cloudTokenSchema } from '../schema/cloudSchema.js';
 import { elekIoCoreOptionsSchema } from '../schema/coreSchema.js';
 import {
   contentChannelSchema,
@@ -69,7 +70,7 @@ export function resolveLogLevel(level?: LogLevel): LogLevel {
  * Resolves the content ref to provision
  *
  * Precedence: the ELEK_IO_CHANNEL environment variable wins over the
- * given ref, which wins over the default `production`. The
+ * given ref, which wins over the default `release`. The
  * environment variable applies to every Project of a deployment, so
  * it only accepts channels, never exact versions. Versions are
  * per-Project decisions and belong into configuration. An empty or
@@ -81,12 +82,12 @@ export function resolveContentRef(ref?: string): string {
     const channel = contentChannelSchema.safeParse(fromEnv);
     if (!channel.success) {
       throw CoreError.badRequest(
-        `ELEK_IO_CHANNEL must be "production", "preview" or "draft", got "${fromEnv}". Pin exact versions per Project through the ref option instead.`
+        `ELEK_IO_CHANNEL must be "release", "preview" or "draft", got "${fromEnv}". Pin exact versions per Project through the ref option instead.`
       );
     }
     return channel.data;
   }
-  return ref?.trim() || 'production';
+  return ref?.trim() || contentChannelSchema.enum.release;
 }
 
 /**
@@ -114,6 +115,31 @@ export function resolveCloudUrl(url?: string): string {
     );
   }
   return parsed.data.replace(/\/+$/, '');
+}
+
+/**
+ * Resolves the bearer token Core starts with, or null for none
+ *
+ * Precedence: the given token wins over the ELEK_IO_CLOUD_TOKEN
+ * environment variable. An empty or whitespace-only value counts as
+ * unset. A value no HTTP header can carry throws, and the message never
+ * repeats it, because it is a credential.
+ */
+export function resolveCloudToken(token?: string): string | null {
+  if (token !== undefined) {
+    return token;
+  }
+  const fromEnv = process.env['ELEK_IO_CLOUD_TOKEN']?.trim();
+  if (!fromEnv) {
+    return null;
+  }
+  const parsed = cloudTokenSchema.safeParse(fromEnv);
+  if (!parsed.success) {
+    throw CoreError.badRequest(
+      'ELEK_IO_CLOUD_TOKEN must be printable ASCII with no whitespace'
+    );
+  }
+  return parsed.data;
 }
 
 /**

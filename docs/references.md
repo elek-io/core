@@ -149,7 +149,7 @@ The same shape is used for all three value-level deletes, so a consumer handles 
 ## Scope and guarantees
 
 - **On-demand, no index.** Detection scans the live working tree on every delete rather than keeping a stored reverse index. This costs one read per existing Entry per delete, so it scales poorly for very large Projects, but it stays correct against content brought in by a sync (a merge of another machine's changes) that never passed through a create or update call.
-- **Work tree only.** Only the current `work` tree is considered, not content preserved in released (`production`) history. A `work` delete does not touch the `production` copies, so a reference that lives only in a past release is not affected by it.
+- **Current tree only.** Only the current `draft` tree is considered, not content preserved in released history on `main`. A delete on `draft` does not touch the copies on `main`, so a reference that lives only in a past release is not affected by it.
 
 ### The third gate: sync
 
@@ -160,7 +160,7 @@ Core (and Desktop) sync a Project by pulling and rebasing, which is what lets pe
 Core closes it at sync time instead:
 
 1. `synchronize` integrates the remote, a fetch and then a controlled rebase.
-2. Before pushing, it scans the whole integrated `work` tree for any reference whose target is now absent, the forward analogue of the delete-time scan.
+2. Before pushing, it scans the whole integrated `draft` tree for any reference whose target is now absent, the forward analogue of the delete-time scan.
 3. If it finds one, the sync stops with a `Conflict` and does not push. The integrated commits stay in the local tree, to repair through Core's own delete or update before syncing again.
 
 So the shared remote never receives a dangling state. The guarantee holds because Projects are reconciled only through Core's `synchronize`, run locally, never through a server-side or pull-request merge or a raw `git push`. The day a merge bypasses Core, the remote can hold a state no local gate saw.

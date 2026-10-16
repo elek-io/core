@@ -7,7 +7,7 @@ import { getCore } from './util.js';
  * directory
  *
  * The ref precedence is the ELEK_IO_CHANNEL environment variable
- * over the given ref over `production`. Runs on a read-only Core, so
+ * over the given ref over `release`. Runs on a read-only Core, so
  * no User is required. Throws on failure, the binary entry presents
  * the error.
  */

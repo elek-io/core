@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import core, {
   flattenFieldDefinitions,
+  projectFileSchema,
   uuid,
   type Asset,
   type Collection,
@@ -35,6 +36,28 @@ describe('ReleaseService', function () {
     await ensureCleanGitStatus(task, project.id);
   });
 
+  /** The Project version committed on a branch */
+  async function versionAt(branch: string): Promise<string> {
+    const content = await core.git.getFileContentAtCommit(
+      core.util.pathTo.project(project.id),
+      core.util.pathTo.projectFile(project.id),
+      branch
+    );
+    return projectFileSchema.parse(JSON.parse(content)).version;
+  }
+
+  it('should refuse to prepare a release off the draft branch', async function () {
+    await core.projects.branches.switch({ id: project.id, branch: 'main' });
+
+    try {
+      await expect(
+        core.releases.prepare({ projectId: project.id })
+      ).rejects.toThrow('Not on draft branch (currently on "main")');
+    } finally {
+      await core.projects.branches.switch({ id: project.id, branch: 'draft' });
+    }
+  });
+
   it('should detect new collections as MINOR bump on first release', async function () {
     collection = await createCollection(project.id);
 
@@ -63,11 +86,10 @@ describe('ReleaseService', function () {
     const updatedProject = await core.projects.read({ id: project.id });
     expect(updatedProject.version).toEqual('0.1.0-preview.1');
 
-    // Verify we're still on work branch (no merge to production)
-    const currentBranch = await core.git.branches.current(
-      core.util.pathTo.project(project.id)
-    );
-    expect(currentBranch).toEqual('work');
+    // Verify we're still on draft and main was not touched
+    const projectPath = core.util.pathTo.project(project.id);
+    expect(await core.git.branches.current(projectPath)).toEqual('draft');
+    expect(await versionAt('main')).toEqual('0.0.1');
   });
 
   it('should increment preview number on subsequent preview releases', async function () {
@@ -95,11 +117,10 @@ describe('ReleaseService', function () {
     const updatedProject = await core.projects.read({ id: project.id });
     expect(updatedProject.version).toEqual('0.1.0');
 
-    // Verify we're back on work branch
-    const currentBranch = await core.git.branches.current(
-      core.util.pathTo.project(project.id)
-    );
-    expect(currentBranch).toEqual('work');
+    // Verify main holds the Release and we're back on draft
+    const projectPath = core.util.pathTo.project(project.id);
+    expect(await versionAt('main')).toEqual('0.1.0');
+    expect(await core.git.branches.current(projectPath)).toEqual('draft');
   });
 
   it('should detect no changes after a release', async function () {
@@ -751,7 +772,7 @@ describe('ReleaseService - slug field changes', function () {
       description: { en: 'Pages', de: 'Pages' },
       fieldDefinitions: [titleDef(), slugDef({})],
     });
-    // Establish a production baseline to diff against
+    // Establish a released baseline to diff against
     await core.releases.create({ projectId: project.id });
   });
 

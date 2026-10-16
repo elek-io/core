@@ -56,6 +56,9 @@ describe('Read-only mode', function () {
 
     const readProject = await readOnlyCore.projects.read({ id: project.id });
     expect(readProject.id).toEqual(project.id);
+    expect(
+      await readOnlyCore.projects.branches.current({ id: project.id })
+    ).toEqual('draft');
 
     const status = await readOnlyCore.git.status(
       readOnlyCore.util.pathTo.project(project.id)
@@ -66,17 +69,17 @@ describe('Read-only mode', function () {
   it('should allow switching branches', async function () {
     await readOnlyCore.projects.branches.switch({
       id: project.id,
-      branch: 'production',
+      branch: 'main',
     });
 
     const branch = await readOnlyCore.projects.branches.current({
       id: project.id,
     });
-    expect(branch).toEqual('production');
+    expect(branch).toEqual('main');
 
     await readOnlyCore.projects.branches.switch({
       id: project.id,
-      branch: 'work',
+      branch: 'draft',
     });
   });
 

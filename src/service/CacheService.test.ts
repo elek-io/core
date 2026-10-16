@@ -191,7 +191,20 @@ describe('caches while a Collection is being created', function () {
           ...Object(file),
           slug: { singular: 'article', plural: 'articles' },
         });
-        await gitExec(['commit', '--all', '-m', 'Pulled'], projectPath);
+        // A Project's git config holds no identity, and CI has no global one
+        await gitExec(
+          [
+            '-c',
+            'user.name=Remote Person',
+            '-c',
+            'user.email=remote@example.com',
+            'commit',
+            '--all',
+            '-m',
+            'Pulled',
+          ],
+          projectPath
+        );
         await core.git.reset(projectPath, 'hard', 'HEAD');
       }
     );

@@ -42,7 +42,7 @@ describe('defineElekConfig', function () {
     expect(() =>
       defineElekConfig({
         projects: {
-          a: { id: projectId, ref: 'production' },
+          a: { id: projectId, ref: 'release' },
           b: { id: projectId, ref: 'preview' },
           c: { id: projectId, ref: 'draft' },
           d: { id: projectId, ref: '1.4.0' },
@@ -60,13 +60,15 @@ describe('defineElekConfig', function () {
   });
 
   it('should reject a ref that is neither a channel nor a version', function () {
-    expectBadRequest(
-      () =>
-        defineElekConfig({
-          projects: { website: { id: projectId, ref: 'latest' } },
-        }),
-      'projects.website.ref'
-    );
+    for (const ref of ['latest', 'production']) {
+      expectBadRequest(
+        () =>
+          defineElekConfig({
+            projects: { website: { id: projectId, ref } },
+          }),
+        'projects.website.ref'
+      );
+    }
   });
 
   it('should reject an empty remoteUrl', function () {

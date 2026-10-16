@@ -40,7 +40,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 - **Migration on read** - historical data is run through the migration chain on read, so it always comes back in the current schema shape. See [`usage.md`](./usage.md#reading-from-history).
 - **Transactional writes** - create / update / delete operations are wrapped in an automatic git rollback that restores the working tree on failure. See [`error-handling.md`](./error-handling.md).
 - **Releases** - tagged snapshots of a Project at a point in time, managed through git tags.
-- **Branching** - content work happens on a `work` branch, with `production` reserved for released content.
+- **Branching** - content edits happen on a `draft` branch, with `main` reserved for released content.
 
 ## Schema evolution
 
@@ -78,12 +78,13 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 ### Not yet implemented
 
 - **No full-text search** - a `searchProjectSchema` is defined, but there is no `search()` service method or API route behind it.
-- **No cloud authentication** - the `cloud` user type exists, but `UserService.set()` does not actually log a cloud user in (the login branch is a stub).
+- **No address verification or password reset** - `core.cloud.account.signUp()` can answer that an address has to be verified, but Core has no call that verifies one or resets a password. See [`cloud-account.md`](./cloud-account.md#signing-up).
 - **No conditional fields** - a field's visibility cannot depend on another field's value.
 - **Limited specialized field types** - no arbitrary JSON, color picker, geospatial, code-editor, or password / hash field types.
 
 ### Intentional constraints
 
+- **A Project is changed through Core only** - git run by hand, another git client or an editor writing a Project's files is not supported, and Core does not guard against it. Reading the files with any tool is safe. See [`git-and-sync.md`](./git-and-sync.md#change-a-project-only-through-core).
 - **Git LFS requires an LFS-capable remote** - Asset binaries are tracked with Git LFS, so the remote you push to must support it. A remote without LFS (for example a self-hosted server with it disabled) fails the push with a descriptive `PreconditionFailed` error. See [`git-and-sync.md`](./git-and-sync.md#git-lfs).
 - **Field-definition `id`s are caller-supplied** - Core generates ids for entities (Collections, Components, Entries, Assets) but deliberately not for the field definitions inside them. You pass a UUID per field definition (for example via `uuid()`) on both create and update.
   - Generating them in Core was considered and rejected. It would need parallel id-less schema variants and only partly helps, because update must still identify existing field definitions by id.
@@ -107,6 +108,8 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
   - Calling `render()` on an Entry is not an error and renders nothing at all, so reach for `mdastRender` instead. See [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro).
 - **No plugin or marketplace system** - extending the field catalogue means changing code, not installing a package.
 - **No nested composition** - groups cannot nest groups, and `dynamic` fields cannot nest `dynamic` fields. Components are the flat, predictable reuse mechanism.
+- **The elek.io Cloud token lives in memory only** - Core never writes the token of a session to disk, so a session ends with the process unless the host stores the token and hands it back through `cloud.token` or `ELEK_IO_CLOUD_TOKEN`. See [`cloud-account.md`](./cloud-account.md#the-token).
+- **Signing up, in and out are never retried** - each sends once, as a report does, because a retry after a timeout can create a second account or spend the rate limit on a password guess. See [`cloud-account.md`](./cloud-account.md#the-calls).
 - **A report is never retried** - `core.cloud.reports.create()` sends once. A retry after a timeout can duplicate a report elek.io Cloud already accepted, and Core cannot tell the difference from the outside, so a failure is handed back and sending again is left to whoever wrote it. See [`reporting.md`](./reporting.md#errors).
 - **A log tail can be truncated** - `core.logger.tail()` stops collecting at a size ceiling and sets `isTruncated`, dropping the oldest records first. Collapsing repeated records is what keeps a tail small, and it is worth far more than a bigger cap, so an ordinary day is 1 to 25 KB and the ceiling is a safety valve rather than a working limit. See [`reporting.md`](./reporting.md#the-log-tail).
 - **A log tail can be missing its last lines** - winston hands a record to a write stream and offers no per transport flush, so a tail collected right after a crash can stop short of the lines it was collected for, which are usually the interesting ones.
@@ -122,7 +125,7 @@ For how these compare to other CMS platforms and where Core leads, see [`compari
 - [`references.md`](./references.md) - how references work end to end, including write-time and delete-time integrity
 - [`schema-changes.md`](./schema-changes.md) - how editing field definitions cascades into existing content
 - [`git-and-sync.md`](./git-and-sync.md) - the branch model and synchronizing with a remote
-- [`releases.md`](./releases.md) - tagged snapshots and promoting `work` to `production`
+- [`releases.md`](./releases.md) - tagged snapshots and promoting `draft` into `main`
 - [`asset-management.md`](./asset-management.md) - the two-file Asset model
 - [`storage-layout.md`](./storage-layout.md) - where Projects and their files live on disk
 - [`local-api.md`](./local-api.md) - the read-only REST API reference
@@ -130,5 +133,6 @@ For how these compare to other CMS platforms and where Core leads, see [`compari
 - [`export.md`](./export.md) - exporting Projects to JSON
 - [`markdown-content.md`](./markdown-content.md) - rich `markdown` content storage and rendering
 - [`error-handling.md`](./error-handling.md) - `CoreError` and error patterns
+- [`cloud-account.md`](./cloud-account.md) - signing in to an elek.io account and the token Core holds
 - [`reporting.md`](./reporting.md) - sending a report to elek.io Cloud, and handing a window of log files over
 - [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md) - cross-CMS field comparison

@@ -4,7 +4,7 @@ import { assert, describe, expect, it } from 'vitest';
 import core, { testUserProps, uuid } from '../test/setup.js';
 import { createProject } from '../test/util.js';
 import { CoreError } from '../util/shared.js';
-import { redactGitArgs } from './GitService.js';
+import { redactGitArgs } from '../util/git.js';
 
 /**
  * Core's log files can be attached to a bug report, so a git command line
@@ -68,8 +68,8 @@ describe('redactGitArgs', function () {
 
 describe('git identity never reaches a log file', function () {
   it('does not write the User name or email while creating a Project', async function () {
-    // Creating a Project runs `git config --local user.name/user.email` and
-    // commits with `--author=`, which is every identity site there is.
+    // Creating a Project writes its git config and commits, and the identity
+    // reaches git through the environment rather than a command line
     const project = await createProject();
     const written = await readLogs();
 
@@ -116,9 +116,9 @@ describe('a failed git command', function () {
     assert(error instanceof CoreError);
     expect(error.message).not.toContain(testUserProps.name);
     expect(error.message).not.toContain(testUserProps.email);
-    // The exit code and the redacted command are what is left, and they
-    // are enough to find the command in the log line above the failure
-    expect(error.message).toContain('--author=[redacted]');
+    // The exit code and the command are what is left, and they are enough
+    // to find the command in the log line above the failure
+    expect(error.message).toContain('git commit --message=');
     expect(error.message).toContain('exit code');
 
     // git's own words are thrown but never logged, so whoever made the

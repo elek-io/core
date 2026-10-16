@@ -52,7 +52,7 @@ describe('ReleaseService recovery', function () {
     projectPath = core.util.pathTo.project(project.id);
     await createCollection(project.id);
     // One real release first, so every test below starts from a Project
-    // that has a local production branch and a release to bump from
+    // that has a local main branch and a release to bump from
     await core.releases.create({ projectId: project.id });
   }, 60000);
 
@@ -71,8 +71,8 @@ describe('ReleaseService recovery', function () {
 
   async function snapshot() {
     return {
-      work: await core.git.revParse(projectPath, 'work'),
-      production: await core.git.revParse(projectPath, 'production'),
+      draft: await core.git.revParse(projectPath, 'draft'),
+      main: await core.git.revParse(projectPath, 'main'),
       branch: await core.git.branches.current(projectPath),
       tags: (await core.git.tags.list({ path: projectPath })).list.map(
         (tag) => tag.id
@@ -111,7 +111,7 @@ describe('ReleaseService recovery', function () {
   });
 
   it('should leave nothing behind when a preview fails at the push', async function () {
-    // createPreview never leaves work, so switching back to work undoes
+    // createPreview never leaves draft, so switching back to draft undoes
     // nothing at all and its version commit and tag used to survive
     const before = await snapshot();
 
@@ -149,7 +149,7 @@ describe('ReleaseService recovery', function () {
 
     expect(result.version).not.toEqual(before.version);
     const after = await snapshot();
-    expect(after.branch).toEqual('work');
+    expect(after.branch).toEqual('draft');
     expect(after.tags.length).toEqual(before.tags.length + 1);
   });
 });

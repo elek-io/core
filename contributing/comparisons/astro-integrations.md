@@ -10,7 +10,7 @@ Astro is the first framework Core targets. For the consumer-facing documentation
 
 - **elek.io Core** (`@elek-io/core/astro`) - Git-backed. The `elek()` integration provisions Projects from their remotes before content sync runs, the loaders then read from local disk.
   - The only surveyed loader that supplies both a zod schema and generated TypeScript entry types from the content model.
-  - Content state is a real model: channels (`production`, `preview`, `draft`) plus exact version pins.
+  - Content state is a real model: channels (`release`, `preview`, `draft`) plus exact version pins.
   - Credentials are env-only, one `elek.config.ts` declares every Project the site consumes, the collections are derived from the content model and image Assets arrive as native Astro images.
 - **Storyblok** (`@storyblok/astro` v7) - API-based. One untyped collection for the whole space, the token appears in two files. Strong delta sync between builds and the richest visual editing story (bridge, live preview).
 - **Hygraph** (`@hygraph/hygraph-astro-loader`, beta) - Pure loader with zero `astro.config` footprint. The model is spelled three times (CMS, `fields` selection, hand-written zod). A neat `richText` option bridges CMS rich text into Astro's native `render()` pipeline.
@@ -47,7 +47,7 @@ No other surveyed provider derives collections or schemas from the CMS content m
 
 | Dimension | elek.io Core | Storyblok | Hygraph | Sanity | Keystatic |
 | --- | --- | --- | --- | --- | --- |
-| **Draft vs published** | Channels (`production`, `preview`, `draft`) | `version: DEV ? 'draft' : 'published'` | Undocumented | `useCdn` + read token + perspective | Storage kind, branches as environments |
+| **Draft vs published** | Channels (`release`, `preview`, `draft`) | `version: DEV ? 'draft' : 'published'` | Undocumented | `useCdn` + read token + perspective | Storage kind, branches as environments |
 | **Deployment-wide switch** | `ELEK_IO_CHANNEL` env var | Manual per option | -- | Manual per option | Branch choice |
 | **Reproducible pins** | Exact Release version per Project | -- | -- | -- | Implicit via git commit |
 | **Fills an empty CI runner** | Yes, `elek()` provisions before content sync | API fetch at load | API fetch at load | API fetch at request | Content is already in the repo |

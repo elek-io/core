@@ -162,6 +162,7 @@ Run `pnpm test` and `pnpm lint`. Neither list below needs remembering, they are 
 | `brevity/*` | a paragraph passes 400 characters, four paragraphs run in a row, a section passes 45 content lines, or a JSDoc block passes 12 lines |
 | `jsdoc/*` | an exported function, class or public member carries no block, JSDoc uses a tag outside the agreed set, a `@todo` carries no issue URL, or a comment names a `Class.member` that does not exist |
 | `diagrams/mermaid` | a mermaid diagram does not parse, checked with mermaid's own parser |
+| `layout/*` | a service file declares anything above its class, exports anything beside it, keeps a constant or helper class below it, or builds a zod schema, see [`source-layout.md`](./source-layout.md) |
 | oxlint `jsdoc/*` | a tag is malformed, empty, or restates a type or default |
 
 ### Why the coverage rule requires what it does

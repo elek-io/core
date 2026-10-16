@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCredentialEnv, classifyAuthError } from './GitService.js';
+import { buildCredentialEnv, classifyAuthError } from '../util/git.js';
 import { CoreError } from '../util/shared.js';
 
 describe('buildCredentialEnv', function () {
@@ -47,7 +47,7 @@ describe('classifyAuthError', function () {
   it('returns null for ordinary git errors', function () {
     expect(classifyAuthError('fatal: not a git repository', false)).toBeNull();
     expect(
-      classifyAuthError("fatal: couldn't find remote ref work", true)
+      classifyAuthError("fatal: couldn't find remote ref draft", true)
     ).toBeNull();
   });
 

@@ -1,4 +1,6 @@
+import Fs from 'node:fs';
 import Os from 'node:os';
+import Path from 'node:path';
 import { uuid } from '../util/shared.js';
 import { testFileDataDir } from './worker.js';
 
@@ -26,3 +28,11 @@ process.env['ELEK_IO_DATA_DIR'] = testFileDataDir({
   poolId,
   uniqueId: uuid(),
 });
+
+// No global git config, so a developer's machine has no git identity, as CI.
+// A global identity would otherwise sign a commit Core forgot to give the
+// User, and the test would pass here and fail in CI. Every worker writes the
+// same empty file, so the race between them is harmless.
+const emptyGitConfig = Path.join(Os.tmpdir(), 'elek-io-core-test.gitconfig');
+Fs.writeFileSync(emptyGitConfig, '');
+process.env['GIT_CONFIG_GLOBAL'] = emptyGitConfig;

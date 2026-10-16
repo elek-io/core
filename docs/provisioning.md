@@ -13,12 +13,12 @@ Once a Project is provisioned it is a regular local Project, so everything else 
 
 ## What a CI environment sees
 
-Provisioning follows the `production` channel by default, which resolves to your latest published Release. Your local working copy lives on the `work` branch, which holds your drafts. So a CI pipeline consumes Released content, while local development sees drafts. This split is intentional: publishing is an editorial decision, made by creating a Release.
+Provisioning follows the `release` channel by default, which resolves to your latest published Release. Your local working copy lives on the `draft` branch, which holds your drafts. So a CI pipeline consumes Released content, while local development sees drafts. This split is intentional: publishing is an editorial decision, made by creating a Release.
 
 Two consequences:
 
 - A brand-new Project with no Release yet fails provisioning with a clear error. Publish a Release first, or consume another channel explicitly, see [Channels and pinned versions](#channels-and-pinned-versions).
-- Provisioning logs which content state it fetched, e.g. `version 1.4.0 (production)`. When a pipeline does not produce what you expect, this log line tells you why.
+- Provisioning logs which channel it fetched and the version it landed on, e.g. `at "release", version 1.4.0`. When a pipeline does not produce what you expect, this log line tells you why.
 
 ## Provisioning with elek provision
 
@@ -130,9 +130,9 @@ Which content state provisioning fetches is the `ref`. It is either a channel, w
 
 | Ref                        | Meaning                                 |
 | -------------------------- | --------------------------------------- |
-| `production`               | The latest Release (default)            |
+| `release`                  | The latest Release (default)            |
 | `preview`                  | The latest preview Release              |
-| `draft`                    | The current drafts (the work branch)    |
+| `draft`                    | The current drafts (the draft branch)   |
 | `1.4.0`, `1.5.0-preview.2` | Exactly that Release or preview Release |
 
 Set the ref per Project in the integration config or via `--ref` on `elek provision`. The `ELEK_IO_CHANNEL` environment variable overrides both and applies to every Project of a deployment, so one variable can repoint a whole pipeline. Because it is deployment-wide, it accepts channels only, exact versions are per-Project decisions and belong into the configuration.

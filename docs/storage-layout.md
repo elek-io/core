@@ -1,6 +1,6 @@
 # Storage layout
 
-elek.io Core stores everything as plain files on disk. This document describes where those files live and what a Project looks like as a directory tree.
+elek.io Core stores everything as plain files on disk. This document describes where those files live and what a Project looks like as a directory tree. Read them with any tool, and change them only through Core, see [`git-and-sync.md`](./git-and-sync.md#change-a-project-only-through-core).
 
 For the data model these files represent, see [`concepts.md`](./concepts.md).
 
@@ -12,7 +12,7 @@ Core works under a single data directory, `~/elek.io` by default. The root is co
 | --- | --- | --- |
 | `pathTo.projects` | `~/elek.io/projects` | All Projects, one folder each |
 | `pathTo.project(id)` | `~/elek.io/projects/{projectId}` | A single Project (a git repository) |
-| `pathTo.userFile` | `~/elek.io/user.json` | The current User set via `core.user.set()` |
+| `pathTo.userFile` | `~/elek.io/user.json` | The current User set via `core.user.set()` or by signing in to elek.io Cloud, never the session's token |
 | `pathTo.tmp` | `~/elek.io/tmp` | Scratch space (emptied on Core startup) |
 
 The User file is global, not per-Project. There is one `user.json` per data directory.

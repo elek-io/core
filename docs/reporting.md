@@ -9,7 +9,7 @@ Core can send a report to elek.io Cloud, and it can hand a window of its own log
 
 A report attaches a tail when whoever wrote it consented to that. A "save my diagnostics to a file" button uses the same tail and no network at all.
 
-Where a report goes is the `cloud.url` option, which defaults to `https://api.elek.io` and is overridable through `ELEK_IO_CLOUD_URL`. See [`usage.md`](./usage.md#options).
+Where a report goes is the `cloud.url` option, which defaults to `https://api.elek.io` and is overridable through `ELEK_IO_CLOUD_URL`. A report carries the `cloud.token` Core holds as a bearer token, and none while it holds none. See [`usage.md`](./usage.md#options).
 
 ## Sending a report
 
@@ -147,7 +147,7 @@ For what Core writes into a log file in the first place, and the level each thin
 | Type | When |
 | --- | --- |
 | `BadRequest` | The report failed validation, or elek.io Cloud rejected the body (400, 413) |
-| `Unauthorized` | elek.io Cloud refused the credential, or wanted one (401, 403) |
+| `Unauthorized` | elek.io Cloud refused the credential, or wanted one (401, 403). A 401 also forgets the token |
 | `RateLimited` | This client passed its rate limit (429) |
 | `PreconditionFailed` | elek.io Cloud could not be reached, or did not answer within 15 seconds |
 | `Internal` | elek.io Cloud failed (5xx), or accepted the report and answered with something unreadable |

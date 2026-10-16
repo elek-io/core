@@ -8,6 +8,7 @@ import {
   type ElekIoCoreOptions,
 } from './schema/index.js';
 import {
+  AccountService,
   AssetService,
   CacheService,
   CloudService,
@@ -23,8 +24,10 @@ import {
   UserService,
 } from './service/index.js';
 import { LogService } from './service/LogService.js';
+import { CloudClient } from './util/cloud.js';
 import {
   createPathTo,
+  resolveCloudToken,
   resolveCloudUrl,
   resolveDataDir,
   resolveLogLevel,
@@ -45,7 +48,8 @@ export * from './util/shared.js';
  * at import, creates `<dataDir>/projects` and empties `<dataDir>/tmp` on
  * disk, and registers process-level exception and rejection handlers unless
  * `log.hasProcessErrorHandlers` is false. Throws `BadRequest` on invalid
- * options and on an unusable `ELEK_IO_LOG_LEVEL` or `ELEK_IO_CLOUD_URL`.
+ * options and on an unusable `ELEK_IO_LOG_LEVEL`, `ELEK_IO_CLOUD_URL` or
+ * `ELEK_IO_CLOUD_TOKEN`.
  *
  * @see ../docs/usage.md
  */
@@ -66,6 +70,8 @@ export default class ElekIoCore {
   private readonly entryService: EntryService;
   private readonly referenceService: ReferenceService;
   private readonly releaseService: ReleaseService;
+  private readonly cloudClient: CloudClient;
+  private readonly accountService: AccountService;
   private readonly reportService: ReportService;
   private readonly cloudService: CloudService;
   private readonly localApi: LocalApi;
@@ -93,10 +99,20 @@ export default class ElekIoCore {
       cloud: { url: resolveCloudUrl(parsedProps.data?.cloud?.url) },
       isReadOnly: resolveReadOnly(parsedProps.data?.isReadOnly),
     };
+    // The token is a credential Core may forget while it runs, so it stays
+    // out of the options, which are configuration a host may log. Resolved
+    // before the logger, which registers process handlers a throw would leak
+    const cloudToken = resolveCloudToken(parsedProps.data?.cloud?.token);
     this.pathTo = createPathTo(this.options.dataDir);
     this.utilities = { pathTo: this.pathTo };
 
     this.logService = new LogService(this.options, this.pathTo);
+    this.cloudClient = new CloudClient(
+      this.options.cloud.url,
+      this.coreVersion,
+      cloudToken,
+      this.logService
+    );
     this.cacheService = new CacheService(this.options.cache);
     this.jsonFileService = new JsonFileService(
       this.options,
@@ -192,9 +208,20 @@ export default class ElekIoCore {
       this.coreVersion,
       this.options,
       this.pathTo,
-      this.logService
+      this.logService,
+      this.cloudClient
     );
-    this.cloudService = new CloudService(this.reportService);
+    this.accountService = new AccountService(
+      this.options,
+      this.pathTo,
+      this.logService,
+      this.cloudClient,
+      this.userService
+    );
+    this.cloudService = new CloudService(
+      this.accountService,
+      this.reportService
+    );
 
     // Every cache that mirrors a working tree, cleared together whenever
     // git or Core changes one. See CacheService
@@ -333,7 +360,7 @@ export default class ElekIoCore {
   }
 
   /**
-   * Releases. Diffs the `work` branch against `production`, computes the
+   * Releases. Diffs the `draft` branch against `main`, computes the
    * semver bump from what changed, and merges, leaving a tagged snapshot.
    *
    * @see ../docs/releases.md
@@ -343,8 +370,8 @@ export default class ElekIoCore {
   }
 
   /**
-   * Everything Core does against elek.io Cloud, which today is
-   * sending a bug report or feedback
+   * Everything Core does against elek.io Cloud: signing in to an account
+   * and sending a bug report or feedback
    */
   public get cloud(): CloudService {
     return this.cloudService;

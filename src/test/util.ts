@@ -1,4 +1,5 @@
 import { faker } from '@faker-js/faker';
+import { exec as gitExec } from 'dugite';
 import { execFile, type ExecFileOptions } from 'node:child_process';
 import crypto from 'node:crypto';
 import Fs from 'fs-extra';
@@ -8,6 +9,7 @@ import ts from 'typescript';
 import type { RunnerTestCase } from 'vitest';
 import { expect, onTestFinished } from 'vitest';
 import ElekIoCore from '../index.node.js';
+import { CoreError } from '../util/shared.js';
 import type {
   Collection,
   Component,
@@ -125,28 +127,76 @@ export async function getFileHash(path: string): Promise<string> {
 }
 
 /**
+ * Copies a local Project into a bare "remote" repository on the local file
+ * system, at the tmp path named after the Project id, and returns that path.
+ * The working copy stays in place.
+ *
+ * A bare clone copies the `HEAD` of its source, which is `draft` for a
+ * Project. A git host points `HEAD` at its default branch, `main`, so the
+ * remote does too and a clone of it behaves like one of a real host.
+ */
+export async function createBareRemoteOf(projectId: string): Promise<string> {
+  const remotePath = Path.join(core.util.pathTo.tmp, projectId);
+  await core.git.clone(core.util.pathTo.project(projectId), remotePath, {
+    bare: true,
+  });
+  await execGit(remotePath, ['symbolic-ref', 'HEAD', 'refs/heads/main']);
+
+  return remotePath;
+}
+
+/**
  * Creates a new local "remote" repository.
  * Meaning, simulating a remote repository on the local file system.
- * Returns the path to the remote repository.
+ * The remote holds `main` and `draft`, with `HEAD` on `main`, and the
+ * Project exists nowhere else.
  */
 export async function createLocalRemoteRepository() {
   const remoteProject = await createProject('Remote Project');
-  const remoteProjectPath = Path.join(core.util.pathTo.tmp, remoteProject.id);
-  await core.git.clone(
-    core.util.pathTo.project(remoteProject.id),
-    remoteProjectPath,
-    { bare: true }
-  );
+  await createBareRemoteOf(remoteProject.id);
   await Fs.remove(core.util.pathTo.project(remoteProject.id));
 
   return remoteProject;
 }
 
 /**
+ * Awaits the promise and asserts it rejects with a `CoreError` of the given
+ * type whose message contains the given text. Runs the call once, so it
+ * suits calls that change state before they fail.
+ */
+export async function expectCoreError(
+  promise: Promise<unknown>,
+  type: CoreError['type'],
+  text = ''
+): Promise<void> {
+  const error = await promise.then(
+    () => null,
+    (reason: unknown) => reason
+  );
+  expect(error).toBeInstanceOf(CoreError);
+  expect(error instanceof CoreError && error.type).toEqual(type);
+  expect(error instanceof CoreError && error.message).toContain(text);
+}
+
+/**
+ * Runs a git command through dugite, the git Core itself runs, and throws
+ * on a non-zero exit. For arranging repository state Core has no API for.
+ */
+export async function execGit(path: string, args: string[]): Promise<string> {
+  const result = await gitExec(args, path);
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `git ${args.join(' ')} failed with exit code ${result.exitCode}: ${result.stderr}`
+    );
+  }
+  return result.stdout.trim();
+}
+
+/**
  * Creates a local bare remote seeded with a released Project.
  *
  * The remote holds a Collection and an Asset, one preview and one
- * full Release, and a synchronized work branch. The local working
+ * full Release, and a synchronized draft branch. The local working
  * copy is removed again, so the remote is the only place the
  * Project exists. Used by provisioning tests.
  */

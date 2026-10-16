@@ -58,7 +58,7 @@ export const projectFolderSchema = z.enum([
 ]);
 export type ProjectFolder = z.infer<typeof projectFolderSchema>;
 
-export const projectBranchSchema = z.enum(['production', 'work']);
+export const projectBranchSchema = z.enum(['main', 'draft']);
 export type ProjectBranch = z.infer<typeof projectBranchSchema>;
 
 export const projectFileSchema = baseFileSchema.extend({
@@ -154,16 +154,16 @@ export type CloneProjectProps = z.infer<typeof cloneProjectSchema>;
 /**
  * The channels provisioning can follow
  *
- * `production` is the latest Release, `preview` the latest preview Release,
- * `draft` the tip of the work branch. A channel name is Project-independent,
+ * `release` is the latest Release, `preview` the latest preview Release,
+ * `draft` the tip of the draft branch. A channel name is Project-independent,
  * unlike a version pin, which is what makes `ELEK_IO_CHANNEL` safe to set
  * deployment-wide.
  *
- * Resolving one can still fail per Project: `production` and `preview` throw
+ * Resolving one can still fail per Project: `release` and `preview` throw
  * `PreconditionFailed` when nothing has been published, and `draft` throws
- * `NotFound` when the remote has no `work` branch.
+ * `NotFound` when the remote has no `draft` branch.
  */
-export const contentChannelSchema = z.enum(['production', 'preview', 'draft']);
+export const contentChannelSchema = z.enum(['release', 'preview', 'draft']);
 export type ContentChannel = z.infer<typeof contentChannelSchema>;
 
 /**
@@ -179,10 +179,10 @@ export const provisionProjectSchema = z.object({
    */
   url: z.string().trim().min(1),
   /**
-   * The content state to provision: a channel (`production`,
+   * The content state to provision: a channel (`release`,
    * `preview`, `draft`) or an exact Release version
    *
-   * @default 'production'
+   * @default 'release'
    */
   ref: contentRefSchema.optional(),
 });

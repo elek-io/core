@@ -1,4 +1,3 @@
-import { z } from '@hono/zod-openapi';
 import {
   countEntriesSchema,
   deleteEntrySchema,
@@ -11,7 +10,6 @@ import {
   objectTypeSchema,
   readEntrySchema,
   serviceTypeSchema,
-  uuidSchema,
   entryHistorySchema,
   type CountEntriesProps,
   type CreateEntryProps,
@@ -30,6 +28,7 @@ import {
   type ComponentResolver,
   type Value,
   type UniqueValueConflict,
+  collectionScopeSchema,
 } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
 import { migrateEntryFile } from './migrations/index.js';
@@ -116,7 +115,7 @@ export class EntryService
     this.assertNotReadOnly('create');
     const { projectId, collectionId } = this.parseOrThrow(
       'create',
-      z.object({ projectId: uuidSchema, collectionId: uuidSchema }),
+      collectionScopeSchema,
       props
     );
     await this.assertNotProvisioned('create', projectId);
@@ -275,7 +274,7 @@ export class EntryService
     this.assertNotReadOnly('update');
     const { projectId, collectionId } = this.parseOrThrow(
       'update',
-      z.object({ projectId: uuidSchema, collectionId: uuidSchema }),
+      collectionScopeSchema,
       props
     );
     await this.assertNotProvisioned('update', projectId);

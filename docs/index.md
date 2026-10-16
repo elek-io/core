@@ -25,7 +25,7 @@ New to elek.io Core? Read [`concepts.md`](./concepts.md) for the data model, the
 - [`local-api.md`](./local-api.md) - the read-only REST API: endpoints, pagination and the OpenAPI docs
 - [`api-clients.md`](./api-clients.md) - generating typed JS/TS clients and standalone TypeScript types
 - [`export.md`](./export.md) - exporting Projects to plain JSON
-- [`releases.md`](./releases.md) - tagged, versioned snapshots and promoting `work` to `production`
+- [`releases.md`](./releases.md) - tagged, versioned snapshots and promoting `draft` into `main`
 - [`provisioning.md`](./provisioning.md) - provisioning Projects into build environments (CI/CD and local builds), whatever runs next
 
 ## Platform
@@ -33,4 +33,5 @@ New to elek.io Core? Read [`concepts.md`](./concepts.md) for the data model, the
 - [`git-and-sync.md`](./git-and-sync.md) - the branch model, commits and synchronizing with a remote
 - [`storage-layout.md`](./storage-layout.md) - where Projects and their files live on disk
 - [`error-handling.md`](./error-handling.md) - `CoreError` and how to catch failures
+- [`cloud-account.md`](./cloud-account.md) - signing in to an elek.io account, the token Core holds and what happens to the User
 - [`reporting.md`](./reporting.md) - sending a report to elek.io Cloud, and handing a window of log files over

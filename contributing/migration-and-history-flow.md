@@ -76,7 +76,7 @@ export const projectMigrations: Migration[] = [
 upgrade({ id, force? })
   |
   v
-Switch to 'work' branch (if not already on it)
+Switch to 'draft' branch (if not already on it)
   |
   v
 Read project.json (unsafe read, no strict validation)
@@ -109,10 +109,10 @@ Create upgrade branch: upgrade/core-{from}-to-{to}
 Migrate the Project file itself
   |
   v
-Switch back to 'work' branch
+Switch back to 'draft' branch
   |
   v
-Squash-merge upgrade branch into 'work'
+Squash-merge upgrade branch into 'draft'
   |
   v
 Commit with method: 'upgrade'
@@ -131,11 +131,11 @@ Done (logged with previous + migrated state)
 
 If any step inside the `try` block fails:
 
-1. Switch back to the `work` branch
+1. Switch back to the `draft` branch
 2. Force-delete the upgrade branch
 3. Re-throw the error
 
-The `work` branch remains unchanged since all upgrade work happened on the temporary upgrade branch.
+The `draft` branch remains unchanged since all upgrade work happened on the temporary upgrade branch.
 
 ## Reading from Git history
 

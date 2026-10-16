@@ -21,7 +21,7 @@ export interface ElekProjectDeclaration {
    */
   remoteUrl?: string;
   /**
-   * What `elek()` provisions: a channel (`production`, `preview` or `draft`)
+   * What `elek()` provisions: a channel (`release`, `preview` or `draft`)
    * or an exact Release version. Nothing else reads it, so on a Project
    * declared without a `remoteUrl` it has no effect and the loaders read
    * whatever the data directory already holds.
@@ -29,7 +29,7 @@ export interface ElekProjectDeclaration {
    * The ELEK_IO_CHANNEL environment variable overrides it with a channel
    * only, so an exact Release version there throws `BadRequest`.
    *
-   * @default 'production'
+   * @default 'release'
    */
   ref?: string;
 }

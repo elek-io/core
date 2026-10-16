@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isMutatingGitCommand } from './GitService.js';
+import { isMutatingGitCommand } from '../util/git.js';
 
 /**
  * A packaged elek.io Desktop runs Core at `info`, so `info` is the whole
@@ -14,19 +14,19 @@ describe('isMutatingGitCommand', function () {
       ['commit', '--message=Create entry 1234', '--author=[redacted]'],
     ],
     ['add', ['add', '--', 'collections/6f1e/2b7c.json']],
-    ['init', ['init', '--initial-branch=work']],
+    ['init', ['init', '--initial-branch=main']],
     [
       'clone',
       ['clone', '--progress', 'https://example.com/repo.git', '/tmp/x'],
     ],
     ['push', ['push', 'origin', '--no-verify']],
     ['pull', ['pull']],
-    ['fetch', ['fetch', '--depth', '1', 'origin', 'work']],
-    ['merge', ['merge', '--squash', 'work']],
-    ['rebase', ['rebase', 'origin/work']],
+    ['fetch', ['fetch', '--depth', '1', 'origin', 'draft']],
+    ['merge', ['merge', '--squash', 'draft']],
+    ['rebase', ['rebase', 'origin/draft']],
     ['reset', ['reset', '--hard', 'HEAD']],
     ['switch', ['switch', '--create', 'upgrade/core-0.23.0-to-0.24.0']],
-    ['branch delete', ['branch', '--delete', '--force', 'work']],
+    ['branch delete', ['branch', '--delete', '--force', 'draft']],
     ['tag create', ['tag', '--annotate', '1234', '-m', 'Version: 1.0.0']],
     ['tag delete', ['tag', '--delete', '1234']],
     ['remote add', ['remote', 'add', 'origin', 'https://example.com/repo.git']],
@@ -46,7 +46,7 @@ describe('isMutatingGitCommand', function () {
     ['ls-remote', ['ls-remote', '--quiet', 'origin']],
     ['ls-tree', ['ls-tree', '--name-only', 'HEAD', 'assets/']],
     ['cat-file', ['cat-file', 'blob', 'abc:project.json']],
-    ['check-ref-format', ['check-ref-format', '--allow-onelevel', 'work']],
+    ['check-ref-format', ['check-ref-format', '--allow-onelevel', 'draft']],
     ['version', ['--version']],
     ['exec-path', ['--exec-path']],
     ['branch list', ['branch', '--list', '--all']],

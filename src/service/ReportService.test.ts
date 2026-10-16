@@ -1,6 +1,4 @@
-import { serve, type ServerType } from '@hono/node-server';
 import Fs from 'fs-extra';
-import { Hono } from 'hono';
 import Crypto from 'node:crypto';
 import Os from 'node:os';
 import Path from 'node:path';
@@ -11,6 +9,7 @@ import {
   type LogRecord,
 } from '../schema/logSchema.js';
 import type { CreateReportProps } from '../schema/reportSchema.js';
+import { startFakeCloud, type FakeCloud, type Respond } from '../test/cloud.js';
 import { createTmpCore } from '../test/util.js';
 import { CoreError, uuid } from '../util/shared.js';
 
@@ -62,75 +61,9 @@ function feedbackReport(
   };
 }
 
-/** What the fake Cloud saw, which is the only honest record of what was sent */
-interface Received {
-  body: Record<string, unknown>;
-  headers: Record<string, string>;
-}
-
-interface FakeCloud {
-  url: string;
-  received: Received[];
-  close: () => Promise<void>;
-}
-
-/**
- * A real HTTP server standing in for elek.io Cloud.
- *
- * Core's suite has no HTTP mocking and does not need one, since hono and
- * `@hono/node-server` are already dependencies. Port 0 rather than the
- * per-worker port the local API uses, so test files running in parallel
- * cannot contend at all, and 127.0.0.1 explicitly because the default
- * binds `::`.
- */
-async function startFakeCloud(
-  respond: (received: Received) => Response | Promise<Response>
-): Promise<FakeCloud> {
-  const received: Received[] = [];
-  const app = new Hono();
-
-  app.post('/management/v1/reports', async function (context) {
-    const entry: Received = {
-      body: await context.req.json(),
-      headers: Object.fromEntries(context.req.raw.headers),
-    };
-    received.push(entry);
-    return respond(entry);
-  });
-
-  const { server, port } = await new Promise<{
-    server: ServerType;
-    port: number;
-  }>(function (resolve) {
-    const created = serve(
-      { fetch: app.fetch, port: 0, hostname: '127.0.0.1' },
-      function (info) {
-        resolve({ server: created, port: info.port });
-      }
-    );
-  });
-
-  let isClosed = false;
-  const close = async function (): Promise<void> {
-    if (isClosed) {
-      return;
-    }
-    isClosed = true;
-    // A request the handler never answers holds its socket open, so the
-    // sockets go before close() is awaited. Narrowed rather than cast,
-    // since ServerType also covers the HTTP/2 servers this never creates
-    if ('closeAllConnections' in server) {
-      server.closeAllConnections();
-    }
-    await new Promise<void>(function (resolve) {
-      server.close(function () {
-        resolve();
-      });
-    });
-  };
-  onTestFinished(close);
-
-  return { url: `http://127.0.0.1:${port}`, received, close };
+/** The fake Cloud, answering only the report route */
+async function startReportCloud(respond: Respond): Promise<FakeCloud> {
+  return startFakeCloud({ 'POST /management/v1/reports': respond });
 }
 
 /** The 201 elek.io Cloud answers a created report with */
@@ -210,7 +143,7 @@ async function readLogsOnce(
 
 describe('what leaves the machine', function () {
   it('sends the report to the reports endpoint of the configured Cloud', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     // With a trailing slash, since the option drops one and a path is
     // appended to what is left
     const { core } = createTmpCore({ cloud: { url: `${cloud.url}/` } });
@@ -223,7 +156,7 @@ describe('what leaves the machine', function () {
   });
 
   it('says what it is and which Core sent it', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
 
     await core.cloud.reports.create(bugReport());
@@ -237,7 +170,7 @@ describe('what leaves the machine', function () {
   });
 
   it('carries exactly the keys the request is made of', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
 
     await core.cloud.reports.create(bugReport({ hasLogConsent: true }));
@@ -255,7 +188,7 @@ describe('what leaves the machine', function () {
   });
 
   it('passes the caller through unchanged, since Core does not read the User', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
     // Somebody reachable at an address other than the one their commits
     // are signed with, which is the whole reason the dialog stays editable
@@ -269,7 +202,7 @@ describe('what leaves the machine', function () {
   });
 
   it('sends a report from a machine with no User yet', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
 
     // The button stays reachable on a broken first run, which is when a
@@ -281,7 +214,7 @@ describe('what leaves the machine', function () {
   });
 
   it('describes the machine Core is running on, in the Node spellings', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
 
     await core.cloud.reports.create(bugReport());
@@ -299,7 +232,7 @@ describe('what leaves the machine', function () {
   it('refuses a machine the contract cannot describe rather than sending it', async function () {
     // Linux caps a release at 64 characters, so this is a cap gone wrong,
     // and a failure naming the field says so where a substitute would not
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
     vi.spyOn(Os, 'release').mockReturnValue('6'.repeat(65));
     onTestFinished(function () {
@@ -314,7 +247,7 @@ describe('what leaves the machine', function () {
   });
 
   it('still sends while Core is in read-only mode', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({
       isReadOnly: true,
       cloud: { url: cloud.url },
@@ -329,9 +262,128 @@ describe('what leaves the machine', function () {
   });
 });
 
+describe('the session a report carries', function () {
+  it('carries no credential while Core holds no token', async function () {
+    const cloud = await startReportCloud(accepted);
+    const { core } = createTmpCore({ cloud: { url: cloud.url } });
+
+    await core.cloud.reports.create(bugReport());
+
+    expect(cloud.received[0]?.headers).not.toHaveProperty('authorization');
+  });
+
+  it('carries the token Core holds as a bearer token', async function () {
+    const cloud = await startReportCloud(accepted);
+    const { core } = createTmpCore({
+      cloud: { url: cloud.url, token: 'report-session-token' },
+    });
+
+    await core.cloud.reports.create(bugReport());
+
+    expect(cloud.received[0]?.headers['authorization']).toBe(
+      'Bearer report-session-token'
+    );
+  });
+
+  it('carries the token ELEK_IO_CLOUD_TOKEN hands Core', async function () {
+    vi.stubEnv('ELEK_IO_CLOUD_TOKEN', 'environment-session-token');
+    onTestFinished(function () {
+      vi.unstubAllEnvs();
+    });
+    const cloud = await startReportCloud(accepted);
+    const { core } = createTmpCore({ cloud: { url: cloud.url } });
+
+    await core.cloud.reports.create(bugReport());
+
+    expect(cloud.received[0]?.headers['authorization']).toBe(
+      'Bearer environment-session-token'
+    );
+  });
+
+  it('prefers the cloud.token option over ELEK_IO_CLOUD_TOKEN', async function () {
+    vi.stubEnv('ELEK_IO_CLOUD_TOKEN', 'environment-session-token');
+    onTestFinished(function () {
+      vi.unstubAllEnvs();
+    });
+    const cloud = await startReportCloud(accepted);
+    const { core } = createTmpCore({
+      cloud: { url: cloud.url, token: 'option-session-token' },
+    });
+
+    await core.cloud.reports.create(bugReport());
+
+    expect(cloud.received[0]?.headers['authorization']).toBe(
+      'Bearer option-session-token'
+    );
+  });
+
+  it('keeps the token out of core.options', function () {
+    // The options are configuration a host may log or hand around, and the
+    // token is a credential Core may forget while it runs
+    const { core } = createTmpCore({
+      cloud: { url: 'http://127.0.0.1:1', token: 'option-session-token' },
+    });
+
+    expect(core.options.cloud).toEqual({ url: 'http://127.0.0.1:1' });
+    expect(JSON.stringify(core.options)).not.toContain('option-session-token');
+  });
+
+  it('refuses a token no header can carry, without repeating it', function () {
+    expect(function () {
+      createTmpCore({ cloud: { token: 'zqx canary\n41be7c' } });
+    }).toThrowError(expect.objectContaining({ type: 'BadRequest' }));
+    expect(function () {
+      createTmpCore({ cloud: { token: 'zqx canary\n41be7c' } });
+    }).not.toThrowError(/zqx/);
+  });
+
+  it('forgets the token after a 401, so the next report carries none', async function () {
+    let status = 401;
+    const cloud = await startReportCloud(function () {
+      return status === 401 ? new Response(null, { status }) : accepted();
+    });
+    const { core } = createTmpCore({
+      cloud: { url: cloud.url, token: 'expired-session-token' },
+    });
+
+    const error = await expectCoreError(core.cloud.reports.create(bugReport()));
+    expect(error.type).toBe('Unauthorized');
+
+    // A 401 means the session is gone, so sending it again would only be
+    // refused again. The report itself still goes, without a credential
+    status = 201;
+    await core.cloud.reports.create(bugReport());
+
+    expect(cloud.received[0]?.headers['authorization']).toBe(
+      'Bearer expired-session-token'
+    );
+    expect(cloud.received[1]?.headers).not.toHaveProperty('authorization');
+  });
+
+  it('keeps the token after a 403, which refuses the call rather than the session', async function () {
+    let status = 403;
+    const cloud = await startReportCloud(function () {
+      return status === 403 ? new Response(null, { status }) : accepted();
+    });
+    const { core } = createTmpCore({
+      cloud: { url: cloud.url, token: 'live-session-token' },
+    });
+
+    const error = await expectCoreError(core.cloud.reports.create(bugReport()));
+    expect(error.type).toBe('Unauthorized');
+
+    status = 201;
+    await core.cloud.reports.create(bugReport());
+
+    expect(cloud.received[1]?.headers['authorization']).toBe(
+      'Bearer live-session-token'
+    );
+  });
+});
+
 describe('the log tail a report may attach', function () {
   it('attaches one when a bug report consented to it', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
 
     await core.cloud.reports.create(bugReport({ hasLogConsent: true }));
@@ -343,7 +395,7 @@ describe('the log tail a report may attach', function () {
   });
 
   it('attaches none when a bug report did not consent', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
 
     await core.cloud.reports.create(bugReport({ hasLogConsent: false }));
@@ -352,7 +404,7 @@ describe('the log tail a report may attach', function () {
   });
 
   it('never attaches one to feedback, whatever the caller passes', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
 
     // Feedback has no consent to give, so there is nothing that could
@@ -364,7 +416,7 @@ describe('the log tail a report may attach', function () {
   });
 
   it('refuses a body over the cap rather than letting Cloud answer 413', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
     await seedIncompressibleLog(core.util.pathTo.logs);
 
@@ -380,7 +432,7 @@ describe('the log tail a report may attach', function () {
   it('refuses a tail at the cap once the rest of the body is added', async function () {
     // The tail alone is within the contract here, so what refuses it is
     // the ceiling on the whole body
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
     const tail = await core.logger.tail();
     vi.spyOn(core.logger, 'tail').mockResolvedValue({
@@ -412,7 +464,7 @@ describe('what a caller is told when it does not arrive', function () {
   ])(
     'turns a %i from elek.io Cloud into a %s error',
     async function (status, type) {
-      const cloud = await startFakeCloud(function () {
+      const cloud = await startReportCloud(function () {
         return new Response(null, { status });
       });
       const { core } = createTmpCore({ cloud: { url: cloud.url } });
@@ -425,8 +477,28 @@ describe('what a caller is told when it does not arrive', function () {
     }
   );
 
+  it.each([400, 401, 403, 413, 429, 500])(
+    'never repeats what a %i answered in the message',
+    async function (status) {
+      // An answer can echo what was sent, and a boundary error message is
+      // written to a log file
+      const sentinel = 'zqx-canary-5d02af-answer';
+      const cloud = await startReportCloud(function () {
+        return Response.json({ code: sentinel, message: sentinel }, { status });
+      });
+      const { core } = createTmpCore({ cloud: { url: cloud.url } });
+
+      const error = await expectCoreError(
+        core.cloud.reports.create(bugReport())
+      );
+
+      expect(error.message).toContain(String(status));
+      expect(error.message).not.toContain(sentinel);
+    }
+  );
+
   it('turns a Cloud that is not there into a PreconditionFailed', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     await cloud.close();
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
 
@@ -438,7 +510,7 @@ describe('what a caller is told when it does not arrive', function () {
   });
 
   it('waits 15 seconds for an answer and no longer', async function () {
-    const cloud = await startFakeCloud(accepted);
+    const cloud = await startReportCloud(accepted);
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
     const timeout = vi.spyOn(AbortSignal, 'timeout');
     onTestFinished(function () {
@@ -460,7 +532,7 @@ describe('what a caller is told when it does not arrive', function () {
     onTestFinished(function () {
       timeout.mockRestore();
     });
-    const cloud = await startFakeCloud(function () {
+    const cloud = await startReportCloud(function () {
       return new Promise<Response>(function () {
         // Never answers, which is the case the 15 second ceiling is for
       });
@@ -482,7 +554,7 @@ describe('what a caller is told when it does not arrive', function () {
     onTestFinished(function () {
       timeout.mockRestore();
     });
-    const cloud = await startFakeCloud(function () {
+    const cloud = await startReportCloud(function () {
       return new Promise<Response>(function () {
         // Answers nothing, so a retrying Core would show up twice
       });
@@ -497,7 +569,7 @@ describe('what a caller is told when it does not arrive', function () {
   });
 
   it('refuses to hand back an accepted report it could not read', async function () {
-    const cloud = await startFakeCloud(function () {
+    const cloud = await startReportCloud(function () {
       return Response.json({ id: 'not-a-uuid' }, { status: 201 });
     });
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
@@ -508,7 +580,7 @@ describe('what a caller is told when it does not arrive', function () {
   });
 
   it('refuses an accepted report answered with something that is not JSON', async function () {
-    const cloud = await startFakeCloud(function () {
+    const cloud = await startReportCloud(function () {
       return new Response('created', { status: 201 });
     });
     const { core } = createTmpCore({ cloud: { url: cloud.url } });
@@ -524,7 +596,7 @@ describe('the report itself stays off the machine it was sent from', function ()
     // The whole feature is a privacy feature, and a rejected report is
     // where the text would leak: the service boundary logs the failure
     const sentinel = 'zqx-canary-9c31be-report';
-    const cloud = await startFakeCloud(function () {
+    const cloud = await startReportCloud(function () {
       return new Response(null, { status: 400 });
     });
     const { core } = createTmpCore({ cloud: { url: cloud.url } });

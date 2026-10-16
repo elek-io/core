@@ -108,7 +108,7 @@ export const provisionSchema = z.object({
    * The content state to provision: a channel or an exact Release
    * version, overridden by the ELEK_IO_CHANNEL environment variable
    *
-   * @default 'production'
+   * @default 'release'
    */
   ref: contentRefSchema.optional(),
 });

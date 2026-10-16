@@ -30,7 +30,7 @@ describe('provisionAction', function () {
     vi.unstubAllEnvs();
   });
 
-  it('provisions a Project at production by default', async function () {
+  it('provisions a Project at the release channel by default', async function () {
     await provisionAction({ project: seed.projectId, url: seed.remotePath });
 
     const projectPath = core.util.pathTo.project(seed.projectId);
@@ -53,13 +53,13 @@ describe('provisionAction', function () {
     await provisionAction({
       project: seed.projectId,
       url: seed.remotePath,
-      ref: 'production',
+      ref: 'release',
     });
 
-    // The draft channel follows the work branch
+    // The draft channel follows the draft branch
     expect(
       await core.git.branches.current(core.util.pathTo.project(seed.projectId))
-    ).toEqual('work');
+    ).toEqual('draft');
   }, 30000);
 
   it('rejects with the typed error instead of exiting the process', async function () {

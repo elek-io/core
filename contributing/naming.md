@@ -12,7 +12,7 @@ Examples: `isReadOnly`, `isRequired`, `isUnique`, `isProvisioned`, `hasToken`.
 
 When a key maps directly to another tool's flag or option, keep that tool's name. The reader can then look the option up in the external documentation without translating it first.
 
-- Git flags stay git-named: `create`, `detach`, `forceCreate`, `discardChanges`, `bare`, `squash`, `singleBranch` and `force` in the git schemas mirror the flags of `git switch`, `git clone`, `git merge` and friends.
+- Git flags stay git-named: `create`, `detach`, `forceCreate`, `discardChanges`, `bare`, `squash`, `singleBranch`, `atomic` and `force` in the git schemas and options mirror the flags of `git switch`, `git clone`, `git merge`, `git push` and friends.
 - Slug options mirror `@sindresorhus/slugify`: `lowercase` and `decamelize`.
 - CLI options mirror the flag users type: `watch` mirrors `--watch`.
 - mdast node fields mirror the mdast spec: `spread`, `checked`, `ordered`. Renaming these would break the external format.
@@ -37,6 +37,17 @@ The namespace is one level deep everywhere except `core.cloud`, and that excepti
 
 The alternative was `core.reports`, flat like the rest. It was rejected because the next Cloud API would then sit beside it with nothing saying the two share a backend, an account and an outage.
 
+### The account
+
+The session Core signs in to hangs off `core.cloud.account`, singular because Core holds one session at a time. Why the names:
+
+- `account` rather than `session`. `signUp()` creates the account and can answer no session at all, and verifying an address or resetting a password act on the account too. `session.signUp()` reads as creating a session.
+- `signUp()`, `signIn()` and `signOut()` rather than the CRUD verbs. They are the words a sign in form and its reader use, and `create()` would not say whether it makes an account or a session.
+- `read()` keeps the CRUD verb, because it reads the account of the session and changes nothing but a dead token.
+- The sign up result's `outcome` is `session` or `verification`, one lowercase word each like Core's other enum values, naming what the caller has next.
+- `hasToken` follows the boolean rule above.
+- `onTokenChange()` takes the `on<Event>` shape of Node and DOM listeners and returns its own remover, so there is no `off` method to pair with it.
+
 ## Astro entry exports
 
 Two conventions from the Astro ecosystem apply to `@elek-io/core/astro`:
@@ -44,6 +55,26 @@ Two conventions from the Astro ecosystem apply to `@elek-io/core/astro`:
 - The integration is product-named, like every Astro integration (`react()`, `sitemap()`, `starlight()`): `elek()`, not `elekIntegration()`. Its position inside `integrations: []` states its kind.
 - Loader factories carry the `Loader` suffix, like Starlight's `docsLoader` and the community loaders: `elekAssetsLoader()`, `elekEntriesLoader()`. The suffix separates them from functions that return collection definitions instead, like `elekCollections()`.
 - Config helpers follow the `define*` convention of `defineConfig` and `defineCollection`: `defineElekConfig()`.
+
+## Branches and channels
+
+A Project has two branches, `projectBranchSchema`, and provisioning follows three channels, `contentChannelSchema`:
+
+| Name | Kind | Holds |
+| --- | --- | --- |
+| `main` | branch | the released state, which only `core.releases.create()` moves |
+| `draft` | branch and channel | every edit, and the channel that reads that branch |
+| `release` | channel | the newest Release tag |
+| `preview` | channel | the newest preview tag |
+
+Why these names:
+
+- Every git host points a new repository's default branch at `main`, and a plain `git clone` checks out the default branch, so released content is what the host and such a clone show. `core.projects.clone()` lands on `draft` instead, see [`releases.md`](./releases.md#where-a-clone-lands).
+- `draft` is the branch and the channel that reads it, so nobody translates between the two. The Astro build log and the provisioning fallback warning print the branch name as is.
+- `release` matches the word Desktop uses, Release, and the `Type: release` trailer of the tag it resolves to. `preview` likewise matches its tag type.
+- `released` was the first pick and was rejected. `draft` and `preview` are nouns, so a participle is the odd one out, and making the set consistent would take `drafted` and `previewed`.
+
+They replace `production` for the released branch and the channel, and `work` for the editing branch. The rename shipped without a migration, and the old names are refused like any unknown value. Do not add them back as aliases, because an alias keeps both vocabularies alive in every doc, error message and log line.
 
 ## See also
 

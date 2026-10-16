@@ -22,7 +22,7 @@ Never:
 - **a name, or the slug made from one**: of a Project, Collection, Component, Entry or Asset. Anything a User typed that identifies one object, not only what they wrote into a field
 - a User's name or email, including inside a git command line
 - **a path the User chose**, such as the file an Asset was created from, which carries the name they gave it
-- the remote access token, which today only ever travels by environment variable
+- a credential: the remote access token, or the elek.io Cloud token, which travel by environment variable or argument and never inside a file Core writes
 
 **Names go even though they are not content.** They buy a reader nothing: every line already carries the id, and an id resolves to the object, its name included, the moment the repository is on hand. A name is the one part of a line that reads as somebody's words, and it is the part that survives being read by someone the User never expected to read it. So it goes, and the ids stay.
 
@@ -44,7 +44,7 @@ The invariant is about the files under `pathTo.logs`. It does not cover output C
 
 Two places do that on purpose and keep their names:
 
-- [`astro/core.ts`](../src/astro/core.ts) `logReadingProject`, which the loaders call with Astro's `context.logger`. Its `Reading Project "Website" version 1.4.0 (production)` line is documented consumer behavior in [`usage.md`](../docs/usage.md).
+- [`astro/core.ts`](../src/astro/core.ts) `logReadingProject`, which the loaders call with Astro's `context.logger`. Its `Reading Project "Website" version 1.4.0 (Release tag)` line is documented consumer behavior in [`usage.md`](../docs/usage.md).
 - [`index.astro.ts`](../src/index.astro.ts), which uses the `logger` Astro hands to `astro:config:setup`.
 
 A build that will not say which Project it read is worse at its job, and none of that output leaves the machine.
@@ -61,9 +61,9 @@ Practically: **log the shape, never the payload.** For a migration bug, "12 Valu
 
 ### Redacting a command line
 
-[`redactGitArgs`](../src/service/GitService.ts) takes the User's identity out of a git command before it reaches a log record or an error message: the `--author` of a commit, the values of `config --local user.name` and `user.email`, and credentials embedded in a remote URL. Ids, paths and flags pass through untouched.
+Core hands git the User's identity through the environment of each command, see [`git-identity.md`](./git-identity.md), so no command line Core builds carries one. A command line is still the first place an identity would land if that changed.
 
-Anything that builds a string from git arguments has to go through it. There is more than one identity site, and a rule written for only the one in front of you will miss the others.
+[`redactGitArgs`](../src/util/git.ts) is the backstop. It takes the `--author` of a commit, the values of `config user.name` and `user.email`, and credentials embedded in a remote URL out of a git command before it reaches a log record or an error message. Ids, paths and flags pass through untouched. Anything that builds a string from git arguments has to go through it.
 
 ### An error message has two audiences
 
@@ -220,9 +220,9 @@ The one exception is the rollback cleanup in [`AbstractEntityService`](../src/se
 One rule, applied to the verb: a command that changes a repository, a remote or the git configuration is `info`, a command that only asks it something is `debug`.
 
 - The record of what happened, at `info`: `commit`, `add`, `push`, `pull`, `fetch`, `clone`, `init`, `merge`, `rebase`, `reset`, `switch`, `lfs` transfers, `remote add`, `config --local` writes, and creating or deleting a branch or tag.
-- How it happened, at `debug`: `status`, `log`, `rev-parse`, `ls-remote`, `cat-file`, `branch --list`, `remote get-url`, `config --get`, `--version` and `--exec-path`.
+- How it happened, at `debug`: `status`, `log`, `rev-parse`, `merge-base`, `ls-remote`, `cat-file`, `branch --list`, `remote get-url`, `config --get`, `--version` and `--exec-path`.
 
-[`isMutatingGitCommand`](../src/service/GitService.ts) decides it, and **a command it does not know counts as a mutation**. A command added later and never classified then shows up as a noisy line rather than as a line that should have been there and is not.
+[`isMutatingGitCommand`](../src/util/git.ts) decides it, and **a command it does not know counts as a mutation**. A command added later and never classified then shows up as a noisy line rather than as a line that should have been there and is not.
 
 **Duration is never an input to the level.** It is a value on the record. A rule that logged any git command taking 100ms or more as a warning meant every clone, merge and LFS transfer on Windows and Intel macOS during entirely normal operation, per the platform latencies in [`testing.md`](./testing.md). A slow operation is not an anomaly, it is a slow operation on a slow machine.
 

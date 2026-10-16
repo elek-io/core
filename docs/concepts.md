@@ -18,7 +18,7 @@ The data model behind elek.io Core: Projects, Collections, Components, Entries, 
 
 ## Projects
 
-Are a container for Collections, Components, Entries, Values and Assets. Think of a folder containing all the relevant files. Projects are version controlled with git, so you can roll back to previous versions of files at any time.
+Are a container for Collections, Components, Entries, Values and Assets. Think of a folder containing all the relevant files. Projects are version controlled with git, so you can roll back to previous versions of files at any time. Change a Project only through Core, never with git or an editor by hand, see [`git-and-sync.md`](./git-and-sync.md#change-a-project-only-through-core).
 
 Each Project declares its supported languages in its settings, along with one of them as the default. Translatable content (admin metadata and Entry Values) is validated against those languages, not the full universe of supported language codes.
 
@@ -66,5 +66,6 @@ Are tagged snapshots of a Project at a specific point in time, managed through g
 - [`markdown-content.md`](./markdown-content.md) - how rich `markdown` Values are stored and rendered
 - [`asset-management.md`](./asset-management.md) - the two-file Asset model, creating, reading and deleting Assets
 - [`git-and-sync.md`](./git-and-sync.md) - the branch model and synchronizing with a remote
-- [`releases.md`](./releases.md) - tagged snapshots and promoting `work` to `production`
-- [`storage-layout.md`](./storage-layout.md) - where Projects and their files live on disk- [`error-handling.md`](./error-handling.md) - `CoreError` and validation error patterns
+- [`releases.md`](./releases.md) - tagged snapshots and promoting `draft` into `main`
+- [`storage-layout.md`](./storage-layout.md) - where Projects and their files live on disk
+- [`error-handling.md`](./error-handling.md) - `CoreError` and validation error patterns

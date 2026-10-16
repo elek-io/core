@@ -180,7 +180,7 @@ describe('Provisioned copy', function () {
     await expectProvisionedError(
       core.projects.branches.switch({
         id: seed.projectId,
-        branch: 'work',
+        branch: 'draft',
       })
     );
   });

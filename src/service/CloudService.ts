@@ -1,19 +1,35 @@
+import type { AccountService } from './AccountService.js';
 import type { ReportService } from './ReportService.js';
 
 /**
- * The elek.io Cloud APIs, reached as `core.cloud.<api>`. Today that is
- * `core.cloud.reports` alone, which sends bug reports and feedback.
+ * The elek.io Cloud APIs, reached as `core.cloud.<api>`: `core.cloud.account`
+ * signs in to an elek.io account, and `core.cloud.reports` sends bug reports
+ * and feedback.
  *
  * It owns no behavior of its own, only the second namespace level.
  *
  * @see ../../contributing/naming.md
+ * @see ../../docs/cloud-account.md
  * @see ../../docs/reporting.md
  */
 export class CloudService {
+  private readonly accountService: AccountService;
   private readonly reportService: ReportService;
 
-  public constructor(reportService: ReportService) {
+  public constructor(
+    accountService: AccountService,
+    reportService: ReportService
+  ) {
+    this.accountService = accountService;
     this.reportService = reportService;
+  }
+
+  /**
+   * The account Core is signed in to. Signing in keeps a bearer token in
+   * memory for every later call using it, and the User follows the account.
+   */
+  public get account(): AccountService {
+    return this.accountService;
   }
 
   /**

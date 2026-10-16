@@ -61,11 +61,15 @@ The resolved options are exposed on `core.options`, and the running Core version
 - **`cloud.url`** is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It has to be an http or https URL. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`.
   - A trailing slash is dropped, since Core appends a path to it.
   - A value that is not a URL throws a `CoreError`, rather than falling back to the default and sending to production on the strength of a typo.
+- **`cloud.token`** is a bearer token every elek.io Cloud call using the session carries, a report included. It takes precedence over the `ELEK_IO_CLOUD_TOKEN` environment variable, and there is no default.
+  - It is how a host hands back the token `core.cloud.account.signIn()` answered, see [`cloud-account.md`](./cloud-account.md#the-token).
+  - Core keeps it in memory and never writes it to disk, so it is not part of `core.options` either.
+  - Core forgets it on `signOut()` and when elek.io Cloud answers 401, and the calls after that carry none.
+  - A value holding whitespace or anything outside printable ASCII throws a `CoreError` of type `BadRequest`, whose message never repeats it.
 - **`cache`** decides whether Core keeps what it reads from a Project's files in memory between calls: parsed JSON files and the index that resolves Collection and Component slugs. It defaults to `true`, and everything kept is dropped whenever git changes a Project's working tree.
   - Set it to `false` when another application writes the same files while this Core runs. The Astro loaders do that for you during `astro dev`.
 - **`isReadOnly`** puts Core into read-only mode, meant for environments that only consume content, such as CI builds. It takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
   - Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`.
-  - In return, cloning and fetching work without a User being set, because nothing is ever committed.
 
 ### Environment variables
 
@@ -80,6 +84,7 @@ Core reads its environment variables once at construction, never at import. All 
 | `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN` | `x-access-token` |
 | `ELEK_IO_CHANNEL` | The channel provisioning follows, overrides configured refs | unset |
 | `ELEK_IO_CLOUD_URL` | Base URL of the elek.io Cloud API | `https://api.elek.io` |
+| `ELEK_IO_CLOUD_TOKEN` | Bearer token for elek.io Cloud, for a command line tool or a script | unset |
 
 `ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git per invocation through an askpass helper:
 
@@ -133,7 +138,7 @@ A log file holds ids, paths, counts and error messages. It never holds the conte
 
 ## Setting the User (required before writing)
 
-Every create, update and delete operation commits to git, and git needs a signature. Set the User once before any write - without it, write operations throw a `CoreError` of type `Unauthorized`.
+Every create, update and delete operation commits to git, and git needs a signature. Set the User once before any write - without it, write operations throw a `CoreError` of type `Unauthorized`. Cloning, fetching and reading need no User.
 
 ```typescript
 await core.user.set({
@@ -148,7 +153,10 @@ await core.user.set({
 });
 ```
 
-`core.user.get()` returns the current `User` or `null` if none is set (a fresh install has no User).
+`core.user.get()` returns the current `User` or `null` if none is set (a fresh install has no User). There are two kinds of User:
+
+- A `local` User has an `id` of `null`.
+- A `cloud` User carries the `id` of the elek.io account it signed in to. Setting one signs nobody in. `core.cloud.account.signIn()` signs in and sets the `cloud` User itself, see [`cloud-account.md`](./cloud-account.md).
 
 `name` takes up to 256 characters, with no `|` and no control characters, and `email` is an address of up to 254. A length counts UTF-16 code units, as `String.length` does. `core.user.set()` throws `BadRequest` past either limit. A `user.json` written by an older Core that breaks one reads back as `null`, the same as no User, so set the User again.
 
@@ -361,7 +369,7 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
 - `elek provision --project <id> --url <url>` - provision a copy of a Project from its remote into the data directory, for example in CI. It runs read-only, so no User is required, and private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`.
-  - `--ref` selects a channel (`production` for the latest Release, `preview` for the latest preview Release, `draft` for the tip of the work branch) or an exact Release version. The `ELEK_IO_CHANNEL` environment variable overrides it.
+  - `--ref` selects a channel (`release` for the latest Release, `preview` for the latest preview Release, `draft` for the tip of the draft branch) or an exact Release version. The `ELEK_IO_CHANNEL` environment variable overrides it.
   - See [`git-and-sync.md`](./git-and-sync.md#provisioning-a-copy-for-builds).
 
 The global `--data-dir <path>` option sets the data directory for any command, e.g. `elek --data-dir /path/to/data export`. It overrides the `ELEK_IO_DATA_DIR` environment variable and defaults to `~/elek.io`, see [Options](#options).
@@ -613,7 +621,7 @@ Content editing carries on as normal after the restart. Adding or removing a who
 
 The loaders read from the local data directory, which is empty on a CI runner. The `elek()` integration fills it: it provisions every Project of the config from its remote before Astro's content sync runs.
 
-Each declaration takes an optional `ref`, a channel (`production`, `preview` or `draft`, default `production`) or an exact Release version. The `ELEK_IO_CHANNEL` environment variable overrides it and accepts channels only. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`.
+Each declaration takes an optional `ref`, a channel (`release`, `preview` or `draft`, default `release`) or an exact Release version. The `ELEK_IO_CHANNEL` environment variable overrides it and accepts channels only. Private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`.
 
 - The integration runs on its own short-lived read-only Core, so no User is required and nothing is mutated.
 - A locally existing Project managed by the Desktop app is left untouched, so `astro dev` keeps reading the live working copy while CI builds Released content.
@@ -625,7 +633,7 @@ Each declaration takes an optional `ref`, a channel (`production`, `preview` or 
 - A config in which no Project has a `remoteUrl` fails while `astro.config` is read, naming the aliases, because there is nothing left for the integration to do.
 - A site whose Projects are all local needs no integration at all.
 
-Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (production)`.
+Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (Release tag)`. The label is the checked-out branch, or `Release tag` for a Release or a pinned version.
 
 For rendering `markdown` field Values (including the required `html`, `assetReference` and `entryReference` handlers), see [`markdown-content.md`](./markdown-content.md).
 
@@ -635,7 +643,7 @@ For rendering `markdown` field Values (including the required `html`, `assetRefe
 - [`fields.md`](./fields.md) - full field type reference
 - [`schema-changes.md`](./schema-changes.md) - how editing field definitions cascades into existing Entries
 - [`git-and-sync.md`](./git-and-sync.md) - branches, commits and synchronizing with a remote
-- [`releases.md`](./releases.md) - tagged snapshots and promoting `work` to `production`
+- [`releases.md`](./releases.md) - tagged snapshots and promoting `draft` into `main`
 - [`asset-management.md`](./asset-management.md) - creating, reading and deleting Assets
 - [`storage-layout.md`](./storage-layout.md) - where Projects and their files live on disk
 - [`local-api.md`](./local-api.md) - the read-only REST API reference

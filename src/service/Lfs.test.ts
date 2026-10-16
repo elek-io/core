@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import core, { type Asset, type Project } from '../test/setup.js';
 import {
   createAsset,
+  createCollection,
   createLocalRemoteRepository,
   createProject,
   getFileHash,
@@ -99,6 +100,41 @@ describe('Git LFS', function () {
     await core.projects.delete({ id: cloned.id, force: true });
     await Fs.remove(remotePath);
   });
+
+  it('materializes an Asset that only draft holds when cloning', async function () {
+    const remote = await createLocalRemoteRepository();
+    const remotePath = Path.join(core.util.pathTo.tmp, remote.id);
+
+    const seeded = await core.projects.clone({ url: remotePath });
+    await createCollection(seeded.id);
+    await core.releases.create({ projectId: seeded.id });
+    await core.projects.synchronize({ id: seeded.id });
+    // Added after the last Release, so the remote's main never received it
+    const draftOnlyAsset = await createAsset(seeded.id);
+    await core.projects.synchronize({ id: seeded.id });
+    await core.projects.delete({ id: seeded.id, force: true });
+
+    const cloned = await core.projects.clone({ url: remotePath });
+    const clonedPath = core.util.pathTo.project(cloned.id);
+    const binaryPath = core.util.pathTo.asset(
+      cloned.id,
+      draftOnlyAsset.id,
+      draftOnlyAsset.extension
+    );
+
+    await expect(
+      core.git.getFileContentAtCommit(clonedPath, binaryPath, 'origin/main')
+    ).rejects.toThrow();
+    expect(core.git.lfs.isPointer(await Fs.readFile(binaryPath, 'utf8'))).toBe(
+      false
+    );
+    expect(await getFileHash(binaryPath)).toEqual(
+      await getFileHash(originalAssetPath)
+    );
+
+    await core.projects.delete({ id: cloned.id, force: true });
+    await Fs.remove(remotePath);
+  }, 60000);
 
   it('throws a descriptive PreconditionFailed when the remote does not support LFS', async function () {
     const remote = await createLocalRemoteRepository();

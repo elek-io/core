@@ -38,8 +38,8 @@ export const createReportBaseSchema = z.object({
    * most: elek.io Desktop keeps it reachable on a broken first run.
    *
    * Self-declared, and none of it is proof of anything. Whether a sender
-   * is who they claim is what a session says once Cloud sign-in exists,
-   * never what a body says.
+   * is who they claim is what the session a report carries says, never
+   * what a body says.
    */
   user: z
     .discriminatedUnion('userType', [localUserSchema, cloudUserSchema])

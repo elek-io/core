@@ -4,6 +4,17 @@ Every elek.io Project is a git repository, and Core drives git directly for ever
 
 For the data model, see [`concepts.md`](./concepts.md). For how history is read, see [`usage.md`](./usage.md#reading-from-history).
 
+## Change a Project only through Core
+
+A Project is a git repository you can read with any tool, but change only through Core. Git run by hand in a Project, another git client, or an editor writing its files is not supported, and Core does not guard against it. What goes wrong otherwise:
+
+- A commit Core did not make carries none of Core's trailers, so `history()` and the log of `core.git` skip it.
+- Core checks references, unique fields and the field definitions on its own writes only, so a file changed by hand can hold content Core refuses or skips when it reads it.
+- An upgrade migrates files from the shapes an earlier Core wrote, and knows no other.
+- Core writes no identity into the Project's git config, so a commit made by hand is signed with whatever identity the machine has.
+
+Reading is safe: a log, a diff, a backup, or a copy of the folder.
+
 ## The git backend
 
 Core runs git through [dugite](https://github.com/desktop/dugite) (the git bindings used by GitHub Desktop), declared as a peer dependency. All git commands for a Project are serialized through an internal queue, so two operations never overlap on the same repository.
@@ -17,31 +28,35 @@ Two levels of API are available:
 
 A Project uses exactly two branches, defined by `projectBranchSchema` (`src/schema/projectSchema.ts`):
 
-- **`production`** - the stable, released state of the content.
-- **`work`** - where all editing happens.
+- **`main`** - the stable, released state of the content.
+- **`draft`** - where all editing happens.
 
-When `core.projects.create()` runs, it initializes the repository with `production` as the initial branch, makes the first commit there, then creates and switches to `work`. After creation you are on `work`, and every subsequent content change is committed there.
+When `core.projects.create()` runs, it initializes the repository with `main` as the initial branch, makes the first commit there, then creates and switches to `draft`. After creation you are on `draft`, and every subsequent content change is committed there.
 
-`work` is promoted to `production` through **Releases** (tagged snapshots managed by `core.releases`). Day-to-day create / update / delete operations never touch `production` directly.
+`draft` is promoted into `main` through **Releases** (tagged snapshots managed by `core.releases`). Day-to-day create / update / delete operations never touch `main` directly.
+
+Set `main` as the default branch of the repository at your git host, so the host and a plain `git clone` show released content. `core.projects.clone()` checks out `draft` either way, see [Cloning an existing Project](#cloning-an-existing-project).
 
 ```typescript
 const { local, remote } = await core.projects.branches.list({
   id: project.id,
 });
-// local  -> ['production', 'work']
-// remote -> ['origin/production', 'origin/work'], empty without an origin
+// local  -> ['draft', 'main']
+// remote -> ['origin/draft', 'origin/main'], empty without an origin
 
 const branch = await core.projects.branches.current({ id: project.id });
-// branch -> 'work'
+// branch -> 'draft'
 
-await core.projects.branches.switch({ id: project.id, branch: 'production' });
+await core.projects.branches.switch({ id: project.id, branch: 'main' });
 ```
 
 ## Commits and the User signature
 
-Every create, update and delete commits to git, and git needs an author. Core takes the author from the configured User (see [`usage.md`](./usage.md#setting-the-user-required-before-writing)). Committing with no User set throws a `CoreError` of type `Unauthorized`.
+Every create, update and delete commits to git, and git needs an author. Core takes the author and the committer from the configured User (see [`usage.md`](./usage.md#setting-the-user-required-before-writing)). Committing with no User set throws a `CoreError` of type `Unauthorized`.
 
-The User's `name` and `email` are written into the repository's local git config on `init` and `clone`, along with two settings Core relies on:
+Core reads the User each time it writes a commit or a tag, for a merge, a rebase and a pull as well. So once `core.user.set()` or signing in to elek.io Cloud changes the User, the next commit carries the new name and email as author and committer, and the next tag as tagger. A rebase keeps each commit's author and makes the User its committer.
+
+The User reaches git through the environment of each command, never through the repository's git config. So `init` and `clone` need no User, and only a commit does. On `init` and `clone` Core writes two settings it relies on into the local git config:
 
 - `push.autoSetupRemote = true` - new branches get an upstream automatically on first push.
 - `pull.rebase = true` - `pull` rebases local commits rather than creating merge commits.
@@ -81,7 +96,7 @@ const { ahead, behind } = await core.projects.getChanges({ id: project.id });
 
 ## Synchronizing
 
-`synchronize()` integrates `origin` into the current branch, then pushes it. That is `work` in day to day use. The `production` branch and the Release tags are published by `core.releases` instead, see below.
+`synchronize()` integrates `origin` into the current branch, then pushes it. That is `draft` in day to day use. The `main` branch and the Release tags are published by `core.releases` instead, always together with `draft`, see [Tags](#tags).
 
 ```typescript
 await core.projects.synchronize({ id: project.id });
@@ -108,6 +123,10 @@ const project = await core.projects.clone({
 });
 ```
 
+The clone lands on a local `draft` tracking `origin/draft`, whatever the remote's default branch is, so edits commit there and `core.releases` works right away. There is no local `main` until a Release creates one from the remote's.
+
+A Project remote holds both `main` and `draft`, because `create()` makes both and every Release pushes them together. Core asks the remote for its branches before cloning, and a remote without `draft` throws `PreconditionFailed` and leaves no files behind.
+
 After cloning, Core fetches the whole LFS history into the local store and materializes the working-tree binaries, so all Assets (including older versions) are available offline. See [Git LFS](#git-lfs).
 
 ## Provisioning a copy for builds
@@ -120,13 +139,13 @@ A local copy of a Project is one of two kinds. A **working copy** is created by 
 const { project, source, warning } = await core.projects.provision({
   id: '<project-id>',
   url: 'https://github.com/acme/website-content.git',
-  // A channel ('production' | 'preview' | 'draft') or an exact
-  // Release version - default 'production'
-  ref: 'production',
+  // A channel ('release' | 'preview' | 'draft') or an exact
+  // Release version - default 'release'
+  ref: 'release',
 });
 ```
 
-The channels resolve against the tags the remote advertises: `production` checks out the newest Release tag, `preview` the newest preview Release tag (both by semver, with a detached HEAD), and `draft` follows the `work` branch. An exact version checks out that Release's tag.
+The channels resolve against the tags the remote advertises: `release` checks out the newest Release tag, `preview` the newest preview Release tag (both by semver, with a detached HEAD), and `draft` follows the `draft` branch. An exact version checks out that Release's tag.
 
 Three cases, decided by a provisioning marker file inside the Project directory:
 
@@ -134,7 +153,7 @@ Three cases, decided by a provisioning marker file inside the Project directory:
 - **Present with the marker**: the copy is fetched and hard-reset to the ref, so a reachable remote decides what it holds.
 - **Present without the marker**: a working copy managed by another application (for example the Desktop app), left untouched.
 
-An unknown version throws `NotFound` listing the available versions. Provisioning the `production` or `preview` channel of a Project that never published a Release or preview throws `PreconditionFailed` naming the fix.
+An unknown version throws `NotFound` listing the available versions. Provisioning the `release` or `preview` channel of a Project that never published a Release or preview throws `PreconditionFailed` naming the fix.
 
 The returned `source` states where the content came from, and a refresh keeps building when the remote cannot be reached:
 
@@ -169,6 +188,7 @@ Asset binaries are tracked with [Git LFS](https://git-lfs.com). It is always on 
 - Locally created Projects already have their objects (the clean filter writes them on commit).
 - On `clone()`, Core runs `git lfs fetch --all` then `git lfs checkout` to pull every object across all refs and materialize the working tree.
 - On `synchronize()`, Core runs `git lfs fetch --all` after the pull to complete any newly pulled history.
+- `core.releases.create()` and `createPreview()` do the same after the fetch they start with, see [`releases.md`](./releases.md#what-a-release-compares-against).
 
 **Pushing.** `push()` (used by `synchronize()`) uploads the LFS objects in an explicit `git lfs push` step first, then pushes the refs.
 
@@ -206,14 +226,14 @@ The trailers are the whole contract, which decides what Core can see:
 - A `v1.2.3` tag pushed by hand, and any lightweight tag, is therefore invisible to Core. `count()` counts Core's own tags rather than the repository's.
 - Tags come back newest first, sorted by the author date of the commit they point at rather than by when the tag was written, and `list()` returns all of them in one page.
 
-When a remote `origin` is set, `core.releases` pushes at creation time: a full Release pushes `production` and its tag, a preview Release pushes its tag. Upgrade tags are not pushed. See [`releases.md`](./releases.md).
+When a remote `origin` is set, `core.releases` pushes at creation time, in one atomic push: a full Release pushes `main`, `draft` and its tag, a preview Release pushes `draft` and its tag. Upgrade tags are not pushed. See [`releases.md`](./releases.md#the-atomic-push).
 
 ## Errors during git operations
 
 | Error type | When |
 | --- | --- |
-| `Unauthorized` (401) | A commit (or `init` / `clone` config) is attempted with no User set, or the remote rejects the credentials on a push. In read-only mode, cloning needs no User, see [`usage.md`](./usage.md#options). |
-| `PreconditionFailed` (412) | `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree or a rebase conflict, or a push fails because the remote does not support Git LFS. |
+| `Unauthorized` (401) | A commit is attempted with no User set, or the remote rejects the credentials on a push. Cloning needs no User. |
+| `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree or a rebase conflict, or a push fails because the remote does not support Git LFS or, for a Release, atomic pushes. |
 | `Conflict` (409) | `clone()` targets an already-present Project, a guarded `delete()` has unpushed commits, or `synchronize()` would integrate dangling references. |
 | `BadRequest` (400) | A `core.git.push()` combines the `all` and `refs` options, which are mutually exclusive. |
 | `Internal` (500) | The underlying git command exits non-zero (no upstream, merge conflict, network, ...). |
@@ -225,5 +245,6 @@ See [`error-handling.md`](./error-handling.md) for the full error model.
 ## See also
 
 - [`usage.md`](./usage.md) - setting the User, creating and reading content
-- [`releases.md`](./releases.md) - promoting `work` to `production` as tagged, versioned snapshots- [`concepts.md`](./concepts.md) - Projects, Releases and the rest of the data model
+- [`releases.md`](./releases.md) - promoting `draft` into `main` as tagged, versioned snapshots
+- [`concepts.md`](./concepts.md) - Projects, Releases and the rest of the data model
 - [`error-handling.md`](./error-handling.md) - `CoreError` types and patterns

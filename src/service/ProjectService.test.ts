@@ -48,6 +48,18 @@ describe('ProjectService', function () {
     await ensureCleanGitStatus(task, project.id);
   });
 
+  it('should commit a new Project to main and leave it on draft', async function () {
+    const projectPath = core.util.pathTo.project(project.id);
+    const { local } = await core.git.branches.list(projectPath);
+
+    expect(local.toSorted()).toEqual(['draft', 'main']);
+    expect(await core.git.branches.current(projectPath)).toEqual('draft');
+    // draft branches off the first commit, nothing has been edited yet
+    expect(await core.git.revParse(projectPath, 'draft')).toEqual(
+      await core.git.revParse(projectPath, 'main')
+    );
+  });
+
   it('should be able to read a Project', async function () {
     const readProject = await core.projects.read({ id: project.id });
 
@@ -269,7 +281,7 @@ describe('ProjectService', function () {
   it('should be able to list the branches of a Project', async function () {
     const branches = await core.projects.branches.list({ id: project.id });
 
-    expect(branches.local).to.include('production', 'work');
+    expect(branches.local).to.include.members(['main', 'draft']);
   });
 
   it('should be able to get the current branch of a Project', async function () {
@@ -277,7 +289,7 @@ describe('ProjectService', function () {
       id: project.id,
     });
 
-    expect(currentBranch).toEqual('work');
+    expect(currentBranch).toEqual('draft');
   });
 
   it('should be able to switch the current branch of a Project', async function ({
@@ -285,13 +297,13 @@ describe('ProjectService', function () {
   }) {
     await core.projects.branches.switch({
       id: project.id,
-      branch: 'production',
+      branch: 'main',
     });
     const currentBranch = await core.projects.branches.current({
       id: project.id,
     });
 
-    expect(currentBranch).toEqual('production');
+    expect(currentBranch).toEqual('main');
     await ensureCleanGitStatus(task, project.id);
   });
 
