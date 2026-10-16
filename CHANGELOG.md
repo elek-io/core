@@ -1,5 +1,47 @@
 # @elek-io/core
 
+## 0.25.0
+
+### Minor Changes
+
+- c899bbd: Core signs in to an elek.io account. `core.cloud.account` has `signUp()`, `signIn()`, `signOut()`, `read()`, `onTokenChange()` and `hasToken`, and every elek.io Cloud call that uses the session carries its token as a bearer token, reports included.
+
+  **Signing in.** `signIn({ email, password })` answers `{ token, account }`, keeps the token in memory and sets a `cloud` User with the account's id, name and email. The User keeps its language and its local API settings. A wrong address or password throws `Unauthorized`, and an address that is not verified yet throws `Conflict`, so a sign in form can tell the two apart.
+
+  **Signing up has two outcomes.** `signUp({ name, email, password })` answers `{ outcome: 'session', token, account }` and signs in the way `signIn()` does. Or it answers `{ outcome: 'verification' }` when the address has to be verified first, which carries no account, keeps no token and leaves the User as it was. A password has 12 to 128 characters.
+
+  **The token stays in memory.** Core never writes it into `user.json`, a log file or `core.options`. A host persists it and hands it back through the new `cloud.token` option, and a script through the new `ELEK_IO_CLOUD_TOKEN` environment variable. The option wins over the variable. `onTokenChange(listener)` tells the host every token Core keeps and drops, so its stored copy stays current. Signing in and signing up never send the token Core holds, so a mistyped password keeps it.
+
+  **Reading the account** answers the account of a live session and makes the User follow it, so a name or an address changed on the account reaches the next commit.
+
+  **When a session ends.** A 401 to any elek.io Cloud call that sends the token forgets it and throws `Unauthorized`. `read()` answers `null` and forgets the token when the session is not live. Either way the User stays `cloud`, and the host asks the person to sign in again.
+
+  **Signing out** sends the request, forgets the token and sets a `local` User that keeps the name and the email. When the request fails, Core still signs out on this machine, logs a warning and resolves.
+
+  **The committer follows the User.** Commits, merges, rebases, pulls and tags carry the current User as author, committer and tagger. A commit made after the User changed kept the committer from when the Project was created or cloned before.
+
+  **No identity in a Project's git config.** Core hands git the User through the environment of each command and no longer writes `user.name` and `user.email` into a Project's local git config. So `init` and `clone` need no User, and only a commit throws `Unauthorized` without one.
+
+  **A Project is changed through Core only.** Git run by hand, another git client or an editor writing a Project's files is not supported. Reading the files with any tool is safe.
+
+- c899bbd: The `production` branch is now `main`, the `work` branch is now `draft`, and the `production` channel is now `release`. The channels are `release`, `preview` and `draft`.
+
+  **Why the new names.** Every git host points a new repository's default branch at `main`, and a plain `git clone` checks out the default branch, so released content is what the host and such a clone show. `draft` matches the channel that reads that branch, so you no longer translate between the `work` branch and the `draft` channel. `release` matches the word Desktop uses, Release, and the type of the tag the channel resolves to.
+
+  **What Core does now.** `core.projects.create()` makes its first commit on `main`, then creates and switches to `draft`. `core.releases` diffs `draft` against the released `main` and promotes `draft` into it. Provisioning defaults to the `release` channel, and the `draft` channel follows the `draft` branch.
+
+  **A clone lands on `draft`.** `core.projects.clone()` checks out a local `draft` tracking `origin/draft`, whatever the remote's default branch, so edits and `core.releases` work right after a clone. A Project remote holds both `main` and `draft`, so a remote without `draft` throws `PreconditionFailed` and leaves nothing behind.
+
+  **A Release never leaves `main` and `draft` apart.** With a remote, a full Release pushes `main`, `draft` and its tag in one `git push --atomic`, and a preview Release pushes `draft` and its tag the same way. The remote takes every ref or none, so another working copy that synchronizes holds the released content on `draft`. A remote without `draft` gets it from the push. A remote that does not support atomic pushes throws `PreconditionFailed` and nothing is pushed, Core does not fall back to separate pushes. A rejected push unwinds the Release as before.
+
+  **With a remote, a Release compares against the remote's `main`.** `core.releases.prepare()` reads the remote as last fetched and never fetches. `create()` and `createPreview()` fetch first, LFS objects included, and `create()` builds on the remote's `main`. A local `main` that is missing after a clone, or behind after another working copy released, no longer changes the bump. All three throw `PreconditionFailed` before changing anything when `draft` lacks commits of the remote's `draft`, which needs a `synchronize()` first, and when `draft` lacks commits of the remote's `main`, the local `main` holds commits the remote's lacks, or there is no `main` anywhere. Without a remote, Releases compare against the local `main` and push nothing, as before.
+
+  **Nothing is migrated, and the old names are not accepted.** A channel or ref of `production` is refused like any unknown value. `ELEK_IO_CHANNEL=production` throws a `BadRequest`, and so does a `ref` of `production` in `core.projects.provision()`, `elek provision --ref` or `defineElekConfig()`. Replace them with `release`, and name the branches `main` and `draft` in code that names one, such as `core.projects.branches.switch()`. A Project created by an earlier Core is not supported.
+
+### Patch Changes
+
+- c899bbd: Three schemas Core used internally are now exported: `projectScopeSchema` and `collectionScopeSchema`, the ids a create or update call is scoped by, and `upgradeableFileSchema`, the Core version a file needs to be considered for an upgrade. Nothing about how Core behaves changes.
+
 ## 0.24.0
 
 ### Minor Changes
