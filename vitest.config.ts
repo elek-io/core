@@ -6,6 +6,10 @@ export default defineConfig({
     // Windows and Intel macOS runners, and parallel test files add CPU
     // contention on top, see contributing/testing.md
     testTimeout: 15000,
+    // Drops the console output of passing tests and keeps that of failing
+    // ones. The shared test Core logs at debug, which otherwise buries a
+    // failure at the end of the CI log, see contributing/testing.md
+    silent: 'passed-only',
     // Gives each test file its own data directory, which is what allows
     // files to run in parallel, see contributing/testing.md
     setupFiles: ['./src/test/workerSetup.ts'],
