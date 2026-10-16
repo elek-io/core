@@ -91,12 +91,12 @@ Connect a Project to an empty repository. Create it at your git host without a R
 
 The first `synchronize()` against a remote without `draft` sends `main`, `draft` and the Project's Release and preview tags in one `git push --atomic`:
 
-- The remote takes every ref or none, so it never holds `draft` without `main`.
+- The remote takes every ref or none, so it never holds `draft` without `main`. The exception is a ref the remote hides with git's `receive.hideRefs`, which git refuses on its own while the other refs land.
 - The tags include every Release made before the Project had a remote. Upgrade tags stay local, as they do for a Release.
 - The LFS objects of every pushed ref are uploaded first, so a clone of the remote gets every Asset.
 - Afterwards the local `main` tracks `origin/main` and `draft` tracks `origin/draft`, and every later `synchronize()` integrates and pushes as usual.
 
-A remote that does not support atomic pushes throws `PreconditionFailed` before anything is sent, as it does for a Release. After the first push, check that the repository's default branch at your git host is `main`, see [The branch model](#the-branch-model).
+A remote that does not support atomic pushes throws `PreconditionFailed` and receives no ref, as it does for a Release. The LFS objects go first, so they may already be uploaded. After the first push, check that the repository's default branch at your git host is `main`, see [The branch model](#the-branch-model).
 
 ### Which remotes synchronize() accepts
 

@@ -1211,10 +1211,13 @@ export class ProjectService
 
         const currentBranch =
           await this.gitService.branches.current(projectPath);
+        // Asked of the remote, because a fetch never prunes the
+        // remote-tracking ref of a branch the remote no longer holds
+        const remoteRefs =
+          await this.gitService.remotes.listOriginRefs(projectPath);
         await this.gitService.fetch(projectPath);
 
-        const { remote } = await this.gitService.branches.list(projectPath);
-        if (!remote.includes(`origin/${currentBranch}`)) {
+        if (!remoteRefs.includes(`refs/heads/${currentBranch}`)) {
           // Nothing of the branch reached the remote yet. The log of HEAD
           // is the log of the current branch
           return { behind: [], ahead: await this.gitService.log(projectPath) };
@@ -1243,7 +1246,7 @@ export class ProjectService
    * A remote without `draft`, such as a new and empty one, gets the first
    * push instead: `main`, `draft` and the Release tags in one atomic push.
    *
-   * A refused sync pushes nothing: `PreconditionFailed` for a remote holding
+   * A refused sync pushes no ref: `PreconditionFailed` for a remote holding
    * anything but this Project or lacking atomic pushes for the first push,
    * `Conflict` for dangling references, whose commits stay local for repair.
    *

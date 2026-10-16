@@ -104,7 +104,7 @@ Previews are snapshots of the current `draft` state for testing or sharing. Only
 
 ## The atomic push
 
-With a remote, a Release publishes its refs in one `git push --atomic`. The remote takes every ref or none, so a rejected ref leaves it as it was, and the Release unwinds like any failed one.
+With a remote, a Release publishes its refs in one `git push --atomic`. The remote takes every ref or none, so a rejected ref leaves it as it was, and the Release unwinds like any failed one. The exception is a ref the remote hides with git's `receive.hideRefs`, which git refuses on its own while the other refs land.
 
 | Case | What Core does |
 | --- | --- |

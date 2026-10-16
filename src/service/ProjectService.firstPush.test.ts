@@ -258,6 +258,34 @@ describe('ProjectService first push', function () {
     );
   }, 30000);
 
+  it('should treat a new empty remote as empty after the origin moved, whatever the old remote left behind', async function () {
+    const { project, path } = await newProject();
+    await connect(project.id, await emptyRemote());
+    await core.projects.synchronize({ id: project.id });
+    // A fetch never prunes, so the old remote's branches stay tracked
+    const newRemotePath = await emptyRemote();
+    await connect(project.id, newRemotePath);
+
+    const { ahead, behind } = await core.projects.getChanges({
+      id: project.id,
+    });
+
+    expect(behind).toEqual([]);
+    expect(ahead.map((commit) => commit.hash)).toEqual(
+      (await core.git.log(path)).map((commit) => commit.hash)
+    );
+    await expectCoreError(
+      core.projects.delete({ id: project.id }),
+      'Conflict',
+      'not pushed'
+    );
+
+    await core.projects.synchronize({ id: project.id });
+    expect(await refsOf(newRemotePath, 'refs/heads')).toEqual(
+      await refsOf(path, 'refs/heads')
+    );
+  }, 30000);
+
   it.each([
     ['a repository a git host created with a README', hostRepositoryWithReadme],
     ['the remote of another Project', anotherProjectsRemote],

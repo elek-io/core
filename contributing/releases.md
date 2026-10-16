@@ -8,6 +8,8 @@ Read it before changing `clone()` or `synchronize()` in [`ProjectService`](../sr
 
 A remote that holds a Project holds both `main` and `draft`, and a Release never leaves them apart. `create()` makes both branches. The first push sends them together. Every Release pushes `main`, `draft` and its tag together, and every preview Release pushes `draft` and its tag.
 
+A remote holding `draft` alone is the one exception Core accepts, left by a preview Release made on an empty remote or by a hand push. `synchronize()` integrates and pushes `draft` there as usual and creates no `main`, so the remote stays that way until a Release pushes `main`, `draft` and its tag together. From then on the rule holds.
+
 Pushing `main` and the tag alone was rejected. The remote's `main` then holds released content its `draft` lacks, other editors do not see it after synchronizing, and their next Release refuses or miscounts.
 
 ## Where a clone lands
@@ -61,7 +63,7 @@ Rejected alternatives:
 
 ### Telling remotes apart
 
-`synchronize()` asks the remote with `git ls-remote` before it fetches. The remote-tracking refs cannot answer that. A fetch never prunes them, so a Project pointed at a new URL still shows the old remote's branches, and a remote holding only tags leaves no trace in them at all.
+`synchronize()` and `getChanges()` ask the remote with `git ls-remote` before they fetch. The remote-tracking refs cannot answer that. A fetch never prunes them, so a Project pointed at a new URL still shows the old remote's branches, and a remote holding only tags leaves no trace in them at all.
 
 A branch of the remote holds this Project when it shares a merge base with the local `draft`. Every Project descends from the commit `create()` made, so any other history is unrelated, a README a git host committed included.
 
