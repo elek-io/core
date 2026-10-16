@@ -24,7 +24,7 @@ When `core.projects.create()` runs, it initializes the repository with `main` as
 
 `draft` is promoted into `main` through **Releases** (tagged snapshots managed by `core.releases`). Day-to-day create / update / delete operations never touch `main` directly.
 
-Set `main` as the default branch of the repository at your git host. A clone then shows released content.
+Set `main` as the default branch of the repository at your git host, so the host and a plain `git clone` show released content. `core.projects.clone()` checks out `draft` either way, see [Cloning an existing Project](#cloning-an-existing-project).
 
 ```typescript
 const { local, remote } = await core.projects.branches.list({
@@ -83,7 +83,7 @@ const { ahead, behind } = await core.projects.getChanges({ id: project.id });
 
 ## Synchronizing
 
-`synchronize()` integrates `origin` into the current branch, then pushes it. That is `draft` in day to day use. The `main` branch and the Release tags are published by `core.releases` instead, see below.
+`synchronize()` integrates `origin` into the current branch, then pushes it. That is `draft` in day to day use. The `main` branch and the Release tags are published by `core.releases` instead, always together with `draft`, see [Tags](#tags).
 
 ```typescript
 await core.projects.synchronize({ id: project.id });
@@ -110,11 +110,9 @@ const project = await core.projects.clone({
 });
 ```
 
-The clone checks out the remote's default branch, which is `main` when the remote is set up as described in [The branch model](#the-branch-model). Core does not switch it to `draft`. Switch before editing, because `core.releases` refuses to run on any other branch:
+The clone lands on a local `draft` tracking `origin/draft`, whatever the remote's default branch is, so edits commit there and `core.releases` works right away. There is no local `main` until a Release creates one from the remote's.
 
-```typescript
-await core.projects.branches.switch({ id: project.id, branch: 'draft' });
-```
+A Project remote holds both `main` and `draft`, because `create()` makes both and every Release pushes them together. Core asks the remote for its branches before cloning, and a remote without `draft` throws `PreconditionFailed` and leaves no files behind.
 
 After cloning, Core fetches the whole LFS history into the local store and materializes the working-tree binaries, so all Assets (including older versions) are available offline. See [Git LFS](#git-lfs).
 
@@ -177,6 +175,7 @@ Asset binaries are tracked with [Git LFS](https://git-lfs.com). It is always on 
 - Locally created Projects already have their objects (the clean filter writes them on commit).
 - On `clone()`, Core runs `git lfs fetch --all` then `git lfs checkout` to pull every object across all refs and materialize the working tree.
 - On `synchronize()`, Core runs `git lfs fetch --all` after the pull to complete any newly pulled history.
+- `core.releases.create()` and `createPreview()` do the same after the fetch they start with, see [`releases.md`](./releases.md#what-a-release-compares-against).
 
 **Pushing.** `push()` (used by `synchronize()`) uploads the LFS objects in an explicit `git lfs push` step first, then pushes the refs.
 
@@ -214,14 +213,14 @@ The trailers are the whole contract, which decides what Core can see:
 - A `v1.2.3` tag pushed by hand, and any lightweight tag, is therefore invisible to Core. `count()` counts Core's own tags rather than the repository's.
 - Tags come back newest first, sorted by the author date of the commit they point at rather than by when the tag was written, and `list()` returns all of them in one page.
 
-When a remote `origin` is set, `core.releases` pushes at creation time: a full Release pushes `main` and its tag, a preview Release pushes its tag. Upgrade tags are not pushed. See [`releases.md`](./releases.md).
+When a remote `origin` is set, `core.releases` pushes at creation time, in one atomic push: a full Release pushes `main`, `draft` and its tag, a preview Release pushes `draft` and its tag. Upgrade tags are not pushed. See [`releases.md`](./releases.md#the-atomic-push).
 
 ## Errors during git operations
 
 | Error type | When |
 | --- | --- |
 | `Unauthorized` (401) | A commit (or `init` / `clone` config) is attempted with no User set, or the remote rejects the credentials on a push. In read-only mode, cloning needs no User, see [`usage.md`](./usage.md#options). |
-| `PreconditionFailed` (412) | `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree or a rebase conflict, or a push fails because the remote does not support Git LFS. |
+| `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree or a rebase conflict, or a push fails because the remote does not support Git LFS or, for a Release, atomic pushes. |
 | `Conflict` (409) | `clone()` targets an already-present Project, a guarded `delete()` has unpushed commits, or `synchronize()` would integrate dangling references. |
 | `BadRequest` (400) | A `core.git.push()` combines the `all` and `refs` options, which are mutually exclusive. |
 | `Internal` (500) | The underlying git command exits non-zero (no upstream, merge conflict, network, ...). |

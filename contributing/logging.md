@@ -220,7 +220,7 @@ The one exception is the rollback cleanup in [`AbstractEntityService`](../src/se
 One rule, applied to the verb: a command that changes a repository, a remote or the git configuration is `info`, a command that only asks it something is `debug`.
 
 - The record of what happened, at `info`: `commit`, `add`, `push`, `pull`, `fetch`, `clone`, `init`, `merge`, `rebase`, `reset`, `switch`, `lfs` transfers, `remote add`, `config --local` writes, and creating or deleting a branch or tag.
-- How it happened, at `debug`: `status`, `log`, `rev-parse`, `ls-remote`, `cat-file`, `branch --list`, `remote get-url`, `config --get`, `--version` and `--exec-path`.
+- How it happened, at `debug`: `status`, `log`, `rev-parse`, `merge-base`, `ls-remote`, `cat-file`, `branch --list`, `remote get-url`, `config --get`, `--version` and `--exec-path`.
 
 [`isMutatingGitCommand`](../src/service/GitService.ts) decides it, and **a command it does not know counts as a mutation**. A command added later and never classified then shows up as a noisy line rather than as a line that should have been there and is not.
 

@@ -46,8 +46,17 @@ import type { ProjectService } from './ProjectService.js';
 import type { PathTo } from '../util/node.js';
 
 /**
- * Diffs the `draft` branch against `main` to compute a semver bump from what
- * actually changed.
+ * The commit a Release compares against and builds on, and whether it is the
+ * remote's `main` rather than the local one.
+ */
+interface ReleasedSide {
+  commit: string;
+  isRemote: boolean;
+}
+
+/**
+ * Diffs the `draft` branch against the released `main`, the remote's when
+ * there is one, to compute a semver bump from what actually changed.
  *
  * `create()` then promotes `draft` into `main` and tags it. `createPreview()`
  * only tags a snapshot on `draft` and never touches `main`.
@@ -102,145 +111,33 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Diffs the current `draft` branch against `main` and returns a read-only
-   * summary plus the computed next version. With no changes, both `bump` and
-   * `nextVersion` are null.
+   * Diffs `draft` against the released `main`, the remote's as last fetched
+   * when there is one, since this call never fetches. Returns the changes and
+   * the next version, `bump` and `nextVersion` null when nothing changed and
+   * `patch` when `draft` is merely ahead in commits. Writes nothing.
    *
-   * Throws `PreconditionFailed` unless the Project is checked out on `draft`.
-   * Writes nothing, to disk or to git.
+   * Throws `PreconditionFailed` off `draft`, with no `main` anywhere, when
+   * `draft` lacks commits of the remote's `draft` or `main`, or the local
+   * `main` holds commits the remote's lacks, exactly as `create()` would.
    *
-   * A `draft` branch merely ahead in commits, with no classified change, still
-   * yields a `patch` bump.
+   * @see ../../docs/releases.md
    */
   public prepare(props: PrepareReleaseProps): Promise<ReleaseDiff> {
     return this.validated('prepare', prepareReleaseSchema, props, async () => {
-      const projectPath = this.pathTo.project(props.projectId);
-      const releasedRef = projectBranchSchema.enum.main;
-
-      const currentBranch = await this.gitService.branches.current(projectPath);
-      if (currentBranch !== projectBranchSchema.enum.draft) {
-        throw CoreError.preconditionFailed(
-          `Not on draft branch (currently on "${currentBranch}")`
-        );
-      }
-
-      const project = await this.projectService.read({ id: props.projectId });
-      const currentVersion = project.version;
-
-      const releasedProject = await this.getProjectAtRef(
-        props.projectId,
-        projectPath,
-        releasedRef
-      );
-      const projectDiff = this.diffProject(project, releasedProject);
-
-      const currentCollections = await this.getCollectionsAtRef(
-        props.projectId,
-        projectPath,
-        projectBranchSchema.enum.draft
-      );
-      const releasedCollections = await this.getCollectionsAtRef(
-        props.projectId,
-        projectPath,
-        releasedRef
-      );
-      const collectionDiff = this.diffCollections(
-        currentCollections,
-        releasedCollections
-      );
-
-      const currentAssets = await this.getAssetsAtRef(
-        props.projectId,
-        projectPath,
-        projectBranchSchema.enum.draft
-      );
-      const releasedAssets = await this.getAssetsAtRef(
-        props.projectId,
-        projectPath,
-        releasedRef
-      );
-      const assetDiff = this.diffAssets(currentAssets, releasedAssets);
-
-      const currentComponents = await this.getComponentsAtRef(
-        props.projectId,
-        projectPath,
-        projectBranchSchema.enum.draft
-      );
-      const releasedComponents = await this.getComponentsAtRef(
-        props.projectId,
-        projectPath,
-        releasedRef
-      );
-      const componentDiff = this.diffComponents(
-        currentComponents,
-        releasedComponents
-      );
-
-      const allCollectionIds = new Set([
-        ...currentCollections.map((c) => c.id),
-        ...releasedCollections.map((c) => c.id),
-      ]);
-
-      const entryDiff = await this.diffEntries(
-        props.projectId,
-        projectPath,
-        allCollectionIds,
-        releasedRef
-      );
-
-      // Combine bumps from all diffs
-      let finalBump: SemverBump | null = null;
-      for (const bump of [
-        projectDiff.bump,
-        collectionDiff.bump,
-        componentDiff.bump,
-        assetDiff.bump,
-        entryDiff.bump,
-      ]) {
-        if (bump) {
-          finalBump = finalBump ? this.higherBump(finalBump, bump) : bump;
-        }
-      }
-
-      if (!finalBump) {
-        const hasContentChanges = await this.hasCommitsBetween(
-          projectPath,
-          releasedRef,
-          projectBranchSchema.enum.draft
-        );
-        if (hasContentChanges) {
-          finalBump = 'patch';
-        }
-      }
-
-      const nextVersion = finalBump
-        ? Semver.inc(currentVersion, finalBump)
-        : null;
-
-      return {
-        project,
-        bump: finalBump,
-        currentVersion,
-        nextVersion,
-        projectChanges: projectDiff.projectChanges,
-        collectionChanges: collectionDiff.collectionChanges,
-        fieldChanges: collectionDiff.fieldChanges,
-        componentChanges: componentDiff.componentChanges,
-        componentFieldChanges: componentDiff.componentFieldChanges,
-        assetChanges: assetDiff.assetChanges,
-        entryChanges: entryDiff.entryChanges,
-      };
+      const { diff } = await this.diff(props.projectId);
+      return diff;
     });
   }
 
   /**
-   * Merges `draft` into `main`, writes the next version there and tags it,
-   * merges that back into `draft`, then pushes `main` and the tag when a
-   * remote is set.
+   * Fetches the remote first, then merges `draft` into the released `main`,
+   * writes the next version there and tags it, merges that back into `draft`
+   * and pushes `main`, `draft` and the tag in one atomic push. Without a
+   * remote it releases locally.
    *
-   * Throws `PreconditionFailed` when nothing changed since the last release.
-   * A failure at any step unwinds every one before it, so nothing half made
-   * is left behind and the call can simply be retried.
+   * Throws `PreconditionFailed` when nothing changed, where `prepare()` does
+   * and when the remote does not support atomic pushes. A failure at any
+   * step unwinds every one before it, so the call can simply be retried.
    *
    * @see ../../docs/releases.md
    */
@@ -251,7 +148,8 @@ export class ReleaseService extends AbstractService {
       const projectPath = this.pathTo.project(props.projectId);
       const projectFilePath = this.pathTo.projectFile(props.projectId);
 
-      const diff = await this.prepare(props);
+      const hasOrigin = await this.fetchOrigin(projectPath);
+      const { diff, released } = await this.diff(props.projectId);
 
       if (!diff.bump || !diff.nextVersion) {
         throw CoreError.preconditionFailed(
@@ -265,20 +163,24 @@ export class ReleaseService extends AbstractService {
         projectPath,
         projectBranchSchema.enum.draft
       );
-      // A cloned Project may have no local `main` until the switch below
-      // creates it, so the remote's tip is where it would be created
-      const mainBefore =
-        (await this.tipOf(projectPath, projectBranchSchema.enum.main)) ??
-        (await this.tipOf(
-          projectPath,
-          `origin/${projectBranchSchema.enum.main}`
-        ));
+      // Null for a clone, which has no local `main` until the switch below
+      // creates it at the released commit
+      const mainBefore = await this.tipOf(
+        projectPath,
+        projectBranchSchema.enum.main
+      );
       let releaseTagId: string | null = null;
 
       try {
+        // Against the remote's `main` this creates a missing local `main` or
+        // fast-forwards a stale one. releasedSide() ruled out a local `main`
+        // holding commits the force would drop
         await this.gitService.branches.switch(
           projectPath,
-          projectBranchSchema.enum.main
+          projectBranchSchema.enum.main,
+          released.isRemote
+            ? { forceCreate: true, startPoint: released.commit }
+            : undefined
         );
         await this.gitService.merge(
           projectPath,
@@ -312,12 +214,17 @@ export class ReleaseService extends AbstractService {
         );
         await this.gitService.merge(projectPath, projectBranchSchema.enum.main);
 
-        // A Release is the publish moment, so the remote receives
-        // `main` and the tag once the local release is complete
-        const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
+        // A Release is the publish moment. The remote receives `main`,
+        // `draft` and the tag together or not at all, so its `draft` never
+        // lacks what its `main` released
         if (hasOrigin) {
           await this.gitService.push(projectPath, {
-            refs: [projectBranchSchema.enum.main, releaseTag.id],
+            refs: [
+              projectBranchSchema.enum.main,
+              projectBranchSchema.enum.draft,
+              releaseTag.id,
+            ],
+            atomic: true,
           });
         }
 
@@ -346,12 +253,13 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Writes a pre-release version such as `1.1.0-preview.3` onto `draft`, tags
-   * it there and pushes the tag when a remote is set. It never touches
-   * `main`, so only `create` promotes content.
+   * Fetches the remote first, then writes a pre-release version such as
+   * `1.1.0-preview.3` onto `draft`, tags it there and pushes `draft` and the
+   * tag in one atomic push. It never touches `main`, so only `create`
+   * promotes content.
    *
-   * A failure unwinds the version commit and the tag, so a failed preview
-   * leaves `draft` where it was.
+   * Throws where `create()` does. A failure unwinds the version commit and
+   * the tag, so a failed preview leaves `draft` where it was.
    *
    * @see ../../docs/releases.md
    */
@@ -368,7 +276,8 @@ export class ReleaseService extends AbstractService {
         const projectPath = this.pathTo.project(props.projectId);
         const projectFilePath = this.pathTo.projectFile(props.projectId);
 
-        const diff = await this.prepare(props);
+        const hasOrigin = await this.fetchOrigin(projectPath);
+        const { diff } = await this.diff(props.projectId);
 
         if (!diff.bump || !diff.nextVersion) {
           throw CoreError.preconditionFailed(
@@ -411,13 +320,12 @@ export class ReleaseService extends AbstractService {
           });
           previewTagId = previewTag.id;
 
-          // Previews are deployable, so the tag is published as well. The
-          // `draft` branch ref itself stays local to synchronize()
-          const hasOrigin =
-            await this.gitService.remotes.hasOrigin(projectPath);
+          // Previews are deployable, so the tag is published together with
+          // the `draft` it was cut from
           if (hasOrigin) {
             await this.gitService.push(projectPath, {
-              refs: [previewTag.id],
+              refs: [projectBranchSchema.enum.draft, previewTag.id],
+              atomic: true,
             });
           }
 
@@ -446,6 +354,227 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
+   * Fetches `origin` and tops up the LFS objects of what arrived, as
+   * synchronize() does, when the Project has a remote. Answers whether it
+   * has one. A Release builds on the remote's `main` and pushes, so it needs
+   * the remote as of the call.
+   */
+  private async fetchOrigin(projectPath: string): Promise<boolean> {
+    const hasOrigin = await this.gitService.remotes.hasOrigin(projectPath);
+    if (hasOrigin) {
+      await this.gitService.fetch(projectPath);
+      await this.gitService.lfs.fetchAll(projectPath);
+    }
+    return hasOrigin;
+  }
+
+  /**
+   * Refuses a `draft` missing commits of the remote's `draft` as last
+   * fetched. A Release pushes `draft` and would be rejected, and it never
+   * rebases, so what prepare() showed is what gets released. A remote
+   * without `draft` passes, the Release's push creates it.
+   *
+   * @see ../../contributing/releases.md
+   */
+  private async assertDraftNotBehind(
+    projectPath: string,
+    remoteBranches: string[]
+  ): Promise<void> {
+    const { draft } = projectBranchSchema.enum;
+    const remoteDraft = `origin/${draft}`;
+    if (
+      remoteBranches.includes(remoteDraft) &&
+      !(await this.gitService.isAncestor(projectPath, remoteDraft, draft))
+    ) {
+      throw CoreError.preconditionFailed(
+        `"${draft}" lacks commits of the remote's "${draft}", so the Release's push would be rejected. Synchronize first.`
+      );
+    }
+  }
+
+  /**
+   * Picks the commit holding the released state on purpose, never by a read
+   * failing: the remote's `main` as last fetched when there is one, else the
+   * local `main`. Every Project has a `main` from the commit create() made,
+   * so none anywhere is refused rather than read as no Release yet.
+   *
+   * Also refuses a local `main` holding commits the remote's lacks, and a
+   * `draft` missing commits of the remote's, which would count released
+   * content as removed. Both would release a guess.
+   *
+   * @see ../../contributing/releases.md
+   */
+  private async releasedSide(
+    projectPath: string,
+    { local, remote }: { local: string[]; remote: string[] }
+  ): Promise<ReleasedSide> {
+    const { draft, main } = projectBranchSchema.enum;
+    const remoteMain = `origin/${main}`;
+    const hasLocalMain = local.includes(main);
+
+    if (!remote.includes(remoteMain)) {
+      if (!hasLocalMain) {
+        throw CoreError.preconditionFailed(
+          `There is no "${main}" branch, locally or on the remote, to compare "${draft}" against`
+        );
+      }
+      const commit = await this.gitService.revParse(projectPath, main);
+      return { commit, isRemote: false };
+    }
+
+    if (
+      hasLocalMain &&
+      !(await this.gitService.isAncestor(projectPath, main, remoteMain))
+    ) {
+      throw CoreError.preconditionFailed(
+        `The local "${main}" holds commits the remote's "${main}" lacks, so the released state is ambiguous. Push them or reset the local "${main}" to the remote's before releasing.`
+      );
+    }
+
+    const commit = await this.gitService.revParse(projectPath, remoteMain);
+    if (!(await this.gitService.isAncestor(projectPath, commit, draft))) {
+      throw CoreError.preconditionFailed(
+        `"${draft}" lacks commits of the remote's "${main}", so released content would count as removed. Synchronize first, and if the remote's "${draft}" lacks them too, synchronize the working copy that released them.`
+      );
+    }
+    return { commit, isRemote: true };
+  }
+
+  /**
+   * The diff behind prepare(), create() and createPreview(), plus the
+   * released commit it was taken against, so create() builds on exactly
+   * that commit.
+   */
+  private async diff(
+    projectId: string
+  ): Promise<{ diff: ReleaseDiff; released: ReleasedSide }> {
+    const projectPath = this.pathTo.project(projectId);
+    const currentRef = projectBranchSchema.enum.draft;
+
+    const currentBranch = await this.gitService.branches.current(projectPath);
+    if (currentBranch !== currentRef) {
+      throw CoreError.preconditionFailed(
+        `Not on draft branch (currently on "${currentBranch}")`
+      );
+    }
+
+    const branches = await this.gitService.branches.list(projectPath);
+    await this.assertDraftNotBehind(projectPath, branches.remote);
+    const released = await this.releasedSide(projectPath, branches);
+    const releasedRef = released.commit;
+
+    const project = await this.projectService.read({ id: projectId });
+    const currentVersion = project.version;
+
+    const releasedProject = await this.getProjectAtRef(
+      projectId,
+      projectPath,
+      releasedRef
+    );
+    const projectDiff = this.diffProject(project, releasedProject);
+
+    const currentCollections = await this.getCollectionsAtRef(
+      projectId,
+      projectPath,
+      currentRef
+    );
+    const releasedCollections = await this.getCollectionsAtRef(
+      projectId,
+      projectPath,
+      releasedRef
+    );
+    const collectionDiff = this.diffCollections(
+      currentCollections,
+      releasedCollections
+    );
+
+    const currentAssets = await this.getAssetsAtRef(
+      projectId,
+      projectPath,
+      currentRef
+    );
+    const releasedAssets = await this.getAssetsAtRef(
+      projectId,
+      projectPath,
+      releasedRef
+    );
+    const assetDiff = this.diffAssets(currentAssets, releasedAssets);
+
+    const currentComponents = await this.getComponentsAtRef(
+      projectId,
+      projectPath,
+      currentRef
+    );
+    const releasedComponents = await this.getComponentsAtRef(
+      projectId,
+      projectPath,
+      releasedRef
+    );
+    const componentDiff = this.diffComponents(
+      currentComponents,
+      releasedComponents
+    );
+
+    const allCollectionIds = new Set([
+      ...currentCollections.map((c) => c.id),
+      ...releasedCollections.map((c) => c.id),
+    ]);
+
+    const entryDiff = await this.diffEntries(
+      projectId,
+      projectPath,
+      allCollectionIds,
+      releasedRef
+    );
+
+    // Combine bumps from all diffs
+    let finalBump: SemverBump | null = null;
+    for (const bump of [
+      projectDiff.bump,
+      collectionDiff.bump,
+      componentDiff.bump,
+      assetDiff.bump,
+      entryDiff.bump,
+    ]) {
+      if (bump) {
+        finalBump = finalBump ? this.higherBump(finalBump, bump) : bump;
+      }
+    }
+
+    if (!finalBump) {
+      const hasContentChanges = await this.hasCommitsBetween(
+        projectPath,
+        releasedRef,
+        currentRef
+      );
+      if (hasContentChanges) {
+        finalBump = 'patch';
+      }
+    }
+
+    const nextVersion = finalBump
+      ? Semver.inc(currentVersion, finalBump)
+      : null;
+
+    return {
+      diff: {
+        project,
+        bump: finalBump,
+        currentVersion,
+        nextVersion,
+        projectChanges: projectDiff.projectChanges,
+        collectionChanges: collectionDiff.collectionChanges,
+        fieldChanges: collectionDiff.fieldChanges,
+        componentChanges: componentDiff.componentChanges,
+        componentFieldChanges: componentDiff.componentFieldChanges,
+        assetChanges: assetDiff.assetChanges,
+        entryChanges: entryDiff.entryChanges,
+      },
+      released,
+    };
+  }
+
+  /**
    * The commit a branch points at, or null when it does not resolve, which
    * is what a Project without a local `main` branch answers.
    */
@@ -463,7 +592,8 @@ export class ReleaseService extends AbstractService {
   /**
    * Undoes what a failed release already did and leaves the Project on
    * `draft`, because a half-finished release cannot be completed through the
-   * public API and is worse than none.
+   * public API and is worse than none. A branch whose tip was null did not
+   * exist before, so it is deleted rather than reset.
    *
    * Every step swallows its own failure and warns, so the caller sees the
    * error that caused the unwind rather than one raised while undoing it.
@@ -500,6 +630,19 @@ export class ReleaseService extends AbstractService {
         projectBranchSchema.enum.draft
       )
     );
+
+    // Only once off them, git refuses to delete the checked-out branch
+    for (const { name, tip } of branches) {
+      if (tip !== null) {
+        continue;
+      }
+      await this.recovering(`delete "${name}"`, async () => {
+        if ((await this.tipOf(projectPath, name)) === null) {
+          return;
+        }
+        await this.gitService.branches.delete(projectPath, name, true);
+      });
+    }
   }
 
   /** One step of `unwind`, whose own failure may not replace the original. */
@@ -522,27 +665,24 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads the project file as it exists at a given git ref.
+   * Reads the project file as it exists at a given git ref, migrated in
+   * memory like any read from history, because `main` keeps the shape the
+   * Core that last released wrote.
    *
-   * Every failure is swallowed and returns null, which `diffProject()` reads
-   * as the first-release case rather than as an error.
+   * A failure throws. Every `main` holds a project file from the commit
+   * create() made, so a missing one is an error, not a first Release.
    */
   private async getProjectAtRef(
     projectId: string,
     projectPath: string,
     ref: string
-  ): Promise<ProjectFile | null> {
-    try {
-      const content = await this.gitService.getFileContentAtCommit(
-        projectPath,
-        this.pathTo.projectFile(projectId),
-        ref
-      );
-      return projectFileSchema.parse(JSON.parse(content));
-    } catch {
-      // Project may not exist at this ref (first release scenario)
-      return null;
-    }
+  ): Promise<ProjectFile> {
+    const content = await this.gitService.getFileContentAtCommit(
+      projectPath,
+      this.pathTo.projectFile(projectId),
+      ref
+    );
+    return this.projectService.migrate(JSON.parse(content));
   }
 
   /**
@@ -879,27 +1019,18 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Checks if there are any commits between two refs.
-   *
-   * A failed `git log` returns true, so a Project whose `main` branch
-   * holds no commits yet is treated as having changes and `prepare()` falls
-   * back to a `patch` bump.
+   * Checks if there are any commits between two refs. Both resolve, because
+   * `releasedSide()` picked the released one, so a failed `git log` throws.
    */
   private async hasCommitsBetween(
     projectPath: string,
     from: string,
     to: string
   ): Promise<boolean> {
-    try {
-      const commits = await this.gitService.log(projectPath, {
-        between: { from, to },
-      });
-      return commits.length > 0;
-    } catch {
-      // If the main branch has no commits yet (first release scenario),
-      // treat as having changes
-      return true;
-    }
+    const commits = await this.gitService.log(projectPath, {
+      between: { from, to },
+    });
+    return commits.length > 0;
   }
 
   /**
@@ -974,18 +1105,12 @@ export class ReleaseService extends AbstractService {
    */
   private diffProject(
     current: ProjectFile,
-    released: ProjectFile | null
+    released: ProjectFile
   ): {
     bump: SemverBump | null;
     projectChanges: ProjectChange[];
   } {
     const projectChanges: ProjectChange[] = [];
-
-    // No released project means first release - no changes to report
-    if (!released) {
-      return { bump: null, projectChanges };
-    }
-
     let highestBump: SemverBump | null = null;
 
     // MAJOR: default language changed

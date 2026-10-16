@@ -24,6 +24,7 @@ About to change an area? Read its doc first, so you change behavior on purpose r
 ## Platform
 
 - [`git-credentials.md`](./git-credentials.md) - why git authenticates through an askpass helper, and what to keep intact
+- [`releases.md`](./releases.md) - why a clone lands on `draft`, which `main` a Release compares against, and why it pushes atomically
 - [`error-handling-internals.md`](./error-handling-internals.md) - how `CoreError` and validation work inside Core
 - [`logging.md`](./logging.md) - what a log file may contain, and why names never appear in one
 - [`astro-entry.md`](./astro-entry.md) - the design and invariants behind `@elek-io/core/astro`

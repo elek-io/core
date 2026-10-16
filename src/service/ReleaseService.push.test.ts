@@ -26,7 +26,7 @@ describe('ReleaseService push', function () {
     await ensureCleanGitStatus(task, project.id);
   });
 
-  it('should push the preview tag to origin on preview release', async function () {
+  it('should push draft and the preview tag to origin on preview release', async function () {
     const result = await core.releases.createPreview({
       projectId: project.id,
     });
@@ -37,11 +37,13 @@ describe('ReleaseService push', function () {
         tag.message.type === 'preview' && tag.message.version === result.version
     );
     expect(previewTag).toBeDefined();
+    // The Collection was never synchronized, the preview pushed it
+    expect(await core.git.revParse(remotePath, 'draft')).toEqual(
+      await core.git.revParse(core.util.pathTo.project(project.id), 'draft')
+    );
   });
 
-  it('should push main and the release tag to origin on release', async function () {
-    const remoteDraftBefore = await core.git.revParse(remotePath, 'draft');
-
+  it('should push main, draft and the release tag to origin on release', async function () {
     const result = await core.releases.create({ projectId: project.id });
 
     const remoteTags = await core.git.tags.list({ path: remotePath });
@@ -50,21 +52,16 @@ describe('ReleaseService push', function () {
         tag.message.type === 'release' && tag.message.version === result.version
     );
     expect(releaseTag).toBeDefined();
-    expect(await core.git.revParse(remotePath, 'main')).toEqual(
-      await core.git.revParse(core.util.pathTo.project(project.id), 'main')
-    );
-    // draft reaches the remote through synchronize(), not through a Release
-    expect(await core.git.revParse(remotePath, 'draft')).toEqual(
-      remoteDraftBefore
-    );
+    // A Release never leaves main and draft apart on the remote
+    for (const branch of ['main', 'draft']) {
+      expect(await core.git.revParse(remotePath, branch)).toEqual(
+        await core.git.revParse(core.util.pathTo.project(project.id), branch)
+      );
+    }
 
-    // A fresh clone proves the remote main ref advanced to the release
+    // A fresh clone lands on draft, which holds the Release
     await core.projects.delete({ id: project.id, force: true });
     project = await core.projects.clone({ url: remotePath });
-    await core.projects.branches.switch({
-      id: project.id,
-      branch: 'main',
-    });
     const clonedProject = await core.projects.read({ id: project.id });
     expect(clonedProject.version).toEqual(result.version);
   }, 30000);

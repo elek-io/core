@@ -56,6 +56,9 @@ describe('Read-only mode', function () {
 
     const readProject = await readOnlyCore.projects.read({ id: project.id });
     expect(readProject.id).toEqual(project.id);
+    expect(
+      await readOnlyCore.projects.branches.current({ id: project.id })
+    ).toEqual('draft');
 
     const status = await readOnlyCore.git.status(
       readOnlyCore.util.pathTo.project(project.id)

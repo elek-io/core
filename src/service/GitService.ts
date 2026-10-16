@@ -255,6 +255,7 @@ const READING_GIT_COMMANDS = new Set([
   'diff',
   'rev-parse',
   'rev-list',
+  'merge-base',
   'ls-files',
   'ls-tree',
   'ls-remote',
@@ -297,6 +298,15 @@ const READING_CONFIG_FLAGS = new Set([
 ]);
 
 const READING_REMOTE_SUBCOMMANDS = new Set(['show', 'get-url']);
+
+/**
+ * The line an atomic push prints for a ref rejected as not fast-forwarding.
+ * git follows it with the refs it then gave up on, so dugite's own
+ * `PushNotFastForward` pattern, which expects git's error line right after,
+ * misses it.
+ */
+const ATOMIC_NOT_FAST_FORWARD =
+  /^ ! \[rejected\] .+ \((non-fast-forward|fetch first)\)$/m;
 
 const READING_LFS_SUBCOMMANDS = new Set([
   'env',
@@ -1018,6 +1028,36 @@ export class GitService {
   }
 
   /**
+   * True when `ancestor` is reachable from `descendant`, which includes the
+   * two being the same commit. Reads local history only. Throws `Internal`
+   * when either revision does not resolve.
+   *
+   * @see https://git-scm.com/docs/git-merge-base#Documentation/git-merge-base.txt---is-ancestor
+   */
+  public async isAncestor(
+    path: string,
+    ancestor: string,
+    descendant: string
+  ): Promise<boolean> {
+    const result = await this.git(
+      path,
+      ['merge-base', '--is-ancestor', ancestor, descendant],
+      { tolerateNonZero: true }
+    );
+    switch (result.exitCode) {
+      case 0:
+        return true;
+      case 1:
+        return false;
+      default:
+        throw CoreError.internal(
+          `Git merge-base of "${ancestor}" and "${descendant}" failed with exit code "${result.exitCode}"`,
+          gitOutputCause(result.stderr, result.stdout)
+        );
+    }
+  }
+
+  /**
    * Lists the ref names a remote repository advertises, without cloning
    *
    * @see https://git-scm.com/docs/git-ls-remote
@@ -1053,19 +1093,24 @@ export class GitService {
 
   /**
    * Update remote refs and their objects on `origin`, LFS objects first so an
-   * upload failure is attributable. By default the current branch is pushed,
-   * `refs` the named branches or tags, `all` every branch.
+   * upload failure is attributable. Pushes the current branch, or `refs`, or
+   * `all` branches. `atomic` lands every ref or none.
    *
    * Throws `PreconditionFailed` in read-only mode, on a provisioned copy, on
-   * a non-fast-forward rejection and on an unusable LFS endpoint,
-   * `BadRequest` when `all` and `refs` are combined, `Unauthorized` when the
-   * remote rejects the credentials.
+   * a non-fast-forward rejection, on an unusable LFS endpoint and on an
+   * `atomic` push the remote does not support, `BadRequest` when `all` and
+   * `refs` are combined, `Unauthorized` when the remote rejects credentials.
    *
    * @see ../../docs/git-and-sync.md
    */
   public async push(
     path: string,
-    options?: Partial<{ all: boolean; force: boolean; refs: string[] }>
+    options?: Partial<{
+      all: boolean;
+      atomic: boolean;
+      force: boolean;
+      refs: string[];
+    }>
   ): Promise<void> {
     if (this.options.isReadOnly) {
       throw CoreError.preconditionFailed(
@@ -1103,6 +1148,10 @@ export class GitService {
       args = [...args, '--all'];
     }
 
+    if (options?.atomic === true) {
+      args = [...args, '--atomic'];
+    }
+
     if (options?.refs) {
       args = [...args, ...options.refs];
     }
@@ -1120,10 +1169,20 @@ export class GitService {
         throw authError;
       }
       const message = `${result.stderr}\n${result.stdout}`.trim();
+      // git refuses before sending anything, so no ref landed
+      if (result.stderr.includes('does not support --atomic push')) {
+        throw CoreError.preconditionFailed(
+          'Push refused because the remote does not support atomic pushes. Nothing was pushed.',
+          message
+        );
+      }
       // A non-fast-forward rejection is recoverable by re-integrating the
       // remote and pushing again, so it is surfaced distinctly from a genuine
       // push failure (which stays `Internal`).
-      if (parseError(result.stderr) === GitError.PushNotFastForward) {
+      if (
+        parseError(result.stderr) === GitError.PushNotFastForward ||
+        ATOMIC_NOT_FAST_FORWARD.test(result.stderr)
+      ) {
         throw CoreError.preconditionFailed(
           'Push rejected because the remote advanced. Re-integrate the remote changes and try again.',
           message

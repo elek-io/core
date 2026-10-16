@@ -12,7 +12,7 @@ Examples: `isReadOnly`, `isRequired`, `isUnique`, `isProvisioned`, `hasToken`.
 
 When a key maps directly to another tool's flag or option, keep that tool's name. The reader can then look the option up in the external documentation without translating it first.
 
-- Git flags stay git-named: `create`, `detach`, `forceCreate`, `discardChanges`, `bare`, `squash`, `singleBranch` and `force` in the git schemas mirror the flags of `git switch`, `git clone`, `git merge` and friends.
+- Git flags stay git-named: `create`, `detach`, `forceCreate`, `discardChanges`, `bare`, `squash`, `singleBranch`, `atomic` and `force` in the git schemas and options mirror the flags of `git switch`, `git clone`, `git merge`, `git push` and friends.
 - Slug options mirror `@sindresorhus/slugify`: `lowercase` and `decamelize`.
 - CLI options mirror the flag users type: `watch` mirrors `--watch`.
 - mdast node fields mirror the mdast spec: `spread`, `checked`, `ordered`. Renaming these would break the external format.
@@ -58,7 +58,7 @@ A Project has two branches, `projectBranchSchema`, and provisioning follows thre
 
 Why these names:
 
-- Every git host points a new repository's default branch at `main`, and a clone checks out the default branch, so released content is what a clone shows.
+- Every git host points a new repository's default branch at `main`, and a plain `git clone` checks out the default branch, so released content is what the host and such a clone show. `core.projects.clone()` lands on `draft` instead, see [`releases.md`](./releases.md#where-a-clone-lands).
 - `draft` is the branch and the channel that reads it, so nobody translates between the two. The Astro build log and the provisioning fallback warning print the branch name as is.
 - `release` matches the word Desktop uses, Release, and the `Type: release` trailer of the tag it resolves to. `preview` likewise matches its tag type.
 - `released` was the first pick and was rejected. `draft` and `preview` are nouns, so a participle is the odd one out, and making the set consistent would take `drafted` and `previewed`.

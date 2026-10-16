@@ -117,15 +117,15 @@ describe('ProjectService provision', function () {
   }, 30000);
 
   it('should provision the draft channel when asked', async function () {
-    // The remote draft branch was synchronized before the second
-    // Release, so it still holds the first released version
+    // The second Release pushed draft along with main, so the remote
+    // draft holds the second released version
     const { project: provisioned } = await readOnlyCore.projects.provision({
       id: seed.projectId,
       url: seed.remotePath,
       ref: 'draft',
     });
 
-    expect(provisioned.version).toEqual(seed.releaseVersion);
+    expect(provisioned.version).toEqual(secondReleaseVersion);
     // The draft channel follows the draft branch
     expect(
       await readOnlyCore.projects.branches.current({ id: seed.projectId })

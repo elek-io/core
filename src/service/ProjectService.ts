@@ -230,20 +230,36 @@ export class ProjectService
   }
 
   /**
-   * Clones a Project by URL into a full working copy for editing: whole
-   * history and every LFS object. To consume content in a build, see
-   * `provision()` instead.
+   * Clones a Project by URL into a working copy for editing, with its whole
+   * history and every LFS object, checked out on a local `draft` tracking
+   * the remote's. To build from content, use `provision()` instead.
    *
-   * Throws `Unauthorized` when no User is set and `Conflict` when the Project
-   * id already exists locally. On a read-only Core the clone runs without a
-   * git identity, so the copy is readable but cannot commit.
+   * Throws `PreconditionFailed` when the remote has no `draft` branch,
+   * `Unauthorized` when no User is set and `Conflict` when the Project exists
+   * locally, leaving nothing behind. A read-only Core clones with no git
+   * identity to commit.
+   *
+   * @see ../../docs/git-and-sync.md
    */
   public clone(props: CloneProjectProps): Promise<Project> {
     return this.validated('clone', cloneProjectSchema, props, async () => {
       const tmpProjectPath = Path.join(this.pathTo.tmp, uuid());
+      const { draft, main } = projectBranchSchema.enum;
 
       try {
-        await this.gitService.clone(props.url, tmpProjectPath);
+        // Asked up front, because `git clone --branch` fails with an untyped
+        // git error on a branch the remote lacks
+        const remoteRefs = await this.gitService.lsRemote(props.url);
+        if (!remoteRefs.includes(`refs/heads/${draft}`)) {
+          throw CoreError.preconditionFailed(
+            `The remote has no "${draft}" branch, so it is not a Project remote, which holds both "${main}" and "${draft}"`
+          );
+        }
+
+        await this.gitService.clone(props.url, tmpProjectPath, {
+          branch: draft,
+        });
+
         const projectFile = await this.jsonFileService.read(
           Path.join(tmpProjectPath, 'project.json'),
           projectFileSchema
