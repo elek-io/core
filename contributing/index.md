@@ -10,6 +10,7 @@ About to change an area? Read its doc first, so you change behavior on purpose r
 
 - [`documentation.md`](./documentation.md) - how to write on each documentation surface, and what the tools enforce
 - [`naming.md`](./naming.md) - how things are named in the source, and the exceptions that mirror external tools
+- [`source-layout.md`](./source-layout.md) - where schemas, types, constants and helpers live, so a service file opens with its class
 - [`testing.md`](./testing.md) - how the suite creates real Projects, and why it is slow by design
 - [`toolchain.md`](./toolchain.md) - what Core builds, tests, lints and formats with, and why each tool was picked
 

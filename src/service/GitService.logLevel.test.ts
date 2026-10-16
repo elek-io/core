@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isMutatingGitCommand } from './GitService.js';
+import { isMutatingGitCommand } from '../util/git.js';
 
 /**
  * A packaged elek.io Desktop runs Core at `info`, so `info` is the whole

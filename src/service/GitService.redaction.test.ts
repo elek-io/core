@@ -4,7 +4,7 @@ import { assert, describe, expect, it } from 'vitest';
 import core, { testUserProps, uuid } from '../test/setup.js';
 import { createProject } from '../test/util.js';
 import { CoreError } from '../util/shared.js';
-import { redactGitArgs } from './GitService.js';
+import { redactGitArgs } from '../util/git.js';
 
 /**
  * Core's log files can be attached to a bug report, so a git command line

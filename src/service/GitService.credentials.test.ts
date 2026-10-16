@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCredentialEnv, classifyAuthError } from './GitService.js';
+import { buildCredentialEnv, classifyAuthError } from '../util/git.js';
 import { CoreError } from '../util/shared.js';
 
 describe('buildCredentialEnv', function () {

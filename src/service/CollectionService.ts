@@ -1,5 +1,4 @@
 import Fs from 'fs-extra';
-import { z } from '@hono/zod-openapi';
 import { isDeepStrictEqual } from 'node:util';
 import { CoreError } from '../util/shared.js';
 import {
@@ -15,7 +14,6 @@ import {
   type ReadBySlugCollectionProps,
   readCollectionSchema,
   serviceTypeSchema,
-  uuidSchema,
   type Collection,
   type CollectionFile,
   type CountCollectionsProps,
@@ -38,6 +36,7 @@ import {
   type ProjectLanguages,
   type Uuid,
   type Value,
+  projectScopeSchema,
 } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
 import { detectUniqueValueCollisions } from '../util/uniqueFieldValues.js';
@@ -151,7 +150,7 @@ export class CollectionService
     this.assertNotReadOnly('create');
     const { projectId } = this.parseOrThrow(
       'create',
-      z.object({ projectId: uuidSchema }),
+      projectScopeSchema,
       props
     );
     await this.assertNotProvisioned('create', projectId);
@@ -331,7 +330,7 @@ export class CollectionService
     this.assertNotReadOnly('update');
     const { projectId } = this.parseOrThrow(
       'update',
-      z.object({ projectId: uuidSchema }),
+      projectScopeSchema,
       props
     );
     await this.assertNotProvisioned('update', projectId);

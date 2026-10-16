@@ -46,15 +46,6 @@ import type { ProjectService } from './ProjectService.js';
 import type { PathTo } from '../util/node.js';
 
 /**
- * The commit a Release compares against and builds on, and whether it is the
- * remote's `main` rather than the local one.
- */
-interface ReleasedSide {
-  commit: string;
-  isRemote: boolean;
-}
-
-/**
  * Diffs the `draft` branch against the released `main`, the remote's when
  * there is one, to compute a semver bump from what actually changed.
  *
@@ -1712,4 +1703,13 @@ export class ReleaseService extends AbstractService {
     if (a === null) return b;
     return order[a] >= order[b] ? a : b;
   }
+}
+
+/**
+ * The commit a Release compares against and builds on, and whether it is the
+ * remote's `main` rather than the local one.
+ */
+interface ReleasedSide {
+  commit: string;
+  isRemote: boolean;
 }

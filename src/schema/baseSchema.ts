@@ -59,6 +59,20 @@ export const uuidSchema = z.uuid();
 export type Uuid = z.infer<typeof uuidSchema>;
 
 /**
+ * The ids a create or update call is scoped by, parsed before the rest of its
+ * props. The full schema checks the Project's languages, so it can only be
+ * built once the Project is known.
+ */
+export const projectScopeSchema = z.object({ projectId: uuidSchema });
+export type ProjectScope = z.infer<typeof projectScopeSchema>;
+
+/** `projectScopeSchema` for a call that is scoped by a Collection as well. */
+export const collectionScopeSchema = projectScopeSchema.extend({
+  collectionId: uuidSchema,
+});
+export type CollectionScope = z.infer<typeof collectionScopeSchema>;
+
+/**
  * A record keyed by every language Core supports, the 24 of
  * `supportedLanguageSchema`, with every key optional. This is the structural
  * type used for file I/O and for Core's exported TypeScript types.

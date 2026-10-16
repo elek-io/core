@@ -13,28 +13,6 @@ import { CoreError } from '../util/shared.js';
 import { AbstractService } from './AbstractService.js';
 import type { LogService } from './LogService.js';
 
-/** Appended to the configured Cloud URL, which never ends in a slash */
-const REPORT_PATH = '/management/v1/reports';
-
-/**
- * How long Core waits for an answer before giving up.
- *
- * There is no retry behind this. A retry after a timeout can duplicate a
- * report elek.io Cloud already accepted and Core cannot tell the
- * difference, so a timeout is handed back and sending again is the
- * User's decision.
- */
-const REPORT_TIMEOUT_MS = 15_000;
-
-/**
- * Ceiling on the serialized body, checked before it is sent.
- *
- * Base64 inflates a gzipped tail by a third, so the 1 MB a log blob may
- * be is 1.33 MB here. Refusing locally beats letting Cloud answer 413,
- * since the caller learns the same thing without the round trip.
- */
-const REPORT_MAX_BYTES = 2 * 1024 * 1024;
-
 /**
  * Sends a bug report or feedback to elek.io Cloud
  *
@@ -47,6 +25,28 @@ const REPORT_MAX_BYTES = 2 * 1024 * 1024;
  * @see ../../docs/reporting.md
  */
 export class ReportService extends AbstractService {
+  /** Appended to the configured Cloud URL, which never ends in a slash */
+  private static readonly path = '/management/v1/reports';
+
+  /**
+   * How long Core waits for an answer before giving up.
+   *
+   * There is no retry behind this. A retry after a timeout can duplicate a
+   * report elek.io Cloud already accepted and Core cannot tell the
+   * difference, so a timeout is handed back and sending again is the
+   * User's decision.
+   */
+  private static readonly timeoutMs = 15_000;
+
+  /**
+   * Ceiling on the serialized body, checked before it is sent.
+   *
+   * Base64 inflates a gzipped tail by a third, so the 1 MB a log blob may
+   * be is 1.33 MB here. Refusing locally beats letting Cloud answer 413,
+   * since the caller learns the same thing without the round trip.
+   */
+  private static readonly maxBytes = 2 * 1024 * 1024;
+
   private readonly coreVersion: string;
 
   public constructor(
@@ -109,13 +109,13 @@ export class ReportService extends AbstractService {
 
         const body = JSON.stringify(request);
         const bytes = Buffer.byteLength(body, 'utf8');
-        if (bytes > REPORT_MAX_BYTES) {
+        if (bytes > ReportService.maxBytes) {
           throw CoreError.badRequest(
-            `Cannot send a report of ${bytes} bytes because the limit is ${REPORT_MAX_BYTES}`
+            `Cannot send a report of ${bytes} bytes because the limit is ${ReportService.maxBytes}`
           );
         }
 
-        const url = `${this.options.cloud.url}${REPORT_PATH}`;
+        const url = `${this.options.cloud.url}${ReportService.path}`;
         let response: Response;
         try {
           response = await fetch(url, {
@@ -125,7 +125,7 @@ export class ReportService extends AbstractService {
               'User-Agent': `elek.io-core/${this.coreVersion}`,
             },
             body,
-            signal: AbortSignal.timeout(REPORT_TIMEOUT_MS),
+            signal: AbortSignal.timeout(ReportService.timeoutMs),
           });
         } catch (error) {
           throw CoreError.preconditionFailed(

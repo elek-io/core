@@ -1,7 +1,6 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
 import Semver from 'semver';
-import { z } from '@hono/zod-openapi';
 import type { FileReference, ObjectType, Version } from '../schema/index.js';
 import {
   cloneProjectSchema,
@@ -52,6 +51,7 @@ import {
   type UpdateProjectProps,
   type UpgradeProjectProps,
   type VersionedGitTag,
+  upgradeableFileSchema,
 } from '../schema/index.js';
 import {
   applyMigrations,
@@ -71,30 +71,6 @@ import type { CacheService } from './CacheService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
 import type { PathTo } from '../util/node.js';
-
-/**
- * The least a Project file has to satisfy to be considered for an upgrade.
- *
- * The upgrade path reads the file before any schema applies to it, because a
- * Project written by an older Core may not satisfy the current one. That is
- * the point of the upgrade. It still has to carry a Core version to compare,
- * so only that is required here and every other key passes through untouched
- * for `migrate` to handle.
- */
-const upgradeableProjectFileSchema = z.looseObject({
-  coreVersion: z.string(),
-});
-
-/**
- * What the network phase of a refresh gathered, handed to the
- * working-tree phase so it needs no second remote round trip
- */
-interface ProvisionFetch {
-  /** Ref names the remote advertises */
-  remoteRefs: string[];
-  /** Origin URL the copy pointed at before, restored when the refresh fails */
-  previousOriginUrl: string | null;
-}
 
 /**
  * A Project is a git repository under the data directory, and every mutating
@@ -978,8 +954,7 @@ export class ProjectService
    * `unsafeRead` hands back `unknown` on purpose.
    */
   private coreVersionOf(file: unknown): string | null {
-    const coreVersionCarrier = z.object({ coreVersion: z.string() });
-    const parsed = coreVersionCarrier.safeParse(file);
+    const parsed = upgradeableFileSchema.safeParse(file);
     return parsed.success ? parsed.data.coreVersion : null;
   }
 
@@ -1003,7 +978,7 @@ export class ProjectService
       );
     }
 
-    const readProjectFile = upgradeableProjectFileSchema.safeParse(
+    const readProjectFile = upgradeableFileSchema.safeParse(
       await this.jsonFileService.unsafeRead(projectFilePath)
     );
     if (!readProjectFile.success) {
@@ -1719,4 +1694,15 @@ export class ProjectService
         );
     }
   }
+}
+
+/**
+ * What the network phase of a refresh gathered, handed to the
+ * working-tree phase so it needs no second remote round trip
+ */
+interface ProvisionFetch {
+  /** Ref names the remote advertises */
+  remoteRefs: string[];
+  /** Origin URL the copy pointed at before, restored when the refresh fails */
+  previousOriginUrl: string | null;
 }

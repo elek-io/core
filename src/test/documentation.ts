@@ -290,6 +290,12 @@ const productionSourceFiles = () =>
   sourceFiles().filter(
     (file) => !file.endsWith('.test.ts') && !file.startsWith('src/test/')
   );
+
+/** One file per service class, directly in `src/service/`. */
+const serviceFiles = () =>
+  productionSourceFiles().filter((file) =>
+    /^src\/service\/[^/]+Service\.ts$/.test(file)
+  );
 const rootFiles = () =>
   ['AGENTS.md', 'README.md'].filter((file) => exists(file));
 
@@ -469,6 +475,38 @@ function hasModifier(node: ts.Node, ...kinds: ts.SyntaxKind[]): boolean {
   if (!ts.canHaveModifiers(node)) return false;
   return (ts.getModifiers(node) ?? []).some((modifier) =>
     kinds.includes(modifier.kind)
+  );
+}
+
+/** What a top-level statement declares, named for a failure message. */
+function declaredNameOf(statement: ts.Statement, source: ts.SourceFile) {
+  if (ts.isVariableStatement(statement)) {
+    return statement.declarationList.declarations
+      .map((declaration) => declaration.name.getText(source))
+      .join(', ');
+  }
+  if (
+    (ts.isClassDeclaration(statement) ||
+      ts.isFunctionDeclaration(statement) ||
+      ts.isInterfaceDeclaration(statement) ||
+      ts.isTypeAliasDeclaration(statement)) &&
+    statement.name !== undefined
+  ) {
+    return statement.name.text;
+  }
+  return ts.SyntaxKind[statement.kind];
+}
+
+/**
+ * True for what may sit below a service class: declarations a compiler
+ * erases or the engine hoists, so none is in its temporal dead zone while
+ * the class body evaluates.
+ */
+function isHoisted(statement: ts.Statement): boolean {
+  return (
+    ts.isInterfaceDeclaration(statement) ||
+    ts.isTypeAliasDeclaration(statement) ||
+    ts.isFunctionDeclaration(statement)
   );
 }
 
@@ -1072,6 +1110,91 @@ export const rules: Rule[] = [
           message: `the table has ${declared.size} types, the sentence says ${counted[1]}`,
         });
       }
+      return violations;
+    },
+  },
+  {
+    id: 'layout/service-file',
+    summary:
+      'a service file opens with its class, exports nothing else and keeps only hoisted declarations below it',
+    files: serviceFiles,
+    check: (file, content) => {
+      const source = ts.createSourceFile(
+        file,
+        content,
+        ts.ScriptTarget.Latest,
+        true
+      );
+      const statements = source.statements.filter(
+        (statement) => !ts.isImportDeclaration(statement)
+      );
+      const classIndex = statements.findIndex(
+        (statement) =>
+          ts.isClassDeclaration(statement) &&
+          hasModifier(statement, ts.SyntaxKind.ExportKeyword)
+      );
+      const violations: Violation[] = [];
+      for (const [index, statement] of statements.entries()) {
+        if (index === classIndex) continue;
+        const line =
+          source.getLineAndCharacterOfPosition(statement.getStart(source))
+            .line + 1;
+        const name = declaredNameOf(statement, source);
+        if (classIndex === -1 || index < classIndex) {
+          violations.push({
+            file,
+            line,
+            message: `${name} sits above the class, a service file opens with its class`,
+          });
+        } else if (hasModifier(statement, ts.SyntaxKind.ExportKeyword)) {
+          violations.push({
+            file,
+            line,
+            message: `${name} is exported beside the class, move it to src/util/ or src/schema/`,
+          });
+        } else if (!isHoisted(statement)) {
+          violations.push({
+            file,
+            line,
+            message: `${name} below the class is not hoisted, move it to src/util/ or make it a private static readonly member`,
+          });
+        }
+      }
+      return violations;
+    },
+  },
+  {
+    id: 'layout/service-schemas',
+    summary: 'a service file builds no zod schema, schemas live in src/schema/',
+    files: serviceFiles,
+    check: (file, content) => {
+      const source = ts.createSourceFile(
+        file,
+        content,
+        ts.ScriptTarget.Latest,
+        true
+      );
+      const violations: Violation[] = [];
+      // `z.ZodError` in an instanceof check reads a class rather than calling
+      // a builder, so only a call on `z` counts
+      const visit = (node: ts.Node) => {
+        if (
+          ts.isCallExpression(node) &&
+          ts.isPropertyAccessExpression(node.expression) &&
+          ts.isIdentifier(node.expression.expression) &&
+          node.expression.expression.text === 'z'
+        ) {
+          violations.push({
+            file,
+            line:
+              source.getLineAndCharacterOfPosition(node.getStart(source)).line +
+              1,
+            message: `z.${node.expression.name.text}() builds a schema inside a service, define it in src/schema/ and import it`,
+          });
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
       return violations;
     },
   },

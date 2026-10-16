@@ -61,7 +61,7 @@ Practically: **log the shape, never the payload.** For a migration bug, "12 Valu
 
 ### Redacting a command line
 
-[`redactGitArgs`](../src/service/GitService.ts) takes the User's identity out of a git command before it reaches a log record or an error message: the `--author` of a commit, the values of `config --local user.name` and `user.email`, and credentials embedded in a remote URL. Ids, paths and flags pass through untouched.
+[`redactGitArgs`](../src/util/git.ts) takes the User's identity out of a git command before it reaches a log record or an error message: the `--author` of a commit, the values of `config --local user.name` and `user.email`, and credentials embedded in a remote URL. Ids, paths and flags pass through untouched.
 
 Anything that builds a string from git arguments has to go through it. There is more than one identity site, and a rule written for only the one in front of you will miss the others.
 
@@ -222,7 +222,7 @@ One rule, applied to the verb: a command that changes a repository, a remote or 
 - The record of what happened, at `info`: `commit`, `add`, `push`, `pull`, `fetch`, `clone`, `init`, `merge`, `rebase`, `reset`, `switch`, `lfs` transfers, `remote add`, `config --local` writes, and creating or deleting a branch or tag.
 - How it happened, at `debug`: `status`, `log`, `rev-parse`, `merge-base`, `ls-remote`, `cat-file`, `branch --list`, `remote get-url`, `config --get`, `--version` and `--exec-path`.
 
-[`isMutatingGitCommand`](../src/service/GitService.ts) decides it, and **a command it does not know counts as a mutation**. A command added later and never classified then shows up as a noisy line rather than as a line that should have been there and is not.
+[`isMutatingGitCommand`](../src/util/git.ts) decides it, and **a command it does not know counts as a mutation**. A command added later and never classified then shows up as a noisy line rather than as a line that should have been there and is not.
 
 **Duration is never an input to the level.** It is a value on the record. A rule that logged any git command taking 100ms or more as a warning meant every clone, merge and LFS transfer on Windows and Intel macOS during entirely normal operation, per the platform latencies in [`testing.md`](./testing.md). A slow operation is not an anomaly, it is a slow operation on a slow machine.
 

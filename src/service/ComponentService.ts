@@ -1,5 +1,4 @@
 import Fs from 'fs-extra';
-import { z } from '@hono/zod-openapi';
 import { CoreError } from '../util/shared.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -14,7 +13,6 @@ import {
   type ReadBySlugComponentProps,
   readComponentSchema,
   serviceTypeSchema,
-  uuidSchema,
   type Component,
   type ComponentFile,
   type CountComponentsProps,
@@ -38,6 +36,7 @@ import {
   type ProjectLanguages,
   type Uuid,
   type Value,
+  projectScopeSchema,
 } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
 import {
@@ -150,7 +149,7 @@ export class ComponentService
     this.assertNotReadOnly('create');
     const { projectId } = this.parseOrThrow(
       'create',
-      z.object({ projectId: uuidSchema }),
+      projectScopeSchema,
       props
     );
     await this.assertNotProvisioned('create', projectId);
@@ -334,7 +333,7 @@ export class ComponentService
     this.assertNotReadOnly('update');
     const { projectId } = this.parseOrThrow(
       'update',
-      z.object({ projectId: uuidSchema }),
+      projectScopeSchema,
       props
     );
     await this.assertNotProvisioned('update', projectId);

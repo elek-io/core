@@ -2,16 +2,29 @@ import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
 import { createInterface } from 'node:readline';
-import { promisify } from 'node:util';
-import { createGunzip, gzip as gzipCallback } from 'node:zlib';
+import { createGunzip } from 'node:zlib';
 import type { Logform, Logger } from 'winston';
 import { createLogger, format, transports } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import * as packageJson from '../../package.json' with { type: 'json' };
 import { type ElekIoCoreOptions } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
+import {
+  DAY_MS,
+  gzip,
+  HOST_ARCHS,
+  MASKED_COUNT,
+  OS_TYPES,
+  REDACTED,
+  REDACTED_COUNT,
+  REDACTED_EMAIL,
+  SECRET_KEY_PARTS,
+  SEVERITY_NUMBERS,
+  TAIL_MARKER,
+  TAIL_WINDOW_MS,
+  TailBuffer,
+} from '../util/log.js';
 import type {
-  LogAttributeName,
   LogProps,
   LogRecord,
   LogResource,
@@ -21,186 +34,8 @@ import {
   logConsoleTransportSchema,
   logRecordSchema,
   logSchema,
-  logSeverityNumbers,
   logSourceSchema,
 } from '../schema/logSchema.js';
-
-const gzip = promisify(gzipCallback);
-
-/** The Resource without the part that differs per record */
-type LogResourceBase = Omit<LogResource, 'service.name'>;
-
-/** How much of a record was rewritten, and how much of it went */
-type RedactionCounts = { masked: number; redacted: number };
-
-/**
- * OpenTelemetry names the operating system and the CPU architecture from
- * its own enumerations, which are not the values Node reports. A
- * Semantic Convention name has to carry a Semantic Convention value, so
- * the two Node spells differently are translated and everything else
- * passes through unchanged.
- */
-const OS_TYPES: Record<string, string> = { win32: 'windows', sunos: 'solaris' };
-const HOST_ARCHS: Record<string, string> = {
-  x64: 'amd64',
-  ia32: 'x86',
-  arm: 'arm32',
-  ppc: 'ppc32',
-};
-
-const SEVERITY_NUMBERS = new Map<string, number>(
-  Object.entries(logSeverityNumbers)
-);
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** How far back a tail reaches */
-const TAIL_WINDOW_MS = DAY_MS;
-
-/** Written before a tail is collected, so a reader can see where one ended */
-const TAIL_MARKER = 'Collecting a log tail';
-
-/**
- * Ceiling on the records of a tail, before they are gzipped.
- *
- * A safety valve rather than a working limit. Collapsing the repeated
- * records is what keeps a tail small: it was worth 2079x on the day a
- * broken pipe filled a log file with one stack, and a realistic tail is
- * 1 to 25 KB. JSONL of this shape compresses at least fourfold, so even
- * a tail that reaches this ceiling stays inside the 1 MB a report may
- * carry. The oldest records go first, because a report is about what
- * just happened.
- */
-const TAIL_MAX_BYTES = 4 * 1024 * 1024;
-
-const REDACTED = '[redacted]';
-const REDACTED_EMAIL = '[email]';
-
-// Named rather than inlined, so the vocabulary in logSchema.ts types them
-const MASKED_COUNT: LogAttributeName = 'redaction.masked.count';
-const REDACTED_COUNT: LogAttributeName = 'redaction.redacted.count';
-const REPEAT_COUNT: LogAttributeName = 'elek.log.repeat.count';
-const REPEAT_LAST_TIMESTAMP: LogAttributeName =
-  'elek.log.repeat.last_timestamp';
-
-/**
- * Key names whose value is a credential, dropped from a tail at whatever
- * depth they sit.
- *
- * Sentry's default denylist, matched as a substring. It is the backstop
- * for the `meta` a host hands `core.logger` over IPC, whose shape Core
- * cannot type, and it runs over every record rather than only a host's: a
- * Core attribute matching one of these would be a leak, not a false
- * positive. `logTail.test.ts` checks that no declared name matches, so
- * this cannot start dropping something Core meant to write. See
- * contributing/logging.md.
- */
-const SECRET_KEY_PARTS = [
-  'password',
-  'passwd',
-  'secret',
-  'api_key',
-  'apikey',
-  'auth',
-  'credentials',
-  'privatekey',
-  'private_key',
-  'token',
-  'bearer',
-];
-
-/**
- * Collects the records of a tail in order, collapsing a run of identical ones
- * into the first of them and a count.
- *
- * That collapse is the whole algorithm rather than a nicety, and it happens
- * during the read. A collector rather than state on `LogService`, because it
- * belongs to one call of `tail()` rather than to the service.
- *
- * @see ../../contributing/logging.md
- */
-class TailBuffer {
-  private readonly lines: (string | undefined)[] = [];
-  private head = 0;
-  private bytes = 0;
-  private pending: LogRecord | undefined;
-  private pendingKey = '';
-  private repeats = 0;
-  private lastTimestamp = '';
-  public isTruncated = false;
-
-  public add(record: LogRecord): void {
-    const key = TailBuffer.collapseKeyOf(record);
-    if (this.pending !== undefined && key === this.pendingKey) {
-      this.repeats += 1;
-      this.lastTimestamp = record.timestamp;
-      return;
-    }
-    this.flush();
-    this.pending = record;
-    this.pendingKey = key;
-    this.repeats = 0;
-    this.lastTimestamp = record.timestamp;
-  }
-
-  /** Every record that survived, one JSON object per line */
-  public end(): string {
-    this.flush();
-    return this.lines
-      .slice(this.head)
-      .filter((line) => line !== undefined)
-      .join('\n');
-  }
-
-  /** What everything but the timestamp of a record says */
-  private static collapseKeyOf(record: LogRecord): string {
-    return JSON.stringify({ ...record, timestamp: '' });
-  }
-
-  private static withRepeats(
-    record: LogRecord,
-    count: number,
-    lastTimestamp: string
-  ): LogRecord {
-    return {
-      ...record,
-      attributes: {
-        ...record.attributes,
-        [REPEAT_COUNT]: count,
-        [REPEAT_LAST_TIMESTAMP]: lastTimestamp,
-      },
-    };
-  }
-
-  private flush(): void {
-    if (this.pending === undefined) {
-      return;
-    }
-    const record =
-      this.repeats > 0
-        ? TailBuffer.withRepeats(
-            this.pending,
-            this.repeats + 1,
-            this.lastTimestamp
-          )
-        : this.pending;
-    this.pending = undefined;
-    this.push(JSON.stringify(record));
-  }
-
-  private push(line: string): void {
-    this.lines.push(line);
-    this.bytes += Buffer.byteLength(line) + 1;
-    while (this.bytes > TAIL_MAX_BYTES && this.head < this.lines.length - 1) {
-      const dropped = this.lines[this.head];
-      this.bytes -= Buffer.byteLength(dropped ?? '') + 1;
-      // Freed rather than spliced, so a very long file is not held twice
-      this.lines[this.head] = undefined;
-      this.head += 1;
-      this.isTruncated = true;
-    }
-  }
-}
 
 /**
  * Writes records to the console and to daily rotated files under
@@ -851,3 +686,9 @@ export class LogService {
     }
   }
 }
+
+/** The Resource without the part that differs per record */
+type LogResourceBase = Omit<LogResource, 'service.name'>;
+
+/** How much of a record was rewritten, and how much of it went */
+type RedactionCounts = { masked: number; redacted: number };
