@@ -80,8 +80,7 @@ export const elekIoCoreOptionsSchema = z.strictObject({
    * If set to true, Core never mutates a Project or its remote
    *
    * Every create, update, delete, synchronize and release operation
-   * throws a `CoreError` of type `PreconditionFailed`. Cloning and
-   * fetching work without a User being set.
+   * throws a `CoreError` of type `PreconditionFailed`.
    *
    * Overrides the ELEK_IO_READ_ONLY environment variable.
    *

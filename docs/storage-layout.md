@@ -1,6 +1,6 @@
 # Storage layout
 
-elek.io Core stores everything as plain files on disk. This document describes where those files live and what a Project looks like as a directory tree.
+elek.io Core stores everything as plain files on disk. This document describes where those files live and what a Project looks like as a directory tree. Read them with any tool, and change them only through Core, see [`git-and-sync.md`](./git-and-sync.md#change-a-project-only-through-core).
 
 For the data model these files represent, see [`concepts.md`](./concepts.md).
 

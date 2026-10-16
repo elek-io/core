@@ -70,7 +70,6 @@ The resolved options are exposed on `core.options`, and the running Core version
   - Set it to `false` when another application writes the same files while this Core runs. The Astro loaders do that for you during `astro dev`.
 - **`isReadOnly`** puts Core into read-only mode, meant for environments that only consume content, such as CI builds. It takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
   - Every operation that would mutate a Project or its remote (create, update, delete, synchronize, setting a remote, releasing, upgrading) throws a `CoreError` of type `PreconditionFailed`.
-  - In return, cloning and fetching work without a User being set, because nothing is ever committed.
 
 ### Environment variables
 
@@ -139,7 +138,7 @@ A log file holds ids, paths, counts and error messages. It never holds the conte
 
 ## Setting the User (required before writing)
 
-Every create, update and delete operation commits to git, and git needs a signature. Set the User once before any write - without it, write operations throw a `CoreError` of type `Unauthorized`.
+Every create, update and delete operation commits to git, and git needs a signature. Set the User once before any write - without it, write operations throw a `CoreError` of type `Unauthorized`. Cloning, fetching and reading need no User.
 
 ```typescript
 await core.user.set({

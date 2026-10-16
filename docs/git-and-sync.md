@@ -4,6 +4,17 @@ Every elek.io Project is a git repository, and Core drives git directly for ever
 
 For the data model, see [`concepts.md`](./concepts.md). For how history is read, see [`usage.md`](./usage.md#reading-from-history).
 
+## Change a Project only through Core
+
+A Project is a git repository you can read with any tool, but change only through Core. Git run by hand in a Project, another git client, or an editor writing its files is not supported, and Core does not guard against it. What goes wrong otherwise:
+
+- A commit Core did not make carries none of Core's trailers, so `history()` and the log of `core.git` skip it.
+- Core checks references, unique fields and the field definitions on its own writes only, so a file changed by hand can hold content Core refuses or skips when it reads it.
+- An upgrade migrates files from the shapes an earlier Core wrote, and knows no other.
+- Core writes no identity into the Project's git config, so a commit made by hand is signed with whatever identity the machine has.
+
+Reading is safe: a log, a diff, a backup, or a copy of the folder.
+
 ## The git backend
 
 Core runs git through [dugite](https://github.com/desktop/dugite) (the git bindings used by GitHub Desktop), declared as a peer dependency. All git commands for a Project are serialized through an internal queue, so two operations never overlap on the same repository.
@@ -41,9 +52,11 @@ await core.projects.branches.switch({ id: project.id, branch: 'main' });
 
 ## Commits and the User signature
 
-Every create, update and delete commits to git, and git needs an author. Core takes the author from the configured User (see [`usage.md`](./usage.md#setting-the-user-required-before-writing)). Committing with no User set throws a `CoreError` of type `Unauthorized`.
+Every create, update and delete commits to git, and git needs an author. Core takes the author and the committer from the configured User (see [`usage.md`](./usage.md#setting-the-user-required-before-writing)). Committing with no User set throws a `CoreError` of type `Unauthorized`.
 
-The User's `name` and `email` are written into the repository's local git config on `init` and `clone`, along with two settings Core relies on:
+Core reads the User each time it writes a commit or a tag, for a merge, a rebase and a pull as well. So once `core.user.set()` or signing in to elek.io Cloud changes the User, the next commit carries the new name and email as author and committer, and the next tag as tagger. A rebase keeps each commit's author and makes the User its committer.
+
+The User reaches git through the environment of each command, never through the repository's git config. So `init` and `clone` need no User, and only a commit does. On `init` and `clone` Core writes two settings it relies on into the local git config:
 
 - `push.autoSetupRemote = true` - new branches get an upstream automatically on first push.
 - `pull.rebase = true` - `pull` rebases local commits rather than creating merge commits.
@@ -219,7 +232,7 @@ When a remote `origin` is set, `core.releases` pushes at creation time, in one a
 
 | Error type | When |
 | --- | --- |
-| `Unauthorized` (401) | A commit (or `init` / `clone` config) is attempted with no User set, or the remote rejects the credentials on a push. In read-only mode, cloning needs no User, see [`usage.md`](./usage.md#options). |
+| `Unauthorized` (401) | A commit is attempted with no User set, or the remote rejects the credentials on a push. Cloning needs no User. |
 | `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree or a rebase conflict, or a push fails because the remote does not support Git LFS or, for a Release, atomic pushes. |
 | `Conflict` (409) | `clone()` targets an already-present Project, a guarded `delete()` has unpushed commits, or `synchronize()` would integrate dangling references. |
 | `BadRequest` (400) | A `core.git.push()` combines the `all` and `refs` options, which are mutually exclusive. |

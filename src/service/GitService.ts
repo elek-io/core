@@ -22,6 +22,7 @@ import {
   type GitLogOptions,
   type GitStatus,
   type GitSwitchOptions,
+  type User,
 } from '../schema/index.js';
 import { datetime } from '../util/shared.js';
 import { GitTagService } from './GitTagService.js';
@@ -36,6 +37,7 @@ import {
   gitOutputCause,
   isMutatingGitCommand,
   parsePorcelainStatusLine,
+  recordsGitIdentity,
   redactedCommand,
 } from '../util/git.js';
 
@@ -49,6 +51,7 @@ import {
  *
  * @see https://github.com/desktop/dugite
  * @see ../../contributing/git-credentials.md
+ * @see ../../contributing/git-identity.md
  */
 export class GitService {
   private version: string | null;
@@ -109,8 +112,8 @@ export class GitService {
    * creating one. It also writes the local git config and installs the Git
    * LFS filters, so it has to run before any file below `lfs/` is added.
    *
-   * Throws `PreconditionFailed` in read-only mode, and `Unauthorized` when no
-   * User is set, since the config carries the commit identity.
+   * Throws `PreconditionFailed` in read-only mode. It needs no User, the
+   * config holds no identity.
    *
    * @see https://git-scm.com/docs/git-init
    */
@@ -141,8 +144,8 @@ export class GitService {
    * The `lfs` option decides how much is downloaded: the default fetches
    * every LFS object of the whole history so Assets work offline, `current`
    * only the checked-out ref, which is what a build clone wants. A bare clone
-   * skips both LFS and the local config. Outside read-only mode it writes
-   * that config, so it throws `Unauthorized` when no User is set.
+   * skips both LFS and the local config, and so does a read-only Core, which
+   * never commits. It needs no User, the config holds no identity.
    *
    * @see https://git-scm.com/docs/git-clone
    */
@@ -170,8 +173,7 @@ export class GitService {
     }
 
     await this.git('', [...args, url, path]);
-    // A read-only Core never commits, so no git identity or behavior
-    // config is needed and no User has to be set
+    // A read-only Core never commits, so it needs no behavior config
     if (!this.options.isReadOnly) {
       await this.setLocalConfig(path);
     }
@@ -562,8 +564,8 @@ export class GitService {
    * Join two development histories together.
    *
    * `squash` stages the merged result without creating a commit, so the
-   * caller has to commit afterwards, which is what the Project upgrade flow
-   * does.
+   * caller has to commit afterwards, as the Project upgrade flow does. A
+   * merge commit is signed as the current User.
    *
    * A conflict throws `Internal` and leaves the tree mid-merge, rather than
    * aborting it the way `rebase` does.
@@ -592,12 +594,11 @@ export class GitService {
   /**
    * Rebase the current branch onto `onto` (for example `origin/draft`).
    *
-   * A clean success leaves the working tree holding the integrated state. A
-   * textual conflict aborts the rebase, so the tree is never left mid-rebase,
-   * and throws `PreconditionFailed`. Any other failure throws `Internal`.
-   *
-   * Conflicts are classified with dugite's own `parseError` and `GitError`
-   * rather than with bespoke regexes.
+   * A clean success leaves the working tree holding the integrated state,
+   * each replayed commit keeping its author with the current User as its
+   * committer. A textual conflict, classified with dugite's own `parseError`,
+   * aborts the rebase and throws `PreconditionFailed`. Any other failure
+   * throws `Internal`.
    *
    * @see https://git-scm.com/docs/git-rebase
    */
@@ -876,8 +877,8 @@ export class GitService {
    * plus `Method:`, `Object-Type:`, `Object-Id:` and `Collection-Id:`
    * trailers, which `log()` parses back out.
    *
-   * Throws `BadRequest` when `message` fails its schema, and `Unauthorized`
-   * when no User is set.
+   * The current User is its author and committer. Throws `BadRequest` when
+   * `message` fails its schema, and `Unauthorized` when no User is set.
    *
    * @see https://git-scm.com/docs/git-commit
    */
@@ -920,14 +921,12 @@ export class GitService {
     }
     const fullMessage = `${subject}\n\n${trailers.join('\n')}`;
 
-    const args = [
-      'commit',
-      `--message=${fullMessage}`,
-      `--author=${user.name} <${user.email}>`,
-    ];
+    const args = ['commit', `--message=${fullMessage}`];
     // The same ids the commit carries as trailers, so a log line and the
-    // commit it produced join without parsing either
+    // commit it produced join without parsing either. The User checked above
+    // is the one it is signed as, rather than one read a second time
     await this.git(path, args, {
+      user,
       attributes: {
         'elek.method': message.method,
         'elek.object.type': message.reference.objectType,
@@ -1230,24 +1229,13 @@ export class GitService {
   }
 
   /**
-   * Writes the local git config of the repository.
+   * Writes the local git config of the repository: `push.autoSetupRemote`,
+   * and `pull.rebase`, which makes every pull a rebase.
    *
-   * The identity comes from `userService.get()`, and `Unauthorized` is thrown
-   * when there is none. It also sets `push.autoSetupRemote` and
-   * `pull.rebase`, which is what makes every Core pull a rebase.
+   * No identity goes in. Core hands git the current User on every command
+   * that records one, and a Project is changed through Core only.
    */
   private async setLocalConfig(path: string): Promise<void> {
-    const user = await this.userService.get();
-
-    if (!user) {
-      throw CoreError.unauthorized(
-        'No user is set in Core. Please set a User before doing any git operations.'
-      );
-    }
-
-    // Setup the local User
-    const userNameArgs = ['config', '--local', 'user.name', user.name];
-    const userEmailArgs = ['config', '--local', 'user.email', user.email];
     // By default new branches that are pushed are automatically tracking
     // their remote without the need of using the `--set-upstream` argument of `git push`
     const autoSetupRemoteArgs = [
@@ -1260,8 +1248,6 @@ export class GitService {
     // to reduce the amount of merge commits
     const pullRebaseArgs = ['config', '--local', 'pull.rebase', 'true'];
 
-    await this.git(path, userNameArgs);
-    await this.git(path, userEmailArgs);
     await this.git(path, autoSetupRemoteArgs);
     await this.git(path, pullRebaseArgs);
   }
@@ -1287,13 +1273,20 @@ export class GitService {
     args: string[],
     options: GitCommandOptions = {}
   ): Promise<IGitStringResult> {
-    const { tolerateNonZero, attributes, ...execOptions } = options;
+    const { tolerateNonZero, attributes, user, ...execOptions } = options;
+    const identity = recordsGitIdentity(args)
+      ? identityEnv(user === undefined ? await this.userService.get() : user)
+      : {};
     const result = await this.queue.add(async () => {
       // Every git invocation gets the credential environment, so remote
       // operations and on-demand LFS smudges authenticate the same way
       // and never prompt. Built inside the queue, so the askpass write
       // is serialized with every other git operation.
-      execOptions.env = { ...(await this.credentialEnv()), ...execOptions.env };
+      execOptions.env = {
+        ...(await this.credentialEnv()),
+        ...identity,
+        ...execOptions.env,
+      };
       const start = Date.now();
       const gitResult = await gitExec(args, path, execOptions);
       const durationMs = Date.now() - start;
@@ -1363,4 +1356,28 @@ type GitCommandOptions = IGitExecutionOptions & {
    * only the caller has. Stripped before the options reach dugite.
    */
   attributes?: LogAttributes;
+  /**
+   * The User a caller already read, so the identity is not read a second
+   * time. Stripped before the options reach dugite.
+   */
+  user?: User | null;
 };
+
+/**
+ * The User as the author and the committer of whatever a command writes,
+ * through the environment, which never reaches a command line or a log.
+ * Empty without a User, which leaves git to the machine's identity. Every
+ * write Core makes commits first and `commit()` refuses without a User, so
+ * only a rebase replaying commits made under an earlier User gets here.
+ */
+function identityEnv(user: User | null): Record<string, string> {
+  if (user === null) {
+    return {};
+  }
+  return {
+    GIT_AUTHOR_NAME: user.name,
+    GIT_AUTHOR_EMAIL: user.email,
+    GIT_COMMITTER_NAME: user.name,
+    GIT_COMMITTER_EMAIL: user.email,
+  };
+}

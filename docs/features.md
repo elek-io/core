@@ -84,6 +84,7 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 
 ### Intentional constraints
 
+- **A Project is changed through Core only** - git run by hand, another git client or an editor writing a Project's files is not supported, and Core does not guard against it. Reading the files with any tool is safe. See [`git-and-sync.md`](./git-and-sync.md#change-a-project-only-through-core).
 - **Git LFS requires an LFS-capable remote** - Asset binaries are tracked with Git LFS, so the remote you push to must support it. A remote without LFS (for example a self-hosted server with it disabled) fails the push with a descriptive `PreconditionFailed` error. See [`git-and-sync.md`](./git-and-sync.md#git-lfs).
 - **Field-definition `id`s are caller-supplied** - Core generates ids for entities (Collections, Components, Entries, Assets) but deliberately not for the field definitions inside them. You pass a UUID per field definition (for example via `uuid()`) on both create and update.
   - Generating them in Core was considered and rejected. It would need parallel id-less schema variants and only partly helps, because update must still identify existing field definitions by id.

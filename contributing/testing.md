@@ -75,6 +75,7 @@ Test files run in parallel, one file per vitest worker. This works because no st
 - [`src/test/globalSetup.ts`](../src/test/globalSetup.ts) runs once in the main process and sweeps `worker-*` directories left by previous runs. It removes only that prefix, so a developer-pointed `ELEK_IO_DATA_DIR` keeps its unrelated contents.
   - Directories of the current run are left in place for debugging and swept at the next start. Long watch sessions accumulate them across reruns, they are mostly empty because test files destroy their Projects.
 - Tests that bind the local API use `testApiPort` from [`src/test/setup.ts`](../src/test/setup.ts), which is `31310 + poolId`, so concurrent workers never contend for a port. 31310 stays the documented product default.
+- `workerSetup.ts` also points `GIT_CONFIG_GLOBAL` at an empty file, so git ignores the developer's global config. CI runners carry no global identity, and one on a developer's machine once let a raw `git commit` in a test pass locally that would have failed in CI. A test that commits with git directly passes its own identity through `-c user.name=` and `-c user.email=`.
 - All of this relies on the vitest `forks` pool (the default), where each test file gets its own process and env. Switching to the `threads` pool would break the per-file env derivation and the `vi.stubEnv` based tests.
 
 ### One Astro suite per test file

@@ -15,3 +15,9 @@ Core signs in to an elek.io account. `core.cloud.account` has `signUp()`, `signI
 **When a session ends.** A 401 to any elek.io Cloud call that sends the token forgets it and throws `Unauthorized`. `read()` answers `null` and forgets the token when the session is not live. Either way the User stays `cloud`, and the host asks the person to sign in again.
 
 **Signing out** sends the request, forgets the token and sets a `local` User that keeps the name and the email. When the request fails, Core still signs out on this machine, logs a warning and resolves.
+
+**The committer follows the User.** Commits, merges, rebases, pulls and tags carry the current User as author, committer and tagger. A commit made after the User changed kept the committer from when the Project was created or cloned before.
+
+**No identity in a Project's git config.** Core hands git the User through the environment of each command and no longer writes `user.name` and `user.email` into a Project's local git config. So `init` and `clone` need no User, and only a commit throws `Unauthorized` without one.
+
+**A Project is changed through Core only.** Git run by hand, another git client or an editor writing a Project's files is not supported. Reading the files with any tool is safe.

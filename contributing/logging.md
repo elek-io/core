@@ -61,9 +61,9 @@ Practically: **log the shape, never the payload.** For a migration bug, "12 Valu
 
 ### Redacting a command line
 
-[`redactGitArgs`](../src/util/git.ts) takes the User's identity out of a git command before it reaches a log record or an error message: the `--author` of a commit, the values of `config --local user.name` and `user.email`, and credentials embedded in a remote URL. Ids, paths and flags pass through untouched.
+Core hands git the User's identity through the environment of each command, see [`git-identity.md`](./git-identity.md), so no command line Core builds carries one. A command line is still the first place an identity would land if that changed.
 
-Anything that builds a string from git arguments has to go through it. There is more than one identity site, and a rule written for only the one in front of you will miss the others.
+[`redactGitArgs`](../src/util/git.ts) is the backstop. It takes the `--author` of a commit, the values of `config user.name` and `user.email`, and credentials embedded in a remote URL out of a git command before it reaches a log record or an error message. Ids, paths and flags pass through untouched. Anything that builds a string from git arguments has to go through it.
 
 ### An error message has two audiences
 

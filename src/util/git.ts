@@ -89,10 +89,10 @@ const REDACTED = '[redacted]';
  * Redacts the User's identity out of a git command line before it is written
  * down, in a log record or in an error message.
  *
- * Three places put one on a command line: `commit --author`, `config --local
- * user.name` and `config --local user.email`. Credentials embedded in a remote
- * URL go too. Everything else is left exactly as it is, because ids, paths and
- * flags are what make a log line resolvable against the repository.
+ * Core hands git the identity through the environment, so no command line it
+ * builds carries one. This is the backstop for the shapes that would: `commit
+ * --author`, `config user.name` and `config user.email`, and credentials in a
+ * remote URL. Ids, paths and flags stay, they make a log line resolvable.
  *
  * @see ../../contributing/logging.md
  */
@@ -272,6 +272,28 @@ const READING_LFS_SUBCOMMANDS = new Set([
 ]);
 
 /**
+ * Commands that change a repository but never write a commit or a tag, so
+ * git records no identity for them. A reflog entry takes one when there is,
+ * and goes on without it when there is not.
+ */
+const ANONYMOUS_GIT_COMMANDS = new Set([
+  'add',
+  'branch',
+  'checkout',
+  'clone',
+  'config',
+  'fetch',
+  'init',
+  'lfs',
+  'push',
+  'remote',
+  'reset',
+  'restore',
+  'rm',
+  'switch',
+]);
+
+/**
  * True when the command changes a repository, a remote or the git
  * configuration, which is what decides whether it is logged at `info` or
  * at `debug`.
@@ -318,4 +340,20 @@ export function isMutatingGitCommand(args: readonly string[]): boolean {
     default:
       return true;
   }
+}
+
+/**
+ * True when the command may write a commit or a tag, so git has to be told
+ * who the User is. A changing command nobody classified counts as one, so a
+ * command added later cannot sign with whatever identity git finds on the
+ * machine.
+ *
+ * @see ../../contributing/git-identity.md
+ */
+export function recordsGitIdentity(args: readonly string[]): boolean {
+  if (isMutatingGitCommand(args) === false) {
+    return false;
+  }
+  const command = args.find((arg) => !arg.startsWith('-'));
+  return command !== undefined && !ANONYMOUS_GIT_COMMANDS.has(command);
 }
