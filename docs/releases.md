@@ -115,6 +115,8 @@ With a remote, a Release publishes its refs in one `git push --atomic`. The remo
 
 Core does not fall back to separate pushes on a remote without atomic pushes, because a push that lands `main` without `draft` breaks the rule a Release keeps. Releasing to such a remote needs a git host that supports them.
 
+Connected to a new, empty remote, a Project synchronizes before its first Release there. The first push of `synchronize()` sends `main`, `draft` and the tags of every earlier Release, see [`git-and-sync.md`](./git-and-sync.md#the-first-push). A Release sends only its own tag, and a preview Release sends `draft` without `main`.
+
 ## When a release fails partway
 
 A release is a transaction you retry, not a state you resume. There is no public call that finishes a half-made release, so both `create()` and `createPreview()` undo what they already did before the error reaches you:
