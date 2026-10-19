@@ -21,7 +21,7 @@ Core runs git through [dugite](https://github.com/desktop/dugite) (the git bindi
 
 Two levels of API are available:
 
-- **`core.projects`** - the high-level interface (`clone`, `synchronize`, `getChanges`, `setRemoteOriginUrl`, `branches.*`, `delete`, `history`). Use this in normal application code.
+- **`core.projects`** - the high-level interface (`clone`, `synchronize`, `getChanges`, `setRemoteOriginUrl`, `removeRemoteOrigin`, `branches.*`, `delete`, `history`). Use this in normal application code.
 - **`core.git`** - the lower-level `GitService` (`add`, `commit`, `status`, `branches.*`, `remotes.*`, `tags.*`, `getFileContentAtCommit`, ...). An escape hatch for advanced use.
 
 ## The branch model
@@ -111,6 +111,21 @@ A branch on the remote holds this Project when it shares history with the local 
 | anything else, such as a README a git host created | throws `PreconditionFailed` and pushes nothing |
 
 A remote's `main` holding commits the local `main` lacks, with no `draft` beside it, throws `PreconditionFailed` as well. Synchronize the working copy that pushed that `main` instead.
+
+### Removing the remote
+
+`removeRemoteOrigin()` makes a Project local only again. It removes `origin` with its remote-tracking branches and the upstream of `main` and `draft`, and keeps every commit and tag.
+
+```typescript
+await core.projects.removeRemoteOrigin({ id: project.id });
+```
+
+- The remote stays as it was.
+- A Project without an `origin` is left as it is, so calling it twice is safe.
+- Afterwards `getChanges()` and a guarded `delete()` throw `PreconditionFailed`, as for a Project that never had a remote.
+- It throws `PreconditionFailed` in read-only mode and on a provisioned copy, like `setRemoteOriginUrl()`.
+
+Use it after deleting a Project from elek.io Cloud, see [`cloud-projects.md`](./cloud-projects.md#deleting-a-project).
 
 ## Inspecting changes against the remote
 

@@ -48,6 +48,16 @@ The session Core signs in to hangs off `core.cloud.account`, singular because Co
 - `hasToken` follows the boolean rule above.
 - `onTokenChange()` takes the `on<Event>` shape of Node and DOM listeners and returns its own remover, so there is no `off` method to pair with it.
 
+### Organizations, Projects and plans
+
+What the account holds on elek.io Cloud hangs off `core.cloud` in one namespace per noun, the owner's choice: `organizations`, `projects` and `plans`. Why the names:
+
+- `core.cloud.projects` beside `core.projects`. A local Project and its copy on elek.io Cloud share an id but not a service, and the `cloud` level says which one a call changes.
+- `plans` rather than an `upgradePlan()` on `organizations`. The billing portal and cancelling join it later without another rename.
+- `isSlugAvailable()` answers a boolean, and its name is the question. `checkSlug()`, after Better Auth's route, was rejected, since it would have to answer an object to say anything.
+- `upgrade()` keeps the name of Better Auth's route, because it is the one call that reaches it.
+- `removeRemoteOrigin()` sits beside `setRemoteOriginUrl()` and mirrors `git remote remove`. A `setRemoteOriginUrl()` taking a `null` url was rejected, because a remove would hide inside a set.
+
 ## Astro entry exports
 
 Two conventions from the Astro ecosystem apply to `@elek-io/core/astro`:

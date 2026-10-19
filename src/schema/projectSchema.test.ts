@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { projectSettingsSchema } from './projectSchema.js';
+import {
+  projectDescriptionSchema,
+  projectNameSchema,
+  projectSettingsSchema,
+} from './projectSchema.js';
 
 describe('projectSettingsSchema', () => {
   it('accepts a valid language configuration', () => {
@@ -49,5 +53,22 @@ describe('projectSettingsSchema', () => {
         language: { default: 'de', supported: ['en', 'fr'] },
       })
     ).toThrow('Default language must be one of the supported languages');
+  });
+});
+
+describe('the caps of a Project name and description', () => {
+  it.each([
+    ['a name', projectNameSchema, 200],
+    ['a description', projectDescriptionSchema, 500],
+  ] as const)('holds %s to %i after trimming', (_, schema, cap) => {
+    expect(schema.safeParse('N'.repeat(cap)).success).toBe(true);
+    expect(schema.safeParse(`  ${'N'.repeat(cap)}  `).success).toBe(true);
+    expect(schema.safeParse('N'.repeat(cap + 1)).success).toBe(false);
+    expect(schema.safeParse('   ').success).toBe(false);
+  });
+
+  it('counts UTF-16 code units, as elek.io Cloud does', () => {
+    expect(projectNameSchema.safeParse('😀'.repeat(100)).success).toBe(true);
+    expect(projectNameSchema.safeParse('😀'.repeat(101)).success).toBe(false);
   });
 });

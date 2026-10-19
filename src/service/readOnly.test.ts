@@ -105,6 +105,9 @@ describe('Read-only mode', function () {
       })
     );
     await expectReadOnlyError(
+      readOnlyCore.projects.removeRemoteOrigin({ id: project.id })
+    );
+    await expectReadOnlyError(
       readOnlyCore.projects.upgrade({ id: project.id })
     );
   });

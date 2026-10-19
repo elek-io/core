@@ -160,6 +160,48 @@ export async function createLocalRemoteRepository() {
 }
 
 /**
+ * Every log file Core wrote into `dir`, once a record with `message` reached
+ * one. winston has no per transport flush, so reading any earlier would pass
+ * a test of what is absent because nothing was written yet
+ */
+export async function readLogsUntil(
+  dir: string,
+  message: string
+): Promise<string> {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const names = (await Fs.pathExists(dir)) ? await Fs.readdir(dir) : [];
+    const contents = await Promise.all(
+      names
+        .filter((name) => name.endsWith('.log'))
+        .map((name) => Fs.readFile(Path.join(dir, name), 'utf8'))
+    );
+    const logs = contents.join('\n');
+    if (logs.includes(JSON.stringify(message))) {
+      return logs;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return expect.unreachable(`"${message}" never reached a log file`);
+}
+
+/**
+ * Awaits a promise that has to reject with a `CoreError`, and returns that
+ * error, for a test that reads more of it than its type and message
+ */
+export async function caughtCoreError(
+  promise: Promise<unknown>
+): Promise<CoreError> {
+  const error = await promise.then(
+    () => null,
+    (reason: unknown) => reason
+  );
+  if (error instanceof CoreError) {
+    return error;
+  }
+  return expect.unreachable(`expected a CoreError, got ${String(error)}`);
+}
+
+/**
  * Awaits the promise and asserts it rejects with a `CoreError` of the given
  * type whose message contains the given text. Runs the call once, so it
  * suits calls that change state before they fail.

@@ -4,17 +4,18 @@ All services throw `CoreError` on failure. `CoreError` extends `Error` with `typ
 
 ## CoreError
 
-A class extending `Error` with 9 typed variants (`src/util/shared.ts`):
+A class extending `Error` with 10 typed variants (`src/util/shared.ts`):
 
 | Type | Status Code | Used For |
 | --- | --- | --- |
 | `NotFound` | 404 | Entity doesn't exist, whether addressed by id or by slug |
 | `BadRequest` | 400 | Invalid input, bad UUID, unsupported file type |
-| `Unauthorized` | 401 | No user configured, or elek.io Cloud refused the address, the password or the session |
-| `Conflict` | 409 | Sync failed, uncommitted changes, slug clash, an elek.io address that is not verified yet or that an account already holds |
+| `Unauthorized` | 401 | No user configured, or elek.io Cloud refused the address, the password, the session or the account's role |
+| `Conflict` | 409 | Sync failed, uncommitted changes, slug clash, an elek.io address that is not verified yet or that an account already holds, an elek.io Cloud organization slug or Project id held elsewhere |
 | `PreconditionFailed` | 412 | Remote origin missing (setup required), mutation attempted in read-only mode or on a provisioned copy, elek.io Cloud unreachable |
 | `UpgradeFailed` | 422 | Project version upgrade failed |
 | `VersionSkew` | 422 | Content written by a newer Core than installed |
+| `QuotaExceeded` | 402 | An elek.io Cloud organization's plan has no room left, such as for another Project |
 | `RateLimited` | 429 | elek.io Cloud refused because this client passed its rate limit |
 | `Internal` | 500 | Git errors, FS errors, unexpected failures |
 
@@ -26,6 +27,8 @@ throw CoreError.badRequest('Invalid UUID format', zodError);
 throw CoreError.internal('Git command failed', originalError);
 throw CoreError.fromUnknown(caughtException); // wraps any unknown into Internal
 ```
+
+A `RateLimited` from elek.io Cloud also carries `retryAt`, when to call again in epoch milliseconds, or `null` when elek.io Cloud did not say. Every other error carries `null`, see [`cloud-projects.md`](./cloud-projects.md#waiting-to-call-again).
 
 ## The message and the cause
 
@@ -86,4 +89,5 @@ const { list: assets, total } = await core.assets.list({
 - [`git-and-sync.md`](./git-and-sync.md) - the errors git operations and synchronizing raise
 - [`schema-changes.md`](./schema-changes.md) - the `Conflict` error and the resolutions workflow
 - [`local-api.md`](./local-api.md) - how `CoreError` maps to HTTP responses
+- [`cloud-projects.md`](./cloud-projects.md) - the errors the elek.io Cloud calls throw, and waiting after `RateLimited`
 - [`concepts.md`](./concepts.md) - the objects these errors are raised about

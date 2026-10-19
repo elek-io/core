@@ -22,6 +22,8 @@ Are a container for Collections, Components, Entries, Values and Assets. Think o
 
 Each Project declares its supported languages in its settings, along with one of them as the default. Translatable content (admin metadata and Entry Values) is validated against those languages, not the full universe of supported language codes.
 
+A Project's `name` holds 1 to 200 characters and its `description` 1 to 500, both counted after trimming. Both are plain strings rather than translatable, because a Project is listed outside its own languages, on elek.io Cloud too. A Project on elek.io Cloud has the same cap on its name, so every Project can move there, see [`cloud-projects.md`](./cloud-projects.md).
+
 ## Collections
 
 Contains field definitions (a schema) for possible Values each Entry can or has to have. e.g. for a Blog, it could have the following field definition for each post / Entry:

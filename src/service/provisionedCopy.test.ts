@@ -70,6 +70,9 @@ describe('Provisioned copy', function () {
         url: seed.remotePath,
       })
     );
+    await expectProvisionedError(
+      core.projects.removeRemoteOrigin({ id: seed.projectId })
+    );
     await expectProvisionedError(core.projects.upgrade({ id: seed.projectId }));
   });
 

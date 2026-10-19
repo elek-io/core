@@ -427,6 +427,17 @@ export class GitService {
       const args = ['remote', 'set-url', 'origin', url.trim()];
       await this.git(path, args);
     },
+    /**
+     * Removes the `origin` remote, with its remote-tracking branches and the
+     * upstream of every branch that tracked it
+     *
+     * Throws if no `origin` remote is added.
+     *
+     * @see https://git-scm.com/docs/git-remote#Documentation/git-remote.txt-emremoveem
+     */
+    removeOrigin: async (path: string): Promise<void> => {
+      await this.git(path, ['remote', 'remove', 'origin']);
+    },
   };
 
   /**

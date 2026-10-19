@@ -21,7 +21,7 @@ export interface CloudRefusal {
 
 /** One call to elek.io Cloud, as `CloudClient.request()` takes it */
 export interface CloudRequest {
-  method: 'GET' | 'POST' | 'PUT';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   /** Appended to the configured Cloud URL, which never ends in a slash */
   path: string;
   /** The serialized JSON body, sent with its content type */
@@ -35,6 +35,11 @@ export interface CloudRequest {
    * rather than uses one. Its 401 then says nothing about that session
    */
   isAnonymous?: boolean;
+  /**
+   * Refused with `Unauthorized` before anything is sent while Core holds no
+   * token, for a call that acts as the account and means nothing without one
+   */
+  isSessionRequired?: boolean;
 }
 
 /**
@@ -133,6 +138,11 @@ export class CloudClient {
   public async request(request: CloudRequest): Promise<Response> {
     const url = `${this.url}${request.path}`;
     const sentToken = request.isAnonymous === true ? null : this.token;
+    if (request.isSessionRequired === true && sentToken === null) {
+      throw CoreError.unauthorized(
+        `Cannot send ${request.subject} without an elek.io Cloud session, sign in first`
+      );
+    }
     const headers: Record<string, string> = { 'User-Agent': this.userAgent };
     if (request.body !== undefined) {
       headers['Content-Type'] = 'application/json';
@@ -266,7 +276,13 @@ async function refusalOf(
       return refusal.code === undefined || refusal.code === code;
     });
     if (match !== undefined) {
-      return new CoreError(match.type, `${match.message} (${response.status})`);
+      // A 429 named here still says when to call again
+      return new CoreError(
+        match.type,
+        `${match.message} (${response.status})`,
+        undefined,
+        response.status === 429 ? retryAfterOf(response) : null
+      );
     }
   }
 
@@ -284,8 +300,11 @@ async function refusalOf(
     case 401:
     case 403:
       return CoreError.unauthorized(detail);
+    // A plan's limit, which only a plan with more room lifts
+    case 402:
+      return CoreError.quotaExceeded(detail);
     case 429:
-      return CoreError.rateLimited(detail);
+      return CoreError.rateLimited(detail, retryAfter);
     // 5xx, and anything else nobody planned for. Not a caller's to fix
     default:
       return CoreError.internal(detail);

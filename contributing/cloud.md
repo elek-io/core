@@ -19,6 +19,7 @@ Every call goes through [`CloudClient`](../src/util/cloud.ts). It owns the base 
 - **A 401 forgets the token it was sent with.** Whatever the call that sent it, a 401 means the session is gone, so the calls after it carry none instead of being refused again. A 403 keeps the token, because it refuses one call rather than the session.
 - **A token is validated before it is kept.** `fetch` throws on a header value it cannot carry and quotes that value in its error, so `cloudTokenSchema` stops one at the door.
 - **The User is set before the token is kept.** A User that cannot be written then leaves no token behind that the caller never received.
+- **A 429 says when.** Every `RateLimited` carries the `Retry-After` it was answered with as `retryAt`, so no caller has to read `notBefore`. Why a field, see [`cloud-projects.md`](./cloud-projects.md#when-to-call-again).
 
 ## The session
 
@@ -57,6 +58,7 @@ Every other refusal takes the shared mapping. The owner chose the backoff over a
 - [`../docs/cloud-account.md`](../docs/cloud-account.md) - the calls, the token and the User as a consumer sees them
 - [`../docs/reporting.md`](../docs/reporting.md) - the report, a call through the seam
 - [`git-credentials.md`](./git-credentials.md) - the helper the git calls answer, and every decision behind it
+- [`cloud-projects.md`](./cloud-projects.md) - the organization, Project and plan calls, and how their refusals map
 - [`naming.md`](./naming.md#the-account) - why the account calls carry the names they do
 - [`logging.md`](./logging.md) - why neither a body nor a credential may reach a log file
 - [`error-handling-internals.md`](./error-handling-internals.md) - the boundary that logs a `CoreError` message

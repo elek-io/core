@@ -35,4 +35,5 @@ New to elek.io Core? Read [`concepts.md`](./concepts.md) for the data model, the
 - [`error-handling.md`](./error-handling.md) - `CoreError` and how to catch failures
 - [`cloud-account.md`](./cloud-account.md) - signing in to an elek.io account, the token Core holds and what happens to the User
 - [`cloud-git.md`](./cloud-git.md) - git against elek.io Cloud's git hosts with a session, and one session per process
+- [`cloud-projects.md`](./cloud-projects.md) - organizations, Projects and plans on elek.io Cloud, and moving a local Project there and back
 - [`reporting.md`](./reporting.md) - sending a report to elek.io Cloud, and handing a window of log files over

@@ -11,12 +11,15 @@ import {
   AccountService,
   AssetService,
   CacheService,
+  CloudProjectService,
   CloudService,
   CollectionService,
   ComponentService,
   EntryService,
   GitService,
   JsonFileService,
+  OrganizationService,
+  PlanService,
   ProjectService,
   ReferenceService,
   ReleaseService,
@@ -77,6 +80,9 @@ export default class ElekIoCore {
   private readonly gitCredentialRelay: GitCredentialRelay;
   private readonly accountService: AccountService;
   private readonly reportService: ReportService;
+  private readonly organizationService: OrganizationService;
+  private readonly cloudProjectService: CloudProjectService;
+  private readonly planService: PlanService;
   private readonly cloudService: CloudService;
   private readonly localApi: LocalApi;
 
@@ -235,9 +241,30 @@ export default class ElekIoCore {
       this.cloudClient,
       this.userService
     );
+    this.organizationService = new OrganizationService(
+      this.options,
+      this.pathTo,
+      this.logService,
+      this.cloudClient
+    );
+    this.cloudProjectService = new CloudProjectService(
+      this.options,
+      this.pathTo,
+      this.logService,
+      this.cloudClient
+    );
+    this.planService = new PlanService(
+      this.options,
+      this.pathTo,
+      this.logService,
+      this.cloudClient
+    );
     this.cloudService = new CloudService(
       this.accountService,
-      this.reportService
+      this.reportService,
+      this.organizationService,
+      this.cloudProjectService,
+      this.planService
     );
 
     // Every cache that mirrors a working tree, cleared together whenever
@@ -394,8 +421,9 @@ export default class ElekIoCore {
   }
 
   /**
-   * Everything Core does against elek.io Cloud: signing in to an account
-   * and sending a bug report or feedback
+   * Everything Core does against elek.io Cloud: signing in to an account,
+   * its organizations, their Projects and plans, and sending a bug report or
+   * feedback
    */
   public get cloud(): CloudService {
     return this.cloudService;

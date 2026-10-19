@@ -143,7 +143,7 @@ Every call throws a `CoreError`, see [`error-handling.md`](./error-handling.md).
 | `BadRequest` | The props failed validation, or elek.io Cloud rejected them (400) |
 | `Unauthorized` | `signIn()` with a wrong address or password (401), and any other 401 or 403 |
 | `Conflict` | `signIn()` for an address that is not verified yet (403), or `signUp()` for an address an account already holds (422) |
-| `RateLimited` | This client signed up or signed in too often (429) |
+| `RateLimited` | This client signed up or signed in too often (429). `retryAt` says when to try again |
 | `PreconditionFailed` | elek.io Cloud could not be reached, or did not answer within 15 seconds |
 | `Internal` | elek.io Cloud failed (5xx), or accepted the call and answered with something Core cannot read |
 
@@ -153,5 +153,6 @@ Every call throws a `CoreError`, see [`error-handling.md`](./error-handling.md).
 
 - [`usage.md`](./usage.md#options) - the `cloud.url` and `cloud.token` options, and `ELEK_IO_CLOUD_TOKEN`
 - [`cloud-git.md`](./cloud-git.md) - git against elek.io Cloud's git hosts with the session
+- [`cloud-projects.md`](./cloud-projects.md) - organizations, Projects and plans, the calls the session makes next
 - [`reporting.md`](./reporting.md) - sending a report, which carries the token
 - [`error-handling.md`](./error-handling.md) - `CoreError` and how to catch failures
