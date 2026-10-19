@@ -2,6 +2,7 @@ import { exec as gitExec, spawn as gitSpawn } from 'dugite';
 import Fs from 'fs-extra';
 import Http from 'node:http';
 import Path from 'node:path';
+import Zlib from 'node:zlib';
 import { onTestFinished } from 'vitest';
 import { tmpDirPath } from './util.js';
 
@@ -40,9 +41,9 @@ export interface FakeGitHost {
 
 /**
  * A git host over plain HTTP for any number of host names, standing in for
- * elek.io Cloud's git hosts and for any other provider. It serves git
- * through `git http-backend` and Git LFS through the batch API, behind
- * basic auth that `authorize` decides.
+ * elek.io Cloud's git hosts and for any other provider. It serves git's
+ * smart HTTP protocol and Git LFS through the batch API, behind basic auth
+ * that `authorize` decides.
  *
  * Every host name reaches it as a forward proxy through `http_proxy`,
  * which git and git-lfs both honor, so no DNS and no TLS is involved.
@@ -116,10 +117,9 @@ export async function startFakeGitHost(
       return;
     }
     await serveGit(req, res, {
-      root: Path.join(root, host),
-      pathInfo: `/${repositoryPath}${rest}`,
-      query: url.search.slice(1),
-      username: credential?.username ?? 'anonymous',
+      repository,
+      rest,
+      service: new URLSearchParams(url.search).get('service'),
     });
   }
 
@@ -183,77 +183,73 @@ function basicCredential(
   };
 }
 
-/** Runs `git http-backend` as the CGI program it is */
+/**
+ * git's smart HTTP protocol, served by running `upload-pack` and
+ * `receive-pack` with `--stateless-rpc`, which is all `git http-backend`
+ * does for them. MinGit, the git dugite bundles on Windows, ships no
+ * `git-http-backend`, while both of these are builtins of every git.
+ *
+ * @see https://git-scm.com/docs/http-protocol
+ */
 async function serveGit(
   req: Http.IncomingMessage,
   res: Http.ServerResponse,
-  props: { root: string; pathInfo: string; query: string; username: string }
+  props: { repository: string; rest: string; service: string | null }
 ): Promise<void> {
-  const env: Record<string, string> = {
-    GIT_PROJECT_ROOT: props.root,
-    GIT_HTTP_EXPORT_ALL: '1',
-    PATH_INFO: props.pathInfo,
-    QUERY_STRING: props.query,
-    REQUEST_METHOD: req.method ?? 'GET',
-    CONTENT_TYPE: req.headers['content-type'] ?? '',
-    REMOTE_USER: props.username,
-    REMOTE_ADDR: '127.0.0.1',
-  };
+  const isAdvertisement = props.rest === '/info/refs';
+  const service = isAdvertisement ? props.service : props.rest.slice(1);
+  if (service !== 'git-upload-pack' && service !== 'git-receive-pack') {
+    req.resume();
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not a git service');
+    return;
+  }
+  const command = service.slice('git-'.length);
   const protocol = req.headers['git-protocol'];
-  if (typeof protocol === 'string') {
-    env['GIT_PROTOCOL'] = protocol;
-  }
-  const encoding = req.headers['content-encoding'];
-  if (typeof encoding === 'string') {
-    env['HTTP_CONTENT_ENCODING'] = encoding;
-  }
-  const length = req.headers['content-length'];
-  if (typeof length === 'string') {
-    env['CONTENT_LENGTH'] = length;
-  }
+  const env: Record<string, string> =
+    typeof protocol === 'string' ? { GIT_PROTOCOL: protocol } : {};
 
-  const child = gitSpawn(['http-backend'], props.root, { env });
-  req.pipe(child.stdin);
-
-  await new Promise<void>(function (resolve, reject) {
-    let head = Buffer.alloc(0);
-    let isBody = false;
-    child.stdout.on('data', function (chunk: Buffer) {
-      if (isBody) {
-        res.write(chunk);
-        return;
-      }
-      head = Buffer.concat([head, chunk]);
-      const end = head.indexOf('\r\n\r\n');
-      if (end === -1) {
-        return;
-      }
-      isBody = true;
-      let status = 200;
-      const headers: Record<string, string> = {};
-      for (const line of head.subarray(0, end).toString('utf8').split('\r\n')) {
-        const separator = line.indexOf(':');
-        const key = line.slice(0, separator).trim();
-        const value = line.slice(separator + 1).trim();
-        if (key.toLowerCase() === 'status') {
-          status = Number.parseInt(value, 10);
-        } else {
-          headers[key] = value;
-        }
-      }
-      res.writeHead(status, headers);
-      res.write(head.subarray(end + 4));
-    });
-    child.stderr.resume();
+  const child = gitSpawn(
+    isAdvertisement
+      ? [command, '--stateless-rpc', '--advertise-refs', props.repository]
+      : [command, '--stateless-rpc', props.repository],
+    props.repository,
+    { env }
+  );
+  const closed = new Promise<void>(function (resolve, reject) {
     child.on('error', reject);
     child.on('close', function () {
-      if (!isBody) {
-        res.writeHead(500);
-      }
-      res.end();
       resolve();
     });
   });
+  child.stderr.resume();
+
+  res.writeHead(200, {
+    'Content-Type': `application/x-${service}-${isAdvertisement ? 'advertisement' : 'result'}`,
+    'Cache-Control': 'no-cache',
+  });
+  if (isAdvertisement) {
+    req.resume();
+    child.stdin.end();
+    // Protocol v2 answers with its capabilities alone, as http-backend does
+    if (!(
+      command === 'upload-pack' && /version=2/.test(env['GIT_PROTOCOL'] ?? '')
+    )) {
+      res.write(`${pktLine(`# service=${service}\n`)}0000`);
+    }
+  } else if (req.headers['content-encoding'] === 'gzip') {
+    // git compresses a large fetch request
+    req.pipe(Zlib.createGunzip()).pipe(child.stdin);
+  } else {
+    req.pipe(child.stdin);
+  }
+  child.stdout.pipe(res);
+  await closed;
+}
+
+/** One packet of git's pkt-line format, its length counting itself */
+function pktLine(text: string): string {
+  return `${(Buffer.byteLength(text) + 4).toString(16).padStart(4, '0')}${text}`;
 }
 
 /** The Git LFS batch API and the basic transfer it hands out */

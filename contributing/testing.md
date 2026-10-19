@@ -126,18 +126,20 @@ Re-check these when touching `watch.ts`, the loaders' sync functions or the load
 
 The suite's usual remotes are bare repositories on the local filesystem, and git skips its whole credential machinery for local paths. [`GitService.cloudGit.test.ts`](../src/service/GitService.cloudGit.test.ts) closes that gap with two fixtures and no new dependency:
 
-- [`src/test/gitHost.ts`](../src/test/gitHost.ts) is a git host over plain HTTP. It runs `git http-backend` as a CGI program and serves the Git LFS batch API behind basic auth. git and git-lfs reach it as a forward proxy through `http_proxy`, so any host name works without DNS or TLS.
+- [`src/test/gitHost.ts`](../src/test/gitHost.ts) is a git host over plain HTTP. It serves git's smart HTTP protocol and the Git LFS batch API behind basic auth. git and git-lfs reach it as a forward proxy through `http_proxy`, so any host name works without DNS or TLS.
+  - It runs `upload-pack` and `receive-pack` with `--stateless-rpc` itself rather than `git http-backend`, which MinGit, dugite's git on Windows, does not ship. Through `http-backend` every request on Windows answered 500.
 - [`src/test/cloudGit.ts`](../src/test/cloudGit.ts) models elek.io Cloud's two git endpoints. The fake Cloud answers from it, and the git host asks it which token reaches which repository.
 - [`src/test/credentialRecorder.ts`](../src/test/credentialRecorder.ts) stands in for the person's keychain and askpass, and records whether git asked them.
+  - Its global config starts with an empty helper. MinGit's system config sets Git Credential Manager, which would otherwise be asked ahead of the stand-in and refuses a plain HTTP host whose name holds `github`.
 
 Real Projects are pushed and cloned on two host names, LFS objects included. [`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) drives the same helper through dugite's own `git credential fill`, which needs no HTTP at all.
 
 On a Linux whose `libcurl.so.4` dugite's git cannot load, the HTTP suite fails with `PreconditionFailed` naming the library. Point `LOCAL_GIT_DIRECTORY` at a system git and put dugite's `git/libexec/git-core` on `PATH` for its git-lfs, see [`peer-dependencies.md`](./peer-dependencies.md#dugite-323-required).
 
-What no test covers, to check by hand before releasing a change to the credential path:
+CI runs both on Linux, macOS and Windows, where MinGit's `sh` runs the helper's shell snippet. What no test covers, to check by hand before releasing a change to the credential path:
 
-- Windows, where git runs the helper through MinGit's `sh`, and paths holding spaces or non-ASCII characters there.
-- macOS, and an Electron host running the helper with `ELECTRON_RUN_AS_NODE`.
+- A data directory or Node path holding spaces or non-ASCII characters. CI's paths hold neither.
+- An Electron host running the helper with `ELECTRON_RUN_AS_NODE`.
 - LFS object availability for old Release tags on real providers.
 
 ### Deliberately untested

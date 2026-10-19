@@ -173,7 +173,7 @@ git-lfs 3.8.0 ([git-lfs#6018](https://github.com/git-lfs/git-lfs/pull/6018)) ret
 
 [`GitService.cloudGit.test.ts`](../src/service/GitService.cloudGit.test.ts) pushes and clones real Projects over HTTP against a fake git host, see [`testing.md`](./testing.md#git-over-http). [`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) drives the helper with dugite's own `git credential`, which needs no HTTP and runs everywhere.
 
-Neither reaches Windows paths with spaces or Unicode, macOS, or Electron's `ELECTRON_RUN_AS_NODE`, which need checking by hand.
+CI runs both on Linux, macOS and Windows. Neither reaches a path holding spaces or non-ASCII characters, or Electron's `ELECTRON_RUN_AS_NODE`, which need checking by hand.
 
 ## See also
 

@@ -16,8 +16,8 @@ export interface CredentialRecorder {
 }
 
 /**
- * A keychain stand-in, a credential helper in a global config that answers
- * `person` and `keychain-secret`, and an askpass that answers
+ * A keychain stand-in, the only credential helper of a global config, that
+ * answers `person` and `keychain-secret`, and an askpass that answers
  * `askpass-secret`. Both record every request, so a test asserts what
  * reached them rather than what Core believes it configured.
  */
@@ -44,18 +44,17 @@ export async function createCredentialRecorder(): Promise<CredentialRecorder> {
   const emptyConfig = Path.join(dir, 'empty.gitconfig');
   await Fs.writeFile(globalConfig, '');
   await Fs.writeFile(emptyConfig, '');
-  const configured = await gitExec(
-    [
-      'config',
-      '--file',
-      globalConfig,
-      'credential.helper',
-      `!'${process.execPath}' '${helper}'`,
-    ],
-    dir
-  );
-  if (configured.exitCode !== 0) {
-    throw new Error(`git config failed: ${configured.stderr}`);
+  // An empty helper first, as a person setting their own helper writes it,
+  // so the stand-in is the whole list. MinGit's system config otherwise puts
+  // Git Credential Manager ahead of it on Windows
+  for (const value of ['', `!'${process.execPath}' '${helper}'`]) {
+    const configured = await gitExec(
+      ['config', '--file', globalConfig, '--add', 'credential.helper', value],
+      dir
+    );
+    if (configured.exitCode !== 0) {
+      throw new Error(`git config failed: ${configured.stderr}`);
+    }
   }
 
   const askpassScript = Path.join(dir, 'askpass.cjs');
