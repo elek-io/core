@@ -1,5 +1,10 @@
+import { execFileSync } from 'node:child_process';
+import Fs from 'fs-extra';
+import Path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { tmpDirPath } from '../test/util.js';
 import {
+  CREDENTIAL_HELPER_SCRIPT,
   QUIT_ANSWER,
   credentialConfig,
   credentialHelperCommand,
@@ -186,5 +191,31 @@ describe('parseRelayMessage', function () {
 
   it('keeps quit=1 in the one place git reads it from', function () {
     expect(QUIT_ANSWER).toEqual('quit=1\n');
+  });
+});
+
+describe('CREDENTIAL_HELPER_SCRIPT', function () {
+  /** Runs the helper as git would, with no relay to reach */
+  async function runWithoutRelay(action: string): Promise<string> {
+    const dir = tmpDirPath();
+    const script = Path.join(dir, 'helper.cjs');
+    await Fs.outputFile(script, CREDENTIAL_HELPER_SCRIPT);
+    const env = { ...process.env };
+    delete env['ELEK_IO_CREDENTIAL_PORT'];
+    delete env['ELEK_IO_CREDENTIAL_TOKEN'];
+    return execFileSync(process.execPath, [script, 'cloud', action], {
+      input: 'protocol=https\nhost=cell-1.git.example.test\n\n',
+      env,
+      encoding: 'utf8',
+    });
+  }
+
+  it('answers get with exactly quit=1 when it cannot reach the relay', async function () {
+    expect(await runWithoutRelay('get')).toEqual(QUIT_ANSWER);
+  });
+
+  it('answers store and erase with nothing', async function () {
+    expect(await runWithoutRelay('store')).toEqual('');
+    expect(await runWithoutRelay('erase')).toEqual('');
   });
 });

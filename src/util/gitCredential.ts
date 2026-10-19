@@ -196,6 +196,7 @@ export const CREDENTIAL_HELPER_SCRIPT = `'use strict';
 // Written by elek.io Core. Relays one request of git's credential protocol
 // to the Core that started git and prints its answer.
 const net = require('node:net');
+const QUIT = ${JSON.stringify(QUIT_ANSWER)};
 const args = process.argv.slice(2);
 const mode = args[0] || '';
 const action = args[args.length - 1] || '';
@@ -213,17 +214,17 @@ function relay(input) {
     isDone = true;
     if (action === 'get') process.stdout.write(answer);
   };
-  const port = Number(process.env['${RELAY_PORT_ENV}']);
-  const token = process.env['${RELAY_TOKEN_ENV}'];
+  const port = Number(process.env[${JSON.stringify(RELAY_PORT_ENV)}]);
+  const token = process.env[${JSON.stringify(RELAY_TOKEN_ENV)}];
   if (!Number.isInteger(port) || port <= 0 || !token) {
-    finish('${QUIT_ANSWER.replace('\n', '\\n')}');
+    finish(QUIT);
     return;
   }
   const answer = [];
   const socket = net.connect({ host: '127.0.0.1', port });
   socket.on('data', (chunk) => answer.push(chunk));
   socket.on('end', () => finish(Buffer.concat(answer).toString('utf8')));
-  socket.on('error', () => finish('${QUIT_ANSWER.replace('\n', '\\n')}'));
+  socket.on('error', () => finish(QUIT));
   socket.end(token + '\\n' + mode + '\\n' + action + '\\n' + input);
 }
 `;
