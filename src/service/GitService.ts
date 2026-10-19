@@ -34,6 +34,7 @@ import {
   ATOMIC_NOT_FAST_FORWARD,
   buildCredentialEnv,
   classifyAuthError,
+  classifyLoadError,
   gitOutputCause,
   isMutatingGitCommand,
   parsePorcelainStatusLine,
@@ -1367,6 +1368,15 @@ export class GitService {
       this.logService.info(record);
     } else {
       this.logService.debug(record);
+    }
+
+    // A program git could not even start is never the caller's to classify,
+    // so it throws whether or not a non-zero exit is tolerated
+    if (result.gitResult.exitCode !== 0) {
+      const loadError = classifyLoadError(result.gitResult.stderr.toString());
+      if (loadError) {
+        throw loadError;
+      }
     }
 
     if (result.gitResult.exitCode !== 0 && tolerateNonZero !== true) {

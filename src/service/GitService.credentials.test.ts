@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildCredentialEnv, classifyAuthError } from '../util/git.js';
+import {
+  buildCredentialEnv,
+  classifyAuthError,
+  classifyLoadError,
+} from '../util/git.js';
 import { CoreError } from '../util/shared.js';
 
 describe('buildCredentialEnv', function () {
@@ -110,5 +114,42 @@ describe('classifyAuthError', function () {
     expect(error?.type).toEqual('Unauthorized');
     expect(error?.message).toContain('SSH');
     expect(error?.message).not.toContain('Check ELEK_IO_REMOTE_ACCESS_TOKEN');
+  });
+});
+
+describe('classifyLoadError', function () {
+  it('names a library the loader could not find', function () {
+    const error = classifyLoadError(
+      "git-remote-https: error while loading shared libraries: libcurl-gnutls.so.4: cannot open shared object file: No such file or directory\nfatal: remote helper 'https' aborted session"
+    );
+
+    expect(error?.type).toEqual('PreconditionFailed');
+    expect(error?.message).toContain('"libcurl-gnutls.so.4"');
+    expect(error?.message).toContain('LOCAL_GIT_DIRECTORY');
+  });
+
+  it('names a library whose symbol version does not match', function () {
+    const error = classifyLoadError(
+      "/opt/git/libexec/git-core/git-remote-https: /lib/libcurl.so.4: version 'CURL_OPENSSL_4' not found (required by /opt/git/libexec/git-core/git-remote-https)"
+    );
+
+    expect(error?.message).toContain('"libcurl.so.4"');
+  });
+
+  it('matches a localized loader message by the library name', function () {
+    const error = classifyLoadError(
+      'git-remote-https: Fehler beim Laden gemeinsamer Bibliotheken: libcurl-gnutls.so.4: Kann die Shared-Object-Datei nicht öffnen'
+    );
+
+    expect(error?.message).toContain('"libcurl-gnutls.so.4"');
+  });
+
+  it('leaves every other failure alone', function () {
+    expect(
+      classifyLoadError(
+        "fatal: repository 'https://example.com/a.git/' not found"
+      )
+    ).toBeNull();
+    expect(classifyLoadError('fatal: not a git repository')).toBeNull();
   });
 });

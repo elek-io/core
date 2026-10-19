@@ -5,7 +5,7 @@ Core declares five peer dependencies, so the consumer supplies them and Core sha
 | Peer | Range | Required | Used by |
 | --- | --- | --- | --- |
 | `zod` | `^4.3.6` | yes | every entry (schemas) |
-| `dugite` | `^3.0.0` | yes | the Node entry (git) |
+| `dugite` | `^3.2.3` | yes | the Node entry (git) |
 | `astro` | `^6.1.3 \|\| ^7.0.0` | no | the `/astro` entry (content loaders) |
 | `tsdown` | `^0.22.3` | no | the CLI, `generate:* js` only |
 | `typescript` | `^5.0.0 \|\| ^6.0.0 \|\| ^7.0.0` | no | the CLI, through tsdown's `dts` |
@@ -57,19 +57,33 @@ Re-check whenever you bump `zod`, `astro`, `@scalar/*`, `@hono/zod-openapi`, or 
 3. Run `pnpm dedupe` and confirm the guard passes.
 4. Add a changeset. Raising the floor is a breaking change for consumers pinned below it.
 
-## dugite (`^3.0.0`, required)
+## dugite (`^3.2.3`, required)
 
-dugite is the git bindings the Node entry runs every Project operation through (see `src/service/GitService.ts`). It does not brand its types by version, so there is no single-copy problem here. A range is still better than the old exact `3.2.2` pin, because an exact peer forces every consumer onto one release and risks a peer conflict.
+dugite is the git bindings the Node entry runs every Project operation through (see `src/service/GitService.ts`). It does not brand its types by version, so there is no single-copy problem here. A range is still better than an exact pin, because an exact peer forces every consumer onto one release and risks a peer conflict.
 
-The floor is the functional `exec` API (`exec`, `IGitStringResult`, `parseError`, `GitError`), which replaced the old `GitProcess` class in dugite 3.0.0. Nothing transitive pulls dugite, so the floor is purely Core's own usage.
+The floor is not Core's API usage, which dugite 3.0.0 already covers. It is the Linux build of the embedded git:
 
-- Each dugite release ships an embedded git binary, the 3.x line bundles git 2.47.x, so the test suite, which runs real git and Git LFS, is the real check.
+| dugite | `git-remote-http` links | HTTP remotes fail on |
+| --- | --- | --- |
+| 3.0.0 to 3.2.2 | `libcurl-gnutls.so.4` | Fedora, RHEL and its rebuilds, openSUSE, NixOS, and Arch without its `libcurl-gnutls` package |
+| 3.2.3 and later | `libcurl.so.4`, built against OpenSSL | a distribution whose `libcurl.so.4` carries another TLS backend's symbol versions |
+
+dugite-native changed the link in v2.53.0-4 ([desktop/dugite-native#554](https://github.com/desktop/dugite-native/pull/554)), after the git 2.49.0 build dropped its own curl and caused the regression ([#527](https://github.com/desktop/dugite-native/issues/527)). Debian and Ubuntu ship both libraries in a desktop install, so the old floor only failed elsewhere.
+
+| Rejected | Why |
+| --- | --- |
+| Keeping `^3.0.0` and documenting the requirement | A consumer resolving an older dugite, Desktop's Linux builds included, still fails on those distributions with no change on its side |
+| Falling back to the system git | A stock desktop ships no git-lfs, Debian and Arch keep the exec path at `/usr/lib/git-core`, and `/etc/gitconfig` is skipped when `LOCAL_GIT_DIRECTORY` is `/usr` |
+
+A git that cannot load a shared library throws `PreconditionFailed` naming the library, so an older build or a mismatched `libcurl.so.4` says what is missing rather than `Internal`.
+
+- Each dugite release ships an embedded git binary. 3.2.3 bundles git 2.53.0 and git-lfs 3.7.1, so the test suite, which runs real git and Git LFS, is the real check.
 - `devDependencies` pins the latest 3.x for development, like the other peers.
 
 To re-verify the floor, pin the dev version to it and run the suite:
 
 ```bash
-pnpm add -D dugite@3.0.0   # the floor; restore to the latest 3.x afterwards
+pnpm add -D dugite@3.2.3   # the floor, restore to the latest 3.x afterwards
 pnpm why dugite            # expect one version
 pnpm check-types && pnpm build && pnpm test
 ```

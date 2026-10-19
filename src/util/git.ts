@@ -83,6 +83,32 @@ export function classifyAuthError(
   );
 }
 
+/**
+ * A library the dynamic loader names when it fails, as in
+ * `git-remote-https: error while loading shared libraries: libcurl-gnutls.so.4: cannot open shared object file`
+ * or `/lib/libcurl.so.4: version 'CURL_OPENSSL_4' not found`. Matched on
+ * the library name rather than the loader's words, which glibc localizes.
+ */
+const SHARED_LIBRARY_FAILURE = /[\s/](lib[^\s:/]+\.so(?:\.\d+)*): /;
+
+/**
+ * Classifies a git that could not start a program because the dynamic
+ * loader failed, which on Linux is what an embedded git built against
+ * another distribution's libraries does. Returns null for everything else.
+ *
+ * @see ../../contributing/peer-dependencies.md
+ */
+export function classifyLoadError(stderr: string): CoreError | null {
+  const library = SHARED_LIBRARY_FAILURE.exec(stderr)?.[1];
+  if (library === undefined) {
+    return null;
+  }
+  return CoreError.preconditionFailed(
+    `Git could not load the shared library "${library}". Install it, use dugite 3.2.3 or later, whose git links libcurl.so.4, or point LOCAL_GIT_DIRECTORY at another git installation.`,
+    gitOutputCause(stderr, '')
+  );
+}
+
 const REDACTED = '[redacted]';
 
 /**
