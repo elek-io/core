@@ -324,7 +324,10 @@ describe('the session a report carries', function () {
       cloud: { url: 'http://127.0.0.1:1', token: 'option-session-token' },
     });
 
-    expect(core.options.cloud).toEqual({ url: 'http://127.0.0.1:1' });
+    expect(core.options.cloud).toEqual({
+      url: 'http://127.0.0.1:1',
+      gitUrl: null,
+    });
     expect(JSON.stringify(core.options)).not.toContain('option-session-token');
   });
 

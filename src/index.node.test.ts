@@ -47,6 +47,7 @@ describe('Node.js', function () {
       dataDir: defaultDataDir,
       cloud: {
         url: 'https://api.elek.io',
+        gitUrl: 'https://*.git.elek.io',
       },
       isReadOnly: false,
     });
@@ -61,6 +62,7 @@ describe('Node.js', function () {
       dataDir: defaultDataDir,
       cloud: {
         url: 'https://api.elek.io',
+        gitUrl: 'https://*.git.elek.io',
       },
       isReadOnly: false,
     });
@@ -75,6 +77,7 @@ describe('Node.js', function () {
       dataDir: defaultDataDir,
       cloud: {
         url: 'https://api.elek.io',
+        gitUrl: 'https://*.git.elek.io',
       },
       isReadOnly: false,
     });

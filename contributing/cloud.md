@@ -10,7 +10,7 @@ Every call goes through [`CloudClient`](../src/util/cloud.ts). It owns the base 
 | --- | --- |
 | Each service calling `fetch` itself | The report did, and the token, the 401 rule and the mapping would be copied into every new call |
 | An HTTP client library | The global `fetch` covers one JSON request with a timeout, and a library brings retries Core has to turn off |
-| Retrying a call | A retry after a timeout can duplicate a report or an account, or spend a rate limit on a password guess, and Core cannot tell from the outside whether the first one landed |
+| Retrying a call | A retry after a timeout can duplicate a report or an account, or spend a rate limit on a password guess, and Core cannot tell from the outside whether the first one landed. The one exception is below, a `409` that says nothing landed |
 
 ## Invariants
 
@@ -37,10 +37,26 @@ Every call goes through [`CloudClient`](../src/util/cloud.ts). It owns the base 
 - **The `verification` outcome carries no account.** For an address that already has one, elek.io Cloud answers a made up `user`, so handing it back would hand a caller an id that belongs to nobody.
 - **The 422 for an address an account holds is mapped and nothing more.** It goes away once elek.io Cloud requires a verified address, so nothing is built on it.
 
+## The git calls
+
+[`CloudGitAccess`](../src/util/cloudGit.ts) asks for git tokens through the same seam, `POST /management/v1/projects/{id}/git-token` and `PUT /management/v1/projects/{id}/git-access`, each with a `{}` body so an API that wants JSON gets it. Why it asks when it does is in [`git-credentials.md`](./git-credentials.md#core-answers-by-host-and-path).
+
+| Answer | Type | Why |
+| --- | --- | --- |
+| `404 project_not_found` | `NotFound` | Nothing was granted, and the Project is not one this session can see |
+| `409 git_access_changed` | asked once more, then `Conflict` | elek.io Cloud says access changed while it granted it and nothing landed, so asking again cannot duplicate anything |
+| `429` | `RateLimited` | Core asks nothing more for git until `Retry-After` passes, read by `CloudClient.notBefore` and capped at an hour so a long running host is never locked out |
+| `502`, `504` | `PreconditionFailed` | elek.io Cloud could not reach the git host, an outage like an unreachable Cloud, so `provision()` keeps its offline fallback |
+
+Every other refusal takes the shared mapping. The owner chose the backoff over asking on every git command, because Desktop fetches every three minutes for every Project and would otherwise spend the limit again each round.
+
+`CloudClient.tokenGeneration` changes with the token. Whatever Core learned under one session, git tokens and grants and a backoff alike, is dropped when the generation moves, because the old session's tokens went with it.
+
 ## See also
 
 - [`../docs/cloud-account.md`](../docs/cloud-account.md) - the calls, the token and the User as a consumer sees them
 - [`../docs/reporting.md`](../docs/reporting.md) - the report, a call through the seam
+- [`git-credentials.md`](./git-credentials.md) - the helper the git calls answer, and every decision behind it
 - [`naming.md`](./naming.md#the-account) - why the account calls carry the names they do
 - [`logging.md`](./logging.md) - why neither a body nor a credential may reach a log file
 - [`error-handling-internals.md`](./error-handling-internals.md) - the boundary that logs a `CoreError` message

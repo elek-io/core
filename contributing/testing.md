@@ -122,24 +122,32 @@ Dev-mode content watching cannot be integration-tested for the reason above, and
 
 Re-check these when touching `watch.ts`, the loaders' sync functions or the loaders' Core options.
 
-### Limitation: git credentials cannot be integration-tested
+### Git over HTTP
 
-The suite's remotes are bare repositories on the local filesystem, and git skips its whole credential machinery for local paths. The `ELEK_IO_REMOTE_ACCESS_TOKEN` askpass flow (`buildCredentialEnv` and the helper scripts in `GitService`) is therefore covered by unit tests on the env it builds, plus a negative integration test asserting the token never lands in `.git/config` or the remote URL.
+The suite's usual remotes are bare repositories on the local filesystem, and git skips its whole credential machinery for local paths. [`GitService.cloudGit.test.ts`](../src/service/GitService.cloudGit.test.ts) closes that gap with two fixtures and no new dependency:
 
-What no test covers:
+- [`src/test/gitHost.ts`](../src/test/gitHost.ts) is a git host over plain HTTP. It serves git's smart HTTP protocol and the Git LFS batch API behind basic auth. git and git-lfs reach it as a forward proxy through `http_proxy`, so any host name works without DNS or TLS.
+  - It runs `upload-pack` and `receive-pack` with `--stateless-rpc` itself rather than `git http-backend`, which MinGit, dugite's git on Windows, does not ship. Through `http-backend` every request on Windows answered 500.
+- [`src/test/cloudGit.ts`](../src/test/cloudGit.ts) models elek.io Cloud's two git endpoints. The fake Cloud answers from it, and the git host asks it which token reaches which repository.
+- [`src/test/credentialRecorder.ts`](../src/test/credentialRecorder.ts) stands in for the person's keychain and askpass, and records whether git asked them.
+  - Its global config starts with an empty helper. MinGit's system config sets Git Credential Manager, which would otherwise be asked ahead of the stand-in and refuses a plain HTTP host whose name holds `github`.
 
-- git actually invoking the askpass helper against an HTTP remote, and the Windows `.bat` trampoline in particular.
+Real Projects are pushed and cloned on two host names, LFS objects included. [`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) drives the same helper through dugite's own `git credential fill`, which needs no HTTP at all.
+
+On a Linux whose `libcurl.so.4` dugite's git cannot load, the HTTP suite fails with `PreconditionFailed` naming the library. Point `LOCAL_GIT_DIRECTORY` at a system git and put dugite's `git/libexec/git-core` on `PATH` for its git-lfs, see [`peer-dependencies.md`](./peer-dependencies.md#dugite-323-required).
+
+CI runs both on Linux, macOS and Windows, where MinGit's `sh` runs the helper's shell snippet. What no test covers, to check by hand before releasing a change to the credential path:
+
+- A data directory or Node path holding spaces or non-ASCII characters. CI's paths hold neither.
+- An Electron host running the helper with `ELECTRON_RUN_AS_NODE`.
 - LFS object availability for old Release tags on real providers.
-
-Verify those manually against a real private HTTPS remote when touching the credential path, and before releasing changes to it. A local HTTP git server fixture would close this gap if it ever becomes worth the setup. The design rationale behind the askpass approach is in [`git-credentials.md`](./git-credentials.md).
 
 ### Deliberately untested
 
-Three more paths are left uncovered on purpose. Each is listed so the next person reading a coverage report does not take it for an oversight:
+Two more paths are left uncovered on purpose. Each is listed so the next person reading a coverage report does not take it for an oversight:
 
 - **`--watch` on `elek export`, `generate:types` and `generate:client`.** Each is the same six-line wrapper that logs and hands `watchProjects()` to the same regenerate call. A test would start a watcher that never settles and assert the wrapper rather than the watching.
   - The debouncing and overlap handling that is worth proving lives in `watchContent` and is covered by [`src/astro/watch.test.ts`](../src/astro/watch.test.ts).
-- **Auth failures on `push` and the generic git runner.** Both classify the stderr of a remote that rejected a credential, which the local bare remotes cannot produce, for the reason in the credentials limitation above.
 - **A remote without a `draft` branch.** Provisioning the `draft` channel refuses one, but no Core operation produces such a remote. The fixture would have to be built by hand purely to read the error message back.
 
 ### Worker count: do not set it
@@ -160,5 +168,5 @@ The CI gains are in the runner performance table above. The timeout held up on t
 
 - [`toolchain.md`](./toolchain.md) - why vitest, and what the suite runs next to
 - [`documentation.md`](./documentation.md) - the documentation rules this suite enforces
-- [`git-credentials.md`](./git-credentials.md) - the one path the suite cannot reach
+- [`git-credentials.md`](./git-credentials.md) - the credential helper the HTTP suite drives
 - [`logging.md`](./logging.md) - the sentinel tests that guard what a log file may carry

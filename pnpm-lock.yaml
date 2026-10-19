@@ -88,8 +88,8 @@ importers:
         specifier: 15.0.0
         version: 15.0.0
       dugite:
-        specifier: 3.2.2
-        version: 3.2.2
+        specifier: 3.2.3
+        version: 3.2.3
       jiti:
         specifier: 2.7.0
         version: 2.7.0
@@ -2051,8 +2051,8 @@ packages:
       oxc-resolver:
         optional: true
 
-  dugite@3.2.2:
-    resolution: {integrity: sha512-pGTVaxea0WqauGXF5A3GmpmPOim6oTnfYM6dS6s8nHyJxf4pRTjwtFHkqLkT5de87uUPhTI+LtlmcJQ2WkqeGA==}
+  dugite@3.2.3:
+    resolution: {integrity: sha512-kPBJ0uevCPY4pcGl0R0+dgC/prPBvnHN9109ZUUWDttkWHz4HqFGwyFri9Btmd2YucAXIJTYMGECh/Q5VAfpfA==}
     engines: {node: '>= 20'}
 
   empathic@2.0.1:
@@ -5170,7 +5170,7 @@ snapshots:
 
   dts-resolver@3.0.0: {}
 
-  dugite@3.2.2:
+  dugite@3.2.3:
     dependencies:
       progress: 2.0.3
       tar-stream: 3.2.0

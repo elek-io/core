@@ -75,7 +75,7 @@ That carries the OS account name. Every `Cache miss reading file "..."` line car
 
 - **Commit messages** are ids only. `GitService.commit` builds `Create entry <uuid>` plus trailers, no names and no content.
 - **Zod error messages** do not carry input values. `AbstractService.validated` logs `parsed.error.message`, and zod 4 serializes issues without the `input`. Verified: a `too_small` on a 47 character string produced only `origin`, `code`, `minimum`, `inclusive`, `path` and `message`.
-- **The remote access token** never reaches a command line. It travels through the askpass helper by environment variable, as `git-credentials.md` documents.
+- **The remote access token** never reaches a command line. It travels through Core's credential helper, as `git-credentials.md` documents.
 
 ### What the logs actually contain
 

@@ -200,7 +200,7 @@ See [Building offline](./provisioning.md#building-offline).
 - The git layer backstops callers that bypass the services. A direct `git.commit`, `git.tags.create` or `git.push` against a provisioned copy throws the same error.
 - The escape hatch is `projects.delete()`, which removes a provisioned copy without any unpushed-changes check, because it is disposable by definition. After that the Project can be cloned as a working copy.
 
-Private remotes authenticate through the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable, see [`usage.md`](./usage.md#environment-variables). The token is passed to git per invocation and never written into a URL or the repository config.
+Private remotes authenticate through the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable, see [`usage.md`](./usage.md#environment-variables). The token is passed to git per invocation and never written into a URL or the repository config. A remote on one of elek.io Cloud's git hosts authenticates with the elek.io Cloud session instead, see [`cloud-git.md`](./cloud-git.md).
 
 It applies to HTTP(S) remotes only. SSH remotes authenticate through the ambient SSH setup instead, for example keys loaded into ssh-agent, and an SSH failure raises an `Unauthorized` error naming the SSH setup rather than the token.
 
@@ -265,8 +265,9 @@ Tags made before the Project had a remote reach it with [the first push](#the-fi
 
 | Error type | When |
 | --- | --- |
-| `Unauthorized` (401) | A commit is attempted with no User set, or the remote rejects the credentials on a push. Cloning needs no User. |
-| `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree, a rebase conflict or a remote holding anything but the Project, or a push fails because the remote does not support Git LFS or, for a Release or a first push, atomic pushes. |
+| `Unauthorized` (401) | A commit is attempted with no User set, the remote rejects the credentials, or a remote on elek.io Cloud's git hosts is reached without a session. Cloning needs no User. |
+| `NotFound`, `Conflict`, `RateLimited` | Asking elek.io Cloud for a git token failed, see [`cloud-git.md`](./cloud-git.md#errors). |
+| `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree, a rebase conflict or a remote holding anything but the Project, or a push fails because the remote does not support Git LFS or, for a Release or a first push, atomic pushes. Also when git cannot load a shared library it needs, see [`usage.md`](./usage.md#installing-and-instantiating). |
 | `Conflict` (409) | `clone()` targets an already-present Project, a guarded `delete()` has unpushed commits, or `synchronize()` would integrate dangling references. |
 | `BadRequest` (400) | A `core.git.push()` combines the `all` and `refs` options, which are mutually exclusive. |
 | `Internal` (500) | The underlying git command exits non-zero (no upstream, merge conflict, network, ...). |

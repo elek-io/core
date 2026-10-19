@@ -25,13 +25,16 @@ import {
 } from './service/index.js';
 import { LogService } from './service/LogService.js';
 import { CloudClient } from './util/cloud.js';
+import { GitCredentialRelay } from './util/gitCredentialRelay.js';
 import {
   createPathTo,
+  resolveCloudGitUrl,
   resolveCloudToken,
   resolveCloudUrl,
   resolveDataDir,
   resolveLogLevel,
   resolveReadOnly,
+  resolveRemoteAccessToken,
   type PathTo,
 } from './util/node.js';
 import { CoreError } from './util/shared.js';
@@ -48,8 +51,8 @@ export * from './util/shared.js';
  * at import, creates `<dataDir>/projects` and empties `<dataDir>/tmp` on
  * disk, and registers process-level exception and rejection handlers unless
  * `log.hasProcessErrorHandlers` is false. Throws `BadRequest` on invalid
- * options and on an unusable `ELEK_IO_LOG_LEVEL`, `ELEK_IO_CLOUD_URL` or
- * `ELEK_IO_CLOUD_TOKEN`.
+ * options and on an unusable `ELEK_IO_LOG_LEVEL`, `ELEK_IO_CLOUD_URL`,
+ * `ELEK_IO_CLOUD_GIT_URL` or `ELEK_IO_CLOUD_TOKEN`.
  *
  * @see ../docs/usage.md
  */
@@ -71,6 +74,7 @@ export default class ElekIoCore {
   private readonly referenceService: ReferenceService;
   private readonly releaseService: ReleaseService;
   private readonly cloudClient: CloudClient;
+  private readonly gitCredentialRelay: GitCredentialRelay;
   private readonly accountService: AccountService;
   private readonly reportService: ReportService;
   private readonly cloudService: CloudService;
@@ -83,6 +87,7 @@ export default class ElekIoCore {
       throw CoreError.badRequest(parsedProps.error.message, parsedProps.error);
     }
 
+    const cloudUrl = resolveCloudUrl(parsedProps.data?.cloud?.url);
     this.options = {
       log: {
         level: resolveLogLevel(parsedProps.data?.log?.level),
@@ -96,13 +101,17 @@ export default class ElekIoCore {
       },
       cache: parsedProps.data?.cache ?? true,
       dataDir: resolveDataDir(parsedProps.data?.dataDir),
-      cloud: { url: resolveCloudUrl(parsedProps.data?.cloud?.url) },
+      cloud: {
+        url: cloudUrl,
+        gitUrl: resolveCloudGitUrl(parsedProps.data?.cloud?.gitUrl, cloudUrl),
+      },
       isReadOnly: resolveReadOnly(parsedProps.data?.isReadOnly),
     };
     // The token is a credential Core may forget while it runs, so it stays
     // out of the options, which are configuration a host may log. Resolved
     // before the logger, which registers process handlers a throw would leak
     const cloudToken = resolveCloudToken(parsedProps.data?.cloud?.token);
+    const remoteToken = resolveRemoteAccessToken();
     this.pathTo = createPathTo(this.options.dataDir);
     this.utilities = { pathTo: this.pathTo };
 
@@ -113,6 +122,13 @@ export default class ElekIoCore {
       cloudToken,
       this.logService
     );
+    this.gitCredentialRelay = new GitCredentialRelay({
+      cloudGitUrl: this.options.cloud.gitUrl,
+      remoteToken,
+      cloudClient: this.cloudClient,
+      logService: this.logService,
+      pathTo: this.pathTo,
+    });
     this.cacheService = new CacheService(this.options.cache);
     this.jsonFileService = new JsonFileService(
       this.options,
@@ -130,7 +146,8 @@ export default class ElekIoCore {
       this.pathTo,
       this.logService,
       this.userService,
-      this.cacheService
+      this.cacheService,
+      this.gitCredentialRelay
     );
     this.referenceService = new ReferenceService(
       this.coreVersion,
@@ -250,6 +267,13 @@ export default class ElekIoCore {
         'elek.options.is_read_only': this.options.isReadOnly,
       },
     });
+    if (this.options.cloud.gitUrl === null) {
+      this.logService.warn({
+        source: 'core',
+        message:
+          'Installs no credential helper for elek.io Cloud\'s git hosts, because the host of cloud.url carries no "api." label to derive them from. Set cloud.gitUrl or ELEK_IO_CLOUD_GIT_URL',
+      });
+    }
 
     Fs.mkdirpSync(this.pathTo.projects);
     Fs.mkdirpSync(this.pathTo.tmp);
@@ -388,9 +412,9 @@ export default class ElekIoCore {
   }
 
   /**
-   * Stops the local API, then closes the logger, removing the process-level
-   * exception and rejection handlers. The port is released once this
-   * resolves.
+   * Stops the local API and the loopback listener git's credential helper
+   * reaches, then closes the logger, removing the process-level exception
+   * and rejection handlers. Both ports are released once this resolves.
    *
    * Safe to call twice: every later call awaits the first one's teardown,
    * and a record logged afterwards is dropped rather than thrown at the
@@ -398,6 +422,7 @@ export default class ElekIoCore {
    */
   public async dispose(): Promise<void> {
     await this.localApi.stop();
+    await this.gitCredentialRelay.close();
     // Logged before closing so the final line is flushed
     this.logService.info({ source: 'core', message: 'Disposing elek.io Core' });
     await this.logService.close();

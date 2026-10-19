@@ -3,39 +3,6 @@ import type { GitFileStatus } from '../schema/index.js';
 import { CoreError } from './shared.js';
 
 /**
- * Builds the environment for git commands.
- *
- * Terminal prompts are always disabled, so a missing or wrong token
- * fails a command instead of hanging it. With a token, GIT_ASKPASS
- * points at the askpass helper and the token travels by environment
- * variable only, never as an argument, a URL or repository config.
- *
- * @see ../../contributing/git-credentials.md for the design rationale and invariants
- */
-export function buildCredentialEnv(
-  token: string | null,
-  tokenUser: string,
-  askpassPath: string | null
-): Record<string, string> {
-  const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' };
-  if (token === null || askpassPath === null) {
-    return env;
-  }
-  return {
-    ...env,
-    GIT_ASKPASS: askpassPath,
-    ELEK_IO_ASKPASS_TOKEN: token,
-    ELEK_IO_ASKPASS_TOKEN_USER: tokenUser,
-    // Configured credential helpers would take precedence over the
-    // askpass fallback. An empty helper entry resets the list, so the
-    // token is authoritative while it is set.
-    GIT_CONFIG_COUNT: '1',
-    GIT_CONFIG_KEY_0: 'credential.helper',
-    GIT_CONFIG_VALUE_0: '',
-  };
-}
-
-/**
  * Classifies an authentication failure from git's stderr, so a bad or
  * missing credential surfaces as a typed `Unauthorized` naming the fix
  * instead of raw git output. Returns null for everything else.
@@ -69,7 +36,11 @@ export function classifyAuthError(
     // Prompts are disabled, so git fails to read credentials it would
     // otherwise ask for. dugite does not classify this case.
     /could not read (Username|Password) for/i.test(stderr) ||
-    /terminal prompts disabled/i.test(stderr);
+    /terminal prompts disabled/i.test(stderr) ||
+    // A helper answered quit=1 without the relay recording why, git's
+    // own words and git-lfs's
+    /told us to quit/i.test(stderr) ||
+    /Git credentials for .+ not found/i.test(stderr);
   if (!isAuthError) {
     return null;
   }
@@ -80,6 +51,32 @@ export function classifyAuthError(
   }
   return CoreError.unauthorized(
     'The remote requires authentication. Set the ELEK_IO_REMOTE_ACCESS_TOKEN environment variable.'
+  );
+}
+
+/**
+ * A library the dynamic loader names when it fails, as in
+ * `git-remote-https: error while loading shared libraries: libcurl-gnutls.so.4: cannot open shared object file`
+ * or `/lib/libcurl.so.4: version 'CURL_OPENSSL_4' not found`. Matched on
+ * the library name rather than the loader's words, which glibc localizes.
+ */
+const SHARED_LIBRARY_FAILURE = /[\s/](lib[^\s:/]+\.so(?:\.\d+)*): /;
+
+/**
+ * Classifies a git that could not start a program because the dynamic
+ * loader failed, which on Linux is what an embedded git built against
+ * another distribution's libraries does. Returns null for everything else.
+ *
+ * @see ../../contributing/peer-dependencies.md
+ */
+export function classifyLoadError(stderr: string): CoreError | null {
+  const library = SHARED_LIBRARY_FAILURE.exec(stderr)?.[1];
+  if (library === undefined) {
+    return null;
+  }
+  return CoreError.preconditionFailed(
+    `Git could not load the shared library "${library}". Install it, use dugite 3.2.3 or later, whose git links libcurl.so.4, or point LOCAL_GIT_DIRECTORY at another git installation.`,
+    gitOutputCause(stderr, '')
   );
 }
 

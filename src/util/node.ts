@@ -118,6 +118,78 @@ export function resolveCloudUrl(url?: string): string {
 }
 
 /**
+ * Resolves the URL pattern of elek.io Cloud's git hosts, or null when Core
+ * installs no credential helper for them
+ *
+ * Precedence: the given pattern wins over the ELEK_IO_CLOUD_GIT_URL
+ * environment variable, which wins over the pattern derived from the
+ * resolved Cloud URL. An empty or whitespace-only value counts as unset. A
+ * trailing slash is dropped, and git takes the rest as written.
+ */
+export function resolveCloudGitUrl(
+  gitUrl: string | undefined,
+  cloudUrl: string
+): string | null {
+  const candidate =
+    gitUrl?.trim() || process.env['ELEK_IO_CLOUD_GIT_URL']?.trim();
+  if (!candidate) {
+    return cloudGitUrlOf(cloudUrl);
+  }
+  // The same rule the option is validated by, rather than a second one
+  const parsed =
+    elekIoCoreOptionsSchema.shape.cloud.shape.gitUrl.safeParse(candidate);
+  if (!parsed.success || parsed.data === null) {
+    throw CoreError.badRequest(
+      `ELEK_IO_CLOUD_GIT_URL must be an http or https URL, got "${candidate}"`
+    );
+  }
+  return parsed.data.replace(/\/+$/, '');
+}
+
+/**
+ * The URL pattern of elek.io Cloud's git hosts that the API's own URL
+ * implies, or null when its host carries no `api.` label to replace.
+ *
+ * Only the zone is read: `https://api.<zone>` gives `https://*.git.<zone>`.
+ * The API's scheme, port and path say nothing about the git hosts, so the
+ * pattern is always https on the default port.
+ *
+ * @see ../../contributing/git-credentials.md
+ */
+export function cloudGitUrlOf(cloudUrl: string): string | null {
+  const host = new URL(cloudUrl).hostname;
+  const zone = host.startsWith('api.') ? host.slice('api.'.length) : '';
+  if (zone === '' || zone.startsWith('.')) {
+    return null;
+  }
+  return `https://*.git.${zone}`;
+}
+
+/**
+ * Resolves the token git presents to every host but elek.io Cloud's, and
+ * the username beside it, or null without a token
+ *
+ * Read from ELEK_IO_REMOTE_ACCESS_TOKEN and ELEK_IO_REMOTE_ACCESS_TOKEN_USER,
+ * whose default is `x-access-token`. An empty or whitespace-only value
+ * counts as unset.
+ */
+export function resolveRemoteAccessToken(): {
+  token: string;
+  user: string;
+} | null {
+  const token = process.env['ELEK_IO_REMOTE_ACCESS_TOKEN']?.trim();
+  if (!token) {
+    return null;
+  }
+  return {
+    token,
+    user:
+      process.env['ELEK_IO_REMOTE_ACCESS_TOKEN_USER']?.trim() ||
+      'x-access-token',
+  };
+}
+
+/**
  * Resolves the bearer token Core starts with, or null for none
  *
  * Precedence: the given token wins over the ELEK_IO_CLOUD_TOKEN

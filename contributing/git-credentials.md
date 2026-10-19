@@ -1,73 +1,184 @@
 # Git credentials
 
-Core authenticates git operations against private HTTPS remotes through an askpass helper, driven by the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable. The observable behavior is documented in [`docs/usage.md`](../docs/usage.md#environment-variables).
+Core answers git's credential requests through its own helper, a relay to Core over loopback TCP. It serves elek.io Cloud's git hosts with the session's git tokens, and every other host with `ELEK_IO_REMOTE_ACCESS_TOKEN` while that is set. The consumer side is in [`../docs/cloud-git.md`](../docs/cloud-git.md) and [`../docs/usage.md`](../docs/usage.md#environment-variables).
 
-This doc records why the askpass approach was chosen over its alternatives, and which invariants to keep when touching the credential path in `GitService`.
+Read this before changing how `GitService` builds git's environment, [`GitCredentialRelay`](../src/util/gitCredentialRelay.ts), [`CloudGitAccess`](../src/util/cloudGit.ts) or the helper script in [`gitCredential.ts`](../src/util/gitCredential.ts).
 
 ## How it works
 
-The token flows from the environment into a git prompt answer in five steps:
+```mermaid
+sequenceDiagram
+    participant Service as GitService.git()
+    participant Relay as GitCredentialRelay
+    participant Git as git and git-lfs
+    participant Helper as helper script
+    participant Access as CloudGitAccess
+    Service->>Relay: begin(), inside the git queue
+    Relay-->>Service: env with config, port and a relay token
+    Service->>Git: run the command
+    Git->>Helper: get, erase or store
+    Helper->>Relay: relay token, mode, action, request
+    Relay->>Access: credentialFor(host, project)
+    Access-->>Relay: username and token, or a CoreError
+    Relay-->>Helper: credential or quit=1
+    Helper-->>Git: printed answer
+    Service->>Relay: finish(), then rerun once or throw
+```
 
-1. **Construction.** `GitService` reads `ELEK_IO_REMOTE_ACCESS_TOKEN` and `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` once from the environment (default token user `x-access-token`). Nothing is read at import time.
-2. **Per invocation.** Every git command funnels through the private `git()` method and its queue. Inside the queue `credentialEnv()` builds the environment for this one invocation. Without a token that is only `GIT_TERMINAL_PROMPT=0`.
-3. **Helper scripts.** With a token, `writeAskpassScript()` writes `askpass.cjs` plus a platform trampoline into the tmp directory, `askpass.sh` on POSIX and `askpass.bat` on Windows, both invoking `process.execPath`. They are rewritten on every call, which is cheap, serialized by the queue and self-healing if the tmp directory is emptied.
-4. **Environment.** `buildCredentialEnv()` returns `GIT_ASKPASS` pointing at the trampoline, the token and token user in `ELEK_IO_ASKPASS_TOKEN` and `ELEK_IO_ASKPASS_TOKEN_USER`, and the `GIT_CONFIG_*` entry that resets `credential.helper`. The result is merged into the dugite exec options, caller-provided env wins.
-5. **Prompt time.** When git needs credentials, it runs the trampoline with the prompt text as argument. The Node script answers a prompt starting with `Username` with the token user and every other prompt with the token, read from its environment and written to stdout.
+Every invocation that runs a git command gets `GIT_TERMINAL_PROMPT=0`, an empty `GIT_ASKPASS` and these entries in `GIT_CONFIG_PARAMETERS`, in this order:
 
-Because git-lfs commands go through the same `git()` method, LFS fetches, pushes and smudges authenticate identically. On a non-zero exit, stderr passes through `classifyAuthError()`, which maps authentication failures to a `CoreError` of type `Unauthorized` naming the environment variable to set or check.
+| Entry | Present |
+| --- | --- |
+| `credential.helper` empty, then Core's helper in `token` mode | while `ELEK_IO_REMOTE_ACCESS_TOKEN` is set |
+| `credential.<pattern>.helper` empty, then Core's helper in `cloud` mode | while a pattern resolves, with or without a session |
+| `credential.<pattern>.useHttpPath=true` | the same, so the path names the Project |
 
-## Why askpass
+The scoped reset comes last, so a Cloud host never sees the remote token while Core holds a session. `--version` and `--exec-path` get the first two variables only. They run no command and so never ask, and the constructor fires them unawaited, so installing the helper for them raced a test removing the data directory.
 
-Git has no credentials API. Its own documentation ([gitcredentials](https://git-scm.com/docs/gitcredentials)) defines exactly two integration points for supplying credentials programmatically, credential helpers and the askpass interface (`GIT_ASKPASS`).
+## The decisions
 
-Both mean the same thing, git runs a program you point it at. Writing a small helper and setting `GIT_ASKPASS` is therefore the documented standard, not a workaround.
+The owner decided the design below. Each part names what it replaced.
 
-It is also the established pattern in Core's ecosystem:
+### A helper scoped to Cloud's git hosts
 
-- VS Code's built-in git extension sets `GIT_ASKPASS` to a bundled shell script ([`askpass.sh`](https://github.com/microsoft/vscode/blob/main/extensions/git/src/askpass.sh)) that execs a Node script ([`askpass-main.ts`](https://github.com/microsoft/vscode/blob/main/extensions/git/src/askpass-main.ts)) to answer the prompts.
-- GitHub Desktop routes prompts through its vendored [`desktop-trampoline`](https://github.com/desktop/desktop/tree/development/vendor/desktop-trampoline) executable, as a credential helper for HTTPS and as askpass for SSH (the [askpass handler](https://github.com/desktop/desktop/blob/development/app/src/lib/trampoline/trampoline-askpass-handler.ts)).
-- dugite itself ships no credential support and only passes `env` through, expecting exactly this pattern.
+`GIT_CONFIG_PARAMETERS` rather than `-c`, so git-lfs inherits it. The person's keychain is never asked about a Cloud host, so it never gets a Cloud token to `store`, and a GitHub remote keeps the person's own helpers. gh (`git/client.go`), glab and Chromium's `git-credential-luci` scope the same way, but for one exact host. Core needs a wildcard because elek.io Cloud adds git hosts over time.
 
-Desktop moved its HTTPS flow from askpass to the credential helper protocol because askpass cannot express "no credentials available". An empty askpass answer makes git authenticate with literal empty strings, while a silent credential helper makes git fail cleanly.
+| Rejected | Why |
+| --- | --- |
+| Askpass answering by host | It hears no failure, and every token would sit in git's environment |
+| Asking Cloud after a git failure | An ungranted Project fails with `repository not found`, so the ask never happens |
+| Desktop asking per Project | It knows no Project's organization, and repeats itself after every start |
+| Resetting the helpers of every host, as GitHub Desktop and JetBrains do | It takes the keychain away from a GitHub remote |
+| Resolving a credential into git's environment before each command | Core would need every command's remote, git-lfs's included, would hear no `erase`, and the token would reach every process under git. A hook is no argument either way, it can run `git credential fill` through the relay |
 
-That ambiguity matters for an interactive app that must tell a cancelled prompt apart from a wrong password. Core never hits it, the askpass helper is only installed while a token exists, so askpass stays the simpler fit.
+### The pattern comes from cloud.url
 
-Desktop's wiring ([`trampoline-environment.ts`](https://github.com/desktop/desktop/blob/development/app/src/lib/trampoline/trampoline-environment.ts)) also confirms two Core decisions independently:
+`https://api.<zone>` gives `https://*.git.<zone>`, through [`cloudGitUrlOf`](../src/util/node.ts). Only the zone is read, so the pattern is always https on the default port.
 
-- It injects git config by environment variable instead of `-c` arguments, so that git-lfs filter processes inherit it.
-- It resets the credential helper list with an empty entry before adding its own.
+- `cloud.gitUrl` and `ELEK_IO_CLOUD_GIT_URL` override it with a pattern git takes as written.
+- With neither and no `api.` label, Core installs no helper and warns.
+- [`naming.md`](./naming.md) argues for no other name than `gitUrl`. The resolved option is the pattern in use or `null`, so a host can show what Core uses.
 
-The mechanism covers HTTP(S) remotes. SSH remotes are supported too but authenticate through the ambient SSH setup outside of Core, like keys loaded into ssh-agent. `classifyAuthError` tells the two transports apart (including dugite's `SSHPermissionDenied` for the common `Permission denied (publickey)` case) and names the SSH setup instead of the token for SSH failures.
+| Rejected | Why |
+| --- | --- |
+| Deriving with no override | A local elek.io Cloud would get no helper |
+| elek.io Cloud answering the pattern | A request before each process's first git command, which fails offline |
+| Collecting hosts from the remotes Cloud answers | After a restart Core knows none until a Project list arrives, so the first background sync fails |
 
-That SSH branch is deliberately narrow. dugite maps `SSHPermissionDenied` from git's generic `fatal: Could not read from remote repository.`, which git also prints for an unreachable host and for a repository that does not exist, so the classification also requires a permission signal in the output.
+### The helper is a relay
 
-Without that narrowing every offline SSH remote would surface as `Unauthorized`, which is both misleading and, since `provision()` treats `Unauthorized` as unrecoverable, would cost SSH consumers the offline fallback.
+The helper is a CommonJS script git runs as `!'<execPath>' '<script>' <mode>`, single quoted so a path with a space survives. It forwards git's request to Core and prints the answer:
 
-## Alternatives considered
+- The relay token it carries is 32 random bytes, valid for one invocation and the git-lfs processes under it. The Cloud token never enters git's environment.
+- Inside Electron it runs `process.execPath` with `ELECTRON_RUN_AS_NODE=1`, as VS Code's askpass does. Desktop's `electron-builder.yml` at `510df4d` sets no fuses, so `RunAsNode` is on, and the consumer docs say a host has to keep it on.
+- It ignores lines it does not know, since git-lfs sends `capability[]` and `wwwauth[]`. It answers `store` with nothing, and `quit=1` when it cannot reach the relay.
+- The script is named after its content's hash and rewritten when missing, so a Core of another version sharing the data directory never runs a script it did not write.
 
-- **Inline credential helper**, a `credential.helper=!f() ...` one-liner injected via `GIT_CONFIG_*`. Would remove the helper files, but embeds a shell script in an env var and depends on cross-platform shell quoting. The askpass helper runs its logic in Node, the one runtime Core is guaranteed to have, and is unit-testable as a plain function.
-- **`http.extraheader` with a basic auth header**, the `actions/checkout` approach. Puts the token on argv via `-c` where it is visible in the process list, or persists it into `.git/config`, which then needs explicit cleanup.
-- **Token embedded in the remote URL**. Persists in `.git/config` and leaks into logs.
-- **Pre-seeding `git credential-cache`**. Documented, but adds a daemon, a socket and a TTL lifecycle for no gain.
-- **Third-party packages**. No maintained package for this exists. Libraries with real credential callbacks (isomorphic-git, nodegit) replace git itself, which would drop Git LFS and abandon dugite.
+If a script relay proves unreliable on Windows, a native trampoline on GitHub Desktop's model is the fallback. Desktop built desktop-trampoline for cmd's Unicode path limits, Go launching batch files whose paths hold spaces, and logging.
+
+### Loopback TCP, not a socket file
+
+The relay listens on `127.0.0.1` on a random port, as GitHub Desktop does with a token per invocation. It opens on the first invocation that needs it, is unreferenced so it never keeps a host alive, and closes on `dispose()`. It is half open, because the helper ends its side after sending and still reads the answer.
+
+| Rejected | Why |
+| --- | --- |
+| A Unix socket and a Windows named pipe | Two transports to test where one runs everywhere, macOS caps a socket path near 104 bytes while a data directory can run deeper, and a crashed Core leaves a stale socket file |
+
+A loopback port is reachable by any local process. The relay token closes that, since a request without the live token gets `quit=1`.
+
+### Core answers by host and path
+
+[`CloudGitAccess`](../src/util/cloudGit.ts) maps `projects/<id>.git` to a Project id. The first time this session meets a Project, it asks `git-token` while it holds no token for the host, and `git-access` once it does. It keeps one token per host, and a per-host queue means two calls to one host never overlap, since a second `git-token` would revoke the first one's token.
+
+- Grants are kept per held token and dropped with it. elek.io Cloud does not say whether a new token inherits the old one's grants, so Core asks `git-access` again rather than assume.
+- A `remoteUrl` on another host than the one git asked asks `git-token` for the Project, then throws `PreconditionFailed` naming the remote to set.
+- `CloudClient.tokenGeneration` changes with the token, so a new session starts with no token and no grant, and an answer that arrives after the session changed is dropped.
+- Nothing here may wait on the git queue, which the command that asked still holds.
+
+### Erase, quit=1 and the rerun
+
+On `erase` Core drops the host's token only if it is the one git reports, so a newer token survives an older command's failure. The helper then answers `quit=1` for that host for the rest of the invocation, and `GitService` runs the command once more as a new invocation, which asks again.
+
+The helper answers `quit=1` whenever Core has no credential for a Cloud host: signed out, after an `erase`, after a failed Cloud call, and for a path that names no Project. git stops there, so no askpass hands another provider's token to Cloud's host and no `SSH_ASKPASS` dialog opens, Desktop's background fetch every three minutes included.
+
+| Rejected | Why |
+| --- | --- |
+| Answering nothing without a credential | git falls through to askpass, which hands another provider's token to Cloud's host or opens an `SSH_ASKPASS` dialog |
+| `quit=1` with no exception | Core could no longer reach a Cloud remote with only `ELEK_IO_REMOTE_ACCESS_TOKEN` |
+
+The exception is a token with no session. Signed out with `ELEK_IO_REMOTE_ACCESS_TOKEN` set, a Cloud host gets that token, as a site's build in a customer's pipeline needs.
+
+The invocation records why it answered `quit=1`, and `GitService` throws that error when the command failed, even where its caller tolerates a non-zero exit. So an outage stays `PreconditionFailed`, which `provision()` falls back on, and a rate limit stays `RateLimited`. `lfs.push` rethrows a typed error before probing the remote, because the probe runs git again and would mint another token.
+
+A grant taken back while Core runs leaves the token live, and git answers `repository not found` with no `erase`. Core then forgets the grant it answered, so the next command asks `git-access` again, which answers `404` once the person cannot see the Project.
+
+### The remote token moved onto the relay
+
+Askpass never hears that its answer failed, so with a refused `ELEK_IO_REMOTE_ACCESS_TOKEN` an LFS push looped forever. The owner chose to answer the token through the relay, which hears `erase` and answers `quit=1` afterwards, without a rerun, since the same token would be refused again.
+
+| Rejected | Why |
+| --- | --- |
+| Waiting for git-lfs 3.8.0 | It bounds the loop at 3 attempts, but no dugite release bundles it, and the token stays in git's environment |
+| An erase-aware helper without a relay | It would keep state in marker files on disk |
+
+It also took the token out of git's environment and fixed askpass inside Electron, which ran `process.execPath` without `ELECTRON_RUN_AS_NODE`. The older transport alternatives still stand: `http.extraheader` puts the token on argv or into `.git/config`, a token in the URL persists and leaks into logs, and pre-seeding `git credential-cache` adds a daemon and a TTL for nothing.
+
+### No prompt and no askpass
+
+`GIT_TERMINAL_PROMPT=0` does not stop git from running `SSH_ASKPASS` or `core.askPass`, which some Linux desktops set. An empty `GIT_ASKPASS` stops both, so every invocation gets one. The person's credential helpers still run for hosts Core does not answer.
+
+| Rejected | Why |
+| --- | --- |
+| Also setting `SSH_ASKPASS_REQUIRE=never` | It would stop ssh's own passphrase dialog for an SSH remote, which authenticates through the person's SSH setup |
+| Documenting the gap only | Desktop's background fetch would open a dialog for a remote without a token |
+
+### SSH remotes
+
+SSH remotes authenticate through the person's SSH setup, such as keys in ssh-agent, never through the helper. `classifyAuthError` tells the transports apart, including dugite's `SSHPermissionDenied` for `Permission denied (publickey)`, and names the SSH setup rather than the token for an SSH failure.
+
+That branch is deliberately narrow. dugite maps `SSHPermissionDenied` from git's `fatal: Could not read from remote repository.`, which git also prints for an unreachable host and a missing repository, so the classification also requires a permission signal in the output.
+
+Without that, every offline SSH remote would throw `Unauthorized`, which `provision()` treats as unrecoverable, costing SSH consumers the offline fallback.
+
+## Measurements
+
+Measured with the git 2.53.0 and git-lfs 3.7.1 that dugite 3.2.2 and 3.2.3 bundle. git ran `git credential fill`, and git-lfs pushed through `HTTP_PROXY` to a local Node server answering `401` with `LFS-Authenticate: Basic`. A helper in the global config stood in for a keychain.
+
+| What | Result |
+| --- | --- |
+| `credential.https://*.git.example.com.helper` | matched `cell-1.git.example.com` and `cell-22.git.example.com`, not `git.example.com`, `a.b.git.example.com` or `cell-1.git.example.com:8443` |
+| The keychain on a matched host | asked nothing, neither `get` nor `store` nor `erase` |
+| An empty `credential.helper` in `GIT_CONFIG_COUNT` | the scoped helper still answered, git reads `GIT_CONFIG_COUNT` before `GIT_CONFIG_PARAMETERS` |
+| git-lfs under the wildcard | sends `path=projects/<id>.git`, without `/info/lfs` |
+| A refused token | git calls `erase` once and fails, git-lfs calls `erase` and `get` again for as long as the helper answers, about 1,600 rounds in 30 seconds |
+| A silent helper | git ran `GIT_ASKPASS`, or `SSH_ASKPASS` when only that was set, and `GIT_TERMINAL_PROMPT=0` stopped neither |
+| `quit=1` | git failed with `credential helper ... told us to quit`, git-lfs with `Git credentials for ... not found`, neither ran an askpass |
+| A refused token through askpass | an LFS push made 3,730 requests in 20 seconds until a timeout killed it |
+| An empty `GIT_ASKPASS` | git ran neither `SSH_ASKPASS` nor `core.askPass` and failed with `terminal prompts disabled` |
+| A helper path holding a space | ran when single quoted in a `!` snippet |
+
+git-lfs 3.8.0 ([git-lfs#6018](https://github.com/git-lfs/git-lfs/pull/6018)) retries at most 3 times, through `defaultMaxAuthAttempts` in `lfsapi/auth.go`. Keep the `quit=1` after the bump anyway, or each LFS request could mint 3 tokens.
 
 ## Invariants
 
-Preserve these properties when changing the credential path:
-
-- The token travels by environment variable only. It never becomes part of an argument, a URL or the repository config, so it cannot leak into process listings, logs or caches.
-- `credential.helper` is reset to an empty value via `GIT_CONFIG_*` while the token is set. Helpers outrank askpass in git's precedence order, so without the reset an ambient helper like the OS keychain would silently shadow the token. Without a token the reset is not applied, so ambient helpers keep working.
-  - Desktop performs the same reset through `GIT_CONFIG_PARAMETERS` instead, because the blank `GIT_CONFIG_VALUE_*` entry triggered a Windows bug in Python based hook runners ([desktop/desktop#18945](https://github.com/desktop/desktop/issues/18945)). Core-managed repositories only run the shell hooks git-lfs installs, so the documented `GIT_CONFIG_*` form is safe here.
-- `GIT_TERMINAL_PROMPT` is always `0`, with or without a token. A missing or wrong token fails the command with a typed `Unauthorized` error (`classifyAuthError`) instead of hanging it on a prompt.
-- The helper scripts on disk contain no secret. They only read their environment, so the tmp directory never holds the token.
+- No credential reaches a command line, a URL, the repository config or git's environment. Only the relay token does, and it dies with its invocation.
+- Every invocation that runs a command gets the config, with or without a session. Without it, a signed out Core would let the keychain answer a Cloud host.
+- The relay never waits on the git queue, or the command that asked deadlocks it.
+- Two Cloud calls for one host never overlap, or the second token revokes the first.
+- What Core learned under one session never answers another.
+- A command reruns at most once, so a refused token costs at most two.
+- The helper script holds no secret.
 
 ## Testing
 
-The credential flow cannot be integration-tested, the suite's remotes are local bare repositories and git skips its credential machinery for local paths. See the limitation in [`testing.md`](./testing.md#limitation-git-credentials-cannot-be-integration-tested) for what the unit tests cover and what to verify manually.
+[`GitService.cloudGit.test.ts`](../src/service/GitService.cloudGit.test.ts) pushes and clones real Projects over HTTP against a fake git host, see [`testing.md`](./testing.md#git-over-http). [`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) drives the helper with dugite's own `git credential`, which needs no HTTP and runs everywhere.
+
+CI runs both on Linux, macOS and Windows. Neither reaches a path holding spaces or non-ASCII characters, or Electron's `ELECTRON_RUN_AS_NODE`, which need checking by hand.
 
 ## See also
 
+- [`../docs/cloud-git.md`](../docs/cloud-git.md) - the behavior a consumer sees with a Cloud session
 - [`../docs/usage.md`](../docs/usage.md#environment-variables) - the environment variables a consumer sets
+- [`cloud.md`](./cloud.md) - the seam the two git calls go through, and how they map refusals
 - [`error-handling-internals.md`](./error-handling-internals.md) - how a failed authentication becomes a typed error
-- [`testing.md`](./testing.md#limitation-git-credentials-cannot-be-integration-tested) - why this path has no integration test
-- [`peer-dependencies.md`](./peer-dependencies.md) - the dugite range the askpass helper runs against
+- [`peer-dependencies.md`](./peer-dependencies.md) - the dugite range the helper runs against

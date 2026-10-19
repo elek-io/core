@@ -75,6 +75,18 @@ export const elekIoCoreOptionsSchema = z.strictObject({
      * @default 'https://api.elek.io'
      */
     url: z.url({ protocol: /^https?$/ }),
+    /**
+     * The URL pattern of elek.io Cloud's git hosts, which Core's own
+     * credential helper answers git for. git matches it as written: `*` is
+     * one label, and without a port only the default port matches.
+     *
+     * Derived from `url` when unset, `https://api.<zone>` gives
+     * `https://*.git.<zone>`. Null when nothing derives, and Core then
+     * installs no helper. Overrides ELEK_IO_CLOUD_GIT_URL.
+     *
+     * @see ../../docs/cloud-git.md
+     */
+    gitUrl: z.url({ protocol: /^https?$/ }).nullable(),
   }),
   /**
    * If set to true, Core never mutates a Project or its remote
@@ -112,6 +124,12 @@ export const constructorElekIoCoreSchema = elekIoCoreOptionsSchema
          * @see ../../docs/cloud-account.md
          */
         token: cloudTokenSchema,
+        /**
+         * A URL pattern git takes as written, such as
+         * `http://localhost:3300` for a local elek.io Cloud, in place of the
+         * one derived from `url`
+         */
+        gitUrl: z.url({ protocol: /^https?$/ }),
       })
       .partial(),
   })

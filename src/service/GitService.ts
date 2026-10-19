@@ -1,6 +1,10 @@
 import type { ChildProcess } from 'node:child_process';
 import Fs from 'fs-extra';
-import type { IGitExecutionOptions, IGitStringResult } from 'dugite';
+import type {
+  IGitExecutionOptions,
+  IGitResult,
+  IGitStringResult,
+} from 'dugite';
 import { exec as gitExec, GitError, parseError } from 'dugite';
 import PQueue from 'p-queue';
 import Path from 'node:path';
@@ -30,10 +34,14 @@ import type { CacheService } from './CacheService.js';
 import type { LogService } from './LogService.js';
 import type { UserService } from './UserService.js';
 import { PROVISIONED_MARKER, type PathTo } from '../util/node.js';
+import type {
+  GitCredentialOutcome,
+  GitCredentialRelay,
+} from '../util/gitCredentialRelay.js';
 import {
   ATOMIC_NOT_FAST_FORWARD,
-  buildCredentialEnv,
   classifyAuthError,
+  classifyLoadError,
   gitOutputCause,
   isMutatingGitCommand,
   parsePorcelainStatusLine,
@@ -46,8 +54,8 @@ import {
  * goes through a FIFO queue of concurrency 1, so calls against one Core are
  * serialized rather than racing, and every command line is logged, a mutation
  * at `info` and a read at `debug`, with the User's identity redacted out of
- * it. The remote token is read from `ELEK_IO_REMOTE_ACCESS_TOKEN` once at
- * construction, never at import.
+ * it. Credentials reach git through Core's own helper, for elek.io Cloud's
+ * git hosts and for `ELEK_IO_REMOTE_ACCESS_TOKEN`, and never through a prompt.
  *
  * @see https://github.com/desktop/dugite
  * @see ../../contributing/git-credentials.md
@@ -58,9 +66,7 @@ export class GitService {
   private gitPath: string | null;
   private queue: PQueue;
   private options: ElekIoCoreOptions;
-  private pathTo: PathTo;
-  private token: string | null;
-  private tokenUser: string;
+  private credentialRelay: GitCredentialRelay;
   private logService: LogService;
   private gitTagService: GitTagService;
   private userService: UserService;
@@ -71,7 +77,8 @@ export class GitService {
     pathTo: PathTo,
     logService: LogService,
     userService: UserService,
-    cacheService: CacheService
+    cacheService: CacheService,
+    credentialRelay: GitCredentialRelay
   ) {
     this.version = null;
     this.gitPath = null;
@@ -85,12 +92,7 @@ export class GitService {
       logService
     );
     this.options = options;
-    this.pathTo = pathTo;
-    // Read once at construction, never at import
-    this.token = process.env['ELEK_IO_REMOTE_ACCESS_TOKEN']?.trim() || null;
-    this.tokenUser =
-      process.env['ELEK_IO_REMOTE_ACCESS_TOKEN_USER']?.trim() ||
-      'x-access-token';
+    this.credentialRelay = credentialRelay;
     this.logService = logService;
     this.userService = userService;
     this.cacheService = cacheService;
@@ -556,6 +558,11 @@ export class GitService {
       try {
         await this.git(path, args);
       } catch (error) {
+        // A typed failure already says what went wrong, and probing would
+        // run git again, which for a refused Cloud token mints another
+        if (error instanceof CoreError && error.type !== 'Internal') {
+          throw error;
+        }
         // git-lfs emits Go HTTP errors that git's own error parsing does not
         // recognize. Tell a down or unauthorized host apart from a reachable
         // host with a broken LFS endpoint with a plain git reachability probe.
@@ -877,7 +884,10 @@ export class GitService {
       tolerateNonZero: true,
     });
     if (result.exitCode !== 0) {
-      const authError = classifyAuthError(result.stderr, this.token !== null);
+      const authError = classifyAuthError(
+        result.stderr,
+        this.credentialRelay.hasRemoteToken
+      );
       if (authError) {
         throw authError;
       }
@@ -1227,60 +1237,6 @@ export class GitService {
   }
 
   /**
-   * The environment for git commands, built from the ELEK_IO_REMOTE_ACCESS_TOKEN
-   * and ELEK_IO_REMOTE_ACCESS_TOKEN_USER environment variables read at construction
-   */
-  private async credentialEnv(): Promise<Record<string, string>> {
-    if (this.token === null) {
-      return buildCredentialEnv(null, this.tokenUser, null);
-    }
-    return buildCredentialEnv(
-      this.token,
-      this.tokenUser,
-      await this.writeAskpassScript()
-    );
-  }
-
-  /**
-   * Writes the askpass helper into the tmp directory and returns the
-   * path git invokes. The helper answers git's username prompt with
-   * the token user and every other prompt with the token itself, both
-   * read from its environment.
-   */
-  private async writeAskpassScript(): Promise<string> {
-    // Written on every call: cheap, serialized by the queue, and
-    // self-healing against the tmp directory being emptied
-    await Fs.ensureDir(this.pathTo.tmp);
-    const scriptPath = Path.join(this.pathTo.tmp, 'askpass.cjs');
-    const script = [
-      "const prompt = process.argv[2] || '';",
-      "const value = prompt.startsWith('Username')",
-      "  ? process.env['ELEK_IO_ASKPASS_TOKEN_USER']",
-      "  : process.env['ELEK_IO_ASKPASS_TOKEN'];",
-      "process.stdout.write((value || '') + '\\n');",
-      '',
-    ].join('\n');
-    await Fs.writeFile(scriptPath, script);
-
-    if (process.platform === 'win32') {
-      const batPath = Path.join(this.pathTo.tmp, 'askpass.bat');
-      await Fs.writeFile(
-        batPath,
-        `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`
-      );
-      return batPath;
-    }
-
-    const shPath = Path.join(this.pathTo.tmp, 'askpass.sh');
-    await Fs.writeFile(
-      shPath,
-      `#!/bin/sh\nexec "${process.execPath}" "${scriptPath}" "$@"\n`,
-      { mode: 0o700 }
-    );
-    return shPath;
-  }
-
-  /**
    * Writes the local git config of the repository: `push.autoSetupRemote`,
    * and `pull.rebase`, which makes every pull a rebase.
    *
@@ -1318,7 +1274,10 @@ export class GitService {
    * The credential environment is built inside the queue, the command is
    * timed, redacted and logged at `info` or `debug`, and a non-zero exit is
    * classified into `Unauthorized` or `Internal`, unless `tolerateNonZero`
-   * hands the result back for the caller to classify.
+   * hands the result back for the caller to classify. A command whose
+   * Cloud git token the git host refused runs once more, which asks again.
+   *
+   * @see ../../contributing/git-credentials.md
    */
   private async git(
     path: string,
@@ -1329,20 +1288,40 @@ export class GitService {
     const identity = recordsGitIdentity(args)
       ? identityEnv(user === undefined ? await this.userService.get() : user)
       : {};
+    const callerEnv = execOptions.env;
+    // `--version` and `--exec-path` run no command, so they can never ask
+    // for a credential, and the constructor's calls of them install nothing
+    const hasCommand = args.some((arg) => !arg.startsWith('-'));
     const result = await this.queue.add(async () => {
-      // Every git invocation gets the credential environment, so remote
-      // operations and on-demand LFS smudges authenticate the same way
-      // and never prompt. Built inside the queue, so the askpass write
-      // is serialized with every other git operation.
-      execOptions.env = {
-        ...(await this.credentialEnv()),
-        ...identity,
-        ...execOptions.env,
-      };
-      const start = Date.now();
-      const gitResult = await gitExec(args, path, execOptions);
-      const durationMs = Date.now() - start;
-      return { gitResult, durationMs };
+      for (let attempt = 1; ; attempt += 1) {
+        // Every other git invocation gets the credential environment, so
+        // remote operations and on-demand LFS smudges authenticate the same
+        // way and never prompt
+        const invocation = await this.credentialRelay.begin(hasCommand);
+        execOptions.env = { ...invocation.env, ...identity, ...callerEnv };
+        const start = Date.now();
+        let gitResult: IGitResult;
+        let credentials: GitCredentialOutcome;
+        try {
+          gitResult = await gitExec(args, path, execOptions);
+        } finally {
+          credentials = invocation.finish();
+        }
+        const durationMs = Date.now() - start;
+        if (
+          gitResult.exitCode !== 0 &&
+          credentials.isRetryable &&
+          attempt === 1
+        ) {
+          this.logService.info({
+            source: 'core',
+            message: `Running "${redactedCommand(args)}" once more, because a git host refused the git token elek.io Cloud answered`,
+            meta: { 'elek.git.command': redactedCommand(args) },
+          });
+          continue;
+        }
+        return { gitResult, durationMs, credentials };
+      }
     });
 
     if (!result) {
@@ -1369,10 +1348,31 @@ export class GitService {
       this.logService.debug(record);
     }
 
+    // A program git could not even start, and a credential the helper
+    // could not give, are never the caller's to classify, so both throw
+    // whether or not a non-zero exit is tolerated
+    if (result.gitResult.exitCode !== 0) {
+      const stderr = result.gitResult.stderr.toString();
+      const loadError = classifyLoadError(stderr);
+      if (loadError) {
+        throw loadError;
+      }
+      if (result.credentials.failure !== null) {
+        throw result.credentials.failure;
+      }
+      // A grant taken back while Core runs leaves the token live, so the
+      // git host answers as for a repository that does not exist
+      if (parseError(stderr) === GitError.HTTPSRepositoryNotFound) {
+        for (const [host, projectId] of result.credentials.answered) {
+          this.credentialRelay.forget(host, projectId);
+        }
+      }
+    }
+
     if (result.gitResult.exitCode !== 0 && tolerateNonZero !== true) {
       const authError = classifyAuthError(
         result.gitResult.stderr.toString(),
-        this.token !== null
+        this.credentialRelay.hasRemoteToken
       );
       if (authError) {
         throw authError;

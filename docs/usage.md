@@ -12,7 +12,9 @@ npm install @elek-io/core zod dugite
 
 Core declares `zod` and `dugite` as required peer dependencies, so you install them alongside Core:
 
-- `dugite` is the git binding the Node entry point runs every Project operation through, see [git and sync](./git-and-sync.md).
+- `dugite` (`^3.2.3`) is the git binding the Node entry point runs every Project operation through, see [git and sync](./git-and-sync.md).
+  - On Linux its embedded git needs `libcurl.so.4` for HTTP(S) remotes. Older dugite releases need `libcurl-gnutls.so.4`, which Fedora, RHEL, openSUSE and NixOS do not ship.
+  - A git that cannot load a shared library throws a `CoreError` of type `PreconditionFailed` naming it. Install the library, or point dugite's `LOCAL_GIT_DIRECTORY` variable at another git installation that has git-lfs.
 - `zod` is what Core authors its schemas with. Use a compatible version (`zod@^4.3.6`) that resolves to a single copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage.
 
 Three more peers are optional and needed by one feature each: `astro` for the [Astro integration](#astro-integration), and `tsdown` plus `typescript` for [compiling generated clients and types to JavaScript](./api-clients.md#compiling-to-javascript).
@@ -66,6 +68,10 @@ The resolved options are exposed on `core.options`, and the running Core version
   - Core keeps it in memory and never writes it to disk, so it is not part of `core.options` either.
   - Core forgets it on `signOut()` and when elek.io Cloud answers 401, and the calls after that carry none.
   - A value holding whitespace or anything outside printable ASCII throws a `CoreError` of type `BadRequest`, whose message never repeats it.
+- **`cloud.gitUrl`** is the URL pattern of elek.io Cloud's git hosts, which git asks Core's own credential helper about, see [`cloud-git.md`](./cloud-git.md). It takes precedence over the `ELEK_IO_CLOUD_GIT_URL` environment variable, which takes precedence over the pattern derived from `cloud.url`.
+  - Derived, `https://api.<zone>` gives `https://*.git.<zone>`. A `cloud.url` whose host does not start with `api.` derives nothing, and Core installs no helper and logs a warning.
+  - git matches the value as written, so `*` stands for one label and a pattern without a port matches the default port only. A trailing slash is dropped.
+  - `core.options.cloud.gitUrl` holds the pattern in use, or `null` without one. A value that is not an http or https URL throws a `CoreError` of type `BadRequest`.
 - **`cache`** decides whether Core keeps what it reads from a Project's files in memory between calls: parsed JSON files and the index that resolves Collection and Component slugs. It defaults to `true`, and everything kept is dropped whenever git changes a Project's working tree.
   - Set it to `false` when another application writes the same files while this Core runs. The Astro loaders do that for you during `astro dev`.
 - **`isReadOnly`** puts Core into read-only mode, meant for environments that only consume content, such as CI builds. It takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
@@ -80,17 +86,20 @@ Core reads its environment variables once at construction, never at import. All 
 | `ELEK_IO_DATA_DIR` | The directory Core reads and writes data in | `~/elek.io` |
 | `ELEK_IO_LOG_LEVEL` | The lowest level Core logs | `info` |
 | `ELEK_IO_READ_ONLY` | Set to `true` to put Core into read-only mode | unset |
-| `ELEK_IO_REMOTE_ACCESS_TOKEN` | Token for authenticating git operations against a private remote | unset |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN` | Token git presents to a private remote, for every host but elek.io Cloud's while signed in | unset |
 | `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN` | `x-access-token` |
 | `ELEK_IO_CHANNEL` | The channel provisioning follows, overrides configured refs | unset |
 | `ELEK_IO_CLOUD_URL` | Base URL of the elek.io Cloud API | `https://api.elek.io` |
 | `ELEK_IO_CLOUD_TOKEN` | Bearer token for elek.io Cloud, for a command line tool or a script | unset |
+| `ELEK_IO_CLOUD_GIT_URL` | URL pattern of elek.io Cloud's git hosts, see [`cloud-git.md`](./cloud-git.md) | derived from `cloud.url` |
 
-`ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git per invocation through an askpass helper:
+`ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git through Core's own credential helper:
 
-- It never becomes part of a command line, a remote URL or the repository config, so it cannot leak into logs or caches.
-- Prompts are disabled. A missing or wrong token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it.
+- It never becomes part of a command line, a remote URL, the repository config or git's environment, so it cannot leak into logs or caches.
+- Prompts and askpass programs are disabled, `SSH_ASKPASS` included. A missing token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it.
+- A token the remote refuses fails the operation with `Unauthorized` after one attempt, a Git LFS transfer included.
 - While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before.
+- With an elek.io Cloud session, Cloud's git hosts get the session's tokens instead, see [`cloud-git.md`](./cloud-git.md). Signed out, they get this token too.
 - It applies to HTTP(S) remotes only. SSH remotes authenticate through the ambient SSH setup like ssh-agent.
 
 On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room.
