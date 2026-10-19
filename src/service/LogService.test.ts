@@ -9,7 +9,7 @@ import { createPathTo } from '../util/node.js';
 const options: ElekIoCoreOptions = {
   log: { level: 'debug', hasProcessErrorHandlers: true },
   cache: true,
-  cloud: { url: 'https://api.elek.io' },
+  cloud: { url: 'https://api.elek.io', gitUrl: 'https://*.git.elek.io' },
   dataDir: Path.join(Os.tmpdir(), 'elek-io-core-logservice-test'),
   isReadOnly: false,
 };

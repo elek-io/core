@@ -38,4 +38,4 @@ The current User reaches git as `GIT_AUTHOR_*` and `GIT_COMMITTER_*` in the envi
 
 - [`../docs/git-and-sync.md`](../docs/git-and-sync.md#commits-and-the-user-signature) - the signature as a consumer sees it
 - [`logging.md`](./logging.md#redacting-a-command-line) - the redaction that stays as a backstop
-- [`git-credentials.md`](./git-credentials.md) - the remote token, which reaches git through the environment as well
+- [`git-credentials.md`](./git-credentials.md) - the credentials, which reach git through Core's own helper rather than a command line

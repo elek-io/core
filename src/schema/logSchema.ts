@@ -99,6 +99,7 @@ export const logAttributeNames = [
   'http.request.method',
   'http.response.status_code',
   'http.route',
+  'server.address',
 
   // Semantic Conventions, still incubating as of semconv 1.43.0
   'file.directory',

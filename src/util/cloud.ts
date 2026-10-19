@@ -21,7 +21,7 @@ export interface CloudRefusal {
 
 /** One call to elek.io Cloud, as `CloudClient.request()` takes it */
 export interface CloudRequest {
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'PUT';
   /** Appended to the configured Cloud URL, which never ends in a slash */
   path: string;
   /** The serialized JSON body, sent with its content type */
@@ -57,11 +57,16 @@ export class CloudClient {
   /** How long a call waits for an answer. Nothing retries after it */
   public static readonly timeoutMs = 15_000;
 
+  /** The longest a 429's Retry-After is taken at its word */
+  public static readonly maxRetryAfterMs = 3_600_000;
+
   private readonly url: string;
   private readonly userAgent: string;
   private readonly logService: LogService;
   private readonly listeners = new Set<CloudTokenListener>();
   private token: string | null;
+  private generation = 0;
+  private retryAfter: number | null = null;
 
   public constructor(
     url: string,
@@ -78,6 +83,23 @@ export class CloudClient {
   /** Whether Core holds a token, which every call but an anonymous one carries */
   public get hasToken(): boolean {
     return this.token !== null;
+  }
+
+  /**
+   * Changes whenever the token does, so whatever was learned under one
+   * session can tell it is not the session Core holds any more
+   */
+  public get tokenGeneration(): number {
+    return this.generation;
+  }
+
+  /**
+   * When the last 429 asked Core to call again, in epoch milliseconds, or
+   * null when no 429 carried a Retry-After Core could read. Capped at an
+   * hour from the answer, so a long running host cannot be locked out
+   */
+  public get notBefore(): number | null {
+    return this.retryAfter;
   }
 
   /** Keeps a token for every later call, replacing the one held before */
@@ -137,6 +159,9 @@ export class CloudClient {
     if (response.ok) {
       return response;
     }
+    if (response.status === 429) {
+      this.retryAfter = retryAfterOf(response);
+    }
     // Compared rather than only checked, so a token kept while this call
     // was in flight is not the one forgotten
     if (response.status === 401 && sentToken !== null) {
@@ -191,6 +216,7 @@ export class CloudClient {
       return;
     }
     this.token = token;
+    this.generation += 1;
     for (const listener of this.listeners) {
       try {
         void Promise.resolve(listener(token)).catch(() => {
@@ -244,7 +270,11 @@ async function refusalOf(
     }
   }
 
-  const detail = `elek.io Cloud answered ${response.status} to ${request.subject} at "${url}"`;
+  const retryAfter = retryAfterOf(response);
+  const detail =
+    response.status === 429 && retryAfter !== null
+      ? `elek.io Cloud answered 429 to ${request.subject} at "${url}", call again in ${Math.ceil((retryAfter - Date.now()) / 1000)} seconds`
+      : `elek.io Cloud answered ${response.status} to ${request.subject} at "${url}"`;
   switch (response.status) {
     // The body was rejected, which is something a caller can act on
     case 400:
@@ -260,6 +290,26 @@ async function refusalOf(
     default:
       return CoreError.internal(detail);
   }
+}
+
+/**
+ * When an answer's Retry-After asks to call again, in epoch milliseconds,
+ * from seconds or an HTTP date, capped at `CloudClient.maxRetryAfterMs`.
+ * Null when there is none or it cannot be read.
+ */
+function retryAfterOf(response: Response): number | null {
+  const value = response.headers.get('retry-after')?.trim();
+  if (value === undefined || value === '') {
+    return null;
+  }
+  const now = Date.now();
+  const at = /^\d+$/.test(value)
+    ? now + Number(value) * 1000
+    : Date.parse(value);
+  if (Number.isNaN(at)) {
+    return null;
+  }
+  return Math.min(Math.max(at, now), now + CloudClient.maxRetryAfterMs);
 }
 
 /** The `code` of a refusal, or null when the answer carries none */

@@ -30,7 +30,9 @@ const { token, account } = await core.cloud.account.signIn({
 });
 ```
 
-Core keeps `token` and sends it as a bearer token on every later elek.io Cloud call, a report included. It sets a `cloud` User with the account's `id`, `name` and `email`, and keeps the `language` and `localApi` settings of the User before. A data directory without a User yet starts on `en`, with the local API disabled on port 31310.
+Core keeps `token` and sends it as a bearer token on every later elek.io Cloud call, a report included. It also asks git tokens for elek.io Cloud's git hosts with it, see [`cloud-git.md`](./cloud-git.md).
+
+Signing in sets a `cloud` User with the account's `id`, `name` and `email`, and keeps the `language` and `localApi` settings of the User before. A data directory without a User yet starts on `en`, with the local API disabled on port 31310.
 
 Signing in and signing up never send the token Core holds, so a refused attempt, a mistyped password included, keeps it. Signing in again replaces the token. It does not end the earlier session, so call `signOut()` first to end that one.
 
@@ -92,6 +94,8 @@ Core holds the token in memory. It never writes it into `user.json`, a log file 
 
 Core reads both once at construction, and the option wins over the variable.
 
+Hand a token to one process only. Its git tokens replace each other, so two processes or two Cores on one session revoke each other's, see [`cloud-git.md`](./cloud-git.md#one-session-per-process). Sign each application and command line tool in on its own.
+
 `onTokenChange()` tells a listener every token Core keeps and drops from then on: the token of a sign in or a sign up, and `null` after `signOut()`, a 401 or a `read()` that found no live session. It is never called for the token Core started with. Keep the stored copy current from there, and nothing else has to track the token. A listener that throws or rejects is logged and changes nothing else.
 
 ### Handing the token back
@@ -148,5 +152,6 @@ Every call throws a `CoreError`, see [`error-handling.md`](./error-handling.md).
 ## See also
 
 - [`usage.md`](./usage.md#options) - the `cloud.url` and `cloud.token` options, and `ELEK_IO_CLOUD_TOKEN`
+- [`cloud-git.md`](./cloud-git.md) - git against elek.io Cloud's git hosts with the session
 - [`reporting.md`](./reporting.md) - sending a report, which carries the token
 - [`error-handling.md`](./error-handling.md) - `CoreError` and how to catch failures

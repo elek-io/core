@@ -23,3 +23,48 @@ export const cloudErrorResponseSchema = z.object({
   code: z.string(),
 });
 export type CloudErrorResponse = z.infer<typeof cloudErrorResponseSchema>;
+
+/**
+ * A username or a token git is handed through the credential protocol,
+ * which carries one value per line, so neither may hold a control character
+ */
+const cloudGitCredentialValueSchema = z
+  .string()
+  .min(1)
+  .max(4096)
+  .regex(/^[^\p{Cc}]+$/u, 'Must not contain control characters');
+
+/** The git remote of a Project on one of elek.io Cloud's git hosts */
+const cloudGitRemoteUrlSchema = z.url({ protocol: /^https?$/ });
+
+/**
+ * What `POST /management/v1/projects/{id}/git-token` answers: a new token
+ * for the Project's git host, which replaces every older token the session
+ * holds on that host
+ *
+ * @see ../../docs/cloud-git.md
+ */
+export const cloudGitTokenResponseSchema = z.object({
+  gitToken: z.object({
+    username: cloudGitCredentialValueSchema,
+    token: cloudGitCredentialValueSchema,
+    remoteUrl: cloudGitRemoteUrlSchema,
+  }),
+});
+export type CloudGitTokenResponse = z.infer<typeof cloudGitTokenResponseSchema>;
+
+/**
+ * What `PUT /management/v1/projects/{id}/git-access` answers: the token the
+ * session already holds for the Project's git host reaches it too
+ *
+ * @see ../../docs/cloud-git.md
+ */
+export const cloudGitAccessResponseSchema = z.object({
+  gitAccess: z.object({
+    username: cloudGitCredentialValueSchema,
+    remoteUrl: cloudGitRemoteUrlSchema,
+  }),
+});
+export type CloudGitAccessResponse = z.infer<
+  typeof cloudGitAccessResponseSchema
+>;

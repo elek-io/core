@@ -15,11 +15,14 @@ import {
   isNotEmpty,
   files,
   folders,
+  cloudGitUrlOf,
+  resolveCloudGitUrl,
   resolveCloudToken,
   resolveCloudUrl,
   resolveContentRef,
   resolveDataDir,
   resolveLogLevel,
+  resolveRemoteAccessToken,
 } from './node.js';
 import { CoreError } from './shared.js';
 
@@ -453,5 +456,107 @@ describe('createPathTo', () => {
     expect(otherPathTo.tmpAsset('a1', 'abc123', 'png')).not.toBe(
       pathTo.tmpAsset('a1', 'abc123', 'png')
     );
+  });
+});
+
+describe('cloudGitUrlOf', () => {
+  it('replaces the api label with a wildcard below git', () => {
+    expect(cloudGitUrlOf('https://api.elek.io')).toBe('https://*.git.elek.io');
+    expect(cloudGitUrlOf('https://api.dev.elek.io')).toBe(
+      'https://*.git.dev.elek.io'
+    );
+  });
+
+  it('reads only the zone, never the scheme, port or path', () => {
+    expect(cloudGitUrlOf('http://API.Dev.elek.io:8443/base')).toBe(
+      'https://*.git.dev.elek.io'
+    );
+  });
+
+  it('answers null for a host without an api label to replace', () => {
+    expect(cloudGitUrlOf('http://127.0.0.1:31311')).toBeNull();
+    expect(cloudGitUrlOf('http://localhost:3000')).toBeNull();
+    expect(cloudGitUrlOf('https://apix.elek.io')).toBeNull();
+    expect(cloudGitUrlOf('https://cloud.elek.io')).toBeNull();
+    expect(cloudGitUrlOf('http://[::1]:3000')).toBeNull();
+  });
+});
+
+describe('resolveCloudGitUrl', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('derives the pattern from the Cloud URL when nothing is configured', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_GIT_URL', undefined);
+
+    expect(resolveCloudGitUrl(undefined, 'https://api.elek.io')).toBe(
+      'https://*.git.elek.io'
+    );
+    expect(resolveCloudGitUrl(undefined, 'http://127.0.0.1:1')).toBeNull();
+  });
+
+  it('takes ELEK_IO_CLOUD_GIT_URL as written over the derived pattern', () => {
+    // What a local elek.io Cloud needs, whose API has no api label
+    vi.stubEnv('ELEK_IO_CLOUD_GIT_URL', 'http://localhost:3300');
+
+    expect(resolveCloudGitUrl(undefined, 'http://localhost:3000')).toBe(
+      'http://localhost:3300'
+    );
+  });
+
+  it('prefers the given pattern over the environment variable', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_GIT_URL', 'http://localhost:3300');
+
+    expect(
+      resolveCloudGitUrl('http://*.git.example.test/', 'https://api.elek.io')
+    ).toBe('http://*.git.example.test');
+  });
+
+  it('treats an empty or whitespace-only value as unset', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_GIT_URL', '  ');
+
+    expect(resolveCloudGitUrl(' ', 'https://api.elek.io')).toBe(
+      'https://*.git.elek.io'
+    );
+  });
+
+  it('throws on something that is not an http or https URL', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_GIT_URL', 'git.elek.io');
+    expect(() =>
+      resolveCloudGitUrl(undefined, 'https://api.elek.io')
+    ).toThrowError(expect.objectContaining({ type: 'BadRequest' }));
+
+    vi.stubEnv('ELEK_IO_CLOUD_GIT_URL', 'ssh://*.git.elek.io');
+    expect(() =>
+      resolveCloudGitUrl(undefined, 'https://api.elek.io')
+    ).toThrowError(/ELEK_IO_CLOUD_GIT_URL/);
+  });
+});
+
+describe('resolveRemoteAccessToken', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('answers null without a token', () => {
+    vi.stubEnv('ELEK_IO_REMOTE_ACCESS_TOKEN', '  ');
+
+    expect(resolveRemoteAccessToken()).toBeNull();
+  });
+
+  it('pairs the token with x-access-token unless a user is set', () => {
+    vi.stubEnv('ELEK_IO_REMOTE_ACCESS_TOKEN', ' secret ');
+    vi.stubEnv('ELEK_IO_REMOTE_ACCESS_TOKEN_USER', undefined);
+    expect(resolveRemoteAccessToken()).toEqual({
+      token: 'secret',
+      user: 'x-access-token',
+    });
+
+    vi.stubEnv('ELEK_IO_REMOTE_ACCESS_TOKEN_USER', 'oauth2');
+    expect(resolveRemoteAccessToken()).toEqual({
+      token: 'secret',
+      user: 'oauth2',
+    });
   });
 });

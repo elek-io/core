@@ -4,6 +4,8 @@ import { onTestFinished } from 'vitest';
 
 /** What the fake Cloud saw, which is the only honest record of what was sent */
 export interface Received {
+  /** The path as requested, so a route with a parameter can read it */
+  path: string;
   /** The parsed JSON body, `{}` when there was none */
   body: Record<string, unknown>;
   /** The body exactly as it arrived, empty when there was none */
@@ -15,7 +17,7 @@ export interface Received {
 export type Respond = (received: Received) => Response | Promise<Response>;
 
 /** A route as `<method> <path>`, so a test reads like the request it fakes */
-export type FakeCloudRoute = `${'GET' | 'POST'} /${string}`;
+export type FakeCloudRoute = `${'GET' | 'POST' | 'PUT'} /${string}`;
 
 export interface FakeCloud {
   url: string;
@@ -48,6 +50,7 @@ export async function startFakeCloud(
     app.on(method ?? 'GET', path, async function (context) {
       const rawBody = await context.req.text();
       const entry: Received = {
+        path: context.req.path,
         body: parseBody(rawBody),
         rawBody,
         headers: Object.fromEntries(context.req.raw.headers),
