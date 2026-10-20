@@ -9,17 +9,17 @@ Core manages what an elek.io account holds on elek.io Cloud: the organizations i
 | `organizations.list()` | `CloudOrganization[]`, oldest first | `GET /management/v1/organizations` |
 | `organizations.isSlugAvailable({ slug })` | `boolean` | `POST /api/auth/organization/check-slug` |
 | `organizations.create({ name, slug })` | `{ id, name, slug }` | `POST /api/auth/organization/create` |
-| `projects.create({ organizationId, id, name })` | `CloudProject` | `POST /management/v1/organizations/{organizationId}/projects` |
+| `projects.create({ organizationId, id, name, description? })` | `CloudProject` | `POST /management/v1/organizations/{organizationId}/projects` |
 | `projects.list()` | `CloudProject[]`, oldest first | `GET /management/v1/projects` |
 | `projects.read({ organizationId, id })` | `CloudProject` | `GET /management/v1/organizations/{organizationId}/projects/{id}` |
-| `projects.update({ organizationId, id, name })` | `CloudProject` | `PATCH /management/v1/organizations/{organizationId}/projects/{id}` |
+| `projects.update({ organizationId, id, name?, description? })` | `CloudProject` | `PATCH /management/v1/organizations/{organizationId}/projects/{id}` |
 | `projects.delete({ organizationId, id })` | nothing | `DELETE /management/v1/organizations/{organizationId}/projects/{id}` |
 | `plans.upgrade({ organizationId, plan, successUrl, cancelUrl })` | `{ url }` | `POST /api/auth/subscription/upgrade` |
 
 Every call hangs off `core.cloud`. Every path is appended to the `cloud.url` option and carries the session's token, see [`cloud-account.md`](./cloud-account.md).
 
 - Without a session every call throws `Unauthorized` and sends nothing.
-- In read-only mode `projects.create()`, `projects.update()` and `projects.delete()` throw `PreconditionFailed`, because they change a Project's remote.
+- In read-only mode `projects.create()`, `projects.update()` and `projects.delete()` throw `PreconditionFailed`, because they change a Project on elek.io Cloud.
 - No call is retried.
 
 `core.projects.removeRemoteOrigin({ id })` belongs with them, although it calls nothing. It removes a local Project's `origin`, see [deleting a Project](#deleting-a-project).
@@ -31,28 +31,37 @@ An organization is `{ id, name, slug, roles, plan, projects: { count, limit } }`
 | Key | Holds |
 | --- | --- |
 | `roles` | the account's roles there, any of `owner`, `admin` and `member` |
-| `plan` | `hobby`, `pro` or `business` |
+| `plan` | `hobby`, `pro` or `business`, or `null` for a plan this version of Core does not know |
 | `projects.count` | every Project the organization holds, including ones the account cannot see |
 | `projects.limit` | how many Projects the plan has room for |
 
-An organization has room while `count` is below `limit`. Only an `owner` or an `admin` creates, renames or deletes a Project there, and only an `owner` changes the plan. A role Core does not know is left out of `roles`.
+An organization has room while `count` is below `limit`, whatever its `plan`. Only an `owner` or an `admin` creates, updates or deletes a Project there, and only an `owner` changes the plan. A role Core does not know is left out of `roles`.
 
-A slug is 2 to 48 lowercase letters, in words joined by single hyphens, with no digit: `^[a-z]+(-[a-z]+)*$`. Core refuses any other with `BadRequest` before sending, and `cloudOrganizationSlugSchema` checks the same rule under a form field. `isSlugAvailable()` says whether another organization holds a slug, never whether it keeps the rule.
+`organizations.create()` checks two rules before sending and refuses a break with `BadRequest`:
+
+| Prop | Rule | Schema for a form field |
+| --- | --- | --- |
+| `name` | 1 to 200 characters after trimming | `cloudOrganizationNameSchema` |
+| `slug` | 2 to 48 lowercase letters, in words joined by single hyphens, with no digit: `^[a-z]+(-[a-z]+)*$` | `cloudOrganizationSlugSchema` |
+
+`isSlugAvailable()` says whether another organization holds a slug, never whether it keeps the rule.
 
 ```typescript
-import ElekIoCore, { cloudOrganizationSlugSchema } from '@elek-io/core';
+import ElekIoCore, {
+  cloudOrganizationNameSchema,
+  cloudOrganizationSlugSchema,
+} from '@elek-io/core';
 
 const core = new ElekIoCore({ cloud: { token: process.env['CLOUD_TOKEN'] } });
+const name = 'Studio Penkuhl';
 const slug = 'studio-penkuhl';
 
 if (
+  cloudOrganizationNameSchema.safeParse(name).success &&
   cloudOrganizationSlugSchema.safeParse(slug).success &&
   (await core.cloud.organizations.isSlugAvailable({ slug }))
 ) {
-  const organization = await core.cloud.organizations.create({
-    name: 'Studio Penkuhl',
-    slug,
-  });
+  const organization = await core.cloud.organizations.create({ name, slug });
   console.log(`Created ${organization.id}, its plan is hobby`);
 }
 ```
@@ -61,13 +70,14 @@ Creating an organization makes the account its `owner`.
 
 ## Creating a Project
 
-A Project on elek.io Cloud is `{ id, organizationId, teamId, name, remoteUrl, remoteStatus, createdAt, updatedAt }`:
+A Project on elek.io Cloud is `{ id, organizationId, teamId, name, description, remoteUrl, remoteStatus, createdAt, updatedAt }`:
 
 - `id` is the id of the local Project, and the remote is named after it. Names may repeat.
+- `description` is `null` for a Project created without one.
 - `teamId` is `null` for a Project every member of the organization can see.
 - `remoteStatus` is `pending`, `ready` or `failed`, and only a `ready` remote can be cloned or pushed to.
 
-`projects.create()` takes the name under the same cap a local Project has, 1 to 200 after trimming. Core then moves the Project in three steps:
+`projects.create()` takes a name and, optionally, a description, under the caps a local Project has: 1 to 200 and 1 to 500 after trimming. Core then moves the Project in three steps:
 
 ```typescript
 import ElekIoCore from '@elek-io/core';
@@ -82,6 +92,7 @@ let project = await core.cloud.projects.create({
   organizationId,
   id: local.id,
   name: local.name,
+  description: local.description,
 });
 while (project.remoteStatus === 'pending') {
   await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -108,9 +119,11 @@ A refused create leaves nothing behind, and so does one that got no answer, so s
 | no such Project there | throws `Conflict`, the id is in another organization and the Project stays local |
 | anything else | throws that call's error, see [errors](#errors) |
 
-## Renaming and listing
+## Updating and listing
 
-`projects.update()` renames a Project on elek.io Cloud, and its remote stays the same. It does not rename the local Project, which `core.projects.update()` does. `projects.list()` answers every Project the account can see, in every organization.
+`projects.update()` changes a Project's name, its description or both on elek.io Cloud, under the caps of `create()`. It sends only what it is given, and its remote stays the same. Given neither, it throws `BadRequest` and sends nothing.
+
+It does not change the local Project, which `core.projects.update()` does. `projects.list()` answers every Project the account can see, in every organization.
 
 ## Deleting a Project
 
@@ -160,16 +173,16 @@ Every call throws a `CoreError`, see [`error-handling.md`](./error-handling.md).
 
 | Type | When |
 | --- | --- |
-| `BadRequest` | The props failed validation, a slug that breaks the rule included, or elek.io Cloud refused them (400) |
+| `BadRequest` | The props failed validation, an organization's name or slug that breaks its rule and an update naming neither a name nor a description included, or elek.io Cloud refused them (400) |
 | `Unauthorized` | Core holds no session, elek.io Cloud answered 401 and Core forgot the token, or the account's role may not do this (403) |
 | `NotFound` | The organization holds no Project under the id that the account can see (404) |
 | `Conflict` | `organizations.create()` for a slug another organization holds, `projects.create()` for an id in another organization, or `plans.upgrade()` to a plan with room for fewer Projects than the organization holds (409) |
 | `QuotaExceeded` | `projects.create()` in an organization whose plan has no room for another Project (402) |
 | `RateLimited` | This client called too often (429), see [waiting to call again](#waiting-to-call-again) |
-| `PreconditionFailed` | elek.io Cloud could not be reached or did not answer within 15 seconds, could not take a new Project, or could not reach the git host (502, 504). Also a create, rename or delete in read-only mode |
+| `PreconditionFailed` | elek.io Cloud could not be reached or did not answer within 15 seconds, could not take a new Project, or could not reach the git host (502, 504). Also a create, update or delete in read-only mode |
 | `Internal` | elek.io Cloud failed otherwise, or answered with something Core cannot read |
 
-A `PreconditionFailed` or `QuotaExceeded` from `projects.create()` created nothing. No message repeats what elek.io Cloud answered, a name or a slug.
+A `PreconditionFailed` or `QuotaExceeded` from `projects.create()` created nothing. No message repeats what elek.io Cloud answered, a name, a description or a slug.
 
 ## Waiting to call again
 

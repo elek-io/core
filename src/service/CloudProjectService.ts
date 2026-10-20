@@ -22,8 +22,8 @@ import type { LogService } from './LogService.js';
 /**
  * The Projects on elek.io Cloud, reached as `core.cloud.projects`, each under
  * the id Core gave the local Project. Every call needs a session and throws
- * `Unauthorized` without one, before sending anything. Creating, renaming and
- * deleting change a Project's remote, so read-only mode refuses them.
+ * `Unauthorized` without one, before sending anything. Creating, updating and
+ * deleting change a Project on elek.io Cloud, so read-only mode refuses them.
  *
  * Nothing here touches a local Project. Setting or removing its `origin` is
  * `core.projects`'s.
@@ -74,7 +74,12 @@ export class CloudProjectService extends AbstractService {
           response = await this.cloudClient.request({
             method: 'POST',
             path: CloudProjectService.pathOf(create.organizationId),
-            body: JSON.stringify({ id: create.id, name: create.name }),
+            // A description not given is undefined, which stringify leaves out
+            body: JSON.stringify({
+              id: create.id,
+              name: create.name,
+              description: create.description,
+            }),
             subject: 'the Project',
             isSessionRequired: true,
             refusals: this.createRefusals(create),
@@ -143,8 +148,12 @@ export class CloudProjectService extends AbstractService {
   }
 
   /**
-   * Renames the Project. Its remote stays the same. Needs `owner` or `admin`
-   * and throws `Unauthorized` otherwise, and `NotFound` as `read()` does.
+   * Changes the Project's name, its description or both, and sends only what
+   * it was given. Its remote stays the same. Throws `BadRequest` for neither,
+   * before anything is sent.
+   *
+   * Needs `owner` or `admin` and throws `Unauthorized` otherwise, and
+   * `NotFound` as `read()` does.
    */
   public async update(props: UpdateCloudProjectProps): Promise<CloudProject> {
     return this.mutating(
@@ -152,11 +161,15 @@ export class CloudProjectService extends AbstractService {
       updateCloudProjectSchema,
       props,
       async (update) => {
-        const subject = 'the Project rename';
+        const subject = 'the Project update';
         const response = await this.cloudClient.request({
           method: 'PATCH',
           path: CloudProjectService.pathOf(update.organizationId, update.id),
-          body: JSON.stringify({ name: update.name }),
+          // stringify leaves out whichever of the two is undefined
+          body: JSON.stringify({
+            name: update.name,
+            description: update.description,
+          }),
           subject,
           isSessionRequired: true,
           refusals: this.refusalsFor(update),
@@ -168,7 +181,7 @@ export class CloudProjectService extends AbstractService {
         );
         this.logService.info({
           source: 'core',
-          message: 'Renamed a Project on elek.io Cloud',
+          message: 'Updated a Project on elek.io Cloud',
           meta: {
             'elek.organization.id': project.organizationId,
             'elek.project.id': project.id,

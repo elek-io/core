@@ -24,6 +24,7 @@ function project(overrides: Record<string, unknown> = {}) {
     organizationId,
     teamId: null,
     name: 'Website',
+    description: null,
     remoteUrl: `https://cell-1.git.example.test/projects/${id}.git`,
     remoteStatus: 'pending',
     createdAt: '2026-10-19T12:00:00.000Z',
@@ -82,6 +83,29 @@ describe('creating a Project', function () {
     expect(cloud.received[0]?.headers['authorization']).toBe(`Bearer ${token}`);
   });
 
+  it('sends a description it was given, trimmed, and answers it', async function () {
+    const created = project({ description: 'Our shop' });
+    const { cloud, core } = await signedIn({
+      create: () => Response.json({ project: created }, { status: 201 }),
+    });
+
+    const answer = await core.cloud.projects.create({
+      organizationId,
+      id: created.id,
+      name: 'Website',
+      description: ' Our shop  ',
+    });
+
+    expect(answer.description).toBe('Our shop');
+    expect(cloud.received[0]?.rawBody).toBe(
+      JSON.stringify({
+        id: created.id,
+        name: 'Website',
+        description: 'Our shop',
+      })
+    );
+  });
+
   it('takes a name of 200 and refuses one of 201 before anything is sent', async function () {
     const { cloud, core } = await signedIn({
       create: (received) =>
@@ -105,6 +129,46 @@ describe('creating a Project', function () {
     );
 
     expect(error.type).toBe('BadRequest');
+    expect(cloud.received).toHaveLength(1);
+  });
+
+  it('takes a description of 500 and refuses one of 501 or a blank one before anything is sent', async function () {
+    const { cloud, core } = await signedIn({
+      create: (received) =>
+        Response.json(
+          {
+            project: project({
+              id: received.body['id'],
+              description: received.body['description'],
+            }),
+          },
+          { status: 201 }
+        ),
+    });
+
+    await core.cloud.projects.create({
+      organizationId,
+      id: uuid(),
+      name: 'A',
+      description: 'D'.repeat(500),
+    });
+    const errors = await Promise.all(
+      ['D'.repeat(501), '   '].map((description) =>
+        caughtCoreError(
+          core.cloud.projects.create({
+            organizationId,
+            id: uuid(),
+            name: 'A',
+            description,
+          })
+        )
+      )
+    );
+
+    expect(errors.map((error) => error.type)).toEqual([
+      'BadRequest',
+      'BadRequest',
+    ]);
     expect(cloud.received).toHaveLength(1);
   });
 
@@ -197,8 +261,11 @@ describe('creating a Project', function () {
     expect(error.type).toBe('Internal');
   });
 
-  it('logs the ids, never the name', async function () {
-    const created = project({ name: 'Zqx Canary Name' });
+  it('logs the ids, never the name or the description', async function () {
+    const created = project({
+      name: 'Zqx Canary Name',
+      description: 'Zqx Canary Description',
+    });
     const { core } = await signedIn({
       create: () => Response.json({ project: created }, { status: 201 }),
     });
@@ -207,6 +274,7 @@ describe('creating a Project', function () {
       organizationId,
       id: created.id,
       name: 'Zqx Canary Name',
+      description: 'Zqx Canary Description',
     });
     const logs = await readLogsUntil(
       core.util.pathTo.logs,
@@ -302,7 +370,7 @@ describe('a taken id', function () {
   });
 });
 
-describe('listing, reading and renaming', function () {
+describe('listing, reading and updating', function () {
   it('lists every Project the account can see', async function () {
     const listed = [project(), project({ organizationId: uuid() })];
     const { cloud, core } = await signedIn({
@@ -334,6 +402,23 @@ describe('listing, reading and renaming', function () {
     ).toBe('NotFound');
   });
 
+  it('answers a description, or null for a Project created without one', async function () {
+    const described = project({ description: 'Our shop' });
+    const bare = project();
+    const { core } = await signedIn({
+      list: () => Response.json({ projects: [described, bare] }),
+      read: () => Response.json({ project: described }),
+    });
+
+    expect(
+      (await core.cloud.projects.list()).map((listed) => listed.description)
+    ).toEqual(['Our shop', null]);
+    expect(
+      (await core.cloud.projects.read({ organizationId, id: described.id }))
+        .description
+    ).toBe('Our shop');
+  });
+
   it('renames a Project, sending only the name', async function () {
     const renamed = project({ name: 'Shop' });
     const { cloud, core } = await signedIn({
@@ -350,7 +435,75 @@ describe('listing, reading and renaming', function () {
     expect(cloud.received[0]?.rawBody).toBe('{"name":"Shop"}');
   });
 
-  it('throws Unauthorized for a member renaming', async function () {
+  it('changes the description, sending only the description', async function () {
+    const described = project({ description: 'Our shop' });
+    const { cloud, core } = await signedIn({
+      update: () => Response.json({ project: described }),
+    });
+
+    expect(
+      await core.cloud.projects.update({
+        organizationId,
+        id: described.id,
+        description: ' Our shop ',
+      })
+    ).toEqual(described);
+    expect(cloud.received[0]?.rawBody).toBe('{"description":"Our shop"}');
+  });
+
+  it('sends the name and the description together', async function () {
+    const updated = project({ name: 'Shop', description: 'Our shop' });
+    const { cloud, core } = await signedIn({
+      update: () => Response.json({ project: updated }),
+    });
+
+    await core.cloud.projects.update({
+      organizationId,
+      id: updated.id,
+      name: 'Shop',
+      description: 'Our shop',
+    });
+
+    expect(cloud.received[0]?.body).toEqual({
+      name: 'Shop',
+      description: 'Our shop',
+    });
+  });
+
+  it.each([
+    ['neither a name nor a description', {}],
+    ['a description of 501', { description: 'D'.repeat(501) }],
+    ['a blank name', { name: '  ' }],
+  ])(
+    'refuses an update with %s before anything is sent',
+    async function (_, change) {
+      const { cloud, core } = await signedIn({
+        update: () => Response.json({ project: project() }),
+      });
+
+      const error = await caughtCoreError(
+        core.cloud.projects.update({ organizationId, id: uuid(), ...change })
+      );
+
+      expect(error.type).toBe('BadRequest');
+      expect(cloud.received).toHaveLength(0);
+    }
+  );
+
+  it('throws BadRequest when elek.io Cloud refuses the update', async function () {
+    const { core } = await signedIn({
+      update: () => refused(400, 'invalid_request'),
+    });
+
+    const error = await caughtCoreError(
+      core.cloud.projects.update({ organizationId, id: uuid(), name: 'Shop' })
+    );
+
+    expect(error.type).toBe('BadRequest');
+    expect(error.message).not.toContain('invalid_request');
+  });
+
+  it('throws Unauthorized for a member updating', async function () {
     const { core } = await signedIn({
       update: () => refused(403, 'forbidden'),
     });
@@ -431,7 +584,7 @@ describe('without a session, and in read-only mode', function () {
     expect(cloud.received).toHaveLength(0);
   });
 
-  it('refuses creating, renaming and deleting, and still lists and reads', async function () {
+  it('refuses creating, updating and deleting, and still lists and reads', async function () {
     const read = project();
     const cloud = await startFakeCloud({
       'GET /management/v1/projects': () => Response.json({ projects: [read] }),

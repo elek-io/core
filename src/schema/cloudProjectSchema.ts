@@ -1,6 +1,9 @@
 import { z } from '@hono/zod-openapi';
 import { uuidSchema } from './baseSchema.js';
-import { projectNameSchema } from './projectSchema.js';
+import {
+  projectDescriptionSchema,
+  projectNameSchema,
+} from './projectSchema.js';
 
 /**
  * Whether a Project's repository on elek.io Cloud can be reached yet. Only a
@@ -19,13 +22,15 @@ export type CloudProjectRemoteStatus = z.infer<
  * A Project on elek.io Cloud, under the id Core gave the local Project
  *
  * `remoteUrl` is the git remote to set as the local Project's `origin`. Names
- * may repeat, because a Project is found by its id.
+ * may repeat, because a Project is found by its id. `description` is `null`
+ * for a Project created without one.
  */
 export const cloudProjectSchema = z.object({
   id: uuidSchema,
   organizationId: uuidSchema,
   teamId: uuidSchema.nullable(),
   name: z.string(),
+  description: z.string().nullable(),
   remoteUrl: z.url({ protocol: /^https?$/ }),
   remoteStatus: cloudProjectRemoteStatusSchema,
   createdAt: z.iso.datetime(),
@@ -41,12 +46,20 @@ export type ReadCloudProjectProps = z.infer<typeof readCloudProjectSchema>;
 
 export const createCloudProjectSchema = readCloudProjectSchema.extend({
   name: projectNameSchema,
+  description: projectDescriptionSchema.optional(),
 });
 export type CreateCloudProjectProps = z.infer<typeof createCloudProjectSchema>;
 
-export const updateCloudProjectSchema = readCloudProjectSchema.extend({
-  name: projectNameSchema,
-});
+/** Takes a name, a description or both, and refuses neither before sending */
+export const updateCloudProjectSchema = readCloudProjectSchema
+  .extend({
+    name: projectNameSchema.optional(),
+    description: projectDescriptionSchema.optional(),
+  })
+  .refine(
+    (update) => update.name !== undefined || update.description !== undefined,
+    'An update takes a name, a description or both'
+  );
 export type UpdateCloudProjectProps = z.infer<typeof updateCloudProjectSchema>;
 
 export const deleteCloudProjectSchema = readCloudProjectSchema;

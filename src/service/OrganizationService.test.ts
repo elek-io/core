@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { cloudOrganizationSlugSchema } from '../schema/cloudOrganizationSchema.js';
+import {
+  cloudOrganizationNameSchema,
+  cloudOrganizationSlugSchema,
+} from '../schema/cloudOrganizationSchema.js';
 import { refused, startFakeCloud, type FakeCloud } from '../test/cloud.js';
 import { caughtCoreError, createTmpCore, readLogsUntil } from '../test/util.js';
 import { uuid } from '../util/shared.js';
@@ -77,10 +80,28 @@ describe('listing organizations', function () {
     expect(listed?.roles).toEqual(['admin']);
   });
 
-  it('throws Internal for a plan Core does not know', async function () {
+  it('answers null for a plan Core does not know, rather than failing the list', async function () {
+    const unknown = organization({
+      plan: 'galactic',
+      projects: { count: 2, limit: 10 },
+    });
+    const known = organization({ slug: 'acme', plan: 'pro' });
+    const { core } = await signedIn({
+      [listRoute]: () => Response.json({ organizations: [unknown, known] }),
+    });
+
+    expect(await core.cloud.organizations.list()).toEqual([
+      { ...unknown, plan: null },
+      known,
+    ]);
+  });
+
+  it('throws Internal for a plan that is not a string, never repeating it', async function () {
     const { core } = await signedIn({
       [listRoute]: () =>
-        Response.json({ organizations: [organization({ plan: 'galactic' })] }),
+        Response.json({
+          organizations: [organization({ plan: { tier: 'galactic' } })],
+        }),
     });
 
     const error = await caughtCoreError(core.cloud.organizations.list());
@@ -194,6 +215,35 @@ describe('the slug rule', function () {
 
     expect(checked.type).toBe('BadRequest');
     expect(created.type).toBe('BadRequest');
+    expect(cloud.received).toHaveLength(0);
+  });
+});
+
+describe('the name rule', function () {
+  it.each([
+    ['one character', 'A'],
+    ['200 characters', 'N'.repeat(200)],
+    ['200 characters between spaces', ` ${'N'.repeat(200)} `],
+  ])('takes %s', function (_, name) {
+    expect(cloudOrganizationNameSchema.safeParse(name).success).toBe(true);
+  });
+
+  it.each([
+    ['an empty name', ''],
+    ['a blank name', '   '],
+    ['201 characters', 'N'.repeat(201)],
+  ])('refuses %s before anything is sent', async function (_, name) {
+    expect(cloudOrganizationNameSchema.safeParse(name).success).toBe(false);
+
+    const { cloud, core } = await signedIn({
+      [createRoute]: () => Response.json(organization()),
+    });
+
+    const error = await caughtCoreError(
+      core.cloud.organizations.create({ name, slug: 'acme' })
+    );
+
+    expect(error.type).toBe('BadRequest');
     expect(cloud.received).toHaveLength(0);
   });
 });
