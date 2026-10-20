@@ -7,6 +7,8 @@ import {
   createEntry,
   createProject,
 } from '../test/util.js';
+import { elekCollections } from './collections.js';
+import { getCore } from './core.js';
 import { elekEntriesLoader } from './loaders.js';
 import type { ContentWatcher } from './watch.js';
 
@@ -26,13 +28,21 @@ async function startLoader(projectId: string) {
   };
   const warnings: string[] = [];
   const errors: string[] = [];
+  /** Every line Astro's logger took, at any level and never cleared */
+  const astroLines: string[] = [];
   const store = new Map<string, { data: unknown; digest: string }>();
   const context = {
     logger: {
-      info: () => undefined,
-      debug: () => undefined,
-      warn: (message: string) => warnings.push(message),
-      error: (message: string) => errors.push(message),
+      info: (message: string) => astroLines.push(message),
+      debug: (message: string) => astroLines.push(message),
+      warn: (message: string) => {
+        astroLines.push(message);
+        warnings.push(message);
+      },
+      error: (message: string) => {
+        astroLines.push(message);
+        errors.push(message);
+      },
     },
     store: {
       get: (id: string) => store.get(id),
@@ -63,6 +73,7 @@ async function startLoader(projectId: string) {
     store,
     warnings,
     errors,
+    astroLines,
     /** Reports a change below the Collection and waits for its reload */
     reload: async (changedPath: string) => {
       const reported = warnings.length + errors.length;
@@ -149,5 +160,49 @@ describe('the Entries loader while astro dev runs', function () {
     expect(warnings).toEqual([
       expect.stringContaining('was renamed or replaced'),
     ]);
+  }, 60000);
+});
+
+describe('the loggers a build writes through', function () {
+  it('reports the loaders through Astro and the derive warning through Core', async function () {
+    const project = await createProject();
+    onTestFinished(() => project.destroy());
+    await createCollection(project.id);
+
+    const coreLines: string[] = [];
+    const spies = (['debug', 'info', 'warn', 'error'] as const).map((level) =>
+      vi.spyOn(getCore().logger, level).mockImplementation((props) => {
+        coreLines.push(props.message);
+      })
+    );
+    onTestFinished(() => {
+      for (const spy of spies) spy.mockRestore();
+    });
+
+    const { astroLines } = await startLoader(project.id);
+
+    // What a loader reports is Astro's to silence, so ELEK_IO_LOG_LEVEL
+    // leaves every one of these lines standing
+    expect(astroLines).toContainEqual(
+      expect.stringContaining('Reading Project ')
+    );
+    expect(astroLines).toContainEqual(
+      expect.stringContaining('Finished loading Entries')
+    );
+    for (const line of astroLines) {
+      expect(coreLines).not.toContain(line);
+    }
+    // What the same build loses at error level is Core's own
+    expect(coreLines).toContainEqual(expect.stringContaining('slug index'));
+
+    await elekCollections({ projects: { website: { id: project.id } } });
+
+    // The derive warning is Core's, so that one the level does reach
+    expect(coreLines).toContainEqual(
+      expect.stringContaining('elekCollections()')
+    );
+    expect(astroLines).not.toContainEqual(
+      expect.stringContaining('elekCollections()')
+    );
   }, 60000);
 });
