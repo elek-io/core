@@ -51,9 +51,9 @@ The resolved options are exposed on `core.options`, and the running Core version
   - Relative paths are resolved against the current working directory once at construction. `~` is not expanded, that is a shell feature, so pass an absolute path or let the shell expand it.
   - The directory does not need to exist, Core creates it. An empty or whitespace-only value throws a `CoreError`.
   - The resolved absolute path is exposed as `core.options.dataDir`, and `core.util.pathTo` builds every path from it.
-- **`log.level`** is the lowest level Core writes, one of `error`, `warn`, `info` and `debug`. It takes precedence over the `ELEK_IO_LOG_LEVEL` environment variable, which takes precedence over the default `info`.
+- **`log.level`** is the lowest level Core's own logger writes, one of `error`, `warn`, `info` and `debug`. It takes precedence over the `ELEK_IO_LOG_LEVEL` environment variable, which takes precedence over the default `info`.
   - A value that is none of the four throws a `CoreError`, so a typo says so instead of quietly leaving the logs as they were.
-  - Set it to `error` where Core is a library inside another tool's output, such as an Astro build.
+  - Set it to `error` where Core is a library inside another tool's output, such as an Astro build. It reaches Core's own logger only, so whatever the host tool logs is untouched, see [Astro integration](#astro-integration).
 - **`log.hasProcessErrorHandlers`** decides whether Core registers `process.on('uncaughtException')` and `process.on('unhandledRejection')`, which is what writes an uncaught error into the log file before the process goes down. It defaults to `true`.
   - Set it to `false` where the host owns its own error handling, such as inside a build. The Astro entry does that for you.
   - `dispose()` removes the handlers again either way.
@@ -596,9 +596,15 @@ Those are the only entries the integration needs. Everything else it produces go
 All loaders share one Core instance, and the loaders themselves take no options for it. What configures it are the `ELEK_IO_*` environment variables of the build:
 
 - `ELEK_IO_DATA_DIR` reads from a data directory other than `~/elek.io`.
-- `ELEK_IO_LOG_LEVEL` set to `error` keeps Core out of the build output.
+- `ELEK_IO_LOG_LEVEL` set to `error` keeps Core's own lines out of the build output.
 - `ELEK_IO_CHANNEL` switches the content state deployment-wide.
 - `ELEK_IO_REMOTE_ACCESS_TOKEN` authenticates against a private remote.
+
+`ELEK_IO_LOG_LEVEL` reaches Core's own logger and nothing else, so the loaders keep reporting at `error`:
+
+- Core's own lines disappear, which in a build means the line it writes when it starts and one for every slug index it rebuilds.
+- The `[elek-assets]` and `[elek-entries]` lines stay, because the loaders report through Astro's logger. They name the Project, its version and the branch or Release tag each loader read.
+- [`astro build --silent`](https://docs.astro.build/en/reference/cli-reference/#--silent) quiets those too, and the rest of the build with them, warnings and errors included.
 
 See [Environment variables](#environment-variables) for the full list, and note that it is the full list. A setting without an environment variable cannot be changed for the loaders' Core.
 
