@@ -87,7 +87,7 @@ A git operation against a Cloud host throws a `CoreError`, see [`error-handling.
 | `Unauthorized` | Core holds no session, elek.io Cloud answered 401, or the git host refused the token after Core asked once more |
 | `NotFound` | elek.io Cloud has no Project with the remote's id that this session can see (404) |
 | `Conflict` | Access changed twice in a row while elek.io Cloud granted it (409) |
-| `RateLimited` | elek.io Cloud answered 429. Core asks nothing more for git until its `Retry-After` passes, an hour at most |
+| `RateLimited` | elek.io Cloud answered 429. Core asks nothing more for git until its `Retry-After` passes, an hour at most, and `retryAt` holds when that is |
 | `PreconditionFailed` | elek.io Cloud could not be reached, did not answer within 15 seconds, or could not reach the git host (502, 504). Also a remote whose path names no Project, and a remote on another git host than elek.io Cloud places the Project on |
 | `Internal` | elek.io Cloud failed otherwise, or answered with something Core cannot read |
 

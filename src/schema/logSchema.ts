@@ -134,6 +134,7 @@ export const logAttributeNames = [
   'elek.options.is_read_only',
   'elek.options.log.has_process_error_handlers',
   'elek.options.log.level',
+  'elek.organization.id',
   'elek.project.count',
   'elek.project.id',
   'elek.release.bump',

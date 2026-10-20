@@ -74,6 +74,7 @@ export type CoreErrorType =
   | 'PreconditionFailed'
   | 'UpgradeFailed'
   | 'VersionSkew'
+  | 'QuotaExceeded'
   | 'RateLimited'
   | 'Internal';
 
@@ -85,6 +86,7 @@ const statusCodes: Record<CoreErrorType, number> = {
   PreconditionFailed: 412,
   UpgradeFailed: 422,
   VersionSkew: 422,
+  QuotaExceeded: 402,
   RateLimited: 429,
   Internal: 500,
 };
@@ -93,7 +95,7 @@ const statusCodes: Record<CoreErrorType, number> = {
  * The only error a service method throws, so `error instanceof CoreError` is
  * the whole catch.
  *
- * `type` is the nine-way discriminant to branch on. `statusCode` is the HTTP
+ * `type` is the ten-way discriminant to branch on. `statusCode` is the HTTP
  * status the local API answers with and is not unique, `UpgradeFailed` and
  * `VersionSkew` are both 422. `cause` keeps whatever was originally thrown.
  *
@@ -104,12 +106,24 @@ const statusCodes: Record<CoreErrorType, number> = {
 export class CoreError extends Error {
   public readonly type: CoreErrorType;
   public readonly statusCode: number;
+  /**
+   * When elek.io Cloud asks to be called again, in epoch milliseconds, at
+   * most an hour ahead. Set on a `RateLimited` whose 429 carried a readable
+   * `Retry-After`, and null on every other error
+   */
+  public readonly retryAt: number | null;
 
-  constructor(type: CoreErrorType, message: string, cause?: unknown) {
+  constructor(
+    type: CoreErrorType,
+    message: string,
+    cause?: unknown,
+    retryAt: number | null = null
+  ) {
     super(message, { cause });
     this.name = 'CoreError';
     this.type = type;
     this.statusCode = statusCodes[type];
+    this.retryAt = retryAt;
   }
 
   /** The Project, entity or git object the id or slug names is not on disk. */
@@ -165,11 +179,23 @@ export class CoreError extends Error {
     return new CoreError('VersionSkew', message, cause);
   }
   /**
-   * elek.io Cloud refused because this client passed its rate limit. Only
-   * the `core.cloud` calls reach it, so nothing else raises it.
+   * elek.io Cloud refused because an organization's plan has no room left,
+   * such as for another Project. Only the `core.cloud` calls reach it.
    */
-  static rateLimited(message: string, cause?: unknown) {
-    return new CoreError('RateLimited', message, cause);
+  static quotaExceeded(message: string, cause?: unknown) {
+    return new CoreError('QuotaExceeded', message, cause);
+  }
+  /**
+   * elek.io Cloud refused because this client passed its rate limit, and
+   * `retryAt` says when to call again where Cloud said so. Only elek.io
+   * Cloud calls reach it, so nothing else raises it.
+   */
+  static rateLimited(
+    message: string,
+    retryAt: number | null = null,
+    cause?: unknown
+  ) {
+    return new CoreError('RateLimited', message, cause, retryAt);
   }
   /**
    * Core's own failure, or one nobody planned for: a failed git command, an

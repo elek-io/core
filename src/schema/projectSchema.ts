@@ -61,10 +61,25 @@ export type ProjectFolder = z.infer<typeof projectFolderSchema>;
 export const projectBranchSchema = z.enum(['main', 'draft']);
 export type ProjectBranch = z.infer<typeof projectBranchSchema>;
 
+/**
+ * A Project's name, 1 to 200 long after trimming, counted in UTF-16 code
+ * units as `String.length` counts. elek.io Cloud holds a Project's name to
+ * the same, so every Project can move there
+ */
+export const projectNameSchema = z.string().trim().min(1).max(200);
+
+/**
+ * A Project's description, 1 to 500 long after trimming, counted like a name.
+ * A plain string rather than a translatable one, like the name
+ *
+ * @see ../../contributing/cloud-projects.md
+ */
+export const projectDescriptionSchema = z.string().trim().min(1).max(500);
+
 export const projectFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.project).readonly(),
-  name: z.string().trim().min(1),
-  description: z.string().trim().min(1),
+  name: projectNameSchema,
+  description: projectDescriptionSchema,
   version: versionSchema,
   settings: projectSettingsSchema,
 });
@@ -247,6 +262,13 @@ export const setRemoteOriginUrlProjectSchema = z.object({
 });
 export type SetRemoteOriginUrlProjectProps = z.infer<
   typeof setRemoteOriginUrlProjectSchema
+>;
+
+export const removeRemoteOriginProjectSchema = z.object({
+  id: uuidSchema.readonly(),
+});
+export type RemoveRemoteOriginProjectProps = z.infer<
+  typeof removeRemoteOriginProjectSchema
 >;
 
 export const getChangesProjectSchema = z.object({

@@ -77,6 +77,7 @@ describe('CoreError', () => {
     ['preconditionFailed', 'PreconditionFailed', 412],
     ['upgradeFailed', 'UpgradeFailed', 422],
     ['versionSkew', 'VersionSkew', 422],
+    ['quotaExceeded', 'QuotaExceeded', 402],
     ['rateLimited', 'RateLimited', 429],
     ['internal', 'Internal', 500],
   ] as const)(
@@ -87,12 +88,20 @@ describe('CoreError', () => {
       expect(error.type).toBe(type);
       expect(error.statusCode).toBe(statusCode);
       expect(error.message).toBe('something happened');
+      expect(error.retryAt).toBeNull();
     }
   );
 
   it('keeps the cause of what it was raised from', () => {
     const cause = new Error('the real one');
 
-    expect(CoreError.rateLimited('too many', cause).cause).toBe(cause);
+    expect(CoreError.quotaExceeded('no room', cause).cause).toBe(cause);
+    expect(CoreError.rateLimited('too many', null, cause).cause).toBe(cause);
+  });
+
+  it('says when a RateLimited may call again', () => {
+    const retryAt = Date.now() + 30_000;
+
+    expect(CoreError.rateLimited('too many', retryAt).retryAt).toBe(retryAt);
   });
 });

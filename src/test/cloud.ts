@@ -17,7 +17,8 @@ export interface Received {
 export type Respond = (received: Received) => Response | Promise<Response>;
 
 /** A route as `<method> <path>`, so a test reads like the request it fakes */
-export type FakeCloudRoute = `${'GET' | 'POST' | 'PUT'} /${string}`;
+export type FakeCloudRoute =
+  `${'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} /${string}`;
 
 export interface FakeCloud {
   url: string;
@@ -93,6 +94,26 @@ export async function startFakeCloud(
   onTestFinished(close);
 
   return { url: `http://127.0.0.1:${port}`, received, close };
+}
+
+/**
+ * A refusal as elek.io Cloud answers one, `{ code, message, detail? }`, which
+ * is Better Auth's shape too. The message repeats the code, so a test can
+ * tell that nothing an answer said reached Core's message
+ */
+export function refused(
+  status: number,
+  code: string,
+  init: { detail?: Record<string, unknown>; headers?: HeadersInit } = {}
+): Response {
+  return Response.json(
+    {
+      code,
+      message: code,
+      ...(init.detail === undefined ? {} : { detail: init.detail }),
+    },
+    { status, ...(init.headers === undefined ? {} : { headers: init.headers }) }
+  );
 }
 
 function parseBody(rawBody: string): Record<string, unknown> {

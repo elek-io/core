@@ -190,7 +190,7 @@ const project = await core.projects.create({
 });
 ```
 
-`supported` must be non-empty and free of duplicates, and `default` must be one of the supported languages. Both are checked on create and update, so a Project cannot drop a supported language while it is still the default.
+`supported` must be non-empty and free of duplicates, and `default` must be one of the supported languages. Both are checked on create and update, so a Project cannot drop a supported language while it is still the default. `name` takes 1 to 200 characters and `description` 1 to 500, after trimming.
 
 ### Adding an Asset
 

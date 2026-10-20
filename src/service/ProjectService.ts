@@ -21,6 +21,7 @@ import {
   projectHistorySchema,
   projectSchema,
   readProjectSchema,
+  removeRemoteOriginProjectSchema,
   serviceTypeSchema,
   setRemoteOriginUrlProjectSchema,
   switchBranchProjectSchema,
@@ -45,6 +46,7 @@ import {
   type ProvisionResult,
   type ProvisionSource,
   type ReadProjectProps,
+  type RemoveRemoteOriginProjectProps,
   type SetRemoteOriginUrlProjectProps,
   type SwitchBranchProjectProps,
   type SynchronizeProjectProps,
@@ -1179,6 +1181,34 @@ export class ProjectService
           projectPath,
           props.url
         );
+      }
+    );
+  }
+
+  /**
+   * Removes the `origin` remote of given Project, with its remote-tracking
+   * branches and the upstream of its branches, so the Project is only local
+   * again. Nothing on the remote changes. A Project without an `origin` is
+   * left as it is, so calling it twice is safe.
+   *
+   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy.
+   *
+   * @see ../../docs/git-and-sync.md#removing-the-remote
+   */
+  public removeRemoteOrigin(
+    props: RemoveRemoteOriginProjectProps
+  ): Promise<void> {
+    return this.mutating(
+      'removeRemoteOrigin',
+      removeRemoteOriginProjectSchema,
+      props,
+      async (remove) => {
+        await this.assertNotProvisioned('removeRemoteOrigin', remove.id);
+
+        const projectPath = this.pathTo.project(remove.id);
+        if (await this.gitService.remotes.hasOrigin(projectPath)) {
+          await this.gitService.remotes.removeOrigin(projectPath);
+        }
       }
     );
   }

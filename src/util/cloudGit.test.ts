@@ -140,6 +140,12 @@ describe('CloudGitAccess', function () {
       'call again in 120 seconds'
     );
     expect(t.cloudGit.calls).toHaveLength(1);
+    // The error Core keeps answering with says when, as the first one did
+    const kept = await t.access
+      .credentialFor(hostTwo, second)
+      .catch((error: unknown) => error);
+    expect(kept).toMatchObject({ retryAt: t.cloudClient.notBefore });
+    expect(t.cloudClient.notBefore).toBeGreaterThan(Date.now() + 110_000);
 
     // A new session is not rate limited by the old one's answer
     t.cloudClient.keep('session-two');
