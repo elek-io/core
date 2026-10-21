@@ -16,7 +16,7 @@ import { entriesOf } from './typedObject.js';
  * Collection or a Component answered.
  */
 export const contentLossRefusal =
-  'The update was refused, because applying it would delete stored content for good. Send it again with "acceptedContentLoss" naming the id of every field definition in this error whose content may go.';
+  'The update was refused, because applying it would permanently delete stored content. Send it again with "acceptedContentLoss" naming the id of every field definition in this error whose content may go.';
 
 /**
  * True when the Value holds something a person would miss. An added field

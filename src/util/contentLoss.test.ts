@@ -236,7 +236,7 @@ describe('updateRefusalMessage', function () {
 
     expect(message).toBe(contentLossRefusal);
     expect(message).toContain('refused');
-    expect(message).toContain('delete stored content for good');
+    expect(message).toContain('permanently delete stored content');
     expect(message).toContain('acceptedContentLoss');
     expect(message).not.toContain('Gone');
     expect(message).not.toContain(resolutionMessage);

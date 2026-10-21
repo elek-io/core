@@ -88,7 +88,7 @@ export type ValueLoss =
   FieldRemovedLoss | ComponentsNarrowedLoss | CollectionsNarrowedLoss;
 
 /**
- * Stored content the update would delete for good. It is accepted rather
+ * Stored content the update would delete permanently. It is accepted rather
  * than resolved: list `fieldDefinitionId` under `acceptedContentLoss` and
  * send the same update again.
  *
