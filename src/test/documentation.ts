@@ -352,9 +352,10 @@ function changeTypesOf(): Map<string, string[]> {
 /**
  * The bump `ReleaseService` gives each change type, read out of the literals
  * it pushes. Every push writes `bump` directly after `changeType`, and this
- * looks for that pair anywhere in the file. It does not establish which
- * array the pair is pushed into, so a change type two arrays share answers
- * for both, see contributing/documentation.md.
+ * looks for that pair anywhere in the file. It establishes neither which
+ * array the pair is pushed into nor which push wrote it, so a change type
+ * pushed in several places answers for every row naming it, which is 19 of
+ * the 58 declared pairs, see contributing/documentation.md.
  */
 function changeBumpsOf(
   changeTypes: Iterable<string>
@@ -1242,25 +1243,29 @@ export const rules: Rule[] = [
         );
         if (arrays.length === 0) continue;
 
-        const classified = bumps.get(changeType) ?? new Set<string>();
-        if (classified.size === 0) {
-          violations.push({
-            file,
-            line: line.number,
-            message: `ReleaseService pairs no bump with ${changeType}, so either nothing classifies it and the row goes, or its push writes bump before changeType`,
-          });
-        } else if (classified.size > 1) {
-          violations.push({
-            file,
-            line: line.number,
-            message: `ReleaseService classifies ${changeType} as ${[...classified].join(' and ')}, so one row cannot answer for it`,
-          });
-        } else if (!classified.has(bump)) {
-          violations.push({
-            file,
-            line: line.number,
-            message: `${changeType} is classified as ${[...classified][0]}, not ${bump}`,
-          });
+        // A change type no array declares has no bump to look for, and the
+        // per-array check below reports it where the truth about it is
+        const classified = bumps.get(changeType);
+        if (classified !== undefined) {
+          if (classified.size === 0) {
+            violations.push({
+              file,
+              line: line.number,
+              message: `ReleaseService pairs no bump with ${changeType}, so either nothing classifies it and the row goes, or its push does not write bump directly after changeType`,
+            });
+          } else if (classified.size > 1) {
+            violations.push({
+              file,
+              line: line.number,
+              message: `ReleaseService classifies ${changeType} as ${[...classified].join(' and ')}, so one row cannot answer for it`,
+            });
+          } else if (!classified.has(bump)) {
+            violations.push({
+              file,
+              line: line.number,
+              message: `${changeType} is classified as ${[...classified][0]}, not ${bump}`,
+            });
+          }
         }
 
         for (const array of arrays) {

@@ -155,17 +155,6 @@ describe('documentation', () => {
       );
     });
 
-    it('names both causes when nothing pairs a bump with the change type', () => {
-      const messages = messagesOf(
-        table.replace(entryRow, '| `entryChanges` | `renamed` | patch |')
-      );
-
-      // The pair is read file-wide, so a reordered push reads like a stale row
-      expect(messages).toContain(
-        'ReleaseService pairs no bump with renamed, so either nothing classifies it and the row goes, or its push writes bump before changeType'
-      );
-    });
-
     it('reports the section being renamed away', () => {
       const messages = messagesOf(
         table.replace(
