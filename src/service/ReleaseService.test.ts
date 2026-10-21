@@ -1311,4 +1311,22 @@ describe('ReleaseService - a dynamic field inside a Component', function () {
     ]);
     expect(diff.componentChanges).toEqual([]);
   });
+
+  it('leaves the same list in a different order a PATCH', async function () {
+    await core.components.update({
+      projectId: project.id,
+      ...section,
+      fieldDefinitions: [
+        dynamicField('blocks', [media.id, hero.id]),
+        dynamicField('sections', []),
+      ],
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    // The lists are compared sorted, so the order they are declared in is no
+    // part of the contract and reordering alone changes nothing
+    expect(diff.componentFieldChanges).toEqual([]);
+    expect(diff.bump).toEqual('patch');
+  });
 });
