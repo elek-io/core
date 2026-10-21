@@ -161,7 +161,7 @@ Four decisions beyond that, each the cheaper half of a trade:
 | Decision | Against | Why |
 | --- | --- | --- |
 | `<ol start>` only where the list counts from something other than 1 | always writing it | `start="1"` is what `<ol>` does anyway, and emitting it would change the markup of every ordered list for no effect. A 0 is kept, GFM and HTML both allow it |
-| A task item's checkbox is `disabled` | a live checkbox | A rendered tree is not an editor, and a focusable control with no handler is a WCAG failure waiting for a consumer to hit it |
+| A task item's checkbox is `disabled` | a live checkbox | A rendered tree is not an editor, so a live box would offer a change that goes nowhere. It would also be a focusable control with no name, since the item's text is a sibling rather than a `<label>` |
 | No class name on a task item | `class="task-list-item"`, which is GFM's | The defaults promise no class names, and a name without the CSS that makes it mean something is a half measure. The item keeps its list marker, which is visible and therefore reported rather than hidden |
 | The footnote reference carries `id="fnref-<identifier>"` and the definition links back to it | leaving the way back to the consumer | Without an id the definition's `fn-` id has nothing to point at, so the one half Core shipped was unusable on its own |
 
