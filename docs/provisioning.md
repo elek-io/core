@@ -103,7 +103,8 @@ jobs:
           key: elek-io-${{ github.run_id }}
           restore-keys: elek-io-
       - run: pnpm install
-      # astro check reads the types astro build only writes
+      # astro check reads the types astro build only writes. It needs
+      # @astrojs/check and typescript in the project
       - run: pnpm astro check && pnpm astro build
         env:
           ELEK_IO_REMOTE_ACCESS_TOKEN: ${{ secrets.ELEK_IO_REMOTE_ACCESS_TOKEN }}
