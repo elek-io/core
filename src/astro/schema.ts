@@ -198,8 +198,8 @@ function buildComponentArraySchema(
 
 /**
  * Fingerprints everything the generated schema and types are built from: the
- * Collection's field definitions, the Project's languages and the Components
- * the fields reference.
+ * Collection's field definitions, the Project's languages and the Project's
+ * Components, whether a field references them or not.
  *
  * The loaders compare this digest on every dev reload, to notice that the
  * model moved underneath them. Field definitions keep their order, which the
