@@ -138,7 +138,11 @@ describe('published documentation', function () {
   }, 60000);
 
   afterAll(async function () {
-    await Fs.remove(consumerDir);
+    // The hook above can die before it assigns this, and removing undefined
+    // would bury that failure under a second, unrelated error
+    if (consumerDir) {
+      await Fs.remove(consumerDir);
+    }
   });
 
   function resolveFromConsumer(...specifiers: string[]) {
@@ -153,6 +157,11 @@ describe('published documentation', function () {
           cwd: consumerDir,
           env,
           encoding: 'utf8',
+          // The child writes every page back, so this output grows with
+          // docs/. The pages weigh a quarter of the 1 MB default today and
+          // passing it fails as ENOBUFS naming the spawn, not the pages.
+          // 32 MB is a hundred times that and still a ceiling
+          maxBuffer: 32 * 1024 * 1024,
         })
       )
     );
