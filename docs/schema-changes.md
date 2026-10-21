@@ -42,6 +42,8 @@ Renames, removals, additions with a usable default, and allowlist narrowing are 
 
 There is no separate confirmation step for these - the commit is made as part of the update. Treat field removal and allowlist narrowing as destructive operations.
 
+Removing a field, narrowing a `dynamic` field's `ofComponents` and narrowing an `entry` field's `ofCollections` each make the next Release a major one, see [`releases.md`](./releases.md#every-change-a-diff-can-carry).
+
 ### Default values for added fields
 
 A newly added field's value is built per its type:

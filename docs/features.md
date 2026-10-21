@@ -40,6 +40,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 - **Migration on read** - historical data is run through the migration chain on read, so it always comes back in the current schema shape. See [`usage.md`](./usage.md#reading-from-history).
 - **Transactional writes** - create / update / delete operations are wrapped in an automatic git rollback that restores the working tree on failure. See [`error-handling.md`](./error-handling.md).
 - **Releases** - tagged snapshots of a Project at a point in time, managed through git tags.
+- **A version computed from the content** - a Release diffs the draft against the released state and takes its semver bump from what changed, so a renamed Collection or Component arrives as a major. See [`releases.md`](./releases.md#how-the-bump-is-decided).
 - **Branching** - content edits happen on a `draft` branch, with `main` reserved for released content.
 
 ## Schema evolution
@@ -105,6 +106,7 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **Astro's `render()` does not apply to Entries** - a `markdown` field arrives on `entry.data` as an mdast tree, not as the rendered HTML `render(entry)` and `<Content />` read, so the loaders leave Astro's rendered slot empty.
   - Filling it would flatten `entryReference` and `assetReference` nodes into finished markup and lose the UUIDs a page resolves them by, which is the reason to store a tree in the first place.
   - Calling `render()` on an Entry is not an error and renders nothing at all, so reach for `mdastRender` instead. See [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro).
+- **A major Release warns, it does not gate** - a build that provisions the `release` channel lands on the newest Release of a Project whatever its bump, so a major one reaches it like any other. Pin an exact version to decide yourself when to move. See [`releases.md`](./releases.md#what-a-major-release-asks-of-a-consumer).
 - **No plugin or marketplace system** - extending the field catalogue means changing code, not installing a package.
 - **No nested composition** - groups cannot nest groups, and `dynamic` fields cannot nest `dynamic` fields. Components are the flat, predictable reuse mechanism.
 - **A log tail can be truncated** - `core.logger.tail()` stops collecting at a size ceiling and sets `isTruncated`, dropping the oldest records first. Collapsing repeated records is what keeps a tail small, and it is worth far more than a bigger cap, so the ceiling is a safety valve rather than a working limit. See [`usage.md`](./usage.md#the-log-tail) for the ceiling and what `isTruncated` means.

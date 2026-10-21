@@ -285,6 +285,79 @@ function statusCodesOf(): Map<string, string> {
   );
 }
 
+/**
+ * Every change type a release diff can carry, by the array it arrives in.
+ *
+ * `docs/releases.md` restates these as a table whoever releases reads, and a
+ * table maintained by hand drifts from the enums it copies. Walked from
+ * `releaseDiffSchema` so an array added there cannot stay undocumented.
+ */
+function changeTypesOf(): Map<string, string[]> {
+  const source = readFile('src/schema/releaseSchema.ts');
+  const enums = new Map(
+    [
+      ...source.matchAll(
+        /const (\w+ChangeTypeSchema) = z\.enum\(\[([^\]]*)\]\)/g
+      ),
+    ].map(([, name, values]) => [
+      name ?? '',
+      [...(values ?? '').matchAll(/'([^']+)'/g)].map(
+        ([, value]) => value ?? ''
+      ),
+    ])
+  );
+  const changeSchemas = new Map(
+    [
+      ...source.matchAll(/const (\w+ChangeSchema) = z\.object\(\{([^}]*)\}\)/g),
+    ].map(([, name, body]) => [
+      name ?? '',
+      /changeType:\s*(\w+)/.exec(body ?? '')?.[1] ?? '',
+    ])
+  );
+  const diff = /const releaseDiffSchema = z\.object\(\{([^}]*)\}\)/.exec(
+    source
+  )?.[1];
+  if (diff === undefined) {
+    throw new Error(
+      'releaseDiffSchema is not declared as expected in src/schema/releaseSchema.ts'
+    );
+  }
+  const byArray = new Map<string, string[]>();
+  for (const [, array, schema] of diff.matchAll(/(\w+): z\.array\((\w+)\)/g)) {
+    const types = enums.get(changeSchemas.get(schema ?? '') ?? '');
+    if (types === undefined) {
+      throw new Error(
+        `${array ?? ''} of releaseDiffSchema reaches no change type enum`
+      );
+    }
+    byArray.set(array ?? '', types);
+  }
+  return byArray;
+}
+
+/**
+ * The bump `ReleaseService` gives each change type, read out of the literals
+ * it pushes. Every push writes `bump` directly after `changeType`, which is
+ * what this reads, so a change type with no pair is one nothing classifies.
+ */
+function changeBumpsOf(): Map<string, Set<string>> {
+  const source = readFile('src/service/ReleaseService.ts');
+  const bumps = new Map<string, Set<string>>();
+  for (const [, type, bump] of source.matchAll(
+    /changeType: '(\w+)',\s*bump: '(\w+)'/g
+  )) {
+    const seen = bumps.get(type ?? '') ?? new Set<string>();
+    seen.add(bump ?? '');
+    bumps.set(type ?? '', seen);
+  }
+  if (bumps.size === 0) {
+    throw new Error(
+      'No changeType and bump pair in src/service/ReleaseService.ts, keep bump directly after changeType'
+    );
+  }
+  return bumps;
+}
+
 /** What the coverage rule reads. A test documents nobody, so it is left out. */
 const productionSourceFiles = () =>
   sourceFiles().filter(
@@ -1109,6 +1182,100 @@ export const rules: Rule[] = [
           line: 1,
           message: `the table has ${declared.size} types, the sentence says ${counted[1]}`,
         });
+      }
+      return violations;
+    },
+  },
+  {
+    id: 'links/release-table',
+    summary: 'the documented release changes are the ones Core classifies',
+    files: () => ['docs/releases.md'].filter((file) => exists(file)),
+    check: (file, content) => {
+      const section = 'Every change a diff can carry';
+      if (!content.includes(`### ${section}`)) {
+        return [
+          {
+            file,
+            line: 1,
+            message: `the "${section}" section is gone, and with it the table of every change type`,
+          },
+        ];
+      }
+
+      const declared = changeTypesOf();
+      const bumps = changeBumpsOf();
+      const documented = new Set<string>();
+      const violations: Violation[] = [];
+      let inSection = false;
+
+      for (const line of linesOf(content)) {
+        if (!line.inFence && /^#{1,6}\s/.test(line.text)) {
+          inSection = line.text.includes(section);
+          continue;
+        }
+        if (!inSection || line.inFence) continue;
+        // | `fieldChanges` and `componentFieldChanges` | `added` | minor | .. |
+        const row = /^\|([^|]*)\|\s*`(\w+)`\s*\|\s*(\w+)\s*\|/.exec(line.text);
+        const changeType = row?.[2];
+        const bump = row?.[3];
+        if (!changeType || !bump) continue;
+        const arrays = [...(row?.[1] ?? '').matchAll(/`(\w+)`/g)].map(
+          ([, name]) => name ?? ''
+        );
+        if (arrays.length === 0) continue;
+
+        const classified = bumps.get(changeType);
+        if (classified === undefined) {
+          violations.push({
+            file,
+            line: line.number,
+            message: `ReleaseService classifies no ${changeType}, drop the row`,
+          });
+        } else if (classified.size > 1) {
+          violations.push({
+            file,
+            line: line.number,
+            message: `ReleaseService classifies ${changeType} as ${[...classified].join(' and ')}, so one row cannot answer for it`,
+          });
+        } else if (!classified.has(bump)) {
+          violations.push({
+            file,
+            line: line.number,
+            message: `${changeType} is classified as ${[...classified][0]}, not ${bump}`,
+          });
+        }
+
+        for (const array of arrays) {
+          const types = declared.get(array);
+          if (types === undefined) {
+            violations.push({
+              file,
+              line: line.number,
+              message: `${array} is not an array of a release diff, drop it from the row`,
+            });
+            continue;
+          }
+          if (!types.includes(changeType)) {
+            violations.push({
+              file,
+              line: line.number,
+              message: `${array} never carries ${changeType}, drop it from the row`,
+            });
+            continue;
+          }
+          documented.add(`${array}.${changeType}`);
+        }
+      }
+
+      for (const [array, types] of declared) {
+        for (const type of types) {
+          if (documented.has(`${array}.${type}`)) continue;
+          violations.push({
+            file,
+            line: 1,
+            message: `${array} carries ${type} with no row in the table`,
+          });
+        }
       }
       return violations;
     },

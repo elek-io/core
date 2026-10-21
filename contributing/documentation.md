@@ -157,7 +157,7 @@ Run `pnpm test` and `pnpm lint`. Neither list below needs remembering, they are 
 | Rule | Fails when |
 | --- | --- |
 | `structure/*` | a doc is missing from its index, its H1, its lead paragraph or its `## See also` |
-| `links/*` | a link, anchor, cited source path or `@see` does not resolve, `docs/` links out relatively, or anything links into `plans/` |
+| `links/*` | a link, anchor, cited source path or `@see` does not resolve, `docs/` links out relatively, anything links into `plans/`, or a table restating a declaration in the source has drifted from it |
 | `prose/*` | em dashes, curly quotes, title case headings, an unknown fence language, a blocked word or phrase, a `**Label:**` list, or a word that dates a consumer doc |
 | `brevity/*` | a paragraph passes 400 characters, four paragraphs run in a row, a section passes 45 content lines, or a JSDoc block passes 12 lines |
 | `jsdoc/*` | an exported function, class or public member carries no block, JSDoc uses a tag outside the agreed set, a `@todo` carries no issue URL, or a comment names a `Class.member` that does not exist |
