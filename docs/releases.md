@@ -129,7 +129,7 @@ A major Release says a name or a shape your build is written against changed. Th
 - Run `elek generate:types` and `elek generate:client` against the new Release and fix what stops compiling.
 - `elekCollections()` names each Astro collection after the Project alias and the Collection's plural slug, so a renamed Collection renames the name `getCollection()` takes.
 
-`prepare()` reports every change behind the bump before the Release is published. A Collection or Component change carries the id of what changed, so the name is yours to look up. A field change carries its `fieldSlug` as well.
+`prepare()` reports every change behind the bump before the Release is published. A Collection or Component change carries the id of what changed, so the name is yours to look up, see [`usage.md`](./usage.md#reading-from-history). A field change carries its `fieldSlug` as well.
 
 ## create(): cutting a release
 

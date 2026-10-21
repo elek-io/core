@@ -81,9 +81,10 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **No full-text search** - a `searchProjectSchema` is defined, but there is no `search()` service method or API route behind it.
 - **No conditional fields** - a field's visibility cannot depend on another field's value.
 - **Limited specialized field types** - no arbitrary JSON, color picker, geospatial, code-editor, or password / hash field types.
-- **Not every field property reaches a Release diff** - eight property and field type pairs are unclassified, so changing one of them alone leaves the bump at the patch default. See [`releases.md`](./releases.md#every-change-a-diff-can-carry) for what a diff does carry.
-  - The pairs are a `markdown` field's `ofCollections`, `ofAssetMimeTypes`, `features`, `min` and `max`, a `dynamic` field's `min` and `max`, an `asset` field's `ofAssetMimeTypes`, and a `numberSelect` or `stringSelect` field's `options`.
-  - A `numberSelect` field declares `min` and `max` as `null` and can never hold a bound, so a diff that reports no bound change for it is right rather than a ninth gap.
+- **Not every field property reaches a Release diff** - some property and field type pairs are unclassified, so changing one of them alone leaves the bump at the patch default. See [`releases.md`](./releases.md#every-change-a-diff-can-carry) for what a diff does carry.
+  - All of them are restated in the generated types, so a patch Release can stop a build compiling. Regenerate and compile after any Release rather than only after a major, see [`releases.md`](./releases.md#what-a-major-release-asks-of-a-consumer).
+  - The pairs are a `markdown` field's `ofCollections`, `ofAssetMimeTypes`, `features`, `min` and `max`, a `dynamic` field's `min` and `max`, an `asset` field's `ofAssetMimeTypes`, and a `select` field's `options`.
+  - The number variant of a `select` field forces `min` and `max` to `null` and can never hold a bound, so a diff that reports no bound change for it is right rather than a gap.
   - A `dynamic` field's `ofComponents` is compared as declared, so replacing an empty list with an explicit one is reported, even though an empty list already allows every Component.
 
 ### Intentional constraints
