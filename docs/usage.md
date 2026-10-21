@@ -78,7 +78,12 @@ Core reads its environment variables once at construction, never at import. All 
 | `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN` | `x-access-token` |
 | `ELEK_IO_CHANNEL` | The channel provisioning follows, overrides configured refs | unset |
 
-Core also reads `ELEK_IO_CLOUD_URL`, `ELEK_IO_CLOUD_TOKEN` and `ELEK_IO_CLOUD_GIT_URL`. They configure calls to elek.io Cloud, which is not released, so nothing you can use today reads them. They are documented with elek.io Cloud.
+Core also reads `ELEK_IO_CLOUD_URL`, `ELEK_IO_CLOUD_TOKEN` and `ELEK_IO_CLOUD_GIT_URL`. They configure calls to elek.io Cloud:
+
+- Core reads and validates all three at construction, and an unusable value throws a `CoreError`. A well-formed value does not throw.
+- Constructing Core calls nothing. A request reaches elek.io Cloud only when you call a method that talks to it.
+- A well-formed `ELEK_IO_CLOUD_TOKEN` becomes the session token every later call carries, as `ELEK_IO_REMOTE_ACCESS_TOKEN` does for git.
+- They are not documented until elek.io Cloud is released.
 
 `ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git through Core's own credential helper:
 
