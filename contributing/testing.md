@@ -8,12 +8,16 @@ Each test file writes to its own fresh data directory, `~/elek.io-test/worker-<p
 
 ## Coverage under-reports two areas
 
-`pnpm coverage` measures what runs inside the vitest worker. Two parts of Core do not, so their numbers are far lower than what the suite actually exercises:
+`pnpm coverage` measures what runs inside the vitest worker. Two parts of Core run outside it, so their numbers understate what the suite exercises:
 
-- **The Astro loaders.** The Astro suites write a content config that imports [`src/index.astro.ts`](../src/index.astro.ts) by absolute path, and `sync()` loads it through Astro's own vite pipeline. v8 attributes nothing back to the source file, so [`src/astro/loaders.ts`](../src/astro/loaders.ts) reads around 12% while six suites drive it end to end.
+- **The Astro loaders.** The Astro suites write a content config that imports [`src/index.astro.ts`](../src/index.astro.ts) by absolute path, and `sync()` loads it through Astro's own vite pipeline. v8 attributes nothing back to the source file, so everything six suites drive end to end counts for nothing in what [`src/astro/loaders.ts`](../src/astro/loaders.ts) reports.
 - **The CLI.** [`src/index.cli.test.ts`](../src/index.cli.test.ts) spawns the built binary, which is the point: it is the only thing that proves a consumer install starts. A spawned process is not instrumented either, so the action modules look thinner than they are.
 
 Do not close those gaps by unit-testing the same behavior in process. A test that reaches for the loader's internals to make a number move proves less than the sync-based test next to it. Add a test there when the behavior is worth proving, and accept the reported number.
+
+The exception is behavior a sync cannot show:
+
+- Which logger a line takes, and at which level. A build writes Core's logger and Astro's to the same console, so only a test that hands the loader its own `LoaderContext` can tell the two apart. [`src/astro/loaders.test.ts`](../src/astro/loaders.test.ts) runs in process for that reason, not to move a number.
 
 What a loader test can reach differs from what it cannot. `sync()` calls `load()` once, with no watcher, so anything on the dev reload path is out of reach from a test, see the hand-verified list below.
 
