@@ -1941,7 +1941,7 @@ describe('two Components deriving one name', () => {
     expect(error.message).not.toContain('Duplicate discriminator value');
   });
 
-  it('names both Components and the field when their slugs derive one type name', () => {
+  it('names both Components and the type name their slugs derive', () => {
     // toPascalCase uppercases after a hyphen only, and a digit cannot be
     // uppercased, so two ordinary slugs derive one name
     const firstId = uuid();
@@ -1968,6 +1968,8 @@ describe('two Components deriving one name', () => {
     expect(error.message).toContain('hero-1');
     expect(error.message).toContain('hero1');
     expect(error.message).toContain('Hero1ComponentValues');
+    // No field is involved in a `ComponentValues` clash, so none is named
+    expect(error.message).not.toContain('sections');
   });
 
   it('names both fields when a Collection and a Component derive one item type', () => {
