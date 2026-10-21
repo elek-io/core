@@ -22,7 +22,8 @@ The loaders share one lazily created `ElekIoCore` and take no options of their o
 
 `elek()` keeps its own `core` option because it runs a second, short-lived, read-only Core for provisioning, in a different module graph, before the loaders exist.
 
-- `log.level` reaches the loaders' Core through `ELEK_IO_LOG_LEVEL`. It governs `core.logger` alone, so at `error` a build loses Core's startup lines, its slug index rebuilds and every warning it raises, and keeps every loader line.
+- `log.level` reaches the loaders' Core through `ELEK_IO_LOG_LEVEL`, and the integration's with it, since both read the environment at construction. It governs `core.logger` alone, so at `error` a build keeps every loader line and loses Core's own.
+  - That list is open: the line each Core writes when it starts, the one the integration's writes when it is disposed, the line per slug index rebuild, every git command provisioning runs, and every warning Core raises.
 - A loader reports through `context.logger`, which is Astro's and carries its labels and timings. Leave it there. Routing those lines through `core.logger` would change what every build prints, and all it would buy is a Core setting silencing output it does not own. `astro build --silent` already silences them on Astro's side.
   - `loaders.test.ts` pins which logger each kind of line takes and the level it takes there, so moving one of them fails the suite rather than quietly making `usage.md` wrong.
 - `cache` is deliberately not exposed, the loaders pin it off (see below).

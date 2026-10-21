@@ -602,10 +602,16 @@ All loaders share one Core instance, and the loaders themselves take no options 
 
 `ELEK_IO_LOG_LEVEL` reaches Core's own logger and nothing else, so the loaders keep reporting even when it is set to `error`:
 
-- The `[core]` lines go. A build runs two Cores, the integration's and the loaders', so that is two lines about Core starting, the line the integration's Core writes when it is disposed, and one line per slug index rebuild where a loader names a Collection by its slug rather than its id.
-- **Every warning Core raises goes with them**, and that list is open. A build reaches the one `elekCollections()` raises when it is called without a selection, and the one about a credential helper Core could not derive for elek.io Cloud's git hosts.
-- It also reaches three where content is dropped rather than read: an Entry whose file did not parse, which is why a loader can report more Entries than it stored, a Collection skipped while the slug index is rebuilt, and a file or folder skipped because its name does not parse. Only the first leaves an error behind, and that one names no file.
-- The level governs Core's [log files](#log-files) too, so at `error` the build leaves no record of itself there either.
+- **The `[core]` lines go**, and that list is open.
+  - A build that uses `elek()` runs two Cores, the integration's and the loaders', so that is two lines about Core starting and one when the integration's is disposed.
+  - On a CI runner the whole provisioning trail goes with them. Core logs every git command that changes the copy `elek()` fetches: the clone, the Git LFS install, every LFS fetch and checkout, and outside the `draft` channel the tag fetch and the checkout of the ref.
+  - A loader that names its Collection by its slug rather than its id adds a line for every slug index rebuild.
+- **Every warning Core raises goes with them**, and that list is open too.
+  - A build that uses `elek()` reaches one for every `project.json` provisioning reads before it has validated it, which is how it migrates a Project an older Core wrote.
+  - A build also reaches the one `elekCollections()` raises when it is called without a selection, and the one about a credential helper Core could not derive for elek.io Cloud's git hosts.
+- Three more of those warnings are about content Core dropped rather than read: an Entry whose file did not parse, which is why a loader can report more Entries than it stored, a Collection skipped while the slug index is rebuilt, and a file or folder skipped because its name does not parse.
+  - The last two name what they skipped. The first carries only what the read failed with, which names the file when the JSON is broken and names the failing field alone when the file parses but does not validate.
+- The level governs Core's [log files](#log-files) too, so at `error` the log file holds nothing about the build but what failed.
 - The `[elek]`, `[elek-assets]` and `[elek-entries]` lines stay, because the integration and the loaders report through Astro's logger. That covers what each one provisioned, read and wrote, the line [every loader logs about the content state it read](#provisioning-in-ci-with-elek), and their own warnings.
 - [`astro build --silent`](https://docs.astro.build/en/reference/cli-reference/#--silent) silences those lines, and Astro's whole output with them. It does not reach Core's, so a build that prints nothing needs `ELEK_IO_LOG_LEVEL=error` as well.
 - Either way a failing build still prints the error that stopped it and still exits non-zero, because that error is not written through a logger.
