@@ -23,6 +23,20 @@ It is framework-agnostic, `T` is the consumer's element type. A framework bindin
 
 Exhaustiveness is the point. A node type added in a later Core release becomes a type error in a consumer's renderers rather than a silent gap, and the three keys in `REQUIRED_RENDERER_KEYS` stay required because no default is safe for them.
 
+### What a parent handler cannot see
+
+A parent is called with its children already rendered, which is what makes the fold framework-agnostic: `T` is opaque to it. Three placements are out of reach because of it, and each one is a divergence from what remark emits:
+
+| Where | What the fold can do | What remark does |
+| --- | --- | --- |
+| A tight list item | `<li><p>text</p></li>` | `<li>text</li>` |
+| A task item's checkbox | before the item's first block | inside its first paragraph |
+| A footnote's way back | after the note's blocks | at the end of its last paragraph |
+
+All three need a handler to know where it sits, which is the same positional context a table cell needs for `<th scope="col">` and `table.align`. Fixing them separately would mean two mechanisms, so they wait for that one.
+
+Until then the defaults ship the divergence visibly rather than working around it. A `<p>` of margin in a list item is reported, and CSS that hides it is not.
+
 ## Drift against `@types/mdast`
 
 Core's mdast types are hand written for Zod, and the inferred types come from `z.infer`, never from `@types/mdast`. That package stays a devDependency for one reason: [`mdast-upstream-compat.ts`](../src/schema/mdast-upstream-compat.ts) asserts at compile time that the two have not drifted.

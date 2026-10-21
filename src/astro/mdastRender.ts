@@ -46,6 +46,11 @@ function renderHeading(
  * The default renderer for every node type that has a safe one, so a consumer
  * overrides only what they care about. Spread under an override object, which
  * is what `mdastRender` below does.
+ *
+ * Each default renders every field its node carries, except the six listed as
+ * dropped in the doc below, which name what an override is still needed for.
+ *
+ * @see ../../docs/markdown-content.md
  */
 export const astroDefaults: Pick<
   MdastRenderersBase<AstroElement>,
@@ -56,18 +61,30 @@ export const astroDefaults: Pick<
   heading: (node, children) => renderHeading(node.depth, children),
   blockquote: (_, children) =>
     renderTemplate`<blockquote>${children}</blockquote>`,
+  // A start of 1 is what an <ol> counts from anyway, so only another one is
+  // written. A list starting at 0 keeps it, which GFM and HTML both allow.
   list: (node, children) =>
     node.ordered
-      ? renderTemplate`<ol>${children}</ol>`
+      ? renderTemplate`<ol${addAttribute(node.start === 1 ? null : node.start, 'start')}>${children}</ol>`
       : renderTemplate`<ul>${children}</ul>`,
-  listItem: (_, children) => renderTemplate`<li>${children}</li>`,
+  // A checked of null is an ordinary item, true and false are a task. The
+  // checkbox is disabled because a rendered tree is not an editor, and it
+  // precedes the item's first block rather than opening it.
+  listItem: (node, children) =>
+    node.checked === null
+      ? renderTemplate`<li>${children}</li>`
+      : renderTemplate`<li><input type="checkbox"${addAttribute(node.checked, 'checked')} disabled>${children}</li>`,
   code: (node) => renderTemplate`<pre><code>${node.value}</code></pre>`,
   thematicBreak: () => renderTemplate`<hr>`,
   table: (_, children) => renderTemplate`<table>${children}</table>`,
   tableRow: (_, children) => renderTemplate`<tr>${children}</tr>`,
   tableCell: (_, children) => renderTemplate`<td>${children}</td>`,
+  // The way back follows the note's blocks rather than ending its last
+  // paragraph, which is where remark puts it, for the same reason as the
+  // checkbox above. Its label is English, so a site in another language
+  // overrides this handler.
   footnoteDefinition: (node, children) =>
-    renderTemplate`<div${addAttribute(`fn-${node.identifier}`, 'id')}>${children}</div>`,
+    renderTemplate`<div${addAttribute(`fn-${node.identifier}`, 'id')}>${children}<a${addAttribute(`#fnref-${node.identifier}`, 'href')} aria-label="Back to content">↩</a></div>`,
   text: (node) => node.value,
   inlineCode: (node) => renderTemplate`<code>${node.value}</code>`,
   emphasis: (_, children) => renderTemplate`<em>${children}</em>`,
@@ -78,8 +95,10 @@ export const astroDefaults: Pick<
   image: (node) =>
     renderTemplate`<img${addAttribute(node.url, 'src')}${addAttribute(node.alt, 'alt')}${addAttribute(node.title, 'title')}>`,
   break: () => renderTemplate`<br>`,
+  // The reference carries the id the definition's way back targets. Two
+  // trees on one page share these ids, which only an override separates.
   footnoteReference: (node) =>
-    renderTemplate`<sup><a${addAttribute(`#fn-${node.identifier}`, 'href')}>${node.label ?? node.identifier}</a></sup>`,
+    renderTemplate`<sup${addAttribute(`fnref-${node.identifier}`, 'id')}><a${addAttribute(`#fn-${node.identifier}`, 'href')}>${node.label ?? node.identifier}</a></sup>`,
 };
 
 /**

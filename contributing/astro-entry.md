@@ -150,6 +150,28 @@ Two consequences for the code:
 
 A consumer writing handlers as JSX inside an `.astro` template needs none of this: the compiler emits render-safe values for them. It only matters for what Core itself constructs.
 
+## What a default decides for the consumer
+
+A default renders every field of its node, because a field a default silently drops is a loss a consumer cannot see without reading Core's source. `src/astro/mdastRender.test.ts` accounts for every field per node type, either locating it in the output or naming it dropped with the reason, so a field added to a node schema cannot pass through unanswered.
+
+Six are dropped, and the test carries the reason for each. `code.lang` and `code.meta` because every highlighter wants them somewhere else, `list.spread` and `listItem.spread` and `table.align` because the fold cannot reach where they apply, and `footnoteDefinition.label` because it is the reference's text rather than the note's.
+
+Four decisions beyond that, each the cheaper half of a trade:
+
+| Decision | Against | Why |
+| --- | --- | --- |
+| `<ol start>` only where the list counts from something other than 1 | always writing it | `start="1"` is what `<ol>` does anyway, and emitting it would change the markup of every ordered list for no effect. A 0 is kept, GFM and HTML both allow it |
+| A task item's checkbox is `disabled` | a live checkbox | A rendered tree is not an editor, and a focusable control with no handler is a WCAG failure waiting for a consumer to hit it |
+| No class name on a task item | `class="task-list-item"`, which is GFM's | The defaults promise no class names, and a name without the CSS that makes it mean something is a half measure. The item keeps its list marker, which is visible and therefore reported rather than hidden |
+| The footnote reference carries `id="fnref-<identifier>"` and the definition links back to it | leaving the way back to the consumer | Without an id the definition's `fn-` id has nothing to point at, so the one half Core shipped was unusable on its own |
+
+Two limits follow from the fold rather than from a choice, and both are left visible on the page:
+
+- A default cannot prefix the footnote ids, because `astroDefaults` is one module-level object shared by every render and counting trees would mean state in it. Two trees on one page therefore share the ids, and a note referenced twice repeats its reference id, so the way back lands on the first reference. The consumer-facing doc names the override.
+- The checkbox precedes the item's first paragraph and the way back follows the note's last one, rather than sitting inside either, see [`markdown-internals.md`](./markdown-internals.md#the-render-fold).
+
+The back-link's `aria-label` is English, which is the first copy Core puts on a page. A link whose only content is an arrow glyph gets whatever name the screen reader's symbol dictionary gives it, so the label is worth more than the consistency of shipping no text at all. The doc names the override for another language.
+
 ## The `astro/content/config` subpath
 
 `elekCollections` imports `defineCollection` from `astro/content/config`, not from the `astro:content` virtual module, which only exists inside a consumer's build and cannot be imported from package code.
