@@ -36,7 +36,8 @@
         "types": "./dist/astro/index.astro.d.mts",
         "default": "./dist/astro/index.astro.mjs"
       }
-    }
+    },
+    "./docs/*": "./docs/*"
   },
   "scripts": {
     "lint": "oxlint",
