@@ -613,7 +613,7 @@ All loaders share one Core instance, and the loaders themselves take no options 
   - The last two name what they skipped. The first carries only what the read failed with, which names the file when the JSON is broken and names the failing field alone when the file parses but does not validate.
 - The level governs Core's [log files](#log-files) too, so at `error` the log file holds nothing about the build but what failed.
 - The `[elek]`, `[elek-assets]` and `[elek-entries]` lines stay, because the integration and the loaders report through Astro's logger. That covers what each one provisioned, read and wrote, the line [every loader logs about the content state it read](#provisioning-in-ci-with-elek), and their own warnings.
-- [`astro build --silent`](https://docs.astro.build/en/reference/cli-reference/#--silent) silences those lines, and Astro's whole output with them. It does not reach Core's, so a build that prints nothing needs `ELEK_IO_LOG_LEVEL=error` as well.
+- [`astro build --silent`](https://docs.astro.build/en/reference/cli-reference/#--silent) silences those lines, and everything else Astro's own logger writes with them. It does not reach Core's logger, so a build that prints nothing needs `ELEK_IO_LOG_LEVEL=error` as well.
 - Either way a failing build still prints the error that stopped it and still exits non-zero, because that error is not written through a logger.
 
 See [Environment variables](#environment-variables) for the full list, and note that it is the full list. A setting without an environment variable cannot be changed for the loaders' Core.
