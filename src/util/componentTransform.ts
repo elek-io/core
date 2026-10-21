@@ -4,11 +4,16 @@ import type { FieldDefinition } from '../schema/fieldSchema.js';
 import type { ProjectLanguages } from '../schema/projectSchema.js';
 import type { ComponentResolver } from '../schema/schemaFromFieldDefinition.js';
 import type { Value } from '../schema/valueSchema.js';
+import {
+  contentLossIssues,
+  lossOfRemovedField,
+  narrowAllowlists,
+} from './contentLoss.js';
 import { buildDefaultValue } from './defaultValueBuilder.js';
-import type { EntryIssue, TransformResult } from './entryTransform.js';
+import type { EntryIssue, EntryIssueType } from './entryIssue.js';
+import type { TransformResult } from './entryTransform.js';
 import type { FieldChange } from './fieldDefinitionDiff.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
-import type { EntryIssueType } from './entryTransform.js';
 
 /**
  * Rebuilds an Entry's component item values when a Component's field
@@ -18,9 +23,9 @@ import type { EntryIssueType } from './entryTransform.js';
  * does not discover it. The nested pass then re-enters every component-valued
  * field, whatever Component it declares, with cycle protection.
  *
- * A matched item loses values whose definition is gone, gains
- * `buildDefaultValue` or a `missing_required` issue for an added field, and
- * has an updated field re-validated.
+ * A change deleting a matched item's value raises a `content_loss` issue.
+ *
+ * @see ../../contributing/content-loss.md
  */
 export function transformComponentValues(
   entryId: Uuid,
@@ -117,9 +122,42 @@ export function transformComponentValues(
         const fieldUuid = oldSlugToUuid.get(oldSlug);
         if (!fieldUuid) continue; // Orphaned
         const newFieldDef = uuidToNewFieldDef.get(fieldUuid);
-        if (!newFieldDef) continue; // Removed
+        if (!newFieldDef) {
+          // Removed, so the item's value for it goes
+          itemIssues.push(
+            ...contentLossIssues(
+              {
+                entryId,
+                collectionId,
+                fieldDefinitionId: fieldUuid,
+                // The new definitions declare no slug for it, so the old one
+                fieldSlug: oldSlug,
+                componentItemId: item.id,
+                transformedValues: {},
+              },
+              lossOfRemovedField(value)
+            )
+          );
+          continue;
+        }
 
-        const processedValue = value;
+        // Minus what the new allowlists no longer allow, the same rule the
+        // Collection cascade applies
+        const narrowed = narrowAllowlists(value, newFieldDef);
+        const processedValue = narrowed.value;
+        itemIssues.push(
+          ...contentLossIssues(
+            {
+              entryId,
+              collectionId,
+              fieldDefinitionId: fieldUuid,
+              fieldSlug: newFieldDef.slug,
+              componentItemId: item.id,
+              transformedValues: {},
+            },
+            narrowed.losses
+          )
+        );
 
         // Validate if field was updated
         if (updatedFieldIds.has(fieldUuid)) {
