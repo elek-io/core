@@ -8,4 +8,4 @@
 const indexUrl = import.meta.resolve('@elek-io/core/docs/index.md');
 ```
 
-What the package publishes is unchanged. Every page of `docs/` shipped in it before and still does, and no other entry point changes.
+This is an addition to `exports` and nothing more. It adds no file to the package, and no other entry point changes.
