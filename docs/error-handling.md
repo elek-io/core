@@ -15,7 +15,7 @@ A class extending `Error` with 9 typed variants (`src/util/shared.ts`):
 | `PreconditionFailed` | 412 | Remote origin missing (setup required), mutation attempted in read-only mode or on a provisioned copy |
 | `UpgradeFailed` | 422 | Project version upgrade failed |
 | `VersionSkew` | 422 | Content written by a newer Core than installed |
-| `RateLimited` | 429 | A network call refused because this client passed its rate limit |
+| `RateLimited` | 429 | elek.io Cloud refused a call because this client passed its rate limit |
 | `Internal` | 500 | Git errors, FS errors, unexpected failures |
 
 Static factory methods:
