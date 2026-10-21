@@ -1207,3 +1207,108 @@ describe('ReleaseService - a renamed Collection and a narrowed dynamic field', f
     expect(diff.collectionChanges).toEqual([]);
   });
 });
+
+describe('ReleaseService - a dynamic field inside a Component', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let hero: Component;
+  let media: Component;
+  let section: Component;
+  const fieldIds = { blocks: uuid(), sections: uuid() };
+
+  /** A dynamic field of the Component, so a test can restate both of them. */
+  function dynamicField(slug: 'blocks' | 'sections', ofComponents: string[]) {
+    return {
+      id: fieldIds[slug],
+      slug,
+      valueType: 'component' as const,
+      fieldType: 'dynamic' as const,
+      label: { en: slug, de: slug },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: false as const,
+      inputWidth: '12' as const,
+      ofComponents,
+      min: null,
+      max: null,
+    };
+  }
+
+  beforeAll(async function () {
+    project = await createProject();
+    hero = await createComponent(project.id);
+    media = await createMediaComponent(project.id);
+    section = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Section', de: 'Section' },
+      slug: 'section',
+      description: null,
+      fieldDefinitions: [
+        dynamicField('blocks', [hero.id, media.id]),
+        dynamicField('sections', []),
+      ],
+    });
+    // Establish a released baseline to diff against
+    await core.releases.create({ projectId: project.id });
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('reports a narrowed list as a MAJOR change of the Component field', async function () {
+    await core.components.update({
+      projectId: project.id,
+      ...section,
+      fieldDefinitions: [
+        dynamicField('blocks', [hero.id]),
+        dynamicField('sections', []),
+      ],
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('major');
+    expect(diff.componentFieldChanges).toEqual([
+      {
+        componentId: section.id,
+        fieldId: fieldIds.blocks,
+        fieldSlug: 'blocks',
+        changeType: 'ofComponentsChanged',
+        bump: 'major',
+      },
+    ]);
+    expect(diff.componentChanges).toEqual([]);
+  });
+
+  it('reports an empty list replaced by an explicit one as a MAJOR change', async function () {
+    await core.components.update({
+      projectId: project.id,
+      ...section,
+      fieldDefinitions: [
+        dynamicField('blocks', [hero.id, media.id]),
+        dynamicField('sections', [hero.id, media.id]),
+      ],
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    // The generated types restate the declared list, so an empty list and the
+    // explicit list it resolves to are not the same contract
+    expect(diff.bump).toEqual('major');
+    expect(diff.componentFieldChanges).toEqual([
+      {
+        componentId: section.id,
+        fieldId: fieldIds.sections,
+        fieldSlug: 'sections',
+        changeType: 'ofComponentsChanged',
+        bump: 'major',
+      },
+    ]);
+    expect(diff.componentChanges).toEqual([]);
+  });
+});
