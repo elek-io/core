@@ -96,8 +96,8 @@ Every change `prepare()` can report is below, with the bump it contributes. The 
 | `fieldChanges` and `componentFieldChanges` | `isRequiredToNotRequired` | major | A field definition that was required is optional |
 | `fieldChanges` and `componentFieldChanges` | `isUniqueToNotUnique` | major | A field definition that was unique may repeat a value |
 | `fieldChanges` and `componentFieldChanges` | `ofCollectionsChanged` | major | An `entry` field's `ofCollections`. A narrowed list strips the Entry references it no longer allows |
-| `fieldChanges` and `componentFieldChanges` | `ofComponentsChanged` | major | A `dynamic` field's `ofComponents`. A narrowed list strips the Component items it no longer allows, and an empty list allows every Component |
-| `fieldChanges` and `componentFieldChanges` | `slugFormatChanged` | major | A `slug` field's `separator`, `lowercase` or `decamelize`, which re-canonicalises every value it holds |
+| `fieldChanges` and `componentFieldChanges` | `ofComponentsChanged` | major | A `dynamic` field's `ofComponents`. The generated types restate the list, so narrowing it, widening it and replacing an empty list, which allows every Component, with an explicit one are each reported. The lists are compared sorted, so reordering alone is not. A narrowed list also strips the Component items it no longer allows |
+| `fieldChanges` and `componentFieldChanges` | `slugFormatChanged` | major | A `slug` field's `separator`, `lowercase` or `decamelize`, which re-canonicalizes every value it holds |
 | `fieldChanges` and `componentFieldChanges` | `added` | minor | A field definition the released state does not hold |
 | `fieldChanges` and `componentFieldChanges` | `isNotRequiredToRequired` | minor | A field definition that was optional is required |
 | `fieldChanges` and `componentFieldChanges` | `isNotUniqueToUnique` | minor | A field definition that could repeat a value is unique |
@@ -122,14 +122,14 @@ A Component's field definition can be neither unique nor a `slug` field, so the 
 
 ## What a major Release asks of a consumer
 
-A major Release says a name or a shape your build is written against changed. Nothing holds it back from your build, so read it as a warning rather than a gate:
+A major Release says a name or a shape your build is written against changed. The warning is the version number and the `prepare()` report, and a build that provisions the `release` channel logs the version it landed on and carries on, so read it as a warning rather than a gate:
 
 - Provisioning the `release` channel, the default, lands on the newest Release whatever its bump, so the next build takes a major one like any other.
 - Pin the exact version you have, in the integration config or through `--ref` on `elek provision`, to decide yourself when to move. See [`provisioning.md`](./provisioning.md#channels-and-pinned-versions).
 - Run `elek generate:types` and `elek generate:client` against the new Release and fix what stops compiling.
 - `elekCollections()` names each Astro collection after the Project alias and the Collection's plural slug, so a renamed Collection renames the name `getCollection()` takes.
 
-`prepare()` reports every change behind the bump, so whoever cuts the Release sees what it asks of a consumer before publishing it.
+`prepare()` reports every change behind the bump before the Release is published. A Collection or Component change carries the id of what changed, so the name is yours to look up. A field change carries its `fieldSlug` as well.
 
 ## create(): cutting a release
 
