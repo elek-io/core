@@ -510,7 +510,7 @@ entry.data.sections[0].values; // that Component's own fields, language keyed
 - `componentId` addresses the same Component through Core's own methods, the [local API](./local-api.md) and the types [`elek generate:types`](./api-clients.md#generatetypes) writes, which dispatch on an id constant rather than on the slug.
 - The array is not language keyed, the `values` inside each item are. Editors order the items once for every language.
 
-The item type is a union discriminated on `componentSlug`, so a `switch` narrows `values` to the Component of that branch:
+The item type is a union discriminated on `componentSlug`, so a `switch` narrows `values` to the Component of that branch. A page hands the field's array to a component of its own, `<Sections sections={entry.data.sections} />`:
 
 ```astro
 ---
@@ -576,7 +576,7 @@ Two changes to the content model then fail, which is what the `default` branch a
 - A Component the field allows that the `switch` does not handle. `section` is that member in the `default` branch rather than `never`, and `unhandled()` refuses it.
 - A Component the `switch` handles that was renamed. Its `case` matches no member of the union any more.
 
-Two things do not catch either on their own. An `Extract<Section, { componentSlug: 'hero' }>` alias of a Component that is gone becomes `never` rather than failing, and a chain of `if (section.componentSlug === 'hero' && ...)` conditions is complete whatever the union holds. The `switch` with the `default` branch is what reports both.
+Two shapes that look equivalent report neither change. An `Extract<Section, { componentSlug: 'hero' }>` alias of a Component that is gone becomes `never` rather than failing, and a chain of `if (section.componentSlug === 'hero' && ...)` conditions is complete whatever the union holds.
 
 A field whose `ofComponents` is empty allows every Component of the Project, so its union gains a member whenever a Component is added anywhere, including one no page of yours renders. Give such a field a `default` branch that returns nothing instead of `unhandled()`, or list the Components the field allows and keep the exhaustive one.
 
