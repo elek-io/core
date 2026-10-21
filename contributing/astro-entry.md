@@ -145,7 +145,7 @@ Four consequences for the loader, of which the first two decide the order inside
 
 - `transformEntryValues` needs the Project's Components to resolve an item's slug, so `syncEntries` reads the model on every sync rather than only to compare the digest.
 - That read goes after the Collection rename guard, never before, and takes the id the guard resolved. `readModel` resolves without a catch, so a renamed Collection would throw and fail the build where the guard warns and keeps the Entries.
-- An item whose Component the Project cannot resolve throws `NotFound` naming the Entry, the field and the Component, and nothing an editor typed. A Component deleted while an Entry still holds its items reaches this.
+- An item whose Component the Project cannot resolve throws `NotFound` naming the Entry, the field and the Component, and nothing an editor typed. Deleting the Component is not the route there, because `delete` refuses while a Collection or a Component still references it and narrowing an `ofComponents` strips the items it drops. A Project written outside Core is what reaches it.
 - The slug is part of the stored item, so the digest the loader compares changes when a Component is renamed and a second build into the same cache replaces every item of it.
 
 An item union with no members at all, which an open `ofComponents` in a Project without Components produces, is emitted as `never`. Emitting the members alone leaves `type X =` and a bare semicolon, which is a syntax error in a file the consumer compiles.
