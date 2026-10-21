@@ -880,7 +880,7 @@ export class ReleaseService extends AbstractService {
   /**
    * Diffs two sets of components and returns all changes with the computed bump level.
    *
-   * Component-level changes: added (MINOR), deleted (MAJOR).
+   * Component-level changes: added (MINOR), deleted (MAJOR), slugChanged (MAJOR).
    * Field-level changes within matched components reuse the same rules as collection fields.
    */
   private diffComponents(
@@ -922,10 +922,21 @@ export class ReleaseService extends AbstractService {
       }
     }
 
-    // Matched components - diff their field definitions
+    // Matched components - a renamed slug and the field definitions
     for (const [id, currentComponent] of currentById) {
       const releasedComponent = releasedById.get(id);
       if (!releasedComponent) continue;
+
+      // The generated type names, the generated client and the API path are
+      // built from the slug, so a rename breaks every consumer of them
+      if (currentComponent.slug !== releasedComponent.slug) {
+        componentChanges.push({
+          componentId: id,
+          changeType: 'slugChanged',
+          bump: 'major',
+        });
+        highestBump = 'major';
+      }
 
       const changes = this.diffComponentFieldDefinitions(
         id,
@@ -1068,10 +1079,22 @@ export class ReleaseService extends AbstractService {
       }
     }
 
-    // Matched collections - diff their field definitions
+    // Matched collections - a renamed plural slug and the field definitions
     for (const [id, currentCollection] of currentById) {
       const releasedCollection = releasedById.get(id);
       if (!releasedCollection) continue;
+
+      // The plural slug names the generated types, the generated client and
+      // the API path, so a rename breaks every consumer of them. The singular
+      // slug reaches none of them
+      if (currentCollection.slug.plural !== releasedCollection.slug.plural) {
+        collectionChanges.push({
+          collectionId: id,
+          changeType: 'slugChanged',
+          bump: 'major',
+        });
+        highestBump = 'major';
+      }
 
       const changes = this.diffFieldDefinitions(
         id,
@@ -1447,6 +1470,24 @@ export class ReleaseService extends AbstractService {
         changes.push({
           ...base,
           changeType: 'ofCollectionsChanged',
+          bump: 'major',
+        });
+      }
+    }
+
+    if (current.fieldType === 'dynamic' && released.fieldType === 'dynamic') {
+      // Narrowing the list permanently strips the Component items it no
+      // longer allows, see docs/schema-changes.md. An empty list allows every
+      // Component, so replacing it with an explicit list counts as well
+      if (
+        isDeepStrictEqual(
+          current.ofComponents.toSorted(),
+          released.ofComponents.toSorted()
+        ) === false
+      ) {
+        changes.push({
+          ...base,
+          changeType: 'ofComponentsChanged',
           bump: 'major',
         });
       }

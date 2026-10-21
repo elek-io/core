@@ -12,10 +12,31 @@ import core, {
 import {
   createAsset,
   createCollection,
+  createComponent,
   createEntry,
+  createMediaComponent,
   createProject,
   ensureCleanGitStatus,
 } from '../test/util.js';
+
+/** An optional text field, so a test can restate a whole definition list. */
+function textField(slug: string) {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'string' as const,
+    fieldType: 'text' as const,
+    label: { en: slug, de: slug },
+    description: null,
+    defaultValue: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12' as const,
+    min: null,
+    max: null,
+  };
+}
 
 describe('ReleaseService', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -898,5 +919,291 @@ describe('ReleaseService - list', function () {
       '0.1.0',
       '0.1.0-preview.1',
     ]);
+  });
+});
+
+describe('ReleaseService - a renamed Component', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let component: Component;
+
+  beforeAll(async function () {
+    project = await createProject();
+    component = await createComponent(project.id);
+    // Establish a released baseline to diff against
+    await core.releases.create({ projectId: project.id });
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('reports a Component created and renamed in one draft as added alone', async function () {
+    const teaser = await core.components.create({
+      projectId: project.id,
+      name: { en: 'Teaser', de: 'Teaser' },
+      slug: 'teaser',
+      description: null,
+      fieldDefinitions: [textField('headline')],
+    });
+
+    await core.components.update({
+      projectId: project.id,
+      ...teaser,
+      slug: 'promo',
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    // The released side holds no such Component, so there is nothing to break
+    expect(diff.bump).toEqual('minor');
+    expect(diff.componentChanges).toEqual([
+      { componentId: teaser.id, changeType: 'added', bump: 'minor' },
+    ]);
+  });
+
+  it('creates a minor Release for the added Component', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('0.2.0');
+  });
+
+  it('reports no change for a rename undone in the same draft', async function () {
+    await core.components.update({
+      projectId: project.id,
+      ...component,
+      slug: 'banner',
+    });
+    await core.components.update({
+      projectId: project.id,
+      ...component,
+      slug: 'hero',
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    // The diff compares the released state against the draft state, not the
+    // commits in between, so only the patch default is left
+    expect(diff.componentChanges).toEqual([]);
+    expect(diff.bump).toEqual('patch');
+  });
+
+  it('reports a rename and a field change of one draft as one MAJOR', async function () {
+    const subtitle = textField('subtitle');
+
+    await core.components.update({
+      projectId: project.id,
+      ...component,
+      slug: 'banner',
+      fieldDefinitions: [...component.fieldDefinitions, subtitle],
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('major');
+    expect(diff.componentChanges).toEqual([
+      { componentId: component.id, changeType: 'slugChanged', bump: 'major' },
+    ]);
+    expect(diff.componentFieldChanges).toEqual([
+      {
+        componentId: component.id,
+        fieldId: subtitle.id,
+        fieldSlug: 'subtitle',
+        changeType: 'added',
+        bump: 'minor',
+      },
+    ]);
+  });
+
+  it('raises the major version when it releases the rename', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('1.0.0');
+    expect(result.diff.bump).toEqual('major');
+  });
+
+  it('leaves a Component whose localized name changes a PATCH', async function () {
+    const released = await core.components.read({
+      projectId: project.id,
+      id: component.id,
+    });
+
+    await core.components.update({
+      projectId: project.id,
+      ...released,
+      name: { en: 'Banner section', de: 'Banner section' },
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('patch');
+    expect(diff.componentChanges).toEqual([]);
+    expect(diff.componentFieldChanges).toEqual([]);
+  });
+});
+
+describe('ReleaseService - a renamed Collection and a narrowed dynamic field', function () {
+  let project: Project & { destroy: () => Promise<void> };
+  let hero: Component;
+  let media: Component;
+  let collection: Collection;
+  const blocksFieldId = uuid();
+
+  function blocksField(ofComponents: string[]) {
+    return {
+      id: blocksFieldId,
+      slug: 'blocks',
+      valueType: 'component' as const,
+      fieldType: 'dynamic' as const,
+      label: { en: 'Blocks', de: 'Blocks' },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: false as const,
+      inputWidth: '12' as const,
+      ofComponents,
+      min: null,
+      max: null,
+    };
+  }
+
+  beforeAll(async function () {
+    project = await createProject();
+    hero = await createComponent(project.id);
+    media = await createMediaComponent(project.id);
+    collection = await core.collections.create({
+      projectId: project.id,
+      icon: 'home',
+      name: {
+        singular: { en: 'Page', de: 'Page' },
+        plural: { en: 'Pages', de: 'Pages' },
+      },
+      slug: { singular: 'page', plural: 'pages' },
+      description: { en: 'Pages', de: 'Pages' },
+      fieldDefinitions: [blocksField([hero.id, media.id])],
+    });
+    // Establish a released baseline to diff against
+    await core.releases.create({ projectId: project.id });
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('reports a renamed plural slug as a MAJOR change of its own', async function () {
+    await core.collections.update({
+      projectId: project.id,
+      ...collection,
+      slug: { singular: 'page', plural: 'articles' },
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('major');
+    expect(diff.collectionChanges).toEqual([
+      { collectionId: collection.id, changeType: 'slugChanged', bump: 'major' },
+    ]);
+    expect(diff.fieldChanges).toEqual([]);
+  });
+
+  it('raises the major version when it releases the rename', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('1.0.0');
+    expect(result.diff.bump).toEqual('major');
+  });
+
+  it('leaves a renamed singular slug a PATCH', async function () {
+    await core.collections.update({
+      projectId: project.id,
+      ...collection,
+      slug: { singular: 'article', plural: 'articles' },
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    // Nothing a consumer is built against carries the singular slug, so
+    // only the patch default is left
+    expect(diff.bump).toEqual('patch');
+    expect(diff.collectionChanges).toEqual([]);
+  });
+
+  it('leaves a Collection whose localized name changes a PATCH', async function () {
+    await core.collections.update({
+      projectId: project.id,
+      ...collection,
+      slug: { singular: 'page', plural: 'articles' },
+      name: {
+        singular: { en: 'Article', de: 'Article' },
+        plural: { en: 'Articles', de: 'Articles' },
+      },
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('patch');
+    expect(diff.collectionChanges).toEqual([]);
+  });
+
+  it('reports a narrowed dynamic field as a MAJOR change of its own', async function () {
+    await core.collections.update({
+      projectId: project.id,
+      ...collection,
+      slug: { singular: 'page', plural: 'articles' },
+      fieldDefinitions: [blocksField([hero.id])],
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('major');
+    expect(diff.fieldChanges).toEqual([
+      {
+        collectionId: collection.id,
+        fieldId: blocksFieldId,
+        fieldSlug: 'blocks',
+        changeType: 'ofComponentsChanged',
+        bump: 'major',
+      },
+    ]);
+    expect(diff.collectionChanges).toEqual([]);
+  });
+
+  it('raises the major version when it releases the narrowed field', async function () {
+    const result = await core.releases.create({ projectId: project.id });
+
+    expect(result.version).toEqual('2.0.0');
+    expect(result.diff.bump).toEqual('major');
+  });
+
+  it('leaves an added field a MINOR', async function () {
+    const title = textField('title');
+
+    await core.collections.update({
+      projectId: project.id,
+      ...collection,
+      slug: { singular: 'page', plural: 'articles' },
+      fieldDefinitions: [blocksField([hero.id]), title],
+    });
+
+    const diff = await core.releases.prepare({ projectId: project.id });
+
+    expect(diff.bump).toEqual('minor');
+    expect(diff.fieldChanges).toEqual([
+      {
+        collectionId: collection.id,
+        fieldId: title.id,
+        fieldSlug: 'title',
+        changeType: 'added',
+        bump: 'minor',
+      },
+    ]);
+    expect(diff.collectionChanges).toEqual([]);
   });
 });
