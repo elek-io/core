@@ -1,11 +1,65 @@
 import { afterAll, assert, beforeAll, describe, expect, it } from 'vitest';
-import { sync, type HookParameters } from 'astro';
+import { sync, type AstroIntegration, type HookParameters } from 'astro';
 import Os from 'node:os';
 import Path from 'node:path';
 import Fs from 'fs-extra';
 import { seedRemoteWithRelease, tmpDirPath } from './test/util.js';
 import core, { uuid } from './test/setup.js';
 import { defineElekConfig, elek, type ElekConfig } from './index.astro.js';
+
+/** One logged line, with the level it was logged at. */
+interface LoggedLine {
+  level: 'debug' | 'info' | 'warn' | 'error';
+  message: string;
+}
+
+/**
+ * Every line as `<level>: <message up to its first id or quoted name>`, in the
+ * order it was logged, so one assertion pins both the level a message took and
+ * the place it took it in.
+ */
+function summarize(lines: LoggedLine[]): string[] {
+  return lines.map(
+    (line) =>
+      `${line.level}: ${line.message.replace(/["(][\S\s]*$/, '').trim()}`
+  );
+}
+
+/**
+ * Runs the integration's `astro:config:setup` hook with a logger that records
+ * the level of every line, which is what pins both the logger a message took
+ * and the level it took there.
+ *
+ * `onLine` is called while the hook runs, which is the only window in which
+ * the Core it provisions with still exists.
+ *
+ * The hook reads nothing off its parameters but the logger, so the cast that
+ * says so lives here once rather than in every test that runs it.
+ */
+async function runSetup(
+  integration: AstroIntegration,
+  onLine?: () => void
+): Promise<LoggedLine[]> {
+  const setup = integration.hooks['astro:config:setup'];
+  assert(setup);
+
+  const lines: LoggedLine[] = [];
+  const record = (level: LoggedLine['level']) => (message: string) => {
+    lines.push({ level, message });
+    onLine?.();
+  };
+
+  await setup({
+    logger: {
+      debug: record('debug'),
+      info: record('info'),
+      warn: record('warn'),
+      error: record('error'),
+    },
+  } as unknown as HookParameters<'astro:config:setup'>);
+
+  return lines;
+}
 
 describe('Astro elek() integration', function () {
   let seed: Awaited<ReturnType<typeof seedRemoteWithRelease>>;
@@ -212,24 +266,16 @@ export const collections = {
     // consumer the Astro entry sets that up for them. The Core is disposed
     // in a finally, so the handlers are only observable while the hook runs,
     // which the logger call in front of every provision reaches into.
-    const integration = elek({ config });
-    const setup = integration.hooks['astro:config:setup'];
-    assert(setup);
-
     const baseUncaught = process.listenerCount('uncaughtException');
     const baseUnhandled = process.listenerCount('unhandledRejection');
     const duringProvision: number[] = [];
-    const record = () => {
+
+    await runSetup(elek({ config }), () => {
       duringProvision.push(
         process.listenerCount('uncaughtException') - baseUncaught,
         process.listenerCount('unhandledRejection') - baseUnhandled
       );
-    };
-
-    await setup({
-      logger: { info: record, warn: record, error: record, debug: record },
-      // The hook reads nothing else off its parameters
-    } as unknown as HookParameters<'astro:config:setup'>);
+    });
 
     expect(duringProvision.length).toBeGreaterThan(0);
     expect(duringProvision.every((count) => count === 0)).toBe(true);
@@ -242,19 +288,30 @@ export const collections = {
     const integration = elek({ config });
     expect(integration.name).toBe('elek');
 
-    const setup = integration.hooks['astro:config:setup'];
-    assert(setup);
-    const astroLines: string[] = [];
-    const record = (message: string) => astroLines.push(message);
+    expect(summarize(await runSetup(integration))).toEqual([
+      'info: Provisioning',
+      'info: Provisioned',
+    ]);
+  }, 120000);
 
-    await setup({
-      logger: { info: record, warn: record, error: record, debug: record },
-      // The hook reads nothing else off its parameters
-    } as unknown as HookParameters<'astro:config:setup'>);
+  it('should warn through the same logger when the remote is unreachable', async function () {
+    // docs/usage.md promises that the integration's own warnings stay at
+    // error level as well, and this is the one it raises. Moving the remote
+    // away drives the fallback, the way the sync test above does
+    const hiddenRemotePath = `${remotePath}-hidden`;
+    await Fs.move(remotePath, hiddenRemotePath);
 
-    expect(astroLines).toEqual([
-      expect.stringContaining('Provisioning'),
-      expect.stringContaining('Provisioned'),
+    let lines: LoggedLine[];
+    try {
+      lines = await runSetup(elek({ config }));
+    } finally {
+      await Fs.move(hiddenRemotePath, remotePath);
+    }
+
+    expect(summarize(lines)).toEqual([
+      'info: Provisioning',
+      'warn: Could not reach the remote of Project',
+      'info: Provisioned',
     ]);
   }, 120000);
 

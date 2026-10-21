@@ -136,7 +136,6 @@ async function startLoader(projectId: string) {
 
   return {
     store,
-    lines,
     /** What the loader warned or errored about since the last reload */
     reportedSince: () => problems().slice(reported),
     /** Reports a change below the Collection and waits for its reload */
@@ -273,8 +272,10 @@ describe('the loggers an astro build writes through', function () {
       'info: Loading elek.io Entries of Collection',
       'info: Reading Project',
     ]);
-    // And Core's logger takes none of them, which is the complete set
-    // of what the same build loses at error level
+    // And Core's logger takes none of them. The set below is everything
+    // Core's logger takes on this path, of which only the info line is
+    // what a default-level build loses at error level: the two debug
+    // lines sit below the default level and were never printed
     expect(summarize(coreLines)).toEqual([
       'debug: Cache miss reading file',
       'debug: Executed',
