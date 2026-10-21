@@ -1,7 +1,12 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
 import Semver from 'semver';
-import type { FileReference, ObjectType, Version } from '../schema/index.js';
+import type {
+  FileReference,
+  ObjectType,
+  Uuid,
+  Version,
+} from '../schema/index.js';
 import {
   cloneProjectSchema,
   contentChannelSchema,
@@ -59,6 +64,7 @@ import {
   projectMigrations,
 } from './migrations/index.js';
 import { isNotEmpty, PROVISIONED_MARKER } from '../util/node.js';
+import { acceptedContentLossOf } from '../util/contentLoss.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { AssetService } from './AssetService.js';
@@ -1660,6 +1666,44 @@ export class ProjectService
     await Fs.writeFile(Path.join(path, '.gitattributes'), lines.join('\n'));
   }
 
+  /**
+   * Runs an update a migration drives, accepting the content that migration
+   * deletes and nothing else.
+   *
+   * A migration is not a model edit somebody can be asked about: a Project
+   * stays unreadable until it is applied, so refusing here would leave a
+   * Project nobody can upgrade. The accepted ids come from the refusal
+   * itself, and the loss is recorded in the log.
+   *
+   * @see ../../docs/schema-changes.md
+   */
+  private async updateAcceptingMigrationContentLoss(
+    projectId: string,
+    objectType: ObjectType,
+    update: (acceptedContentLoss?: Uuid[]) => Promise<unknown>
+  ): Promise<void> {
+    try {
+      await update();
+      return;
+    } catch (error) {
+      const acceptedContentLoss = acceptedContentLossOf(error);
+      if (acceptedContentLoss.length === 0) {
+        throw error;
+      }
+      // Ids and a count, never a Value, see contributing/logging.md
+      this.logService.warn({
+        source: 'core',
+        message: `Upgrading ${objectType} "${projectId}" drops the content of ${acceptedContentLoss.length} field definitions, because a migration removed them`,
+        meta: {
+          'elek.project.id': projectId,
+          'elek.object.type': objectType,
+          'elek.field_definition.ids': acceptedContentLoss,
+        },
+      });
+      await update(acceptedContentLoss);
+    }
+  }
+
   private async upgradeObjectFile(
     projectId: string,
     objectType: ObjectType,
@@ -1695,10 +1739,16 @@ export class ProjectService
           await this.jsonFileService.unsafeRead(componentFilePath);
         const migratedComponentFile =
           this.componentService.migrate(prevComponentFile);
-        await this.componentService.update({
+        await this.updateAcceptingMigrationContentLoss(
           projectId,
-          ...migratedComponentFile,
-        });
+          objectType,
+          (acceptedContentLoss) =>
+            this.componentService.update({
+              projectId,
+              ...migratedComponentFile,
+              ...(acceptedContentLoss && { acceptedContentLoss }),
+            })
+        );
         this.logService.info({
           source: 'core',
           message: `Upgraded ${objectType} "${componentFilePath}"`,
@@ -1721,10 +1771,16 @@ export class ProjectService
           await this.jsonFileService.unsafeRead(collectionFilePath);
         const migratedCollectionFile =
           this.collectionService.migrate(prevCollectionFile);
-        await this.collectionService.update({
+        await this.updateAcceptingMigrationContentLoss(
           projectId,
-          ...migratedCollectionFile,
-        });
+          objectType,
+          (acceptedContentLoss) =>
+            this.collectionService.update({
+              projectId,
+              ...migratedCollectionFile,
+              ...(acceptedContentLoss && { acceptedContentLoss }),
+            })
+        );
         this.logService.info({
           source: 'core',
           message: `Upgraded ${objectType} "${collectionFilePath}"`,
