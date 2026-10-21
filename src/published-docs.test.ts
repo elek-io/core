@@ -25,6 +25,11 @@ const packedManifestSchema = z.object({
   files: z.array(z.object({ path: z.string() })),
 });
 
+/** The manifest this test copies, reduced to what a publish would rewrite. */
+const sourceManifestSchema = z.object({
+  publishConfig: z.record(z.string(), z.unknown()).optional(),
+});
+
 /** What the script below writes per specifier, a resolved file or the refusal. */
 const answerSchema = z.array(
   z.object({
@@ -109,6 +114,15 @@ describe('published documentation', function () {
       await Fs.mkdtemp(Path.join(Os.tmpdir(), 'elek-io-core-consumer-'))
     );
     installDir = Path.join(consumerDir, 'node_modules', '@elek-io', 'core');
+
+    // The loop below copies the manifest from disk, while a publish folds
+    // publishConfig into the one npm receives. An exports map there would
+    // decide what resolves and the copy would never show it.
+    const manifest = sourceManifestSchema.parse(
+      await Fs.readJson(Path.join(packageRoot, 'package.json'))
+    );
+    expect(manifest.publishConfig?.['exports']).toBeUndefined();
+
     for (const path of published) {
       await Fs.copy(Path.join(packageRoot, path), Path.join(installDir, path));
     }
