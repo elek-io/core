@@ -81,6 +81,10 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **No full-text search** - a `searchProjectSchema` is defined, but there is no `search()` service method or API route behind it.
 - **No conditional fields** - a field's visibility cannot depend on another field's value.
 - **Limited specialized field types** - no arbitrary JSON, color picker, geospatial, code-editor, or password / hash field types.
+- **Not every field property reaches a Release diff** - eight property and field type pairs are unclassified, so changing one of them alone leaves the bump at the patch default. See [`releases.md`](./releases.md#every-change-a-diff-can-carry) for what a diff does carry.
+  - The pairs are a `markdown` field's `ofCollections`, `ofAssetMimeTypes`, `features`, `min` and `max`, a `dynamic` field's `min` and `max`, an `asset` field's `ofAssetMimeTypes`, and a `numberSelect` or `stringSelect` field's `options`.
+  - A `numberSelect` field declares `min` and `max` as `null` and can never hold a bound, so a diff that reports no bound change for it is right rather than a ninth gap.
+  - A `dynamic` field's `ofComponents` is compared as declared, so replacing an empty list with an explicit one is reported, even though an empty list already allows every Component.
 
 ### Intentional constraints
 
@@ -106,7 +110,7 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **Astro's `render()` does not apply to Entries** - a `markdown` field arrives on `entry.data` as an mdast tree, not as the rendered HTML `render(entry)` and `<Content />` read, so the loaders leave Astro's rendered slot empty.
   - Filling it would flatten `entryReference` and `assetReference` nodes into finished markup and lose the UUIDs a page resolves them by, which is the reason to store a tree in the first place.
   - Calling `render()` on an Entry is not an error and renders nothing at all, so reach for `mdastRender` instead. See [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro).
-- **A major Release warns, it does not gate** - a build that provisions the `release` channel lands on the newest Release of a Project whatever its bump, so a major one reaches it like any other. Pin an exact version to decide yourself when to move. See [`releases.md`](./releases.md#what-a-major-release-asks-of-a-consumer).
+- **A major Release warns, it does not gate** - a build that provisions the `release` channel lands on the newest Release of a Project whatever its bump, so a major one reaches it like any other. A channel that stays within a major is not built yet. Pin an exact version to decide yourself when to move. See [`releases.md`](./releases.md#what-a-major-release-asks-of-a-consumer).
 - **No plugin or marketplace system** - extending the field catalogue means changing code, not installing a package.
 - **No nested composition** - groups cannot nest groups, and `dynamic` fields cannot nest `dynamic` fields. Components are the flat, predictable reuse mechanism.
 - **A log tail can be truncated** - `core.logger.tail()` stops collecting at a size ceiling and sets `isTruncated`, dropping the oldest records first. Collapsing repeated records is what keeps a tail small, and it is worth far more than a bigger cap, so the ceiling is a safety valve rather than a working limit. See [`usage.md`](./usage.md#the-log-tail) for the ceiling and what `isTruncated` means.
