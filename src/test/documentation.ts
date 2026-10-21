@@ -2,6 +2,11 @@ import Path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fs from 'fs-extra';
 import ts from 'typescript';
+import { z } from 'zod';
+import {
+  releaseDiffSchema,
+  semverBumpSchema,
+} from '../schema/releaseSchema.js';
 
 /**
  * The machine checkable half of the documentation rules.
@@ -285,6 +290,22 @@ function statusCodesOf(): Map<string, string> {
   );
 }
 
+/** A row of the documented release table, which names an array, a change type and a bump. */
+const tableRowSchema = z.object({
+  arrays: z.string(),
+  changeType: z.string(),
+  bump: z.string(),
+});
+
+/** An array of a release diff, read for the change types its items carry. */
+const changeArraySchema = z.object({
+  element: z.object({
+    shape: z.object({
+      changeType: z.object({ options: z.array(z.string()) }),
+    }),
+  }),
+});
+
 /**
  * Every change type a release diff can carry, by the array it arrives in.
  *
@@ -293,67 +314,35 @@ function statusCodesOf(): Map<string, string> {
  * `releaseDiffSchema` so an array added there cannot stay undocumented.
  */
 function changeTypesOf(): Map<string, string[]> {
-  const source = readFile('src/schema/releaseSchema.ts');
-  const enums = new Map(
-    [
-      ...source.matchAll(
-        /const (\w+ChangeTypeSchema) = z\.enum\(\[([^\]]*)\]\)/g
-      ),
-    ].map(([, name, values]) => [
-      name ?? '',
-      [...(values ?? '').matchAll(/'([^']+)'/g)].map(
-        ([, value]) => value ?? ''
-      ),
-    ])
-  );
-  const changeSchemas = new Map(
-    [
-      ...source.matchAll(/const (\w+ChangeSchema) = z\.object\(\{([^}]*)\}\)/g),
-    ].map(([, name, body]) => [
-      name ?? '',
-      /changeType:\s*(\w+)/.exec(body ?? '')?.[1] ?? '',
-    ])
-  );
-  const diff = /const releaseDiffSchema = z\.object\(\{([^}]*)\}\)/.exec(
-    source
-  )?.[1];
-  if (diff === undefined) {
-    throw new Error(
-      'releaseDiffSchema is not declared as expected in src/schema/releaseSchema.ts'
-    );
-  }
   const byArray = new Map<string, string[]>();
-  for (const [, array, schema] of diff.matchAll(/(\w+): z\.array\((\w+)\)/g)) {
-    const types = enums.get(changeSchemas.get(schema ?? '') ?? '');
-    if (types === undefined) {
-      throw new Error(
-        `${array ?? ''} of releaseDiffSchema reaches no change type enum`
-      );
-    }
-    byArray.set(array ?? '', types);
+  for (const [array, schema] of Object.entries(releaseDiffSchema.shape)) {
+    const change = changeArraySchema.safeParse(schema);
+    if (!change.success) continue;
+    byArray.set(array, change.data.element.shape.changeType.options);
   }
   return byArray;
 }
 
 /**
  * The bump `ReleaseService` gives each change type, read out of the literals
- * it pushes. Every push writes `bump` directly after `changeType`, which is
- * what this reads, so a change type with no pair is one nothing classifies.
+ * it pushes. Every push writes `bump` directly after `changeType`, and this
+ * looks for that pair anywhere in the file. It does not establish which
+ * array the pair is pushed into, so a change type two arrays share answers
+ * for both, see contributing/documentation.md.
  */
-function changeBumpsOf(): Map<string, Set<string>> {
-  const source = readFile('src/service/ReleaseService.ts');
+function changeBumpsOf(
+  changeTypes: Iterable<string>
+): Map<string, Set<string>> {
+  const source = readFile('src/service/ReleaseService.ts').replaceAll(
+    /\s+/g,
+    ' '
+  );
   const bumps = new Map<string, Set<string>>();
-  for (const [, type, bump] of source.matchAll(
-    /changeType: '(\w+)',\s*bump: '(\w+)'/g
-  )) {
-    const seen = bumps.get(type ?? '') ?? new Set<string>();
-    seen.add(bump ?? '');
-    bumps.set(type ?? '', seen);
-  }
-  if (bumps.size === 0) {
-    throw new Error(
-      'No changeType and bump pair in src/service/ReleaseService.ts, keep bump directly after changeType'
+  for (const changeType of changeTypes) {
+    const classified = semverBumpSchema.options.filter((bump) =>
+      source.includes(`changeType: '${changeType}', bump: '${bump}'`)
     );
+    bumps.set(changeType, new Set(classified));
   }
   return bumps;
 }
@@ -1203,7 +1192,7 @@ export const rules: Rule[] = [
       }
 
       const declared = changeTypesOf();
-      const bumps = changeBumpsOf();
+      const bumps = changeBumpsOf([...declared.values()].flat());
       const documented = new Set<string>();
       const violations: Violation[] = [];
       let inSection = false;
@@ -1215,21 +1204,24 @@ export const rules: Rule[] = [
         }
         if (!inSection || line.inFence) continue;
         // | `fieldChanges` and `componentFieldChanges` | `added` | minor | .. |
-        const row = /^\|([^|]*)\|\s*`(\w+)`\s*\|\s*(\w+)\s*\|/.exec(line.text);
-        const changeType = row?.[2];
-        const bump = row?.[3];
-        if (!changeType || !bump) continue;
-        const arrays = [...(row?.[1] ?? '').matchAll(/`(\w+)`/g)].map(
-          ([, name]) => name ?? ''
+        const row = tableRowSchema.safeParse(
+          /^\|(?<arrays>[^|]*)\|\s*`(?<changeType>\w+)`\s*\|\s*(?<bump>\w+)\s*\|/.exec(
+            line.text
+          )?.groups
+        );
+        if (!row.success) continue;
+        const { changeType, bump } = row.data;
+        const arrays = [...row.data.arrays.matchAll(/`\w+`/g)].map(([name]) =>
+          name.slice(1, -1)
         );
         if (arrays.length === 0) continue;
 
-        const classified = bumps.get(changeType);
-        if (classified === undefined) {
+        const classified = bumps.get(changeType) ?? new Set<string>();
+        if (classified.size === 0) {
           violations.push({
             file,
             line: line.number,
-            message: `ReleaseService classifies no ${changeType}, drop the row`,
+            message: `ReleaseService pairs no bump with ${changeType}, so either nothing classifies it and the row goes, or its push writes bump before changeType`,
           });
         } else if (classified.size > 1) {
           violations.push({
