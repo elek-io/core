@@ -150,6 +150,11 @@ The records come back oldest first, one JSON object per line, gzipped and then b
 - Log files are read line by line and gunzipped on the way, so a very large one is never held in memory.
 - A run of identical records collapses into the first of them plus `elek.log.repeat.count` and `elek.log.repeat.last_timestamp`. A measured day of 78 MB, two thirds of it one stack repeating, came to 4 KB, and an ordinary day is 1 to 25 KB.
 
+Two things a tail does not promise:
+
+- It stops at 4 MB of collapsed records, counted before they are compressed, and sets `isTruncated` to `true` when it had to drop any. The oldest go first, and an ordinary day stays far below that ceiling.
+- A tail collected right after a crash can stop short of its last lines, which are usually the ones it was collected for. See [`features.md`](./features.md#intentional-constraints).
+
 **What a tail holds.** Ids, paths, timestamps, counts and error messages, which is to say what happened and in what order. Ids and timestamps are exact, and paths keep their structure below the data directory, because those are the join: a tail plus the repository replays what was done, in order, with the commit for every step. Hashing or truncating an id would destroy that and buy nothing.
 
 **What a tail does not hold.** The content of an Entry, the name of a Project, Collection or Asset, and the git signature of the User were never written to a log file in the first place, so they cannot be in a tail.
@@ -162,7 +167,7 @@ What the tail itself removes is the short list a log file may hold because it is
 
 Nothing goes silently. What was replaced says what it was (`~`, `[redacted]`, `[email]`), and a record that changed carries `redaction.masked.count` and `redaction.redacted.count`, so a reader can tell a deliberate gap from an empty one.
 
-**A tail is still personal data.** The ids in it resolve against the repository, which makes it pseudonymised rather than anonymous. Scrubbing lowers what a tail carries. It does not change what it is. Ask for consent before collecting one, and decide how long you keep one.
+**A tail is still personal data.** The ids in it resolve against the repository, which makes it pseudonymized rather than anonymous. Scrubbing lowers what a tail carries. It does not change what it is. Ask for consent before collecting one, and decide how long you keep one.
 
 ## Setting the User (required before writing)
 
