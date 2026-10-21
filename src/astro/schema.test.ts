@@ -2000,6 +2000,57 @@ describe('two Components deriving one name', () => {
   });
 });
 
+describe('a dynamic field naming one Component twice', () => {
+  // `ofComponents` is the list of Components the field allows, so naming
+  // one twice allows it once. Two members of one Component would otherwise
+  // reach the union, and the clash guard would report a rename of a
+  // Component into itself, which no rename can fix
+  const heroId = uuid();
+  const quoteId = uuid();
+  const components = [
+    makeComponent({
+      id: heroId,
+      slug: 'hero',
+      fieldDefinitions: [textField('headline')],
+    }),
+    makeComponent({
+      id: quoteId,
+      slug: 'quote',
+      fieldDefinitions: [textField('text')],
+    }),
+  ];
+  const fieldDefs = [dynamicField('sections', [heroId, heroId, quoteId])];
+
+  it('admits its items rather than reporting a clash', () => {
+    const schema = buildEntryValuesSchema(fieldDefs, ['en'], components);
+
+    const valid = {
+      sections: [
+        {
+          id: uuid(),
+          componentId: heroId,
+          componentSlug: 'hero',
+          values: { headline: { en: 'Welcome' } },
+        },
+      ],
+    };
+
+    expect(schema.parse(valid)).toEqual(valid);
+  });
+
+  it('carries that Component once in the item type', () => {
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      components,
+      'Pages'
+    );
+
+    expect(types.split('componentSlug: "hero"')).toHaveLength(2);
+    expect(typeCheckMessages(types)).toEqual([]);
+  });
+});
+
 describe('an open dynamic field', () => {
   const heroId = uuid();
   const quoteId = uuid();
