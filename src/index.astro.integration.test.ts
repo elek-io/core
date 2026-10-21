@@ -235,6 +235,29 @@ export const collections = {
     expect(duringProvision.every((count) => count === 0)).toBe(true);
   }, 120000);
 
+  it('should report what it provisioned through the logger Astro hands it', async function () {
+    // Astro prefixes those lines with the integration's name, so the
+    // [elek] lines of a build are Astro's to silence rather than
+    // ELEK_IO_LOG_LEVEL's, which is what docs/usage.md tells a consumer
+    const integration = elek({ config });
+    expect(integration.name).toBe('elek');
+
+    const setup = integration.hooks['astro:config:setup'];
+    assert(setup);
+    const astroLines: string[] = [];
+    const record = (message: string) => astroLines.push(message);
+
+    await setup({
+      logger: { info: record, warn: record, error: record, debug: record },
+      // The hook reads nothing else off its parameters
+    } as unknown as HookParameters<'astro:config:setup'>);
+
+    expect(astroLines).toEqual([
+      expect.stringContaining('Provisioning'),
+      expect.stringContaining('Provisioned'),
+    ]);
+  }, 120000);
+
   // What elek() then does with such a config is asserted through a real
   // sync in src/index.astro.mixed.test.ts, which needs its own file
   // because every sync() costs the worker a full Astro pipeline
