@@ -130,7 +130,7 @@ A major Release says something your build depends on changed, either a name or a
 - `elekCollections()` names each Astro collection after the Project alias and the Collection's plural slug, so a renamed Collection renames the name `getCollection()` takes.
 - A deleted Entry or Asset and a changed default language are major as well, and none of the three changes a generated type or a generated client, so nothing stops compiling. A page built from a deleted Entry is no longer generated at all, so compare the pages the build emitted rather than only what it compiled.
 
-`prepare()` reports every change behind the bump before the Release is published. It runs on the `draft` branch, so whoever cuts the Release reads it rather than you. A Collection, Component, Entry or Asset change carries the id of what changed, so the name is yours to look up, see [`usage.md`](./usage.md#reading-from-history). A field change carries its `fieldSlug` as well.
+`prepare()` reports every change behind the bump before the Release is published. It runs on the `draft` branch, so whoever cuts the Release reads it rather than you. A Collection or Component change carries the id of what changed, so the name is yours to look up, see [`usage.md`](./usage.md#reading-from-history). A field change carries its `fieldSlug` as well.
 
 ## create(): cutting a release
 
