@@ -25,31 +25,41 @@ const packedManifestSchema = z.object({
   files: z.array(z.object({ path: z.string() })),
 });
 
-/** What the script below writes, either a resolved file or the refusal. */
-const answerSchema = z.object({
-  url: z.string().optional(),
-  content: z.string().optional(),
-  errorCode: z.string().optional(),
-  errorMessage: z.string().optional(),
-});
+/** What the script below writes per specifier, a resolved file or the refusal. */
+const answerSchema = z.array(
+  z.object({
+    specifier: z.string(),
+    url: z.string().optional(),
+    content: z.string().optional(),
+    errorCode: z.string().optional(),
+    errorMessage: z.string().optional(),
+  })
+);
 
 /**
- * Resolves its argument with Node's own resolver and reads what came back.
- * It runs from the consumer directory, so `exports` is the only thing that
- * can answer and `files` is the only thing that can have put the file there.
+ * Resolves each of its arguments with Node's own resolver and reads what came
+ * back. It runs from the consumer directory, so `exports` is the only thing
+ * that can answer and `files` is the only thing that can have put the file
+ * there. One process answers for every specifier, so the whole documentation
+ * costs a single spawn.
  */
 const resolveScript = `
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-let answer;
-try {
-  const url = import.meta.resolve(process.argv[2]);
-  answer = { url, content: readFileSync(fileURLToPath(url), 'utf8') };
-} catch (error) {
-  answer = { errorCode: error.code, errorMessage: error.message };
-}
-process.stdout.write(JSON.stringify(answer));
+const answers = process.argv.slice(2).map((specifier) => {
+  try {
+    const url = import.meta.resolve(specifier);
+    return {
+      specifier,
+      url,
+      content: readFileSync(fileURLToPath(url), 'utf8'),
+    };
+  } catch (error) {
+    return { specifier, errorCode: error.code, errorMessage: error.message };
+  }
+});
+process.stdout.write(JSON.stringify(answers));
 `;
 
 /** The paths a publish puts into the tarball. `npm pack` answers the same list. */
@@ -81,6 +91,7 @@ function documentationPaths(): string[] {
 
 describe('published documentation', function () {
   let published: string[];
+  let pages: string[];
   let installDir: string;
   let consumerDir: string;
   let scriptPath: string;
@@ -89,6 +100,8 @@ describe('published documentation', function () {
   // hook timeout on the slow runners, see contributing/testing.md
   beforeAll(async function () {
     published = publishedPaths();
+    pages = documentationPaths();
+
     // Node answers with the real path of the script it spawns, so without this
     // the assertions compare one canonical path against one raw one. macOS
     // points its temp directory through /var, a symlink to private/var.
@@ -107,7 +120,7 @@ describe('published documentation', function () {
     await Fs.remove(consumerDir);
   });
 
-  function resolveFromConsumer(specifier: string) {
+  function resolveFromConsumer(...specifiers: string[]) {
     // The NODE_PATH vitest gives its workers ends in pnpm's hidden store and
     // resolves packages a consumer never sees, see index.cli.test.ts
     const env = { ...process.env };
@@ -115,7 +128,7 @@ describe('published documentation', function () {
 
     return answerSchema.parse(
       JSON.parse(
-        execFileSync(process.execPath, [scriptPath, specifier], {
+        execFileSync(process.execPath, [scriptPath, ...specifiers], {
           cwd: consumerDir,
           env,
           encoding: 'utf8',
@@ -124,29 +137,43 @@ describe('published documentation', function () {
     );
   }
 
-  it('resolves through the package name from outside the package', async function () {
-    const answer = resolveFromConsumer('@elek-io/core/docs/index.md');
+  it('resolves every page through the package name from outside the package', async function () {
+    const answers = resolveFromConsumer(
+      ...pages.map((path) => `@elek-io/core/${path}`)
+    );
 
-    expect(answer.errorCode, answer.errorMessage).toBeUndefined();
     expect(
-      answer.url === undefined ? undefined : fileURLToPath(answer.url)
-    ).toEqual(Path.join(installDir, 'docs', 'index.md'));
-    expect(answer.content).toEqual(
-      await Fs.readFile(Path.join(packageRoot, 'docs', 'index.md'), 'utf8')
+      answers.map((answer) => ({
+        specifier: answer.specifier,
+        path:
+          answer.url === undefined
+            ? answer.errorMessage
+            : fileURLToPath(answer.url),
+      }))
+    ).toEqual(
+      pages.map((path) => ({
+        specifier: `@elek-io/core/${path}`,
+        path: Path.join(installDir, path),
+      }))
+    );
+    expect(answers.map((answer) => answer.content)).toEqual(
+      await Promise.all(
+        pages.map((path) => Fs.readFile(Path.join(packageRoot, path), 'utf8'))
+      )
     );
   });
 
   it('refuses a subpath the exports map does not list', function () {
-    const answer = resolveFromConsumer(
+    const [answer] = resolveFromConsumer(
       '@elek-io/core/contributing/documentation.md'
     );
 
-    expect(answer.errorCode).toEqual('ERR_PACKAGE_PATH_NOT_EXPORTED');
+    expect(answer?.errorCode).toEqual('ERR_PACKAGE_PATH_NOT_EXPORTED');
   });
 
   it('publishes every page of docs/', function () {
     expect(
       published.filter((path) => path.startsWith('docs/')).toSorted()
-    ).toEqual(documentationPaths());
+    ).toEqual(pages);
   });
 });
