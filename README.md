@@ -51,7 +51,7 @@ The Node, Browser and Astro entry points re-export zod's `z`, so in your own cod
 Every page of [`docs/`](./docs/) ships in the package and resolves under `@elek-io/core/docs/`, so a tool of yours reads the reference of the exact version you install, with no network lookup:
 
 ```typescript
-const index = import.meta.resolve('@elek-io/core/docs/index.md');
+const indexUrl = import.meta.resolve('@elek-io/core/docs/index.md');
 ```
 
 ## Concepts
