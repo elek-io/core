@@ -9,6 +9,7 @@ import {
   CoreError,
   flattenFieldDefinitions,
 } from '../index.node.js';
+import { makeComponentsContext } from '../schema/componentSchema.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
@@ -338,13 +339,20 @@ export function elekEntriesLoader<const T extends ElekConfig>(
 
   /**
    * Reads the Collection, the Project's languages and the Components,
-   * which is everything the schema is built from
+   * which is everything the schema is built from. Takes the resolved
+   * Collection id of a caller that resolved it already, which also keeps
+   * this from throwing `NotFound` on a Collection renamed since.
    */
-  const readModel = async (core: ReturnType<typeof getCore>) => {
-    const resolvedId = await core.collections.resolveCollectionId({
-      projectId,
-      idOrSlug: props.collectionIdOrSlug,
-    });
+  const readModel = async (
+    core: ReturnType<typeof getCore>,
+    knownCollectionId?: string
+  ) => {
+    const resolvedId =
+      knownCollectionId ??
+      (await core.collections.resolveCollectionId({
+        projectId,
+        idOrSlug: props.collectionIdOrSlug,
+      }));
     const collection = await core.collections.read({
       projectId,
       id: resolvedId,
@@ -410,15 +418,17 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       resolvedCollectionId = collectionId;
     }
 
-    if (modelDigest !== undefined) {
-      const { digest } = await readModel(core);
-      if (digest !== modelDigest) {
-        context.logger.warn(
-          `The content model of Collection "${props.collectionIdOrSlug}" of Project "${alias}" changed. Astro builds a collection's schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.`
-        );
-        return resolvedCollectionId;
-      }
+    // Read after the guard above, never before: transforming an Entry
+    // needs the Components to name each item's Component, and resolving
+    // the Collection again here would throw rather than warn
+    const model = await readModel(core, resolvedCollectionId);
+    if (modelDigest !== undefined && model.digest !== modelDigest) {
+      context.logger.warn(
+        `The content model of Collection "${props.collectionIdOrSlug}" of Project "${alias}" changed. Astro builds a collection's schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.`
+      );
+      return resolvedCollectionId;
     }
+    const componentsContext = makeComponentsContext(model.components);
 
     context.logger.info(
       `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" of Project "${alias}"`
@@ -438,7 +448,11 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     const seen = new Set<string>();
     for (const entry of entries) {
       seen.add(entry.id);
-      const values = transformEntryValues(entry.values);
+      const values = transformEntryValues(
+        entry.values,
+        componentsContext,
+        entry.id
+      );
       const digest = context.generateDigest(values);
 
       // Skip re-validating Entries whose data has not changed.
