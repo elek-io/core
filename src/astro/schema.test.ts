@@ -2137,6 +2137,60 @@ function renderQuote(
     expect(typeCheckMessages(dispatchOver(types))).toEqual([]);
   });
 
+  it('compiles against the same Components after the content was re-created', () => {
+    // What the slug is for. Re-creating the content gives every Component
+    // a new UUID, while the name the dispatch is written against holds
+    const reseeded = [
+      makeComponent({
+        id: uuid(),
+        slug: 'hero',
+        fieldDefinitions: [textField('headline')],
+      }),
+      makeComponent({
+        id: uuid(),
+        slug: 'quote',
+        fieldDefinitions: [textField('text')],
+      }),
+    ];
+    const types = buildEntryValuesTypeString(
+      [
+        dynamicField(
+          'sections',
+          reseeded.map((component) => component.id)
+        ),
+      ],
+      ['en'],
+      reseeded,
+      'Pages'
+    );
+
+    expect(types).not.toContain(heroId);
+    expect(typeCheckMessages(dispatchOver(types))).toEqual([]);
+  });
+
+  it('keeps a dispatch on the Component id compiling', () => {
+    // The key is added beside the id, so a site written before it keeps
+    // compiling and needs no change on upgrading
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      [hero, quote],
+      'Pages'
+    );
+    const source = `${types}
+
+type Section = Entry['sections'][number];
+
+export function slugOf(sections: Section[]): string[] {
+  return sections.map((section) =>
+    section.componentId === '${heroId}' ? 'hero' : 'other'
+  );
+}
+`;
+
+    expect(typeCheckMessages(source)).toEqual([]);
+  });
+
   it('fails when the field allows a Component the site does not render', () => {
     const widened = [dynamicField('sections', [heroId, quoteId, gridId])];
     const types = buildEntryValuesTypeString(

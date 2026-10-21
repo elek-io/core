@@ -4,7 +4,7 @@ import Os from 'node:os';
 import Path from 'node:path';
 import Fs from 'fs-extra';
 import core, { uuid } from './test/setup.js';
-import { createProject } from './test/util.js';
+import { createProject, ensureCleanGitStatus } from './test/util.js';
 import type { Collection, Component, Project } from './index.node.js';
 
 /**
@@ -193,7 +193,9 @@ export const collections = {
     await Fs.remove(root);
   }, 60000);
 
-  it('should store every item under the slug of its Component', async function () {
+  it('should store every item under the slug of its Component', async function ({
+    task,
+  }) {
     // Each item carries the slug and the id, so a site dispatches on the
     // name and still addresses the same Component through Core, the local
     // API or the types the CLI generates
@@ -201,6 +203,10 @@ export const collections = {
       [hero.id, 'hero'],
       [quote.id, 'quote'],
     ]);
+
+    // The loaders derive the slug on every sync and write nothing back, so
+    // upgrading migrates no content
+    await ensureCleanGitStatus(task, project.id);
   }, 30000);
 
   it('should generate an item type discriminated on the Component slug', async function () {
