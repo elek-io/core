@@ -2,7 +2,7 @@
 
 A capability reference for elek.io Core - what the content engine does, grouped by the questions a developer evaluating a CMS tends to ask. Each entry links to the deep-dive doc where relevant.
 
-For the data model these features operate on, see [`concepts.md`](./concepts.md). For a cross-CMS comparison against Strapi, Directus, Payload and TinaCMS, see [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md).
+For the data model these features operate on, see [`concepts.md`](./concepts.md).
 
 ## Storage & data ownership
 
@@ -115,8 +115,6 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **A log tail can be missing its last lines** - winston hands a record to a write stream and offers no per transport flush, so a tail collected right after a crash can stop short of the lines it was collected for, which are usually the interesting ones.
   - `tail()` writes a marker and yields before reading to give the stream a chance to drain. That is a hedge rather than a fix, and the residual gap is documented instead of engineered around.
 
-For how these compare to other CMS platforms and where Core leads, see [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md).
-
 ## See also
 
 - [`concepts.md`](./concepts.md) - the data model behind these features
@@ -135,4 +133,3 @@ For how these compare to other CMS platforms and where Core leads, see [`compari
 - [`error-handling.md`](./error-handling.md) - `CoreError` and error patterns
 - [`cloud-account.md`](./cloud-account.md) - signing in to an elek.io account and the token Core holds
 - [`reporting.md`](./reporting.md) - sending a report to elek.io Cloud, and handing a window of log files over
-- [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md) - cross-CMS field comparison
