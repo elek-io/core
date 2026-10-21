@@ -600,11 +600,15 @@ All loaders share one Core instance, and the loaders themselves take no options 
 - `ELEK_IO_CHANNEL` switches the content state deployment-wide.
 - `ELEK_IO_REMOTE_ACCESS_TOKEN` authenticates against a private remote.
 
-`ELEK_IO_LOG_LEVEL` reaches Core's own logger and nothing else, so the loaders keep reporting at `error`:
+`ELEK_IO_LOG_LEVEL` reaches Core's own logger and nothing else, so the loaders keep reporting even when it is set to `error`:
 
-- Core's own lines disappear, which in a build means the line it writes when it starts and one for every slug index it rebuilds.
-- The `[elek-assets]` and `[elek-entries]` lines stay, because the loaders report through Astro's logger. They name the Project, its version and the branch or Release tag each loader read.
-- [`astro build --silent`](https://docs.astro.build/en/reference/cli-reference/#--silent) quiets those too, and the rest of the build with them, warnings and errors included.
+- The `[core]` lines go. A build runs two Cores, the integration's and the loaders', so that is two lines about Core starting, the line the integration's Core writes when it is disposed, and one line per slug index rebuild where a loader names a Collection by its slug rather than its id.
+- **Every warning Core raises goes with them**, and that list is open. A build reaches the one `elekCollections()` raises when it is called without a selection, and the one about a credential helper Core could not derive for elek.io Cloud's git hosts.
+- It also reaches three where content is dropped rather than read: an Entry whose file did not parse, which is why a loader can report more Entries than it stored, a Collection skipped while the slug index is rebuilt, and a file or folder skipped because its name does not parse. Only the first leaves an error behind, and that one names no file.
+- The level governs Core's [log files](#log-files) too, so at `error` the build leaves no record of itself there either.
+- The `[elek]`, `[elek-assets]` and `[elek-entries]` lines stay, because the integration and the loaders report through Astro's logger. That covers what each one provisioned, read and wrote, the line [every loader logs about the content state it read](#provisioning-in-ci-with-elek), and their own warnings.
+- [`astro build --silent`](https://docs.astro.build/en/reference/cli-reference/#--silent) silences those lines, and Astro's whole output with them. It does not reach Core's, so a build that prints nothing needs `ELEK_IO_LOG_LEVEL=error` as well.
+- Either way a failing build still prints the error that stopped it and still exits non-zero, because that error is not written through a logger.
 
 See [Environment variables](#environment-variables) for the full list, and note that it is the full list. A setting without an environment variable cannot be changed for the loaders' Core.
 
@@ -648,7 +652,9 @@ Each declaration takes an optional `ref`, a channel (`release`, `preview` or `dr
 - A config in which no Project has a `remoteUrl` fails while `astro.config` is read, naming the aliases, because there is nothing left for the integration to do.
 - A site whose Projects are all local needs no integration at all.
 
-Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (Release tag)`. The label is the checked-out branch, or `Release tag` for a Release or a pinned version.
+Every loader logs which content state it read, e.g. `Reading Project "Website" version 1.4.0 (Release tag)`. The label is the checked-out branch, or `Release tag` for a Release or a pinned version.
+
+The line goes through Astro's logger, so `ELEK_IO_LOG_LEVEL` does not take it out of a build. `astro build --silent` does.
 
 For rendering `markdown` field Values (including the required `html`, `assetReference` and `entryReference` handlers), see [`markdown-content.md`](./markdown-content.md).
 
