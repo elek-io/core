@@ -9,8 +9,7 @@ import type { ReportService } from './ReportService.js';
  * It owns no behavior of its own, only the second namespace level.
  *
  * @see ../../contributing/naming.md
- * @see ../../docs/cloud-account.md
- * @see ../../docs/reporting.md
+ * @see ../../contributing/cloud.md
  */
 export class CloudService {
   private readonly accountService: AccountService;

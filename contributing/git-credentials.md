@@ -1,6 +1,6 @@
 # Git credentials
 
-Core answers git's credential requests through its own helper, a relay to Core over loopback TCP. It serves elek.io Cloud's git hosts with the session's git tokens, and every other host with `ELEK_IO_REMOTE_ACCESS_TOKEN` while that is set. The consumer side is in [`../docs/cloud-git.md`](../docs/cloud-git.md) and [`../docs/usage.md`](../docs/usage.md#environment-variables).
+Core answers git's credential requests through its own helper, a relay to Core over loopback TCP. It serves elek.io Cloud's git hosts with the session's git tokens, and every other host with `ELEK_IO_REMOTE_ACCESS_TOKEN` while that is set. The consumer side is [`../docs/usage.md`](../docs/usage.md#environment-variables), which covers `ELEK_IO_REMOTE_ACCESS_TOKEN` alone.
 
 Read this before changing how `GitService` builds git's environment, [`GitCredentialRelay`](../src/util/gitCredentialRelay.ts), [`CloudGitAccess`](../src/util/cloudGit.ts) or the helper script in [`gitCredential.ts`](../src/util/gitCredential.ts).
 
@@ -177,8 +177,7 @@ CI runs both on Linux, macOS and Windows. Neither reaches a path holding spaces 
 
 ## See also
 
-- [`../docs/cloud-git.md`](../docs/cloud-git.md) - the behavior a consumer sees with a Cloud session
 - [`../docs/usage.md`](../docs/usage.md#environment-variables) - the environment variables a consumer sets
-- [`cloud.md`](./cloud.md) - the seam the two git calls go through, and how they map refusals
+- [`cloud.md`](./cloud.md#the-options) - the seam the two git calls go through, the options and how they map refusals
 - [`error-handling-internals.md`](./error-handling-internals.md) - how a failed authentication becomes a typed error
 - [`peer-dependencies.md`](./peer-dependencies.md) - the dugite range the helper runs against

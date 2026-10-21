@@ -78,7 +78,6 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 ### Not yet implemented
 
 - **No full-text search** - a `searchProjectSchema` is defined, but there is no `search()` service method or API route behind it.
-- **No address verification or password reset** - `core.cloud.account.signUp()` can answer that an address has to be verified, but Core has no call that verifies one or resets a password. See [`cloud-account.md`](./cloud-account.md#signing-up).
 - **No conditional fields** - a field's visibility cannot depend on another field's value.
 - **Limited specialized field types** - no arbitrary JSON, color picker, geospatial, code-editor, or password / hash field types.
 
@@ -108,10 +107,7 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
   - Calling `render()` on an Entry is not an error and renders nothing at all, so reach for `mdastRender` instead. See [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro).
 - **No plugin or marketplace system** - extending the field catalogue means changing code, not installing a package.
 - **No nested composition** - groups cannot nest groups, and `dynamic` fields cannot nest `dynamic` fields. Components are the flat, predictable reuse mechanism.
-- **The elek.io Cloud token lives in memory only** - Core never writes the token of a session to disk, so a session ends with the process unless the host stores the token and hands it back through `cloud.token` or `ELEK_IO_CLOUD_TOKEN`. See [`cloud-account.md`](./cloud-account.md#the-token).
-- **Signing up, in and out are never retried** - each sends once, as a report does, because a retry after a timeout can create a second account or spend the rate limit on a password guess. See [`cloud-account.md`](./cloud-account.md#the-calls).
-- **A report is never retried** - `core.cloud.reports.create()` sends once. A retry after a timeout can duplicate a report elek.io Cloud already accepted, and Core cannot tell the difference from the outside, so a failure is handed back and sending again is left to whoever wrote it. See [`reporting.md`](./reporting.md#errors).
-- **A log tail can be truncated** - `core.logger.tail()` stops collecting at a size ceiling and sets `isTruncated`, dropping the oldest records first. Collapsing repeated records is what keeps a tail small, and it is worth far more than a bigger cap, so an ordinary day is 1 to 25 KB and the ceiling is a safety valve rather than a working limit. See [`reporting.md`](./reporting.md#the-log-tail).
+- **A log tail can be truncated** - `core.logger.tail()` stops collecting at a size ceiling and sets `isTruncated`, dropping the oldest records first. Collapsing repeated records is what keeps a tail small, and it is worth far more than a bigger cap, so an ordinary day is 1 to 25 KB and the ceiling is a safety valve rather than a working limit.
 - **A log tail can be missing its last lines** - winston hands a record to a write stream and offers no per transport flush, so a tail collected right after a crash can stop short of the lines it was collected for, which are usually the interesting ones.
   - `tail()` writes a marker and yields before reading to give the stream a chance to drain. That is a hedge rather than a fix, and the residual gap is documented instead of engineered around.
 
@@ -131,5 +127,3 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - [`export.md`](./export.md) - exporting Projects to JSON
 - [`markdown-content.md`](./markdown-content.md) - rich `markdown` content storage and rendering
 - [`error-handling.md`](./error-handling.md) - `CoreError` and error patterns
-- [`cloud-account.md`](./cloud-account.md) - signing in to an elek.io account and the token Core holds
-- [`reporting.md`](./reporting.md) - sending a report to elek.io Cloud, and handing a window of log files over

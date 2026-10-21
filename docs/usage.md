@@ -59,19 +59,7 @@ The resolved options are exposed on `core.options`, and the running Core version
   - `dispose()` removes the handlers again either way.
 - **`log.hostVersion`** is the version of your own application, written to `service.version` on every record you log with a `source` other than `core`.
   - Core stamps its own version on its own records and has no way to read yours, so without this the records you write carry no version at all, and a log file someone hands you on its own cannot be matched to the build that produced it.
-  - It must be a semantic version. A value that is not one throws a `CoreError` rather than writing something the log file's own read contract would reject. See [`reporting.md`](./reporting.md) for what a log file and a report each carry.
-- **`cloud.url`** is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It has to be an http or https URL. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`.
-  - A trailing slash is dropped, since Core appends a path to it.
-  - A value that is not a URL throws a `CoreError`, rather than falling back to the default and sending to production on the strength of a typo.
-- **`cloud.token`** is a bearer token every elek.io Cloud call using the session carries, a report included. It takes precedence over the `ELEK_IO_CLOUD_TOKEN` environment variable, and there is no default.
-  - It is how a host hands back the token `core.cloud.account.signIn()` answered, see [`cloud-account.md`](./cloud-account.md#the-token).
-  - Core keeps it in memory and never writes it to disk, so it is not part of `core.options` either.
-  - Core forgets it on `signOut()` and when elek.io Cloud answers 401, and the calls after that carry none.
-  - A value holding whitespace or anything outside printable ASCII throws a `CoreError` of type `BadRequest`, whose message never repeats it.
-- **`cloud.gitUrl`** is the URL pattern of elek.io Cloud's git hosts, which git asks Core's own credential helper about, see [`cloud-git.md`](./cloud-git.md). It takes precedence over the `ELEK_IO_CLOUD_GIT_URL` environment variable, which takes precedence over the pattern derived from `cloud.url`.
-  - Derived, `https://api.<zone>` gives `https://*.git.<zone>`. A `cloud.url` whose host does not start with `api.` derives nothing, and Core installs no helper and logs a warning.
-  - git matches the value as written, so `*` stands for one label and a pattern without a port matches the default port only. A trailing slash is dropped.
-  - `core.options.cloud.gitUrl` holds the pattern in use, or `null` without one. A value that is not an http or https URL throws a `CoreError` of type `BadRequest`.
+  - It must be a semantic version. A value that is not one throws a `CoreError` rather than writing something the log file's own read contract would reject. See [log files](#log-files) for what a record carries.
 - **`cache`** decides whether Core keeps what it reads from a Project's files in memory between calls: parsed JSON files and the index that resolves Collection and Component slugs. It defaults to `true`, and everything kept is dropped whenever git changes a Project's working tree.
   - Set it to `false` when another application writes the same files while this Core runs. The Astro loaders do that for you during `astro dev`.
 - **`isReadOnly`** puts Core into read-only mode, meant for environments that only consume content, such as CI builds. It takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
@@ -86,12 +74,9 @@ Core reads its environment variables once at construction, never at import. All 
 | `ELEK_IO_DATA_DIR` | The directory Core reads and writes data in | `~/elek.io` |
 | `ELEK_IO_LOG_LEVEL` | The lowest level Core logs | `info` |
 | `ELEK_IO_READ_ONLY` | Set to `true` to put Core into read-only mode | unset |
-| `ELEK_IO_REMOTE_ACCESS_TOKEN` | Token git presents to a private remote, for every host but elek.io Cloud's while signed in | unset |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN` | Token git presents to a private remote | unset |
 | `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN` | `x-access-token` |
 | `ELEK_IO_CHANNEL` | The channel provisioning follows, overrides configured refs | unset |
-| `ELEK_IO_CLOUD_URL` | Base URL of the elek.io Cloud API | `https://api.elek.io` |
-| `ELEK_IO_CLOUD_TOKEN` | Bearer token for elek.io Cloud, for a command line tool or a script | unset |
-| `ELEK_IO_CLOUD_GIT_URL` | URL pattern of elek.io Cloud's git hosts, see [`cloud-git.md`](./cloud-git.md) | derived from `cloud.url` |
 
 `ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git through Core's own credential helper:
 
@@ -99,7 +84,6 @@ Core reads its environment variables once at construction, never at import. All 
 - Prompts and askpass programs are disabled, `SSH_ASKPASS` included. A missing token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it.
 - A token the remote refuses fails the operation with `Unauthorized` after one attempt, a Git LFS transfer included.
 - While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before.
-- With an elek.io Cloud session, Cloud's git hosts get the session's tokens instead, see [`cloud-git.md`](./cloud-git.md). Signed out, they get this token too.
 - It applies to HTTP(S) remotes only. SSH remotes authenticate through the ambient SSH setup like ssh-agent.
 
 On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room.
@@ -165,7 +149,7 @@ await core.user.set({
 `core.user.get()` returns the current `User` or `null` if none is set (a fresh install has no User). There are two kinds of User:
 
 - A `local` User has an `id` of `null`.
-- A `cloud` User carries the `id` of the elek.io account it signed in to. Setting one signs nobody in. `core.cloud.account.signIn()` signs in and sets the `cloud` User itself, see [`cloud-account.md`](./cloud-account.md).
+- A `cloud` User carries the `id` of the elek.io account it belongs to.
 
 `name` takes up to 256 characters, with no `|` and no control characters, and `email` is an address of up to 254. A length counts UTF-16 code units, as `String.length` does. `core.user.set()` throws `BadRequest` past either limit. A `user.json` written by an older Core that breaks one reads back as `null`, the same as no User, so set the User again.
 

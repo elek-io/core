@@ -30,7 +30,6 @@ import type { UserService } from './UserService.js';
  * so a host persists it and passes it back as `cloud.token`. No call here
  * is retried.
  *
- * @see ../../docs/cloud-account.md
  * @see ../../contributing/cloud.md
  */
 export class AccountService extends AbstractService {
@@ -81,8 +80,6 @@ export class AccountService extends AbstractService {
    * token Core started with. Returns the function that removes the listener.
    *
    * A listener that throws or rejects is logged and changes nothing else.
-   *
-   * @see ../../docs/cloud-account.md
    */
   public onTokenChange(listener: CloudTokenListener): () => void {
     return this.cloudClient.onTokenChange(listener);
@@ -96,8 +93,6 @@ export class AccountService extends AbstractService {
    * Throws `BadRequest` for rejected props, `Conflict` for an address an
    * account already holds, `RateLimited`, `PreconditionFailed` when Cloud is
    * unreachable or silent for 15 seconds, and `Internal` otherwise.
-   *
-   * @see ../../docs/cloud-account.md
    */
   public async signUp(props: SignUpProps): Promise<SignUpResult> {
     return this.validated('signUp', signUpSchema, props, async (signUp) => {
@@ -148,8 +143,6 @@ export class AccountService extends AbstractService {
    * address that is not verified yet, and `BadRequest`, `RateLimited`,
    * `PreconditionFailed` or `Internal` as `signUp()` does. It never sends the
    * token Core holds, and a refusal keeps that token and the User.
-   *
-   * @see ../../docs/cloud-account.md
    */
   public async signIn(props: SignInProps): Promise<CloudSession> {
     return this.validated('signIn', signInSchema, props, async (signIn) => {
@@ -196,8 +189,6 @@ export class AccountService extends AbstractService {
    * fails, Core still forgets the token, sets the User, logs a warning and
    * resolves, and the session stays live until it expires. Without a token
    * it sends nothing. Throws `Internal` only when the User cannot be set.
-   *
-   * @see ../../docs/cloud-account.md
    */
   public async signOut(): Promise<void> {
     return this.guarded('signOut', async () => {
