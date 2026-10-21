@@ -89,8 +89,11 @@ describe('published documentation', function () {
   // hook timeout on the slow runners, see contributing/testing.md
   beforeAll(async function () {
     published = publishedPaths();
-    consumerDir = await Fs.mkdtemp(
-      Path.join(Os.tmpdir(), 'elek-io-core-consumer-')
+    // Node answers with the real path of the script it spawns, so without this
+    // the assertions compare one canonical path against one raw one. macOS
+    // points its temp directory through /var, a symlink to private/var.
+    consumerDir = await Fs.realpath(
+      await Fs.mkdtemp(Path.join(Os.tmpdir(), 'elek-io-core-consumer-'))
     );
     installDir = Path.join(consumerDir, 'node_modules', '@elek-io', 'core');
     for (const path of published) {
