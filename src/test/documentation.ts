@@ -297,6 +297,11 @@ const tableRowSchema = z.object({
   bump: z.string(),
 });
 
+/** A zod schema, read for the type it declares and the schema it may wrap. */
+const wrappingSchema = z.object({
+  def: z.object({ type: z.string(), innerType: z.unknown().optional() }),
+});
+
 /** An array of a release diff, read for the change types its items carry. */
 const changeArraySchema = z.object({
   element: z.object({
@@ -307,17 +312,38 @@ const changeArraySchema = z.object({
 });
 
 /**
+ * A schema with every wrapper resolved, so `type` tells what it really is.
+ *
+ * `.readonly()` and the like wrap the schema they are called on, so a
+ * readonly array declares `readonly` and keeps its `element` one level down
+ * under `innerType`. Following `innerType` while there is one leaves the
+ * schema itself, whatever it arrived wrapped in.
+ */
+function resolvedSchemaOf(schema: unknown): { type: string; schema: unknown } {
+  const { def } = wrappingSchema.parse(schema);
+  if (def.innerType === undefined) return { type: def.type, schema };
+  return resolvedSchemaOf(def.innerType);
+}
+
+/**
  * Every change type a release diff can carry, by the array it arrives in.
  *
  * `docs/releases.md` restates these as a table whoever releases reads, and a
  * table maintained by hand drifts from the enums it copies. Walked from
- * `releaseDiffSchema` so an array added there cannot stay undocumented.
+ * `releaseDiffSchema` so an array added there cannot stay undocumented: a
+ * field that is no array is skipped, an array that cannot be read throws.
  */
 function changeTypesOf(): Map<string, string[]> {
   const byArray = new Map<string, string[]>();
-  for (const [array, schema] of Object.entries(releaseDiffSchema.shape)) {
-    const change = changeArraySchema.safeParse(schema);
-    if (!change.success) continue;
+  for (const [array, field] of Object.entries(releaseDiffSchema.shape)) {
+    const resolved = resolvedSchemaOf(field);
+    if (resolved.type !== 'array') continue;
+    const change = changeArraySchema.safeParse(resolved.schema);
+    if (!change.success) {
+      throw new Error(
+        `releaseDiffSchema.${array} is an array whose items carry no changeType enum, so either it holds something other than changes, or its changeType sits behind a wrapper this rule does not read`
+      );
+    }
     byArray.set(array, change.data.element.shape.changeType.options);
   }
   return byArray;
