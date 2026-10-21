@@ -122,14 +122,15 @@ A Component's field definition can be neither unique nor a `slug` field, so the 
 
 ## What a major Release asks of a consumer
 
-A major Release says a name or a shape your build is written against changed. The warning is the version number and the `prepare()` report, and a build that provisions the `release` channel logs the version it landed on and carries on, so read it as a warning rather than a gate:
+A major Release says something your build depends on changed, either a name or a shape it is written against, or content it reads. The warning you get is the version number, and a build that provisions the `release` channel logs the version it landed on and carries on, so read it as a warning rather than a gate:
 
 - Provisioning the `release` channel, the default, lands on the newest Release whatever its bump, so the next build takes a major one like any other.
 - Pin the exact version you have, in the integration config or through `--ref` on `elek provision`, to decide yourself when to move. See [`provisioning.md`](./provisioning.md#channels-and-pinned-versions).
 - Run `elek generate:types` and `elek generate:client` against the new Release and fix what stops compiling.
 - `elekCollections()` names each Astro collection after the Project alias and the Collection's plural slug, so a renamed Collection renames the name `getCollection()` takes.
+- A deleted Entry or Asset and a changed default language are major as well, and none of the three changes a generated type or a generated client, so nothing stops compiling. A page built from a deleted Entry is no longer generated at all, so compare the pages the build emitted rather than only what it compiled.
 
-`prepare()` reports every change behind the bump before the Release is published. A Collection or Component change carries the id of what changed, so the name is yours to look up, see [`usage.md`](./usage.md#reading-from-history). A field change carries its `fieldSlug` as well.
+`prepare()` reports every change behind the bump before the Release is published. It runs on the `draft` branch, so whoever cuts the Release reads it rather than you. A Collection, Component, Entry or Asset change carries the id of what changed, so the name is yours to look up, see [`usage.md`](./usage.md#reading-from-history). A field change carries its `fieldSlug` as well.
 
 ## create(): cutting a release
 

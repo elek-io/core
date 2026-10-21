@@ -40,7 +40,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 - **Migration on read** - historical data is run through the migration chain on read, so it always comes back in the current schema shape. See [`usage.md`](./usage.md#reading-from-history).
 - **Transactional writes** - create / update / delete operations are wrapped in an automatic git rollback that restores the working tree on failure. See [`error-handling.md`](./error-handling.md).
 - **Releases** - tagged snapshots of a Project at a point in time, managed through git tags.
-- **A version computed from the content** - a Release diffs the draft against the released state and takes its semver bump from what changed, so a renamed Collection or Component arrives as a major. See [`releases.md`](./releases.md#how-the-bump-is-decided).
+- **A version computed from the content** - a Release diffs the draft against the released state and takes its semver bump from what changed, so a rename that breaks a consumer's build arrives as a major. See [`releases.md`](./releases.md#how-the-bump-is-decided).
 - **Branching** - content edits happen on a `draft` branch, with `main` reserved for released content.
 
 ## Schema evolution
