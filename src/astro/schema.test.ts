@@ -2295,4 +2295,57 @@ export const gridSections: GridSection[] = [];
 
     expect(typeCheckMessages(source)).toEqual([]);
   });
+
+  /**
+   * The chain of conditions `docs/usage.md` names beside the alias: a
+   * narrowing comparison per Component, which nothing asks to be complete.
+   */
+  function chainOver(types: string): string {
+    return `${types}
+
+type Section = Entry['sections'][number];
+
+export function renderSections(sections: Section[]): string[] {
+  return sections.map((section) => {
+    if (section.componentSlug === 'hero' && section.values.headline.en) {
+      return section.values.headline.en;
+    }
+    if (section.componentSlug === 'quote' && section.values.text.en) {
+      return section.values.text.en;
+    }
+    return '';
+  });
+}
+`;
+  }
+
+  it('compiles a chain of conditions when the field allows a Component the site does not render', () => {
+    const widened = [dynamicField('sections', [heroId, quoteId, gridId])];
+    const types = buildEntryValuesTypeString(
+      widened,
+      ['en'],
+      [hero, quote, grid],
+      'Pages'
+    );
+
+    expect(typeCheckMessages(chainOver(types))).toEqual([]);
+  });
+
+  it('fails a chain of conditions when a Component the site renders is renamed', () => {
+    const renamed = makeComponent({
+      id: heroId,
+      slug: 'banner',
+      fieldDefinitions: [textField('headline')],
+    });
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      [renamed, quote],
+      'Pages'
+    );
+
+    const messages = typeCheckMessages(chainOver(types));
+
+    expect(messages.join('\n')).toContain('have no overlap');
+  });
 });
