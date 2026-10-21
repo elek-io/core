@@ -7,6 +7,7 @@ import {
   migrateCollectionSchema,
   deleteCollectionSchema,
   entryFileSchema,
+  type EntryFile,
   getCreateCollectionSchemaFromLanguages,
   getUpdateCollectionSchemaFromLanguages,
   listCollectionsSchema,
@@ -47,8 +48,12 @@ import {
 import {
   assertResolutionSlugsAreKnown,
   transformEntryValues,
-  type EntryIssue,
 } from '../util/entryTransform.js';
+import type { EntryIssue } from '../util/entryIssue.js';
+import {
+  updateRefusalMessage,
+  withoutAcceptedContentLoss,
+} from '../util/contentLoss.js';
 import { getValueSchemaFromFieldDefinition } from '../schema/schemaFromFieldDefinition.js';
 import {
   componentIdsOf,
@@ -352,6 +357,7 @@ export class CollectionService
         const {
           projectId: _,
           resolutions,
+          acceptedContentLoss,
           ...validatedUpdateProps
         } = validatedProps;
         const collectionFile: CollectionFile = {
@@ -400,51 +406,62 @@ export class CollectionService
               );
 
               if (entryReferences.length > 0) {
-                const allIssues: EntryIssue[] = [];
-                const entriesFinalValues: Array<{
-                  entryId: Uuid;
-                  values: Record<string, Value>;
-                }> = [];
                 const componentResolver = await this.buildComponentResolver(
                   validatedProps.projectId,
                   newFieldDefs
                 );
 
+                // Every Entry is transformed before any of them is written,
+                // so a refusal leaves the Project as it was rather than
+                // leaning on the rollback to put it back
+                const transformed = [];
                 for (const entryReference of entryReferences) {
-                  const entryResult = await this.transformAndWriteEntry({
-                    projectId: validatedProps.projectId,
-                    collectionId: validatedProps.id,
-                    entryId: entryReference.id,
-                    oldFieldDefs,
-                    newFieldDefs,
-                    changes,
-                    languages,
-                    resolutions,
-                    componentResolver,
-                  });
-
-                  allIssues.push(...entryResult.issues);
-                  entriesFinalValues.push({
-                    entryId: entryResult.entryId,
-                    values: entryResult.finalValues,
-                  });
-                  if (entryResult.wrote) {
-                    filesToGitAdd.push(entryResult.entryFilePath);
-                  }
+                  transformed.push(
+                    await this.transformEntry({
+                      projectId: validatedProps.projectId,
+                      collectionId: validatedProps.id,
+                      entryId: entryReference.id,
+                      oldFieldDefs,
+                      newFieldDefs,
+                      changes,
+                      languages,
+                      resolutions,
+                      componentResolver,
+                    })
+                  );
                 }
 
                 const blockingIssues = this.computeBlockingIssues({
-                  allIssues,
+                  allIssues: transformed.flatMap((entry) => entry.issues),
                   resolutions,
+                  acceptedContentLoss,
                   newFieldDefs,
-                  entriesFinalValues,
+                  entriesFinalValues: transformed.map((entry) => ({
+                    entryId: entry.entryId,
+                    values: entry.finalValues,
+                  })),
                   collectionId: validatedProps.id,
                 });
                 if (blockingIssues.length > 0) {
                   throw CoreError.conflict(
-                    'Field definition changes or uniqueness collisions require entry resolutions',
+                    updateRefusalMessage(
+                      blockingIssues,
+                      'Field definition changes or uniqueness collisions require entry resolutions'
+                    ),
                     blockingIssues
                   );
+                }
+
+                for (const entry of transformed) {
+                  if (entry.changed === false) {
+                    continue;
+                  }
+                  await this.jsonFileService.update(
+                    { ...entry.entryFile, values: entry.finalValues },
+                    entry.entryFilePath,
+                    entryFileSchema
+                  );
+                  filesToGitAdd.push(entry.entryFilePath);
                 }
               }
             }
@@ -522,13 +539,14 @@ export class CollectionService
   }
 
   /**
-   * Transforms a single Entry's values to the new field definitions, applies any
-   * caller-provided resolutions and writes the Entry file if its values changed.
+   * Transforms a single Entry's values to the new field definitions and
+   * applies any caller-provided resolutions, writing nothing.
    *
-   * Returns the transform issues, the final values (for cross-entry collision
-   * detection) and whether the file was written (so the caller can stage it).
+   * Returns the issues, the Entry file and its final values, so the caller
+   * can refuse the whole update before the first Entry is written. Throws
+   * `BadRequest` for a resolution that does not fit its new field.
    */
-  private async transformAndWriteEntry(params: {
+  private async transformEntry(params: {
     projectId: Uuid;
     collectionId: Uuid;
     entryId: Uuid;
@@ -541,9 +559,10 @@ export class CollectionService
   }): Promise<{
     issues: EntryIssue[];
     entryId: Uuid;
+    entryFile: EntryFile;
     finalValues: Record<string, Value>;
     entryFilePath: string;
-    wrote: boolean;
+    changed: boolean;
   }> {
     const {
       projectId,
@@ -608,37 +627,27 @@ export class CollectionService
       }
     }
 
-    const wrote = isDeepStrictEqual(entryFile.values, finalValues) === false;
-    if (wrote) {
-      const updatedEntryFile = {
-        ...entryFile,
-        values: finalValues,
-      };
-      await this.jsonFileService.update(
-        updatedEntryFile,
-        entryFilePath,
-        entryFileSchema
-      );
-    }
-
     return {
       issues: result.issues,
       entryId: entryFile.id,
+      entryFile,
       finalValues,
       entryFilePath,
-      wrote,
+      changed: isDeepStrictEqual(entryFile.values, finalValues) === false,
     };
   }
 
   /**
    * Builds the list of issues that must block the update.
    *
-   * Combines transform issues the caller did not resolve with cross-entry
+   * Combines the content the update would delete and the caller has not
+   * accepted, transform issues the caller did not resolve, and cross-entry
    * uniqueness collisions on the post-resolution values.
    */
   private computeBlockingIssues(params: {
     allIssues: EntryIssue[];
     resolutions: UpdateCollectionProps['resolutions'];
+    acceptedContentLoss: UpdateCollectionProps['acceptedContentLoss'];
     newFieldDefs: FieldDefinition[];
     entriesFinalValues: Array<{ entryId: Uuid; values: Record<string, Value> }>;
     collectionId: Uuid;
@@ -646,18 +655,28 @@ export class CollectionService
     const {
       allIssues,
       resolutions,
+      acceptedContentLoss,
       newFieldDefs,
       entriesFinalValues,
       collectionId,
     } = params;
 
-    // Transform issues the caller did not resolve
+    const openIssues = withoutAcceptedContentLoss(
+      allIssues,
+      acceptedContentLoss
+    );
+
+    // Transform issues the caller did not resolve. A content loss is
+    // accepted rather than resolved, so no resolution ever clears one
     const unresolvedIssues = resolutions
-      ? allIssues.filter((issue) => {
+      ? openIssues.filter((issue) => {
+          if (issue.issue === 'content_loss') {
+            return true;
+          }
           const entryResolutions = resolutions[issue.entryId];
           return !(entryResolutions && issue.fieldSlug in entryResolutions);
         })
-      : allIssues;
+      : openIssues;
 
     // Cross-entry uniqueness collisions, on the post-resolution
     // values. Keep the first holder, flag the rest as resolvable.

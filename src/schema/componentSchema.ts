@@ -109,6 +109,7 @@ export const updateComponentSchema = componentFileSchema
     resolutions: z
       .record(uuidSchema, z.record(slugSchema, valueSchema))
       .optional(),
+    acceptedContentLoss: z.array(uuidSchema).optional(),
   });
 export type UpdateComponentProps = z.infer<typeof updateComponentSchema>;
 
