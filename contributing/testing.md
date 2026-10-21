@@ -63,6 +63,7 @@ Overrides for heavier work:
 
 - Individual tests known to be heavier (full Project lifecycles) override it with 30s or more.
 - Hooks are not covered by `testTimeout`. They run under vitest's own 10s `hookTimeout`, so a `beforeAll` that clones a remote passes its own timeout, 60s like the provisioning suites, or it times out on Windows first.
+- [`published-docs.test.ts`](../src/published-docs.test.ts) is the only test that spawns the package manager, `pnpm pack --dry-run` for the list of files a publish ships, and takes the same 60s. Packing runs `prepack` and `prepare`, so adding either turns that hook into a full build on all four platforms, and whatever it writes to stdout lands in the JSON the test parses.
 
 When a test times out, vitest cannot abort its still-running async work, so leftover Projects can leak into later tests. Since every test file has its own data directory, that leak is confined to the file that timed out and cannot break other files. Generous timeouts still protect against the within-file cascade.
 
