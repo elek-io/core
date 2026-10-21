@@ -110,6 +110,13 @@ describe('published documentation', function () {
     // Node answers with the real path of the script it spawns, so without this
     // the assertions compare one canonical path against one raw one. macOS
     // points its temp directory through /var, a symlink to private/var.
+    //
+    // It has to be this realpath rather than realpath.native. Node resolves a
+    // main through the JavaScript walk, which follows symlinks per component
+    // and leaves an 8.3 short name alone, while the native one expands the
+    // RUNNER~1 in the Windows runner's TEMP. Swapping it would trade the macOS
+    // mismatch for a Windows one. Fs.promises.realpath is the native one too,
+    // so it has the same effect.
     consumerDir = await Fs.realpath(
       await Fs.mkdtemp(Path.join(Os.tmpdir(), 'elek-io-core-consumer-'))
     );
