@@ -10,7 +10,7 @@ Each test file writes to its own fresh data directory, `~/elek.io-test/worker-<p
 
 `pnpm coverage` measures what runs inside the vitest worker. Two parts of Core do not, so their numbers are far lower than what the suite actually exercises:
 
-- **The Astro loaders.** The Astro suites write a content config that imports [`src/index.astro.ts`](../src/index.astro.ts) by absolute path, and `sync()` loads it through Astro's own vite pipeline. v8 attributes nothing back to the source file, so [`src/astro/loaders.ts`](../src/astro/loaders.ts) reads around 12% while six suites drive it end to end.
+- **The Astro loaders.** The Astro suites write a content config that imports [`src/index.astro.ts`](../src/index.astro.ts) by absolute path, and `sync()` loads it through Astro's own vite pipeline. v8 attributes nothing back to the source file, so [`src/astro/loaders.ts`](../src/astro/loaders.ts) reads around 12% while seven suites drive it end to end.
 - **The CLI.** [`src/index.cli.test.ts`](../src/index.cli.test.ts) spawns the built binary, which is the point: it is the only thing that proves a consumer install starts. A spawned process is not instrumented either, so the action modules look thinner than they are.
 
 Do not close those gaps by unit-testing the same behavior in process. A test that reaches for the loader's internals to make a number move proves less than the sync-based test next to it. Add a test there when the behavior is worth proving, and accept the reported number.
@@ -101,6 +101,7 @@ Every `sync()` builds a full Astro pipeline inside the worker process, and the m
 - [`.config`](../src/index.astro.config.test.ts)
 - [`.collections`](../src/index.astro.collections.test.ts)
 - [`.assets`](../src/index.astro.assets.test.ts)
+- [`.components`](../src/index.astro.components.test.ts)
 
 Add a new file rather than a sixth sync to an existing one. The `.integration` file sits at four syncs and is the one that hit the wall, a fifth sync in it exhausts the heap again.
 

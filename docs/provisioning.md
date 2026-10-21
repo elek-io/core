@@ -103,7 +103,8 @@ jobs:
           key: elek-io-${{ github.run_id }}
           restore-keys: elek-io-
       - run: pnpm install
-      - run: pnpm astro build
+      # astro check reads the types astro build only writes
+      - run: pnpm astro check && pnpm astro build
         env:
           ELEK_IO_REMOTE_ACCESS_TOKEN: ${{ secrets.ELEK_IO_REMOTE_ACCESS_TOKEN }}
 ```
@@ -122,7 +123,7 @@ The cache step is an optimization, not a requirement. Without it, every run perf
 
 ## Vercel, Netlify and Cloudflare Pages
 
-No pipeline file is needed for Astro sites. Set `ELEK_IO_REMOTE_ACCESS_TOKEN` (and optionally `ELEK_IO_CHANNEL`) in the provider's environment variable settings, then build as usual with `astro build`. Each build starts on a fresh runner and performs the shallow build-mode clone described above.
+No pipeline file is needed for Astro sites. Set `ELEK_IO_REMOTE_ACCESS_TOKEN` (and optionally `ELEK_IO_CHANNEL`) in the provider's environment variable settings, then build as usual, with `astro check && astro build`. Each build starts on a fresh runner and performs the shallow build-mode clone described above.
 
 ## Channels and pinned versions
 

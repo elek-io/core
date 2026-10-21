@@ -495,6 +495,91 @@ const post = await getEntry('websitePosts', entry.data.related.en[0].id);
 
 An Entry carries no `body` and no rendered HTML, so Astro's `render()` and `<Content />` produce an empty page rather than an error. A `markdown` field arrives on `entry.data` as a tree, which [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro) renders with `mdastRender`.
 
+### Rendering a dynamic field
+
+A `dynamic` field is the page builder shape: an ordered array of items, each one holding the content of a Component the field allows. Every item names its Component twice.
+
+```typescript
+entry.data.sections[0].id; // string, the item's own id
+entry.data.sections[0].componentSlug; // "hero" | "quote", the Component's slug
+entry.data.sections[0].componentId; // the Component's UUID
+entry.data.sections[0].values; // that Component's own fields, language keyed
+```
+
+- `componentSlug` is what a template dispatches on. It is the name you gave the Component and it survives the content being re-created, where every UUID is new.
+- `componentId` addresses the same Component through Core's own methods, the [local API](./local-api.md) and the types [`elek generate:types`](./api-clients.md#generatetypes) writes, which dispatch on an id constant rather than on the slug.
+- The array is not language keyed, the `values` inside each item are. Editors order the items once for every language.
+
+The item type is a union discriminated on `componentSlug`, so a `switch` narrows `values` to the Component of that branch:
+
+```astro
+---
+// src/components/Sections.astro
+import type { CollectionEntry } from 'astro:content';
+import Hero from './Hero.astro';
+import Quote from './Quote.astro';
+
+type Section = CollectionEntry<'websitePages'>['data']['sections'][number];
+
+interface Props {
+  sections: Section[];
+}
+
+const { sections } = Astro.props;
+
+function unhandled(section: never): never {
+  throw new Error(`Unhandled Component "${String(section)}"`);
+}
+---
+{
+  sections.map((section) => {
+    switch (section.componentSlug) {
+      case 'hero':
+        return <Hero values={section.values} />;
+      case 'quote':
+        return <Quote values={section.values} />;
+      default:
+        return unhandled(section);
+    }
+  })
+}
+```
+
+One component per Component then takes the values of its own branch, named with `Extract`:
+
+```astro
+---
+// src/components/Hero.astro
+import type { CollectionEntry } from 'astro:content';
+
+type Section = CollectionEntry<'websitePages'>['data']['sections'][number];
+
+interface Props {
+  values: Extract<Section, { componentSlug: 'hero' }>['values'];
+}
+
+const { values } = Astro.props;
+---
+<h1>{values.headline.en}</h1>
+```
+
+### Keeping a dispatch and the content model in step
+
+`astro build` emits types, it does not check them, so a dispatch that no longer matches the content model builds a page with a section missing. `astro check` is what reads them, and it needs `@astrojs/check` and `typescript` in the project:
+
+```bash
+astro check && astro build
+```
+
+Two changes to the content model then fail, which is what the `default` branch above is for:
+
+- A Component the field allows that the `switch` does not handle. `section` is that member in the `default` branch rather than `never`, and `unhandled()` refuses it.
+- A Component the `switch` handles that was renamed. Its `case` matches no member of the union any more.
+
+Two things do not catch either on their own. An `Extract<Section, { componentSlug: 'hero' }>` alias of a Component that is gone becomes `never` rather than failing, and a chain of `if (section.componentSlug === 'hero' && ...)` conditions is complete whatever the union holds. The `switch` with the `default` branch is what reports both.
+
+A field whose `ofComponents` is empty allows every Component of the Project, so its union gains a member whenever a Component is added anywhere, including one no page of yours renders. Give such a field a `default` branch that returns nothing instead of `unhandled()`, or list the Components the field allows and keep the exhaustive one.
+
 ### Choosing what to derive
 
 Pass a second argument and it becomes the complete list of what the site reads. This is the shape to ship:
