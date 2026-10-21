@@ -139,7 +139,7 @@ A `dynamic` field's items carry `componentSlug` beside the `componentId` they al
 - Every UUID is new after the content is re-created, from a seed or a fresh Project, while the slug is what the developer named. A page written against the id breaks there, and nothing in the page says why.
 - The id stays on every item and every union member, so a site that also calls Core's own methods or the local API addresses the same Component there.
 
-A Component's slug therefore reaches a consumer's data and types, which is what makes renaming one a major Release, see [`releases.md`](./releases.md).
+A Component's slug therefore reaches a consumer's data and types, which is what makes renaming one a major Release, see [`../docs/releases.md`](../docs/releases.md#every-change-a-diff-can-carry).
 
 Four consequences for the loader, of which the first two decide the order inside `syncEntries`:
 
