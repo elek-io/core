@@ -78,6 +78,8 @@ Core reads its environment variables once at construction, never at import. All 
 | `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN` | `x-access-token` |
 | `ELEK_IO_CHANNEL` | The channel provisioning follows, overrides configured refs | unset |
 
+Core also reads `ELEK_IO_CLOUD_URL`, `ELEK_IO_CLOUD_TOKEN` and `ELEK_IO_CLOUD_GIT_URL`. They configure calls to elek.io Cloud, which is not released, so nothing you can use today reads them. They are documented with elek.io Cloud.
+
 `ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git through Core's own credential helper:
 
 - It never becomes part of a command line, a remote URL, the repository config or git's environment, so it cannot leak into logs or caches.
@@ -127,7 +129,35 @@ So `info`, the default, is enough to reconstruct what was done and in what order
 
 A log file holds ids, paths, counts and error messages. It never holds the content of an Entry, the name of a Project, Collection or Asset, or the git signature of the User. It does hold the absolute data directory, which includes the account name, because it is written for the machine it is on. Anything that ships a log file elsewhere is responsible for scrubbing that prefix.
 
-`resource['service.name']` is the `source` the record was logged with, so your own records stay distinguishable from Core's in the same file. `service.version` is Core's version on Core's records, and yours on yours when you set the `log.hostVersion` option above. Set it: a log file someone sends you without a report around it has no other way to say which build wrote it.
+`resource['service.name']` is the `source` the record was logged with, so your own records stay distinguishable from Core's in the same file. `service.version` is Core's version on Core's records, and yours on yours when you set the `log.hostVersion` option above. Set it: a log file someone sends you has no other way to say which build wrote it.
+
+#### The log tail
+
+`core.logger.tail()` reads the last 24 hours of log files back as one blob:
+
+```typescript
+const tail = await core.logger.tail();
+// { encoding: 'gzip+base64', from, to, isTruncated: false, data: 'H4sIAAAA...' }
+```
+
+The records come back oldest first, one JSON object per line, gzipped and then base64 encoded. Two things keep a tail small:
+
+- Log files are read line by line and gunzipped on the way, so a very large one is never held in memory.
+- A run of identical records collapses into the first of them plus `elek.log.repeat.count` and `elek.log.repeat.last_timestamp`. A measured day of 78 MB, two thirds of it one stack repeating, came to 4 KB, and an ordinary day is 1 to 25 KB.
+
+**What a tail holds.** Ids, paths, timestamps, counts and error messages, which is to say what happened and in what order. Ids and timestamps are exact, and paths keep their structure below the data directory, because those are the join: a tail plus the repository replays what was done, in order, with the commit for every step. Hashing or truncating an id would destroy that and buy nothing.
+
+**What a tail does not hold.** The content of an Entry, the name of a Project, Collection or Asset, and the git signature of the User were never written to a log file in the first place, so they cannot be in a tail.
+
+What the tail itself removes is the short list a log file may hold because it is written for the machine it is on:
+
+- The home directory prefix becomes `~`.
+- An attribute whose key name is on Sentry's default denylist (`token`, `secret`, `password`, `auth` and the rest) is dropped with its value.
+- A git signature, a credential in a URL, or an address anywhere in the text is redacted.
+
+Nothing goes silently. What was replaced says what it was (`~`, `[redacted]`, `[email]`), and a record that changed carries `redaction.masked.count` and `redaction.redacted.count`, so a reader can tell a deliberate gap from an empty one.
+
+**A tail is still personal data.** The ids in it resolve against the repository, which makes it pseudonymised rather than anonymous. Scrubbing lowers what a tail carries. It does not change what it is. Ask for consent before collecting one, and decide how long you keep one.
 
 ## Setting the User (required before writing)
 
@@ -149,7 +179,7 @@ await core.user.set({
 `core.user.get()` returns the current `User` or `null` if none is set (a fresh install has no User). There are two kinds of User:
 
 - A `local` User has an `id` of `null`.
-- A `cloud` User carries the `id` of the elek.io account it belongs to.
+- A `cloud` User carries the `id` of an elek.io account. Setting one with `core.user.set()` signs nobody in. It only writes the signature commits are made with.
 
 `name` takes up to 256 characters, with no `|` and no control characters, and `email` is an address of up to 254. A length counts UTF-16 code units, as `String.length` does. `core.user.set()` throws `BadRequest` past either limit. A `user.json` written by an older Core that breaks one reads back as `null`, the same as no User, so set the User again.
 
