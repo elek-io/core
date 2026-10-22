@@ -207,6 +207,9 @@ Only extensions in Astro's `VALID_INPUT_FORMATS` may carry the marker:
 - That list is not the same on every astro the peer range allows. `apng` joined it in 7.2.5, so each entry carries the release it arrived in and `hasImageExtension` compares that against the installed astro's version.
 - An apng Asset is therefore an image on 7.2.5 and later and a public file below it, which is the honest answer on both rather than a marker one of them cannot resolve.
 - That version is read from `astro/package.json` at runtime, through `createRequire`. A JSON import of it is inlined by the bundler, which would freeze the astro Core was built against into `dist/astro`.
+- The table is typed `Record<ImageInputFormat, string> & Record<string, string>`. The first half still makes a format Astro adds a compile error here, and the index signature is what lets the table name a format the floor does not know, so pinning the floor type checks.
+
+`src/index.astro.assets.test.ts` asserts the branch that belongs to the astro that is running rather than skipping one, so the floor re-check in [`peer-dependencies.md`](./peer-dependencies.md) stays green on every version in the range. The unit test in `src/astro/loaders.test.ts` covers both branches on any version.
 
 The parse-time schema declares `src` as a nullable string, because a marker string is what is stored and validated. The type consumers see is declared separately through `createSchema`'s `types`, as `ImageMetadata | null`.
 

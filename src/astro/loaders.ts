@@ -87,15 +87,16 @@ export function defaultPublicDir(alias: string): string {
 /**
  * The extensions Astro's image pipeline understands, mirroring its own
  * VALID_INPUT_FORMATS, each mapped to the first astro release that accepted
- * it. `satisfies` ties the list to Astro's public ImageInputFormat, so adding
- * or removing a format there is a compile error here instead of a silent
- * behavior change.
+ * it. `6.1.3` is the peer range's own floor.
  *
- * The peer range spans two majors and the list grew inside it, so a floor
- * per format is what keeps the answer true on every astro the range allows.
- * `6.1.3` is that range's own floor, see `../../contributing/peer-dependencies.md`.
+ * `Record<ImageInputFormat, string>` ties the list to Astro's public type, so a
+ * format added there is a compile error here. The index signature beside it
+ * holds a format an older astro in the range does not know yet.
+ *
+ * @see ../../contributing/astro-entry.md
  */
-const imageExtensions = {
+const imageExtensions: Record<ImageInputFormat, string> &
+  Record<string, string> = {
   apng: '7.2.5',
   avif: '6.1.3',
   gif: '6.1.3',
@@ -105,14 +106,7 @@ const imageExtensions = {
   svg: '6.1.3',
   tiff: '6.1.3',
   webp: '6.1.3',
-} satisfies Record<ImageInputFormat, string>;
-
-/**
- * The same table reached with an arbitrary extension, which an Asset carries.
- * An assignment rather than a cast, so the `satisfies` above stays the single
- * place the formats are declared.
- */
-const imageExtensionFloors: Record<string, string> = imageExtensions;
+};
 
 /**
  * The version of the astro the consumer installed, read once.
@@ -146,7 +140,7 @@ export function hasImageExtension(
   extension: string,
   astroVersion: string = (installedAstroVersion ??= readInstalledAstroVersion())
 ): boolean {
-  const since = imageExtensionFloors[extension.toLowerCase()];
+  const since = imageExtensions[extension.toLowerCase()];
   return since !== undefined && Semver.gte(astroVersion, since);
 }
 

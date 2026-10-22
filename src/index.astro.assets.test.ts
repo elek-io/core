@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sync } from 'astro';
+import * as astroPackageJson from 'astro/package.json' with { type: 'json' };
 import Os from 'node:os';
 import Path from 'node:path';
 import Fs from 'fs-extra';
+import Semver from 'semver';
 import core, { uuid } from './test/setup.js';
 import { createProject } from './test/util.js';
 import type { Asset, Project } from './index.node.js';
@@ -124,27 +126,37 @@ export const collections = { ...(await elekCollections(config)) };
       JSON.stringify(`src/elek/website/images/${fileName}`)
     );
 
-    // Astro took the marker, so the stored value is the plain relative
-    // path and the marker itself is gone from the store. That it then
-    // emitted an import of its own is the only proof the handover
-    // worked, since the substitution needs a rendered page.
-    expect(store).not.toContain(`__ASTRO_IMAGE_./${fileName}`);
+    // Astro took the marker and emitted an image import of its own, which
+    // is the only proof the handover worked, since the substitution needs a
+    // rendered page. What the store keeps of the marker afterwards is
+    // Astro's business and differs across the peer range.
     expect(await imageImportContents()).toContain(`./${fileName}`);
   }, 30000);
 
-  it('should hand an apng Asset over as an image on an Astro that processes it', async function () {
-    // apng is in Astro's input formats from 7.2.5 on, and the loader
-    // asks the installed Astro rather than assuming Core's own pin.
-    // Below that release it takes the public route a non-image takes,
-    // which pinning the peer floor is what checks.
-    // See contributing/peer-dependencies.md.
+  it('should hand an apng Asset over the way the installed Astro can take it', async function () {
+    // apng joined Astro's input formats in 7.2.5, and the loader asks the
+    // installed Astro rather than assuming Core's own pin. The peer range
+    // allows both answers, so this asserts the one that belongs to the
+    // astro that is running rather than skipping on either.
+    // See ../contributing/peer-dependencies.md
     const fileName = `${animation.id}.${animation.extension}`;
+    const store = await storeContents();
 
     expect(animation.extension).toBe('apng');
-    expect(await storeContents()).toContain(
-      JSON.stringify(`src/elek/website/images/${fileName}`)
-    );
-    expect(await imageImportContents()).toContain(`./${fileName}`);
+
+    if (Semver.gte(astroPackageJson.default.version, '7.2.5')) {
+      expect(store).toContain(
+        JSON.stringify(`src/elek/website/images/${fileName}`)
+      );
+      expect(await imageImportContents()).toContain(`./${fileName}`);
+    } else {
+      // Not an image there, so it takes the public route a non-image takes
+      // rather than a marker Astro cannot resolve
+      expect(store).toContain(
+        JSON.stringify(`/elek/website/assets/${fileName}`)
+      );
+      expect(await imageImportContents()).not.toContain(`./${fileName}`);
+    }
   }, 30000);
 
   it('should hand a non-image Asset over as a public URL', async function () {
