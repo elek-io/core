@@ -3,7 +3,10 @@
   "version": "0.25.1",
   "description": "Handles core functionality of elek.io Projects like file IO and version control.",
   "homepage": "https://elek.io",
-  "repository": "https://github.com/elek-io/core",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elek-io/core.git"
+  },
   "bugs": {
     "url": "https://github.com/elek-io/core/issues"
   },
