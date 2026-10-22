@@ -346,9 +346,11 @@ const defaultCases: DefaultCase[] = [
   defaultCase({
     node: listItemNode,
     tree: listItemTree(listItemNode),
-    html: '<ul><li><input type="checkbox" checked disabled><p>task text</p></li></ul>',
+    html:
+      '<ul><li><input type="checkbox" aria-label="task text" checked disabled>' +
+      '<p>task text</p></li></ul>',
     fields: {
-      checked: { inOutput: '<input type="checkbox" checked disabled>' },
+      checked: { inOutput: ' checked disabled>' },
       spread: spreadIsDropped,
       children: { inOutput: '<p>task text</p>' },
     },
@@ -503,13 +505,13 @@ function orderedList(start: number | null): MdAstRoot {
   });
 }
 
-/** A one-item list whose item carries the given checked state */
-function taskList(checked: boolean | null): MdAstRoot {
+/** A one-item list whose item carries the given checked state and text */
+function taskList(checked: boolean | null, text = 'a'): MdAstRoot {
   return listItemTree({
     type: 'listItem',
     spread: false,
     checked,
-    children: [paragraphOf('a')],
+    children: [paragraphOf(text)],
   });
 }
 
@@ -632,13 +634,15 @@ describe('mdastRender (Astro wrapper)', () => {
   describe('task list items', () => {
     it('renders a checked item as a checked checkbox', () => {
       expect(render(taskList(true))).toBe(
-        '<ul><li><input type="checkbox" checked disabled><p>a</p></li></ul>'
+        '<ul><li><input type="checkbox" aria-label="a" checked disabled>' +
+          '<p>a</p></li></ul>'
       );
     });
 
     it('renders an unchecked item as a checkbox without the attribute', () => {
       expect(render(taskList(false))).toBe(
-        '<ul><li><input type="checkbox" disabled><p>a</p></li></ul>'
+        '<ul><li><input type="checkbox" aria-label="a" disabled>' +
+          '<p>a</p></li></ul>'
       );
     });
 
@@ -656,7 +660,66 @@ describe('mdastRender (Astro wrapper)', () => {
       // is the one divergence from remark the defaults cannot close, and
       // docs/markdown-content.md names it. See contributing/astro-entry.md.
       expect(render(taskList(true))).toContain(
-        '<input type="checkbox" checked disabled><p>a</p>'
+        '<input type="checkbox" aria-label="a" checked disabled><p>a</p>'
+      );
+    });
+
+    it('names the checkbox with the whole text of its item', () => {
+      // The box is a control, so it needs a name of its own. The item's
+      // text is a sibling of it rather than a <label> around it, and a
+      // <label> could not hold the item's blocks anyway.
+      const root = listItemTree({
+        type: 'listItem',
+        spread: false,
+        checked: false,
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'text', value: 'Pay the ' },
+              { type: 'strong', children: [{ type: 'text', value: 'rent' }] },
+            ],
+          },
+          paragraphOf('before Friday'),
+        ],
+      });
+      expect(render(root)).toBe(
+        '<ul><li><input type="checkbox" aria-label="Pay the rent before Friday" disabled>' +
+          '<p>Pay the <strong>rent</strong></p><p>before Friday</p></li></ul>'
+      );
+    });
+
+    it('escapes a name the author wrote a quote into', () => {
+      expect(render(taskList(true, 'Read "Dune"'))).toContain(
+        'aria-label="Read &quot;Dune&quot;"'
+      );
+    });
+
+    it('names an item that carries no text at all nothing', () => {
+      // An image on its own has alt text, which extractText leaves out
+      // because it is not the document's text. There is no name to give,
+      // and an empty one is worth no attribute.
+      const root = listItemTree({
+        type: 'listItem',
+        spread: false,
+        checked: false,
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              {
+                type: 'image',
+                url: 'https://example.com/a.png',
+                alt: 'a diagram',
+                title: null,
+              },
+            ],
+          },
+        ],
+      });
+      expect(render(root)).toBe(
+        '<ul><li><input type="checkbox" disabled>' +
+          '<p><img src="https://example.com/a.png" alt="a diagram"></p></li></ul>'
       );
     });
   });

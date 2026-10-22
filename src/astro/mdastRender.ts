@@ -3,6 +3,7 @@
 import { renderTemplate, addAttribute } from 'astro/runtime/server/index.js';
 import {
   mdastRender as primitive,
+  extractText,
   type MdastRenderersBase,
   type DefaultedRendererKey,
   type FrameworkRenderers,
@@ -69,11 +70,14 @@ export const astroDefaults: Pick<
       : renderTemplate`<ul>${children}</ul>`,
   // A checked of null is an ordinary item, true and false are a task. The
   // checkbox is disabled because a rendered tree is not an editor, and it
-  // precedes the item's first block rather than opening it.
+  // precedes the item's first block rather than opening it. The item's own
+  // text is its name, since the blocks arrive rendered and a <label> holds
+  // phrasing only. An item with no text, an image on its own, has no name
+  // to give and gets no attribute.
   listItem: (node, children) =>
     node.checked === null
       ? renderTemplate`<li>${children}</li>`
-      : renderTemplate`<li><input type="checkbox"${addAttribute(node.checked, 'checked')} disabled>${children}</li>`,
+      : renderTemplate`<li><input type="checkbox"${addAttribute(extractText(node) || null, 'aria-label')}${addAttribute(node.checked, 'checked')} disabled>${children}</li>`,
   code: (node) => renderTemplate`<pre><code>${node.value}</code></pre>`,
   thematicBreak: () => renderTemplate`<hr>`,
   table: (_, children) => renderTemplate`<table>${children}</table>`,
