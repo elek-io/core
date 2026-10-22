@@ -63,6 +63,22 @@ describe('CLI', function () {
     expect(stdout).toContain('CLI for elek.io');
   });
 
+  it('should reach the compiler through a lazy import only', async function () {
+    // Stripping NODE_PATH above catches a bundled tsdown, because the native
+    // binding it pulls cannot be bundled. It cannot catch a tsdown that is
+    // only imported, since tsdown externalizes a peer and the import then
+    // resolves from the repository's own node_modules either way.
+    //
+    // A consumer has not installed the optional peer, so a static import of
+    // it kills every command before commander runs. Reading the built bundle
+    // is what catches that.
+    // @see ../contributing/peer-dependencies.md
+    const bundle = await fs.readFile('./dist/cli/index.cli.mjs', 'utf-8');
+
+    expect(bundle).not.toMatch(/^import[^;\n]*from\s*['"]tsdown['"]/m);
+    expect(bundle).toMatch(/await import\(\s*['"]tsdown['"]\s*\)/);
+  });
+
   it('should be able to generate the TS API Client with default options', async function () {
     await execCommand({
       command: 'node',

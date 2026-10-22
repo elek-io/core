@@ -189,9 +189,14 @@ Two things keep that from coming back:
 
 `loadCompiler()` maps a failed resolution to a `CoreError` naming both packages, so an install without them gets an actionable message on the `js` path instead of a raw `ERR_MODULE_NOT_FOUND`, and every other command keeps working. `src/cli/util.test.ts` covers that message.
 
-The regression guard is in `src/index.cli.test.ts`, which spawns the built binary with `NODE_PATH` removed from the environment. That detail is the whole point: vitest hands its forked workers a `NODE_PATH` ending in pnpm's hidden hoist store, where the rolldown binding happens to live.
+The regression guard is in `src/index.cli.test.ts`, and it takes two assertions because each one misses what the other catches:
 
-So the CLI subprocesses the suite already spawned resolved it and passed, while every consumer install failed. The test needs `dist/` to exist, which the suite already assumes and CI satisfies by running `pnpm build` before the tests.
+- **Spawning the built binary with `NODE_PATH` removed** catches a bundled tsdown. vitest hands its forked workers a `NODE_PATH` ending in pnpm's hidden hoist store, where the rolldown binding happens to live, so the CLI subprocesses the suite spawned resolved it and passed while every consumer install failed.
+- **Reading the built bundle** catches a tsdown that is only imported, which the first assertion cannot see. That was measured: declaring tsdown a peer makes a top-level import external rather than bundled, and an external import resolves from the repository's own `node_modules` whatever `NODE_PATH` holds.
+  - So the spawned binary keeps working while a consumer's dies with `ERR_MODULE_NOT_FOUND` on every command.
+  - The test asserts no static import of `tsdown` and the lazy one present.
+
+Both need `dist/` to exist, which the suite already assumes and CI satisfies by running `pnpm build` before the tests.
 
 ### Why typescript is declared, and why its range must never be narrower than tsdown's
 
