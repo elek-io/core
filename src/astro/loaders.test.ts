@@ -153,22 +153,22 @@ describe('the Entries loader while astro dev runs', function () {
 });
 
 describe('hasImageExtension', function () {
-  it('takes an extension Astro has processed since the peer floor', function () {
-    expect(hasImageExtension('png', '6.1.3')).toBe(true);
-    expect(hasImageExtension('PNG', '7.4.2')).toBe(true);
+  it('takes an extension Astro processes, however it is spelled', function () {
+    expect(hasImageExtension('png')).toBe(true);
+    expect(hasImageExtension('PNG')).toBe(true);
   });
 
-  it('takes an apng only from the Astro release that processes one', function () {
-    // apng joined Astro's input formats in 7.2.5. Before that the marker
-    // leaves a relative path nothing resolves, so the Asset has to take
-    // the public route a non-image takes.
-    // See ../../contributing/peer-dependencies.md
-    expect(hasImageExtension('apng', '6.4.8')).toBe(false);
-    expect(hasImageExtension('apng', '7.2.4')).toBe(false);
-    expect(hasImageExtension('apng', '7.2.5')).toBe(true);
+  it('takes no apng, which Astro accepts but processes on no release', function () {
+    // apng joined Astro's input formats in 7.2.5, but its image service
+    // validates against VALID_SUPPORTED_FORMATS, which carries no apng on
+    // any release the peer range allows. An apng handed to the pipeline
+    // fails the build with UnsupportedImageFormat, so it takes the public
+    // route a non-image takes.
+    // See ../../contributing/astro-entry.md
+    expect(hasImageExtension('apng')).toBe(false);
   });
 
   it('takes no extension Astro does not process at all', function () {
-    expect(hasImageExtension('pdf', '7.4.2')).toBe(false);
+    expect(hasImageExtension('pdf')).toBe(false);
   });
 });

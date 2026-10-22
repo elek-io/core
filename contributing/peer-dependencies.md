@@ -155,7 +155,7 @@ New in v7 is an optional `@astrojs/markdown-remark` peer for the opt-in remark p
 Two things did move inside the 7 line, and both are handled rather than pinned away:
 
 - **Its zod dependency rose to `^4.6.6` in 7.4.0**, which is what sets the zod floor above. astro depends on zod through a caret range, so its requirement feeds that floor, and bumping astro can raise it again. Re-check the zod single-copy invariant whenever you bump astro.
-- **`apng` joined `VALID_INPUT_FORMATS` in 7.2.5.** The range still allows releases before it, where an apng is not an image at all, so `imageExtensions` in `src/astro/loaders.ts` carries the release each format arrived in and the loader reads the installed astro's version rather than Core's pin. See [`astro-entry.md`](./astro-entry.md).
+- **`apng` joined `VALID_INPUT_FORMATS` in 7.2.5**, and `VALID_SUPPORTED_FORMATS` on no release, so the image service rejects one that reaches it. `imageExtensions` in `src/astro/loaders.ts` mirrors the supported list instead, so an apng Asset takes the public route. Compare both lists when you bump astro, see [`astro-entry.md`](./astro-entry.md).
 
 The coupling is also a runtime one:
 

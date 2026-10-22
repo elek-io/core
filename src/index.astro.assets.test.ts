@@ -1,10 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sync } from 'astro';
-import * as astroPackageJson from 'astro/package.json' with { type: 'json' };
 import Os from 'node:os';
 import Path from 'node:path';
 import Fs from 'fs-extra';
-import Semver from 'semver';
 import core, { uuid } from './test/setup.js';
 import { createProject } from './test/util.js';
 import type { Asset, Project } from './index.node.js';
@@ -37,13 +35,13 @@ describe('Assets through astro:assets', function () {
       description: 'An image Asset, which Astro can process',
     });
 
-    // An image Astro only learned to process in 7.2.5, while the peer
-    // range still allows releases before it
+    // An image format Astro accepts but its image pipeline does not
+    // process, so it is not an image as far as the loader is concerned
     animation = await core.assets.create({
       projectId: project.id,
       filePath: Path.resolve('src/test/data/150x150.apng'),
       name: 'An animation',
-      description: 'An image Asset in a format Astro gained later',
+      description: 'An image Asset in a format Astro cannot process',
     });
 
     // A non-image Asset, which Astro's image pipeline cannot touch
@@ -133,30 +131,18 @@ export const collections = { ...(await elekCollections(config)) };
     expect(await imageImportContents()).toContain(`./${fileName}`);
   }, 30000);
 
-  it('should hand an apng Asset over the way the installed Astro can take it', async function () {
-    // apng joined Astro's input formats in 7.2.5, and the loader asks the
-    // installed Astro rather than assuming Core's own pin. The peer range
-    // allows both answers, so this asserts the one that belongs to the
-    // astro that is running rather than skipping on either.
-    // See ../contributing/peer-dependencies.md
+  it('should hand an apng Asset over as a public URL', async function () {
+    // Astro accepts an apng as an input format from 7.2.5 on, but its image
+    // service processes one on no release in the peer range, so handing it to
+    // the pipeline fails the build with UnsupportedImageFormat. It takes the
+    // public route a non-image takes instead, on every astro in the range.
+    // See ../contributing/astro-entry.md
     const fileName = `${animation.id}.${animation.extension}`;
     const store = await storeContents();
 
     expect(animation.extension).toBe('apng');
-
-    if (Semver.gte(astroPackageJson.default.version, '7.2.5')) {
-      expect(store).toContain(
-        JSON.stringify(`src/elek/website/images/${fileName}`)
-      );
-      expect(await imageImportContents()).toContain(`./${fileName}`);
-    } else {
-      // Not an image there, so it takes the public route a non-image takes
-      // rather than a marker Astro cannot resolve
-      expect(store).toContain(
-        JSON.stringify(`/elek/website/assets/${fileName}`)
-      );
-      expect(await imageImportContents()).not.toContain(`./${fileName}`);
-    }
+    expect(store).toContain(JSON.stringify(`/elek/website/assets/${fileName}`));
+    expect(await imageImportContents()).not.toContain(`./${fileName}`);
   }, 30000);
 
   it('should hand a non-image Asset over as a public URL', async function () {

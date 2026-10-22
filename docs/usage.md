@@ -554,7 +554,7 @@ Slugs are unique per language within a Collection, not across languages, and an 
 
 ### Assets and astro:assets
 
-An Asset that Astro's image pipeline understands (`jpeg`, `jpg`, `png`, `tiff`, `webp`, `gif`, `svg`, `avif`, and `apng` from astro 7.2.5 on) arrives as a ready-made Astro image on `data.src`, so it optimizes like any local image:
+An Asset that Astro's image pipeline understands (`jpeg`, `jpg`, `png`, `tiff`, `webp`, `gif`, `svg`, `avif`) arrives as a ready-made Astro image on `data.src`, so it optimizes like any local image:
 
 ```astro
 ---
@@ -571,8 +571,6 @@ const assets = await getCollection('websiteAssets');
 ```
 
 Every other Asset, a PDF or a ZIP for example, is served as it is and carries its URL on `data.href` instead. Each Asset has exactly one of the two, the other is `null`, so the check above is also how you tell them apart.
-
-The list follows the astro you installed, not Core's own. On an astro below 7.2.5 an `.apng` Asset is not an image, so it arrives on `data.href` like a PDF.
 
 The two kinds are saved in different places, because that is what makes each work. Images go to `src/elek/<alias>/images`, below `src/` where Astro can process them. Everything else goes to `public/elek/<alias>/assets`, because only the public directory is served. Override either per Project:
 

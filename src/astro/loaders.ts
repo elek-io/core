@@ -1,11 +1,9 @@
 import type { ImageInputFormat } from 'astro';
 import type { Loader, LoaderContext } from 'astro/loaders';
 import { z } from '@hono/zod-openapi';
-import Module from 'node:module';
 import Path from 'node:path';
 import Url from 'node:url';
 import Fs from 'fs-extra';
-import Semver from 'semver';
 import {
   assetSchema,
   CoreError,
@@ -85,63 +83,40 @@ export function defaultPublicDir(alias: string): string {
 }
 
 /**
- * The extensions Astro's image pipeline understands, mirroring its own
- * VALID_INPUT_FORMATS, each mapped to the first astro release that accepted
- * it. `6.1.3` is the peer range's own floor.
+ * The extensions Astro's image pipeline processes, mirroring its own
+ * VALID_SUPPORTED_FORMATS. `apng` is in its input list from 7.2.5 on and in
+ * that one on no release, so it is false here and takes the non-image route.
  *
- * `Record<ImageInputFormat, string>` ties the list to Astro's public type, so a
- * format added there is a compile error here. The index signature beside it
- * holds a format an older astro in the range does not know yet.
+ * `Record<ImageInputFormat, boolean>` ties the keys to Astro's public type,
+ * and the index signature beside it holds a format the floor does not know.
  *
  * @see ../../contributing/astro-entry.md
  */
-const imageExtensions: Record<ImageInputFormat, string> &
-  Record<string, string> = {
-  apng: '7.2.5',
-  avif: '6.1.3',
-  gif: '6.1.3',
-  jpeg: '6.1.3',
-  jpg: '6.1.3',
-  png: '6.1.3',
-  svg: '6.1.3',
-  tiff: '6.1.3',
-  webp: '6.1.3',
+const imageExtensions: Record<ImageInputFormat, boolean> &
+  Record<string, boolean> = {
+  apng: false,
+  avif: true,
+  gif: true,
+  jpeg: true,
+  jpg: true,
+  png: true,
+  svg: true,
+  tiff: true,
+  webp: true,
 };
 
 /**
- * The version of the astro the consumer installed, read once.
+ * Whether Astro's image pipeline processes this extension.
  *
- * Resolved at runtime rather than imported, because the bundler inlines a
- * JSON import and `dist/astro` would then carry the astro Core was built
- * against instead of the one it is running next to. `astro/package.json` is
- * an entry of astro's own export map, so this is not a fourth internal.
- */
-let installedAstroVersion: string | undefined;
-
-function readInstalledAstroVersion(): string {
-  const manifest = Module.createRequire(import.meta.url).resolve(
-    'astro/package.json'
-  );
-  return z.object({ version: z.string() }).parse(Fs.readJsonSync(manifest))
-    .version;
-}
-
-/**
- * Whether the astro that is running processes this extension as an image.
- *
- * `astroVersion` defaults to the consumer's astro rather than Core's dev pin,
- * because an extension Astro does not know strips the marker and leaves a
- * relative path nothing resolves, see `../../contributing/astro-entry.md`.
+ * An extension it does not strips the marker and leaves a relative path
+ * nothing resolves, and one it only accepts as an input fails the image
+ * service, see `../../contributing/astro-entry.md`.
  *
  * Exported for this file's tests. Nothing re-exports it, so it is not part of
  * the astro entry's surface.
  */
-export function hasImageExtension(
-  extension: string,
-  astroVersion: string = (installedAstroVersion ??= readInstalledAstroVersion())
-): boolean {
-  const since = imageExtensions[extension.toLowerCase()];
-  return since !== undefined && Semver.gte(astroVersion, since);
+export function hasImageExtension(extension: string): boolean {
+  return imageExtensions[extension.toLowerCase()] === true;
 }
 
 /**
