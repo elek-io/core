@@ -226,6 +226,11 @@ pnpm build && pnpm pack --pack-destination /tmp
 mkdir /tmp/scratch && cd /tmp/scratch && npm init -y
 npm install /tmp/elek-io-core-<version>.tgz   # must not ERESOLVE
 npx elek --help                               # must print help, not a native binding error
+
+# Both generate:types steps below need at least one Project in the data
+# directory, ~/elek.io unless ELEK_IO_DATA_DIR says otherwise. With none there
+# is no types file to compile, so the command exits 0 with "No types to compile
+# to JavaScript, no Projects found" and never loads the compiler.
 npx elek generate:types ./out js              # must name tsdown and typescript, and exit 1
 npm install -D tsdown typescript@6
 npx elek generate:types ./out js              # must now emit .mjs and .d.mts
