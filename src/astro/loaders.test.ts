@@ -7,7 +7,7 @@ import {
   createEntry,
   createProject,
 } from '../test/util.js';
-import { elekEntriesLoader } from './loaders.js';
+import { elekEntriesLoader, hasImageExtension } from './loaders.js';
 import type { ContentWatcher } from './watch.js';
 
 /**
@@ -150,4 +150,25 @@ describe('the Entries loader while astro dev runs', function () {
       expect.stringContaining('was renamed or replaced'),
     ]);
   }, 60000);
+});
+
+describe('hasImageExtension', function () {
+  it('takes an extension Astro has processed since the peer floor', function () {
+    expect(hasImageExtension('png', '6.1.3')).toBe(true);
+    expect(hasImageExtension('PNG', '7.4.2')).toBe(true);
+  });
+
+  it('takes an apng only from the Astro release that processes one', function () {
+    // apng joined Astro's input formats in 7.2.5. Before that the marker
+    // leaves a relative path nothing resolves, so the Asset has to take
+    // the public route a non-image takes.
+    // See ../../contributing/peer-dependencies.md
+    expect(hasImageExtension('apng', '6.4.8')).toBe(false);
+    expect(hasImageExtension('apng', '7.2.4')).toBe(false);
+    expect(hasImageExtension('apng', '7.2.5')).toBe(true);
+  });
+
+  it('takes no extension Astro does not process at all', function () {
+    expect(hasImageExtension('pdf', '7.4.2')).toBe(false);
+  });
 });

@@ -21,6 +21,7 @@ import type { Asset, Project } from './index.node.js';
 describe('Assets through astro:assets', function () {
   let project: Project & { destroy: () => Promise<void> };
   let image: Asset;
+  let animation: Asset;
   let document: Asset;
   let root: string;
   let cacheDir: string;
@@ -32,6 +33,15 @@ describe('Assets through astro:assets', function () {
       filePath: Path.resolve('src/test/data/150x150.png'),
       name: 'A picture',
       description: 'An image Asset, which Astro can process',
+    });
+
+    // An image Astro only learned to process in 7.2.5, while the peer
+    // range still allows releases before it
+    animation = await core.assets.create({
+      projectId: project.id,
+      filePath: Path.resolve('src/test/data/150x150.apng'),
+      name: 'An animation',
+      description: 'An image Asset in a format Astro gained later',
     });
 
     // A non-image Asset, which Astro's image pipeline cannot touch
@@ -108,19 +118,33 @@ export const collections = { ...(await elekCollections(config)) };
     const store = await storeContents();
     const fileName = `${image.id}.${image.extension}`;
 
-    // The marker Astro replaces with its own image metadata, so that
-    // <Image src={asset.data.src} /> works
-    expect(store).toContain(`__ASTRO_IMAGE_./${fileName}`);
-    // Resolved relative to the entry's own file
+    // Resolved relative to the entry's own file, which is what anchors
+    // the import Astro records
     expect(store).toContain(
       JSON.stringify(`src/elek/website/images/${fileName}`)
     );
 
-    // Astro recognized the marker and collected the image as an import
-    // of its own, which is the only proof that the handover worked.
-    // Were the marker convention to change, this string would no
-    // longer appear on its own, only inside the marker above.
-    expect(store).toContain(JSON.stringify(`./${fileName}`));
+    // Astro took the marker, so the stored value is the plain relative
+    // path and the marker itself is gone from the store. That it then
+    // emitted an import of its own is the only proof the handover
+    // worked, since the substitution needs a rendered page.
+    expect(store).not.toContain(`__ASTRO_IMAGE_./${fileName}`);
+    expect(await imageImportContents()).toContain(`./${fileName}`);
+  }, 30000);
+
+  it('should hand an apng Asset over as an image on an Astro that processes it', async function () {
+    // apng is in Astro's input formats from 7.2.5 on, and the loader
+    // asks the installed Astro rather than assuming Core's own pin.
+    // Below that release it takes the public route a non-image takes,
+    // which pinning the peer floor is what checks.
+    // See contributing/peer-dependencies.md.
+    const fileName = `${animation.id}.${animation.extension}`;
+
+    expect(animation.extension).toBe('apng');
+    expect(await storeContents()).toContain(
+      JSON.stringify(`src/elek/website/images/${fileName}`)
+    );
+    expect(await imageImportContents()).toContain(`./${fileName}`);
   }, 30000);
 
   it('should hand a non-image Asset over as a public URL', async function () {
@@ -130,6 +154,7 @@ export const collections = { ...(await elekCollections(config)) };
     expect(store).toContain(JSON.stringify(`/elek/website/assets/${fileName}`));
     // Nothing for Astro's image pipeline to pick up here
     expect(store).not.toContain(`__ASTRO_IMAGE_./${fileName}`);
+    expect(await imageImportContents()).not.toContain(`./${fileName}`);
   }, 30000);
 
   it('should save each Asset next to its own kind', async function () {

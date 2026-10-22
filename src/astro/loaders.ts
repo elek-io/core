@@ -1,9 +1,11 @@
 import type { ImageInputFormat } from 'astro';
 import type { Loader, LoaderContext } from 'astro/loaders';
 import { z } from '@hono/zod-openapi';
+import Module from 'node:module';
 import Path from 'node:path';
 import Url from 'node:url';
 import Fs from 'fs-extra';
+import Semver from 'semver';
 import {
   assetSchema,
   CoreError,
@@ -84,23 +86,70 @@ export function defaultPublicDir(alias: string): string {
 
 /**
  * The extensions Astro's image pipeline understands, mirroring its own
- * VALID_INPUT_FORMATS. `satisfies` ties the list to Astro's public
- * ImageInputFormat, so adding or removing a format there is a compile
- * error here instead of a silent behavior change.
+ * VALID_INPUT_FORMATS, each mapped to the first astro release that accepted
+ * it. `satisfies` ties the list to Astro's public ImageInputFormat, so adding
+ * or removing a format there is a compile error here instead of a silent
+ * behavior change.
+ *
+ * The peer range spans two majors and the list grew inside it, so a floor
+ * per format is what keeps the answer true on every astro the range allows.
+ * `6.1.3` is that range's own floor, see `../../contributing/peer-dependencies.md`.
  */
 const imageExtensions = {
-  avif: true,
-  gif: true,
-  jpeg: true,
-  jpg: true,
-  png: true,
-  svg: true,
-  tiff: true,
-  webp: true,
-} satisfies Record<ImageInputFormat, true>;
+  apng: '7.2.5',
+  avif: '6.1.3',
+  gif: '6.1.3',
+  jpeg: '6.1.3',
+  jpg: '6.1.3',
+  png: '6.1.3',
+  svg: '6.1.3',
+  tiff: '6.1.3',
+  webp: '6.1.3',
+} satisfies Record<ImageInputFormat, string>;
 
-function hasImageExtension(extension: string): boolean {
-  return Object.hasOwn(imageExtensions, extension.toLowerCase());
+/**
+ * The same table reached with an arbitrary extension, which an Asset carries.
+ * An assignment rather than a cast, so the `satisfies` above stays the single
+ * place the formats are declared.
+ */
+const imageExtensionFloors: Record<string, string> = imageExtensions;
+
+/**
+ * The version of the astro the consumer installed, read once.
+ *
+ * Resolved at runtime rather than imported, because the bundler inlines a
+ * JSON import and `dist/astro` would then carry the astro Core was built
+ * against instead of the one it is running next to. `astro/package.json` is
+ * an entry of astro's own export map, so this is not a fourth internal.
+ */
+let installedAstroVersion: string | undefined;
+
+function readInstalledAstroVersion(): string {
+  const manifest = Module.createRequire(import.meta.url).resolve(
+    'astro/package.json'
+  );
+  return z
+    .object({ version: z.string() })
+    .parse(Fs.readJsonSync(manifest)).version;
+}
+
+/**
+ * Whether the astro that is running processes this extension as an image.
+ *
+ * `astroVersion` defaults to the consumer's astro rather than Core's dev pin,
+ * because an extension Astro does not know strips the marker and leaves a
+ * relative path nothing resolves, see `../../contributing/astro-entry.md`.
+ *
+ * Exported for this file's tests. Nothing re-exports it, so it is not part of
+ * the astro entry's surface.
+ */
+export function hasImageExtension(
+  extension: string,
+  astroVersion: string = (installedAstroVersion ??=
+    readInstalledAstroVersion())
+): boolean {
+  const since = imageExtensionFloors[extension.toLowerCase()];
+  return since !== undefined && Semver.gte(astroVersion, since);
 }
 
 /**
