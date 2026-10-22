@@ -225,7 +225,7 @@ So every handler receives an `MdastNodeContext` as its last argument, exported f
 Two things follow from that shape:
 
 - There is no `parent` field, because `ancestors.at(-1)` already is one.
-- One context object is shared by a node's siblings. Read it, never write to it.
+- The `ancestors` array is shared by a node's siblings. Read it, never write to it.
 
 A handler that does not need it declares fewer parameters, which is why every renderers object written before the context existed still compiles.
 
@@ -242,7 +242,8 @@ A table's header is its first row, which is all mdast records. The defaults turn
 
 - The first row's cells are `<th scope="col">`, every row below holds `<td>`, and an empty header cell stays a header cell.
 - `<thead>` and `<tbody>` wrap those rows, and neither is emitted empty. A table of one row is a header with no body.
-- A column's alignment arrives as `style="text-align:left|center|right"` on every cell of that column, header and body alike. A column the markdown left unaligned gets no style at all, so its cells keep the start edge of the reading direction instead of a hard-coded left.
+- A column's alignment arrives as `style="text-align:left|center|right"` on every cell of that column, header and body alike.
+- A column the markdown left unaligned gets no style at all, instead of a hard-coded left, so its body cells keep the start edge of the reading direction. Its header cell is centered, because that is what a user agent does with a `<th>` of its own accord, and only your CSS can change that.
 
 `table.align` sits on the table and the cell is what renders it, so two helpers exported from `@elek-io/core` answer a cell's two questions from its context. Both are what the defaults use:
 

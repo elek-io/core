@@ -27,7 +27,7 @@ Exhaustiveness is the point. A node type added in a later Core release becomes a
 
 A handler used to be given its node and its rendered children, and nothing else. That is not enough for a table: `table.align` reaches the `table` handler while the cell is what has to carry the alignment, and nothing on a `tableCell` says whether it heads a column.
 
-The decision is a third argument, `MdastNodeContext`, holding `index` and `ancestors` with the root first and the direct parent last.
+The decision is an `MdastNodeContext`, handed to every handler as its last argument, holding `index` and `ancestors` with the root first and the direct parent last.
 
 | Rejected | Why not |
 | --- | --- |

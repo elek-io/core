@@ -7,12 +7,12 @@
 **The output changes for every consumer who never touched a renderer**, which is the point of the fix. The defaults of `@elek-io/core/astro` now emit:
 
 - The first row's cells as `<th scope="col">` inside `<thead>`, and every row below as `<td>` inside `<tbody>`. Neither wrapper is emitted empty, so a table of one row is a header with no body and a table of no rows is an empty `<table>`.
-- A column's alignment as `style="text-align:left|center|right"` on every cell of that column, header and body alike. A column the markdown left unaligned gets no style at all, so its cells keep the start edge of the reading direction.
+- A column's alignment as `style="text-align:left|center|right"` on every cell of that column, header and body alike. A column the markdown left unaligned gets no style at all, so its body cells keep the start edge of the reading direction. Its header cell is centered, because that is what a user agent does with a `<th>` of its own accord, and only your own CSS can change that.
 
 There is no migration step, because what changed is the markup. CSS that reached a table's header cells through `tr td` selects `thead th` now.
 
-**Every renderer is handed a third argument**, `MdastNodeContext`, holding `index` and `ancestors` with the root first and the direct parent last. It is what a handler cannot read off its own node. A handler that does not need it declares fewer parameters, so every renderers object that compiles today keeps compiling.
+**Every renderer is handed an `MdastNodeContext` as its last argument**, holding `index` and `ancestors` with the root first and the direct parent last. It is what a handler cannot read off its own node. A handler that does not need it declares fewer parameters, so every renderers object that compiles today keeps compiling.
 
-**New exports** `MdastNodeContext`, and `isTableHeaderCell` and `tableCellAlign`, which answer a table cell's two questions from its context so an override of `tableCell` does not have to reimplement the default. `MdAstTableAlign` and `mdAstTableAlignSchema` name a column's alignment.
+**New exports** `MdastNodeContext`, and `isTableHeaderCell` and `tableCellAlign`, which answer a table cell's two questions from its context so an override of `tableCell` does not have to reimplement the default. `MdAstTableAlign` and `mdAstTableAlignSchema` name a column's alignment, and `ParentHandler` and `LeafHandler` name the two handler shapes `MdastRenderersBase<T>` is built from.
 
 A table still has no `<caption>`, because mdast has no caption node for Core to render one from. A page that puts a wide table into a horizontally scrolling box has to name that region itself. See `docs/markdown-content.md`.

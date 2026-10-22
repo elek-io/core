@@ -71,8 +71,10 @@ function renderTableCell(
   context: MdastNodeContext
 ): ReturnType<typeof renderTemplate> {
   const align = tableCellAlign(context);
-  // A column with no alignment gets no style at all, so its cells keep the
-  // start edge of the reading direction rather than a hard-coded left.
+  // A column with no alignment gets no style at all, rather than a
+  // hard-coded left, so its body cells keep the start edge of the reading
+  // direction. A user agent centers its header cell, which only the
+  // consumer's own CSS can change.
   const style = align === null ? null : `text-align:${align}`;
   return isTableHeaderCell(context)
     ? renderTemplate`<th scope="col"${addAttribute(style, 'style')}>${children}</th>`
