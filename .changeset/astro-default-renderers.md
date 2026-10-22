@@ -9,4 +9,4 @@
 - **`footnoteReference`** carries `id="fnref-<identifier>"`, which is what the way back below points at.
 - **`footnoteDefinition`** ends with `<a href="#fnref-<identifier>" aria-label="Back to content">↩</a>`.
 
-`docs/markdown-content.md` gained two sections: the six fields a default still drops and what to override for each, and the three placements a handler cannot reach plus the one thing an override cannot fix either.
+`docs/markdown-content.md` gained two sections: the six fields a default still drops and what to override for each, and what a handler cannot reach, which names the placements no override reaches either and what CSS does about them.

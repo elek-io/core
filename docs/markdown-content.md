@@ -219,16 +219,17 @@ Every default renders every field of its node except these six. Nothing else of 
 | --- | --- | --- |
 | `code.lang` | nothing, `<pre><code>` carries no class | the class name your highlighter reads, see `code` above |
 | `code.meta` | nothing, it is the option string of a highlighter Core does not ship | whatever your highlighter makes of it |
-| `list.spread` | nothing, see the tight list below | `<li>text</li>` for a tight item |
+| `list.spread` | nothing, see the tight list below | nothing, an override cannot reach it either |
 | `listItem.spread` | the same | the same |
 | `footnoteDefinition.label` | nothing, the authored spelling of the identifier shows on the reference instead | it on the note as well |
 | `table.align` | nothing, see the table below | nothing, an override cannot reach it either |
 
 ### Where a handler cannot reach
 
-A handler is given its own node and its already rendered children, never its position or its siblings. Four things follow, and the defaults ship them visibly rather than working around them.
+A handler is given its own node and its already rendered children, never its position or its siblings. Five things follow, and the defaults ship them visibly rather than working around them.
 
-- **A task item's checkbox precedes its text** instead of opening the item's first paragraph, which is where remark puts it. The paragraph arrives already rendered, so the checkbox sits on the line above its label. The default adds no class name either, so the item keeps its list marker next to the box. Override `listItem` to place both.
+- **A task item's checkbox precedes its text** instead of opening the item's first paragraph, which is where remark puts it. The paragraph arrives already rendered, so an override cannot reach inside it either. `li > p { display: inline }` is the CSS that puts box and text on one line, and it keeps the list marker, which the default leaves in place by adding no class name.
+- **A task item's checkbox is named with the item's own text.** A `<label>` cannot wrap blocks that arrive already rendered, so the name goes on an `aria-label` instead, and a screen reader reads the item's text twice: once as the name of the box, once as the text.
 - **A note's way back follows its blocks** instead of ending its last paragraph, for the same reason.
 - **A tight list item keeps its paragraph**, so `<li><p>text</p></li>` rather than `<li>text</li>`. It is valid and semantic, and it is one `<p>` of margin away from what other renderers emit.
 - **Footnote ids are built from the identifier alone.** Two trees on one page claim the same `fn-` and `fnref-` ids, and an anchor then lands on whichever rendered first. A note referenced twice repeats its reference id, so its way back lands on the first reference. A default cannot take a prefix, because one `astroDefaults` object serves every render. Give both handlers one of your own:
@@ -242,13 +243,18 @@ footnoteReference: (node) => (
   </sup>
 ),
 footnoteDefinition: (node, children) => (
-  <div id={`${prefix}fn-${node.identifier}`}>{children}</div>
+  <div id={`${prefix}fn-${node.identifier}`}>
+    {children}
+    <a href={`#${prefix}fnref-${node.identifier}`} aria-label="Back to content">
+      ↩
+    </a>
+  </div>
 ),
 ```
 
 The back-link's `aria-label` is English, so a site in another language overrides `footnoteDefinition` for that too.
 
-**A table's header cells are the one thing an override cannot fix.** `tableCell` is handed its own node and its children, and nothing tells it which row or column it sits in. So `<th scope="col">` and `table.align` are out of reach of a default and of your override alike: every cell renders as `<td>` and alignment is lost. Follow [issue 244](https://github.com/elek-io/core/issues/244) for the fix.
+**A table's header cells are out of reach of an override as well.** `tableCell` is handed its own node and its children, and nothing tells it which row or column it sits in. So `<th scope="col">` and `table.align` are out of reach of a default and of your override alike: every cell renders as `<td>` and alignment is lost. Follow [issue 244](https://github.com/elek-io/core/issues/244) for the fix.
 
 ### Reusable per-site renderer
 
@@ -294,7 +300,11 @@ The primitive is the same typed fold the Astro binding wraps. `T` is your framew
 The example below uses React (`T = ReactNode`). For Vue bind `T = VNode`, for Solid `T = JSX.Element`. Only the element factory changes, the structure stays identical.
 
 ```tsx
-import { mdastRender, type MdastRenderersBase } from '@elek-io/core';
+import {
+  extractText,
+  mdastRender,
+  type MdastRenderersBase,
+} from '@elek-io/core';
 import type { ReactNode } from 'react';
 
 const renderers: MdastRenderersBase<ReactNode> = {
@@ -320,7 +330,13 @@ const renderers: MdastRenderersBase<ReactNode> = {
       <li>{children}</li>
     ) : (
       <li>
-        <input type="checkbox" checked={node.checked} disabled readOnly />
+        <input
+          type="checkbox"
+          aria-label={extractText(node) || undefined}
+          checked={node.checked}
+          disabled
+          readOnly
+        />
         {children}
       </li>
     ),
