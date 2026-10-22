@@ -4,8 +4,10 @@ import {
   extractText,
   isTableHeaderCell,
   tableCellAlign,
+  type LeafHandler,
   type MdastNodeContext,
   type MdastRenderersBase,
+  type ParentHandler,
 } from './mdastRender.js';
 import type {
   MdAstRoot,
@@ -598,6 +600,17 @@ describe('type level - a handler may ignore the context', () => {
   it('accepts a leaf handler declaring only the node', () => {
     const oneParameter = (node: MdAstText) => node.value;
     expectTypeOf(oneParameter).toMatchTypeOf<
+      MdastRenderersBase<string>['text']
+    >();
+  });
+
+  it('names the two handler shapes without changing either of them', () => {
+    // The keys spell their signature through ParentHandler and LeafHandler,
+    // so the aliases have to be exactly what each key held before.
+    expectTypeOf<ParentHandler<MdAstTableCell, string>>().toEqualTypeOf<
+      MdastRenderersBase<string>['tableCell']
+    >();
+    expectTypeOf<LeafHandler<MdAstText, string>>().toEqualTypeOf<
       MdastRenderersBase<string>['text']
     >();
   });

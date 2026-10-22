@@ -47,8 +47,8 @@ import type {
  * needs the table's `align` and whether its row is the header row, and
  * neither is on the cell.
  *
- * One context object is shared by a node's siblings, so treat both fields as
- * read only.
+ * The `ancestors` array is shared by a node's siblings, so treat it as read
+ * only.
  *
  * @see ../../contributing/markdown-internals.md
  */
@@ -63,83 +63,65 @@ export interface MdastNodeContext {
   ancestors: readonly MdAstAnyNode[];
 }
 
+/**
+ * A handler for a node type that has children. It is called with the node,
+ * its already rendered children and its context. `N` is the node type, `T`
+ * the consumer's element type.
+ */
+export type ParentHandler<N, T> = (
+  node: N,
+  children: T[],
+  context: MdastNodeContext
+) => T;
+
+/**
+ * A handler for a node type that has no children. It is called with the node
+ * and its context. `N` is the node type, `T` the consumer's element type.
+ */
+export type LeafHandler<N, T> = (node: N, context: MdastNodeContext) => T;
+
 export interface MdastRenderersBase<T> {
   /**
    * Combines the rendered top-level blocks into the final output. The
    * framework wrapper supplies a default that wraps in its fragment
    * equivalent; consumers can override to wrap in `<article>` or similar.
    */
-  root: (node: MdAstRoot, children: T[], context: MdastNodeContext) => T;
+  root: ParentHandler<MdAstRoot, T>;
 
   // Block parents
-  paragraph: (
-    node: MdAstParagraph,
-    children: T[],
-    context: MdastNodeContext
-  ) => T;
-  heading: (node: MdAstHeading, children: T[], context: MdastNodeContext) => T;
-  blockquote: (
-    node: MdAstBlockquote,
-    children: T[],
-    context: MdastNodeContext
-  ) => T;
-  list: (node: MdAstList, children: T[], context: MdastNodeContext) => T;
-  table: (node: MdAstTable, children: T[], context: MdastNodeContext) => T;
-  footnoteDefinition: (
-    node: MdAstFootnoteDefinition,
-    children: T[],
-    context: MdastNodeContext
-  ) => T;
+  paragraph: ParentHandler<MdAstParagraph, T>;
+  heading: ParentHandler<MdAstHeading, T>;
+  blockquote: ParentHandler<MdAstBlockquote, T>;
+  list: ParentHandler<MdAstList, T>;
+  table: ParentHandler<MdAstTable, T>;
+  footnoteDefinition: ParentHandler<MdAstFootnoteDefinition, T>;
 
   // Block leaves
-  code: (node: MdAstCode, context: MdastNodeContext) => T;
-  thematicBreak: (node: MdAstThematicBreak, context: MdastNodeContext) => T;
+  code: LeafHandler<MdAstCode, T>;
+  thematicBreak: LeafHandler<MdAstThematicBreak, T>;
 
   // Sub-nodes (block-ish; appear only inside their parents)
-  listItem: (
-    node: MdAstListItem,
-    children: T[],
-    context: MdastNodeContext
-  ) => T;
-  tableRow: (
-    node: MdAstTableRow,
-    children: T[],
-    context: MdastNodeContext
-  ) => T;
-  tableCell: (
-    node: MdAstTableCell,
-    children: T[],
-    context: MdastNodeContext
-  ) => T;
+  listItem: ParentHandler<MdAstListItem, T>;
+  tableRow: ParentHandler<MdAstTableRow, T>;
+  tableCell: ParentHandler<MdAstTableCell, T>;
 
   // Phrasing parents
-  emphasis: (
-    node: MdAstEmphasis,
-    children: T[],
-    context: MdastNodeContext
-  ) => T;
-  strong: (node: MdAstStrong, children: T[], context: MdastNodeContext) => T;
-  delete: (node: MdAstDelete, children: T[], context: MdastNodeContext) => T;
-  link: (node: MdAstLink, children: T[], context: MdastNodeContext) => T;
-  entryReference: (
-    node: MdAstEntryReference,
-    children: T[],
-    context: MdastNodeContext
-  ) => T;
+  emphasis: ParentHandler<MdAstEmphasis, T>;
+  strong: ParentHandler<MdAstStrong, T>;
+  delete: ParentHandler<MdAstDelete, T>;
+  link: ParentHandler<MdAstLink, T>;
+  entryReference: ParentHandler<MdAstEntryReference, T>;
 
   // Phrasing leaves
-  text: (node: MdAstText, context: MdastNodeContext) => T;
-  inlineCode: (node: MdAstInlineCode, context: MdastNodeContext) => T;
-  break: (node: MdAstBreak, context: MdastNodeContext) => T;
-  image: (node: MdAstImage, context: MdastNodeContext) => T;
-  footnoteReference: (
-    node: MdAstFootnoteReference,
-    context: MdastNodeContext
-  ) => T;
-  assetReference: (node: MdAstAssetReference, context: MdastNodeContext) => T;
+  text: LeafHandler<MdAstText, T>;
+  inlineCode: LeafHandler<MdAstInlineCode, T>;
+  break: LeafHandler<MdAstBreak, T>;
+  image: LeafHandler<MdAstImage, T>;
+  footnoteReference: LeafHandler<MdAstFootnoteReference, T>;
+  assetReference: LeafHandler<MdAstAssetReference, T>;
 
   // Shared between block and phrasing (mdast spec uses one type for both)
-  html: (node: MdAstHtml, context: MdastNodeContext) => T;
+  html: LeafHandler<MdAstHtml, T>;
 }
 
 /**
