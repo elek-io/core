@@ -16,14 +16,16 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
+      # Every action is pinned to the commit of its release, so a moved tag
+      # cannot change what runs. The comment names the release the commit is.
       - name: Check out code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - name: Setup Node.js environment
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.node-version'
           registry-url: 'https://registry.npmjs.org'
@@ -37,14 +39,15 @@ jobs:
       - name: Run tests with coverage
         run: pnpm run coverage
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v7
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-      - name: Create pull request or publish to NPM
-        uses: changesets/action@v1
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
-          title: 'WIP: Release x.x.x'
-          commit: Release new version
-          publish: pnpm run release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+      # The action takes its token as an input, so it is passed rather than
+      # left in the environment, where this release no longer reads it
+      - name: Create pull request or publish to NPM
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-title: 'WIP: Release x.x.x'
+          commit-message: Release new version
+          publish-script: pnpm run release

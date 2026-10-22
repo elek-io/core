@@ -128,9 +128,8 @@ function readInstalledAstroVersion(): string {
   const manifest = Module.createRequire(import.meta.url).resolve(
     'astro/package.json'
   );
-  return z
-    .object({ version: z.string() })
-    .parse(Fs.readJsonSync(manifest)).version;
+  return z.object({ version: z.string() }).parse(Fs.readJsonSync(manifest))
+    .version;
 }
 
 /**
@@ -145,8 +144,7 @@ function readInstalledAstroVersion(): string {
  */
 export function hasImageExtension(
   extension: string,
-  astroVersion: string = (installedAstroVersion ??=
-    readInstalledAstroVersion())
+  astroVersion: string = (installedAstroVersion ??= readInstalledAstroVersion())
 ): boolean {
   const since = imageExtensionFloors[extension.toLowerCase()];
   return since !== undefined && Semver.gte(astroVersion, since);

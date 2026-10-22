@@ -1,3 +1,10 @@
+# How long a release has to be public before an install takes it, in minutes.
+# This is pnpm's own default, written down because Dependabot's cooldown has to
+# stay above it: a pull request proposing a version younger than this fails at
+# `pnpm install --frozen-lockfile` on every platform before the suite runs.
+# See .github/dependabot.yml and https://pnpm.io/settings#minimumreleaseage
+minimumReleaseAge: 1440
+
 # Build script approval for dependencies.
 # pnpm 11 removed onlyBuiltDependencies and ignoredBuiltDependencies and replaced
 # them with a single allowBuilds map of package -> boolean.
