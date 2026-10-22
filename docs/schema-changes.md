@@ -195,7 +195,8 @@ A refused update writes nothing at all. Core transforms every affected Entry in 
 
 ## Guardrails
 
-- **No content is deleted without an acceptance.** A change that would drop a stored Value throws `Conflict` until `acceptedContentLoss` names the field definition, see [accepting content loss](#accepting-content-loss).
+- **No content a field definition still declares is deleted without an acceptance.** A change that would drop such a stored Value throws `Conflict` until `acceptedContentLoss` names the field definition, see [accepting content loss](#accepting-content-loss).
+- **An orphaned Value is outside that guarantee.** A Value whose slug none of the Collection's or Component's current field definitions declares is dropped by the next field definition change, with no refusal and no issue, because there is no field definition to name in the acceptance. Core wrote such slugs into Entries unvalidated before 0.24.0, so an older Project can still hold one.
 - **No circular Components.** Creating or updating a Component whose `dynamic` fields reference back into itself (directly or transitively) throws `BadRequest`.
 - **No deleting a referenced Component.** `core.components.delete()` throws `Conflict` if any Collection or Component still references the Component. Remove the references first.
 - **Collection / Component slug uniqueness** is enforced per Project. Field-definition slugs need not be globally unique - they are matched by `id`, which is what makes renames safe.
