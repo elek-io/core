@@ -193,6 +193,32 @@ describe('narrowAllowlists', function () {
       ['de', 1],
     ]);
   });
+
+  it('leaves a language the Value does not hold out of the result', function () {
+    const disallowed = uuid();
+    const content = {
+      en: [
+        { id: uuid(), objectType: 'entry' as const, collectionId: disallowed },
+      ],
+    };
+    // A language key that is there but holds nothing, which the rule skips
+    // rather than turning into an empty list
+    Object.assign(content, { de: undefined });
+    const value: Value = {
+      objectType: 'value',
+      valueType: 'reference',
+      content,
+    };
+
+    const result = narrowAllowlists(value, entryField([uuid()]));
+
+    expect(result.losses.map((loss) => loss.reason)).toEqual([
+      'collections_narrowed',
+    ]);
+    expect(
+      result.value.valueType === 'reference' && result.value.content
+    ).toEqual({ en: [] });
+  });
 });
 
 describe('withoutAcceptedContentLoss', function () {
