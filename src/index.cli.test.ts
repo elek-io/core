@@ -73,7 +73,7 @@ describe('CLI', function () {
   });
 
   it('should be able to generate & compile the API Client as JavaScript, ESM and target ES2020', async function () {
-    await execCommand({
+    const { stdout, stderr } = await execCommand({
       command: 'node',
       args: [
         './dist/cli/index.cli.mjs',
@@ -86,7 +86,26 @@ describe('CLI', function () {
     });
 
     expect(await fs.exists('./.elek.io/client.js')).toBe(true);
+    // The compiler warns about an option it has deprecated, and a consumer
+    // reads that warning as something they did
+    expect(`${stdout}${stderr}`).not.toMatch(/deprecated/i);
   }, 10000);
+
+  it('should be able to generate & compile the types as JavaScript', async function () {
+    const { stdout, stderr } = await execCommand({
+      command: 'node',
+      args: [
+        './dist/cli/index.cli.mjs',
+        'generate:types',
+        './.elek.io/types-out',
+        'js',
+      ],
+    });
+
+    const files = await fs.readdir('./.elek.io/types-out');
+    expect(files.some((file) => file.endsWith('.js'))).toBe(true);
+    expect(`${stdout}${stderr}`).not.toMatch(/deprecated/i);
+  }, 20000);
 
   it('should generate types as JavaScript when there are no Projects', async function () {
     // An isolated data directory holds no Projects, so no types file is
