@@ -391,8 +391,10 @@ describe('signing up', function () {
     ['12 characters', 'a'.repeat(12), true],
     ['128 characters', 'a'.repeat(128), true],
     ['129 characters', 'a'.repeat(129), false],
-    // Six emoji are twelve UTF-16 code units, which is how Cloud counts
-    ['six emoji', '😀'.repeat(6), true],
+    // An emoji is one code point, which is the unit Zod bounds in, so six
+    // of them are six characters short of the minimum and twelve are not
+    ['six emoji', '😀'.repeat(6), false],
+    ['twelve emoji', '😀'.repeat(12), true],
   ])(
     'takes a password of %s only when it is 12 to 128 long',
     async function (_label, candidate, isTaken) {
