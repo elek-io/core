@@ -1,6 +1,7 @@
 import Fs from 'fs-extra';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import core, {
+  CoreError,
   uuid,
   type FieldDefinition,
   type Project,
@@ -150,7 +151,12 @@ describe('upgrading a Project whose migration deletes content', function () {
         reference: { objectType: 'collection', id: collection.id },
       });
 
+      const warn = vi.spyOn(core.logger, 'warn');
       await core.projects.upgrade({ id: project.id, force: true });
+      const records = warn.mock.calls
+        .map(([record]) => record)
+        .filter((record) => record.message.includes('drops the content of'));
+      warn.mockRestore();
 
       const after = await core.entries.read({
         projectId: project.id,
@@ -159,6 +165,34 @@ describe('upgrading a Project whose migration deletes content', function () {
       });
       expect(after.values[dropped.slug]).toBeUndefined();
       expect(after.values['title']).toEqual(entry.values['title']);
+
+      // The one record of the loss points at the Collection that lost it,
+      // and carries ids, a path and a count only
+      expect(records).toHaveLength(1);
+      expect(records[0]!.message).toBe(
+        `Upgrading collection "${collectionFilePath}" drops the content of 1 field definition, because a migration removed it`
+      );
+      expect(records[0]!.meta?.['file.path']).toBe(collectionFilePath);
+      expect(records[0]!.meta?.['elek.field_definition.ids']).toEqual([goneId]);
+      expect(records[0]!.message).not.toContain('Goes with the migration');
+    }
+  );
+
+  it(
+    'propagates an error that is not a content loss instead of accepting it',
+    { timeout: 120000 },
+    async function () {
+      const failure = CoreError.badRequest('Refused for another reason');
+      const update = vi
+        .spyOn(core.collections, 'update')
+        .mockRejectedValueOnce(failure);
+
+      await expect(
+        core.projects.upgrade({ id: project.id, force: true })
+      ).rejects.toBe(failure);
+
+      expect(update).toHaveBeenCalledTimes(1);
+      update.mockRestore();
     }
   );
 });

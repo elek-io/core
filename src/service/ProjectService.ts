@@ -1680,6 +1680,7 @@ export class ProjectService
   private async updateAcceptingMigrationContentLoss(
     projectId: string,
     objectType: ObjectType,
+    filePath: string,
     update: (acceptedContentLoss?: Uuid[]) => Promise<unknown>
   ): Promise<void> {
     try {
@@ -1690,13 +1691,19 @@ export class ProjectService
       if (acceptedContentLoss.length === 0) {
         throw error;
       }
-      // Ids and a count, never a Value, see contributing/logging.md
+      const count = acceptedContentLoss.length;
+      const dropped =
+        count === 1
+          ? '1 field definition, because a migration removed it'
+          : `${count} field definitions, because a migration removed them`;
+      // Ids, a path and a count, never a Value, see contributing/logging.md
       this.logService.warn({
         source: 'core',
-        message: `Upgrading ${objectType} "${projectId}" drops the content of ${acceptedContentLoss.length} field definitions, because a migration removed them`,
+        message: `Upgrading ${objectType} "${filePath}" drops the content of ${dropped}`,
         meta: {
           'elek.project.id': projectId,
           'elek.object.type': objectType,
+          'file.path': filePath,
           'elek.field_definition.ids': acceptedContentLoss,
         },
       });
@@ -1742,6 +1749,7 @@ export class ProjectService
         await this.updateAcceptingMigrationContentLoss(
           projectId,
           objectType,
+          componentFilePath,
           (acceptedContentLoss) =>
             this.componentService.update({
               projectId,
@@ -1774,6 +1782,7 @@ export class ProjectService
         await this.updateAcceptingMigrationContentLoss(
           projectId,
           objectType,
+          collectionFilePath,
           (acceptedContentLoss) =>
             this.collectionService.update({
               projectId,
