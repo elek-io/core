@@ -154,7 +154,7 @@ A consumer writing handlers as JSX inside an `.astro` template needs none of thi
 
 `elekCollections` imports `defineCollection` from `astro/content/config`, not from the `astro:content` virtual module, which only exists inside a consumer's build and cannot be imported from package code.
 
-That subpath is a real export map entry in astro 6.1.3, 6.4.8 and 7.1.3, but it is not documented public API, so treat it as a pinned assumption. `src/index.astro.collections.test.ts` exercises it through a real `sync()`, which is what would catch its removal.
+That subpath is a real export map entry in astro 6.1.3, 6.4.8, 7.1.3 and 7.4.2, but it is not documented public API, so treat it as a pinned assumption. `src/index.astro.collections.test.ts` exercises it through a real `sync()`, which is what would catch its removal.
 
 If it ever disappears, the fallback is cheap: `defineCollection` is a validating passthrough that sets `type` to `content_layer` and returns its argument, so `{ type: 'content_layer', loader }` is equivalent. The only thing lost is astro's own validation of that object.
 
@@ -193,12 +193,20 @@ This is the same path Astro's own `image()` schema helper takes for content laye
 - **`filePath` plus the public `assetImports` field**. Fully documented, and it does get the file emitted, but it does not substitute the data value. The consumer is left with a relative string and no way to reach the content-hashed output. Verified, not assumed.
 - **The marker**, which does both. Chosen.
 
-`IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.1.3 and 7.1.3. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro collected the image as an import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
+`IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.1.3, 7.1.3 and 7.4.2. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro emitted an image import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
+
+What the store holds afterwards is Astro's business, and it has already changed once inside the peer range:
+
+- From astro 7.4 on the marker is consumed while the store is written. `data.src` holds the plain relative path, and the entry carries `assetImports` and `imageImports` beside it.
+- So the marker's absence from the written store means Astro took it, not that Core stopped emitting it. The assertions read the emitted imports instead.
 
 Only extensions in Astro's `VALID_INPUT_FORMATS` may carry the marker:
 
 - For anything else Astro strips the prefix and hands the consumer an unanchored relative path, which is why `src` is `null` for non-images and they take the `href` route instead.
 - `imageExtensions` in `loaders.ts` mirrors that list and is tied to Astro's public `ImageInputFormat` with `satisfies`, so a format added or removed there is a compile error here.
+- That list is not the same on every astro the peer range allows. `apng` joined it in 7.2.5, so each entry carries the release it arrived in and `hasImageExtension` compares that against the installed astro's version.
+- An apng Asset is therefore an image on 7.2.5 and later and a public file below it, which is the honest answer on both rather than a marker one of them cannot resolve.
+- That version is read from `astro/package.json` at runtime, through `createRequire`. A JSON import of it is inlined by the bundler, which would freeze the astro Core was built against into `dist/astro`.
 
 The parse-time schema declares `src` as a nullable string, because a marker string is what is stored and validated. The type consumers see is declared separately through `createSchema`'s `types`, as `ImageMetadata | null`.
 

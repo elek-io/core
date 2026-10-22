@@ -65,7 +65,9 @@ if (result.outcome === 'session') {
 
 The `verification` outcome carries no account. elek.io Cloud answers the same for a new address and for an address that already has an account, so the outcome says nothing about which of the two it was.
 
-A password has 12 to 128 characters, a name 1 to 256 with no `|` and no control character, and an address up to 254. A length counts Unicode code points, the way Zod counts them, so a smiling face emoji counts as one while a flag counts as two. Core refuses a value outside these with `BadRequest` before anything is sent. elek.io Cloud holds limits of its own, so a value Core accepts can still be refused there.
+A password has 12 to 128 characters, a name 1 to 256 with no `|` and no control character, and an address up to 254. Core refuses a value outside these with `BadRequest` before anything is sent, and elek.io Cloud holds limits of its own, so a value Core accepts can still be refused there.
+
+A length counts Unicode code points, the way Zod counts them, so a smiling face emoji counts as one while a flag counts as two.
 
 ## Reading the account
 

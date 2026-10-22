@@ -15,7 +15,7 @@ Core declares `zod` and `dugite` as required peer dependencies, so you install t
 - `dugite` (`^3.2.3`) is the git binding the Node entry point runs every Project operation through, see [git and sync](./git-and-sync.md).
   - On Linux its embedded git needs `libcurl.so.4` for HTTP(S) remotes. Older dugite releases need `libcurl-gnutls.so.4`, which Fedora, RHEL, openSUSE and NixOS do not ship.
   - A git that cannot load a shared library throws a `CoreError` of type `PreconditionFailed` naming it. Install the library, or point dugite's `LOCAL_GIT_DIRECTORY` variable at another git installation that has git-lfs.
-- `zod` is what Core authors its schemas with. Use a compatible version (`zod@^4.3.6`) that resolves to a single copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage.
+- `zod` is what Core authors its schemas with. Use a compatible version (`zod@^4.6.6`) that resolves to a single copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage.
 
 Three more peers are optional and needed by one feature each: `astro` for the [Astro integration](#astro-integration), and `tsdown` plus `typescript` for [compiling generated clients and types to JavaScript](./api-clients.md#compiling-to-javascript).
 
@@ -167,7 +167,9 @@ await core.user.set({
 - A `local` User has an `id` of `null`.
 - A `cloud` User carries the `id` of the elek.io account it signed in to. Setting one signs nobody in. `core.cloud.account.signIn()` signs in and sets the `cloud` User itself, see [`cloud-account.md`](./cloud-account.md).
 
-`name` takes up to 256 characters, with no `|` and no control characters, and `email` is an address of up to 254. A length counts Unicode code points, the way Zod counts them, so a smiling face emoji counts as one while a flag counts as two. `core.user.set()` throws `BadRequest` past either limit. A `user.json` written by an older Core that breaks one reads back as `null`, the same as no User, so set the User again.
+`name` takes up to 256 characters, with no `|` and no control characters, and `email` is an address of up to 254. A length counts Unicode code points, the way Zod counts them, so a smiling face emoji counts as one while a flag counts as two.
+
+`core.user.set()` throws `BadRequest` past either limit. A `user.json` written by an older Core that breaks one reads back as `null`, the same as no User, so set the User again.
 
 The `localApi` settings are a stored preference for elek.io clients. `isEnabled` records whether the local API should auto-start, which elek.io Desktop acts on, but Core itself does not. When using Core directly, start the API with `core.api.start()` or `elek api:start` (see [`local-api.md`](./local-api.md)).
 
@@ -552,7 +554,7 @@ Slugs are unique per language within a Collection, not across languages, and an 
 
 ### Assets and astro:assets
 
-An Asset that Astro's image pipeline understands (`jpeg`, `jpg`, `png`, `tiff`, `webp`, `gif`, `svg`, `avif`) arrives as a ready-made Astro image on `data.src`, so it optimizes like any local image:
+An Asset that Astro's image pipeline understands (`jpeg`, `jpg`, `png`, `tiff`, `webp`, `gif`, `svg`, `avif`, and `apng` from astro 7.2.5 on) arrives as a ready-made Astro image on `data.src`, so it optimizes like any local image:
 
 ```astro
 ---
@@ -569,6 +571,8 @@ const assets = await getCollection('websiteAssets');
 ```
 
 Every other Asset, a PDF or a ZIP for example, is served as it is and carries its URL on `data.href` instead. Each Asset has exactly one of the two, the other is `null`, so the check above is also how you tell them apart.
+
+The list follows the astro you installed, not Core's own. On an astro below 7.2.5 an `.apng` Asset is not an image, so it arrives on `data.href` like a PDF.
 
 The two kinds are saved in different places, because that is what makes each work. Images go to `src/elek/<alias>/images`, below `src/` where Astro can process them. Everything else goes to `public/elek/<alias>/assets`, because only the public directory is served. Override either per Project:
 
