@@ -114,6 +114,26 @@ export function redactedCommand(args: readonly string[]): string {
 }
 
 /**
+ * The configuration every git command Core runs carries.
+ *
+ * `core.longpaths` makes git's Windows build reach a file through the APIs
+ * that take more than 260 characters, so where a Project lives does not
+ * decide whether Core works. Every other platform ignores the key.
+ */
+const GIT_CONFIG_ARGS = ['-c', 'core.longpaths=true'];
+
+/**
+ * The arguments as git receives them, Core's configuration first. It is
+ * applied where the command is handed to the runner, never earlier:
+ * `isMutatingGitCommand` and `recordsGitIdentity` read the first argument
+ * that does not start with `-`, so the pair would make every read a
+ * mutation, and the logged command line would carry it as well.
+ */
+export function withGitConfig(args: readonly string[]): string[] {
+  return [...GIT_CONFIG_ARGS, ...args];
+}
+
+/**
  * What git said, as the cause of the error rather than part of its
  * message. A message is read by whoever made the call and by whoever the
  * log file is handed to, and this text is only safe for the first.

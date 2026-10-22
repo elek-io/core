@@ -47,6 +47,7 @@ import {
   parsePorcelainStatusLine,
   recordsGitIdentity,
   redactedCommand,
+  withGitConfig,
 } from '../util/git.js';
 
 /**
@@ -1271,11 +1272,11 @@ export class GitService {
    * The single choke point every git command goes through. Nothing should
    * call `gitExec` directly, or it loses all of this.
    *
-   * The credential environment is built inside the queue, the command is
-   * timed, redacted and logged at `info` or `debug`, and a non-zero exit is
-   * classified into `Unauthorized` or `Internal`, unless `tolerateNonZero`
-   * hands the result back for the caller to classify. A command whose
-   * Cloud git token the git host refused runs once more, which asks again.
+   * The command is classified, timed, redacted and logged at `info` or
+   * `debug`, the credential environment and Core's configuration are built
+   * inside the queue, and a non-zero exit becomes `Unauthorized` or
+   * `Internal`, unless `tolerateNonZero` hands the result back. A command
+   * whose Cloud git token the git host refused runs once more, asking again.
    *
    * @see ../../contributing/git-credentials.md
    */
@@ -1303,7 +1304,9 @@ export class GitService {
         let gitResult: IGitResult;
         let credentials: GitCredentialOutcome;
         try {
-          gitResult = await gitExec(args, path, execOptions);
+          // The configuration is added here and nowhere earlier, so what is
+          // classified, logged and redacted is the caller's command line
+          gitResult = await gitExec(withGitConfig(args), path, execOptions);
         } finally {
           credentials = invocation.finish();
         }
