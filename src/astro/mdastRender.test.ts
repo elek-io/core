@@ -664,7 +664,7 @@ describe('mdastRender (Astro wrapper)', () => {
       );
     });
 
-    it('names the checkbox with the whole text of its item', () => {
+    it("names the checkbox with the text of the item's own blocks", () => {
       // The box is a control, so it needs a name of its own. The item's
       // text is a sibling of it rather than a <label> around it, and a
       // <label> could not hold the item's blocks anyway.
@@ -692,6 +692,54 @@ describe('mdastRender (Astro wrapper)', () => {
     it('escapes a name the author wrote a quote into', () => {
       expect(render(taskList(true, 'Read "Dune"'))).toContain(
         'aria-label="Read &quot;Dune&quot;"'
+      );
+    });
+
+    it('leaves a nested list out of the name it gives the box', () => {
+      // A nested item has a checkbox of its own, and its text names that
+      // one. Taking it into the parent's name would claim another
+      // control's label as well as the parent's.
+      const root = listItemTree({
+        type: 'listItem',
+        spread: false,
+        checked: false,
+        children: [
+          paragraphOf('Do the shopping'),
+          {
+            type: 'list',
+            ordered: false,
+            start: null,
+            spread: false,
+            children: [
+              {
+                type: 'listItem',
+                spread: false,
+                checked: true,
+                children: [paragraphOf('Buy milk')],
+              },
+            ],
+          },
+        ],
+      });
+      expect(render(root)).toBe(
+        '<ul><li><input type="checkbox" aria-label="Do the shopping" disabled>' +
+          '<p>Do the shopping</p>' +
+          '<ul><li><input type="checkbox" aria-label="Buy milk" checked disabled>' +
+          '<p>Buy milk</p></li></ul></li></ul>'
+      );
+    });
+
+    it('names an item whose text is only spaces nothing', () => {
+      // A name of spaces is read as no name, so the attribute is worth
+      // less than leaving it off.
+      const root = listItemTree({
+        type: 'listItem',
+        spread: false,
+        checked: false,
+        children: [paragraphOf('   ')],
+      });
+      expect(render(root)).toBe(
+        '<ul><li><input type="checkbox" disabled><p>   </p></li></ul>'
       );
     });
 
