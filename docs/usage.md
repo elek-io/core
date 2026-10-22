@@ -102,9 +102,9 @@ Core reads its environment variables once at construction, never at import. All 
 - With an elek.io Cloud session, Cloud's git hosts get the session's tokens instead, see [`cloud-git.md`](./cloud-git.md). Signed out, they get this token too.
 - It applies to HTTP(S) remotes only. SSH remotes authenticate through the ambient SSH setup like ssh-agent.
 
-On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room.
+On Windows, a deep data directory works. Windows resolves a path against a 260 character limit, and Core hands git `core.longpaths=true` on every command it runs, so creating a Project below that depth, committing to it and reading its history all work. Core needs about 137 characters below the data directory for its deepest file.
 
-See the limitation in [`features.md`](./features.md#intentional-constraints). macOS and Linux allow 1024 and 4096 characters and are not affected.
+Git LFS is a separate binary that handles long paths its own way, so Asset binaries are the part this does not cover. See the limitation in [`features.md`](./features.md#intentional-constraints). macOS and Linux allow 1024 and 4096 characters and are not affected.
 
 The environment variable is what makes a packaged app configurable from the outside. For example, an end to end test can point a packaged Electron app at a disposable data directory by injecting `ELEK_IO_DATA_DIR` at launch, without redirecting `HOME` or adding test-only code paths.
 

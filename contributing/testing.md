@@ -142,6 +142,16 @@ CI runs both on Linux, macOS and Windows, where MinGit's `sh` runs the helper's 
 - An Electron host running the helper with `ELECTRON_RUN_AS_NODE`.
 - LFS object availability for old Release tags on real providers.
 
+### What git was run with
+
+Core hands git `-c core.longpaths=true` where the command reaches the runner, and [`GitService.longPaths.test.ts`](../src/service/GitService.longPaths.test.ts) reads back what git recorded rather than what Core passed:
+
+- `GIT_TRACE2_EVENT` points git at a directory, where every git process writes the command line it started with. `GIT_TRACE2_CONFIG_PARAMS` adds the value that process resolved `core.longpaths` to.
+- A process git started itself, `upload-pack` of a local clone for one, carries its parent's id ahead of its own and is left out. git drops the setting for those on purpose, they are the remote side.
+- A call path that skipped the runner would leave a process without the setting, which is what the assertion catches.
+
+The deep Project itself only exists on Windows, the platform with the 260 character limit, so two cases are skipped everywhere else: whether the machine can write, read and remove a path of about 340 characters at all, and whether Core can hold a Project there.
+
 ### Deliberately untested
 
 Two more paths are left uncovered on purpose. Each is listed so the next person reading a coverage report does not take it for an oversight:
