@@ -114,11 +114,13 @@ export function redactedCommand(args: readonly string[]): string {
 }
 
 /**
- * The configuration every git command Core runs carries.
+ * The configuration every git command Core runs carries on its command line.
  *
  * `core.longpaths` makes git's Windows build reach a file through the APIs
- * that take more than 260 characters, so where a Project lives does not
- * decide whether Core works. Every other platform ignores the key.
+ * that take more than 260 characters. The command line is the last scope git
+ * reads, so this is what nothing in a repository can turn off again, and
+ * {@link gitGlobalConfig} is what gets the key in early enough to matter.
+ * Every other platform ignores the key.
  */
 const GIT_CONFIG_ARGS = ['-c', 'core.longpaths=true'];
 
@@ -131,6 +133,60 @@ const GIT_CONFIG_ARGS = ['-c', 'core.longpaths=true'];
  */
 export function withGitConfig(args: readonly string[]): string[] {
   return [...GIT_CONFIG_ARGS, ...args];
+}
+
+/** A path as a git config value: quoted, with its backslashes escaped. */
+function gitConfigPath(path: string): string {
+  return `"${path.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * Where git would look for the global configuration if Core pointed it
+ * nowhere, in the order git reads them. `GIT_CONFIG_GLOBAL` replaces both
+ * files when the host process set it, and an empty value means none, which
+ * is git's own rule. `~` is left for git to expand, so its idea of the home
+ * directory decides rather than Node's.
+ *
+ * @see https://git-scm.com/docs/git-config#FILES
+ */
+function ambientGlobalConfigPaths(env: {
+  global: string | undefined;
+  xdgConfigHome: string | undefined;
+}): string[] {
+  if (env.global !== undefined) {
+    return env.global === '' ? [] : [env.global];
+  }
+  const xdg = env.xdgConfigHome;
+  return [
+    xdg === undefined || xdg === ''
+      ? '~/.config/git/config'
+      : `${xdg}/git/config`,
+    '~/.gitconfig',
+  ];
+}
+
+/**
+ * The global git configuration Core runs every command with, as the content
+ * of the file `GIT_CONFIG_GLOBAL` then points at. It carries
+ * `core.longpaths`, which git's Windows build reads too early for the
+ * command line to answer it, and includes the person's own global files
+ * first, so nothing of their setup is dropped for it.
+ *
+ * @see ../../contributing/git-long-paths.md
+ */
+export function gitGlobalConfig(env: {
+  global: string | undefined;
+  xdgConfigHome: string | undefined;
+}): string {
+  const includes = ambientGlobalConfigPaths(env).map(
+    (path) => `[include]\n\tpath = ${gitConfigPath(path)}\n`
+  );
+  return [
+    '# Written by elek.io Core, which reads the global git configuration\n',
+    '# through the includes below and adds nothing but the key under them.\n',
+    ...includes,
+    '[core]\n\tlongpaths = true\n',
+  ].join('');
 }
 
 /**

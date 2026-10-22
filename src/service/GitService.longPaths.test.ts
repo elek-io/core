@@ -2,19 +2,20 @@ import { exec as gitExec } from 'dugite';
 import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import z from 'zod';
 import ElekIoCore from '../index.node.js';
 import type { SetUserProps } from '../schema/userSchema.js';
 import { createTmpCore, tmpDirPath } from '../test/util.js';
+import { gitGlobalConfig } from '../util/git.js';
 import { uuid } from '../util/shared.js';
 
 /**
  * What lets Core work where the paths it builds pass the 260 characters
- * Windows resolves a path against: `core.longpaths`, on every git command
- * Core runs.
+ * Windows resolves a path against: `core.longpaths`, in a scope git reads
+ * before a repository's own config, on every git command Core runs.
  *
- * The two cases at the top are the user-visible failure and only exist on
+ * The cases at the top are the user-visible failure and only exist on
  * Windows. The ones below hold everywhere, because what Core hands git
  * does. See contributing/testing.md.
  */
@@ -40,7 +41,8 @@ const user: SetUserProps = {
 /**
  * A data directory long enough for the Entry file below it to reach
  * `entryFilePathLength`, padded with segments short enough for any
- * filesystem to take.
+ * filesystem to take. Its removal is registered with vitest, so a case
+ * that throws cannot leave a tree this deep behind.
  */
 function deepDataDir(): string {
   const segments = [Os.tmpdir(), `elek-io-core-longpaths-${uuid()}`];
@@ -51,6 +53,9 @@ function deepDataDir(): string {
     segments.push('d'.repeat(Math.min(Math.max(missing, 1), 32)));
     path = Path.join(...segments);
   }
+  onTestFinished(async () => {
+    await Fs.remove(path);
+  });
   return path;
 }
 
@@ -165,6 +170,52 @@ describe('a Project past the Windows limit', function () {
     },
     120000
   );
+
+  it.runIf(isWindows)(
+    'holds an Asset there, which Git LFS stores and reads back',
+    async function () {
+      const dataDir = deepDataDir();
+      const core = new ElekIoCore({ dataDir });
+      try {
+        await core.user.set(user);
+        const project = await core.projects.create({
+          name: 'Deep Assets',
+          description: 'An Asset past the Windows path limit',
+          settings: { language: { default: 'en', supported: ['en'] } },
+        });
+
+        // Git LFS is a separate binary with its own file IO, so what holds
+        // for git is no answer for the Asset binaries it stores
+        const asset = await core.assets.create({
+          projectId: project.id,
+          filePath: Path.resolve('src/test/data/150x150.png'),
+          name: 'Deep',
+          description: 'A 150x150 image below a deep data directory',
+        });
+        expect(asset.absolutePath.length).toBeGreaterThan(260);
+
+        const status = await core.git.status(
+          core.util.pathTo.project(project.id)
+        );
+        expect(status.files).toEqual([]);
+
+        const read = await core.assets.read({
+          projectId: project.id,
+          id: asset.id,
+        });
+        expect(await Fs.readFile(read.absolutePath)).toEqual(
+          await Fs.readFile(Path.resolve('src/test/data/150x150.png'))
+        );
+      } finally {
+        await core.dispose();
+      }
+
+      await Fs.remove(dataDir);
+
+      expect(await Fs.pathExists(dataDir)).toBe(false);
+    },
+    120000
+  );
 });
 
 /** Every event of a git trace carries these, whatever kind it is. */
@@ -176,16 +227,22 @@ const traceEventSchema = z.looseObject({
 /** The command line the process was started with. */
 const startEventSchema = z.looseObject({ argv: z.array(z.string()) });
 
-/** A configuration key git resolved, and the value it resolved it to. */
+/**
+ * A configuration key git resolved, the scope it read it from and the value
+ * it held there. git writes one per scope the key appears in, in the order
+ * it reads them, rather than one for the value it ended up with.
+ */
 const paramEventSchema = z.looseObject({
+  scope: z.string(),
   param: z.string(),
   value: z.string(),
 });
+type ParamEvent = z.infer<typeof paramEventSchema>;
 
-/** A git process, and what git resolved `core.longpaths` to while it ran. */
+/** A git process, and every scope it read `core.longpaths` from. */
 interface TracedGitCommand {
   argv: string[];
-  longPaths: string | null;
+  longPaths: ParamEvent[];
 }
 
 /**
@@ -202,17 +259,34 @@ async function tracedGitCommands(dir: string): Promise<TracedGitCommand[]> {
       .map((line) => traceEventSchema.parse(JSON.parse(line)));
     const start = events.find((event) => event.event === 'start');
     if (start === undefined || start.sid.includes('/')) continue;
-    const resolved = events
-      .filter((event) => event.event === 'def_param')
-      .map((event) => paramEventSchema.parse(event))
-      .find((event) => event.param === 'core.longpaths');
     commands.push({
       // The first entry is the path of the git binary
       argv: startEventSchema.parse(start).argv.slice(1),
-      longPaths: resolved?.value ?? null,
+      longPaths: events
+        .filter((event) => event.event === 'def_param')
+        .map((event) => paramEventSchema.parse(event))
+        .filter((event) => event.param === 'core.longpaths'),
     });
   }
   return commands;
+}
+
+/** The last value git read for the key, which is the one it resolved to. */
+function resolved(command: TracedGitCommand): string | null {
+  return command.longPaths.at(-1)?.value ?? null;
+}
+
+/**
+ * The last value git read in the global scope, which is the one Core's own
+ * file put there, before git opened the repository's config. Naming the
+ * scope rather than "anything before the repository" keeps a machine whose
+ * system config happens to carry the key from standing in for Core.
+ */
+function resolvedGlobally(command: TracedGitCommand): string | null {
+  return (
+    command.longPaths.findLast((event) => event.scope === 'global')?.value ??
+    null
+  );
 }
 
 describe('the setting every git command runs with', function () {
@@ -255,9 +329,17 @@ describe('the setting every git command runs with', function () {
     }
 
     const commands = await tracedGitCommands(trace);
-    expect(commands.filter((command) => command.longPaths !== 'true')).toEqual(
+    expect(commands).not.toEqual([]);
+    expect(commands.filter((command) => resolved(command) !== 'true')).toEqual(
       []
     );
+
+    // The one the user-visible failure turns on. git decides long paths
+    // while it reads the config, so a value only the command line carries
+    // comes too late for the repository's own config file
+    expect(
+      commands.filter((command) => resolvedGlobally(command) !== 'true')
+    ).toEqual([]);
 
     // The pair comes first, so it can never be read as the command name
     const argv = commands.map((command) => command.argv);
@@ -277,6 +359,73 @@ describe('the setting every git command runs with', function () {
     );
     expect(written.exitCode).toBe(1);
   }, 60000);
+});
+
+describe('the global configuration Core hands git', function () {
+  it('reads the files git would have read, and adds the key under them', async function () {
+    const dir = tmpDirPath();
+    const ambient = Path.join(dir, 'their.gitconfig');
+    await Fs.outputFile(
+      ambient,
+      '[user]\n\tname = Their Person\n[core]\n\tlongpaths = false\n'
+    );
+    const ours = Path.join(dir, 'ours.gitconfig');
+    await Fs.outputFile(
+      ours,
+      gitGlobalConfig({ global: ambient, xdgConfigHome: undefined })
+    );
+
+    const listed = await gitExec(
+      [
+        'config',
+        '--show-scope',
+        '--get-regexp',
+        'user\\.name|core\\.longpaths',
+      ],
+      dir,
+      {
+        env: {
+          GIT_CONFIG_GLOBAL: ours,
+          // So only what Core wrote and what it included is listed
+          GIT_CONFIG_SYSTEM: Path.join(dir, 'no-such.gitconfig'),
+        },
+      }
+    );
+
+    // Theirs is read, in the global scope where git read it before, and the
+    // key Core needs comes after it, so it is what git resolves
+    expect(listed.stdout.trim().split('\n')).toEqual([
+      'global\tuser.name Their Person',
+      'global\tcore.longpaths false',
+      'global\tcore.longpaths true',
+    ]);
+  }, 60000);
+
+  it('reads both files git looks at when the host process names none', function () {
+    const includes = (content: string): string[] =>
+      [...content.matchAll(/^\tpath = (?<path>.+)$/gm)].map(
+        (match) => match.groups?.['path'] ?? ''
+      );
+
+    expect(
+      includes(gitGlobalConfig({ global: undefined, xdgConfigHome: undefined }))
+    ).toEqual(['"~/.config/git/config"', '"~/.gitconfig"']);
+    // A backslash is an escape in a config value, so a Windows path is
+    // written with its own doubled
+    expect(
+      includes(
+        gitGlobalConfig({
+          global: undefined,
+          xdgConfigHome: 'C:\\Users\\A\\cfg',
+        })
+      )
+    ).toEqual(['"C:\\\\Users\\\\A\\\\cfg/git/config"', '"~/.gitconfig"']);
+    // git's own rule: the variable replaces both files, and an empty value
+    // means there is no global configuration to read
+    expect(
+      includes(gitGlobalConfig({ global: '', xdgConfigHome: undefined }))
+    ).toEqual([]);
+  });
 });
 
 describe('the command line Core classifies, logs and redacts', function () {

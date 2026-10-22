@@ -1,4 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import Os from 'node:os';
 import Fs from 'fs-extra';
 import type {
   IGitExecutionOptions,
@@ -42,6 +44,7 @@ import {
   ATOMIC_NOT_FAST_FORWARD,
   classifyAuthError,
   classifyLoadError,
+  gitGlobalConfig,
   gitOutputCause,
   isMutatingGitCommand,
   parsePorcelainStatusLine,
@@ -1269,13 +1272,42 @@ export class GitService {
   }
 
   /**
+   * The global configuration git runs with, handed to it through
+   * `GIT_CONFIG_GLOBAL`. It sits in the machine's temporary directory
+   * rather than the data directory's, which is the one place it may not
+   * be: a deep data directory is what it exists for, and git has to open
+   * it before it knows long paths are on. Checked on every call, so a
+   * temporary directory something emptied heals.
+   *
+   * @see ../../contributing/git-long-paths.md
+   */
+  private async globalConfigEnv(): Promise<Record<string, string>> {
+    const content = gitGlobalConfig({
+      global: process.env['GIT_CONFIG_GLOBAL'],
+      xdgConfigHome: process.env['XDG_CONFIG_HOME'],
+    });
+    // Named after the content and the user, because the temporary directory
+    // is shared on Linux: one person's file is never read by another, and
+    // never in the way of their write
+    const digest = createHash('sha256')
+      .update(`${process.getuid?.() ?? 0}\n${content}`)
+      .digest('hex')
+      .slice(0, 12);
+    const path = Path.join(Os.tmpdir(), `elek-io-core-git-config-${digest}`);
+    if ((await Fs.pathExists(path)) === false) {
+      await Fs.outputFile(path, content);
+    }
+    return { GIT_CONFIG_GLOBAL: path };
+  }
+
+  /**
    * The single choke point every git command goes through. Nothing should
    * call `gitExec` directly, or it loses all of this.
    *
    * The command is classified, timed, redacted and logged at `info` or
-   * `debug`, the credential environment and Core's configuration are built
-   * inside the queue, and a non-zero exit becomes `Unauthorized` or
-   * `Internal`, unless `tolerateNonZero` hands the result back. A command
+   * `debug`, the credential environment is built inside the queue and Core's
+   * own configuration around it, and a non-zero exit becomes `Unauthorized`
+   * or `Internal`, unless `tolerateNonZero` hands the result back. A command
    * whose Cloud git token the git host refused runs once more, asking again.
    *
    * @see ../../contributing/git-credentials.md
@@ -1290,6 +1322,7 @@ export class GitService {
       ? identityEnv(user === undefined ? await this.userService.get() : user)
       : {};
     const callerEnv = execOptions.env;
+    const configEnv = await this.globalConfigEnv();
     // `--version` and `--exec-path` run no command, so they can never ask
     // for a credential, and the constructor's calls of them install nothing
     const hasCommand = args.some((arg) => !arg.startsWith('-'));
@@ -1299,7 +1332,12 @@ export class GitService {
         // remote operations and on-demand LFS smudges authenticate the same
         // way and never prompt
         const invocation = await this.credentialRelay.begin(hasCommand);
-        execOptions.env = { ...invocation.env, ...identity, ...callerEnv };
+        execOptions.env = {
+          ...invocation.env,
+          ...configEnv,
+          ...identity,
+          ...callerEnv,
+        };
         const start = Date.now();
         let gitResult: IGitResult;
         let credentials: GitCredentialOutcome;
