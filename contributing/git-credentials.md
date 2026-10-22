@@ -35,6 +35,8 @@ Every invocation that runs a git command gets `GIT_TERMINAL_PROMPT=0`, an empty 
 
 The scoped reset comes last, so a Cloud host never sees the remote token while Core holds a session. `--version` and `--exec-path` get the first two variables only. They run no command and so never ask, and the constructor fires them unawaited, so installing the helper for them raced a test removing the data directory.
 
+Every invocation also gets `GIT_CONFIG_GLOBAL`, pointing at a file Core writes for `core.longpaths`, see [`testing.md`](./testing.md#what-git-was-run-with). The person's own global configuration is the first include in it, so the helpers they set there are read where they always were.
+
 ## The decisions
 
 The owner decided the design below. Each part names what it replaced.

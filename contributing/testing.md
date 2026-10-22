@@ -144,13 +144,15 @@ CI runs both on Linux, macOS and Windows, where MinGit's `sh` runs the helper's 
 
 ### What git was run with
 
-Core hands git `-c core.longpaths=true` where the command reaches the runner, and [`GitService.longPaths.test.ts`](../src/service/GitService.longPaths.test.ts) reads back what git recorded rather than what Core passed:
+Core hands git `core.longpaths=true` twice, in the global configuration it points `GIT_CONFIG_GLOBAL` at and on the command line, and [`GitService.longPaths.test.ts`](../src/service/GitService.longPaths.test.ts) reads back what git recorded rather than what Core passed:
 
-- `GIT_TRACE2_EVENT` points git at a directory, where every git process writes the command line it started with. `GIT_TRACE2_CONFIG_PARAMS` adds the value that process resolved `core.longpaths` to.
+- `GIT_TRACE2_EVENT` points git at a directory, where every git process writes the command line it started with. `GIT_TRACE2_CONFIG_PARAMS` adds one event per scope the key appears in, in the order git reads them, each carrying that scope's value rather than the one the process ended up with.
+- Which scope it came from is the point, so the assertion reads two values: the last event, which is what git resolved, and the last `global` one, which is what Core's own file put there before git opened the repository's config. Both have to be `true`.
+- A setting only the command line carried passes the first and fails the second. Naming the scope rather than "before the repository" keeps a machine whose system config happens to carry the key from standing in for Core.
 - A process git started itself, `upload-pack` of a local clone for one, carries its parent's id ahead of its own and is left out. git drops the setting for those on purpose, they are the remote side.
 - A call path that skipped the runner would leave a process without the setting, which is what the assertion catches.
 
-The deep Project itself only exists on Windows, the platform with the 260 character limit, so two cases are skipped everywhere else: whether the machine can write, read and remove a path of about 340 characters at all, and whether Core can hold a Project there.
+The deep Project itself only exists on Windows, the platform with the 260 character limit, so three cases are skipped everywhere else: whether the machine can write, read and remove a path of about 340 characters at all, whether Core can hold a Project there, and whether an Asset works there, which is Git LFS rather than git.
 
 ### Deliberately untested
 
