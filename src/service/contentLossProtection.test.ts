@@ -1,6 +1,14 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import core, {
   CoreError,
   flattenFieldDefinitions,
@@ -71,6 +79,50 @@ describe('a model change that deletes content is refused', function () {
       isDisabled: false,
       isUnique: false,
       inputWidth: '12',
+      min: null,
+      max: null,
+    };
+  }
+
+  function dynamicField(
+    id: string,
+    slug: string,
+    ofComponents: string[]
+  ): FieldDefinition {
+    return {
+      id,
+      slug,
+      valueType: 'component',
+      fieldType: 'dynamic',
+      label: { en: slug, de: slug },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: false,
+      inputWidth: '12',
+      ofComponents,
+      min: null,
+      max: null,
+    };
+  }
+
+  function entryField(
+    id: string,
+    slug: string,
+    ofCollections: string[]
+  ): FieldDefinition {
+    return {
+      id,
+      slug,
+      valueType: 'reference',
+      fieldType: 'entry',
+      label: { en: slug, de: slug },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: false,
+      inputWidth: '12',
+      ofCollections,
       min: null,
       max: null,
     };
@@ -149,11 +201,17 @@ describe('a model change that deletes content is refused', function () {
       const { collection, entry, keptId, goneId } =
         await collectionWithTwoFields();
       const before = await snapshot(project.id);
+      const writes = watchWrites();
 
       const error = await refusalOf(
         core.collections.update(withoutNote(collection, keptId))
       );
 
+      // The snapshot below cannot show a write that happened too early,
+      // because the rollback puts the file back before the call returns.
+      // The Collection's own file is written after the cascade, so a write
+      // of either file would show up here
+      expect(writes.stop()).toEqual([]);
       expect(error.type).toBe('Conflict');
       const issues = contentLossIssues(error);
       expect(issues).toHaveLength(1);
@@ -605,9 +663,13 @@ describe('a model change that deletes content is refused', function () {
         fieldDefinitions: [textField(keptId, 'kept')],
       };
       const before = await snapshot(project.id);
+      const writes = watchWrites();
 
       const error = await refusalOf(core.components.update(withoutGone));
 
+      // Nothing is written before the refusal, the Component's own file
+      // included, which the snapshot below cannot show on its own
+      expect(writes.stop()).toEqual([]);
       const issues = contentLossIssues(error);
       expect(issues).toHaveLength(2);
       expect(
@@ -814,6 +876,255 @@ describe('a model change that deletes content is refused', function () {
   );
 
   it(
+    'refuses a loss a resolution names, through both services',
+    { timeout: 120000 },
+    async function () {
+      // A narrowed allowlist keeps its field definition, so its slug is one
+      // the new definitions declare. A caller that loops over every issue
+      // and resolves it by slug reaches a loss that way, and a resolution
+      // never clears one
+      const source = await core.collections.create({
+        projectId: project.id,
+        icon: 'home',
+        name: {
+          singular: { en: 'Source', de: 'Source' },
+          plural: { en: 'Sources', de: 'Sources' },
+        },
+        description: { en: 'Sources', de: 'Sources' },
+        slug: { singular: `source-${uuid()}`, plural: `sources-${uuid()}` },
+        fieldDefinitions: [textField(uuid(), 'title')],
+      });
+      const sourceEntry = await core.entries.create({
+        projectId: project.id,
+        collectionId: source.id,
+        values: {
+          title: {
+            objectType: 'value',
+            valueType: 'string',
+            content: { en: 'Source', de: 'Quelle' },
+          },
+        },
+      });
+
+      const relatedId = uuid();
+      const linkSuffix = uuid();
+      const links = await core.collections.create({
+        projectId: project.id,
+        icon: 'home',
+        name: {
+          singular: { en: 'Link', de: 'Link' },
+          plural: { en: 'Links', de: 'Links' },
+        },
+        description: { en: 'Links', de: 'Links' },
+        slug: { singular: `link-${linkSuffix}`, plural: `links-${linkSuffix}` },
+        fieldDefinitions: [entryField(relatedId, 'related', [source.id])],
+      });
+      const linkEntry = await core.entries.create({
+        projectId: project.id,
+        collectionId: links.id,
+        values: {
+          related: {
+            objectType: 'value',
+            valueType: 'reference',
+            content: {
+              en: [
+                {
+                  objectType: 'entry',
+                  id: sourceEntry.id,
+                  collectionId: source.id,
+                },
+              ],
+              de: [],
+            },
+          },
+        },
+      });
+
+      const throughCollection = await refusalOf(
+        core.collections.update({
+          projectId: project.id,
+          id: links.id,
+          icon: 'home',
+          name: links.name,
+          description: links.description,
+          slug: links.slug,
+          fieldDefinitions: [entryField(relatedId, 'related', [links.id])],
+          resolutions: {
+            [linkEntry.id]: {
+              related: {
+                objectType: 'value',
+                valueType: 'reference',
+                content: { en: [], de: [] },
+              },
+            },
+          },
+        })
+      );
+
+      const collectionLosses = contentLossIssues(throughCollection);
+      expect(collectionLosses).toHaveLength(1);
+      expect(collectionLosses[0]!.fieldDefinitionId).toBe(relatedId);
+      const stillThere = await core.entries.read({
+        projectId: project.id,
+        collectionId: links.id,
+        id: linkEntry.id,
+      });
+      const related = stillThere.values['related'];
+      expect(
+        related?.valueType === 'reference' && related.content.en
+      ).toHaveLength(1);
+
+      const spare = await core.components.create({
+        projectId: project.id,
+        name: { en: 'Spare', de: 'Spare' },
+        slug: `spare-${uuid()}`,
+        description: null,
+        fieldDefinitions: [textField(uuid(), 'body')],
+      });
+      const held = await core.components.create({
+        projectId: project.id,
+        name: { en: 'Held', de: 'Held' },
+        slug: `held-${uuid()}`,
+        description: null,
+        fieldDefinitions: [textField(uuid(), 'body')],
+      });
+      const nestedId = uuid();
+      const holder = await core.components.create({
+        projectId: project.id,
+        name: { en: 'Holder', de: 'Holder' },
+        slug: `holder-${uuid()}`,
+        description: null,
+        fieldDefinitions: [
+          dynamicField(nestedId, 'nested', [held.id, spare.id]),
+        ],
+      });
+      const holderSuffix = uuid();
+      const holders = await core.collections.create({
+        projectId: project.id,
+        icon: 'home',
+        name: {
+          singular: { en: 'Holder', de: 'Holder' },
+          plural: { en: 'Holders', de: 'Holders' },
+        },
+        description: { en: 'Holders', de: 'Holders' },
+        slug: {
+          singular: `holder-${holderSuffix}`,
+          plural: `holders-${holderSuffix}`,
+        },
+        fieldDefinitions: [dynamicField(uuid(), 'blocks', [holder.id])],
+      });
+      const holderEntry = await core.entries.create({
+        projectId: project.id,
+        collectionId: holders.id,
+        values: {
+          blocks: {
+            objectType: 'value',
+            valueType: 'component',
+            content: [
+              {
+                id: uuid(),
+                componentId: holder.id,
+                values: {
+                  nested: {
+                    objectType: 'value',
+                    valueType: 'component',
+                    content: [
+                      {
+                        id: uuid(),
+                        componentId: held.id,
+                        values: {
+                          body: {
+                            objectType: 'value',
+                            valueType: 'string',
+                            content: { en: 'Held', de: 'Gehalten' },
+                          },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      // The added required field is resolved in the same call, so the
+      // resolution clears what it can and the loss still refuses
+      const throughComponent = await refusalOf(
+        core.components.update({
+          projectId: project.id,
+          id: holder.id,
+          name: holder.name,
+          slug: holder.slug,
+          description: holder.description,
+          fieldDefinitions: [
+            dynamicField(nestedId, 'nested', [spare.id]),
+            requiredTextField(uuid(), 'headline'),
+          ],
+          resolutions: {
+            [holderEntry.id]: {
+              nested: {
+                objectType: 'value',
+                valueType: 'component',
+                content: [],
+              },
+              headline: {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Headline', de: 'Headline' },
+              },
+            },
+          },
+        })
+      );
+
+      const componentLosses = contentLossIssues(throughComponent);
+      expect(componentLosses).toHaveLength(1);
+      expect(componentLosses[0]!.fieldDefinitionId).toBe(nestedId);
+      expect(componentLosses[0]!.fieldSlug).toBe('nested');
+      expect(
+        (Array.isArray(throughComponent.cause)
+          ? throughComponent.cause
+          : []
+        ).map((issue: { issue: string }) => issue.issue)
+      ).toEqual(['content_loss']);
+    }
+  );
+
+  it(
+    'updates a Component no Collection references, without an acceptance',
+    { timeout: 60000 },
+    async function () {
+      const keptId = uuid();
+      const goneId = uuid();
+      const unreferenced = await core.components.create({
+        projectId: project.id,
+        name: { en: 'Unreferenced', de: 'Unreferenced' },
+        slug: `unreferenced-${uuid()}`,
+        description: null,
+        fieldDefinitions: [
+          textField(keptId, 'kept'),
+          textField(goneId, 'gone'),
+        ],
+      });
+
+      const applied = await core.components.update({
+        projectId: project.id,
+        id: unreferenced.id,
+        name: unreferenced.name,
+        slug: unreferenced.slug,
+        description: unreferenced.description,
+        fieldDefinitions: [textField(keptId, 'kept')],
+      });
+
+      expect(
+        applied.fieldDefinitions.map((definition) => definition.slug)
+      ).toEqual(['kept']);
+    }
+  );
+
+  it(
     'keeps what a User typed out of the log files on the refusal path',
     { timeout: 60000 },
     async function () {
@@ -829,6 +1140,25 @@ describe('a model change that deletes content is refused', function () {
     }
   );
 });
+
+/**
+ * The files `JsonFileService` wrote while the watch was open, read off the
+ * records it logs. A snapshot cannot show a write that happened too early,
+ * because the rollback puts the file back before the call returns.
+ */
+function watchWrites(): { stop: () => string[] } {
+  const info = vi.spyOn(core.logger, 'info');
+  return {
+    stop(): string[] {
+      const written = info.mock.calls.flatMap(([record]) => {
+        const path = /^Updated file "(.+)"$/.exec(record.message)?.[1];
+        return path === undefined ? [] : [path];
+      });
+      info.mockRestore();
+      return written;
+    },
+  };
+}
 
 /** Narrows one element of a `Conflict`'s cause without asserting its shape. */
 function isEntryIssue(candidate: unknown): candidate is EntryIssue {
