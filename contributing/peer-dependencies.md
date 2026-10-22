@@ -164,9 +164,14 @@ The coupling is also a runtime one:
 
 ### The dev pin and pnpm's release-age cooldown
 
-pnpm 11 holds freshly published versions back for a cooldown period. `pnpm add -D astro@<version>` on a release younger than that writes a `minimumReleaseAgeExclude` entry into `pnpm-workspace.yaml` to bypass it.
+pnpm 12 holds freshly published versions back for a cooldown period. `pnpm-workspace.yaml` pins it as `minimumReleaseAge: 1440`, a day, and that line is committed on purpose rather than left to the default:
 
-Do not commit that entry. It is a permanent opt-out of a supply chain protection for a condition that lasts a day, and it turns into stale cruft at the next bump. Pin the newest version that is past the cooldown instead, and pick the newer one up with the next routine bump.
+- `pnpm config get minimumReleaseAge` reports it inside the repository and nothing in an empty directory, so an install reads the committed value.
+- `.github/dependabot.yml` sets `cooldown.default-days: 2` to stay above it. Keep the Dependabot side the higher of the two, or its pull requests fail at `pnpm install --frozen-lockfile` on every platform before the suite runs.
+
+`pnpm add -D astro@<version>` on a release younger than the cooldown writes a `minimumReleaseAgeExclude` entry into the same file to bypass it. Do not commit that entry.
+
+It is a permanent opt-out of a supply chain protection for a condition that lasts a day, and it turns into stale cruft at the next bump. Pin the newest version that is past the cooldown instead, and pick the newer one up with the next routine bump.
 
 ## tsdown (`^0.23.0`, optional) and typescript (`^5.0.0 || ^6.0.0 || ^7.0.0`, optional)
 
