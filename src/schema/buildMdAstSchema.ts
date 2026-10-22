@@ -22,6 +22,7 @@ import {
   mdAstImageSchema,
   mdAstInlineCodeSchema,
   mdAstLinkUrlSchema,
+  mdAstTableAlignSchema,
   mdAstTextSchema,
   mdAstThematicBreakSchema,
   isEmptyParagraphOnly,
@@ -407,14 +408,7 @@ export function buildMdAstSchemaForFeatures(
     blockMembers.push(
       z.object({
         type: z.literal('table'),
-        align: z.array(
-          z.union([
-            z.literal('left'),
-            z.literal('right'),
-            z.literal('center'),
-            z.null(),
-          ])
-        ),
+        align: z.array(mdAstTableAlignSchema),
         children: z.array(tableRowFieldSchema),
       })
     );

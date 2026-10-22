@@ -1,10 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
   mdastRender,
   extractText,
+  isTableHeaderCell,
+  tableCellAlign,
+  type MdastNodeContext,
   type MdastRenderersBase,
 } from './mdastRender.js';
-import type { MdAstRoot } from '../schema/valueSchema.js';
+import type {
+  MdAstRoot,
+  MdAstTableAlign,
+  MdAstTableCell,
+  MdAstText,
+} from '../schema/valueSchema.js';
 
 const collectionId = '11111111-2222-3333-4444-555555555555';
 const entryId = '66666666-7777-8888-9999-aaaaaaaaaaaa';
@@ -43,6 +51,59 @@ const stringRenderers: MdastRenderersBase<string> = {
   entryReference: (node, children) =>
     `<entry id="${node.entryId}">${children.join('')}</entry>`,
 };
+
+/** A table of one `align` entry per column and one row per array of texts. */
+function tableRoot(align: MdAstTableAlign[], rows: string[][]): MdAstRoot {
+  return {
+    type: 'root',
+    children: [
+      {
+        type: 'table',
+        align,
+        children: rows.map((cells) => ({
+          type: 'tableRow',
+          // The empty string stands for a cell with no content at all,
+          // which is what a blank markdown cell parses to.
+          children: cells.map((value) => ({
+            type: 'tableCell',
+            children: value === '' ? [] : [{ type: 'text', value }],
+          })),
+        })),
+      },
+    ],
+  };
+}
+
+/** What a `tableCell` override can answer about the cell it was handed. */
+interface SeenCell {
+  text: string;
+  index: number;
+  isHeader: boolean;
+  align: MdAstTableAlign;
+}
+
+/**
+ * Renders a table and records, per cell, everything its context answers.
+ * Returns nothing from the cell handler, so what is asserted is the
+ * mechanism rather than any markup.
+ */
+function recordCells(root: MdAstRoot): SeenCell[] {
+  const seen: SeenCell[] = [];
+  const recording: MdastRenderersBase<string> = {
+    ...stringRenderers,
+    tableCell: (node, _children, context) => {
+      seen.push({
+        text: extractText(node),
+        index: context.index,
+        isHeader: isTableHeaderCell(context),
+        align: tableCellAlign(context),
+      });
+      return '';
+    },
+  };
+  mdastRender(root, recording);
+  return seen;
+}
 
 describe('mdastRender (primitive)', () => {
   it('renders a single paragraph with text', () => {
@@ -386,6 +447,72 @@ describe('mdastRender (primitive)', () => {
     expect(log).toEqual(['text:a', 'emphasis', 'paragraph', 'root']);
   });
 
+  it('hands each node its index among its siblings and its ancestors', () => {
+    const seen: { value: string; index: number; ancestors: string[] }[] = [];
+    const recording: MdastRenderersBase<string> = {
+      ...stringRenderers,
+      text: (node, context) => {
+        seen.push({
+          value: node.value,
+          index: context.index,
+          ancestors: context.ancestors.map((a) => a.type),
+        });
+        return node.value;
+      },
+    };
+    const root: MdAstRoot = {
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            { type: 'text', value: 'a' },
+            {
+              type: 'strong',
+              children: [{ type: 'text', value: 'b' }],
+            },
+          ],
+        },
+      ],
+    };
+    mdastRender(root, recording);
+    expect(seen).toEqual([
+      { value: 'a', index: 0, ancestors: ['root', 'paragraph'] },
+      { value: 'b', index: 0, ancestors: ['root', 'paragraph', 'strong'] },
+    ]);
+  });
+
+  it('hands the root an empty ancestor list', () => {
+    let seen: MdastNodeContext | undefined;
+    const recording: MdastRenderersBase<string> = {
+      ...stringRenderers,
+      root: (_, children, context) => {
+        seen = context;
+        return children.join('');
+      },
+    };
+    mdastRender({ type: 'root', children: [] }, recording);
+    expect(seen).toEqual({ index: 0, ancestors: [] });
+  });
+
+  it('hands a parent the very node its children name as their parent', () => {
+    // ancestors.at(-1) is the parent, which is why no parent field exists.
+    let parent: unknown;
+    const recording: MdastRenderersBase<string> = {
+      ...stringRenderers,
+      text: (_, context) => {
+        parent = context.ancestors.at(-1);
+        return '';
+      },
+    };
+    const paragraph = {
+      type: 'paragraph' as const,
+      children: [{ type: 'text' as const, value: 'a' }],
+    };
+    mdastRender({ type: 'root', children: [paragraph] }, recording);
+    expect(parent).toBe(paragraph);
+  });
+
   it('returns whatever the root handler returns (default wrapping is renderers concern)', () => {
     const root: MdAstRoot = {
       type: 'root',
@@ -403,6 +530,82 @@ describe('mdastRender (primitive)', () => {
     expect(mdastRender(root, customRoot)).toBe(
       '<article><p>wrap me</p></article>'
     );
+  });
+});
+
+describe('a table cell asks its context where it sits', () => {
+  it('answers the header row and the column alignment for every cell', () => {
+    const seen = recordCells(
+      tableRoot(
+        ['left', null, 'right'],
+        [
+          ['H1', 'H2', 'H3'],
+          ['a', 'b', 'c'],
+        ]
+      )
+    );
+    expect(seen).toEqual([
+      { text: 'H1', index: 0, isHeader: true, align: 'left' },
+      { text: 'H2', index: 1, isHeader: true, align: null },
+      { text: 'H3', index: 2, isHeader: true, align: 'right' },
+      { text: 'a', index: 0, isHeader: false, align: 'left' },
+      { text: 'b', index: 1, isHeader: false, align: null },
+      { text: 'c', index: 2, isHeader: false, align: 'right' },
+    ]);
+  });
+
+  it('answers null alignment for a column the align array does not cover', () => {
+    const seen = recordCells(tableRoot(['center'], [['H1', 'H2']]));
+    expect(seen).toEqual([
+      { text: 'H1', index: 0, isHeader: true, align: 'center' },
+      { text: 'H2', index: 1, isHeader: true, align: null },
+    ]);
+  });
+
+  it('answers header for an empty cell in the header row', () => {
+    const seen = recordCells(tableRoot([null, null], [['', 'H2']]));
+    expect(seen).toEqual([
+      { text: '', index: 0, isHeader: true, align: null },
+      { text: 'H2', index: 1, isHeader: true, align: null },
+    ]);
+  });
+
+  it('answers no for a cell of the only row when that row is the body', () => {
+    // Nothing in mdast marks a header row, so the first row is the header
+    // and a table of one row has no body. Both helpers answer from that.
+    const seen = recordCells(tableRoot([null], [['H1'], ['a']]));
+    expect(seen.map((cell) => cell.isHeader)).toEqual([true, false]);
+  });
+
+  it('answers no and null outside a table', () => {
+    const outside: MdastNodeContext = { index: 0, ancestors: [] };
+    expect(isTableHeaderCell(outside)).toBe(false);
+    expect(tableCellAlign(outside)).toBeNull();
+  });
+});
+
+describe('type level - a handler may ignore the context', () => {
+  it('accepts a parent handler declaring only node and children', () => {
+    // Every renderers object written before the context existed stays
+    // assignable, which is what keeps a consumer compiling untouched.
+    const twoParameters = (_node: MdAstTableCell, children: string[]) =>
+      `<td>${children.join('')}</td>`;
+    expectTypeOf(twoParameters).toMatchTypeOf<
+      MdastRenderersBase<string>['tableCell']
+    >();
+  });
+
+  it('accepts a leaf handler declaring only the node', () => {
+    const oneParameter = (node: MdAstText) => node.value;
+    expectTypeOf(oneParameter).toMatchTypeOf<
+      MdastRenderersBase<string>['text']
+    >();
+  });
+
+  it('accepts a total renderers object built entirely of such handlers', () => {
+    // stringRenderers above is exactly that object, declared with no
+    // context parameter anywhere.
+    expectTypeOf(stringRenderers).toMatchTypeOf<MdastRenderersBase<string>>();
   });
 });
 

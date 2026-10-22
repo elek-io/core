@@ -126,7 +126,9 @@ The three required handlers are ~20 lines for the typical case. Without the help
 
 ### Defaults and what you'll commonly override
 
-The defaults emit plain semantic HTML - no class names, no `rel`/`target`, no slug anchors, no syntax highlighting. The shape is `(node, children) => ...` for parents and `(node) => ...` for leaves. Each snippet below goes into the renderers object at the `mdastRender` call in the template, next to the three required handlers. Common override patterns:
+The defaults emit plain semantic HTML - no class names, no `rel`/`target`, no slug anchors, no syntax highlighting.
+
+A handler's shape is `(node, children, context) => ...` for a parent and `(node, context) => ...` for a leaf, and one that does not need the [context](#where-a-node-sits) leaves the parameter out. Each snippet below goes into the renderers object at the `mdastRender` call in the template, next to the three required handlers. Common override patterns:
 
 **Slug-id anchors on headings (table of contents).** `extractText` is exported from `@elek-io/core` and returns the concatenated plain text of an mdast node.
 
@@ -209,6 +211,24 @@ const footnotes: astroHTML.JSX.Element[] = [];
 root: (_, children) => <article class="prose">{children}</article>,
 ```
 
+### Where a node sits
+
+An mdast node does not carry its own position, and some of what a handler has to decide is only knowable from it. A table cell is the clear case: nothing on the cell says whether it heads a column, and the alignment of its column sits on the table.
+
+So every handler receives an `MdastNodeContext` as its last argument, exported from `@elek-io/core`:
+
+| Field | Holds |
+| --- | --- |
+| `index` | the node's position among its parent's children, 0 for the root |
+| `ancestors` | every ancestor, the root first and the direct parent last, so `ancestors.at(-1)` is the parent |
+
+Two things follow from that shape:
+
+- There is no `parent` field, because `ancestors.at(-1)` already is one.
+- One context object is shared by a node's siblings. Read it, never write to it.
+
+A handler that does not need it declares fewer parameters, which is why every renderers object written before the context existed still compiles.
+
 ### Reusable per-site renderer
 
 For sites that render markdown in multiple places, write the overrides once in a small Astro component. The per-site rendering policy then lives in one file, and every page passes a tree to it:
@@ -248,7 +268,7 @@ Core does not ship this component itself - it would be a thin one-file wrapper, 
 
 If you're targeting a framework Core doesn't ship a wrapper for yet (React, Vue, Solid, SvelteKit and so on), use the framework-agnostic primitive directly. `mdastRender` and `MdastRenderersBase<T>` are exported from `@elek-io/core`.
 
-The primitive is the same typed fold the Astro binding wraps. `T` is your framework's element type, and you supply one handler per node type. Parents receive their already-rendered `children`, leaves receive just the node.
+The primitive is the same typed fold the Astro binding wraps. `T` is your framework's element type, and you supply one handler per node type. Parents receive their already-rendered `children`, leaves receive just the node, and both receive the [context](#where-a-node-sits) last.
 
 The example below uses React (`T = ReactNode`). For Vue bind `T = VNode`, for Solid `T = JSX.Element`. Only the element factory changes, the structure stays identical.
 
