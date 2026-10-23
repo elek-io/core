@@ -386,7 +386,7 @@ describe('the loggers an astro build writes through', function () {
       'debug: Executed',
       'info: Rebuilding Collection slug index for Project',
     ]);
-  }, 60000);
+  });
 
   it('writes the warning about deriving every collection through Core', async function () {
     const project = await createProject();
@@ -402,5 +402,5 @@ describe('the loggers an astro build writes through', function () {
     expect(warnings.map((line) => line.message)).toEqual([
       expect.stringContaining('elekCollections()'),
     ]);
-  }, 60000);
+  });
 });

@@ -292,7 +292,7 @@ export const collections = {
       'info: Provisioning',
       'info: Provisioned',
     ]);
-  }, 120000);
+  });
 
   it('should warn through the same logger when the remote is unreachable', async function () {
     // docs/usage.md promises that the integration's own warnings stay at
@@ -313,7 +313,7 @@ export const collections = {
       'warn: Could not reach the remote of Project',
       'info: Provisioned',
     ]);
-  }, 120000);
+  });
 
   // What elek() then does with such a config is asserted through a real
   // sync in src/index.astro.mixed.test.ts, which needs its own file
