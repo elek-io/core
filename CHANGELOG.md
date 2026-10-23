@@ -1,5 +1,178 @@
 # @elek-io/core
 
+## 0.26.0
+
+### Minor Changes
+
+- 6938f41: **Component items in Astro name their Component.** A `dynamic` field arrived on `entry.data` as `{ id, componentId, values }`, so `componentId` was the only thing a page could dispatch on. That is a UUID: nothing you want in a template, and a different one after the content is re-created. Every item now carries `componentSlug`, the slug you named the Component, beside the id it already had:
+  
+  ```astro
+  ---
+  function unhandled(section: never): never {
+    throw new Error(`Unhandled Component "${String(section)}"`);
+  }
+  ---
+  {
+    sections.map((section) => {
+      switch (section.componentSlug) {
+        case 'hero':
+          return <Hero values={section.values} />;
+        case 'quote':
+          return <Quote values={section.values} />;
+        default:
+          return unhandled(section);
+      }
+    })
+  }
+  ```
+  
+  The item type is a union discriminated on `componentSlug`, so `values` narrows to the Component of its branch. With that `default` branch, `astro check` then reports a Component the field allows that the dispatch does not handle, and a Component it handles that was renamed. `astro build` writes the types without reading them, so run both. `@elek-io/core/docs/usage.md` shows the dispatch, one component per Component, and what an open `ofComponents` needs instead of an exhaustive one.
+  
+  `componentId` stays on every item and on every member of the union, so nothing that reads it has to change and it still addresses the Component through Core's own methods, the local API and `elek generate:types`.
+  
+  Nothing is migrated. The loaders derive what they store from the Project on every sync, so the key appears after the upgrade. Astro builds a collection's schema and types once, when it loads the content config, so restart a running dev server to pick them up.
+  
+  **Two slugs that derive one name fail the build**, naming both sides and the name they share. Two Components carrying one slug name the `dynamic` field with them, because that is what it discriminates its items on. One of the two was Zod's `Duplicate discriminator value` while an Entry was validated, the other was two declarations of one type name in the file you compile, and `hero-1` and `hero1` are enough to reach it. A `dynamic` field with an empty `ofComponents` in a Project that has no Components also emits a well formed item type now, `never`, where it emitted a type alias with no right hand side. A `dynamic` field that lists one Component twice allows it once now, so it derives one union member for that Component rather than two, in the Astro types and in `elek generate:types` alike.
+  
+  **The loaders raise `CoreError`** while they load content, the way the rest of Core does, rather than a plain `Error`. An item whose Component the Project cannot resolve names the Entry, the field and the Component, and nothing an editor typed.
+- 043e54c: **Git against elek.io Cloud's git hosts with a session.** Core answers git's credential requests for elek.io Cloud's git hosts itself. The first time a session meets a Project, it asks `POST /management/v1/projects/{id}/git-token` when it holds no token for that git host, and `PUT /management/v1/projects/{id}/git-access` when it does. It keeps one token per host in memory. The person's credential store is never asked about a Cloud host, and every other host keeps the person's own helpers.
+  
+  - **New option `cloud.gitUrl`** and environment variable `ELEK_IO_CLOUD_GIT_URL`, with the same precedence as `cloud.url`. They name the git hosts' URL pattern. Unset, it is derived from `cloud.url`: `https://api.<zone>` gives `https://*.git.<zone>`. `core.options.cloud.gitUrl` holds the pattern in use, or `null` when `cloud.url` carries no `api.` label, and Core then installs no helper and logs a warning.
+  - **A refused git token is asked for again once.** Core drops it and runs the command once more. A second refusal throws `Unauthorized`.
+  - **Signed out**, a git command against a Cloud host throws `Unauthorized`, unless `ELEK_IO_REMOTE_ACCESS_TOKEN` is set, which then reaches Cloud's hosts too.
+  - **A failed call to elek.io Cloud is the git command's error**: `NotFound` for a Project the session cannot see, `RateLimited` until `Retry-After` passes, and `PreconditionFailed` when elek.io Cloud or the git host is unreachable, so `provision()` keeps its offline fallback.
+  - **One session per process.** Each `git-token` replaces the session's older tokens on that host, so two processes or two Cores sharing a session revoke each other's.
+  - **Inside Electron**, Core's helper runs the app's binary with `ELECTRON_RUN_AS_NODE=1`, so keep Electron's `RunAsNode` fuse on.
+  - Core listens on a random loopback port for its helper, opened by the first git command and closed by `dispose()`.
+  
+  **`ELEK_IO_REMOTE_ACCESS_TOKEN` goes through the same helper instead of askpass.** A refused token now fails a Git LFS transfer with `Unauthorized` instead of retrying it forever. The token no longer reaches git's environment, and it works inside Electron.
+  
+  **git never runs an askpass program.** Core sets `GIT_ASKPASS` empty for every git command, so a desktop's `SSH_ASKPASS` or a configured `core.askPass` no longer opens a dialog for a remote without a credential. The command throws `Unauthorized` instead.
+  
+  **New exports** `cloudGitTokenResponseSchema` and `cloudGitAccessResponseSchema`, the two answers above.
+- 3f8f942: **A model change that would delete stored content is refused.** `collections.update()` and `components.update()` used to apply three changes that permanently drop content, without asking and without reporting it: removing a field definition, narrowing a `dynamic` field's `ofComponents` and narrowing an `entry` field's `ofCollections`. The values were dropped from every Entry and the change was committed. Both methods now throw `Conflict` before anything is written, and the Project is left byte for byte as it was. See `docs/schema-changes.md`.
+  
+  **If your script relied on the silent apply, it has to accept the loss.** Catch the `Conflict`, read the `content_loss` issues off `error.cause`, and send the same update again with `acceptedContentLoss`, a list of field definition ids:
+  
+  ```typescript
+  import { CoreError, type EntryIssue } from '@elek-io/core';
+  
+  try {
+    await core.collections.update({ ...collection, projectId, fieldDefinitions });
+  } catch (error) {
+    if (error instanceof CoreError && error.type === 'Conflict') {
+      const issues = error.cause as EntryIssue[];
+      await core.collections.update({
+        ...collection,
+        projectId,
+        fieldDefinitions,
+        acceptedContentLoss: issues
+          .filter((issue) => issue.issue === 'content_loss')
+          .map((issue) => issue.fieldDefinitionId),
+      });
+    }
+  }
+  ```
+  
+  - **An id you do not name still refuses**, so an acceptance written for one edit never carries a second one through. There is no default, no constructor option and no Project setting that turns the guard off, and sending the same update again unchanged refuses again.
+  - **An update that drops no stored value is never refused.** A removed field no Entry holds a value for, a Collection with no Entries, a Component no Collection references, an empty allowlist, a widened or reordered one, a renamed slug and an added field all apply as before.
+  - **New issue type `content_loss`**, reported in the same list and the same error as the issues you already resolve, so one call reports everything about one update. Each one carries the Collection, the Entry, the field definition's id and slug, the Component item where there is one, the language where the drop is per language, and a `currentValue` holding exactly what would go.
+  - **New exported types** `EntryIssue`, `EntryIssueType`, `EntryIssueLocation`, `EntryTransformIssue`, `UniqueCollisionIssue`, `ContentLossIssue`, `ContentLossReason`, `ValueLoss`, `FieldRemovedLoss`, `ComponentsNarrowedLoss` and `CollectionsNarrowedLoss`. `EntryIssue` is a discriminated union now, so `issue.currentValue` needs a `switch` on `issue` first and a type added later stops an exhaustive consumer from compiling.
+  - **Narrowing a Component's own `dynamic` or `entry` field** answered with a `constraint_violation` asking for a corrected Value, which no Value could satisfy. It answers with the same refusal as a Collection's now, and applies once accepted.
+  - **`projects.upgrade()` accepts the content a migration Core ships deletes**, and nothing else, so a Project whose migration drops a field definition still upgrades. Each accepted loss is written to the log as ids and a count.
+- 2b93c56: **Every dependency is up to date.** The dependencies Core ships inside its bundles moved like this:
+  
+  | Dependency                   | From    | To      |
+  | ---------------------------- | ------- | ------- |
+  | `@hono/node-server`          | 2.0.12  | 2.1.5   |
+  | `@hono/zod-openapi`          | 1.5.1   | 1.6.3   |
+  | `@scalar/hono-api-reference` | 0.11.11 | 0.12.13 |
+  | `@sindresorhus/slugify`      | 3.0.0   | 3.0.1   |
+  | `fs-extra`                   | 11.4.0  | 11.4.1  |
+  | `hono`                       | 4.12.32 | 4.13.13 |
+  | `mime`                       | 4.1.0   | 4.1.1   |
+  | `p-queue`                    | 9.3.3   | 10.0.0  |
+  | `uuid`                       | 14.0.1  | 14.0.3  |
+  
+  `semver`, `winston` and `winston-daily-rotate-file` stayed where they were. No export of any entry point was added, removed or renamed. The published declarations do carry `z.ZodTypeAny` where they used to carry `z.ZodType`. Zod 4.4.3 exported `ZodTypeAny` as a second name for `ZodType`, and Zod 4.6 declares it as a deprecated alias of its own, so the name Core's source already wrote now shows in the declarations. It resolves to your copy of Zod either way.
+  
+  **One behavior changed, in slugs.** slugify 3.0.1 fixed a contraction or a possessive followed by punctuation, so `Ada's, blog` now gives `adas-blog` where it used to give `ada-s-blog`. A slug already stored keeps its value, and only a slug derived after the update differs.
+  
+  **tsdown's peer range is `^0.23.0`**, up from `^0.22.3`, and it stays inside the minor the suite proves. It is the optional peer `elek generate:client` and `elek generate:types` need with `js` as the language, so install tsdown 0.23 or later alongside Core if you use either. `typescript` is unchanged at `^5.0.0 || ^6.0.0 || ^7.0.0`, which is what tsdown 0.23 declares.
+  
+  **Generating JavaScript prints no deprecation warning.** Core passed the compiler an option it had deprecated, which printed a warning a consumer could only read as something they had done.
+- 2ac5e2e: **The documentation inside the package resolves by name.** `exports` maps `./docs/*`, so you reach the reference of the exact Core version you install without knowing where the package keeps its files. The subpath answered with `ERR_PACKAGE_PATH_NOT_EXPORTED` before.
+  
+  ```typescript
+  const indexUrl = import.meta.resolve('@elek-io/core/docs/index.md');
+  ```
+  
+  This is an addition to `exports` and nothing more. It adds no file to the package, and no other entry point changes.
+- 1857d0d: **The documentation no longer covers elek.io Cloud.** The pages `docs/cloud-account.md`, `docs/cloud-git.md` and `docs/reporting.md` are gone from the package, and so is what the pages that stay said about the `cloud` options, the `ELEK_IO_CLOUD_*` variables and elek.io Cloud's git hosts. They described calls you cannot make, because elek.io Cloud is not released. The documentation comes back with elek.io Cloud.
+  
+  The same release makes every page of `docs/` resolvable by name, and these three are not among them. `@elek-io/core/docs/cloud-account.md`, `@elek-io/core/docs/cloud-git.md` and `@elek-io/core/docs/reporting.md` do not resolve. `core.logger.tail()` keeps its documentation: what `docs/reporting.md` said about it is in `docs/usage.md` from this release.
+  
+  Nothing is removed from the code. `core.cloud.account`, `core.cloud.reports`, the `cloud` options and the `ELEK_IO_CLOUD_*` variables are all still there and every type stays exported. Until the pages are back, Core's repository describes the options in `contributing/cloud.md` and the git side in `contributing/git-credentials.md`.
+- b4e6c48: **dugite `^3.2.3` is required.** The peer range rises from `^3.0.0`. dugite 3.2.3 is the first release whose embedded Linux git links `libcurl.so.4`. Earlier releases link `libcurl-gnutls.so.4`, which Fedora, RHEL, openSUSE and NixOS do not ship, so every fetch, push and clone against an HTTP(S) remote failed there. Update dugite alongside Core.
+  
+  **A git that cannot load a shared library throws `PreconditionFailed`** naming the library, rather than `Internal` with the loader's message only in `error.cause`. This covers a missing library and a `libcurl.so.4` built for another TLS backend.
+- 2613bda: **A rename that breaks a build releases as a major.** A Project that changes a Component's slug or a Collection's plural slug now gets a major Release where it got a patch before. A Project at 0.2.0 that changes a Component's slug now releases 1.0.0 where it released 0.2.1 before. `prepare()` reports each of these as a change of its own, and `create()` takes the bump from it:
+  
+  - **A Component's slug changed.** Its generated type names are built from the slug, the slug addresses it in the API, and in Astro every item of the Component carries it as `componentSlug`, which a page's dispatch switches on. `componentChanges` carries `slugChanged`.
+  - **A Collection's plural slug changed.** Its generated type names, its generated client key and its Astro collection name are built from the plural slug, and the plural slug addresses it in the API. `collectionChanges` carries `slugChanged`. A changed singular slug stays a patch, because no generated name, key or path is built from it.
+  - **A `dynamic` field's `ofComponents` changed.** The generated types restate the list, so narrowing it, widening it and replacing an empty list with an explicit one all change them. Narrowing also strips the Component items it no longer allows, and an update that would strip one is refused until you accept the loss. `fieldChanges` and `componentFieldChanges` carry `ofComponentsChanged`.
+  
+  Nothing else changes its bump, and no Project is migrated: one released before this version keeps the version it got.
+  
+  **Three new values.** `CollectionChangeType` and `ComponentChangeType` gain `slugChanged`, `FieldChangeType` gains `ofComponentsChanged`. An exhaustive `switch` or a map keyed by one of them stops compiling until it handles them.
+  
+  `@elek-io/core/docs/releases.md` now lists every change a diff can carry with the bump it contributes, and says what a major Release asks of a consumer. The `release` channel follows the newest Release whatever its bump, so pin an exact version to decide yourself when to move.
+- 2b93c56: **Every string length Core bounds is counted in Unicode code points.** Zod counts that way from 4.5.0 on, and Core follows it instead of keeping a count of its own. A smiling face emoji counts as one where it used to count as two, and a flag counts as two where it used to count as four.
+  
+  What that lets through, and what it now refuses:
+  
+  - A report `message`, capped at 5000, takes 5000 emoji where it used to take 2500.
+  - An account password of 12 to 128 now needs 12 emoji. Six used to be enough and are refused with `BadRequest`.
+  - A User's `name`, capped at 256, takes the same way more astral characters.
+  - A string Field's `min` and `max` and the `defaultValue` checked against them agree again, so a definition whose default is two emoji inside `min: 2, max: 2` is accepted where it used to be refused.
+  
+  Nothing stored changes, and no limit moved. A counter in your own interface has to count the same way, for example with `[...value].length`, or it disagrees with what Core accepts. elek.io Cloud holds limits of its own, so a value Core accepts can still be refused there.
+- 917fea2: **A rendered table has column headers.** Core's renderers emitted every cell of a table as `<td>` in one flat `<table>`, so a screen reader announced no column headers and the table failed WCAG 1.3.1 Info and relationships at level A. Nothing could be done about it from the outside either: `table.align` reached the `table` handler, and the cell that had to apply it was given only its own node and its rendered children.
+  
+  **The output changes for every consumer who never touched a renderer**, which is the point of the fix. The defaults of `@elek-io/core/astro` now emit:
+  
+  - The first row's cells as `<th scope="col">` inside `<thead>`, and every row below as `<td>` inside `<tbody>`. Neither wrapper is emitted empty, so a table of one row is a header with no body and a table of no rows is an empty `<table>`.
+  - A column's alignment as `style="text-align:left|center|right"` on every cell of that column, header and body alike. A column the markdown left unaligned gets no style at all, so its body cells keep the start edge of the reading direction. Its header cell is centered, because that is what a user agent does with a `<th>` of its own accord, and only your own CSS can change that.
+  
+  There is no migration step, because what changed is the markup. CSS that reached a table's header cells through `tr td` selects `thead th` now.
+  
+  **Every renderer is handed an `MdastNodeContext` as its last argument**, holding `index` and `ancestors` with the root first and the direct parent last. It is what a handler cannot read off its own node. A handler that does not need it declares fewer parameters, so every renderers object that compiles today keeps compiling.
+  
+  **New exports** `MdastNodeContext`, and `isTableHeaderCell` and `tableCellAlign`, which answer a table cell's two questions from its context so an override of `tableCell` does not have to reimplement the default. `MdAstTableAlign` and `mdAstTableAlignSchema` name a column's alignment, and `ParentHandler` and `LeafHandler` name the two handler shapes `MdastRenderersBase<T>` is built from.
+  
+  A table still has no `<caption>`, because mdast has no caption node for Core to render one from. A page that puts a wide table into a horizontally scrolling box has to name that region itself. See `docs/markdown-content.md`.
+- 2b93c56: **Zod `^4.6.6` is required.** The peer range rises from `^4.3.6`. Astro raised its own Zod dependency to `^4.6.6` in 7.4.0, and Core's floor is the highest Zod floor in the tree, so anything below it lets another package pull a second physical Zod.
+  
+  Two copies break the Astro integration at runtime and every schema Core hands you at type-check time, because Zod v4 brands a schema with its exact version. The floor is the same for everyone, even though Astro itself is an optional peer.
+  
+  Raise your own Zod to 4.6.6 or later when you take this Core, then run your package manager's dedupe. `pnpm why zod`, `npm ls zod` or `yarn why zod` has to report exactly one version.
+
+### Patch Changes
+
+- 47ed119: **Astro's default renderers render every field their node carries.** Four defaults in `@elek-io/core/astro` dropped part of the node they were given, so a consumer who supplied only the three required handlers got markup the markdown does not say. Their output changes with no change to your code, so look at your CSS where you style these:
+  
+  - **`list`** writes `<ol start="5">` for a list authored as "5.". Nothing is written for a list that starts at 1 or carries no start, and a list starting at 0 keeps `start="0"`.
+  - **`listItem`** renders `<input type="checkbox" disabled>` ahead of a task item's text, with `checked` on it only where the item is checked. The box is named through `aria-label` with the text of the item's own blocks, a list directly inside the item left out, so a screen reader meets more than a checked state and that list's items keep their names to themselves. An item carrying no text, or only whitespace, gets no name. An item whose `checked` is null renders as before. No class name is added, so such an item keeps its list marker beside the box, and `li > p { display: inline }` is the CSS that puts box and text on one line.
+  - **`footnoteReference`** carries `id="fnref-<identifier>"`, which is what the way back below points at.
+  - **`footnoteDefinition`** ends with `<a href="#fnref-<identifier>" aria-label="Back to content">↩</a>`.
+  
+  `docs/markdown-content.md` gained two sections: the five fields a default still drops and what to override for each, and where a default cannot reach, which names the placements the defaults leave as they are and what an override or CSS does about them.
+- aa5180f: **`ELEK_IO_LOG_LEVEL` sets the level of Core's own logger and nothing else.** `docs/usage.md` said that setting it to `error` keeps Core out of an Astro build's output.
+  
+  The setting reaches `core.logger` alone. At `error` a build loses Core's own lines, and that list is open: the line each Core writes when it starts, the one the integration's writes when it is disposed, the line per slug index rebuild, every git command that changes the copy `elek()` fetches, and every warning Core raises. Core's log file then holds nothing about the build but what failed. The `[elek]`, `[elek-assets]` and `[elek-entries]` lines stay, because the integration and the loaders report through Astro's logger.
+  
+  The docs now say that, and point at `astro build --silent` for the lines the setting does not cover. That flag silences everything Astro's own logger writes, the loader lines included, and it does not reach Core's logger, so a build that prints nothing needs `--silent` and `ELEK_IO_LOG_LEVEL=error` together. Either way a failing build still prints the error that stopped it and still exits non-zero. No behavior changed.
+
 ## 0.25.1
 
 ### Patch Changes
