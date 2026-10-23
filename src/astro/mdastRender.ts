@@ -45,10 +45,11 @@ function renderHeading(
 
 /**
  * The accessible name of a task item's checkbox: the text of the item's own
- * blocks, with a nested list left out. A nested item carries a checkbox of
- * its own and its text names that one, so a parent's name stops where its
- * children begin. Null where nothing but whitespace is left, an image on its
- * own or a paragraph of spaces, because an empty name is worth no attribute.
+ * blocks, with a list directly inside the item left out, whether it holds
+ * tasks that name a checkbox of their own or plain items. A list deeper in,
+ * inside a blockquote for one, is still taken in. Null where nothing but
+ * whitespace is left, an image on its own or a paragraph of spaces, because
+ * an empty name is worth no attribute.
  */
 function taskItemName(node: MdAstListItem): string | null {
   const ownBlocks = {

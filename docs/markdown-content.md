@@ -229,7 +229,7 @@ Every default renders every field of its node except these six. Nothing else of 
 A handler is given its own node and its already rendered children, never its position or its siblings. Five things follow, and the defaults ship them visibly rather than working around them.
 
 - **A task item's checkbox precedes its text** instead of opening the item's first paragraph, which is where remark puts it. The paragraph arrives already rendered, so an override cannot reach inside it either. `li > p { display: inline }` is the CSS that puts box and text on one line, and it keeps the list marker, which the default leaves in place by adding no class name.
-- **A task item's checkbox is named with the item's own text.** A `<label>` cannot wrap blocks that arrive already rendered, so the name goes on an `aria-label` instead and is read twice, once as the box's name and once as the text. A list directly inside the item is left out, since each of its items names a box of its own, and an item whose text is an image or only whitespace gets no attribute.
+- **A task item's checkbox is named with the item's own text.** A `<label>` cannot wrap blocks that arrive already rendered, so the name goes on an `aria-label` instead and is read twice, once as the box's name and once as the text. A list directly inside the item is left out, whether it holds tasks or plain items, and an item whose text is an image or only whitespace gets no attribute.
 - **A note's way back follows its blocks** instead of ending its last paragraph, for the same reason.
 - **A tight list item keeps its paragraph**, so `<li><p>text</p></li>` rather than `<li>text</li>`. It is valid and semantic, and it is one `<p>` of margin away from what other renderers emit.
 - **Footnote ids are built from the identifier alone.** Two trees on one page claim the same `fn-` and `fnref-` ids, and an anchor then lands on whichever rendered first. A note referenced twice repeats its reference id, so its way back lands on the first reference. A default cannot take a prefix, because one `astroDefaults` object serves every render. Give both handlers one of your own:
@@ -309,9 +309,9 @@ import {
 import type { ReactNode } from 'react';
 
 // A task item's name is the text of its own blocks, a list directly inside
-// the item left out, because each of that list's items names a checkbox of
-// its own. Trimmed, so an item whose text is only whitespace gets no name
-// rather than a name of spaces.
+// the item left out, whether its items are tasks naming a checkbox of their
+// own or plain items. Trimmed, so an item whose text is only whitespace gets
+// no name rather than a name of spaces.
 function taskItemName(node: MdAstListItem): string | undefined {
   const ownBlocks = {
     ...node,
