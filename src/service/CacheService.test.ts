@@ -70,7 +70,7 @@ describe('caches after git rewrites the working tree', function () {
       slug: 'products',
     });
     expect(products.id).toBe(collection.id);
-  }, 60000);
+  });
 
   it('keeps a Collection slug unique against the tree the reset left behind', async function () {
     const { project } = await projectWithRenamedCollection();
@@ -78,7 +78,7 @@ describe('caches after git rewrites the working tree', function () {
     await expect(createCollection(project.id)).rejects.toMatchObject({
       type: 'Conflict',
     });
-  }, 60000);
+  });
 
   it('resolves a Component slug against the tree the reset left behind', async function () {
     const { project, component } = await projectWithRenamedComponent();
@@ -91,7 +91,7 @@ describe('caches after git rewrites the working tree', function () {
       slug: 'hero',
     });
     expect(hero.id).toBe(component.id);
-  }, 60000);
+  });
 
   it('keeps a Component slug unique against the tree the reset left behind', async function () {
     const { project } = await projectWithRenamedComponent();
@@ -99,7 +99,7 @@ describe('caches after git rewrites the working tree', function () {
     await expect(createComponent(project.id)).rejects.toMatchObject({
       type: 'Conflict',
     });
-  }, 60000);
+  });
 });
 
 /**
@@ -142,7 +142,7 @@ describe('caches with caching off', function () {
         idOrSlug: 'products',
       })
     ).toBe(replacement.id);
-  }, 60000);
+  });
 });
 
 /**
@@ -222,5 +222,5 @@ describe('caches while a Collection is being created', function () {
         plural: 'articles',
       })
     ).rejects.toMatchObject({ type: 'Conflict' });
-  }, 60000);
+  });
 });

@@ -109,7 +109,7 @@ describe('the Entries loader while astro dev runs', function () {
     expect(store.has(entry.id)).toBe(true);
     expect(warnings).toEqual([]);
     expect(errors).toEqual([]);
-  }, 60000);
+  });
 
   it('asks for a restart when the Collection it loads is renamed', async function () {
     const project = await createProject();
@@ -124,7 +124,7 @@ describe('the Entries loader while astro dev runs', function () {
     expect(warnings).toEqual([
       expect.stringContaining('was renamed or replaced'),
     ]);
-  }, 60000);
+  });
 
   it('asks for a restart when another Collection takes over its slug', async function () {
     const project = await createProject();
@@ -149,7 +149,7 @@ describe('the Entries loader while astro dev runs', function () {
     expect(warnings).toEqual([
       expect.stringContaining('was renamed or replaced'),
     ]);
-  }, 60000);
+  });
 });
 
 describe('hasImageExtension', function () {

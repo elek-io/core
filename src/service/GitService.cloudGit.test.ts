@@ -160,7 +160,7 @@ describe('git with an elek.io Cloud session', function () {
         expect(content).not.toContain('session-two');
       }
     }
-  }, 120000);
+  });
 
   it('ends an LFS push whose token the git host refuses, after asking once more', async function () {
     const t = await setUp();
@@ -183,7 +183,7 @@ describe('git with an elek.io Cloud session', function () {
     expect(lfsRequests.length).toBeGreaterThan(0);
     expect(lfsRequests.length).toBeLessThan(12);
     expect(await t.recorded()).toEqual([]);
-  }, 60000);
+  });
 
   it('asks again for a grant taken back, and throws NotFound once the Project is gone', async function () {
     const t = await setUp();
@@ -205,7 +205,7 @@ describe('git with an elek.io Cloud session', function () {
       project.id
     );
     expect(t.cloudGit.callsTo('git-access')).toHaveLength(1);
-  }, 60000);
+  });
 
   it("throws the Cloud call's error when Cloud could not reach the git host", async function () {
     const t = await setUp();
@@ -218,7 +218,7 @@ describe('git with an elek.io Cloud session', function () {
       'PreconditionFailed',
       'could not reach the git host'
     );
-  }, 60000);
+  });
 
   it("keeps the person's own helper for a host that is not Cloud's", async function () {
     const t = await setUp(
@@ -238,7 +238,7 @@ describe('git with an elek.io Cloud session', function () {
     expect(asked).toContain('keychain get');
     expect(asked.some((line) => line.startsWith('askpass'))).toBe(false);
     expect(t.cloudGit.calls).toEqual([]);
-  }, 60000);
+  });
 });
 
 describe('git signed out of elek.io Cloud', function () {
@@ -254,7 +254,7 @@ describe('git signed out of elek.io Cloud', function () {
     );
     expect(await t.recorded()).toEqual([]);
     expect(t.cloudGit.calls).toEqual([]);
-  }, 60000);
+  });
 
   it('reaches a Cloud remote with ELEK_IO_REMOTE_ACCESS_TOKEN alone', async function () {
     const t = await setUp(
@@ -278,7 +278,7 @@ describe('git signed out of elek.io Cloud', function () {
     expect(viaToken.length).toBeGreaterThan(0);
     expect(viaToken.every((request) => request.status === 200)).toBe(true);
     expect(await t.recorded()).toEqual([]);
-  }, 90000);
+  });
 
   it('ends an LFS push whose ELEK_IO_REMOTE_ACCESS_TOKEN the git host refuses', async function () {
     const t = await setUp(
@@ -307,5 +307,5 @@ describe('git signed out of elek.io Cloud', function () {
     expect(lfsRequests.length).toBeGreaterThan(0);
     expect(lfsRequests.length).toBeLessThan(12);
     expect(await t.recorded()).toEqual([]);
-  }, 60000);
+  });
 });

@@ -29,11 +29,11 @@ describe('Listing entity files', function () {
     const collection = await createCollection(project.id);
     collectionId = collection.id;
     await createEntry(project.id, collection.id, asset.id);
-  }, 60000);
+  });
 
   afterAll(async function () {
     await project.destroy();
-  }, 30000);
+  });
 
   it('should not warn about the files Core writes itself', async function () {
     const warn = vi.spyOn(core.logger, 'warn');
@@ -45,7 +45,7 @@ describe('Listing entity files', function () {
 
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
-  }, 30000);
+  });
 
   it('should still warn about a file it does not recognize', async function () {
     const stray = Path.join(
@@ -63,5 +63,5 @@ describe('Listing entity files', function () {
     ).toBe(true);
     warn.mockRestore();
     await Fs.remove(stray);
-  }, 30000);
+  });
 });

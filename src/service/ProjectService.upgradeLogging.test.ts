@@ -47,7 +47,7 @@ describe('upgrading a Project does not log what the User wrote', function () {
       id: entry.id,
       values,
     });
-  }, 60000);
+  });
 
   it('keeps authored content out of the log file', async function () {
     // `force` runs the whole upgrade path over every entity even though the
@@ -57,7 +57,7 @@ describe('upgrading a Project does not log what the User wrote', function () {
 
     expect(await readLogs()).not.toContain(secret);
     await destroy();
-  }, 60000);
+  });
 });
 
 async function readLogs(): Promise<string> {

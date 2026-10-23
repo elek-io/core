@@ -24,7 +24,7 @@ describe('provisionAction', function () {
     // it must exist before the bare remote is seeded there
     getCore();
     seed = await seedRemoteWithRelease();
-  }, 60000);
+  });
 
   afterEach(function () {
     vi.unstubAllEnvs();
@@ -45,7 +45,7 @@ describe('provisionAction', function () {
       await Fs.readJson(Path.join(projectPath, 'project.json'))
     );
     expect(projectFile.version).toEqual(seed.releaseVersion);
-  }, 30000);
+  });
 
   it('prefers the ELEK_IO_CHANNEL environment variable over the given ref', async function () {
     vi.stubEnv('ELEK_IO_CHANNEL', 'draft');
@@ -60,7 +60,7 @@ describe('provisionAction', function () {
     expect(
       await core.git.branches.current(core.util.pathTo.project(seed.projectId))
     ).toEqual('draft');
-  }, 30000);
+  });
 
   it('rejects with the typed error instead of exiting the process', async function () {
     let error: unknown = null;
@@ -76,5 +76,5 @@ describe('provisionAction', function () {
 
     expect(error).toBeInstanceOf(CoreError);
     expect(error instanceof CoreError && error.type).toEqual('NotFound');
-  }, 30000);
+  });
 });

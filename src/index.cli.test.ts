@@ -31,7 +31,7 @@ describe('CLI', function () {
     asset = await createAsset(project1.id);
     collection = await createCollection(project1.id);
     entry = await createEntry(project1.id, collection.id, asset.id);
-  }, 60000);
+  });
 
   afterAll(async function () {
     await core.api.stop();
@@ -105,7 +105,7 @@ describe('CLI', function () {
     // The compiler warns about an option it has deprecated, and a consumer
     // reads that warning as something they did
     expect(`${stdout}${stderr}`).not.toMatch(/deprecated/i);
-  }, 10000);
+  });
 
   it('should be able to generate & compile the types as JavaScript', async function () {
     const { stdout, stderr } = await execCommand({
@@ -121,7 +121,7 @@ describe('CLI', function () {
     const files = await fs.readdir('./.elek.io/types-out');
     expect(files.some((file) => file.endsWith('.js'))).toBe(true);
     expect(`${stdout}${stderr}`).not.toMatch(/deprecated/i);
-  }, 20000);
+  });
 
   it('should generate types as JavaScript when there are no Projects', async function () {
     // An isolated data directory holds no Projects, so no types file is
@@ -141,7 +141,7 @@ describe('CLI', function () {
     });
 
     expect(await fs.readdir('./.elek.io/no-projects-out')).toEqual([]);
-  }, 10000);
+  });
 
   it('should be able to request a list of entries', async function () {
     await core.api.start(testApiPort);
@@ -428,7 +428,7 @@ describe('CLI', function () {
         `./.elek.io/provision-data-dir/projects/${seed.projectId}/.elek-provisioned`
       )
     ).toBe(true);
-  }, 60000);
+  });
 
   it('should provision the channel given by ELEK_IO_CHANNEL via the provision command', async function () {
     const seed = await seedRemoteWithRelease();
@@ -458,7 +458,7 @@ describe('CLI', function () {
       'utf-8'
     );
     expect(head).toContain('refs/heads/draft');
-  }, 60000);
+  });
 
   it('should reject an exact version in ELEK_IO_CHANNEL', async function () {
     const seed = await seedRemoteWithRelease();
@@ -481,7 +481,7 @@ describe('CLI', function () {
         },
       })
     ).rejects.toThrow();
-  }, 60000);
+  });
 
   it('should fail loudly when the provision ref does not exist', async function () {
     const seed = await seedRemoteWithRelease();
@@ -503,5 +503,5 @@ describe('CLI', function () {
         ],
       })
     ).rejects.toThrow();
-  }, 60000);
+  });
 });

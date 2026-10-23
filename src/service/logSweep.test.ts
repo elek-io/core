@@ -304,7 +304,7 @@ beforeAll(async function () {
   await core.projects.delete({ id: projectId, force: true });
   await Fs.remove(remotePath);
   await Fs.remove(assetDir);
-}, 180000);
+});
 
 describe('nothing a User typed reaches a log file', function () {
   it.each(Object.entries(sentinel))(

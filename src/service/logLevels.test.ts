@@ -31,7 +31,7 @@ beforeAll(async function () {
     await core.dispose();
   }
   records = await readRecords(logs);
-}, 120000);
+});
 
 afterAll(async function () {
   await Fs.remove(dataDir);

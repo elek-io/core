@@ -84,12 +84,12 @@ export const collections = { ...(await elekCollections(config)) };
     // which every test root shares through its symlink
     cacheDir = Path.join(root, '.cache');
     await sync({ root, configFile: false, logLevel: 'info', cacheDir });
-  }, 120000);
+  });
 
   afterAll(async function () {
     await project.destroy();
     await Fs.remove(root);
-  }, 60000);
+  });
 
   /**
    * Astro's content store, as it was written to disk
@@ -129,7 +129,7 @@ export const collections = { ...(await elekCollections(config)) };
     // rendered page. What the store keeps of the marker afterwards is
     // Astro's business and differs across the peer range.
     expect(await imageImportContents()).toContain(`./${fileName}`);
-  }, 30000);
+  });
 
   it('should hand an apng Asset over as a public URL', async function () {
     // Astro accepts an apng as an input format from 7.2.5 on, but its image
@@ -143,7 +143,7 @@ export const collections = { ...(await elekCollections(config)) };
     expect(animation.extension).toBe('apng');
     expect(store).toContain(JSON.stringify(`/elek/website/assets/${fileName}`));
     expect(await imageImportContents()).not.toContain(`./${fileName}`);
-  }, 30000);
+  });
 
   it('should hand a non-image Asset over as a public URL', async function () {
     const store = await storeContents();
@@ -153,7 +153,7 @@ export const collections = { ...(await elekCollections(config)) };
     // Nothing for Astro's image pipeline to pick up here
     expect(store).not.toContain(`__ASTRO_IMAGE_./${fileName}`);
     expect(await imageImportContents()).not.toContain(`./${fileName}`);
-  }, 30000);
+  });
 
   it('should save each Asset next to its own kind', async function () {
     // Images below src/, where Astro can process them
@@ -182,7 +182,7 @@ export const collections = { ...(await elekCollections(config)) };
         )
       )
     ).toBe(true);
-  }, 30000);
+  });
 
   /**
    * Runs last, since it syncs again into the same root.
@@ -199,7 +199,7 @@ export const collections = { ...(await elekCollections(config)) };
     expect(await imageImportContents()).toContain(
       `./${image.id}.${image.extension}`
     );
-  }, 120000);
+  });
 
   /**
    * Runs last as well, and is the only test that changes the Project.
@@ -239,5 +239,5 @@ export const collections = { ...(await elekCollections(config)) };
 
     expect(await Fs.pathExists(imagePath)).toBe(true);
     expect(await storeContents()).not.toContain(document.id);
-  }, 120000);
+  });
 });
