@@ -21,6 +21,7 @@ import type { Asset, Project } from './index.node.js';
 describe('Assets through astro:assets', function () {
   let project: Project & { destroy: () => Promise<void> };
   let image: Asset;
+  let animation: Asset;
   let document: Asset;
   let root: string;
   let cacheDir: string;
@@ -32,6 +33,15 @@ describe('Assets through astro:assets', function () {
       filePath: Path.resolve('src/test/data/150x150.png'),
       name: 'A picture',
       description: 'An image Asset, which Astro can process',
+    });
+
+    // An image format Astro accepts but its image pipeline does not
+    // process, so it is not an image as far as the loader is concerned
+    animation = await core.assets.create({
+      projectId: project.id,
+      filePath: Path.resolve('src/test/data/150x150.apng'),
+      name: 'An animation',
+      description: 'An image Asset in a format Astro cannot process',
     });
 
     // A non-image Asset, which Astro's image pipeline cannot touch
@@ -74,12 +84,12 @@ export const collections = { ...(await elekCollections(config)) };
     // which every test root shares through its symlink
     cacheDir = Path.join(root, '.cache');
     await sync({ root, configFile: false, logLevel: 'info', cacheDir });
-  }, 120000);
+  });
 
   afterAll(async function () {
     await project.destroy();
     await Fs.remove(root);
-  }, 60000);
+  });
 
   /**
    * Astro's content store, as it was written to disk
@@ -108,20 +118,32 @@ export const collections = { ...(await elekCollections(config)) };
     const store = await storeContents();
     const fileName = `${image.id}.${image.extension}`;
 
-    // The marker Astro replaces with its own image metadata, so that
-    // <Image src={asset.data.src} /> works
-    expect(store).toContain(`__ASTRO_IMAGE_./${fileName}`);
-    // Resolved relative to the entry's own file
+    // Resolved relative to the entry's own file, which is what anchors
+    // the import Astro records
     expect(store).toContain(
       JSON.stringify(`src/elek/website/images/${fileName}`)
     );
 
-    // Astro recognized the marker and collected the image as an import
-    // of its own, which is the only proof that the handover worked.
-    // Were the marker convention to change, this string would no
-    // longer appear on its own, only inside the marker above.
-    expect(store).toContain(JSON.stringify(`./${fileName}`));
-  }, 30000);
+    // Astro took the marker and emitted an image import of its own, which
+    // is the only proof the handover worked, since the substitution needs a
+    // rendered page. What the store keeps of the marker afterwards is
+    // Astro's business and differs across the peer range.
+    expect(await imageImportContents()).toContain(`./${fileName}`);
+  });
+
+  it('should hand an apng Asset over as a public URL', async function () {
+    // Astro accepts an apng as an input format from 7.2.5 on, but its image
+    // service processes one on no release in the peer range, so handing it to
+    // the pipeline fails the build with UnsupportedImageFormat. It takes the
+    // public route a non-image takes instead, on every astro in the range.
+    // See ../contributing/astro-entry.md
+    const fileName = `${animation.id}.${animation.extension}`;
+    const store = await storeContents();
+
+    expect(animation.extension).toBe('apng');
+    expect(store).toContain(JSON.stringify(`/elek/website/assets/${fileName}`));
+    expect(await imageImportContents()).not.toContain(`./${fileName}`);
+  });
 
   it('should hand a non-image Asset over as a public URL', async function () {
     const store = await storeContents();
@@ -130,7 +152,8 @@ export const collections = { ...(await elekCollections(config)) };
     expect(store).toContain(JSON.stringify(`/elek/website/assets/${fileName}`));
     // Nothing for Astro's image pipeline to pick up here
     expect(store).not.toContain(`__ASTRO_IMAGE_./${fileName}`);
-  }, 30000);
+    expect(await imageImportContents()).not.toContain(`./${fileName}`);
+  });
 
   it('should save each Asset next to its own kind', async function () {
     // Images below src/, where Astro can process them
@@ -159,7 +182,7 @@ export const collections = { ...(await elekCollections(config)) };
         )
       )
     ).toBe(true);
-  }, 30000);
+  });
 
   /**
    * Runs last, since it syncs again into the same root.
@@ -176,7 +199,7 @@ export const collections = { ...(await elekCollections(config)) };
     expect(await imageImportContents()).toContain(
       `./${image.id}.${image.extension}`
     );
-  }, 120000);
+  });
 
   /**
    * Runs last as well, and is the only test that changes the Project.
@@ -216,5 +239,5 @@ export const collections = { ...(await elekCollections(config)) };
 
     expect(await Fs.pathExists(imagePath)).toBe(true);
     expect(await storeContents()).not.toContain(document.id);
-  }, 120000);
+  });
 });

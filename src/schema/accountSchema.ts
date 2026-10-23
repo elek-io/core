@@ -6,8 +6,9 @@ import { baseUserSchema } from './userSchema.js';
 /**
  * The password of an elek.io account, 12 to 128 long
  *
- * A length counts UTF-16 code units, as `String.length` does, which is how
- * elek.io Cloud counts it as well, so an emoji counts as two.
+ * A length counts Unicode code points, the way Zod counts them, so a smiling
+ * face emoji counts as one while a flag counts as two. elek.io Cloud holds
+ * limits of its own, so a password Core accepts can still be refused there.
  */
 export const accountPasswordSchema = z.string().min(12).max(128);
 

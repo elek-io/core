@@ -7,7 +7,7 @@ import {
   createEntry,
   createProject,
 } from '../test/util.js';
-import { elekEntriesLoader } from './loaders.js';
+import { elekEntriesLoader, hasImageExtension } from './loaders.js';
 import type { ContentWatcher } from './watch.js';
 
 /**
@@ -109,7 +109,7 @@ describe('the Entries loader while astro dev runs', function () {
     expect(store.has(entry.id)).toBe(true);
     expect(warnings).toEqual([]);
     expect(errors).toEqual([]);
-  }, 60000);
+  });
 
   it('asks for a restart when the Collection it loads is renamed', async function () {
     const project = await createProject();
@@ -124,7 +124,7 @@ describe('the Entries loader while astro dev runs', function () {
     expect(warnings).toEqual([
       expect.stringContaining('was renamed or replaced'),
     ]);
-  }, 60000);
+  });
 
   it('asks for a restart when another Collection takes over its slug', async function () {
     const project = await createProject();
@@ -149,5 +149,26 @@ describe('the Entries loader while astro dev runs', function () {
     expect(warnings).toEqual([
       expect.stringContaining('was renamed or replaced'),
     ]);
-  }, 60000);
+  });
+});
+
+describe('hasImageExtension', function () {
+  it('takes an extension Astro processes, however it is spelled', function () {
+    expect(hasImageExtension('png')).toBe(true);
+    expect(hasImageExtension('PNG')).toBe(true);
+  });
+
+  it('takes no apng, which Astro accepts but processes on no release', function () {
+    // apng joined Astro's input formats in 7.2.5, but its image service
+    // validates against VALID_SUPPORTED_FORMATS, which carries no apng on
+    // any release the peer range allows. An apng handed to the pipeline
+    // fails the build with UnsupportedImageFormat, so it takes the public
+    // route a non-image takes.
+    // See ../../contributing/astro-entry.md
+    expect(hasImageExtension('apng')).toBe(false);
+  });
+
+  it('takes no extension Astro does not process at all', function () {
+    expect(hasImageExtension('pdf')).toBe(false);
+  });
 });

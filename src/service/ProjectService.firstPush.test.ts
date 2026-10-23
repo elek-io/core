@@ -165,7 +165,7 @@ describe('ProjectService first push', function () {
     expect(await getFileHash(clonedAsset.absolutePath)).toEqual(
       await getFileHash(originalAssetPath)
     );
-  }, 60000);
+  });
 
   it('should push the Release and preview tags of a Project released before it had a remote, but no upgrade tag', async function () {
     const remotePath = await emptyRemote();
@@ -204,7 +204,7 @@ describe('ProjectService first push', function () {
       ref: 'preview',
     });
     expect(previewed.project.version).toEqual(preview.version);
-  }, 60000);
+  });
 
   it('should synchronize the next change the usual way after the first push', async function () {
     const remotePath = await emptyRemote();
@@ -233,7 +233,7 @@ describe('ProjectService first push', function () {
     expect(collections.list.map((item) => item.slug.plural).toSorted()).toEqual(
       ['locals', 'others']
     );
-  }, 60000);
+  });
 
   it('should report every local commit as not synchronized before the first push', async function () {
     const remotePath = await emptyRemote();
@@ -256,7 +256,7 @@ describe('ProjectService first push', function () {
       'Conflict',
       'not pushed'
     );
-  }, 30000);
+  });
 
   it('should treat a new empty remote as empty after the origin moved, whatever the old remote left behind', async function () {
     const { project, path } = await newProject();
@@ -284,7 +284,7 @@ describe('ProjectService first push', function () {
     expect(await refsOf(newRemotePath, 'refs/heads')).toEqual(
       await refsOf(path, 'refs/heads')
     );
-  }, 30000);
+  });
 
   it.each([
     ['a repository a git host created with a README', hostRepositoryWithReadme],
@@ -308,8 +308,7 @@ describe('ProjectService first push', function () {
       expect(await refsOf(remotePath)).toEqual(remoteBefore);
       expect(await refsOf(path, 'refs/heads')).toEqual(localBefore);
       expect(await core.git.status(path)).toMatchObject({ isClean: true });
-    },
-    30000
+    }
   );
 
   it('should push draft and the Release tags to a remote that holds the main of the Project alone', async function () {
@@ -340,7 +339,7 @@ describe('ProjectService first push', function () {
     expect(
       await other.core.projects.branches.current({ id: other.project.id })
     ).toEqual('draft');
-  }, 60000);
+  });
 
   it('should refuse a remote whose main holds commits the local main lacks and no draft', async function () {
     const remotePath = await emptyRemote();
@@ -375,7 +374,7 @@ describe('ProjectService first push', function () {
 
     expect(await refsOf(remotePath)).toEqual(remoteBefore);
     expect(await refsOf(path, 'refs/heads')).toEqual(localBefore);
-  }, 30000);
+  });
 
   // A shell hook needs a POSIX shell, which git on a Windows runner is not
   // guaranteed to have
@@ -403,8 +402,7 @@ describe('ProjectService first push', function () {
       expect(await refsOf(remotePath)).toEqual('');
       expect(await refsOf(path, 'refs/heads')).toEqual(localBefore);
       await expect(upstreamOf(path, 'draft')).rejects.toThrow();
-    },
-    30000
+    }
   );
 
   it('should refuse an empty remote without atomic push support and land nothing', async function () {
@@ -420,5 +418,5 @@ describe('ProjectService first push', function () {
     );
 
     expect(await refsOf(remotePath)).toEqual('');
-  }, 30000);
+  });
 });

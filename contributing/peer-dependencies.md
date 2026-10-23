@@ -4,15 +4,15 @@ Core declares five peer dependencies, so the consumer supplies them and Core sha
 
 | Peer | Range | Required | Used by |
 | --- | --- | --- | --- |
-| `zod` | `^4.3.6` | yes | every entry (schemas) |
+| `zod` | `^4.6.6` | yes | every entry (schemas) |
 | `dugite` | `^3.2.3` | yes | the Node entry (git) |
 | `astro` | `^6.1.3 \|\| ^7.0.0` | no | the `/astro` entry (content loaders) |
-| `tsdown` | `^0.22.3` | no | the CLI, `generate:* js` only |
+| `tsdown` | `^0.23.0` | no | the CLI, `generate:* js` only |
 | `typescript` | `^5.0.0 \|\| ^6.0.0 \|\| ^7.0.0` | no | the CLI, through tsdown's `dts` |
 
 The general rule for a floor: it is the lowest version whose API Core actually uses. Verify a candidate by installing it and running the suite. `zod` carries an extra constraint (a single physical copy), explained below.
 
-## zod (`^4.3.6`, required)
+## zod (`^4.6.6`, required)
 
 ### Why it is a peer, and the single-copy invariant
 
@@ -31,20 +31,27 @@ The automated guard is `src/zod-single-copy.test.ts`. It reads `pnpm-lock.yaml` 
 
 ### The floor is the maximum of every zod floor in the graph
 
-The floor is not a free choice. It is the highest zod floor among everything in the tree that depends on zod. Pick anything lower and that dependency pulls its own newer zod, which splits the tree. As of this writing the contributors are:
+The floor is not a free choice. It is the highest zod floor among everything in the tree that depends on zod. Pick anything lower and that dependency pulls its own newer zod, which splits the tree.
+
+A peer's row is read at the version `devDependencies` pins, which is the newest release of that peer the suite proves. As of this writing the contributors are:
 
 | Source | zod requirement | Notes |
 | --- | --- | --- |
 | Core's own schemas | `>=4.1.0` | `z.hash('sha1')` in `src/schema/gitSchema.ts` does not exist before 4.1.0 |
 | `@hono/zod-openapi` | `^4.0.0` | peer dependency |
-| `@scalar/types` | `^4.3.5` | via `@scalar/hono-api-reference`, a runtime dependency |
-| `astro` | `^4.3.6` | the `/astro` entry's peer, measured against the current dev version 7.1.4 |
+| `@hono/zod-validator` | `^3.25.0 \|\| ^4.0.0` | a dependency of `@hono/zod-openapi` |
+| `@scalar/types` | `^4.4.3` | via `@scalar/hono-api-reference`, a runtime dependency |
+| `astro` | `^4.6.6` | the `/astro` entry's peer, read at the dev pin 7.4.2 |
 
-The maximum is `4.3.6`, so the peer range is `^4.3.6`. `devDependencies` pins the latest 4.x (`zod@4.4.3`) so Core develops against the newest patch, while the declared floor stays at the lowest version the graph can share.
+The maximum is `4.6.6`, so the peer range is `^4.6.6`. `devDependencies` pins the latest 4.x (`zod@4.6.7`) so Core develops against the newest patch, while the declared floor stays at the lowest version the graph can share.
+
+Reading astro's row at the lowest astro the range allows would give a lower floor, and it would be the wrong one. astro is in the tree whatever version a consumer resolves, so a consumer on a recent astro plus a zod pinned at that lower floor resolves two copies.
+
+That is the failure this peer exists to prevent, so the floor follows the astro the dev pin names, and bumping astro is one of the re-check triggers below.
 
 ### The caret caveat: why `pnpm dedupe` is sometimes needed
 
-`astro` and `@scalar/*` depend on zod through caret ranges (`^4.3.6`, `^4.3.5`). With pnpm's default highest-version resolution these resolve up to the newest zod available.
+`astro` and `@scalar/*` depend on zod through caret ranges (`^4.6.6`, `^4.4.3`). With pnpm's default highest-version resolution these resolve up to the newest zod available.
 
 A fresh or frozen install lands on a single copy, but a partial install (for example after bumping one dependency) can leave the newest zod alongside the version Core pins, giving two copies. The fix is `pnpm dedupe`, which collapses them back to one. The guard test fails until you do.
 
@@ -77,7 +84,7 @@ dugite-native changed the link in v2.53.0-4 ([desktop/dugite-native#554](https:/
 
 A git that cannot load a shared library throws `PreconditionFailed` naming the library, so an older build or a mismatched `libcurl.so.4` says what is missing rather than `Internal`.
 
-- Each dugite release ships an embedded git binary. 3.2.3 bundles git 2.53.0 and git-lfs 3.7.1, so the test suite, which runs real git and Git LFS, is the real check.
+- Each dugite release ships an embedded git binary. 3.2.3 bundles git 2.53.0 and git-lfs 3.7.1, and the dev pin 3.3.0 bundles git 2.56.0 and git-lfs 3.8.0, so the test suite, which runs real git and Git LFS, is the real check.
 - `devDependencies` pins the latest 3.x for development, like the other peers.
 
 To re-verify the floor, pin the dev version to it and run the suite:
@@ -137,16 +144,18 @@ Raising the floor to the release where astro fixed it is the honest fix, and it 
 
 Naming the verified majors explicitly makes a consumer on the next one get a peer warning that prompts that re-check, instead of silently claiming an untested major works. When a new astro major is verified, widen the range to include it.
 
-astro 7 was verified this way in July 2026 and the range widened to include it, and the 6 floor moved to 6.1.3 afterwards for the reason above. It is a speed release: Rust compiler, a Rust markdown pipeline replacing remark and rehype, Vite 8 on Rolldown, queued rendering. The content layer itself is untouched:
+astro 7 was verified this way in July 2026 and the range widened to include it, and the 6 floor moved to 6.1.3 afterwards for the reason above. It is a speed release: Rust compiler, a Rust markdown pipeline replacing remark and rehype, Vite 8 on Rolldown, queued rendering. The content layer itself is untouched, verified again at the dev pin 7.4.2:
 
 - `Loader.createSchema` and `LoaderContext` (including `config: AstroConfig` and `DataEntry.filePath`) are unchanged from 6.4.8.
 - `astro/loaders`, `astro/jsx-runtime` and `astro/content/config` all exist with the same shapes.
 - The `__ASTRO_IMAGE_` marker is unchanged, and programmatic `sync` is unchanged.
-- The zod dependency stays `^4.3.6`, so the zod floor does not move.
 
-New in v7 is an optional `@astrojs/markdown-remark` peer for the opt-in remark pipeline, which adds no install friction. Engines require Node >= 22.12, and CI runs the version in `.node-version`. There is still no integration API for injecting content collections, so nothing in v7 changes how the `/astro` entry is designed.
+New in v7 is an optional `@astrojs/markdown-remark` peer for the opt-in remark pipeline, which adds no install friction. Engines require Node >= 22.23.4 at 7.4.2, and CI runs the version in `.node-version`. There is still no integration API for injecting content collections, so nothing in v7 changes how the `/astro` entry is designed.
 
-Note that astro depends on zod through a caret range, so its zod requirement feeds the zod floor above (astro is currently the binding constraint at `^4.3.6`). Bumping astro can raise the zod floor, so re-check the zod single-copy invariant whenever you bump astro.
+Two things did move inside the 7 line, and both are handled rather than pinned away:
+
+- **Its zod dependency rose to `^4.6.6` in 7.4.0**, which is what sets the zod floor above. astro depends on zod through a caret range, so its requirement feeds that floor, and bumping astro can raise it again. Re-check the zod single-copy invariant whenever you bump astro.
+- **`apng` joined `VALID_INPUT_FORMATS` in 7.2.5**, and `VALID_SUPPORTED_FORMATS` on no release, so the image service rejects one that reaches it. `imageExtensions` in `src/astro/loaders.ts` mirrors the supported list instead, so an apng Asset takes the public route. Compare both lists when you bump astro, see [`astro-entry.md`](./astro-entry.md).
 
 The coupling is also a runtime one:
 
@@ -155,11 +164,16 @@ The coupling is also a runtime one:
 
 ### The dev pin and pnpm's release-age cooldown
 
-pnpm 11 holds freshly published versions back for a cooldown period. `pnpm add -D astro@<version>` on a release younger than that writes a `minimumReleaseAgeExclude` entry into `pnpm-workspace.yaml` to bypass it.
+pnpm 12 holds freshly published versions back for a cooldown period. `pnpm-workspace.yaml` pins it as `minimumReleaseAge: 1440`, a day, and that line is committed on purpose rather than left to the default:
 
-Do not commit that entry. It is a permanent opt-out of a supply chain protection for a condition that lasts a day, and it turns into stale cruft at the next bump. Pin the newest version that is past the cooldown instead, and pick the newer one up with the next routine bump.
+- `pnpm config get minimumReleaseAge` reports it inside the repository and nothing in an empty directory, so an install reads the committed value.
+- `.github/dependabot.yml` sets `cooldown.default-days: 2` to stay above it. Keep the Dependabot side the higher of the two, or its pull requests fail at `pnpm install --frozen-lockfile` on every platform before the suite runs.
 
-## tsdown (`^0.22.3`, optional) and typescript (`^5.0.0 || ^6.0.0 || ^7.0.0`, optional)
+`pnpm add -D astro@<version>` on a release younger than the cooldown writes a `minimumReleaseAgeExclude` entry into the same file to bypass it. Do not commit that entry.
+
+It is a permanent opt-out of a supply chain protection for a condition that lasts a day, and it turns into stale cruft at the next bump. Pin the newest version that is past the cooldown instead, and pick the newer one up with the next routine bump.
+
+## tsdown (`^0.23.0`, optional) and typescript (`^5.0.0 || ^6.0.0 || ^7.0.0`, optional)
 
 ### Why they are peers at all, and why the import must stay lazy
 
@@ -176,13 +190,18 @@ A top-level `import { build } from 'tsdown'` therefore had three consequences:
 Two things keep that from coming back:
 
 - `src/cli/util.ts` loads tsdown through `loadCompiler()`, a lazy `await import('tsdown')` reached only on the `js` path. The import must stay lazy. Moving it back to the top of a module bundles tsdown again whether or not it is declared here.
-- Declaring both as peers is what makes tsdown externalize them, since tsdown never bundles a peer. No `tsdown.config.ts` change is needed. `dist/cli` is 1.6M with both in place.
+- Declaring both as peers is what makes tsdown externalize them, since tsdown never bundles a peer. No `tsdown.config.ts` change is needed. `dist/cli` is 2.2M with both in place.
 
 `loadCompiler()` maps a failed resolution to a `CoreError` naming both packages, so an install without them gets an actionable message on the `js` path instead of a raw `ERR_MODULE_NOT_FOUND`, and every other command keeps working. `src/cli/util.test.ts` covers that message.
 
-The regression guard is in `src/index.cli.test.ts`, which spawns the built binary with `NODE_PATH` removed from the environment. That detail is the whole point: vitest hands its forked workers a `NODE_PATH` ending in pnpm's hidden hoist store, where the rolldown binding happens to live.
+The regression guard is in `src/index.cli.test.ts`, and it takes two assertions because each one misses what the other catches:
 
-So the CLI subprocesses the suite already spawned resolved it and passed, while every consumer install failed. The test needs `dist/` to exist, which the suite already assumes and CI satisfies by running `pnpm build` before the tests.
+- **Spawning the built binary with `NODE_PATH` removed** catches a bundled tsdown. vitest hands its forked workers a `NODE_PATH` ending in pnpm's hidden hoist store, where the rolldown binding happens to live, so the CLI subprocesses the suite spawned resolved it and passed while every consumer install failed.
+- **Reading the built bundle** catches a tsdown that is only imported, which the first assertion cannot see. That was measured: declaring tsdown a peer makes a top-level import external rather than bundled, and an external import resolves from the repository's own `node_modules` whatever `NODE_PATH` holds.
+  - So the spawned binary keeps working while a consumer's dies with `ERR_MODULE_NOT_FOUND` on every command.
+  - The test asserts no static import of `tsdown` and the lazy one present.
+
+Both need `dist/` to exist, which the suite already assumes and CI satisfies by running `pnpm build` before the tests.
 
 ### Why typescript is declared, and why its range must never be narrower than tsdown's
 
@@ -196,9 +215,12 @@ Because Core is not the one using it, Core's range must mirror what tsdown suppo
 
 When tsdown widens again, widen here in the same change.
 
-The tsdown range is `^0.22.3`, a 0.x line, so it stays inside the verified minor. `devDependencies` pins the latest 0.22.x for development, like the other peers, at 0.22.14.
+The tsdown range is `^0.23.0`, a 0.x line, so it stays inside the verified minor. `devDependencies` pins the latest 0.23.x for development, like the other peers, at 0.23.1.
 
-That is the release whose typescript peer widened to include 7, so the locally installed tsdown and the newest one in range declare the same range and the skew described above cannot happen by accident. It can return the next time tsdown widens, so keep checking against the newest in range rather than against the installed copy.
+Two consequences of following a 0.x line:
+
+- The installed tsdown and the newest one in range declare the same typescript range, `^5.0.0 || ^6.0.0 || ^7.0.0`, so the skew described above cannot happen by accident. It can return the next time tsdown widens, so keep checking against the newest in range rather than against the installed copy.
+- Moving to the next minor breaks a consumer who pinned tsdown inside the previous one, since the optional peer stops being satisfied. A 0.x minor is a breaking release, so following it is what keeps the range honest, and the changeset says what such a consumer has to do.
 
 ### How to re-check
 
@@ -209,18 +231,33 @@ pnpm build && pnpm pack --pack-destination /tmp
 mkdir /tmp/scratch && cd /tmp/scratch && npm init -y
 npm install /tmp/elek-io-core-<version>.tgz   # must not ERESOLVE
 npx elek --help                               # must print help, not a native binding error
+
+# Both generate:types steps below need at least one Project in the data
+# directory, ~/elek.io unless ELEK_IO_DATA_DIR says otherwise. With none there
+# is no types file to compile, so the command exits 0 with "No types to compile
+# to JavaScript, no Projects found" and never loads the compiler.
 npx elek generate:types ./out js              # must name tsdown and typescript, and exit 1
-npm install -D tsdown typescript
+npm install -D tsdown typescript@6
 npx elek generate:types ./out js              # must now emit .mjs and .d.mts
 ```
 
 Installing the tarball with npm is the useful part. npm resolves optional peers even though it does not install them, so a range skew surfaces there and not under pnpm.
 
-### Consumers on typescript 7 need a tsconfig
+The typescript is pinned to 6 in that step on purpose. A plain `npm install -D typescript` takes 7, where the step needs a `tsconfig.json` that covers `./out` as well, see below.
 
-typescript 7 is the Go port, and tsdown's dts generator running on it fails with `tsgo generator requires a tsconfig file to be specified` when the consumer's project has no `tsconfig.json`. typescript 6 has no such requirement.
+### Consumers on typescript 7 need a tsconfig that covers the output
 
-This is tsdown's behavior rather than Core's, it only affects `generate:* js`, and a project asking for `.d.ts` output normally has a tsconfig anyway, so it is documented in `docs/api-clients.md` instead of being worked around.
+typescript 7 is the Go port, and tsdown's dts generator running on it needs a `tsconfig.json` that covers the directory it writes into. typescript 6 has neither requirement. Measured against a packed 0.25.1 with tsdown 0.23.1 and typescript 7.0.2:
+
+| The consumer's project | `generate:types ./out js` |
+| --- | --- |
+| No `tsconfig.json` | Exits 1 with "The tsgo generator requires a tsconfig file to be specified" |
+| `include: ["src"]`, writing to `./out` | Exits 1 with "tsgo did not generate dts file", and the generated `out/types.ts` stays behind |
+| `include: ["src"]`, writing to `./src/elek` | Exits 0 and writes the `.js` and the `.d.ts` |
+
+Core's own default output directory is `./.elek.io`, which a typical `include: ["src"]` leaves out, so the command fails there with no `outDir` passed at all.
+
+This is tsdown's behavior rather than Core's and it only affects `generate:* js`, so it is documented in `docs/api-clients.md`, with the ways around it, instead of being worked around.
 
 ### Why the typescript dev pin is still 6.x
 

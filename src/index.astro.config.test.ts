@@ -23,7 +23,7 @@ describe('elek.config.ts file triple', function () {
     // directory's tmp folder, so the remote must live outside of it
     remotePath = Path.join(Os.tmpdir(), `elek-io-core-test-remote-${uuid()}`);
     await Fs.copy(seed.remotePath, remotePath);
-  }, 120000);
+  });
 
   it('should bridge one declaration from astro.config into the content config', async function () {
     // The riskiest platform assumption of the single declaration
@@ -112,5 +112,5 @@ export const collections = {
     expect(await Fs.pathExists(Path.join(root, '.astro', 'content.d.ts'))).toBe(
       true
     );
-  }, 120000);
+  });
 });

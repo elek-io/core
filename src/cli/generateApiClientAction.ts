@@ -292,7 +292,8 @@ async function generateApiClientAs({
     // to JS in the specified module format and target environment
     await compileToJs({
       config: false, // Do not use tsdown config file of Core
-      external: ['@elek-io/core', 'zod'], // These are peer dependencies of the generated client
+      // Peer dependencies of the generated client, so they stay imports
+      deps: { neverBundle: ['@elek-io/core', 'zod'] },
       entry: normalizedEntries,
       outDir: resolvedOutDir,
       format,

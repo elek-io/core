@@ -32,11 +32,11 @@ beforeAll(async function () {
   destroy = project.destroy;
   collectionId = (await createCollection(projectId)).id;
   await createComponent(projectId);
-}, 120000);
+});
 
 afterAll(async function () {
   await destroy();
-}, 60000);
+});
 
 /**
  * Reading something that is not there, by every route a consumer has to it.
@@ -205,20 +205,15 @@ describe('every service method fails with a CoreError', function () {
     '%s',
     async function (_label, run) {
       expect(await rejection(run)).toBeInstanceOf(CoreError);
-    },
-    30000
+    }
   );
 });
 
 describe('an entity that is not there is NotFound', function () {
-  it.each(missingReads())(
-    '%s',
-    async function (_label, run) {
-      const error = await rejection(run);
-      expect(error).toBeInstanceOf(CoreError);
-      expect((error as CoreError).type).toEqual('NotFound');
-      expect((error as CoreError).statusCode).toEqual(404);
-    },
-    30000
-  );
+  it.each(missingReads())('%s', async function (_label, run) {
+    const error = await rejection(run);
+    expect(error).toBeInstanceOf(CoreError);
+    expect((error as CoreError).type).toEqual('NotFound');
+    expect((error as CoreError).statusCode).toEqual(404);
+  });
 });

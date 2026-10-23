@@ -96,7 +96,7 @@ Core fills in exactly two things, `core` and `logs`. Everything else passes thro
 
 ## Limits
 
-elek.io Cloud enforces the same limits, so a report that passes the schema is never refused for its shape. A length counts UTF-16 code units, as `String.length` does, so an emoji counts as two.
+Core refuses a report outside these limits before anything is sent, so a shape elek.io Cloud would turn down is caught here. elek.io Cloud holds limits of its own, so a report Core accepts can still be refused there. A length counts Unicode code points, the way Zod counts them, so a smiling face emoji counts as one while a flag counts as two.
 
 | Field | Limit |
 | --- | --- |

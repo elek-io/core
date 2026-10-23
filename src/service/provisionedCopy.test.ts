@@ -42,7 +42,7 @@ describe('Provisioned copy', function () {
       })
     ).project;
     workingCopy = await createProject();
-  }, 90000);
+  });
 
   it('should expose isProvisioned on the Project', async function () {
     expect(provisioned.isProvisioned).toBe(true);
@@ -191,5 +191,5 @@ describe('Provisioned copy', function () {
     expect(await Fs.pathExists(core.util.pathTo.project(seed.projectId))).toBe(
       false
     );
-  }, 30000);
+  });
 });

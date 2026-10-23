@@ -8,8 +8,9 @@ export type ReportType = z.infer<typeof reportTypeSchema>;
 
 /*
  * Every string below is capped, because elek.io Cloud takes a report from
- * anybody and enforces the same caps. A length counts UTF-16 code units,
- * as `String.length` and a `maxlength` attribute do, so an emoji is two.
+ * anybody and holds caps of its own, so a shape it would turn down is caught
+ * here. A length counts Unicode code points, the way Zod counts them, so a
+ * smiling face emoji counts as one while a flag counts as two.
  * No field takes a control character, since Postgres refuses a NUL.
  */
 
