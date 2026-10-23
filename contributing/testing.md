@@ -17,7 +17,7 @@ Do not close those gaps by unit-testing the same behavior in process. A test tha
 
 The exception is behavior a sync cannot show:
 
-- Which logger a line takes, and at which level. A build writes Core's logger and Astro's to the same console, so only a test that hands the loader its own `LoaderContext` can tell the two apart. [`src/astro/loaders.test.ts`](../src/astro/loaders.test.ts) runs in process for that reason, not to move a number.
+- Which logger a line takes, and at which level. A build writes Core's logger and Astro's to the same console, so only a test that hands the loader its own `LoaderContext` can tell the two apart. The logger tests of [`src/astro/loaders.test.ts`](../src/astro/loaders.test.ts) run in process for that reason, not to move a number.
 
 What a loader test can reach differs from what it cannot. `sync()` calls `load()` once, with no watcher, so anything on the dev reload path is out of reach from a test, see the hand-verified list below.
 

@@ -722,7 +722,7 @@ All loaders share one Core instance, and the loaders themselves take no options 
   - A loader that names its Collection by its slug rather than its id adds a line for every slug index rebuild.
 - **Every warning Core raises goes with them**, and that list is open too.
   - A build that uses `elek()` reaches one for every `project.json` provisioning reads before it has validated it, which is how it migrates a Project an older Core wrote.
-  - A build also reaches the one `elekCollections()` raises when it is called without a selection, and, when `ELEK_IO_CLOUD_URL` names a host without an `api.` label and `ELEK_IO_CLOUD_GIT_URL` is unset, the one about a credential helper Core could not derive for elek.io Cloud's git hosts.
+  - A build also reaches the one `elekCollections()` raises when it is called without a selection.
 - Three more of those warnings are about content Core dropped rather than read: an Entry Core could not read, which is why a loader can report more Entries than it stored, a Collection skipped while the slug index is rebuilt, and a file or folder skipped because its name does not parse.
   - The last two name what they skipped. The first carries only what the read failed with, which names the file when the JSON is broken and names the failing field alone when the file parses but does not validate.
 - The level governs Core's [log files](#log-files) too, so at `error` the log file holds nothing about the build but what failed.
