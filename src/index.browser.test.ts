@@ -1,11 +1,14 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   extractText,
+  isTableHeaderCell,
   mdastRender,
   projectSchema,
   REQUIRED_RENDERER_KEYS,
+  tableCellAlign,
   uuid,
   uuidSchema,
+  type MdastNodeContext,
 } from './index.browser.js';
 
 describe('Browser', function () {
@@ -26,6 +29,22 @@ describe('Browser', function () {
       'assetReference',
       'entryReference',
     ]);
+  });
+
+  it('should expose what a table cell handler needs to place itself', function () {
+    expectTypeOf(isTableHeaderCell).toBeFunction();
+    expectTypeOf(tableCellAlign).toBeFunction();
+
+    const headerRow = { type: 'tableRow' as const, children: [] };
+    const context: MdastNodeContext = {
+      index: 1,
+      ancestors: [
+        { type: 'table', align: [null, 'center'], children: [headerRow] },
+        headerRow,
+      ],
+    };
+    expect(isTableHeaderCell(context)).toBe(true);
+    expect(tableCellAlign(context)).toBe('center');
   });
 
   it('should expose the extractText helper', function () {

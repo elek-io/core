@@ -126,7 +126,9 @@ The three required handlers are ~20 lines for the typical case. Without the help
 
 ### Defaults and what you'll commonly override
 
-The defaults emit plain semantic HTML - no class names, no `rel`/`target`, no slug anchors, no syntax highlighting. The shape is `(node, children) => ...` for parents and `(node) => ...` for leaves. Each snippet below goes into the renderers object at the `mdastRender` call in the template, next to the three required handlers. Common override patterns:
+The defaults emit plain semantic HTML - no class names, no `rel`/`target`, no slug anchors, no syntax highlighting.
+
+A handler's shape is `(node, children, context) => ...` for a parent and `(node, context) => ...` for a leaf, and one that does not need the [context](#where-a-node-sits) leaves the parameter out. Each snippet below goes into the renderers object at the `mdastRender` call in the template, next to the three required handlers. Common override patterns:
 
 **Slug-id anchors on headings (table of contents).** `extractText` is exported from `@elek-io/core` and returns the concatenated plain text of an mdast node.
 
@@ -209,6 +211,60 @@ const footnotes: astroHTML.JSX.Element[] = [];
 root: (_, children) => <article class="prose">{children}</article>,
 ```
 
+### Where a node sits
+
+An mdast node does not carry its own position, and some of what a handler has to decide is only knowable from it. A table cell is the clear case: nothing on the cell says whether it heads a column, and the alignment of its column sits on the table.
+
+So every handler receives an `MdastNodeContext` as its last argument, exported from `@elek-io/core`:
+
+| Field | Holds |
+| --- | --- |
+| `index` | the node's position among its parent's children, 0 for the root |
+| `ancestors` | every ancestor, the root first and the direct parent last, so `ancestors.at(-1)` is the parent |
+
+Two things follow from that shape:
+
+- There is no `parent` field, because `ancestors.at(-1)` already is one.
+- The `ancestors` array is shared by a node's siblings. Read it, never write to it.
+
+A handler that does not need it declares fewer parameters, which is why every renderers object written before the context existed still compiles.
+
+### Tables
+
+A table's header is its first row, which is all mdast records. The defaults turn that into the markup a screen reader needs:
+
+```text
+<table>
+  <thead><tr><th scope="col">Field</th><th scope="col">Type</th></tr></thead>
+  <tbody><tr><td>slug</td><td>string</td></tr></tbody>
+</table>
+```
+
+- The first row's cells are `<th scope="col">`, every row below holds `<td>`, and an empty header cell stays a header cell.
+- `<thead>` and `<tbody>` wrap those rows, and neither is emitted empty. A table of one row is a header with no body.
+- A column's alignment arrives as `style="text-align:left|center|right"` on every cell of that column, header and body alike.
+- A column the markdown left unaligned gets no style at all, instead of a hard-coded left, so its body cells keep the start edge of the reading direction. Its header cell is centered, because that is what a user agent does with a `<th>` of its own accord, and only your CSS can change that.
+
+`table.align` sits on the table and the cell is what renders it, so two helpers exported from `@elek-io/core` answer a cell's two questions from its context. Both are what the defaults use:
+
+```typescript
+import { isTableHeaderCell, tableCellAlign } from '@elek-io/core';
+
+tableCell: (_, children, context) => {
+  const align = tableCellAlign(context); // 'left' | 'center' | 'right' | null
+  const style = align ? { textAlign: align } : undefined;
+  return isTableHeaderCell(context) ? (
+    <th scope="col" style={style}>{children}</th>
+  ) : (
+    <td style={style}>{children}</td>
+  );
+},
+```
+
+Both answer from a cell's context, so `isTableHeaderCell` is false for a row. A `tableRow` override that asks whether it is the header row reads `context.index === 0`.
+
+**A table has no caption**, because mdast has no caption node, so there is nothing for Core to render one from. That matters when you put a wide table in a horizontally scrolling box: the box is a scrollable region, and a region needs a name and keyboard reach of its own. Name it from whatever your page knows, the heading above the table for example, rather than expecting one in the tree.
+
 ### Reusable per-site renderer
 
 For sites that render markdown in multiple places, write the overrides once in a small Astro component. The per-site rendering policy then lives in one file, and every page passes a tree to it:
@@ -248,12 +304,17 @@ Core does not ship this component itself - it would be a thin one-file wrapper, 
 
 If you're targeting a framework Core doesn't ship a wrapper for yet (React, Vue, Solid, SvelteKit and so on), use the framework-agnostic primitive directly. `mdastRender` and `MdastRenderersBase<T>` are exported from `@elek-io/core`.
 
-The primitive is the same typed fold the Astro binding wraps. `T` is your framework's element type, and you supply one handler per node type. Parents receive their already-rendered `children`, leaves receive just the node.
+The primitive is the same typed fold the Astro binding wraps. `T` is your framework's element type, and you supply one handler per node type. Parents receive their already-rendered `children`, leaves receive just the node, and both receive the [context](#where-a-node-sits) last.
 
 The example below uses React (`T = ReactNode`). For Vue bind `T = VNode`, for Solid `T = JSX.Element`. Only the element factory changes, the structure stays identical.
 
 ```tsx
-import { mdastRender, type MdastRenderersBase } from '@elek-io/core';
+import {
+  isTableHeaderCell,
+  mdastRender,
+  tableCellAlign,
+  type MdastRenderersBase,
+} from '@elek-io/core';
 import type { ReactNode } from 'react';
 
 const renderers: MdastRenderersBase<ReactNode> = {
@@ -273,9 +334,24 @@ const renderers: MdastRenderersBase<ReactNode> = {
     </pre>
   ),
   thematicBreak: () => <hr />,
-  table: (_, children) => <table>{children}</table>,
+  table: (_, children) => (
+    <table>
+      {children.length > 0 && <thead>{children[0]}</thead>}
+      {children.length > 1 && <tbody>{children.slice(1)}</tbody>}
+    </table>
+  ),
   tableRow: (_, children) => <tr>{children}</tr>,
-  tableCell: (_, children) => <td>{children}</td>,
+  tableCell: (_, children, context) => {
+    const align = tableCellAlign(context);
+    const style = align ? { textAlign: align } : undefined;
+    return isTableHeaderCell(context) ? (
+      <th scope="col" style={style}>
+        {children}
+      </th>
+    ) : (
+      <td style={style}>{children}</td>
+    );
+  },
   footnoteDefinition: (node, children) => (
     <div id={`fn-${node.identifier}`}>{children}</div>
   ),

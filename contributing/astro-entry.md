@@ -146,6 +146,16 @@ Two consequences for the code:
 - A heading tag cannot be interpolated, since the static parts of a tagged template are the markup. The six depths are spelled out in `renderHeading` rather than built as a string.
 - Attributes go through `addAttribute`, which returns an empty string for `null` and `undefined`, so an absent `title` emits no attribute at all.
 
+A handler is given the node, its rendered children where it has any, and last its `MdastNodeContext`, see [`markdown-internals.md`](./markdown-internals.md). Three defaults need more than the node:
+
+| Default | Needs | Because |
+| --- | --- | --- |
+| `heading` | `node.depth` | the tag is static markup, see above |
+| `table` | its rendered rows | the `thead` and `tbody` split is a split of that array, the first row against the rest, and neither wrapper is emitted empty |
+| `tableCell` | its context | `th` or `td` follows from whether its row is the table's first, and the column's alignment is on the table rather than the cell |
+
+A cell's alignment is emitted as `style="text-align:..."` rather than the `align` attribute, which HTML dropped. A column mdast left unaligned gets no style at all, since `text-align: left` would override the consumer's own CSS and break a right to left reading direction.
+
 `src/astro/mdastRender.test.ts` renders every default by interpolating it into a `renderTemplate`, which puts it through the same `renderChild` dispatch an `.astro` file uses. A default that regressed to a vnode would show up as `[object Object]` in those assertions rather than passing and failing in a consumer's component.
 
 A consumer writing handlers as JSX inside an `.astro` template needs none of this: the compiler emits render-safe values for them. It only matters for what Core itself constructs.
