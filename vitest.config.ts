@@ -3,9 +3,9 @@ import { hookTimeoutMs, testTimeoutMs } from './src/test/budgets.js';
 
 export default defineConfig({
   test: {
-    // Both are the slowest runner's measured duration of what they bound times
-    // one multiple, so no test and no hook needs a budget of its own and a
-    // slow runner fails on a named test, see contributing/testing.md
+    // Both are the slowest measured duration of what they bound times one
+    // multiple, so no test and no hook needs a budget of its own and a slow
+    // runner fails on a named test, see contributing/testing.md
     testTimeout: testTimeoutMs,
     hookTimeout: hookTimeoutMs,
     // Drops the console output of passing tests and keeps that of failing

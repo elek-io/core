@@ -65,11 +65,30 @@ Every budget is a measured duration times one multiple. [`vitest.config.ts`](../
 | `hookTimeout` | every hook | 78,796ms, the slowest fixture hook | 236,388ms |
 | `timeout-minutes` in [`ci.yml`](../.github/workflows/ci.yml) | the whole test job | 889s, the slowest job | 45 minutes |
 
-All three were measured on `windows-2025` on 2026-10-23, the slowest of the four runners, over five CI jobs whose suite durations ran from 529s to 710s.
+All three come from one measured set, the five `windows-2025` jobs of 2026-10-23, whose suite durations ran from 529s to 710s. The set is windows-only.
 
 - The slowest test is the one in `ReleaseService.remote.test.ts` that refuses a Release whose draft is behind the remote draft.
 - The slowest hook is read as the whole duration of `logSweep.test.ts`, which holds one `beforeAll` and no other hook. Each of its 19 tests stayed below the 300ms the reporter prints a duration for, so the hook is all but the whole file.
 - The multiple is 3, the smallest whole number above the run to run spread of a single test on that runner. Of the 306 tests those jobs timed at least twice, the slowest run of one test was 1.5x its own fastest at the median and 2.2x at the 90th percentile, with one test at 9.3x.
+
+### Which runner is slowest varies, and the budgets only go up
+
+No platform is reliably the slowest. The verification runs of the same day put `macos-15-intel` at 937s against `windows-2025`'s 474s on one commit, so the windows-only set is a floor rather than a worst case. The 900s cap in force before would have killed that 937s job.
+
+Three things follow, and the last is a rule to follow rather than an observation:
+
+- A budget rises as the suite gains tests, because every measurement is of a suite that had fewer of them than the next one will.
+- 45 minutes clears the 937s job at 2.88x rather than the stated 3x. That is the margin the current constants buy, not a smaller multiple.
+- **A slower run does not move a constant on the spot.** It supersedes it at the next re-measurement, when the whole set is taken again from a green run. Moving one number per red run chases noise and leaves the four budgets measured on four different days.
+
+### The hook budget is paid once per test
+
+A hook budget is per call and a `beforeEach` runs once per test, so the job cap no longer bounds the suite's worst single failure. One stuck hook can exhaust it instead of failing on a named test.
+
+Measured on the widest `beforeEach` in `src/`, the git-doing one at `uniqueFieldEnforcement.test.ts:101`, over the 11 tests of its describe:
+
+- 11 times 236,388ms, plus the 99s of steps before vitest starts, is 2,699,268ms against the 2,700,000ms cap.
+- So the margin is 732ms. The same stuck hook cost 1m50s before the budgets were raised.
 
 ### No test and no hook carries a budget of its own
 
@@ -81,7 +100,7 @@ A per-call budget below the global caps the heaviest work in a file tighter than
 - The LFS clone in `Lfs.test.ts` passed at 9.8s on the 15s default and was killed at 15.0s on the next run, while its annotated sibling at 18.6s passed.
 - Eleven budgets died over the five jobs of 2026-10-23, five of them hooks on vitest's own 10s default, which the config never raised.
 
-When a measurement shows a test or a hook needs more, raise the global rather than that one call. Measure it on the slowest runner, put the number in [`src/test/budgets.ts`](../src/test/budgets.ts), and state it in the table above with its date.
+When a measurement shows a test or a hook needs more, raise the global rather than that one call. Take the slowest of the four runners, put the number in [`src/test/budgets.ts`](../src/test/budgets.ts), and state it in the table above with its date.
 
 ### A timed out test leaks into its own file only
 
