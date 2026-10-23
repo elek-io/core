@@ -83,7 +83,7 @@ describe('the identity a commit carries', function () {
       'After Person <after@example.com>',
       'After Person <after@example.com>',
     ]);
-  }, 60000);
+  });
 
   it('follows the User on a Release, its commit and its tag', async function () {
     const { core } = createTmpCore();
@@ -112,7 +112,7 @@ describe('the identity a commit carries', function () {
       'After Person <after@example.com>',
       'After Person <after@example.com>',
     ]);
-  }, 60000);
+  });
 
   it('keeps the author of a replayed commit and makes the User its committer', async function () {
     const { core } = createTmpCore();
@@ -141,7 +141,7 @@ describe('the identity a commit carries', function () {
       'Before Person <before@example.com>',
       'After Person <after@example.com>',
     ]);
-  }, 60000);
+  });
 
   it('follows signing in to an elek.io account', async function () {
     const account = {
@@ -170,7 +170,7 @@ describe('the identity a commit carries', function () {
       'Account Person <account@example.com>',
       'Account Person <account@example.com>',
     ]);
-  }, 60000);
+  });
 });
 
 describe('the git config of a Project', function () {
@@ -188,7 +188,7 @@ describe('the git config of a Project', function () {
     expect(
       await execGit(path, ['config', '--local', '--get', 'pull.rebase'])
     ).toBe('true');
-  }, 60000);
+  });
 
   it('lets a Core without a User clone, and refuses only the commit', async function () {
     const { core: author } = createTmpCore();
@@ -215,7 +215,7 @@ describe('the git config of a Project', function () {
     await expect(createCollection(core, cloned.id)).rejects.toMatchObject({
       type: 'Unauthorized',
     });
-  }, 60000);
+  });
 });
 
 describe('recordsGitIdentity', function () {

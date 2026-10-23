@@ -60,7 +60,7 @@ describe('ProjectService clone', function () {
     expect(await core.git.revParse(remotePath, 'main')).toEqual(
       remoteMainBefore
     );
-  }, 30000);
+  });
 
   /** Clones a remote that holds no valid Project and expects nothing left. */
   async function expectRefused(id: string, remotePath: string) {

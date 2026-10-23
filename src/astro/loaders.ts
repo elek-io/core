@@ -84,12 +84,18 @@ export function defaultPublicDir(alias: string): string {
 }
 
 /**
- * The extensions Astro's image pipeline understands, mirroring its own
- * VALID_INPUT_FORMATS. `satisfies` ties the list to Astro's public
- * ImageInputFormat, so adding or removing a format there is a compile
- * error here instead of a silent behavior change.
+ * The extensions Astro's image pipeline processes, mirroring its own
+ * VALID_SUPPORTED_FORMATS. `apng` is in its input list from 7.2.5 on and in
+ * that one on no release, so it is false here and takes the non-image route.
+ *
+ * `Record<ImageInputFormat, boolean>` ties the keys to Astro's public type,
+ * and the index signature beside it holds a format the floor does not know.
+ *
+ * @see ../../contributing/astro-entry.md
  */
-const imageExtensions = {
+const imageExtensions: Record<ImageInputFormat, boolean> &
+  Record<string, boolean> = {
+  apng: false,
   avif: true,
   gif: true,
   jpeg: true,
@@ -98,10 +104,20 @@ const imageExtensions = {
   svg: true,
   tiff: true,
   webp: true,
-} satisfies Record<ImageInputFormat, true>;
+};
 
-function hasImageExtension(extension: string): boolean {
-  return Object.hasOwn(imageExtensions, extension.toLowerCase());
+/**
+ * Whether Astro's image pipeline processes this extension.
+ *
+ * An extension it does not strips the marker and leaves a relative path
+ * nothing resolves, and one it only accepts as an input fails the image
+ * service, see `../../contributing/astro-entry.md`.
+ *
+ * Exported for this file's tests. Nothing re-exports it, so it is not part of
+ * the astro entry's surface.
+ */
+export function hasImageExtension(extension: string): boolean {
+  return imageExtensions[extension.toLowerCase()] === true;
 }
 
 /**

@@ -430,7 +430,7 @@ describe('the log tail a report may attach', function () {
     expect(error.type).toBe('BadRequest');
     // Refused here rather than on the wire, so nothing was sent
     expect(cloud.received).toHaveLength(0);
-  }, 60000);
+  });
 
   it('refuses a tail at the cap once the rest of the body is added', async function () {
     // The tail alone is within the contract here, so what refuses it is

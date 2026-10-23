@@ -24,10 +24,10 @@ npm install @elek-io/core zod dugite
 
 Core declares five peer dependencies, so you install them yourself. Two are required, three are optional and only needed by one feature each:
 
-- **`zod`** (`^4.3.6`, required) - Core authors its schemas with zod v4. Core and your app must resolve to a single zod copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage (for example `@hookform/resolvers`' `zodResolver`).
+- **`zod`** (`^4.6.6`, required) - Core authors its schemas with Zod v4. Core and your app must resolve to a single Zod copy, otherwise Zod's per-version branding makes Core's schemas incompatible with your own Zod usage (for example `@hookform/resolvers`' `zodResolver`).
 - **`dugite`** (`^3.2.3`, required) - the git bindings Core runs every Project operation through. Used by the Node entry point, see [git and sync](./docs/git-and-sync.md).
 - **`astro`** (`^6.1.3 || ^7.0.0`, optional) - only needed for the Astro integration (`@elek-io/core/astro`), where your project already provides it.
-- **`tsdown`** (`^0.22.3`, optional) and **`typescript`** (`^5.0.0 || ^6.0.0 || ^7.0.0`, optional) - only needed to run `elek generate:client` or `elek generate:types` with `js` as the language, which compiles the generated TypeScript. See [generated API clients and types](./docs/api-clients.md#compiling-to-javascript).
+- **`tsdown`** (`^0.23.0`, optional) and **`typescript`** (`^5.0.0 || ^6.0.0 || ^7.0.0`, optional) - only needed to run `elek generate:client` or `elek generate:types` with `js` as the language, which compiles the generated TypeScript. See [generated API clients and types](./docs/api-clients.md#compiling-to-javascript).
 
 As a convenience, Core also re-exports `z`, so in your own code you can import it from `@elek-io/core` instead of from `zod` directly. It is the same `z` plus `@hono/zod-openapi`'s `.openapi()` extension:
 
@@ -46,7 +46,7 @@ The package provides multiple entry points for different environments:
 - **Astro** (`@elek-io/core/astro`) - Astro content loaders `elekAssetsLoader()` and `elekEntriesLoader()` for loading Project data into Astro, declared once with `defineElekConfig()`.
 - **CLI** (`elek`) - A command-line interface with commands for generating API clients, generating TypeScript types, starting a local API and exporting Projects.
 
-The Node, Browser and Astro entry points re-export zod's `z`, so in your own code you can import `z` from Core instead of from `zod` directly. You still install zod as the peer dependency described under [Installation](#installation).
+The Node, Browser and Astro entry points re-export Zod's `z`, so in your own code you can import `z` from Core instead of from `zod` directly. You still install Zod as the peer dependency described under [Installation](#installation).
 
 Every page of [`docs/`](./docs/) ships in the package and resolves under `@elek-io/core/docs/`, so a tool of yours reads the reference of the exact version you install, with no network lookup:
 

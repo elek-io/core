@@ -1,14 +1,16 @@
 # Toolchain
 
-What Core builds, tests, lints, formats and type checks with, and why each tool was picked individually rather than taken as a bundle. Evaluated July 2026.
+What Core builds, tests, lints, formats and type checks with, and why each tool was picked individually rather than taken as a bundle. The two swaps at the end were evaluated in July 2026 and each says what it was measured on.
 
 | Job | Tool | Notes |
 | --- | --- | --- |
 | Build | `tsdown` (rolldown, oxc) | Four entry points, see [`peer-dependencies.md`](./peer-dependencies.md) |
 | Test | `vitest` | Real Projects and real git, see [`testing.md`](./testing.md) |
 | Lint | `oxlint` + `oxlint-tsgolint` | Type aware, see [`linting.md`](./linting.md) |
-| Format | `prettier` | Also formats the 56 markdown docs and the JSON and YAML |
+| Format | `prettier` | Also formats every markdown doc and the JSON and YAML |
 | Type check | `tsc --noEmit` | typescript 6.x, `include: ["src"]` |
+
+Every dependency is pinned exactly, and `pnpm outdated` is expected to list exactly two: `typescript`, which stays on the 6 line, and `@types/node`, which follows the Node major Core targets. [`peer-dependencies.md`](./peer-dependencies.md) holds both reasons. Anything else it lists is a bump nobody has taken yet.
 
 Four of the five are already VoidZero projects. That happened one decision at a time, not by adopting a bundle, and the sections below record why that stays the pattern.
 
@@ -20,14 +22,14 @@ Cost is not the question. Vite+ is MIT licensed and free. VoidZero [dropped the 
 
 ### It would move the toolchain backwards and take the pins
 
-`vite-plus` depends on its tools with exact pins, not ranges. As of 0.2.6:
+`vite-plus` depends on its tools with exact pins, not ranges. As of 1.3.0:
 
 | Tool              | Pinned by vite-plus | Available standalone |
 | ----------------- | ------------------- | -------------------- |
-| `oxlint`          | `=1.75.0`           | 1.76.0               |
-| `oxfmt`           | `=0.60.0`           | 0.61.0               |
-| `vitest`          | `4.1.10`            | 4.1.10               |
-| `oxlint-tsgolint` | `=7.0.2001`         | 7.0.2001             |
+| `oxlint`          | `=1.88.0`           | 1.89.0               |
+| `oxfmt`           | `=0.73.0`           | 0.74.0               |
+| `vitest`          | `5.0.5`             | 5.0.5                |
+| `oxlint-tsgolint` | `=7.0.2004`         | 7.0.2004             |
 
 Adopting it today downgrades oxlint. More importantly it hands the upgrade cadence of the whole toolchain to vite-plus releases. Core pins every dependency exactly and records why each range was chosen, which is the point of [`peer-dependencies.md`](./peer-dependencies.md). Putting a wrapper between Core and those versions gives that up for nothing.
 
@@ -63,7 +65,7 @@ Two swaps were measured and turned down. Both are close enough to be worth revis
 
 ### oxfmt instead of prettier
 
-[oxfmt](https://oxc.rs/docs/guide/usage/formatter) is the oxc formatter. It handles the file types Core needs, `.ts`, `.md`, `.yml` and `.json`, which matters because `docs/` ships inside the package and is 56 markdown files. It reads `.prettierignore` and has a `--migrate=prettier` command that converts [`.prettierrc`](../.prettierrc) directly.
+[oxfmt](https://oxc.rs/docs/guide/usage/formatter) is the oxc formatter. It handles the file types Core needs, `.ts`, `.md`, `.yml` and `.json`, which matters because `docs/` ships inside the package. It reads `.prettierignore` and has a `--migrate=prettier` command that converts [`.prettierrc`](../.prettierrc) directly.
 
 On defaults it wanted to rewrite 202 files. After `--migrate=prettier` that fell to 6. Those 6 are the catch: they are exactly the files prettier 3.9 reformatted when it changed how union types wrap, and oxfmt still emits the old shape.
 
@@ -74,7 +76,7 @@ On defaults it wanted to rewrite 202 files. After `--migrate=prettier` that fell
 +  | AssetMimeMismatchIssue;
 ```
 
-So it is one prettier minor behind, at version 0.61.0, before 1.0. Stable output is the entire value of a formatter, and a pre-1.0 one means repo-wide churn every time it converges or diverges. Formatting is also not slow enough to be worth risk. Re-check at 1.0, and specifically re-run the `--migrate=prettier` measurement above.
+So it was one prettier minor behind, measured on oxfmt 0.61.0. It is at 0.74.0 today and still before 1.0. Stable output is the entire value of a formatter, and a pre-1.0 one means repo-wide churn every time it converges or diverges. Formatting is also not slow enough to be worth risk. Re-check at 1.0, and specifically re-run the `--migrate=prettier` measurement above.
 
 ### oxlint `--type-check` instead of `tsc --noEmit`
 

@@ -175,6 +175,16 @@ Two consequences for the code:
 - A heading tag cannot be interpolated, since the static parts of a tagged template are the markup. The six depths are spelled out in `renderHeading` rather than built as a string.
 - Attributes go through `addAttribute`, which returns an empty string for `null` and `undefined`, so an absent `title` emits no attribute at all.
 
+A handler is given the node, its rendered children where it has any, and last its `MdastNodeContext`, see [`markdown-internals.md`](./markdown-internals.md). Three defaults need more than the node:
+
+| Default | Needs | Because |
+| --- | --- | --- |
+| `heading` | `node.depth` | the tag is static markup, see above |
+| `table` | its rendered rows | the `thead` and `tbody` split is a split of that array, the first row against the rest, and neither wrapper is emitted empty |
+| `tableCell` | its context | `th` or `td` follows from whether its row is the table's first, and the column's alignment is on the table rather than the cell |
+
+A cell's alignment is emitted as `style="text-align:..."` rather than the `align` attribute, which HTML dropped. A column mdast left unaligned gets no style at all, since `text-align: left` would override the consumer's own CSS and break a right to left reading direction.
+
 `src/astro/mdastRender.test.ts` renders every default by interpolating it into a `renderTemplate`, which puts it through the same `renderChild` dispatch an `.astro` file uses. A default that regressed to a vnode would show up as `[object Object]` in those assertions rather than passing and failing in a consumer's component.
 
 A consumer writing handlers as JSX inside an `.astro` template needs none of this: the compiler emits render-safe values for them. It only matters for what Core itself constructs.
@@ -183,7 +193,7 @@ A consumer writing handlers as JSX inside an `.astro` template needs none of thi
 
 `elekCollections` imports `defineCollection` from `astro/content/config`, not from the `astro:content` virtual module, which only exists inside a consumer's build and cannot be imported from package code.
 
-That subpath is a real export map entry in astro 6.1.3, 6.4.8 and 7.1.3, but it is not documented public API, so treat it as a pinned assumption. `src/index.astro.collections.test.ts` exercises it through a real `sync()`, which is what would catch its removal.
+That subpath is a real export map entry in astro 6.1.3, 6.4.8, 7.1.3 and 7.4.2, but it is not documented public API, so treat it as a pinned assumption. `src/index.astro.collections.test.ts` exercises it through a real `sync()`, which is what would catch its removal.
 
 If it ever disappears, the fallback is cheap: `defineCollection` is a validating passthrough that sets `type` to `content_layer` and returns its argument, so `{ type: 'content_layer', loader }` is equivalent. The only thing lost is astro's own validation of that object.
 
@@ -222,12 +232,22 @@ This is the same path Astro's own `image()` schema helper takes for content laye
 - **`filePath` plus the public `assetImports` field**. Fully documented, and it does get the file emitted, but it does not substitute the data value. The consumer is left with a relative string and no way to reach the content-hashed output. Verified, not assumed.
 - **The marker**, which does both. Chosen.
 
-`IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.1.3 and 7.1.3. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro collected the image as an import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
+`IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.1.3, 7.1.3 and 7.4.2. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro emitted an image import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
 
-Only extensions in Astro's `VALID_INPUT_FORMATS` may carry the marker:
+What the store holds afterwards is Astro's business, and it has already changed once inside the peer range:
 
-- For anything else Astro strips the prefix and hands the consumer an unanchored relative path, which is why `src` is `null` for non-images and they take the `href` route instead.
-- `imageExtensions` in `loaders.ts` mirrors that list and is tied to Astro's public `ImageInputFormat` with `satisfies`, so a format added or removed there is a compile error here.
+- From astro 7.4 on the marker is consumed while the store is written. `data.src` holds the plain relative path, and the entry carries `assetImports` and `imageImports` beside it.
+- So the marker's absence from the written store means Astro took it, not that Core stopped emitting it. The assertions read the emitted imports instead.
+
+Astro keeps two format lists, and an extension has to be in both to be worth a marker:
+
+- `VALID_INPUT_FORMATS` is what the content store recognizes a marker for. For anything else Astro strips the prefix and hands the consumer an unanchored relative path, which is why `src` is `null` for non-images and they take the `href` route instead.
+- `VALID_SUPPORTED_FORMATS` is what the image service validates against. `<Image>` on a format outside it throws `UnsupportedImageFormat` and fails the build, measured against the installed 7.4.2.
+- The second is the narrower one, and the difference is `apng`. It joined the input list in 7.2.5 and is in the supported list on no release, checked from 6.1.3 to 7.4.2, so an apng carrying the marker would reach the consumer as an image that cannot be rendered.
+- `imageExtensions` in `loaders.ts` therefore mirrors `VALID_SUPPORTED_FORMATS`, and an apng takes the `href` route a non-image takes. That list is identical on every astro the peer range allows, so the table needs no release per entry and the loader does not read the installed astro's version.
+- It is typed `Record<ImageInputFormat, boolean> & Record<string, boolean>`. The first half makes a format Astro adds to the input list a compile error here, which is where the two lists get compared again. The index signature is what lets the table name `apng`, which the types at the floor do not know, so pinning the floor type checks.
+
+`src/index.astro.assets.test.ts` takes an apng through a real `sync()`, and `src/astro/loaders.test.ts` covers the table itself. Neither sees Astro moving a format into the supported list, so read both lists when bumping astro, see [`peer-dependencies.md`](./peer-dependencies.md).
 
 The parse-time schema declares `src` as a nullable string, because a marker string is what is stored and validated. The type consumers see is declared separately through `createSchema`'s `types`, as `ImageMetadata | null`.
 

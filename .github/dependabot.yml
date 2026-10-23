@@ -9,7 +9,21 @@ updates:
     directory: '/' # Location of package manifests
     schedule:
       interval: 'daily'
+    # pnpm refuses a version younger than minimumReleaseAge, so a pull request
+    # proposing one fails at `pnpm install --frozen-lockfile` on every platform
+    # before the suite runs. Waiting longer than that setting is what keeps a
+    # proposal installable, see pnpm-workspace.yaml.
+    cooldown:
+      default-days: 2
     ignore:
       - dependency-name: '@types/node'
         # Node.js types, ignore major updates since we don't want to use types for 22.x.x if we are using 20.x.x
         update-types: ['version-update:semver-major']
+  # The actions both workflows use are pinned to a commit, so nothing updates
+  # them unless Dependabot proposes it
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'daily'
+    cooldown:
+      default-days: 2

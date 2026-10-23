@@ -43,6 +43,8 @@ import { CoreError } from './util/shared.js';
 // including code that requires filesystem access / git integration etc.
 export * from './schema/index.js';
 export * from './util/shared.js';
+// The `cause` an update throws, so a consumer can branch on it
+export type * from './util/entryIssue.js';
 
 /**
  * elek.io Core, the entry point every service hangs off.

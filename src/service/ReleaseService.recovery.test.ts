@@ -54,7 +54,7 @@ describe('ReleaseService recovery', function () {
     // One real release first, so every test below starts from a Project
     // that has a local main branch and a release to bump from
     await core.releases.create({ projectId: project.id });
-  }, 60000);
+  });
 
   beforeEach(async function () {
     await addACollection();

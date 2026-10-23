@@ -77,6 +77,10 @@ const minMustBeLessOrEqualMaxRefinement: [
  * A string field's default value must respect the same length bounds the value
  * itself is validated against. Without this a definition could ship a default
  * that fails on write. min and max are string lengths here, each optional.
+ *
+ * The count is Zod's own `codePointLength`, so this refinement and the schema
+ * `min` and `max` reach the same verdict on the same string instead of
+ * disagreeing over an emoji.
  */
 const stringDefaultLengthWithinRangeRefinement: [
   (data: {
@@ -86,10 +90,16 @@ const stringDefaultLengthWithinRangeRefinement: [
   }) => boolean,
   { message: string; path: string[] },
 ] = [
-  (data) =>
-    data.defaultValue === null ||
-    ((data.min === null || data.defaultValue.length >= data.min) &&
-      (data.max === null || data.defaultValue.length <= data.max)),
+  (data) => {
+    if (data.defaultValue === null) {
+      return true;
+    }
+    const length = z.core.util.codePointLength(data.defaultValue);
+    return (
+      (data.min === null || length >= data.min) &&
+      (data.max === null || length <= data.max)
+    );
+  },
   {
     message: 'The default value length must be within the min and max range',
     path: ['defaultValue'],

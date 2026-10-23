@@ -25,11 +25,11 @@ describe('elekCollections through astro sync', function () {
     asset = await createAsset(project.id);
     collection = await createCollection(project.id);
     await createEntry(project.id, collection.id, asset.id);
-  }, 60000);
+  });
 
   afterAll(async function () {
     await project.destroy();
-  }, 60000);
+  });
 
   /**
    * An Astro project whose content config spreads elekCollections()
@@ -92,7 +92,7 @@ export const collections = {
         )
       )
     ).toBe(true);
-  }, 120000);
+  });
 
   it('should save Assets where a per Project imageDir points instead', async function () {
     const root = await writeAstroProject(
@@ -108,5 +108,5 @@ export const collections = {
       )
     ).toBe(true);
     expect(await Fs.pathExists(Path.join(root, 'src', 'elek'))).toBe(false);
-  }, 120000);
+  });
 });

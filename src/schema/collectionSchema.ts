@@ -91,6 +91,7 @@ export const updateCollectionSchema = collectionFileSchema
     resolutions: z
       .record(uuidSchema, z.record(slugSchema, valueSchema))
       .optional(),
+    acceptedContentLoss: z.array(uuidSchema).optional(),
   });
 export type UpdateCollectionProps = z.infer<typeof updateCollectionSchema>;
 

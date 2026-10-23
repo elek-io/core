@@ -39,7 +39,7 @@ describe('generateApiClientAction (TypeScript output)', () => {
       Path.join(Path.resolve(outDir), 'client.ts'),
       'utf-8'
     );
-  }, 30000);
+  });
 
   afterAll(async () => {
     await project.destroy();
@@ -106,38 +106,34 @@ describe('generateApiClientAction (JavaScript pipeline smoke test)', () => {
     project = await createProject('generateApiClient JS Smoke Test');
     await createCollection(project.id);
     outDir = Path.join(core.util.pathTo.tmp, `api-client-js-${uuid()}`);
-  }, 30000);
+  });
 
   afterAll(async () => {
     await project.destroy();
     await Fs.remove(outDir);
   });
 
-  it(
-    'bundles to .js and emits .d.ts (pipeline only, not type-checked against Core)',
-    { timeout: 60000 },
-    async () => {
-      await generateApiClientAction({
-        outDir,
-        language: 'js',
-        format: 'esm',
-        target: 'es2020',
-        options: { watch: false },
-      });
+  it('bundles to .js and emits .d.ts (pipeline only, not type-checked against Core)', async () => {
+    await generateApiClientAction({
+      outDir,
+      language: 'js',
+      format: 'esm',
+      target: 'es2020',
+      options: { watch: false },
+    });
 
-      const files = await Fs.readdir(Path.resolve(outDir));
-      // The TS *sources* are removed after compilation in the 'js' path.
-      // Declaration files (.d.ts/.d.mts) are emitted output, not sources.
-      const remainingTsSources = files.filter(
-        (f) => f.endsWith('.ts') && !f.endsWith('.d.ts')
-      );
-      expect(remainingTsSources).toEqual([]);
-      expect(files.some((f) => f.endsWith('.js') || f.endsWith('.mjs'))).toBe(
-        true
-      );
-      expect(
-        files.some((f) => f.endsWith('.d.ts') || f.endsWith('.d.mts'))
-      ).toBe(true);
-    }
-  );
+    const files = await Fs.readdir(Path.resolve(outDir));
+    // The TS *sources* are removed after compilation in the 'js' path.
+    // Declaration files (.d.ts/.d.mts) are emitted output, not sources.
+    const remainingTsSources = files.filter(
+      (f) => f.endsWith('.ts') && !f.endsWith('.d.ts')
+    );
+    expect(remainingTsSources).toEqual([]);
+    expect(files.some((f) => f.endsWith('.js') || f.endsWith('.mjs'))).toBe(
+      true
+    );
+    expect(files.some((f) => f.endsWith('.d.ts') || f.endsWith('.d.mts'))).toBe(
+      true
+    );
+  });
 });
