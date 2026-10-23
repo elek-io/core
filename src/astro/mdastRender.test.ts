@@ -1,12 +1,17 @@
 /// <reference types="astro/astro-jsx" />
 
 import { describe, it, expect, expectTypeOf } from 'vitest';
-import { renderTemplate, addAttribute } from 'astro/runtime/server/index.js';
+import { addAttribute, renderTemplate } from 'astro/runtime/server/index.js';
 import {
   mdastRender,
   astroDefaults,
   type MdastAstroRenderers,
 } from './mdastRender.js';
+import {
+  isTableHeaderCell,
+  tableCellAlign,
+  type MdastNodeContext,
+} from '../util/mdastRender.js';
 import type {
   MdAstBlockNode,
   MdAstBlockquote,
@@ -27,6 +32,7 @@ import type {
   MdAstRoot,
   MdAstStrong,
   MdAstTable,
+  MdAstTableAlign,
   MdAstTableCell,
   MdAstTableRow,
   MdAstText,
@@ -382,26 +388,25 @@ const defaultCases: DefaultCase[] = [
   defaultCase({
     node: tableNode,
     tree: blockTree(tableNode),
-    html: '<table><tr><td>cell text</td></tr></table>',
+    html: '<table><thead><tr><th scope="col" style="text-align:left">cell text</th></tr></thead></table>',
     fields: {
-      align: {
-        droppedBecause:
-          'a cell is rendered without knowing its column, so the fold cannot reach the alignment of one',
-        absentFromOutput: 'left',
+      align: { inOutput: 'style="text-align:left"' },
+      children: {
+        inOutput:
+          '<tr><th scope="col" style="text-align:left">cell text</th></tr>',
       },
-      children: { inOutput: '<tr><td>cell text</td></tr>' },
     },
   }),
   defaultCase({
     node: tableRowNode,
     tree: tableRowTree(tableRowNode),
-    html: '<table><tr><td>row cell</td></tr></table>',
-    fields: { children: { inOutput: '<td>row cell</td>' } },
+    html: '<table><thead><tr><th scope="col">row cell</th></tr></thead></table>',
+    fields: { children: { inOutput: '<th scope="col">row cell</th>' } },
   }),
   defaultCase({
     node: tableCellNode,
     tree: tableCellTree(tableCellNode),
-    html: '<table><tr><td>cell content</td></tr></table>',
+    html: '<table><thead><tr><th scope="col">cell content</th></tr></thead></table>',
     fields: { children: { inOutput: 'cell content' } },
   }),
   defaultCase({
@@ -513,6 +518,28 @@ function taskList(checked: boolean | null, text = 'a'): MdAstRoot {
     checked,
     children: [paragraphOf(text)],
   });
+}
+
+/** A table of one `align` entry per column and one row per array of texts */
+function tableRoot(align: MdAstTableAlign[], rows: string[][]): MdAstRoot {
+  return {
+    type: 'root',
+    children: [
+      {
+        type: 'table',
+        align,
+        children: rows.map((cells) => ({
+          type: 'tableRow',
+          // The empty string stands for a cell with no content at all,
+          // which is what a blank markdown cell parses to.
+          children: cells.map((value) => ({
+            type: 'tableCell',
+            children: value === '' ? [] : [{ type: 'text', value }],
+          })),
+        })),
+      },
+    ],
+  };
 }
 
 describe('mdastRender (Astro wrapper)', () => {
@@ -851,6 +878,124 @@ describe('mdastRender (Astro wrapper)', () => {
       expect(first).toContain('id="fnref-n1"');
       expect(second).toContain('id="second-fnref-n1"');
       expect(second).not.toContain('id="fnref-n1"');
+    });
+  });
+
+  describe('table defaults', () => {
+    it('renders the header row as th cells and the body as td cells', () => {
+      const root = tableRoot(
+        [null, null],
+        [
+          ['H1', 'H2'],
+          ['a', 'b'],
+        ]
+      );
+      expect(render(root)).toBe(
+        '<table>' +
+          '<thead><tr><th scope="col">H1</th><th scope="col">H2</th></tr></thead>' +
+          '<tbody><tr><td>a</td><td>b</td></tr></tbody>' +
+          '</table>'
+      );
+    });
+
+    it('names no scope on a body cell', () => {
+      const html = render(tableRoot([null], [['H1'], ['a']]));
+      expect(html).toContain('<td>a</td>');
+      expect(html.match(/scope=/g)).toHaveLength(1);
+    });
+
+    it('applies a column alignment to the header and the body alike', () => {
+      const root = tableRoot(
+        ['left', 'center', 'right'],
+        [
+          ['H1', 'H2', 'H3'],
+          ['a', 'b', 'c'],
+        ]
+      );
+      expect(render(root)).toBe(
+        '<table>' +
+          '<thead><tr>' +
+          '<th scope="col" style="text-align:left">H1</th>' +
+          '<th scope="col" style="text-align:center">H2</th>' +
+          '<th scope="col" style="text-align:right">H3</th>' +
+          '</tr></thead>' +
+          '<tbody><tr>' +
+          '<td style="text-align:left">a</td>' +
+          '<td style="text-align:center">b</td>' +
+          '<td style="text-align:right">c</td>' +
+          '</tr></tbody>' +
+          '</table>'
+      );
+    });
+
+    it('emits no style at all for a column with no alignment', () => {
+      // text-align: left would override the consumer's own CSS and break a
+      // right to left reading direction.
+      const html = render(tableRoot([null], [['H1'], ['a']]));
+      expect(html).not.toContain('style=');
+      expect(html).not.toContain('text-align');
+    });
+
+    it('leaves a cell the align array does not cover without a style', () => {
+      const html = render(tableRoot(['center'], [['H1', 'H2']]));
+      expect(html).toBe(
+        '<table><thead><tr>' +
+          '<th scope="col" style="text-align:center">H1</th>' +
+          '<th scope="col">H2</th>' +
+          '</tr></thead></table>'
+      );
+    });
+
+    it('keeps an empty header cell a header cell', () => {
+      const html = render(tableRoot([null, null], [['', 'H2']]));
+      expect(html).toBe(
+        '<table><thead><tr>' +
+          '<th scope="col"></th><th scope="col">H2</th>' +
+          '</tr></thead></table>'
+      );
+    });
+
+    it('renders a table with only a header row without a tbody', () => {
+      expect(render(tableRoot([null], [['H1']]))).toBe(
+        '<table><thead><tr><th scope="col">H1</th></tr></thead></table>'
+      );
+    });
+
+    it('renders a table with no rows as an empty table, with no thead', () => {
+      expect(render(tableRoot([], []))).toBe('<table></table>');
+    });
+
+    it('wraps every row after the first in one tbody', () => {
+      const html = render(tableRoot([null], [['H1'], ['a'], ['b']]));
+      expect(html).toBe(
+        '<table><thead><tr><th scope="col">H1</th></tr></thead>' +
+          '<tbody><tr><td>a</td></tr><tr><td>b</td></tr></tbody></table>'
+      );
+    });
+
+    it('escapes cell text rather than emitting it as markup', () => {
+      expect(render(tableRoot([null], [['<b>x</b>']]))).toContain(
+        '&lt;b&gt;x&lt;/b&gt;'
+      );
+    });
+
+    it('lets a consumer override tableCell and decide from the context', () => {
+      // Written as a named function with its types spelled out, which is
+      // what the exported context type is for. An .astro frontmatter is
+      // TypeScript, so a handler up there cannot be JSX, but it can be this.
+      const tableCell = (
+        _node: MdAstTableCell,
+        children: astroHTML.JSX.Element[],
+        context: MdastNodeContext
+      ): astroHTML.JSX.Element =>
+        isTableHeaderCell(context)
+          ? renderTemplate`<th${addAttribute(tableCellAlign(context), 'data-align')}>${children}</th>`
+          : renderTemplate`<td>${children}</td>`;
+      const overrides: MdastAstroRenderers = { ...minimalOverrides, tableCell };
+      expect(render(tableRoot(['center'], [['H1'], ['a']]), overrides)).toBe(
+        '<table><thead><tr><th data-align="center">H1</th></tr></thead>' +
+          '<tbody><tr><td>a</td></tr></tbody></table>'
+      );
     });
   });
 

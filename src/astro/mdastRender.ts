@@ -2,11 +2,14 @@
 
 import { renderTemplate, addAttribute } from 'astro/runtime/server/index.js';
 import {
-  mdastRender as primitive,
   extractText,
+  isTableHeaderCell,
+  mdastRender as primitive,
+  tableCellAlign,
   type MdastRenderersBase,
   type DefaultedRendererKey,
   type FrameworkRenderers,
+  type MdastNodeContext,
 } from '../util/mdastRender.js';
 import type { MdAstListItem, MdAstRoot } from '../schema/valueSchema.js';
 
@@ -60,11 +63,47 @@ function taskItemName(node: MdAstListItem): string | null {
 }
 
 /**
+ * A table's rows arrive rendered, so the header and body split is a split of
+ * that array: the first row is the header, the rest are the body. Neither
+ * wrapper is emitted empty, which keeps a table with no rows and one with a
+ * header row only valid.
+ */
+function renderTableSections(
+  rows: AstroElement[]
+): ReturnType<typeof renderTemplate> {
+  const head =
+    rows.length === 0 ? '' : renderTemplate`<thead>${rows[0]}</thead>`;
+  const body =
+    rows.length < 2 ? '' : renderTemplate`<tbody>${rows.slice(1)}</tbody>`;
+  return renderTemplate`<table>${head}${body}</table>`;
+}
+
+/**
+ * A cell renders as a header cell in the table's first row and as a body cell
+ * below it, and takes its column's alignment either way. `scope` names the
+ * column a header cell heads, which is what a screen reader announces.
+ */
+function renderTableCell(
+  children: AstroElement[],
+  context: MdastNodeContext
+): ReturnType<typeof renderTemplate> {
+  const align = tableCellAlign(context);
+  // A column with no alignment gets no style at all, rather than a
+  // hard-coded left, so its body cells keep the start edge of the reading
+  // direction. A user agent centers its header cell, which only the
+  // consumer's own CSS can change.
+  const style = align === null ? null : `text-align:${align}`;
+  return isTableHeaderCell(context)
+    ? renderTemplate`<th scope="col"${addAttribute(style, 'style')}>${children}</th>`
+    : renderTemplate`<td${addAttribute(style, 'style')}>${children}</td>`;
+}
+
+/**
  * The default renderer for every node type that has a safe one, so a consumer
  * overrides only what they care about. Spread under an override object, which
  * is what `mdastRender` below does.
  *
- * Each default renders every field its node carries, except the six listed as
+ * Each default renders every field its node carries, except the five listed as
  * dropped in the doc below, which name what an override is still needed for.
  *
  * @see ../../docs/markdown-content.md
@@ -95,9 +134,9 @@ export const astroDefaults: Pick<
       : renderTemplate`<li><input type="checkbox"${addAttribute(taskItemName(node), 'aria-label')}${addAttribute(node.checked, 'checked')} disabled>${children}</li>`,
   code: (node) => renderTemplate`<pre><code>${node.value}</code></pre>`,
   thematicBreak: () => renderTemplate`<hr>`,
-  table: (_, children) => renderTemplate`<table>${children}</table>`,
+  table: (_, children) => renderTableSections(children),
   tableRow: (_, children) => renderTemplate`<tr>${children}</tr>`,
-  tableCell: (_, children) => renderTemplate`<td>${children}</td>`,
+  tableCell: (_, children, context) => renderTableCell(children, context),
   // The way back follows the note's blocks rather than ending its last
   // paragraph, which is where remark puts it, for the same reason as the
   // checkbox above. Its label is English, so a site in another language

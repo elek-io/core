@@ -50,7 +50,7 @@ Three things to know before writing a renderer:
 
 - **Astro's `render()` does not apply to an elek.io Entry.** It hands back the rendered HTML an entry carries with it, and the loaders store none, because a finished HTML string cannot keep the `entryReference` and `assetReference` nodes a page needs the UUIDs from.
   - Calling it anyway is not an error and produces nothing: `<Content />` renders empty, `headings` is `[]` and `remarkPluginFrontmatter` is `{}`, with no warning anywhere. Body content arrives on `entry.data` as a tree instead, and `mdastRender` is what turns it into markup.
-- **Three node types require an explicit override**, `html`, `assetReference` and `entryReference`. The other 21 have semantic HTML defaults that render every field their node carries, except the six in [what a default leaves to you](#what-a-default-leaves-to-you).
+- **Three node types require an explicit override**, `html`, `assetReference` and `entryReference`. The other 21 have semantic HTML defaults that render every field their node carries, except the five in [what a default leaves to you](#what-a-default-leaves-to-you).
   - The type system surfaces the required keys because content editors can flip `features.rawHtml`, `features.assetReferences` and `features.entryReferences`, or extend `ofCollections`, on any field at any time.
   - Forcing a documented decision per key stops the renderer from silently no-opping when a new node type appears. Choosing `() => null` is a valid decision and documents "render nothing if this ever appears."
 - **JSX belongs in the template, not in the frontmatter.** That is a property of Astro rather than of `mdastRender`. The `---` fence of an `.astro` file is TypeScript, not TSX, so a handler written as `(node) => <em>{node.alt}</em>` up there is a parse error.
@@ -126,7 +126,9 @@ The three required handlers are ~20 lines for the typical case. Without the help
 
 ### Defaults and what you'll commonly override
 
-The defaults emit plain semantic HTML - no class names, no `rel`/`target`, no slug anchors, no syntax highlighting. The shape is `(node, children) => ...` for parents and `(node) => ...` for leaves. Each snippet below goes into the renderers object at the `mdastRender` call in the template, next to the three required handlers. Common override patterns:
+The defaults emit plain semantic HTML - no class names, no `rel`/`target`, no slug anchors, no syntax highlighting.
+
+A handler's shape is `(node, children, context) => ...` for a parent and `(node, context) => ...` for a leaf, and one that does not need the [context](#where-a-node-sits) leaves the parameter out. Each snippet below goes into the renderers object at the `mdastRender` call in the template, next to the three required handlers. Common override patterns:
 
 **Slug-id anchors on headings (table of contents).** `extractText` is exported from `@elek-io/core` and returns the concatenated plain text of an mdast node.
 
@@ -213,22 +215,21 @@ root: (_, children) => <article class="prose">{children}</article>,
 
 ### What a default leaves to you
 
-Every default renders every field of its node except these six. Nothing else of a node is dropped, so an ordered list keeps the number it counts from and a task item keeps its checked state without you writing a handler.
+Every default renders every field of its node except these five. Nothing else of a node is dropped, so an ordered list keeps the number it counts from and a task item keeps its checked state without you writing a handler.
 
 | Field | What the default does with it | Override to get |
 | --- | --- | --- |
 | `code.lang` | nothing, `<pre><code>` carries no class | the class name your highlighter reads, see `code` above |
 | `code.meta` | nothing, it is the option string of a highlighter Core does not ship | whatever your highlighter makes of it |
-| `list.spread` | nothing, see the tight list below | nothing, an override cannot reach it either |
+| `list.spread` | nothing, see the tight list below | a tight item, from a `paragraph` override that reads it off its [context](#where-a-node-sits) |
 | `listItem.spread` | the same | the same |
 | `footnoteDefinition.label` | nothing, the authored spelling of the identifier shows on the reference instead | it on the note as well |
-| `table.align` | nothing, see the table below | nothing, an override cannot reach it either |
 
-### Where a handler cannot reach
+### Where a default cannot reach
 
-A handler is given its own node and its already rendered children, never its position or its siblings. Five things follow, and the defaults ship them visibly rather than working around them.
+A parent's default is handed its children already rendered, so it cannot reach inside them, and one `astroDefaults` object serves every render. Five things follow, and the defaults ship them visibly rather than working around them.
 
-- **A task item's checkbox precedes its text** instead of opening the item's first paragraph, which is where remark puts it. The paragraph arrives already rendered, so an override cannot reach inside it either. `li > p { display: inline }` is the CSS that puts box and text on one line, and it keeps the list marker, which the default leaves in place by adding no class name.
+- **A task item's checkbox precedes its text** instead of opening the item's first paragraph, which is where remark puts it. The paragraph arrives already rendered, so it takes a `paragraph` override to put the box inside it. `li > p { display: inline }` is the CSS that puts box and text on one line, and it keeps the list marker, which the default leaves in place by adding no class name.
 - **A task item's checkbox is named with the item's own text.** A `<label>` cannot wrap blocks that arrive already rendered, so the name goes on an `aria-label` instead and is read twice, once as the box's name and once as the text. A list directly inside the item is left out, whether it holds tasks or plain items, and an item whose text is an image or only whitespace gets no attribute.
 - **A note's way back follows its blocks** instead of ending its last paragraph, for the same reason.
 - **A tight list item keeps its paragraph**, so `<li><p>text</p></li>` rather than `<li>text</li>`. It is valid and semantic, and it is one `<p>` of margin away from what other renderers emit.
@@ -254,7 +255,59 @@ footnoteDefinition: (node, children) => (
 
 The back-link's `aria-label` is English, so a site in another language overrides `footnoteDefinition` for that too.
 
-**A table's header cells are out of reach of an override as well.** `tableCell` is handed its own node and its children, and nothing tells it which row or column it sits in. So `<th scope="col">` and `table.align` are out of reach of a default and of your override alike: every cell renders as `<td>` and alignment is lost. Follow [issue 244](https://github.com/elek-io/core/issues/244) for the fix.
+### Where a node sits
+
+An mdast node does not carry its own position, and some of what a handler has to decide is only knowable from it. A table cell is the clear case: nothing on the cell says whether it heads a column, and the alignment of its column sits on the table.
+
+So every handler receives an `MdastNodeContext` as its last argument, exported from `@elek-io/core`:
+
+| Field | Holds |
+| --- | --- |
+| `index` | the node's position among its parent's children, 0 for the root |
+| `ancestors` | every ancestor, the root first and the direct parent last, so `ancestors.at(-1)` is the parent |
+
+Two things follow from that shape:
+
+- There is no `parent` field, because `ancestors.at(-1)` already is one.
+- The `ancestors` array is shared by a node's siblings. Read it, never write to it.
+
+A handler that does not need it declares fewer parameters, which is why every renderers object written before the context existed still compiles.
+
+### Tables
+
+A table's header is its first row, which is all mdast records. The defaults turn that into the markup a screen reader needs:
+
+```text
+<table>
+  <thead><tr><th scope="col">Field</th><th scope="col">Type</th></tr></thead>
+  <tbody><tr><td>slug</td><td>string</td></tr></tbody>
+</table>
+```
+
+- The first row's cells are `<th scope="col">`, every row below holds `<td>`, and an empty header cell stays a header cell.
+- `<thead>` and `<tbody>` wrap those rows, and neither is emitted empty. A table of one row is a header with no body.
+- A column's alignment arrives as `style="text-align:left|center|right"` on every cell of that column, header and body alike.
+- A column the markdown left unaligned gets no style at all, instead of a hard-coded left, so its body cells keep the start edge of the reading direction. Its header cell is centered, because that is what a user agent does with a `<th>` of its own accord, and only your CSS can change that.
+
+`table.align` sits on the table and the cell is what renders it, so two helpers exported from `@elek-io/core` answer a cell's two questions from its context. Both are what the defaults use:
+
+```typescript
+import { isTableHeaderCell, tableCellAlign } from '@elek-io/core';
+
+tableCell: (_, children, context) => {
+  const align = tableCellAlign(context); // 'left' | 'center' | 'right' | null
+  const style = align ? { textAlign: align } : undefined;
+  return isTableHeaderCell(context) ? (
+    <th scope="col" style={style}>{children}</th>
+  ) : (
+    <td style={style}>{children}</td>
+  );
+},
+```
+
+Both answer from a cell's context, so `isTableHeaderCell` is false for a row. A `tableRow` override that asks whether it is the header row reads `context.index === 0`.
+
+**A table has no caption**, because mdast has no caption node, so there is nothing for Core to render one from. That matters when you put a wide table in a horizontally scrolling box: the box is a scrollable region, and a region needs a name and keyboard reach of its own. Name it from whatever your page knows, the heading above the table for example, rather than expecting one in the tree.
 
 ### Reusable per-site renderer
 
@@ -295,14 +348,16 @@ Core does not ship this component itself - it would be a thin one-file wrapper, 
 
 If you're targeting a framework Core doesn't ship a wrapper for yet (React, Vue, Solid, SvelteKit and so on), use the framework-agnostic primitive directly. `mdastRender` and `MdastRenderersBase<T>` are exported from `@elek-io/core`.
 
-The primitive is the same typed fold the Astro binding wraps. `T` is your framework's element type, and you supply one handler per node type. Parents receive their already-rendered `children`, leaves receive just the node.
+The primitive is the same typed fold the Astro binding wraps. `T` is your framework's element type, and you supply one handler per node type. Parents receive their already-rendered `children`, leaves receive just the node, and both receive the [context](#where-a-node-sits) last.
 
 The example below uses React (`T = ReactNode`). For Vue bind `T = VNode`, for Solid `T = JSX.Element`. Only the element factory changes, the structure stays identical.
 
 ```tsx
 import {
   extractText,
+  isTableHeaderCell,
   mdastRender,
+  tableCellAlign,
   type MdAstListItem,
   type MdastRenderersBase,
 } from '@elek-io/core';
@@ -359,9 +414,24 @@ const renderers: MdastRenderersBase<ReactNode> = {
     </pre>
   ),
   thematicBreak: () => <hr />,
-  table: (_, children) => <table>{children}</table>,
+  table: (_, children) => (
+    <table>
+      {children.length > 0 && <thead>{children[0]}</thead>}
+      {children.length > 1 && <tbody>{children.slice(1)}</tbody>}
+    </table>
+  ),
   tableRow: (_, children) => <tr>{children}</tr>,
-  tableCell: (_, children) => <td>{children}</td>,
+  tableCell: (_, children, context) => {
+    const align = tableCellAlign(context);
+    const style = align ? { textAlign: align } : undefined;
+    return isTableHeaderCell(context) ? (
+      <th scope="col" style={style}>
+        {children}
+      </th>
+    ) : (
+      <td style={style}>{children}</td>
+    );
+  },
   footnoteDefinition: (node, children) => (
     <div id={`fn-${node.identifier}`}>
       {children}

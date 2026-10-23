@@ -69,12 +69,12 @@ describe('elekCollections', function () {
 
     other = await createProject('Derived Collections Test Two');
     await createCollectionWithSlug(other.id, 'page', 'pages');
-  }, 60000);
+  });
 
   afterAll(async function () {
     await project.destroy();
     await other.destroy();
-  }, 60000);
+  });
 
   it('should derive one collection per elek.io Collection plus the Assets one', async function () {
     const config = defineElekConfig({
@@ -92,7 +92,7 @@ describe('elekCollections', function () {
     expect(collections['websiteProducts']).toMatchObject({
       type: 'content_layer',
     });
-  }, 30000);
+  });
 
   it('should prefix the keys of every declared Project without mixing them', async function () {
     const config = defineElekConfig({
@@ -108,7 +108,7 @@ describe('elekCollections', function () {
       'websiteBlogPosts',
       'websiteProducts',
     ]);
-  }, 30000);
+  });
 
   it('should warn that the bare call is for exploration only', async function () {
     // It derives everything, which is what gets someone started and
@@ -130,7 +130,7 @@ describe('elekCollections', function () {
       logged.some((props) => props.meta?.['elek.collection.count'] === 3)
     ).toBe(true);
     warn.mockRestore();
-  }, 30000);
+  });
 
   it('should stay silent once a selection is given', async function () {
     const config = defineElekConfig({
@@ -145,7 +145,7 @@ describe('elekCollections', function () {
 
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
-  }, 30000);
+  });
 
   it('should derive exactly what the selection names and nothing else', async function () {
     const config = defineElekConfig({
@@ -164,7 +164,7 @@ describe('elekCollections', function () {
       'websiteAssets',
       'websiteProducts',
     ]);
-  }, 30000);
+  });
 
   it('should derive no Assets at all when the key is left out', async function () {
     const config = defineElekConfig({
@@ -176,7 +176,7 @@ describe('elekCollections', function () {
     });
 
     expect(Object.keys(collections)).toEqual(['websiteProducts']);
-  }, 30000);
+  });
 
   it('should derive no Collections at all when the key is left out', async function () {
     const config = defineElekConfig({
@@ -188,7 +188,7 @@ describe('elekCollections', function () {
     });
 
     expect(Object.keys(collections)).toEqual(['websiteAssets']);
-  }, 30000);
+  });
 
   it('should take the Assets directories of a named alias', async function () {
     const config = defineElekConfig({
@@ -200,7 +200,7 @@ describe('elekCollections', function () {
     });
 
     expect(Object.keys(collections)).toEqual(['websiteAssets']);
-  }, 30000);
+  });
 
   it('should accept a Collection UUID as well as its slug', async function () {
     const products = await core.collections.readBySlug({
@@ -216,7 +216,7 @@ describe('elekCollections', function () {
     });
 
     expect(Object.keys(collections)).toEqual(['websiteProducts']);
-  }, 30000);
+  });
 
   it('should throw naming the alias when a selected Collection does not exist', async function () {
     // Silently deriving nothing would look exactly like a Collection
@@ -238,7 +238,7 @@ describe('elekCollections', function () {
     expect(error instanceof CoreError && error.message).toContain('website');
     // Says what the Project does have, so a typo is obvious
     expect(error instanceof CoreError && error.message).toContain('blog-posts');
-  }, 30000);
+  });
 
   it('should throw when a selection derives nothing at all', async function () {
     // Same reason as the typo above, an empty result is what a broken
@@ -253,7 +253,7 @@ describe('elekCollections', function () {
     await expect(
       elekCollections(config, { collections: {}, assets: {} })
     ).rejects.toThrow(/derives no collections/);
-  }, 30000);
+  });
 
   it('should throw when a selected Collection can reference excluded Assets', async function () {
     // Following the reference is getEntry("<alias>Assets", ref.id), so
@@ -318,7 +318,7 @@ describe('elekCollections', function () {
     } finally {
       await referencing.destroy();
     }
-  }, 60000);
+  });
 
   it('should throw when a markdown field may reference excluded Assets', async function () {
     // An Asset reference does not need a reference field, markdown
@@ -392,7 +392,7 @@ describe('elekCollections', function () {
     } finally {
       await referencing.destroy();
     }
-  }, 60000);
+  });
 
   it('should throw naming both sides when two derived keys collide', async function () {
     // toPascalCase cannot mark a digit boundary, so "a-1b" and "a1b"
@@ -423,7 +423,7 @@ describe('elekCollections', function () {
     } finally {
       await collisions.destroy();
     }
-  }, 60000);
+  });
 
   it('should throw when two aliases and Collections meet in the same key', async function () {
     // Alias "web" plus "site-posts" and alias "webSite" plus "posts"
@@ -447,7 +447,7 @@ describe('elekCollections', function () {
       await first.destroy();
       await second.destroy();
     }
-  }, 60000);
+  });
 
   it('should fail with the alias when a declared Project is not available', async function () {
     const config = defineElekConfig({
@@ -455,7 +455,7 @@ describe('elekCollections', function () {
     });
 
     await expect(elekCollections(config)).rejects.toThrow(/missing/);
-  }, 30000);
+  });
 
   it('should accept only the declared aliases in the assets option', function () {
     const config = defineElekConfig({

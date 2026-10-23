@@ -1,0 +1,64 @@
+/**
+ * The suite's time budgets, derived from measured durations.
+ *
+ * Each budget is the slowest measured duration of what it bounds times one
+ * multiple. The measured set is windows-only and no platform is reliably the
+ * slowest, so every number here is a floor that rises as the suite gains
+ * tests, and a slower run supersedes one at the next re-measurement of the
+ * whole set rather than on the spot.
+ *
+ * @see ../../contributing/testing.md
+ */
+
+/**
+ * Margin every budget carries over the slowest duration measured for it.
+ *
+ * It is the smallest whole number above the run to run spread of one test on
+ * the measured runner, which reached 2.2x at the 90th percentile of the 306
+ * tests those jobs timed at least twice.
+ */
+export const budgetMultiple = 3;
+
+/**
+ * Slowest single test measured on windows-2025 on 2026-10-23, in milliseconds.
+ *
+ * ReleaseService.remote.test.ts, "should refuse a Release whose draft is behind
+ * the remote draft before changing anything".
+ */
+export const slowestTestMs = 55_872;
+
+/**
+ * Slowest fixture hook measured on windows-2025 on 2026-10-23, in milliseconds.
+ *
+ * Read as the whole duration of logSweep.test.ts, which holds one beforeAll
+ * and no other hook, and whose 19 tests each stayed below the 300ms the
+ * reporter prints a duration for.
+ */
+export const slowestHookMs = 78_796;
+
+/**
+ * Slowest whole test job of the measured set, in seconds.
+ *
+ * It ran 99% of the 15 minute cap in force then, so the next slowdown would
+ * have been killed with no summary of what failed. A verification run of the
+ * same day took 937s on another platform, which the cap now clears too.
+ */
+export const slowestJobSeconds = 889;
+
+/** The vitest `testTimeout`, and the floor every per-test budget keeps. */
+export const testTimeoutMs = slowestTestMs * budgetMultiple;
+
+/**
+ * The vitest `hookTimeout`, and the floor every per-hook budget keeps.
+ *
+ * It is paid once per test, because a `beforeEach` runs once per test, so one
+ * stuck hook can still exhaust the job cap rather than failing on a named
+ * test. The widest one in src/ leaves a margin of 732ms, measured in
+ * contributing/testing.md.
+ */
+export const hookTimeoutMs = slowestHookMs * budgetMultiple;
+
+/** What every job that runs the suite gives itself, in whole minutes. */
+export const jobTimeoutMinutes = Math.ceil(
+  (slowestJobSeconds * budgetMultiple) / 60
+);

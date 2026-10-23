@@ -17,7 +17,7 @@ The block count floor is `min ?? (isRequired ? 1 : 0)`, so a required markdown f
 
 ## The render fold
 
-[`mdastRender`](../src/util/mdastRender.ts) is a typed fold over an `MdAstRoot`. Every node type has a required handler in `MdastRenderersBase<T>`, the walk descends depth first and calls each parent handler with its already rendered children, then the root handler combines.
+[`mdastRender`](../src/util/mdastRender.ts) is a typed fold over an `MdAstRoot`. Every node type has a required handler in `MdastRenderersBase<T>`, which the depth first walk calls with the node, its rendered children where it has any, and last its `MdastNodeContext`.
 
 It is framework-agnostic, `T` is the consumer's element type. A framework binding layers defaults on top and narrows what a consumer has to supply, which is what `@elek-io/core/astro` does. Both the primitive and its types reach consumers through `util/shared.ts`.
 
@@ -25,17 +25,35 @@ Exhaustiveness is the point. A node type added in a later Core release becomes a
 
 ### What a parent handler cannot see
 
-A parent is called with its children already rendered, which is what makes the fold framework-agnostic: `T` is opaque to it. Three placements are out of reach because of it, and each one is a divergence from what remark emits:
+A parent is called with its children already rendered, which is what makes the fold framework-agnostic: `T` is opaque to it. Three placements are out of reach of a parent's handler because of it, and each one is a divergence from what remark emits:
 
-| Where | What the fold can do | What remark does |
+| Where | What the defaults do | What remark does |
 | --- | --- | --- |
 | A tight list item | `<li><p>text</p></li>` | `<li>text</li>` |
 | A task item's checkbox | before the item's first block | inside its first paragraph |
 | A footnote's way back | after the note's blocks | at the end of its last paragraph |
 
-All three need a handler to know where it sits, which is the same positional context a table cell needs for `<th scope="col">` and `table.align`. Fixing them separately would mean two mechanisms, so they wait for that one.
+A `paragraph` handler can reach all three, since its [context](#how-a-handler-learns-where-its-node-sits) names the item or the note it sits in. The defaults leave them to the `list`, `listItem` and `footnoteDefinition` handlers, so they ship the divergence visibly rather than working around it. A `<p>` of margin in a list item is reported, and CSS that hides it is not.
 
-Until then the defaults ship the divergence visibly rather than working around it. A `<p>` of margin in a list item is reported, and CSS that hides it is not.
+## How a handler learns where its node sits
+
+A handler used to be given its node and its rendered children, and nothing else. That is not enough for a table: `table.align` reaches the `table` handler while the cell is what has to carry the alignment, and nothing on a `tableCell` says whether it heads a column.
+
+The decision is an `MdastNodeContext`, handed to every handler as its last argument, holding `index` and `ancestors` with the root first and the direct parent last.
+
+| Rejected | Why not |
+| --- | --- |
+| A `parent` field beside `ancestors` | `ancestors.at(-1)` already is it, and one fact under two names drifts |
+| A dedicated `tableHeaderCell` renderer key | It fixes one node type and leaves `align` nowhere to come from. There is no `tableHeaderCell` node type either, so the `walk` switch would stop mapping one to one onto `node.type`, which is what the exhaustiveness check rests on. A 25th required key is also the bigger break: every object typed against `MdastRenderersBase` stops compiling |
+
+What holds:
+
+- **A handler that leaves out the context stays assignable to its type**, a parent with two parameters and a leaf with one, so every renderers object written before the context existed still compiles untouched. `mdastRender.test.ts` asserts both with `expectTypeOf` rather than leaving it to the eye.
+- **Every handler is always handed a context**, so none has to guard for `undefined`. The root's is `index` 0 with no ancestors, which is the truth about the root rather than a placeholder.
+- **One child walk**, `renderChildren`, is the only place the walk descends. Each parent case of the switch calls it, so a node's ancestors array is built once and shared by its children rather than built once per case.
+- **The array is shared, so it is read only** in `MdastNodeContext`. Mutating it would reach a node's siblings.
+
+`isTableHeaderCell` and `tableCellAlign` sit next to the fold and answer a cell's two questions from its context. They are exported, because a consumer overriding `tableCell` needs the same two answers and should not reimplement Core's default to get them.
 
 ## Drift against `@types/mdast`
 

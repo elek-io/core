@@ -29,7 +29,7 @@ describe('exportAction', () => {
     const collection = await createCollection(project.id);
     await createEntry(project.id, collection.id, asset.id);
     collectionSlugPlural = collection.slug.plural;
-  }, 30000);
+  });
 
   afterAll(async () => {
     await project.destroy();

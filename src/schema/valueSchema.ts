@@ -418,16 +418,17 @@ export const mdAstTableRowSchema = z.object({
 });
 export type MdAstTableRow = z.infer<typeof mdAstTableRowSchema>;
 
+export const mdAstTableAlignSchema = z.union([
+  z.literal('left'),
+  z.literal('right'),
+  z.literal('center'),
+  z.null(),
+]);
+export type MdAstTableAlign = z.infer<typeof mdAstTableAlignSchema>;
+
 export const mdAstTableSchema = z.object({
   type: z.literal('table'),
-  align: z.array(
-    z.union([
-      z.literal('left'),
-      z.literal('right'),
-      z.literal('center'),
-      z.null(),
-    ])
-  ),
+  align: z.array(mdAstTableAlignSchema),
   children: z.array(mdAstTableRowSchema),
 });
 export type MdAstTable = z.infer<typeof mdAstTableSchema>;

@@ -1,7 +1,7 @@
 /**
  * A typed fold over an MdAstRoot. Every node type has a required handler in
- * `MdastRenderersBase<T>`, the walk descends depth-first and calls each parent
- * handler with its already-rendered children, then the root handler combines.
+ * `MdastRenderersBase<T>`, which the depth-first walk calls with the node,
+ * its rendered children where it has any, and last its `MdastNodeContext`.
  *
  * Framework-agnostic, `T` is the consumer's element type. A framework wrapper
  * such as the astro entry binds `T` to its JSX flavour and defaults every node
@@ -34,11 +34,51 @@ import type {
   MdAstRoot,
   MdAstStrong,
   MdAstTable,
+  MdAstTableAlign,
   MdAstTableCell,
   MdAstTableRow,
   MdAstText,
   MdAstThematicBreak,
 } from '../schema/valueSchema.js';
+
+/**
+ * Where a node sits in the tree, handed to every handler as its last
+ * argument. It is what a handler cannot read off its own node: a `tableCell`
+ * needs the table's `align` and whether its row is the header row, and
+ * neither is on the cell.
+ *
+ * The `ancestors` array is shared by a node's siblings, so treat it as read
+ * only.
+ *
+ * @see ../../contributing/markdown-internals.md
+ */
+export interface MdastNodeContext {
+  /** Position among the parent's children. The root is 0. */
+  index: number;
+  /**
+   * Root first, the direct parent last, so `ancestors.at(-1)` is the parent.
+   * Empty for the root. There is no `parent` field, it would name one fact
+   * twice.
+   */
+  ancestors: readonly MdAstAnyNode[];
+}
+
+/**
+ * A handler for a node type that has children. It is called with the node,
+ * its already rendered children and its context. `N` is the node type, `T`
+ * the consumer's element type.
+ */
+export type ParentHandler<N, T> = (
+  node: N,
+  children: T[],
+  context: MdastNodeContext
+) => T;
+
+/**
+ * A handler for a node type that has no children. It is called with the node
+ * and its context. `N` is the node type, `T` the consumer's element type.
+ */
+export type LeafHandler<N, T> = (node: N, context: MdastNodeContext) => T;
 
 export interface MdastRenderersBase<T> {
   /**
@@ -46,42 +86,69 @@ export interface MdastRenderersBase<T> {
    * framework wrapper supplies a default that wraps in its fragment
    * equivalent; consumers can override to wrap in `<article>` or similar.
    */
-  root: (node: MdAstRoot, children: T[]) => T;
+  root: ParentHandler<MdAstRoot, T>;
 
   // Block parents
-  paragraph: (node: MdAstParagraph, children: T[]) => T;
-  heading: (node: MdAstHeading, children: T[]) => T;
-  blockquote: (node: MdAstBlockquote, children: T[]) => T;
-  list: (node: MdAstList, children: T[]) => T;
-  table: (node: MdAstTable, children: T[]) => T;
-  footnoteDefinition: (node: MdAstFootnoteDefinition, children: T[]) => T;
+  paragraph: ParentHandler<MdAstParagraph, T>;
+  heading: ParentHandler<MdAstHeading, T>;
+  blockquote: ParentHandler<MdAstBlockquote, T>;
+  list: ParentHandler<MdAstList, T>;
+  table: ParentHandler<MdAstTable, T>;
+  footnoteDefinition: ParentHandler<MdAstFootnoteDefinition, T>;
 
   // Block leaves
-  code: (node: MdAstCode) => T;
-  thematicBreak: (node: MdAstThematicBreak) => T;
+  code: LeafHandler<MdAstCode, T>;
+  thematicBreak: LeafHandler<MdAstThematicBreak, T>;
 
   // Sub-nodes (block-ish; appear only inside their parents)
-  listItem: (node: MdAstListItem, children: T[]) => T;
-  tableRow: (node: MdAstTableRow, children: T[]) => T;
-  tableCell: (node: MdAstTableCell, children: T[]) => T;
+  listItem: ParentHandler<MdAstListItem, T>;
+  tableRow: ParentHandler<MdAstTableRow, T>;
+  tableCell: ParentHandler<MdAstTableCell, T>;
 
   // Phrasing parents
-  emphasis: (node: MdAstEmphasis, children: T[]) => T;
-  strong: (node: MdAstStrong, children: T[]) => T;
-  delete: (node: MdAstDelete, children: T[]) => T;
-  link: (node: MdAstLink, children: T[]) => T;
-  entryReference: (node: MdAstEntryReference, children: T[]) => T;
+  emphasis: ParentHandler<MdAstEmphasis, T>;
+  strong: ParentHandler<MdAstStrong, T>;
+  delete: ParentHandler<MdAstDelete, T>;
+  link: ParentHandler<MdAstLink, T>;
+  entryReference: ParentHandler<MdAstEntryReference, T>;
 
   // Phrasing leaves
-  text: (node: MdAstText) => T;
-  inlineCode: (node: MdAstInlineCode) => T;
-  break: (node: MdAstBreak) => T;
-  image: (node: MdAstImage) => T;
-  footnoteReference: (node: MdAstFootnoteReference) => T;
-  assetReference: (node: MdAstAssetReference) => T;
+  text: LeafHandler<MdAstText, T>;
+  inlineCode: LeafHandler<MdAstInlineCode, T>;
+  break: LeafHandler<MdAstBreak, T>;
+  image: LeafHandler<MdAstImage, T>;
+  footnoteReference: LeafHandler<MdAstFootnoteReference, T>;
+  assetReference: LeafHandler<MdAstAssetReference, T>;
 
   // Shared between block and phrasing (mdast spec uses one type for both)
-  html: (node: MdAstHtml) => T;
+  html: LeafHandler<MdAstHtml, T>;
+}
+
+/**
+ * Whether a table cell sits in the table's header row, which is what a
+ * `tableCell` handler decides between `th` and `td` on. The cell node does
+ * not carry it, mdast marks the header by position.
+ *
+ * False for a context that is not a table cell's.
+ */
+export function isTableHeaderCell(context: MdastNodeContext): boolean {
+  const row = context.ancestors.at(-1);
+  const table = context.ancestors.at(-2);
+  if (row?.type !== 'tableRow' || table?.type !== 'table') return false;
+  return table.children[0] === row;
+}
+
+/**
+ * The alignment the markdown gave the column a table cell sits in, which
+ * `table.align` holds for the whole table and no cell carries.
+ *
+ * Null for a column with no alignment, for a column an `align` array is too
+ * short to cover, and for a context that is not a table cell's.
+ */
+export function tableCellAlign(context: MdastNodeContext): MdAstTableAlign {
+  const table = context.ancestors.at(-2);
+  if (table?.type !== 'table') return null;
+  return table.align[context.index] ?? null;
 }
 
 /**
@@ -124,8 +191,9 @@ export type FrameworkRenderers<T> = Pick<
  * with no defaults merged, which is what a binding does for you. `T` is the
  * caller's element type.
  *
- * The walk is depth-first and a parent handler receives its already-rendered
- * children. An unknown node type throws a plain `Error`, not a `CoreError`.
+ * The walk is depth-first. A parent handler receives its already-rendered
+ * children, and every handler receives its `MdastNodeContext` last. An
+ * unknown node type throws a plain `Error`, not a `CoreError`.
  *
  * @see ../../docs/markdown-content.md
  */
@@ -133,7 +201,7 @@ export function mdastRender<T>(
   root: MdAstRoot,
   renderers: MdastRenderersBase<T>
 ): T {
-  return walk(root, renderers);
+  return walk(root, renderers, { index: 0, ancestors: [] });
 }
 
 /**
@@ -187,104 +255,143 @@ export function extractText(node: MdAstAnyNode, separator = ' '): string {
   return parts.join(childSeparator);
 }
 
-function walk<T>(node: MdAstAnyNode, renderers: MdastRenderersBase<T>): T {
+function walk<T>(
+  node: MdAstAnyNode,
+  renderers: MdastRenderersBase<T>,
+  context: MdastNodeContext
+): T {
   switch (node.type) {
     case 'root':
       return renderers.root(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'paragraph':
       return renderers.paragraph(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'heading':
       return renderers.heading(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'blockquote':
       return renderers.blockquote(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'list':
       return renderers.list(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'listItem':
       return renderers.listItem(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'code':
-      return renderers.code(node);
+      return renderers.code(node, context);
     case 'thematicBreak':
-      return renderers.thematicBreak(node);
+      return renderers.thematicBreak(node, context);
     case 'html':
-      return renderers.html(node);
+      return renderers.html(node, context);
     case 'table':
       return renderers.table(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'tableRow':
       return renderers.tableRow(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'tableCell':
       return renderers.tableCell(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'footnoteDefinition':
       return renderers.footnoteDefinition(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'text':
-      return renderers.text(node);
+      return renderers.text(node, context);
     case 'inlineCode':
-      return renderers.inlineCode(node);
+      return renderers.inlineCode(node, context);
     case 'break':
-      return renderers.break(node);
+      return renderers.break(node, context);
     case 'image':
-      return renderers.image(node);
+      return renderers.image(node, context);
     case 'footnoteReference':
-      return renderers.footnoteReference(node);
+      return renderers.footnoteReference(node, context);
     case 'assetReference':
-      return renderers.assetReference(node);
+      return renderers.assetReference(node, context);
     case 'emphasis':
       return renderers.emphasis(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'strong':
       return renderers.strong(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'delete':
       return renderers.delete(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'link':
       return renderers.link(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     case 'entryReference':
       return renderers.entryReference(
         node,
-        node.children.map((c) => walk(c, renderers))
+        renderChildren(node, renderers, context),
+        context
       );
     default:
       return assertNever(node);
   }
+}
+
+/** Any node that carries children, which is every parent case above. */
+type MdAstParentNode = Extract<MdAstAnyNode, { children: unknown[] }>;
+
+/**
+ * Renders a parent's children, the one place the walk descends. Every parent
+ * case above calls it, so a node's ancestors array is built once rather than
+ * once per case, and every child's context shares it.
+ */
+function renderChildren<T>(
+  node: MdAstParentNode,
+  renderers: MdastRenderersBase<T>,
+  context: MdastNodeContext
+): T[] {
+  const ancestors = [...context.ancestors, node];
+  const children: readonly MdAstAnyNode[] = node.children;
+  return children.map((child, index) =>
+    walk(child, renderers, { index, ancestors })
+  );
 }
 
 /**

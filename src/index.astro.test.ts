@@ -195,7 +195,7 @@ export const collections = {
 
     await sync({ root, configFile: false, logLevel: 'info', cacheDir });
     expect(await Fs.readFile(storePath, 'utf-8')).not.toContain(doomed.id);
-  }, 120000);
+  });
 
   it('should throw NotFound listing the declared aliases for an unknown one', function () {
     // The generic makes this a compile error for a config built with

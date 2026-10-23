@@ -142,7 +142,7 @@ describe('ReleaseService against a remote', function () {
     });
     expect(result.version).toEqual(expected.nextVersion);
     expect(await versionAt(remotePath, 'main')).toEqual(expected.nextVersion);
-  }, 60000);
+  });
 
   it('should push main, draft and the tag, so a working copy that synchronizes holds the Release', async function () {
     const remotePath = await remote();
@@ -215,7 +215,7 @@ describe('ReleaseService against a remote', function () {
       );
     }
     expect(await versionAt(remotePath, 'main')).toEqual(diff.nextVersion);
-  }, 90000);
+  });
 
   it('should refuse a Release whose draft is behind the remote draft before changing anything', async function () {
     const remotePath = await remote();
@@ -272,7 +272,7 @@ describe('ReleaseService against a remote', function () {
     await core.projects.synchronize({ id: b.project.id });
     const result = await core.releases.create({ projectId: b.project.id });
     expect(result.diff.collectionChanges).toEqual(ownChanges);
-  }, 90000);
+  });
 
   it('should refuse when the remote main holds a Release its draft lacks', async function () {
     const remotePath = await remote();
@@ -297,7 +297,7 @@ describe('ReleaseService against a remote', function () {
       'PreconditionFailed',
       lacksMain
     );
-  }, 60000);
+  });
 
   it('should refuse when the local main holds commits the remote main lacks', async function () {
     const remotePath = await remote();
@@ -324,7 +324,7 @@ describe('ReleaseService against a remote', function () {
 
     expect(await core.git.revParse(path, 'main')).toEqual(mainBefore);
     expect(await core.git.revParse(remotePath, 'main')).not.toEqual(mainBefore);
-  }, 30000);
+  });
 
   it('should create the remote draft when releasing onto a remote without one', async function () {
     const creator = await createProject();
@@ -353,7 +353,7 @@ describe('ReleaseService against a remote', function () {
       await other.core.projects.branches.current({ id: other.project.id })
     ).toEqual('draft');
     expect(other.project.version).toEqual(result.version);
-  }, 60000);
+  });
 
   // A shell hook needs a POSIX shell, which git on a Windows runner is not
   // guaranteed to have. The race below covers the unwind on every platform
@@ -379,8 +379,7 @@ describe('ReleaseService against a remote', function () {
       expect(await refsOf(remotePath)).toEqual(remoteBefore);
       expect(await stateOf(path)).toEqual(localBefore);
       expect(await refsOf(path, 'refs/tags')).toEqual(tagsBefore);
-    },
-    30000
+    }
   );
 
   it('should land nothing and unwind when the remote draft advances during the Release', async function () {
@@ -420,7 +419,7 @@ describe('ReleaseService against a remote', function () {
     );
     expect(await stateOf(b.path)).toEqual(localBefore);
     expect(await refsOf(b.path, 'refs/tags')).toEqual(tagsBefore);
-  }, 60000);
+  });
 
   it('should refuse a remote without atomic push support and land nothing', async function () {
     const remotePath = await remote();
@@ -446,7 +445,7 @@ describe('ReleaseService against a remote', function () {
     expect(await refsOf(remotePath)).toEqual(remoteBefore);
     expect(await stateOf(path)).toEqual(localBefore);
     expect(await refsOf(path, 'refs/tags')).toEqual(tagsBefore);
-  }, 30000);
+  });
 
   it('should release a Project without a remote against its local main, without fetching', async function () {
     const project = await createProject();
@@ -471,5 +470,5 @@ describe('ReleaseService against a remote', function () {
     expect(second.version).toEqual('0.1.1');
     expect(await versionAt(projectPath, 'main')).toEqual('0.1.1');
     expect(fetch).not.toHaveBeenCalled();
-  }, 30000);
+  });
 });

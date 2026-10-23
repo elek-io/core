@@ -1,4 +1,4 @@
-import type { SupportedLanguage, Uuid } from '../schema/baseSchema.js';
+import type { Uuid } from '../schema/baseSchema.js';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
 import type { ProjectLanguages } from '../schema/projectSchema.js';
 import {
@@ -6,7 +6,13 @@ import {
   getValueSchemaFromFieldDefinition,
 } from '../schema/schemaFromFieldDefinition.js';
 import type { Value } from '../schema/valueSchema.js';
+import {
+  contentLossIssues,
+  lossOfRemovedField,
+  narrowAllowlists,
+} from './contentLoss.js';
 import { buildDefaultValue } from './defaultValueBuilder.js';
+import type { EntryIssue, EntryIssueType } from './entryIssue.js';
 import type { FieldChange } from './fieldDefinitionDiff.js';
 import { isDeepStrictEqual } from 'node:util';
 import { CoreError } from './shared.js';
@@ -47,33 +53,6 @@ export function assertResolutionSlugsAreKnown(
   }
 }
 
-export type EntryIssueType =
-  | 'missing_required'
-  | 'type_mismatch'
-  | 'constraint_violation'
-  | 'unique_collision';
-
-export interface EntryIssue {
-  entryId: Uuid;
-  collectionId: Uuid;
-  fieldDefinitionId: Uuid;
-  fieldSlug: string;
-  issue: EntryIssueType;
-  currentValue?: Value;
-  componentItemId?: Uuid;
-  transformedValues: Record<string, Value>;
-  /**
-   * Set only for `unique_collision`. Mirrors UniqueValueConflict so an editor
-   * can render the clash: the colliding scalar `value` in `language`, and
-   * `conflictingEntryId`, the Entry that already holds it (kept). `value` is the
-   * offending string, distinct from `currentValue` (a full Value object carried
-   * by transform issues).
-   */
-  value?: string;
-  language?: SupportedLanguage;
-  conflictingEntryId?: Uuid;
-}
-
 export interface TransformResult {
   values: Record<string, Value>;
   changed: boolean;
@@ -84,11 +63,10 @@ export interface TransformResult {
  * Rebuilds an Entry's values record on a field definition change, matching by
  * UUID, so a slug swap or a rename plus an add with the same slug is safe.
  *
- * Two deterministic transforms destroy content the caller then writes
- * straight to disk: a value whose definition is gone is dropped, and a
- * narrowed `ofComponents` or `ofCollections` strips the items and Entry
- * references no longer allowed. Asset references stay, an empty allowlist
- * strips nothing, and a non-deterministic change raises an issue instead.
+ * Three of those changes delete stored content: a value whose definition is
+ * gone, and the items and Entry references a narrowed `ofComponents` or
+ * `ofCollections` no longer allows. Each raises a `content_loss` issue, so
+ * the caller decides rather than the transform.
  *
  * @see ../../docs/schema-changes.md
  */
@@ -150,56 +128,39 @@ export function transformEntryValues(
 
     const newFieldDef = uuidToNewFieldDef.get(fieldUuid);
     if (!newFieldDef) {
-      // UUID not in new defs - field was removed, skip (auto-strip)
+      // UUID not in new defs - the field was removed and its value goes
+      issues.push(
+        ...contentLossIssues(
+          {
+            entryId,
+            collectionId,
+            fieldDefinitionId: fieldUuid,
+            // The new definitions declare no slug for it, so the old one
+            fieldSlug: oldSlug,
+            transformedValues: {},
+          },
+          lossOfRemovedField(value)
+        )
+      );
       continue;
     }
 
-    // Place value under new slug (handles renames)
-    let processedValue = value;
-
-    // Auto-strip disallowed component items
-    if (
-      newFieldDef.valueType === 'component' &&
-      value.valueType === 'component' &&
-      'ofComponents' in newFieldDef &&
-      newFieldDef.ofComponents.length > 0
-    ) {
-      const allowedIds = new Set(newFieldDef.ofComponents);
-      const filteredContent = value.content.filter((item) =>
-        allowedIds.has(item.componentId)
-      );
-      if (filteredContent.length !== value.content.length) {
-        processedValue = { ...value, content: filteredContent };
-      }
-    }
-
-    // Auto-strip disallowed collection references
-    if (
-      newFieldDef.valueType === 'reference' &&
-      value.valueType === 'reference' &&
-      'ofCollections' in newFieldDef &&
-      newFieldDef.ofCollections.length > 0
-    ) {
-      const allowedCollections = new Set(newFieldDef.ofCollections);
-      const filteredContent: Record<string, unknown[]> = {};
-      let anyFiltered = false;
-      for (const [language, references] of Object.entries(value.content)) {
-        // Keep non-entry references (assets) unconditionally - ofCollections
-        // only constrains entry references (which have a collectionId property)
-        const filtered = references.filter(
-          (reference) =>
-            !('collectionId' in reference) ||
-            allowedCollections.has(reference.collectionId)
-        );
-        filteredContent[language] = filtered;
-        if (filtered.length !== references.length) {
-          anyFiltered = true;
-        }
-      }
-      if (anyFiltered) {
-        processedValue = { ...value, content: filteredContent };
-      }
-    }
+    // Place value under new slug (handles renames), minus what the new
+    // allowlists no longer allow
+    const narrowed = narrowAllowlists(value, newFieldDef);
+    const processedValue = narrowed.value;
+    issues.push(
+      ...contentLossIssues(
+        {
+          entryId,
+          collectionId,
+          fieldDefinitionId: fieldUuid,
+          fieldSlug: newFieldDef.slug,
+          transformedValues: {},
+        },
+        narrowed.losses
+      )
+    );
 
     // If field was updated (any property changed), validate against new schema
     if (updatedFieldIds.has(fieldUuid)) {

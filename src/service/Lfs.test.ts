@@ -134,7 +134,7 @@ describe('Git LFS', function () {
 
     await core.projects.delete({ id: cloned.id, force: true });
     await Fs.remove(remotePath);
-  }, 60000);
+  });
 
   it('throws a descriptive PreconditionFailed when the remote does not support LFS', async function () {
     const remote = await createLocalRemoteRepository();
