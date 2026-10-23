@@ -57,12 +57,23 @@ Tests should reproduce the environment users actually have, and an artificial fi
 
 ## Timeouts
 
-The vitest `testTimeout` is raised to 15s in [`vitest.config.ts`](../vitest.config.ts) because git-heavy tests that finish in ~3s on the fast runners need 7s or more on Windows and Intel macOS. Parallel test files add CPU contention between workers on the 3 to 4 core CI runners, which is another reason the value stays generous.
+Every budget is a measured duration times one multiple. [`vitest.config.ts`](../vitest.config.ts) reads both of its budgets from [`src/test/budgets.ts`](../src/test/budgets.ts), which holds the measurements they come from.
 
-Overrides for heavier work:
+| Budget | Bounds | Measured | Times 3 |
+| --- | --- | --- | --- |
+| `testTimeout` | every test | 55,872ms, the slowest single test | 167,616ms |
+| `hookTimeout` | every hook | 78,796ms, the slowest fixture hook | 236,388ms |
+| `timeout-minutes` in [`ci.yml`](../.github/workflows/ci.yml) | the whole test job | 889s, the slowest job | 45 minutes |
 
-- Individual tests known to be heavier (full Project lifecycles) override it with 30s or more.
-- Hooks are not covered by `testTimeout`. They run under vitest's own 10s `hookTimeout`, so a `beforeAll` that clones a remote passes its own timeout, 60s like the provisioning suites, or it times out on Windows first.
+All three were measured on `windows-2025` on 2026-10-23, the slowest of the four runners, over five CI jobs whose suite durations ran from 529s to 710s.
+
+- The slowest test is the one in `ReleaseService.remote.test.ts` that refuses a Release whose draft is behind the remote draft.
+- The slowest hook is read as the whole duration of `logSweep.test.ts`, which holds one `beforeAll` and no other hook. Each of its 19 tests stayed below the 300ms the reporter prints a duration for, so the hook is all but the whole file.
+- The multiple is 3, the smallest whole number above the run to run spread of a single test on that runner. Of the 306 tests those jobs timed at least twice, the slowest run of one test was 1.5x its own fastest at the median and 2.2x at the 90th percentile, with one test at 9.3x.
+
+When a measurement shows a test or a hook needs more, raise the global rather than a single call. Measure it on the slowest runner, put the number in [`src/test/budgets.ts`](../src/test/budgets.ts), and state it in the table above with its date.
+
+### A timed out test leaks into its own file only
 
 When a test times out, vitest cannot abort its still-running async work, so leftover Projects can leak into later tests. Since every test file has its own data directory, that leak is confined to the file that timed out and cannot break other files. Generous timeouts still protect against the within-file cascade.
 
@@ -156,13 +167,13 @@ Two more paths are left uncovered on purpose. Each is listed so the next person 
 
 Measurements below show the suite saturates early (4 workers are within 10% of 11), so raising the count buys nothing and lowering it only slows local runs. Do not add `maxWorkers` to `vitest.config.ts`, it would pin every machine to one value, and the `VITEST_MAX_WORKERS` env var overrides the config anyway.
 
-The one case for intervening: if CI data from the slow runners shows git-heavy tests nearing the 15s timeout under contention, first raise `testTimeout` (consistent with the generous-timeouts decision above), and only then cap workers via a `VITEST_MAX_WORKERS` env line in `ci.yml`, so the measure stays CI-specific.
+The one case for intervening: if CI data from the slow runners shows git-heavy tests nearing their measured budget under contention, first re-measure and raise the global budgets (consistent with the generous-timeouts decision above), and only then cap workers via a `VITEST_MAX_WORKERS` env line in `ci.yml`, so the measure stays CI-specific.
 
 ### Measurements
 
 Measured locally (Linux, 12 cores, 3 runs each): parallel 17.5s to 18.3s, serial via `--no-file-parallelism` 65.7s to 66.6s, a 3.7x speedup. Capped to `VITEST_MAX_WORKERS=4` the suite still finishes in 19.2s and at 2 workers in 34.4s, so the suite saturates early. Contention roughly doubled the slowest individual test durations (1.5s to 2.7s worst case).
 
-The CI gains are in the runner performance table above. The timeout held up on the slow runners: on Windows, the most contended platform, the summed per-test time rose 36% under parallelism and no test came near the 15s limit.
+The CI gains are in the runner performance table above. The timeout of the day held up on the slow runners: on Windows, the most contended platform, the summed per-test time rose 36% under parallelism and no test came near the 15s limit that was in force then.
 
 ## See also
 

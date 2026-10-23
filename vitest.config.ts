@@ -1,11 +1,13 @@
 import { coverageConfigDefaults, defineConfig } from 'vitest/config';
+import { hookTimeoutMs, testTimeoutMs } from './src/test/budgets.js';
 
 export default defineConfig({
   test: {
-    // Git-heavy tests need ~3s on fast runners but 7s+ on the slow
-    // Windows and Intel macOS runners, and parallel test files add CPU
-    // contention on top, see contributing/testing.md
-    testTimeout: 15000,
+    // Both are the slowest runner's measured duration of what they bound times
+    // one multiple, so no test and no hook needs a budget of its own and a
+    // slow runner fails on a named test, see contributing/testing.md
+    testTimeout: testTimeoutMs,
+    hookTimeout: hookTimeoutMs,
     // Drops the console output of passing tests and keeps that of failing
     // ones. The shared test Core logs at debug, which otherwise buries a
     // failure at the end of the CI log, see contributing/testing.md

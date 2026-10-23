@@ -6,7 +6,10 @@ on:
 jobs:
   test:
     name: Testing on ${{ matrix.platform }}
-    timeout-minutes: 15
+    # The slowest job measured on the slowest runner times the same multiple
+    # the test budgets carry, so a slow runner fails on a named test rather
+    # than as a killed job with no summary, see contributing/testing.md
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
