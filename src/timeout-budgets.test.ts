@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import Fs from 'fs-extra';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import vitestConfig from '../vitest.config.js';
 import {
   budgetMultiple,
   hookTimeoutMs,
@@ -28,8 +29,11 @@ const sourceRoot = Path.resolve(Path.dirname(fileURLToPath(import.meta.url)));
 /** Where the measured budgets have to read the same as the module holding them. */
 const rulesDoc = Path.join(sourceRoot, '../contributing/testing.md');
 
-/** The workflow whose test job the job budget caps. */
-const ciWorkflow = Path.join(sourceRoot, '../.github/workflows/ci.yml');
+/** Every job that runs the suite, so every one of them carries the job budget. */
+const suiteJobs = [
+  { workflow: '.github/workflows/ci.yml', job: 'test' },
+  { workflow: '.github/workflows/cd.yml', job: 'release' },
+];
 
 /** The calls vitest gives a budget of its own, by the kind it is read from. */
 const budgetedCalls = new Map<string, 'test' | 'hook'>([
@@ -44,13 +48,18 @@ const budgetedCalls = new Map<string, 'test' | 'hook'>([
   ['afterEach', 'hook'],
 ]);
 
+/** A budget a call gives itself, `ms` unset when it is not a plain number. */
 interface PerCallBudget {
   file: string;
   line: number;
   call: string;
   kind: 'test' | 'hook';
-  ms: number;
+  ms: number | undefined;
+  source: string;
 }
+
+/** A budget read off one argument, or that the argument cannot be read. */
+type ReadBudget = { readable: true; ms: number } | { readable: false };
 
 /**
  * The identifier a call expression starts from, so `it.skipIf(x)(...)` and
@@ -74,20 +83,47 @@ function calleeRoot(expression: ts.Expression): string | undefined {
   }
 }
 
-/** The milliseconds an argument gives a call, both forms vitest accepts. */
-function budgetOf(argument: ts.Expression): ts.NumericLiteral | undefined {
-  if (ts.isNumericLiteral(argument)) return argument;
-  if (!ts.isObjectLiteralExpression(argument)) return undefined;
-  for (const property of argument.properties) {
-    if (
-      ts.isPropertyAssignment(property) &&
-      property.name.getText() === 'timeout' &&
-      ts.isNumericLiteral(property.initializer)
-    ) {
-      return property.initializer;
-    }
-  }
-  return undefined;
+/**
+ * Whether a call only narrows the one applied to its result, the way
+ * `it.each(rows)` and `it.skipIf(flag)` do. Its arguments are the modifier's
+ * table or condition, never a budget.
+ */
+function isModifier(node: ts.CallExpression): boolean {
+  return ts.isCallExpression(node.parent) && node.parent.expression === node;
+}
+
+/**
+ * The arguments vitest reads a budget from. A test names itself, then takes
+ * its callback or its options, then its budget. A hook has no name, so
+ * everything shifts by one. An options object carries the budget as a
+ * property instead, and then there is no trailing argument.
+ */
+function budgetArguments(
+  node: ts.CallExpression,
+  kind: 'test' | 'hook'
+): ts.Expression[] {
+  const options = node.arguments.filter(ts.isObjectLiteralExpression);
+  if (options.length > 0) return options;
+  const trailing = node.arguments[kind === 'test' ? 2 : 1];
+  return trailing === undefined ? [] : [trailing];
+}
+
+/** Reads the milliseconds off an argument, both forms vitest accepts. */
+function budgetOf(argument: ts.Expression): ReadBudget | undefined {
+  const milliseconds = (literal: ts.NumericLiteral): ReadBudget => ({
+    readable: true,
+    ms: Number(literal.text.replaceAll('_', '')),
+  });
+  if (ts.isNumericLiteral(argument)) return milliseconds(argument);
+  if (!ts.isObjectLiteralExpression(argument)) return { readable: false };
+  const timeout = argument.properties.find(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) && property.name.getText() === 'timeout'
+  );
+  if (timeout === undefined) return undefined;
+  return ts.isNumericLiteral(timeout.initializer)
+    ? milliseconds(timeout.initializer)
+    : { readable: false };
 }
 
 /** Every per-call budget a test file hands a test or a hook. */
@@ -101,21 +137,22 @@ function perCallBudgets(file: string, source: string): PerCallBudget[] {
   const budgets: PerCallBudget[] = [];
 
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
+    if (ts.isCallExpression(node) && !isModifier(node)) {
       const call = calleeRoot(node.expression);
       const kind = call === undefined ? undefined : budgetedCalls.get(call);
       if (call !== undefined && kind !== undefined) {
-        for (const argument of node.arguments) {
-          const literal = budgetOf(argument);
-          if (literal === undefined) continue;
+        for (const argument of budgetArguments(node, kind)) {
+          const read = budgetOf(argument);
+          if (read === undefined) continue;
           budgets.push({
             file,
             line:
-              parsed.getLineAndCharacterOfPosition(literal.getStart(parsed))
+              parsed.getLineAndCharacterOfPosition(argument.getStart(parsed))
                 .line + 1,
             call,
             kind,
-            ms: Number(literal.text.replaceAll('_', '')),
+            ms: read.readable ? read.ms : undefined,
+            source: argument.getText(parsed),
           });
         }
       }
@@ -125,6 +162,19 @@ function perCallBudgets(file: string, source: string): PerCallBudget[] {
   visit(parsed);
 
   return budgets;
+}
+
+/** What a named job of a workflow gives itself, read from its own block. */
+function jobCap(workflow: string, job: string): string | undefined {
+  const lines = workflow.split('\n');
+  const opens = lines.indexOf(`  ${job}:`);
+  if (opens === -1) return undefined;
+  for (const line of lines.slice(opens + 1)) {
+    if (/^ {2}\S/.test(line)) return undefined;
+    const capped = line.match(/^ {4}timeout-minutes: (\d+)$/);
+    if (capped) return capped[1];
+  }
+  return undefined;
 }
 
 async function testFilesIn(directory: string): Promise<string[]> {
@@ -144,38 +194,53 @@ describe('timeout budgets', () => {
     // Sanity check that the sweep still finds the suite's test files at all.
     expect(files.length).toBeGreaterThan(50);
 
-    const tooTight: PerCallBudget[] = [];
+    const offenders: string[] = [];
     for (const file of files) {
       const source = await Fs.readFile(file, 'utf8');
       for (const budget of perCallBudgets(file, source)) {
         const global = budget.kind === 'hook' ? hookTimeoutMs : testTimeoutMs;
-        if (budget.ms < global) tooTight.push(budget);
+        const where = `${Path.relative(sourceRoot, budget.file)}:${budget.line} ${budget.call}`;
+        if (budget.ms === undefined) {
+          offenders.push(
+            `${where} gets "${budget.source}", which no check can compare against the global`
+          );
+        } else if (budget.ms < global) {
+          offenders.push(
+            `${where} gets ${budget.ms}ms, under the measured ${budget.kind} budget of ${global}ms`
+          );
+        }
       }
     }
 
     expect(
-      tooTight.map(
-        (budget) =>
-          `${Path.relative(sourceRoot, budget.file)}:${budget.line} ${budget.call} gets ${budget.ms}ms, under the measured ${budget.kind} budget of ${budget.kind === 'hook' ? hookTimeoutMs : testTimeoutMs}ms`
-      ),
+      offenders,
       'A per-call budget under the global default caps the heaviest work in a file tighter than the suite caps everything else. Drop it, or measure it and raise the global, see contributing/testing.md.'
     ).toEqual([]);
   });
 
-  it('reads both forms vitest accepts, on a test and on a hook', () => {
+  it('reads every budget form, and nothing a modifier or another call takes', () => {
     const source = [
-      "it('a trailing argument', fn, 1);",
-      "it('an options object', { timeout: 2 }, fn);",
-      "it.skipIf(skip)('a filtered test', fn, 3);",
-      'beforeAll(fn, 4);',
-      'afterEach(fn, 5);',
-      'vi.waitFor(fn, { timeout: 6 });',
+      "it('a trailing argument', () => {}, 1);",
+      "it('an options object', { timeout: 2 }, () => {});",
+      "it.skipIf(skip)('a filtered test', () => {}, 3);",
+      'beforeAll(() => {}, 4);',
+      'afterEach(() => {}, 5);',
+      "it('a computed budget', () => {}, 30 * 1000);",
+      "it('a named budget', () => {}, slow);",
+      "it.each(rows)('a table case %s', () => {});",
+      "describe.each(rows)('a table suite %s', () => {});",
+      "it('options without a budget', { retry: 2 }, () => {});",
+      "it('a plain test', () => {});",
+      'beforeAll(() => {});',
+      "it('a helper as its body', body);",
+      'vi.waitFor(() => {}, { timeout: 6 });',
       'request(url, { timeout: 7 });',
     ].join('\n');
 
     expect(
       perCallBudgets('fixture.test.ts', source).map(
-        (budget) => `${budget.line} ${budget.call} ${budget.kind} ${budget.ms}`
+        (budget) =>
+          `${budget.line} ${budget.call} ${budget.kind} ${budget.ms ?? budget.source}`
       )
     ).toEqual([
       '1 it test 1',
@@ -183,17 +248,56 @@ describe('timeout budgets', () => {
       '3 it test 3',
       '4 beforeAll hook 4',
       '5 afterEach hook 5',
+      '6 it test 30 * 1000',
+      '7 it test slow',
     ]);
   });
 
-  it('caps the CI test job at the same multiple', async () => {
-    const workflow = await Fs.readFile(ciWorkflow, 'utf8');
-    const capped = workflow.match(/^\s*timeout-minutes: (\d+)$/m);
+  it('is the budget the vitest config runs with', () => {
+    expect(
+      {
+        testTimeout: vitestConfig.test?.testTimeout,
+        hookTimeout: vitestConfig.test?.hookTimeout,
+      },
+      'The config has to run on the measured budgets, or this guard compares per-call budgets against a default the suite does not use. See contributing/testing.md.'
+    ).toEqual({ testTimeout: testTimeoutMs, hookTimeout: hookTimeoutMs });
+  });
+
+  it('caps every job that runs the suite at the same multiple', async () => {
+    const capped: Record<string, string | undefined> = {};
+    const wanted: Record<string, string> = {};
+    for (const { workflow, job } of suiteJobs) {
+      const source = await Fs.readFile(
+        Path.join(sourceRoot, '..', workflow),
+        'utf8'
+      );
+      capped[`${workflow} ${job}`] = jobCap(source, job);
+      wanted[`${workflow} ${job}`] = String(jobTimeoutMinutes);
+    }
 
     expect(
-      capped?.[1],
-      `The test job has to allow ${jobTimeoutMinutes} minutes, the slowest job measured times ${budgetMultiple}, so a slow runner fails on a named test rather than as a killed job. See contributing/testing.md.`
-    ).toBe(String(jobTimeoutMinutes));
+      capped,
+      `Every job running the suite has to allow ${jobTimeoutMinutes} minutes, the slowest job measured times ${budgetMultiple}, so a slow runner fails on a named test rather than as a killed job. See contributing/testing.md.`
+    ).toEqual(wanted);
+  });
+
+  it('reads the cap of the named job rather than the first in a workflow', () => {
+    const workflow = [
+      'jobs:',
+      '  lint:',
+      '    timeout-minutes: 5',
+      '    runs-on: ubuntu-24.04',
+      '  test:',
+      '    name: Testing',
+      '    timeout-minutes: 15',
+      '  release:',
+      '    runs-on: ubuntu-latest',
+    ].join('\n');
+
+    expect(jobCap(workflow, 'test')).toBe('15');
+    expect(jobCap(workflow, 'lint')).toBe('5');
+    expect(jobCap(workflow, 'release')).toBeUndefined();
+    expect(jobCap(workflow, 'absent')).toBeUndefined();
   });
 
   it('states every measured budget in contributing/testing.md', async () => {

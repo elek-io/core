@@ -13,7 +13,9 @@ permissions:
 jobs:
   release:
     name: Release
-    timeout-minutes: 15
+    # This job runs the suite too, so it takes the same cap as the CI one,
+    # see contributing/testing.md
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     steps:
       # Every action is pinned to the commit of its release, so a moved tag

@@ -63,7 +63,7 @@ Every budget is a measured duration times one multiple. [`vitest.config.ts`](../
 | --- | --- | --- | --- |
 | `testTimeout` | every test | 55,872ms, the slowest single test | 167,616ms |
 | `hookTimeout` | every hook | 78,796ms, the slowest fixture hook | 236,388ms |
-| `timeout-minutes` in [`ci.yml`](../.github/workflows/ci.yml) | the whole test job | 889s, the slowest job | 45 minutes |
+| `timeout-minutes` in [`ci.yml`](../.github/workflows/ci.yml) and [`cd.yml`](../.github/workflows/cd.yml) | a whole job running the suite | 889s, the slowest job | 45 minutes |
 
 All three come from one measured set, the five `windows-2025` jobs of 2026-10-23, whose suite durations ran from 529s to 710s. The set is windows-only.
 
@@ -92,7 +92,12 @@ Measured on the widest `beforeEach` in `src/`, the git-doing one at `uniqueField
 
 ### No test and no hook carries a budget of its own
 
-Each global bounds the slowest thing of its kind, so nothing in `src/` needs a budget of its own and the 176 that existed were dropped. [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) fails on a new one below the global for its kind, in both forms vitest accepts, a trailing argument and a `{ timeout }` option.
+Each global bounds the slowest thing of its kind, so nothing in `src/` needs a budget of its own and the 176 that existed were dropped. [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) fails on a new one, and also keeps the config and the job caps on the measured numbers. What it rejects:
+
+- A budget under the global for its kind, in either form vitest takes it, a trailing argument or a `{ timeout }` option.
+- A budget no check can read, such as `30 * 1000` or a named constant, since a sweep cannot compare it against the global.
+- A `testTimeout` or `hookTimeout` in [`vitest.config.ts`](../vitest.config.ts) that is not the measured one, which would otherwise leave the sweep comparing against a default the suite does not run on.
+- A `timeout-minutes` other than the derived one on either job that runs the suite, read from that job's own block rather than the first cap in the file.
 
 A per-call budget below the global caps the heaviest work in a file tighter than the suite caps everything around it, which is what took single tests and hooks down on the slow runners:
 
