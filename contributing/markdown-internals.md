@@ -23,6 +23,18 @@ It is framework-agnostic, `T` is the consumer's element type. A framework bindin
 
 Exhaustiveness is the point. A node type added in a later Core release becomes a type error in a consumer's renderers rather than a silent gap, and the three keys in `REQUIRED_RENDERER_KEYS` stay required because no default is safe for them.
 
+### What a parent handler cannot see
+
+A parent is called with its children already rendered, which is what makes the fold framework-agnostic: `T` is opaque to it. Three placements are out of reach of a parent's handler because of it, and each one is a divergence from what remark emits:
+
+| Where | What the defaults do | What remark does |
+| --- | --- | --- |
+| A tight list item | `<li><p>text</p></li>` | `<li>text</li>` |
+| A task item's checkbox | before the item's first block | inside its first paragraph |
+| A footnote's way back | after the note's blocks | at the end of its last paragraph |
+
+A `paragraph` handler can reach all three, since its [context](#how-a-handler-learns-where-its-node-sits) names the item or the note it sits in. The defaults leave them to the `list`, `listItem` and `footnoteDefinition` handlers, so they ship the divergence visibly rather than working around it. A `<p>` of margin in a list item is reported, and CSS that hides it is not.
+
 ## How a handler learns where its node sits
 
 A handler used to be given its node and its rendered children, and nothing else. That is not enough for a table: `table.align` reaches the `table` handler while the cell is what has to carry the alignment, and nothing on a `tableCell` says whether it heads a column.

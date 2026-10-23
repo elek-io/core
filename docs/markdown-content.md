@@ -50,7 +50,7 @@ Three things to know before writing a renderer:
 
 - **Astro's `render()` does not apply to an elek.io Entry.** It hands back the rendered HTML an entry carries with it, and the loaders store none, because a finished HTML string cannot keep the `entryReference` and `assetReference` nodes a page needs the UUIDs from.
   - Calling it anyway is not an error and produces nothing: `<Content />` renders empty, `headings` is `[]` and `remarkPluginFrontmatter` is `{}`, with no warning anywhere. Body content arrives on `entry.data` as a tree instead, and `mdastRender` is what turns it into markup.
-- **Three node types require an explicit override**, `html`, `assetReference` and `entryReference`. The other 21 have semantic HTML defaults you can keep or override.
+- **Three node types require an explicit override**, `html`, `assetReference` and `entryReference`. The other 21 have semantic HTML defaults that render every field their node carries, except the five in [what a default leaves to you](#what-a-default-leaves-to-you).
   - The type system surfaces the required keys because content editors can flip `features.rawHtml`, `features.assetReferences` and `features.entryReferences`, or extend `ofCollections`, on any field at any time.
   - Forcing a documented decision per key stops the renderer from silently no-opping when a new node type appears. Choosing `() => null` is a valid decision and documents "render nothing if this ever appears."
 - **JSX belongs in the template, not in the frontmatter.** That is a property of Astro rather than of `mdastRender`. The `---` fence of an `.astro` file is TypeScript, not TSX, so a handler written as `(node) => <em>{node.alt}</em>` up there is a parse error.
@@ -205,11 +205,55 @@ const footnotes: astroHTML.JSX.Element[] = [];
 )}
 ```
 
+An override replaces the default whole, so the way back to the reference is yours to re-add here, as is the `fn-` id if you want another scheme.
+
 **Custom top-level wrap via `root`.** The default wraps the rendered blocks in a Fragment so `<article>{rendered}</article>` works at the call site. You can override `root` to do the wrapping at the renderer level instead - useful when the renderer is responsible for the whole article shell:
 
 ```typescript
 root: (_, children) => <article class="prose">{children}</article>,
 ```
+
+### What a default leaves to you
+
+Every default renders every field of its node except these five. Nothing else of a node is dropped, so an ordered list keeps the number it counts from and a task item keeps its checked state without you writing a handler.
+
+| Field | What the default does with it | Override to get |
+| --- | --- | --- |
+| `code.lang` | nothing, `<pre><code>` carries no class | the class name your highlighter reads, see `code` above |
+| `code.meta` | nothing, it is the option string of a highlighter Core does not ship | whatever your highlighter makes of it |
+| `list.spread` | nothing, see the tight list below | a tight item, from a `paragraph` override that reads it off its [context](#where-a-node-sits) |
+| `listItem.spread` | the same | the same |
+| `footnoteDefinition.label` | nothing, the authored spelling of the identifier shows on the reference instead | it on the note as well |
+
+### Where a default cannot reach
+
+A parent's default is handed its children already rendered, so it cannot reach inside them, and one `astroDefaults` object serves every render. Five things follow, and the defaults ship them visibly rather than working around them.
+
+- **A task item's checkbox precedes its text** instead of opening the item's first paragraph, which is where remark puts it. The paragraph arrives already rendered, so it takes a `paragraph` override to put the box inside it. `li > p { display: inline }` is the CSS that puts box and text on one line, and it keeps the list marker, which the default leaves in place by adding no class name.
+- **A task item's checkbox is named with the item's own text.** A `<label>` cannot wrap blocks that arrive already rendered, so the name goes on an `aria-label` instead and is read twice, once as the box's name and once as the text. A list directly inside the item is left out, whether it holds tasks or plain items, and an item whose text is an image or only whitespace gets no attribute.
+- **A note's way back follows its blocks** instead of ending its last paragraph, for the same reason.
+- **A tight list item keeps its paragraph**, so `<li><p>text</p></li>` rather than `<li>text</li>`. It is valid and semantic, and it is one `<p>` of margin away from what other renderers emit.
+- **Footnote ids are built from the identifier alone.** Two trees on one page claim the same `fn-` and `fnref-` ids, and an anchor then lands on whichever rendered first. A note referenced twice repeats its reference id, so its way back lands on the first reference. A default cannot take a prefix, because one `astroDefaults` object serves every render. Give both handlers one of your own:
+
+```typescript
+footnoteReference: (node) => (
+  <sup id={`${prefix}fnref-${node.identifier}`}>
+    <a href={`#${prefix}fn-${node.identifier}`}>
+      {node.label ?? node.identifier}
+    </a>
+  </sup>
+),
+footnoteDefinition: (node, children) => (
+  <div id={`${prefix}fn-${node.identifier}`}>
+    {children}
+    <a href={`#${prefix}fnref-${node.identifier}`} aria-label="Back to content">
+      ↩
+    </a>
+  </div>
+),
+```
+
+The back-link's `aria-label` is English, so a site in another language overrides `footnoteDefinition` for that too.
 
 ### Where a node sits
 
@@ -310,12 +354,26 @@ The example below uses React (`T = ReactNode`). For Vue bind `T = VNode`, for So
 
 ```tsx
 import {
+  extractText,
   isTableHeaderCell,
   mdastRender,
   tableCellAlign,
+  type MdAstListItem,
   type MdastRenderersBase,
 } from '@elek-io/core';
 import type { ReactNode } from 'react';
+
+// A task item's name is the text of its own blocks, a list directly inside
+// the item left out, whether its items are tasks naming a checkbox of their
+// own or plain items. Trimmed, so an item whose text is only whitespace gets
+// no name rather than a name of spaces.
+function taskItemName(node: MdAstListItem): string | undefined {
+  const ownBlocks = {
+    ...node,
+    children: node.children.filter((child) => child.type !== 'list'),
+  };
+  return extractText(ownBlocks).trim() || undefined;
+}
 
 const renderers: MdastRenderersBase<ReactNode> = {
   root: (_, children) => <>{children}</>,
@@ -326,8 +384,30 @@ const renderers: MdastRenderersBase<ReactNode> = {
   },
   blockquote: (_, children) => <blockquote>{children}</blockquote>,
   list: (node, children) =>
-    node.ordered ? <ol>{children}</ol> : <ul>{children}</ul>,
-  listItem: (_, children) => <li>{children}</li>,
+    node.ordered ? (
+      // A start of 1 is what an <ol> counts from anyway
+      <ol start={node.start === 1 ? undefined : (node.start ?? undefined)}>
+        {children}
+      </ol>
+    ) : (
+      <ul>{children}</ul>
+    ),
+  listItem: (node, children) =>
+    // A checked of null is an ordinary item, true and false are a task
+    node.checked === null ? (
+      <li>{children}</li>
+    ) : (
+      <li>
+        <input
+          type="checkbox"
+          aria-label={taskItemName(node)}
+          checked={node.checked}
+          disabled
+          readOnly
+        />
+        {children}
+      </li>
+    ),
   code: (node) => (
     <pre>
       <code>{node.value}</code>
@@ -353,7 +433,12 @@ const renderers: MdastRenderersBase<ReactNode> = {
     );
   },
   footnoteDefinition: (node, children) => (
-    <div id={`fn-${node.identifier}`}>{children}</div>
+    <div id={`fn-${node.identifier}`}>
+      {children}
+      <a href={`#fnref-${node.identifier}`} aria-label="Back to content">
+        ↩
+      </a>
+    </div>
   ),
   text: (node) => node.value,
   inlineCode: (node) => <code>{node.value}</code>,
@@ -370,7 +455,7 @@ const renderers: MdastRenderersBase<ReactNode> = {
   ),
   break: () => <br />,
   footnoteReference: (node) => (
-    <sup>
+    <sup id={`fnref-${node.identifier}`}>
       <a href={`#fn-${node.identifier}`}>{node.label ?? node.identifier}</a>
     </sup>
   ),
