@@ -1,4 +1,6 @@
 import type { LoaderContext } from 'astro/loaders';
+import Path from 'node:path';
+import Url from 'node:url';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import core, { uuid, type Collection } from '../test/setup.js';
 import {
@@ -6,9 +8,102 @@ import {
   createCollection,
   createEntry,
   createProject,
+  tmpDirPath,
 } from '../test/util.js';
-import { elekEntriesLoader, hasImageExtension } from './loaders.js';
+import { elekCollections } from './collections.js';
+import { getCore } from './core.js';
+import {
+  elekAssetsLoader,
+  elekEntriesLoader,
+  hasImageExtension,
+} from './loaders.js';
 import type { ContentWatcher } from './watch.js';
+
+/** One logged line, with the level it was logged at. */
+interface LoggedLine {
+  level: 'debug' | 'info' | 'warn' | 'error';
+  message: string;
+}
+
+const levels = ['debug', 'info', 'warn', 'error'] as const;
+
+/**
+ * Every line as `<level>: <message up to its first id, path or quoted name>`,
+ * deduplicated and sorted, so a complete set of lines can be asserted without
+ * pinning the values a single line happens to carry.
+ */
+function summarize(lines: LoggedLine[]): string[] {
+  const summaries = lines.map(
+    (line) =>
+      `${line.level}: ${line.message.replace(/["(][\S\s]*$/, '').trim()}`
+  );
+  return [...new Set(summaries)].toSorted();
+}
+
+/**
+ * A `LoaderContext` whose logger records the level of every line, which is
+ * what pins both the logger a message took and the level it took there.
+ *
+ * Without a watcher it is the context a build hands a loader, with one the
+ * context `astro dev` hands it.
+ */
+function createLoaderContext(options: {
+  root: string;
+  watcher?: ContentWatcher;
+}) {
+  const lines: LoggedLine[] = [];
+  const store = new Map<string, { data: unknown; digest: string }>();
+  const record = (level: LoggedLine['level']) => (message: string) => {
+    lines.push({ level, message });
+  };
+  const context = {
+    logger: {
+      debug: record('debug'),
+      info: record('info'),
+      warn: record('warn'),
+      error: record('error'),
+    },
+    store: {
+      get: (id: string) => store.get(id),
+      set: (entry: { id: string; data: unknown; digest: string }) =>
+        store.set(entry.id, entry),
+      keys: () => [...store.keys()],
+      delete: (id: string) => store.delete(id),
+    },
+    generateDigest: (data: unknown) => JSON.stringify(data),
+    parseData: ({ data }: { data: unknown }) => Promise.resolve(data),
+    config: {
+      root: Url.pathToFileURL(`${options.root}${Path.sep}`),
+      publicDir: Url.pathToFileURL(
+        `${Path.join(options.root, 'public')}${Path.sep}`
+      ),
+      base: '/',
+    },
+    ...(options.watcher === undefined ? {} : { watcher: options.watcher }),
+  } as unknown as LoaderContext;
+
+  return { context, lines, store };
+}
+
+/**
+ * Records every line Core's own logger takes during the test, with its level.
+ *
+ * `getCore()` is called before the spies are installed, so the line Core
+ * writes when it starts is never recorded here.
+ */
+function recordCoreLines(): LoggedLine[] {
+  const lines: LoggedLine[] = [];
+  const logger = getCore().logger;
+  const spies = levels.map((level) =>
+    vi.spyOn(logger, level).mockImplementation((props) => {
+      lines.push({ level, message: props.message });
+    })
+  );
+  onTestFinished(() => {
+    for (const spy of spies) spy.mockRestore();
+  });
+  return lines;
+}
 
 /**
  * Runs the Entries loader the way `astro dev` does: `createSchema()` once,
@@ -24,27 +119,12 @@ async function startLoader(projectId: string) {
       handlers.push(handler);
     },
   };
-  const warnings: string[] = [];
-  const errors: string[] = [];
-  const store = new Map<string, { data: unknown; digest: string }>();
-  const context = {
-    logger: {
-      info: () => undefined,
-      debug: () => undefined,
-      warn: (message: string) => warnings.push(message),
-      error: (message: string) => errors.push(message),
-    },
-    store: {
-      get: (id: string) => store.get(id),
-      set: (entry: { id: string; data: unknown; digest: string }) =>
-        store.set(entry.id, entry),
-      keys: () => [...store.keys()],
-      delete: (id: string) => store.delete(id),
-    },
-    generateDigest: (data: unknown) => JSON.stringify(data),
-    parseData: ({ data }: { data: unknown }) => Promise.resolve(data),
+  const { context, lines, store } = createLoaderContext({
+    root: tmpDirPath(),
     watcher,
-  } as unknown as LoaderContext;
+  });
+  const problems = () =>
+    lines.filter((line) => line.level === 'warn' || line.level === 'error');
 
   const loader = elekEntriesLoader({
     config: { projects: { website: { id: projectId } } },
@@ -56,22 +136,21 @@ async function startLoader(projectId: string) {
   }
   await loader.load(context);
   // Only what a reload reports, the first load may warn about no Entries
-  warnings.length = 0;
-  errors.length = 0;
+  let reported = problems().length;
 
   return {
     store,
-    warnings,
-    errors,
+    /** What the loader warned or errored about since the last reload */
+    reportedSince: () => problems().slice(reported),
     /** Reports a change below the Collection and waits for its reload */
     reload: async (changedPath: string) => {
-      const reported = warnings.length + errors.length;
+      reported = problems().length;
       const loaded = new Map(store);
       for (const handler of handlers) handler(changedPath);
       await vi.waitFor(
         () => {
           const settled =
-            warnings.length + errors.length > reported ||
+            problems().length > reported ||
             [...store.keys()].some((id) => !loaded.has(id));
           if (!settled) throw new Error('Not reloaded yet');
         },
@@ -134,7 +213,7 @@ describe('the Entries loader while astro dev runs', function () {
     onTestFinished(() => project.destroy());
     const collection = await createCollection(project.id);
     const asset = await createAsset(project.id);
-    const { store, warnings, errors, reload } = await startLoader(project.id);
+    const { store, reportedSince, reload } = await startLoader(project.id);
 
     const entry = await createEntry(project.id, collection.id, asset.id);
     await reload(
@@ -142,21 +221,21 @@ describe('the Entries loader while astro dev runs', function () {
     );
 
     expect(store.has(entry.id)).toBe(true);
-    expect(warnings).toEqual([]);
-    expect(errors).toEqual([]);
+    expect(reportedSince()).toEqual([]);
   });
 
   it('asks for a restart when the Collection it loads is renamed', async function () {
     const project = await createProject();
     onTestFinished(() => project.destroy());
     const collection = await createCollection(project.id);
-    const { warnings, errors, reload } = await startLoader(project.id);
+    const { reportedSince, reload } = await startLoader(project.id);
 
     await renameCollection(project.id, collection);
     await reload(core.util.pathTo.collectionFile(project.id, collection.id));
 
-    expect(errors).toEqual([]);
-    expect(warnings).toEqual([
+    const reported = reportedSince();
+    expect(reported.map((line) => line.level)).toEqual(['warn']);
+    expect(reported.map((line) => line.message)).toEqual([
       expect.stringContaining('was renamed or replaced'),
     ]);
   });
@@ -165,7 +244,7 @@ describe('the Entries loader while astro dev runs', function () {
     const project = await createProject();
     onTestFinished(() => project.destroy());
     const collection = await createCollection(project.id);
-    const { warnings, errors, reload } = await startLoader(project.id);
+    const { reportedSince, reload } = await startLoader(project.id);
 
     // Same field definitions, so the content model alone would not tell
     // the two Collections apart
@@ -180,8 +259,9 @@ describe('the Entries loader while astro dev runs', function () {
     });
     await reload(core.util.pathTo.collectionFile(project.id, collection.id));
 
-    expect(errors).toEqual([]);
-    expect(warnings).toEqual([
+    const reported = reportedSince();
+    expect(reported.map((line) => line.level)).toEqual(['warn']);
+    expect(reported.map((line) => line.message)).toEqual([
       expect.stringContaining('was renamed or replaced'),
     ]);
   });
@@ -215,14 +295,17 @@ describe('the Entries loader on a content model that moved', function () {
     const collection = await createCollection(project.id);
     const asset = await createAsset(project.id);
     const entry = await createEntry(project.id, collection.id, asset.id);
-    const { store, warnings, errors, reload } = await startLoader(project.id);
+    const { store, reportedSince, reload } = await startLoader(project.id);
     expect(store.has(entry.id)).toBe(true);
 
     await changeModelOf(project.id, collection);
     await reload(core.util.pathTo.collectionFile(project.id, collection.id));
 
-    expect(errors).toEqual([]);
-    expect(warnings).toEqual([expect.stringContaining('content model')]);
+    const reported = reportedSince();
+    expect(reported.map((line) => line.level)).toEqual(['warn']);
+    expect(reported.map((line) => line.message)).toEqual([
+      expect.stringContaining('content model'),
+    ]);
     // Reloading against the schema Astro built would strip the new field
     // silently, so the Entries of the model it was built for stay
     expect(store.has(entry.id)).toBe(true);
@@ -232,7 +315,7 @@ describe('the Entries loader on a content model that moved', function () {
     const project = await createProject();
     onTestFinished(() => project.destroy());
     const collection = await createCollection(project.id);
-    const { warnings, errors, reload } = await startLoader(project.id);
+    const { reportedSince, reload } = await startLoader(project.id);
 
     // The Collection Astro named the collection after is gone, which is
     // the reason to report whatever else changed with it
@@ -242,9 +325,82 @@ describe('the Entries loader on a content model that moved', function () {
     });
     await reload(core.util.pathTo.collectionFile(project.id, collection.id));
 
-    expect(errors).toEqual([]);
-    expect(warnings).toEqual([
+    const reported = reportedSince();
+    expect(reported.map((line) => line.level)).toEqual(['warn']);
+    expect(reported.map((line) => line.message)).toEqual([
       expect.stringContaining('was renamed or replaced'),
+    ]);
+  });
+});
+
+describe('the loggers an astro build writes through', function () {
+  it('writes every loader line through Astro and every Core line through Core', async function () {
+    const project = await createProject();
+    onTestFinished(() => project.destroy());
+    const collection = await createCollection(project.id);
+    const asset = await createAsset(project.id);
+    await createEntry(project.id, collection.id, asset.id);
+    const config = { projects: { website: { id: project.id } } };
+
+    const coreLines = recordCoreLines();
+    // A build is load() without a watcher, which is the only difference
+    // to the astro dev path the tests above run
+    const assetsLoader = elekAssetsLoader({ config, project: 'website' });
+    const assets = createLoaderContext({ root: tmpDirPath() });
+    await assetsLoader.load(assets.context);
+    const entriesLoader = elekEntriesLoader({
+      config,
+      project: 'website',
+      collectionIdOrSlug: 'products',
+    });
+    const entries = createLoaderContext({ root: tmpDirPath() });
+    if ('createSchema' in entriesLoader) {
+      await entriesLoader.createSchema();
+    }
+    await entriesLoader.load(entries.context);
+
+    // The names Astro prefixes a loader's lines with
+    expect(assetsLoader.name).toBe('elek-assets');
+    expect(entriesLoader.name).toBe('elek-entries');
+
+    // Everything a loader reports goes through Astro's logger, so
+    // ELEK_IO_LOG_LEVEL reaches none of it
+    expect(summarize(assets.lines)).toEqual([
+      'info: Finished loading Assets',
+      'info: Found 1 Assets',
+      'info: Loading elek.io Assets of Project',
+      'info: Reading Project',
+    ]);
+    expect(summarize(entries.lines)).toEqual([
+      'info: Finished loading Entries',
+      'info: Found 1 Entries',
+      'info: Loading elek.io Entries of Collection',
+      'info: Reading Project',
+    ]);
+    // And Core's logger takes none of them. The set below is everything
+    // Core's logger takes on this path, of which only the info line is
+    // what a default-level build loses at error level: the two debug
+    // lines sit below the default level and were never printed
+    expect(summarize(coreLines)).toEqual([
+      'debug: Cache miss reading file',
+      'debug: Executed',
+      'info: Rebuilding Collection slug index for Project',
+    ]);
+  });
+
+  it('writes the warning about deriving every collection through Core', async function () {
+    const project = await createProject();
+    onTestFinished(() => project.destroy());
+    await createCollection(project.id);
+
+    const coreLines = recordCoreLines();
+    await elekCollections({ projects: { website: { id: project.id } } });
+
+    // elekCollections() is handed no LoaderContext, so Core's logger is
+    // the only one it can reach and the level does silence this one
+    const warnings = coreLines.filter((line) => line.level === 'warn');
+    expect(warnings.map((line) => line.message)).toEqual([
+      expect.stringContaining('elekCollections()'),
     ]);
   });
 });

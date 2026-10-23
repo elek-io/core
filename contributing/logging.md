@@ -44,10 +44,12 @@ The invariant is about the files under `pathTo.logs`. It does not cover output C
 
 Two places do that on purpose and keep their names:
 
-- [`astro/core.ts`](../src/astro/core.ts) `logReadingProject`, which the loaders call with Astro's `context.logger`. Its `Reading Project "Website" version 1.4.0 (Release tag)` line is documented consumer behavior in [`usage.md`](../docs/usage.md).
+- [`astro/loaders.ts`](../src/astro/loaders.ts), every line of which takes the `context.logger` Astro hands a loader, [`logReadingProject`](../src/astro/core.ts) included. Its `Reading Project "Website" version 1.4.0 (Release tag)` line is documented consumer behavior in [`usage.md`](../docs/usage.md#provisioning-in-ci-with-elek).
 - [`index.astro.ts`](../src/index.astro.ts), which uses the `logger` Astro hands to `astro:config:setup`.
 
 A build that will not say which Project it read is worse at its job, and none of that output leaves the machine.
+
+`ELEK_IO_LOG_LEVEL` configures `core.logger`, so it reaches none of those lines. [`usage.md`](../docs/usage.md#astro-integration) states that to a consumer and [`astro-entry.md`](./astro-entry.md) holds why they stay on Astro's logger, so moving one of them is a documentation change as much as a code change.
 
 So the test for a call site is not "does it mention a name" but **"does it go through `core.logger`"**.
 
@@ -341,5 +343,6 @@ A sentinel test is a scanner, and a scanner cannot prove absence. As a test that
 ## See also
 
 - [`../docs/usage.md`](../docs/usage.md#log-files) - where log files land, and what a consumer finds in one
+- [`astro-entry.md`](./astro-entry.md) - why a loader's lines stay on Astro's logger
 - [`error-handling-internals.md`](./error-handling-internals.md) - the boundary that logs a validation failure
 - [`testing.md`](./testing.md) - how the suite the sentinel tests belong to runs

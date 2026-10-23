@@ -51,9 +51,9 @@ The resolved options are exposed on `core.options`, and the running Core version
   - Relative paths are resolved against the current working directory once at construction. `~` is not expanded, that is a shell feature, so pass an absolute path or let the shell expand it.
   - The directory does not need to exist, Core creates it. An empty or whitespace-only value throws a `CoreError`.
   - The resolved absolute path is exposed as `core.options.dataDir`, and `core.util.pathTo` builds every path from it.
-- **`log.level`** is the lowest level Core writes, one of `error`, `warn`, `info` and `debug`. It takes precedence over the `ELEK_IO_LOG_LEVEL` environment variable, which takes precedence over the default `info`.
+- **`log.level`** is the lowest level Core's own logger writes, one of `error`, `warn`, `info` and `debug`. It takes precedence over the `ELEK_IO_LOG_LEVEL` environment variable, which takes precedence over the default `info`.
   - A value that is none of the four throws a `CoreError`, so a typo says so instead of quietly leaving the logs as they were.
-  - Set it to `error` where Core is a library inside another tool's output, such as an Astro build.
+  - Set it to `error` where Core is a library inside another tool's output, such as an Astro build. It reaches Core's own logger only, so whatever the host tool logs is untouched, see [Astro integration](#astro-integration).
 - **`log.hasProcessErrorHandlers`** decides whether Core registers `process.on('uncaughtException')` and `process.on('unhandledRejection')`, which is what writes an uncaught error into the log file before the process goes down. It defaults to `true`.
   - Set it to `false` where the host owns its own error handling, such as inside a build. The Astro entry does that for you.
   - `dispose()` removes the handlers again either way.
@@ -710,9 +710,25 @@ Those are the only entries the integration needs. Everything else it produces go
 All loaders share one Core instance, and the loaders themselves take no options for it. What configures it are the `ELEK_IO_*` environment variables of the build:
 
 - `ELEK_IO_DATA_DIR` reads from a data directory other than `~/elek.io`.
-- `ELEK_IO_LOG_LEVEL` set to `error` keeps Core out of the build output.
+- `ELEK_IO_LOG_LEVEL` set to `error` keeps Core's own `[core]` lines out of the build output.
 - `ELEK_IO_CHANNEL` switches the content state deployment-wide.
 - `ELEK_IO_REMOTE_ACCESS_TOKEN` authenticates against a private remote.
+
+`ELEK_IO_LOG_LEVEL` reaches Core's own logger and nothing else, so the loaders keep reporting even when it is set to `error`:
+
+- **The `[core]` lines go**, and that list is open.
+  - A build that uses `elek()` runs two Cores, the integration's and the loaders', so that is two lines about Core starting and one when the integration's is disposed.
+  - On a CI runner the whole provisioning trail goes with them. Core logs every git command that changes the copy `elek()` fetches: the clone, the Git LFS install, every LFS fetch and checkout, and outside the `draft` channel the tag fetch and the checkout of the ref.
+  - A loader that names its Collection by its slug rather than its id adds a line for every slug index rebuild.
+- **Every warning Core raises goes with them**, and that list is open too.
+  - A build that uses `elek()` reaches one for every `project.json` provisioning reads before it has validated it, which is how it migrates a Project an older Core wrote.
+  - A build also reaches the one `elekCollections()` raises when it is called without a selection.
+- Three more of those warnings are about content Core dropped rather than read: an Entry Core could not read, which is why a loader can report more Entries than it stored, a Collection skipped while the slug index is rebuilt, and a file or folder skipped because its name does not parse.
+  - The last two name what they skipped. The first carries only what the read failed with, which names the file when the JSON is broken and names the failing field alone when the file parses but does not validate.
+- The level governs Core's [log files](#log-files) too, so at `error` the log file holds nothing about the build but what failed.
+- The `[elek]`, `[elek-assets]` and `[elek-entries]` lines stay, because the integration and the loaders report through Astro's logger. That covers what each one provisioned, read and wrote, the line [every loader logs about the content state it read](#provisioning-in-ci-with-elek), and their own warnings.
+- [`astro build --silent`](https://docs.astro.build/en/reference/cli-reference/#--silent) silences those lines, and everything else Astro's own logger writes with them. It does not reach Core's logger, so a build that prints nothing needs `ELEK_IO_LOG_LEVEL=error` as well.
+- Either way a failing build still prints the error that stopped it and still exits non-zero, because that error is not written through a logger.
 
 See [Environment variables](#environment-variables) for the full list, and note that it is the full list. A setting without an environment variable cannot be changed for the loaders' Core.
 
@@ -756,7 +772,9 @@ Each declaration takes an optional `ref`, a channel (`release`, `preview` or `dr
 - A config in which no Project has a `remoteUrl` fails while `astro.config` is read, naming the aliases, because there is nothing left for the integration to do.
 - A site whose Projects are all local needs no integration at all.
 
-Every build logs which content state the loaders read, e.g. `Reading Project "Website" version 1.4.0 (Release tag)`. The label is the checked-out branch, or `Release tag` for a Release or a pinned version.
+Every loader logs which content state it read, e.g. `Reading Project "Website" version 1.4.0 (Release tag)`. The label is the checked-out branch, or `Release tag` for a Release or a pinned version.
+
+The line goes through Astro's logger, so `ELEK_IO_LOG_LEVEL` does not take it out of a build. `astro build --silent` does.
 
 For rendering `markdown` field Values (including the required `html`, `assetReference` and `entryReference` handlers), see [`markdown-content.md`](./markdown-content.md).
 
