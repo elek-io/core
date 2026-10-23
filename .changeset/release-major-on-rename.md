@@ -6,7 +6,7 @@
 
 - **A Component's slug changed.** Its generated type names are built from the slug, the slug addresses it in the API, and in Astro every item of the Component carries it as `componentSlug`, which a page's dispatch switches on. `componentChanges` carries `slugChanged`.
 - **A Collection's plural slug changed.** Its generated type names, its generated client key and its Astro collection name are built from the plural slug, and the plural slug addresses it in the API. `collectionChanges` carries `slugChanged`. A changed singular slug stays a patch, because no generated name, key or path is built from it.
-- **A `dynamic` field's `ofComponents` changed.** The generated types restate the list, so narrowing it, widening it and replacing an empty list with an explicit one all change them. Narrowing also permanently strips the Component items it no longer allows. `fieldChanges` and `componentFieldChanges` carry `ofComponentsChanged`.
+- **A `dynamic` field's `ofComponents` changed.** The generated types restate the list, so narrowing it, widening it and replacing an empty list with an explicit one all change them. Narrowing also strips the Component items it no longer allows, and an update that would strip one is refused until you accept the loss. `fieldChanges` and `componentFieldChanges` carry `ofComponentsChanged`.
 
 Nothing else changes its bump, and no Project is migrated: one released before this version keeps the version it got.
 
