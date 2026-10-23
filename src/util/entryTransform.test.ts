@@ -160,7 +160,7 @@ describe('transformEntryValues', () => {
     expect(result.issues).toHaveLength(0);
   });
 
-  it('strips removed fields', () => {
+  it('reports content_loss for a removed field holding a value', () => {
     const idA = uuid();
     const idB = uuid();
     const oldDefs = [
@@ -186,6 +186,47 @@ describe('transformEntryValues', () => {
 
     expect(result.changed).toBe(true);
     expect(result.values['title']).toBeDefined();
+    expect(result.values['subtitle']).toBeUndefined();
+    expect(result.issues).toHaveLength(1);
+    const issue = result.issues[0]!;
+    expect(issue.issue).toBe('content_loss');
+    expect(issue.issue === 'content_loss' && issue.reason).toBe(
+      'field_removed'
+    );
+    expect(issue.fieldDefinitionId).toBe(idB);
+    expect(issue.fieldSlug).toBe('subtitle');
+    expect(issue.entryId).toBe(entryId);
+    expect(issue.collectionId).toBe(collectionId);
+    expect(issue.issue === 'content_loss' && issue.currentValue).toEqual(
+      makeStringValue({ en: 'Remove', de: 'Remove' })
+    );
+  });
+
+  it('reports no content_loss for a removed field holding nothing', () => {
+    const idA = uuid();
+    const idB = uuid();
+    const oldDefs = [
+      makeTextField({ id: idA, slug: 'title' }),
+      makeTextField({ id: idB, slug: 'subtitle' }),
+    ];
+    const newDefs = [makeTextField({ id: idA, slug: 'title' })];
+    const values: Record<string, Value> = {
+      title: makeStringValue({ en: 'Keep', de: 'Keep' }),
+      subtitle: makeStringValue({ en: null, de: null }),
+    };
+    const changes = diffFieldDefinitions(oldDefs, newDefs);
+
+    const result = transformEntryValues(
+      entryId,
+      collectionId,
+      values,
+      oldDefs,
+      newDefs,
+      changes,
+      languages
+    );
+
+    expect(result.changed).toBe(true);
     expect(result.values['subtitle']).toBeUndefined();
     expect(result.issues).toHaveLength(0);
   });
@@ -330,8 +371,9 @@ describe('transformEntryValues', () => {
     );
 
     expect(result.issues).toHaveLength(1);
-    expect(result.issues[0]!.issue).toBe('type_mismatch');
-    expect(result.issues[0]!.currentValue).toEqual(
+    const issue = result.issues[0]!;
+    expect(issue.issue).toBe('type_mismatch');
+    expect(issue.issue === 'type_mismatch' && issue.currentValue).toEqual(
       makeStringValue({ en: 'not a number', de: 'not a number' })
     );
   });
@@ -392,7 +434,7 @@ describe('transformEntryValues', () => {
     );
   });
 
-  it('auto-strips disallowed component items when ofComponents narrows', () => {
+  it('reports content_loss when ofComponents narrows', () => {
     const fieldId = uuid();
     const compA = uuid();
     const compB = uuid();
@@ -441,13 +483,26 @@ describe('transformEntryValues', () => {
     );
 
     expect(result.changed).toBe(true);
-    expect(result.issues).toHaveLength(0);
     const blocks = result.values['blocks'] as ComponentValue;
     expect(blocks.content).toHaveLength(1);
     expect(blocks.content[0]!.componentId).toBe(compA);
+
+    expect(result.issues).toHaveLength(1);
+    const issue = result.issues[0]!;
+    if (
+      issue.issue !== 'content_loss' ||
+      issue.reason !== 'components_narrowed'
+    ) {
+      throw new Error(`expected a narrowed ofComponents, got ${issue.issue}`);
+    }
+    expect(issue.fieldDefinitionId).toBe(fieldId);
+    expect(issue.fieldSlug).toBe('blocks');
+    expect(issue.itemCount).toBe(1);
+    expect(issue.currentValue.content).toHaveLength(1);
+    expect(issue.currentValue.content[0]!.componentId).toBe(compB);
   });
 
-  it('auto-strips disallowed collection references when ofCollections narrows', () => {
+  it('reports content_loss per language when ofCollections narrows', () => {
     const fieldId = uuid();
     const collA = uuid();
     const collB = uuid();
@@ -504,11 +559,81 @@ describe('transformEntryValues', () => {
     );
 
     expect(result.changed).toBe(true);
-    expect(result.issues).toHaveLength(0);
     const related = result.values['related'] as ReferencedValue;
     expect(related.content.en).toHaveLength(1);
     const firstRef = related.content.en![0]!;
     expect('collectionId' in firstRef && firstRef.collectionId).toBe(collA);
+    expect(related.content.de).toHaveLength(1);
+
+    // Only `en` holds a reference into collB, so only `en` loses one
+    expect(result.issues).toHaveLength(1);
+    const issue = result.issues[0]!;
+    if (
+      issue.issue !== 'content_loss' ||
+      issue.reason !== 'collections_narrowed'
+    ) {
+      throw new Error(`expected a narrowed ofCollections, got ${issue.issue}`);
+    }
+    expect(issue.fieldDefinitionId).toBe(fieldId);
+    expect(issue.fieldSlug).toBe('related');
+    expect(issue.language).toBe('en');
+    expect(issue.itemCount).toBe(1);
+    expect(issue.currentValue.content.en).toHaveLength(1);
+    expect(issue.currentValue.content.de).toBeUndefined();
+  });
+
+  it('keeps an Asset reference inside a narrowed ofCollections', () => {
+    const fieldId = uuid();
+    const collA = uuid();
+    const collB = uuid();
+    const oldDefs: FieldDefinition[] = [
+      {
+        id: fieldId,
+        slug: 'related',
+        valueType: 'reference' as const,
+        fieldType: 'entry' as const,
+        label: { en: 'Related', de: 'Related' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12' as const,
+        ofCollections: [collA, collB],
+        min: null,
+        max: null,
+      },
+    ];
+    const newDefs: FieldDefinition[] = [
+      { ...oldDefs[0]!, ofCollections: [collA] } as FieldDefinition,
+    ];
+    const asset = { id: uuid(), objectType: 'asset' as const };
+    const values: Record<string, Value> = {
+      related: {
+        objectType: 'value',
+        valueType: 'reference',
+        content: { en: [asset], de: [asset] },
+      },
+    };
+    const changes = diffFieldDefinitions(oldDefs, newDefs);
+
+    const result = transformEntryValues(
+      entryId,
+      collectionId,
+      values,
+      oldDefs,
+      newDefs,
+      changes,
+      languages
+    );
+
+    // `ofCollections` constrains Entry references only, so nothing is lost.
+    // The Value still fails the `entry` field's own schema, which is a
+    // resolvable issue and not this rule's business
+    expect(
+      result.issues.filter((issue) => issue.issue === 'content_loss')
+    ).toHaveLength(0);
+    const related = result.values['related'] as ReferencedValue;
+    expect(related.content.en).toHaveLength(1);
     expect(related.content.de).toHaveLength(1);
   });
 

@@ -122,6 +122,7 @@ export const logAttributeNames = [
   'elek.entry.value.count',
   'elek.entry.value.slugs',
   'elek.error.status_code',
+  'elek.field_definition.ids',
   'elek.git.command',
   'elek.git.ref',
   'elek.log.repeat.count',
