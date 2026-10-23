@@ -226,7 +226,7 @@ describe('the Entries loader on a content model that moved', function () {
     // Reloading against the schema Astro built would strip the new field
     // silently, so the Entries of the model it was built for stay
     expect(store.has(entry.id)).toBe(true);
-  }, 60000);
+  });
 
   it('names the rename when the Collection and the model changed at once', async function () {
     const project = await createProject();
@@ -246,5 +246,5 @@ describe('the Entries loader on a content model that moved', function () {
     expect(warnings).toEqual([
       expect.stringContaining('was renamed or replaced'),
     ]);
-  }, 60000);
+  });
 });

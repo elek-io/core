@@ -101,8 +101,6 @@ describe('published documentation', function () {
   let consumerDir: string;
   let scriptPath: string;
 
-  // Starting pnpm and copying every published file can outlast vitest's own
-  // hook timeout on the slow runners, see contributing/testing.md
   beforeAll(async function () {
     published = publishedPaths();
     pages = documentationPaths();
@@ -135,7 +133,7 @@ describe('published documentation', function () {
     }
     scriptPath = Path.join(consumerDir, 'resolve.mjs');
     await Fs.outputFile(scriptPath, resolveScript);
-  }, 60000);
+  });
 
   afterAll(async function () {
     // The hook above can die before it assigns this, and removing undefined

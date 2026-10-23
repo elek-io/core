@@ -186,12 +186,12 @@ export const collections = {
     // which every test root shares through its symlink
     cacheDir = Path.join(root, '.cache');
     await sync({ root, configFile: false, logLevel: 'info', cacheDir });
-  }, 120000);
+  });
 
   afterAll(async function () {
     await project.destroy();
     await Fs.remove(root);
-  }, 60000);
+  });
 
   it('should store every item under the slug of its Component', async function ({
     task,
@@ -207,7 +207,7 @@ export const collections = {
     // The loaders derive the slug on every sync and write nothing back, so
     // upgrading migrates no content
     await ensureCleanGitStatus(task, project.id);
-  }, 30000);
+  });
 
   it('should generate an item type discriminated on the Component slug', async function () {
     const types = await readGeneratedTypes();
@@ -218,7 +218,7 @@ export const collections = {
     expect(types).toContain(
       `| { id: string; componentId: "${quote.id}"; componentSlug: "quote"; values: QuoteComponentValues }`
     );
-  }, 30000);
+  });
 
   /**
    * Runs last, it is the only test that changes the Project, and it syncs
@@ -245,5 +245,5 @@ export const collections = {
       [quote.id, 'quote'],
     ]);
     expect(await readStore()).not.toContain('"hero"');
-  }, 120000);
+  });
 });
