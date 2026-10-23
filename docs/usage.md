@@ -596,7 +596,7 @@ Those are the only entries the integration needs. Everything else it produces go
 All loaders share one Core instance, and the loaders themselves take no options for it. What configures it are the `ELEK_IO_*` environment variables of the build:
 
 - `ELEK_IO_DATA_DIR` reads from a data directory other than `~/elek.io`.
-- `ELEK_IO_LOG_LEVEL` set to `error` keeps Core's own lines out of the build output.
+- `ELEK_IO_LOG_LEVEL` set to `error` keeps Core's own `[core]` lines out of the build output.
 - `ELEK_IO_CHANNEL` switches the content state deployment-wide.
 - `ELEK_IO_REMOTE_ACCESS_TOKEN` authenticates against a private remote.
 
@@ -608,8 +608,8 @@ All loaders share one Core instance, and the loaders themselves take no options 
   - A loader that names its Collection by its slug rather than its id adds a line for every slug index rebuild.
 - **Every warning Core raises goes with them**, and that list is open too.
   - A build that uses `elek()` reaches one for every `project.json` provisioning reads before it has validated it, which is how it migrates a Project an older Core wrote.
-  - A build also reaches the one `elekCollections()` raises when it is called without a selection, and the one about a credential helper Core could not derive for elek.io Cloud's git hosts.
-- Three more of those warnings are about content Core dropped rather than read: an Entry whose file did not parse, which is why a loader can report more Entries than it stored, a Collection skipped while the slug index is rebuilt, and a file or folder skipped because its name does not parse.
+  - A build also reaches the one `elekCollections()` raises when it is called without a selection, and, when `ELEK_IO_CLOUD_URL` names a host without an `api.` label and `ELEK_IO_CLOUD_GIT_URL` is unset, the one about a credential helper Core could not derive for elek.io Cloud's git hosts.
+- Three more of those warnings are about content Core dropped rather than read: an Entry Core could not read, which is why a loader can report more Entries than it stored, a Collection skipped while the slug index is rebuilt, and a file or folder skipped because its name does not parse.
   - The last two name what they skipped. The first carries only what the read failed with, which names the file when the JSON is broken and names the failing field alone when the file parses but does not validate.
 - The level governs Core's [log files](#log-files) too, so at `error` the log file holds nothing about the build but what failed.
 - The `[elek]`, `[elek-assets]` and `[elek-entries]` lines stay, because the integration and the loaders report through Astro's logger. That covers what each one provisioned, read and wrote, the line [every loader logs about the content state it read](#provisioning-in-ci-with-elek), and their own warnings.
