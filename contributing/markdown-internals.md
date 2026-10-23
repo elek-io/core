@@ -36,7 +36,7 @@ The decision is an `MdastNodeContext`, handed to every handler as its last argum
 
 What holds:
 
-- **A two parameter handler stays assignable to a three parameter type**, so every renderers object written before the context existed still compiles untouched. `mdastRender.test.ts` asserts it with `expectTypeOf` rather than leaving it to the eye.
+- **A handler that leaves out the context stays assignable to its type**, a parent with two parameters and a leaf with one, so every renderers object written before the context existed still compiles untouched. `mdastRender.test.ts` asserts both with `expectTypeOf` rather than leaving it to the eye.
 - **Every handler is always handed a context**, so none has to guard for `undefined`. The root's is `index` 0 with no ancestors, which is the truth about the root rather than a placeholder.
 - **One child walk**, `renderChildren`, is the only place the walk descends. Each parent case of the switch calls it, so a node's ancestors array is built once and shared by its children rather than built once per case.
 - **The array is shared, so it is read only** in `MdastNodeContext`. Mutating it would reach a node's siblings.

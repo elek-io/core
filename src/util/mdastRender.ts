@@ -191,8 +191,9 @@ export type FrameworkRenderers<T> = Pick<
  * with no defaults merged, which is what a binding does for you. `T` is the
  * caller's element type.
  *
- * The walk is depth-first and a parent handler receives its already-rendered
- * children. An unknown node type throws a plain `Error`, not a `CoreError`.
+ * The walk is depth-first. A parent handler receives its already-rendered
+ * children, and every handler receives its `MdastNodeContext` last. An
+ * unknown node type throws a plain `Error`, not a `CoreError`.
  *
  * @see ../../docs/markdown-content.md
  */

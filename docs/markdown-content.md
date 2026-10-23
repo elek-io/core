@@ -261,6 +261,8 @@ tableCell: (_, children, context) => {
 },
 ```
 
+Both answer from a cell's context, so `isTableHeaderCell` is false for a row. A `tableRow` override that asks whether it is the header row reads `context.index === 0`.
+
 **A table has no caption**, because mdast has no caption node, so there is nothing for Core to render one from. That matters when you put a wide table in a horizontally scrolling box: the box is a scrollable region, and a region needs a name and keyboard reach of its own. Name it from whatever your page knows, the heading above the table for example, rather than expecting one in the tree.
 
 ### Reusable per-site renderer
