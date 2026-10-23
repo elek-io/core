@@ -84,7 +84,7 @@ Install them as dev dependencies of the project you run `elek` in. Without them 
 
 **TypeScript 7** asks for two more things, and TypeScript 5 and 6 for neither:
 
-- A `tsconfig.json` in the project. Without one it fails with `tsgo generator requires a tsconfig file to be specified`.
+- A `tsconfig.json` in the project. Without one it fails with "The `tsgo` generator requires a tsconfig file to be specified."
 - That `tsconfig.json` has to cover the output directory. Writing into a directory its `include` leaves out fails with `tsgo did not generate dts file` and exits 1, with the generated `.ts` file left behind.
 
 Core's default `./.elek.io` is outside a typical `include: ["src"]`, so the command fails there with no `outDir` passed at all. Any one of these fixes it:

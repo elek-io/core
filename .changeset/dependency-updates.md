@@ -16,7 +16,7 @@
 | `p-queue`                    | 9.3.3   | 10.0.0  |
 | `uuid`                       | 14.0.1  | 14.0.3  |
 
-`semver`, `winston` and `winston-daily-rotate-file` stayed where they were. No export of any entry point was added, removed or renamed. The published declarations do carry `z.ZodTypeAny` where they used to carry `z.ZodType`, which is zod's own rename of that alias and resolves to your copy of zod either way.
+`semver`, `winston` and `winston-daily-rotate-file` stayed where they were. No export of any entry point was added, removed or renamed. The published declarations do carry `z.ZodTypeAny` where they used to carry `z.ZodType`. Zod 4.4.3 exported `ZodTypeAny` as a second name for `ZodType`, and Zod 4.6 declares it as a deprecated alias of its own, so the name Core's source already wrote now shows in the declarations. It resolves to your copy of Zod either way.
 
 **One behavior changed, in slugs.** slugify 3.0.1 fixed a contraction or a possessive followed by punctuation, so `Ada's, blog` now gives `adas-blog` where it used to give `ada-s-blog`. A slug already stored keeps its value, and only a slug derived after the update differs.
 
