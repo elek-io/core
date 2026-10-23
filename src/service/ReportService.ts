@@ -23,7 +23,7 @@ import type { LogService } from './LogService.js';
  * not read from `user.get()` here, because the address somebody can be
  * reached at is editable in the form that collected the report.
  *
- * @see ../../docs/reporting.md
+ * @see ../../contributing/cloud.md
  */
 export class ReportService extends AbstractService {
   /** Appended to the configured Cloud URL, which never ends in a slash */
@@ -62,8 +62,6 @@ export class ReportService extends AbstractService {
    * `PreconditionFailed` when Cloud is unreachable or silent for 15 seconds,
    * and `Internal` otherwise. Read-only mode does not block it, and Core
    * never retries, so sending again after a timeout can duplicate a report.
-   *
-   * @see ../../docs/reporting.md
    */
   public async create(props: CreateReportProps): Promise<ReportResponse> {
     // validated() rather than mutating(): assertNotReadOnly protects a

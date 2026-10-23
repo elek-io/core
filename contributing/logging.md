@@ -341,6 +341,5 @@ A sentinel test is a scanner, and a scanner cannot prove absence. As a test that
 ## See also
 
 - [`../docs/usage.md`](../docs/usage.md#log-files) - where log files land, and what a consumer finds in one
-- [`../docs/reporting.md`](../docs/reporting.md) - what happens to a log tail once somebody sends it to elek.io Cloud
 - [`error-handling-internals.md`](./error-handling-internals.md) - the boundary that logs a validation failure
 - [`testing.md`](./testing.md) - how the suite the sentinel tests belong to runs

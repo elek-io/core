@@ -54,7 +54,7 @@ await core.projects.branches.switch({ id: project.id, branch: 'main' });
 
 Every create, update and delete commits to git, and git needs an author. Core takes the author and the committer from the configured User (see [`usage.md`](./usage.md#setting-the-user-required-before-writing)). Committing with no User set throws a `CoreError` of type `Unauthorized`.
 
-Core reads the User each time it writes a commit or a tag, for a merge, a rebase and a pull as well. So once `core.user.set()` or signing in to elek.io Cloud changes the User, the next commit carries the new name and email as author and committer, and the next tag as tagger. A rebase keeps each commit's author and makes the User its committer.
+Core reads the User each time it writes a commit or a tag, for a merge, a rebase and a pull as well. So once `core.user.set()` changes the User, the next commit carries the new name and email as author and committer, and the next tag as tagger. A rebase keeps each commit's author and makes the User its committer.
 
 The User reaches git through the environment of each command, never through the repository's git config. So `init` and `clone` need no User, and only a commit does. On `init` and `clone` Core writes two settings it relies on into the local git config:
 
@@ -200,7 +200,7 @@ See [Building offline](./provisioning.md#building-offline).
 - The git layer backstops callers that bypass the services. A direct `git.commit`, `git.tags.create` or `git.push` against a provisioned copy throws the same error.
 - The escape hatch is `projects.delete()`, which removes a provisioned copy without any unpushed-changes check, because it is disposable by definition. After that the Project can be cloned as a working copy.
 
-Private remotes authenticate through the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable, see [`usage.md`](./usage.md#environment-variables). The token is passed to git per invocation and never written into a URL or the repository config. A remote on one of elek.io Cloud's git hosts authenticates with the elek.io Cloud session instead, see [`cloud-git.md`](./cloud-git.md).
+Private remotes authenticate through the `ELEK_IO_REMOTE_ACCESS_TOKEN` environment variable, see [`usage.md`](./usage.md#environment-variables). The token is passed to git per invocation and never written into a URL or the repository config.
 
 It applies to HTTP(S) remotes only. SSH remotes authenticate through the ambient SSH setup instead, for example keys loaded into ssh-agent, and an SSH failure raises an `Unauthorized` error naming the SSH setup rather than the token.
 
@@ -265,8 +265,7 @@ Tags made before the Project had a remote reach it with [the first push](#the-fi
 
 | Error type | When |
 | --- | --- |
-| `Unauthorized` (401) | A commit is attempted with no User set, the remote rejects the credentials, or a remote on elek.io Cloud's git hosts is reached without a session. Cloning needs no User. |
-| `NotFound`, `Conflict`, `RateLimited` | Asking elek.io Cloud for a git token failed, see [`cloud-git.md`](./cloud-git.md#errors). |
+| `Unauthorized` (401) | A commit is attempted with no User set, or the remote rejects the credentials. Cloning needs no User. |
 | `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree, a rebase conflict or a remote holding anything but the Project, or a push fails because the remote does not support Git LFS or, for a Release or a first push, atomic pushes. Also when git cannot load a shared library it needs, see [`usage.md`](./usage.md#installing-and-instantiating). |
 | `Conflict` (409) | `clone()` targets an already-present Project, a guarded `delete()` has unpushed commits, or `synchronize()` would integrate dangling references. |
 | `BadRequest` (400) | A `core.git.push()` combines the `all` and `refs` options, which are mutually exclusive. |

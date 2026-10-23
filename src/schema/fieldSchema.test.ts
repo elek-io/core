@@ -141,7 +141,7 @@ describe('resolveOfComponents', () => {
     expect(result).toEqual(componentIds);
   });
 
-  it('returns the field-defined ofComponents verbatim when non-empty', () => {
+  it('returns the field-defined ofComponents in order when non-empty', () => {
     const a = uuid();
     const b = uuid();
     const componentIds = [a, b, uuid()];
@@ -149,6 +149,18 @@ describe('resolveOfComponents', () => {
     const result = resolveOfComponents(
       { ...baseDynamicField, ofComponents: [a, b] },
       componentIds
+    );
+
+    expect(result).toEqual([a, b]);
+  });
+
+  it('names a Component the field lists twice once', () => {
+    const a = uuid();
+    const b = uuid();
+
+    const result = resolveOfComponents(
+      { ...baseDynamicField, ofComponents: [a, b, a] },
+      [a, b]
     );
 
     expect(result).toEqual([a, b]);

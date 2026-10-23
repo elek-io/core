@@ -64,9 +64,14 @@ Unlike `generate:client`, this emits **type definitions only - no runtime code**
 
 - a `ProjectLanguage` union narrowed to that Project's languages
 - typed interfaces for every Collection, Component and Entry, with their values narrowed to the same languages
-- id constants
+- id constants, which a `dynamic` field's item union is discriminated on: `case HeroComponentId:`
 
-Use these to type content you load yourself, through the [Astro integration](./usage.md#astro-integration) or your own fetch layer, without pulling in the client.
+Use these to type content you load yourself, through the [local API](./local-api.md), an [export](./export.md) or your own fetch layer, without pulling in the client.
+
+An Astro site needs none of it:
+
+- The [loaders](./usage.md#astro-integration) supply its types, for the shape they transform an Entry into rather than for the stored one.
+- Their item union is discriminated on the Component's slug rather than on an id constant, see [Rendering a dynamic field](./usage.md#rendering-a-dynamic-field). The id is on every item there too, so both can be read side by side.
 
 A single Project writes `types.ts`. Multiple Projects write one `types-{projectId}.ts` per Project. With no Projects in the data directory nothing is written and the command exits successfully, for either language.
 

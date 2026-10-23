@@ -778,12 +778,16 @@ export const forbidUniqueAndSlugInComponentSuperRefinement = (
 /**
  * Resolves the effective list of Component IDs a dynamic field references.
  * An empty `ofComponents` array means "all Components in the Project".
+ *
+ * The list is deduped, because a field naming one Component twice allows it
+ * once. A duplicate would otherwise reach a discriminated union and the
+ * generated types as two members of one Component.
  */
 export function resolveOfComponents(
   fieldDefinition: DynamicFieldDefinition,
   allComponentIds: readonly Uuid[]
 ): readonly Uuid[] {
   return fieldDefinition.ofComponents.length > 0
-    ? fieldDefinition.ofComponents
+    ? [...new Set(fieldDefinition.ofComponents)]
     : allComponentIds;
 }
