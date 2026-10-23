@@ -45,7 +45,7 @@ A Project's first Release compares against the commit `core.projects.create()` m
 
 `prepare()` must be run while the Project is on the `draft` branch (otherwise it throws `PreconditionFailed`). It is read-only: it changes nothing, it just reports what a release would do.
 
-It diffs `draft` against the released `main` across six object kinds - the Project file, Collections, their field definitions, Components and their field definitions, Assets, and Entries - and returns a `ReleaseDiff`:
+It diffs `draft` against the released `main` across the Project file, Collections and Components with their field definitions, Assets and Entries, and returns a `ReleaseDiff`:
 
 ```typescript
 const diff = await core.releases.prepare({ projectId: project.id });
@@ -65,11 +65,72 @@ Each change is classified as `major`, `minor` or `patch`, and the highest classi
 
 | Bump | Meaning | Examples |
 | --- | --- | --- |
-| **major** | Breaks an existing consumer's assumptions | Collection / Component / Entry / Asset deleted. Field deleted. A field's `valueType`, `fieldType` or `slug` changed. `min`/`max` tightened. `isRequired` turned off. `isUnique` turned off. `ofCollections` changed. A slug field's `separator`, `lowercase` or `decamelize` changed, which re-canonicalises every value it holds. Default language changed, or a supported language removed. |
-| **minor** | Adds something without breaking | Collection / Component / Entry / Asset added. Field added. `isRequired` turned on. `isUnique` turned on. A supported language added. |
-| **patch** | Cosmetic or content-only | `label`, `description`, `inputWidth`, `isDisabled` or `defaultValue` changed. `min`/`max` loosened. A slug field's `ofFieldDefinitions` changed, a generation hint that never rewrites a stored value. Project `name` / `description` changed. An Asset's binary or metadata changed. An Entry's values modified. |
+| **major** | Breaks an existing consumer's assumptions | A Collection, Component, Entry or Asset deleted. A field definition deleted or renamed. A Collection's plural slug or a Component's slug renamed. A field's `valueType` or `fieldType` changed. The default language changed. |
+| **minor** | Adds something without breaking | A Collection, Component, Entry or Asset added. A field definition added. A supported language added. |
+| **patch** | Cosmetic or content-only | A field's `label`, `description` or `defaultValue` changed. An Entry's values modified. The Project's name changed. |
 
-If `draft` has commits ahead of `main` but the diff finds no classified change, the bump defaults to `patch`. If there are no changes at all, `bump` and `nextVersion` are `null`. The exhaustive list of change types lives in `src/schema/releaseSchema.ts`.
+If `draft` has commits ahead of `main` but the diff finds no classified change, the bump defaults to `patch`. If there are no changes at all, `bump` and `nextVersion` are `null`. [Every change a diff can carry](#every-change-a-diff-can-carry) lists the rest.
+
+### Every change a diff can carry
+
+Every change `prepare()` can report is below, with the bump it contributes. The names are the `*ChangeTypeSchema` enums of `src/schema/releaseSchema.ts`.
+
+| Array | `changeType` | Bump | What changed |
+| --- | --- | --- | --- |
+| `projectChanges` | `defaultLanguageChanged` | major | The Project's default language |
+| `projectChanges` | `supportedLanguageRemoved` | major | The Project supports one language less, so the generated `ProjectLanguage` drops it and with it every key of a translatable value |
+| `projectChanges` | `supportedLanguageAdded` | minor | The Project supports one language more, which the generated `ProjectLanguage` gains |
+| `projectChanges` | `nameChanged` | patch | The Project's name |
+| `projectChanges` | `descriptionChanged` | patch | The Project's description |
+| `collectionChanges` | `deleted` | major | The Collection is gone, with every Entry it held |
+| `collectionChanges` | `slugChanged` | major | The Collection's plural slug, which its generated type names, its generated client key and its Astro collection name are built from, and which addresses it in the API. A changed singular slug is not reported, because no generated name, key or path is built from it |
+| `collectionChanges` | `added` | minor | A Collection the released state does not hold |
+| `componentChanges` | `deleted` | major | The Component is gone |
+| `componentChanges` | `slugChanged` | major | The Component's slug, which its generated type names are built from, which addresses it in the API, and which every item of it carries as `componentSlug` in Astro |
+| `componentChanges` | `added` | minor | A Component the released state does not hold |
+| `fieldChanges` and `componentFieldChanges` | `deleted` | major | The field definition is gone, with its value in every Entry |
+| `fieldChanges` and `componentFieldChanges` | `slugChanged` | major | The field definition's slug, which is the key its value arrives under |
+| `fieldChanges` and `componentFieldChanges` | `valueTypeChanged` | major | The field definition's `valueType` |
+| `fieldChanges` and `componentFieldChanges` | `fieldTypeChanged` | major | The field definition's `fieldType` |
+| `fieldChanges` and `componentFieldChanges` | `minMaxTightened` | major | `min` rose, `max` fell, or either gained a bound where there was none, on a `text`, `textarea`, `number`, `range`, `asset` or `entry` field |
+| `fieldChanges` and `componentFieldChanges` | `isRequiredToNotRequired` | major | A field definition that was required is optional |
+| `fieldChanges` and `componentFieldChanges` | `isUniqueToNotUnique` | major | A field definition that was unique may repeat a value |
+| `fieldChanges` and `componentFieldChanges` | `ofCollectionsChanged` | major | An `entry` field's `ofCollections`. A narrowed list strips the Entry references it no longer allows, and an update that would strip one is refused until the loss is accepted, see [`schema-changes.md`](./schema-changes.md#accepting-content-loss) |
+| `fieldChanges` and `componentFieldChanges` | `ofComponentsChanged` | major | A `dynamic` field's `ofComponents`. The generated types restate the list, so narrowing it, widening it and replacing an empty list, which allows every Component, with an explicit one are each reported. The lists are compared sorted, so reordering alone is not. A narrowed list also strips the Component items it no longer allows, and an update that would strip one is refused until the loss is accepted |
+| `fieldChanges` and `componentFieldChanges` | `slugFormatChanged` | major | A `slug` field's `separator`, `lowercase` or `decamelize`, which re-canonicalizes every value it holds |
+| `fieldChanges` and `componentFieldChanges` | `added` | minor | A field definition the released state does not hold |
+| `fieldChanges` and `componentFieldChanges` | `isNotRequiredToRequired` | minor | A field definition that was optional is required |
+| `fieldChanges` and `componentFieldChanges` | `isNotUniqueToUnique` | minor | A field definition that could repeat a value is unique |
+| `fieldChanges` and `componentFieldChanges` | `labelChanged` | patch | The field definition's `label` |
+| `fieldChanges` and `componentFieldChanges` | `descriptionChanged` | patch | The field definition's `description` |
+| `fieldChanges` and `componentFieldChanges` | `defaultValueChanged` | patch | The field definition's `defaultValue`, where both versions carry one |
+| `fieldChanges` and `componentFieldChanges` | `inputWidthChanged` | patch | The field definition's `inputWidth` |
+| `fieldChanges` and `componentFieldChanges` | `isDisabledChanged` | patch | The field definition's `isDisabled` |
+| `fieldChanges` and `componentFieldChanges` | `minMaxLoosened` | patch | `min` fell, `max` rose, or either lost its bound, on the same field types as `minMaxTightened` |
+| `fieldChanges` and `componentFieldChanges` | `ofFieldDefinitionsChanged` | patch | A `slug` field's `ofFieldDefinitions`, a generation hint that never rewrites a stored value |
+| `assetChanges` | `deleted` | major | The Asset is gone |
+| `assetChanges` | `added` | minor | An Asset the released state does not hold |
+| `assetChanges` | `binaryChanged` | patch | The Asset's `extension`, `mimeType` or `size` |
+| `assetChanges` | `metadataChanged` | patch | The Asset's `name` or `description` |
+| `entryChanges` | `deleted` | major | The Entry is gone |
+| `entryChanges` | `added` | minor | An Entry the released state does not hold |
+| `entryChanges` | `modified` | patch | The Entry's values |
+
+Every row compares the released state against the current `draft`, never the commits in between, so a rename and its undo inside one `draft` is no change at all. A Collection or Component added since the last Release is reported as `added` alone, whatever its slug did afterwards.
+
+A Component's field definition can be neither unique nor a `slug` field, so the four rows that need one of those reach `fieldChanges` alone.
+
+## What a major Release asks of a consumer
+
+A major Release says something your build depends on changed, either a name or a shape it is written against, or content it reads. The warning you get is the version number, and a build that provisions the `release` channel logs the version it landed on and carries on, so read it as a warning rather than a gate:
+
+- Provisioning the `release` channel, the default, lands on the newest Release whatever its bump, so the next build takes a major one like any other.
+- Pin the exact version you have, in the integration config or through `--ref` on `elek provision`, to decide yourself when to move. See [`provisioning.md`](./provisioning.md#channels-and-pinned-versions).
+- Run `elek generate:types` and `elek generate:client` against the new Release and fix what stops compiling.
+- `elekCollections()` names each Astro collection after the alias you chose for the Project in `defineElekConfig()` and the Collection's plural slug, so a renamed Collection renames the name `getCollection()` takes. The alias is not the Project's name, so renaming the Project changes no collection name, see [`usage.md`](./usage.md#astro-integration).
+- A deleted Entry or Asset and a changed default language are major as well, and none of the three changes a generated type or a generated client, so nothing stops compiling. A page built from a deleted Entry is no longer generated at all, so compare the pages the build emitted rather than only what it compiled.
+
+`prepare()` reports every change behind the bump before the Release is published. It runs on the `draft` branch, so whoever cuts the Release reads it rather than you. A Collection or Component change carries the id of what changed, so the name is yours to look up, see [`usage.md`](./usage.md#reading-from-history). A field change carries its `fieldSlug` as well.
 
 ## create(): cutting a release
 

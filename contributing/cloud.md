@@ -1,6 +1,6 @@
 # elek.io Cloud calls
 
-How Core talks to elek.io Cloud, how it holds a session, and what every call has to keep. For what a consumer sees, read [`../docs/cloud-account.md`](../docs/cloud-account.md) and [`../docs/reporting.md`](../docs/reporting.md).
+How Core talks to elek.io Cloud, how it holds a session, and what every call has to keep. `docs/` covers none of it, because elek.io Cloud is not released, so this doc is also where the `cloud` options and their environment variables are written down until the consumer pages return.
 
 ## The decision
 
@@ -11,6 +11,16 @@ Every call goes through [`CloudClient`](../src/util/cloud.ts). It owns the base 
 | Each service calling `fetch` itself | The report did, and the token, the 401 rule and the mapping would be copied into every new call |
 | An HTTP client library | The global `fetch` covers one JSON request with a timeout, and a library brings retries Core has to turn off |
 | Retrying a call | A retry after a timeout can duplicate a report or an account, or spend a rate limit on a password guess, and Core cannot tell from the outside whether the first one landed. The one exception is below, a `409` that says nothing landed |
+
+## The options
+
+Three options configure the calls, each overriding the environment variable next to it. They are validated in [`coreSchema`](../src/schema/coreSchema.ts), and `cloud.token` is the only one `core.options` leaves out.
+
+| Option | Variable | Holds |
+| --- | --- | --- |
+| `cloud.url` | `ELEK_IO_CLOUD_URL` | The base URL of every call, `https://api.elek.io` by default, without a trailing slash |
+| `cloud.token` | `ELEK_IO_CLOUD_TOKEN` | The bearer token of a session, kept in memory only |
+| `cloud.gitUrl` | `ELEK_IO_CLOUD_GIT_URL` | The git hosts' URL pattern, derived from `cloud.url` when unset, see [`git-credentials.md`](./git-credentials.md#the-pattern-comes-from-cloudurl) |
 
 ## Invariants
 
@@ -54,8 +64,6 @@ Every other refusal takes the shared mapping. The owner chose the backoff over a
 
 ## See also
 
-- [`../docs/cloud-account.md`](../docs/cloud-account.md) - the calls, the token and the User as a consumer sees them
-- [`../docs/reporting.md`](../docs/reporting.md) - the report, a call through the seam
 - [`git-credentials.md`](./git-credentials.md) - the helper the git calls answer, and every decision behind it
 - [`naming.md`](./naming.md#the-account) - why the account calls carry the names they do
 - [`logging.md`](./logging.md) - why neither a body nor a credential may reach a log file

@@ -2,6 +2,11 @@ import Path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fs from 'fs-extra';
 import ts from 'typescript';
+import { z } from 'zod';
+import {
+  releaseDiffSchema,
+  semverBumpSchema,
+} from '../schema/releaseSchema.js';
 
 /**
  * The machine checkable half of the documentation rules.
@@ -283,6 +288,90 @@ function statusCodesOf(): Map<string, string> {
       code ?? '',
     ])
   );
+}
+
+/** A row of the documented release table, which names an array, a change type and a bump. */
+const tableRowSchema = z.object({
+  arrays: z.string(),
+  changeType: z.string(),
+  bump: z.string(),
+});
+
+/** A zod schema, read for the type it declares and the schema it may wrap. */
+const wrappingSchema = z.object({
+  def: z.object({ type: z.string(), innerType: z.unknown().optional() }),
+});
+
+/** An array of a release diff, read for the change types its items carry. */
+const changeArraySchema = z.object({
+  element: z.object({
+    shape: z.object({
+      changeType: z.object({ options: z.array(z.string()) }),
+    }),
+  }),
+});
+
+/**
+ * A schema with every wrapper resolved, so `type` tells what it really is.
+ *
+ * `.readonly()` and the like wrap the schema they are called on, so a
+ * readonly array declares `readonly` and keeps its `element` one level down
+ * under `innerType`. Following `innerType` while there is one leaves the
+ * schema itself, whatever it arrived wrapped in.
+ */
+function resolvedSchemaOf(schema: unknown): { type: string; schema: unknown } {
+  const { def } = wrappingSchema.parse(schema);
+  if (def.innerType === undefined) return { type: def.type, schema };
+  return resolvedSchemaOf(def.innerType);
+}
+
+/**
+ * Every change type a release diff can carry, by the array it arrives in.
+ *
+ * `docs/releases.md` restates these as a table whoever releases reads, and a
+ * table maintained by hand drifts from the enums it copies. Walked from
+ * `releaseDiffSchema` so an array added there cannot stay undocumented: a
+ * field that is no array is skipped, an array that cannot be read throws.
+ */
+function changeTypesOf(): Map<string, string[]> {
+  const byArray = new Map<string, string[]>();
+  for (const [array, field] of Object.entries(releaseDiffSchema.shape)) {
+    const resolved = resolvedSchemaOf(field);
+    if (resolved.type !== 'array') continue;
+    const change = changeArraySchema.safeParse(resolved.schema);
+    if (!change.success) {
+      throw new Error(
+        `releaseDiffSchema.${array} is an array whose items carry no changeType enum, so either it holds something other than changes, or its changeType sits behind a wrapper this rule does not read`
+      );
+    }
+    byArray.set(array, change.data.element.shape.changeType.options);
+  }
+  return byArray;
+}
+
+/**
+ * The bump `ReleaseService` gives each change type, read out of the literals
+ * it pushes. Every push writes `bump` directly after `changeType`, and this
+ * looks for that pair anywhere in the file. It establishes neither which
+ * array the pair is pushed into nor which push wrote it, so a change type
+ * pushed in several places answers for every row naming it, which is 19 of
+ * the 58 declared pairs, see contributing/documentation.md.
+ */
+function changeBumpsOf(
+  changeTypes: Iterable<string>
+): Map<string, Set<string>> {
+  const source = readFile('src/service/ReleaseService.ts').replaceAll(
+    /\s+/g,
+    ' '
+  );
+  const bumps = new Map<string, Set<string>>();
+  for (const changeType of changeTypes) {
+    const classified = semverBumpSchema.options.filter((bump) =>
+      source.includes(`changeType: '${changeType}', bump: '${bump}'`)
+    );
+    bumps.set(changeType, new Set(classified));
+  }
+  return bumps;
 }
 
 /** What the coverage rule reads. A test documents nobody, so it is left out. */
@@ -1109,6 +1198,107 @@ export const rules: Rule[] = [
           line: 1,
           message: `the table has ${declared.size} types, the sentence says ${counted[1]}`,
         });
+      }
+      return violations;
+    },
+  },
+  {
+    id: 'links/release-table',
+    summary: 'the documented release changes are the ones Core classifies',
+    files: () => ['docs/releases.md'].filter((file) => exists(file)),
+    check: (file, content) => {
+      const section = 'Every change a diff can carry';
+      if (!content.includes(`### ${section}`)) {
+        return [
+          {
+            file,
+            line: 1,
+            message: `the "${section}" section is gone, and with it the table of every change type`,
+          },
+        ];
+      }
+
+      const declared = changeTypesOf();
+      const bumps = changeBumpsOf([...declared.values()].flat());
+      const documented = new Set<string>();
+      const violations: Violation[] = [];
+      let inSection = false;
+
+      for (const line of linesOf(content)) {
+        if (!line.inFence && /^#{1,6}\s/.test(line.text)) {
+          inSection = line.text.includes(section);
+          continue;
+        }
+        if (!inSection || line.inFence) continue;
+        // | `fieldChanges` and `componentFieldChanges` | `added` | minor | .. |
+        const row = tableRowSchema.safeParse(
+          /^\|(?<arrays>[^|]*)\|\s*`(?<changeType>\w+)`\s*\|\s*(?<bump>\w+)\s*\|/.exec(
+            line.text
+          )?.groups
+        );
+        if (!row.success) continue;
+        const { changeType, bump } = row.data;
+        const arrays = [...row.data.arrays.matchAll(/`\w+`/g)].map(([name]) =>
+          name.slice(1, -1)
+        );
+        if (arrays.length === 0) continue;
+
+        // A change type no array declares has no bump to look for, and the
+        // per-array check below reports it where the truth about it is
+        const classified = bumps.get(changeType);
+        if (classified !== undefined) {
+          if (classified.size === 0) {
+            violations.push({
+              file,
+              line: line.number,
+              message: `ReleaseService pairs no bump with ${changeType}, so either nothing classifies it and the row goes, or its push does not write bump directly after changeType`,
+            });
+          } else if (classified.size > 1) {
+            violations.push({
+              file,
+              line: line.number,
+              message: `ReleaseService classifies ${changeType} as ${[...classified].join(' and ')}, so one row cannot answer for it`,
+            });
+          } else if (!classified.has(bump)) {
+            violations.push({
+              file,
+              line: line.number,
+              message: `${changeType} is classified as ${[...classified][0]}, not ${bump}`,
+            });
+          }
+        }
+
+        for (const array of arrays) {
+          const types = declared.get(array);
+          if (types === undefined) {
+            violations.push({
+              file,
+              line: line.number,
+              message: `${array} is not an array of a release diff, drop it from the row`,
+            });
+            continue;
+          }
+          if (!types.includes(changeType)) {
+            violations.push({
+              file,
+              line: line.number,
+              message: `${array} never carries ${changeType}, drop it from the row`,
+            });
+            continue;
+          }
+          documented.add(`${array}.${changeType}`);
+        }
+      }
+
+      for (const [array, types] of declared) {
+        for (const type of types) {
+          if (documented.has(`${array}.${type}`)) continue;
+          violations.push({
+            file,
+            line: 1,
+            message: `${array} carries ${type} with no row in the table`,
+          });
+        }
       }
       return violations;
     },

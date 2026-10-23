@@ -2,7 +2,7 @@
 '@elek-io/core': minor
 ---
 
-**Git against elek.io Cloud's git hosts with a session.** Core answers git's credential requests for elek.io Cloud's git hosts itself. The first time a session meets a Project, it asks `POST /management/v1/projects/{id}/git-token` when it holds no token for that git host, and `PUT /management/v1/projects/{id}/git-access` when it does. It keeps one token per host in memory. The person's credential store is never asked about a Cloud host, and every other host keeps the person's own helpers. See `docs/cloud-git.md`.
+**Git against elek.io Cloud's git hosts with a session.** Core answers git's credential requests for elek.io Cloud's git hosts itself. The first time a session meets a Project, it asks `POST /management/v1/projects/{id}/git-token` when it holds no token for that git host, and `PUT /management/v1/projects/{id}/git-access` when it does. It keeps one token per host in memory. The person's credential store is never asked about a Cloud host, and every other host keeps the person's own helpers.
 
 - **New option `cloud.gitUrl`** and environment variable `ELEK_IO_CLOUD_GIT_URL`, with the same precedence as `cloud.url`. They name the git hosts' URL pattern. Unset, it is derived from `cloud.url`: `https://api.<zone>` gives `https://*.git.<zone>`. `core.options.cloud.gitUrl` holds the pattern in use, or `null` when `cloud.url` carries no `api.` label, and Core then installs no helper and logs a warning.
 - **A refused git token is asked for again once.** Core drops it and runs the command once more. A second refusal throws `Unauthorized`.

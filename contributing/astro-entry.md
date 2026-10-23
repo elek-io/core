@@ -128,7 +128,36 @@ Nothing structural enforces the pairing. `buildValueContentSchema` and `fieldDef
 
 The emitted type names are PascalCased slugs: `${CollectionPascal}${FieldPascal}Item` and `${ComponentPascal}${FieldPascal}Item` for dynamic field item unions, `${ComponentPascal}ComponentValues` for a Component's values.
 
-That is the same `toPascalCase` derivation as the collection keys above, so it carries the same digit-boundary collision class. Unlike the keys, the collision is not detected here, and two declarations of one name land in a file the consumer has to compile. Closing that is open work.
+That is the same `toPascalCase` derivation as the collection keys above, so it carries the same digit-boundary collision class, detected where the name is emitted rather than left to the file a consumer compiles, see [Two slugs deriving one name](#two-slugs-deriving-one-name).
+
+## What a Component item names
+
+A `dynamic` field's items carry `componentSlug` beside the `componentId` they always had, and the item schema discriminates on the slug. The id alone cannot do the job on this surface:
+
+- The loader hands Astro its types as a string, so it has no runtime constant a page could switch on. `elek generate:types` does emit an id constant per Component and types its union on `componentId`.
+- The two generators therefore dispatch differently on purpose, and both say so, in [`../docs/usage.md`](../docs/usage.md#rendering-a-dynamic-field) and [`../docs/api-clients.md`](../docs/api-clients.md#generatetypes).
+- Every UUID is new after the content is re-created, from a seed or a fresh Project, while the slug is what the developer named. A page written against the id breaks there, and nothing in the page says why.
+- The id stays on every item and every union member, so a site that also calls Core's own methods or the local API addresses the same Component there.
+
+A Component's slug therefore reaches a consumer's data and types, which is what makes renaming one a major Release, see [`../docs/releases.md`](../docs/releases.md#every-change-a-diff-can-carry).
+
+Four consequences for the loader, of which the first two decide the order inside `syncEntries`:
+
+- `transformEntryValues` needs the Project's Components to resolve an item's slug, so `syncEntries` reads the model on every sync rather than only to compare the digest.
+- That read goes after the Collection rename guard, never before, and takes the id the guard resolved. `readModel` resolves without a catch, so a renamed Collection would throw and fail the build where the guard warns and keeps the Entries.
+- An item whose Component the Project cannot resolve throws `NotFound` naming the Entry, the field and the Component, and nothing an editor typed. Deleting the Component is not the route there, because `delete` refuses while a Collection or a Component still references it and narrowing an `ofComponents` strips the items it drops. A Project written outside Core is what reaches it.
+- The slug is part of the stored item, so the digest the loader compares changes when a Component is renamed and a second build into the same cache replaces every item of it.
+
+An item union with no members at all, which an open `ofComponents` in a Project without Components produces, is emitted as `never`. Emitting the members alone leaves `type X =` and a bare semicolon, which is a syntax error in a file the consumer compiles.
+
+## Two slugs deriving one name
+
+Component slugs are unique per Project, enforced by `ComponentService` on create and update, and `toPascalCase` collapses the difference between some of them anyway. Both collisions are caught where the name is derived, because the layer below reports neither usefully:
+
+- **One discriminant for two Components** of one field is `buildComponentArraySchema`'s `Conflict`, naming both ids and the field. Zod answers it with `Duplicate discriminator value` while an Entry is validated, which names neither the Components nor the field, and only once content happens to reach it.
+- **One type name for two declarations** is `buildEntryValuesTypeString`'s `Conflict`, naming both sources and the name. Two classes are reachable:
+  - The digit boundary of the collection keys above, where `hero-1` and `hero1` both derive `Hero1`.
+  - An item name a Collection and a Component both derive, where the Collection `Hero` with a `grid-items` field meets the Component `hero-grid` with an `items` field.
 
 ## What the mdast renderers return
 

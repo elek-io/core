@@ -44,6 +44,8 @@ Two changes are just as unambiguous and **delete stored content**, so Core refus
 
 A field whose Value holds nothing in any language is no loss, so removing it applies straight away. The same goes for a Collection with no Entries, and for a Component no Collection references.
 
+Removing a field, narrowing a `dynamic` field's `ofComponents` and narrowing an `entry` field's `ofCollections` each make the next Release a major one, see [`releases.md`](./releases.md#every-change-a-diff-can-carry).
+
 ### Default values for added fields
 
 A newly added field's value is built per its type:
