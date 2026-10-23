@@ -581,7 +581,7 @@ Two shapes report less than the `switch` does:
 - An `Extract<Section, { componentSlug: 'hero' }>` alias that is only declared reports neither change, because an alias of a Component that is gone becomes `never` rather than failing. Reading values off that alias does report the rename, which is what `Hero.astro` above does with `['values']`.
 - A chain of `if (section.componentSlug === 'hero' && ...)` conditions reports the rename, because the comparison has no overlap left. It misses the Component the field gained, because nothing asks a chain to be complete.
 
-A field whose `ofComponents` is empty allows every Component of the Project, so its union gains a member whenever a Component is added anywhere, including one no page of yours renders. Give such a field a `default` branch that returns nothing instead of `unhandled()`, or list the Components the field allows and keep the exhaustive one.
+A field whose `ofComponents` is empty allows every Component of the Project, so its union gains a member whenever a Component is added anywhere, including one no page of yours renders. Give such a field a `default` branch that returns nothing, `default: return;` in place of `return unhandled(section);`, or list the Components the field allows and keep the exhaustive one.
 
 ### Choosing what to derive
 

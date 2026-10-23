@@ -160,7 +160,7 @@ describe('published documentation', function () {
           // The child writes every page back, so this output grows with
           // docs/. The pages weigh a quarter of the 1 MB default today and
           // passing it fails as ENOBUFS naming the spawn, not the pages.
-          // 32 MB is a hundred times that and still a ceiling
+          // 32 MB is over a hundred times that and still a ceiling
           maxBuffer: 32 * 1024 * 1024,
         })
       )

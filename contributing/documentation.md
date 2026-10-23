@@ -48,7 +48,7 @@ Write for someone holding the published package with no `src`, no network and no
 
 `docs/` ships without the rest of the repository, so a relative link out of it dangles for its real reader. Point at the repository with an absolute `https://github.com/elek-io/core/blob/main/` URL instead, and let the link text show it leaves the package.
 
-Every page is listed in [`../docs/index.md`](../docs/index.md), and every example pastes and runs, imports included. Each page is a published subpath too, because `exports` maps `./docs/*`, so adding, renaming or deleting one changes the package's public API.
+Every page is listed in [`../docs/index.md`](../docs/index.md), and every example pastes and runs, imports included. Each page is a published subpath too, because `exports` maps `./docs/*`. Adding, renaming or deleting one changes the package's public API.
 
 ```markdown
 # Page title
