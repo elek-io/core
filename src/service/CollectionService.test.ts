@@ -724,85 +724,73 @@ describe('CollectionService - update entry resolutions', function () {
       },
     });
     entryId = entry.id;
-  }, 30000);
+  });
 
   afterAll(async function () {
     await project.destroy();
   });
 
-  it(
-    'throws a conflict when field changes need unresolved entry resolutions',
-    { timeout: 30000 },
-    async function () {
-      await expect(
-        core.collections.update(collectionWithRequiredSummary())
-      ).rejects.toThrow(/require entry resolutions/);
-    }
-  );
+  it('throws a conflict when field changes need unresolved entry resolutions', async function () {
+    await expect(
+      core.collections.update(collectionWithRequiredSummary())
+    ).rejects.toThrow(/require entry resolutions/);
+  });
 
-  it(
-    'rejects a resolution value that fails the new field schema',
-    { timeout: 30000 },
-    async function () {
-      await expect(
-        core.collections.update({
-          ...collectionWithRequiredSummary(),
-          resolutions: {
-            // Generically a valid Value, but the wrong valueType for a string field.
-            [entryId]: {
-              summary: {
-                objectType: 'value',
-                valueType: 'number',
-                content: { en: 1, de: 1 },
-              },
+  it('rejects a resolution value that fails the new field schema', async function () {
+    await expect(
+      core.collections.update({
+        ...collectionWithRequiredSummary(),
+        resolutions: {
+          // Generically a valid Value, but the wrong valueType for a string field.
+          [entryId]: {
+            summary: {
+              objectType: 'value',
+              valueType: 'number',
+              content: { en: 1, de: 1 },
             },
           },
-        })
-      ).rejects.toThrow(/Resolution validation failed/);
-    }
-  );
+        },
+      })
+    ).rejects.toThrow(/Resolution validation failed/);
+  });
 
-  it(
-    'rejects a resolution naming a field the new definitions do not declare',
-    { timeout: 30000 },
-    async function () {
-      // A stale slug used to be written into the Entry with no validation at
-      // all, so it has to be caught at the boundary and leave every Entry
-      // untouched
-      const before = await core.entries.read({
-        projectId: project.id,
-        collectionId,
-        id: entryId,
-      });
+  it('rejects a resolution naming a field the new definitions do not declare', async function () {
+    // A stale slug used to be written into the Entry with no validation at
+    // all, so it has to be caught at the boundary and leave every Entry
+    // untouched
+    const before = await core.entries.read({
+      projectId: project.id,
+      collectionId,
+      id: entryId,
+    });
 
-      await expect(
-        core.collections.update({
-          ...collectionWithRequiredSummary(),
-          resolutions: {
-            [entryId]: {
-              summary: {
-                objectType: 'value',
-                valueType: 'string',
-                content: { en: 'Sum', de: 'Sum' },
-              },
-              'gone-away': {
-                objectType: 'value',
-                valueType: 'string',
-                content: { en: 'Stale', de: 'Stale' },
-              },
+    await expect(
+      core.collections.update({
+        ...collectionWithRequiredSummary(),
+        resolutions: {
+          [entryId]: {
+            summary: {
+              objectType: 'value',
+              valueType: 'string',
+              content: { en: 'Sum', de: 'Sum' },
+            },
+            'gone-away': {
+              objectType: 'value',
+              valueType: 'string',
+              content: { en: 'Stale', de: 'Stale' },
             },
           },
-        })
-      ).rejects.toMatchObject({ type: 'BadRequest' });
+        },
+      })
+    ).rejects.toMatchObject({ type: 'BadRequest' });
 
-      const after = await core.entries.read({
-        projectId: project.id,
-        collectionId,
-        id: entryId,
-      });
-      expect(after.values).toEqual(before.values);
-    }
-  );
+    const after = await core.entries.read({
+      projectId: project.id,
+      collectionId,
+      id: entryId,
+    });
+    expect(after.values).toEqual(before.values);
+  });
 });
 
 describe('CollectionService - cascade over a dynamic field', function () {
@@ -917,72 +905,64 @@ describe('CollectionService - cascade over a dynamic field', function () {
       },
     });
     entryId = entry.id;
-  }, 30000);
+  });
 
   afterAll(async function () {
     await project.destroy();
   });
 
-  it(
-    'revalidates an updated dynamic field against its Components',
-    { timeout: 30000 },
-    async function () {
-      // Changing any property marks the field updated, which re-validates
-      // every existing value against the new schema. A component field needs
-      // a resolver to build that schema, and without one the update ends as
-      // Internal rather than doing what docs/schema-changes.md promises.
-      await expect(
-        core.collections.update({
-          projectId: project.id,
-          id: collectionId,
-          icon: 'home',
-          name: {
-            singular: { en: 'Article', de: 'Artikel' },
-            plural: { en: 'Articles', de: 'Artikel' },
-          },
-          description: { en: 'Articles', de: 'Artikel' },
-          slug: { singular: 'article', plural: 'articles' },
-          fieldDefinitions: [titleField(), blocksField(5)],
-        })
-      ).resolves.toMatchObject({ id: collectionId });
-
-      // The item survives, because it still fits the new schema
-      const entry = await core.entries.read({
+  it('revalidates an updated dynamic field against its Components', async function () {
+    // Changing any property marks the field updated, which re-validates
+    // every existing value against the new schema. A component field needs
+    // a resolver to build that schema, and without one the update ends as
+    // Internal rather than doing what docs/schema-changes.md promises.
+    await expect(
+      core.collections.update({
         projectId: project.id,
-        collectionId,
-        id: entryId,
-      });
-      const blocks = entry.values['blocks'];
-      assert(blocks?.valueType === 'component');
-      expect(blocks.content).toHaveLength(1);
-    }
-  );
+        id: collectionId,
+        icon: 'home',
+        name: {
+          singular: { en: 'Article', de: 'Artikel' },
+          plural: { en: 'Articles', de: 'Artikel' },
+        },
+        description: { en: 'Articles', de: 'Artikel' },
+        slug: { singular: 'article', plural: 'articles' },
+        fieldDefinitions: [titleField(), blocksField(5)],
+      })
+    ).resolves.toMatchObject({ id: collectionId });
 
-  it(
-    'raises a constraint_violation rather than an Internal when it no longer fits',
-    { timeout: 30000 },
-    async function () {
-      // The same path, on a value the new schema rejects. Core promises a
-      // Conflict carrying the issue, not a failure to build the schema.
-      await expect(
-        core.collections.update({
-          projectId: project.id,
-          id: collectionId,
-          icon: 'home',
-          name: {
-            singular: { en: 'Article', de: 'Artikel' },
-            plural: { en: 'Articles', de: 'Artikel' },
-          },
-          description: { en: 'Articles', de: 'Artikel' },
-          slug: { singular: 'article', plural: 'articles' },
-          fieldDefinitions: [
-            titleField(),
-            { ...blocksField(5), min: 2, isRequired: true },
-          ],
-        })
-      ).rejects.toMatchObject({ type: 'Conflict' });
-    }
-  );
+    // The item survives, because it still fits the new schema
+    const entry = await core.entries.read({
+      projectId: project.id,
+      collectionId,
+      id: entryId,
+    });
+    const blocks = entry.values['blocks'];
+    assert(blocks?.valueType === 'component');
+    expect(blocks.content).toHaveLength(1);
+  });
+
+  it('raises a constraint_violation rather than an Internal when it no longer fits', async function () {
+    // The same path, on a value the new schema rejects. Core promises a
+    // Conflict carrying the issue, not a failure to build the schema.
+    await expect(
+      core.collections.update({
+        projectId: project.id,
+        id: collectionId,
+        icon: 'home',
+        name: {
+          singular: { en: 'Article', de: 'Artikel' },
+          plural: { en: 'Articles', de: 'Artikel' },
+        },
+        description: { en: 'Articles', de: 'Artikel' },
+        slug: { singular: 'article', plural: 'articles' },
+        fieldDefinitions: [
+          titleField(),
+          { ...blocksField(5), min: 2, isRequired: true },
+        ],
+      })
+    ).rejects.toMatchObject({ type: 'Conflict' });
+  });
 });
 
 describe('AbstractIndexedEntityService - stale index cache', function () {
@@ -1019,24 +999,20 @@ describe('AbstractIndexedEntityService - stale index cache', function () {
     await secondCore.dispose();
   });
 
-  it(
-    'rebuilds the index and retries when the cached index is stale',
-    { timeout: 30000 },
-    async function () {
-      // Populate the test instance's cached index for this project.
-      await makeCollection(core, 'firsts', 'first');
+  it('rebuilds the index and retries when the cached index is stale', async function () {
+    // Populate the test instance's cached index for this project.
+    await makeCollection(core, 'firsts', 'first');
 
-      // A second Core instance writes another Collection to the same data dir.
-      // The test instance's cached index does not know about it yet.
-      const second = await makeCollection(secondCore, 'seconds', 'second');
+    // A second Core instance writes another Collection to the same data dir.
+    // The test instance's cached index does not know about it yet.
+    const second = await makeCollection(secondCore, 'seconds', 'second');
 
-      // Resolving by slug misses the stale cache, then rebuilds from disk and
-      // finds the Collection on the retry pass.
-      const resolvedId = await core.collections.resolveCollectionId({
-        projectId: project.id,
-        idOrSlug: 'seconds',
-      });
-      expect(resolvedId).to.equal(second.id);
-    }
-  );
+    // Resolving by slug misses the stale cache, then rebuilds from disk and
+    // finds the Collection on the retry pass.
+    const resolvedId = await core.collections.resolveCollectionId({
+      projectId: project.id,
+      idOrSlug: 'seconds',
+    });
+    expect(resolvedId).to.equal(second.id);
+  });
 });

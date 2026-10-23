@@ -57,13 +57,13 @@ const config = defineElekConfig({
 export const collections = { ...(await elekCollections(config)) };
 `
     );
-  }, 120000);
+  });
 
   afterAll(async function () {
     await local.destroy();
     await Fs.remove(remotePath);
     await Fs.remove(astroRoot);
-  }, 60000);
+  });
 
   it('should provision the Project with a remoteUrl and skip the local one', async function () {
     const config = defineElekConfig({
@@ -100,5 +100,5 @@ export const collections = { ...(await elekCollections(config)) };
     );
     expect(types).toContain('websiteProducts');
     expect(types).toContain('localAssets');
-  }, 120000);
+  });
 });

@@ -57,12 +57,57 @@ Tests should reproduce the environment users actually have, and an artificial fi
 
 ## Timeouts
 
-The vitest `testTimeout` is raised to 15s in [`vitest.config.ts`](../vitest.config.ts) because git-heavy tests that finish in ~3s on the fast runners need 7s or more on Windows and Intel macOS. Parallel test files add CPU contention between workers on the 3 to 4 core CI runners, which is another reason the value stays generous.
+Every budget is a measured duration times one multiple. [`vitest.config.ts`](../vitest.config.ts) reads both of its budgets from [`src/test/budgets.ts`](../src/test/budgets.ts), which holds the measurements they come from.
 
-Overrides for heavier work:
+| Budget | Bounds | Measured | Times 3 |
+| --- | --- | --- | --- |
+| `testTimeout` | every test | 55,872ms, the slowest single test | 167,616ms |
+| `hookTimeout` | every hook | 78,796ms, the slowest fixture hook | 236,388ms |
+| `timeout-minutes` in [`ci.yml`](../.github/workflows/ci.yml) and [`cd.yml`](../.github/workflows/cd.yml) | a whole job running the suite | 889s, the slowest job | 45 minutes |
 
-- Individual tests known to be heavier (full Project lifecycles) override it with 30s or more.
-- Hooks are not covered by `testTimeout`. They run under vitest's own 10s `hookTimeout`, so a `beforeAll` that clones a remote passes its own timeout, 60s like the provisioning suites, or it times out on Windows first.
+All three come from one measured set, the five `windows-2025` jobs of 2026-10-23, whose suite durations ran from 529s to 710s. The set is windows-only.
+
+- The slowest test is the one in `ReleaseService.remote.test.ts` that refuses a Release whose draft is behind the remote draft.
+- The slowest hook is read as the whole duration of `logSweep.test.ts`, which holds one `beforeAll` and no other hook. Each of its 19 tests stayed below the 300ms the reporter prints a duration for, so the hook is all but the whole file.
+- The multiple is 3, the smallest whole number above the run to run spread of a single test on that runner. Of the 306 tests those jobs timed at least twice, the slowest run of one test was 1.5x its own fastest at the median and 2.2x at the 90th percentile, with one test at 9.3x.
+
+### Which runner is slowest varies, and the budgets only go up
+
+No platform is reliably the slowest. The verification runs of the same day put `macos-15-intel` at 937s against `windows-2025`'s 474s on one commit, so the windows-only set is a floor rather than a worst case. The 900s cap in force before would have killed that 937s job.
+
+Three things follow, and the last is a rule to follow rather than an observation:
+
+- A budget rises as the suite gains tests, because every measurement is of a suite that had fewer of them than the next one will.
+- 45 minutes clears the 937s job at 2.88x rather than the stated 3x. That is the margin the current constants buy, not a smaller multiple.
+- **A slower run does not move a constant on the spot.** It supersedes it at the next re-measurement, when the whole set is taken again from a green run. Moving one number per red run chases noise and leaves the four budgets measured on four different days.
+
+### The hook budget is paid once per test
+
+A hook budget is per call and a `beforeEach` runs once per test, so the job cap no longer bounds the suite's worst single failure. One stuck hook can exhaust it instead of failing on a named test.
+
+Measured on the widest `beforeEach` in `src/`, the git-doing one at `uniqueFieldEnforcement.test.ts:101`, over the 11 tests of its describe:
+
+- 11 times 236,388ms, plus the 99s of steps before vitest starts, is 2,699,268ms against the 2,700,000ms cap.
+- So the margin is 732ms. The same stuck hook cost 1m50s before the budgets were raised.
+
+### No test and no hook carries a budget of its own
+
+Each global bounds the slowest thing of its kind, so nothing in `src/` needs a budget of its own and the 176 that existed were dropped. [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) fails on a new one, and also keeps the config and the job caps on the measured numbers. What it rejects:
+
+- A budget under the global for its kind, in either form vitest takes it, a trailing argument or a `{ timeout }` option.
+- A budget no check can read, such as `30 * 1000` or a named constant, since a sweep cannot compare it against the global.
+- A `testTimeout` or `hookTimeout` in [`vitest.config.ts`](../vitest.config.ts) that is not the measured one, which would otherwise leave the sweep comparing against a default the suite does not run on.
+- A `timeout-minutes` other than the derived one on either job that runs the suite, read from that job's own block rather than the first cap in the file.
+
+A per-call budget below the global caps the heaviest work in a file tighter than the suite caps everything around it, which is what took single tests and hooks down on the slow runners:
+
+- The 10s cap on the heaviest test of `index.cli.test.ts` failed on `macos-15-intel` seven times, against the 15s the suite gave every other test.
+- The LFS clone in `Lfs.test.ts` passed at 9.8s on the 15s default and was killed at 15.0s on the next run, while its annotated sibling at 18.6s passed.
+- Eleven budgets died over the five jobs of 2026-10-23, five of them hooks on vitest's own 10s default, which the config never raised.
+
+When a measurement shows a test or a hook needs more, raise the global rather than that one call. Take the slowest of the four runners, put the number in [`src/test/budgets.ts`](../src/test/budgets.ts), and state it in the table above with its date.
+
+### A timed out test leaks into its own file only
 
 When a test times out, vitest cannot abort its still-running async work, so leftover Projects can leak into later tests. Since every test file has its own data directory, that leak is confined to the file that timed out and cannot break other files. Generous timeouts still protect against the within-file cascade.
 
@@ -156,13 +201,13 @@ Two more paths are left uncovered on purpose. Each is listed so the next person 
 
 Measurements below show the suite saturates early (4 workers are within 10% of 11), so raising the count buys nothing and lowering it only slows local runs. Do not add `maxWorkers` to `vitest.config.ts`, it would pin every machine to one value, and the `VITEST_MAX_WORKERS` env var overrides the config anyway.
 
-The one case for intervening: if CI data from the slow runners shows git-heavy tests nearing the 15s timeout under contention, first raise `testTimeout` (consistent with the generous-timeouts decision above), and only then cap workers via a `VITEST_MAX_WORKERS` env line in `ci.yml`, so the measure stays CI-specific.
+The one case for intervening: if CI data from the slow runners shows git-heavy tests nearing their measured budget under contention, first re-measure and raise the global budgets (consistent with the generous-timeouts decision above), and only then cap workers via a `VITEST_MAX_WORKERS` env line in `ci.yml`, so the measure stays CI-specific.
 
 ### Measurements
 
 Measured locally (Linux, 12 cores, 3 runs each): parallel 17.5s to 18.3s, serial via `--no-file-parallelism` 65.7s to 66.6s, a 3.7x speedup. Capped to `VITEST_MAX_WORKERS=4` the suite still finishes in 19.2s and at 2 workers in 34.4s, so the suite saturates early. Contention roughly doubled the slowest individual test durations (1.5s to 2.7s worst case).
 
-The CI gains are in the runner performance table above. The timeout held up on the slow runners: on Windows, the most contended platform, the summed per-test time rose 36% under parallelism and no test came near the 15s limit.
+The CI gains are in the runner performance table above. The timeout of the day held up on the slow runners: on Windows, the most contended platform, the summed per-test time rose 36% under parallelism and no test came near the 15s limit that was in force then.
 
 ## See also
 

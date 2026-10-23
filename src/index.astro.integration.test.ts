@@ -67,7 +67,7 @@ export const collections = {
 };
 `
     );
-  }, 120000);
+  });
 
   afterAll(async function () {
     await Fs.remove(remotePath);
@@ -101,7 +101,7 @@ export const collections = {
     expect(
       await Fs.pathExists(Path.join(astroRoot, '.astro', 'content.d.ts'))
     ).toBe(true);
-  }, 120000);
+  });
 
   it('should refresh the provisioned copy on the next sync', async function () {
     await sync({
@@ -116,7 +116,7 @@ export const collections = {
         core.util.pathTo.projectProvisionedMarker(seed.projectId)
       )
     ).toBe(true);
-  }, 120000);
+  });
 
   it('should sync with the provisioned copy when the remote is unreachable', async function () {
     const hiddenRemotePath = `${remotePath}-hidden`;
@@ -141,7 +141,7 @@ export const collections = {
         Path.join(assetOutDir, `${seed.assetId}.${seed.assetExtension}`)
       )
     ).toBe(true);
-  }, 120000);
+  });
 
   it('should fail a sync without the integration and point at it', async function () {
     const missingId = uuid();
@@ -181,7 +181,7 @@ export const collections = {
     await expect(
       sync({ root, configFile: false, logLevel: 'error' })
     ).rejects.toThrow(/elek\(\)|data directory/);
-  }, 120000);
+  });
 
   it('should reject a config in which no Project has a remoteUrl', function () {
     // Nothing to provision, so the integration is in the config by
@@ -233,7 +233,7 @@ export const collections = {
 
     expect(duringProvision.length).toBeGreaterThan(0);
     expect(duringProvision.every((count) => count === 0)).toBe(true);
-  }, 120000);
+  });
 
   // What elek() then does with such a config is asserted through a real
   // sync in src/index.astro.mixed.test.ts, which needs its own file

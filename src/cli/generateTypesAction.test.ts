@@ -130,7 +130,7 @@ describe('generateTypesForProject', () => {
         },
       ],
     });
-  }, 30000);
+  });
 
   afterAll(async () => {
     await project.destroy();
@@ -208,7 +208,7 @@ describe('generateTypesForProject - missing component reference', () => {
         },
       ],
     });
-  }, 30000);
+  });
 
   afterAll(async () => {
     await project.destroy();
@@ -278,7 +278,7 @@ describe('generateTypesForProject - markdown field', () => {
         },
       ],
     });
-  }, 30000);
+  });
 
   afterAll(async () => {
     await project.destroy();
@@ -651,7 +651,7 @@ describe('generateTypesForProject - every field type', () => {
     });
 
     output = await generateTypesForProject(project);
-  }, 30000);
+  });
 
   afterAll(async () => {
     await project.destroy();
@@ -739,7 +739,7 @@ describe('generateTypes - writes type files to disk', () => {
         },
       ],
     });
-  }, 30000);
+  });
 
   afterAll(async () => {
     await project.destroy();
@@ -897,7 +897,7 @@ describe('generateTypesForProject - optional and required fields', () => {
     valuesBlock =
       output.match(/export interface PostsValues \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(valuesBlock).not.toBe('');
-  }, 30000);
+  });
 
   afterAll(async () => {
     await project.destroy();
@@ -1026,7 +1026,7 @@ describe('generateTypesForProject - free-form strings in a field definition', ()
         },
       ],
     });
-  }, 30000);
+  });
 
   afterAll(async () => {
     await project.destroy();

@@ -34,7 +34,7 @@ describe('ProjectService provision', function () {
       isReadOnly: true,
       dataDir: readOnlyDataDir,
     });
-  }, 60000);
+  });
 
   afterAll(async function () {
     await readOnlyCore.dispose();
@@ -80,7 +80,7 @@ describe('ProjectService provision', function () {
     expect(await getFileHash(assetPath)).toEqual(
       await getFileHash(Path.resolve('src/test/data/150x150.png'))
     );
-  }, 30000);
+  });
 
   it('should refresh a provisioned copy to the newest Release', async function () {
     // Publish a second Release through a writable Core
@@ -100,7 +100,7 @@ describe('ProjectService provision', function () {
 
     expect(source).toEqual('remote');
     expect(provisioned.version).toEqual(secondReleaseVersion);
-  }, 30000);
+  });
 
   it('should discard local modifications on refresh', async function () {
     const projectFilePath = readOnlyCore.util.pathTo.projectFile(
@@ -114,7 +114,7 @@ describe('ProjectService provision', function () {
     });
 
     expect(provisioned.version).toEqual(secondReleaseVersion);
-  }, 30000);
+  });
 
   it('should provision the draft channel when asked', async function () {
     // The second Release pushed draft along with main, so the remote
@@ -130,7 +130,7 @@ describe('ProjectService provision', function () {
     expect(
       await readOnlyCore.projects.branches.current({ id: seed.projectId })
     ).toEqual('draft');
-  }, 30000);
+  });
 
   it('should clone the draft branch when the draft channel is provisioned into an empty data directory', async function () {
     // A cold CI runner building a preview deploy takes a different
@@ -166,7 +166,7 @@ describe('ProjectService provision', function () {
       await draftCore.dispose();
       await Fs.remove(draftDataDir);
     }
-  }, 60000);
+  });
 
   it('should provision the newest preview on the preview channel', async function () {
     // The only preview so far is the one from the seed
@@ -198,7 +198,7 @@ describe('ProjectService provision', function () {
       ref: 'release',
     });
     expect(latestRelease.version).toEqual(secondReleaseVersion);
-  }, 60000);
+  });
 
   it('should provision a pinned Release version with a detached HEAD', async function () {
     const { project: provisioned } = await readOnlyCore.projects.provision({
@@ -212,7 +212,7 @@ describe('ProjectService provision', function () {
     expect(
       await readOnlyCore.projects.branches.current({ id: seed.projectId })
     ).toEqual('');
-  }, 30000);
+  });
 
   it('should provision a preview version', async function () {
     const { project: provisioned } = await readOnlyCore.projects.provision({
@@ -222,7 +222,7 @@ describe('ProjectService provision', function () {
     });
 
     expect(provisioned.version).toEqual(seed.previewVersion);
-  }, 30000);
+  });
 
   it('should throw NotFound for an unknown version and list the available ones', async function () {
     let error: unknown = null;
@@ -241,7 +241,7 @@ describe('ProjectService provision', function () {
     expect(error instanceof CoreError && error.message).toContain(
       seed.releaseVersion
     );
-  }, 30000);
+  });
 
   it('should throw BadRequest for an invalid ref', async function () {
     // production is no channel, it is refused like any other unknown ref
@@ -284,7 +284,7 @@ describe('ProjectService provision', function () {
 
     // Restore the marker for the following tests
     await Fs.writeFile(markerPath, 'Provisioned by @elek-io/core\n');
-  }, 30000);
+  });
 
   it('should throw PreconditionFailed when the remote holds no Release', async function () {
     // A remote that never received a Release has no release tags
@@ -310,7 +310,7 @@ describe('ProjectService provision', function () {
     expect(
       await Fs.pathExists(readOnlyCore.util.pathTo.project(remoteProject.id))
     ).toBe(false);
-  }, 60000);
+  });
 
   it('should throw PreconditionFailed when the remote holds no preview Release', async function () {
     // Asking for the preview channel of a Project that only ever
@@ -337,7 +337,7 @@ describe('ProjectService provision', function () {
     expect(
       await Fs.pathExists(readOnlyCore.util.pathTo.project(remoteProject.id))
     ).toBe(false);
-  }, 60000);
+  });
 
   it('should reject a refresh from a remote holding a different Project', async function () {
     const otherSeed = await seedRemoteWithRelease();
@@ -370,7 +370,7 @@ describe('ProjectService provision', function () {
       url: seed.remotePath,
     });
     expect(healed.id).toEqual(seed.projectId);
-  }, 60000);
+  });
 
   it('should never write the token into the clone', async function () {
     vi.stubEnv('ELEK_IO_REMOTE_ACCESS_TOKEN', 'secret-token-123');
@@ -404,7 +404,7 @@ describe('ProjectService provision', function () {
       await tokenCore.dispose();
       await Fs.remove(tokenDataDir);
     }
-  }, 30000);
+  });
 
   it('should throw VersionSkew when the remote Project is newer than Core', async function () {
     // An own remote, so the corrupted state cannot leak into other tests
@@ -464,7 +464,7 @@ describe('ProjectService provision', function () {
     expect(
       await Fs.pathExists(readOnlyCore.util.pathTo.project(skewSeed.projectId))
     ).toBe(false);
-  }, 60000);
+  });
 
   // Not covered here: the Unauthorized rethrow. Local remotes skip git's
   // credential machinery entirely, so an auth failure cannot be produced
@@ -476,7 +476,7 @@ describe('ProjectService provision', function () {
     beforeAll(async function () {
       offlineSeed = await seedRemoteWithRelease();
       hiddenRemotePath = `${offlineSeed.remotePath}-hidden`;
-    }, 60000);
+    });
 
     /**
      * Runs the given function with the remote moved away, so every git
@@ -517,7 +517,7 @@ describe('ProjectService provision', function () {
         limit: 0,
       });
       expect(total).toEqual(1);
-    }, 60000);
+    });
 
     it('should reject when the remote is unreachable and no copy exists', async function () {
       let error: unknown = null;
@@ -533,7 +533,7 @@ describe('ProjectService provision', function () {
       }
 
       expect(error).toBeInstanceOf(CoreError);
-    }, 60000);
+    });
 
     it('should skip the network for a pinned version that is already checked out', async function () {
       // Puts the copy on the pinned Release tag
@@ -555,7 +555,7 @@ describe('ProjectService provision', function () {
       expect(source).toEqual('local-pin');
       expect(warning).toBeNull();
       expect(project.version).toEqual(offlineSeed.releaseVersion);
-    }, 60000);
+    });
 
     it('should reject a pinned version the copy on disk does not hold', async function () {
       let error: unknown = null;
@@ -572,7 +572,7 @@ describe('ProjectService provision', function () {
       }
 
       expect(error).toBeInstanceOf(CoreError);
-    }, 60000);
+    });
 
     it('should build with the copy on disk on the draft channel too', async function () {
       const online = await readOnlyCore.projects.provision({
@@ -592,6 +592,6 @@ describe('ProjectService provision', function () {
 
       expect(source).toEqual('local-fallback');
       expect(warning).toContain('draft');
-    }, 60000);
+    });
   });
 });

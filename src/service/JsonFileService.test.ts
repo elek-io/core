@@ -122,5 +122,5 @@ describe('deleting an entity takes it out of the file cache', function () {
 
     await expect(core.entries.read(props)).rejects.toThrow();
     await project.destroy();
-  }, 60000);
+  });
 });

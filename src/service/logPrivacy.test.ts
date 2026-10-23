@@ -33,7 +33,7 @@ describe('names a User typed stay out of the log files', function () {
 
     expect(await readLogs()).not.toContain(sentinel);
     await project.destroy();
-  }, 60000);
+  });
 });
 
 async function readLogs(): Promise<string> {
