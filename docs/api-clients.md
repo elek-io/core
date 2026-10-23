@@ -64,9 +64,14 @@ Unlike `generate:client`, this emits **type definitions only - no runtime code**
 
 - a `ProjectLanguage` union narrowed to that Project's languages
 - typed interfaces for every Collection, Component and Entry, with their values narrowed to the same languages
-- id constants
+- id constants, which a `dynamic` field's item union is discriminated on: `case HeroComponentId:`
 
-Use these to type content you load yourself, through the [Astro integration](./usage.md#astro-integration) or your own fetch layer, without pulling in the client.
+Use these to type content you load yourself, through the [local API](./local-api.md), an [export](./export.md) or your own fetch layer, without pulling in the client.
+
+An Astro site needs none of it:
+
+- The [loaders](./usage.md#astro-integration) supply its types, for the shape they transform an Entry into rather than for the stored one.
+- Their item union is discriminated on the Component's slug rather than on an id constant, see [Rendering a dynamic field](./usage.md#rendering-a-dynamic-field). The id is on every item there too, so both can be read side by side.
 
 A single Project writes `types.ts`. Multiple Projects write one `types-{projectId}.ts` per Project. With no Projects in the data directory nothing is written and the command exits successfully, for either language.
 
@@ -82,7 +87,16 @@ npm install --save-dev tsdown typescript
 
 Install them as dev dependencies of the project you run `elek` in. Without them the `js` language fails with a message naming both, and every other command, including both generators with the default `ts` language, is unaffected.
 
-On **TypeScript 7** the compiler also needs a `tsconfig.json` in the project, otherwise it fails with `tsgo generator requires a tsconfig file to be specified`. TypeScript 5 and 6 have no such requirement.
+**TypeScript 7** asks for two more things, and TypeScript 5 and 6 for neither:
+
+- A `tsconfig.json` in the project. Without one it fails with "The `tsgo` generator requires a tsconfig file to be specified."
+- That `tsconfig.json` has to cover the output directory. Writing into a directory its `include` leaves out fails with `tsgo did not generate dts file` and exits 1, with the generated `.ts` file left behind.
+
+Core's default `./.elek.io` is outside a typical `include: ["src"]`, so the command fails there with no `outDir` passed at all. Any one of these fixes it:
+
+- Generate into a directory the tsconfig already covers, for example `elek generate:types ./src/elek js`.
+- Add the output directory to the tsconfig's `include`.
+- Use TypeScript 6, which compiles into either location.
 
 ## Output location
 

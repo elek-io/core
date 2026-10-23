@@ -84,7 +84,7 @@ export const elekIoCoreOptionsSchema = z.strictObject({
      * `https://*.git.<zone>`. Null when nothing derives, and Core then
      * installs no helper. Overrides ELEK_IO_CLOUD_GIT_URL.
      *
-     * @see ../../docs/cloud-git.md
+     * @see ../../contributing/git-credentials.md
      */
     gitUrl: z.url({ protocol: /^https?$/ }).nullable(),
   }),
@@ -121,7 +121,7 @@ export const constructorElekIoCoreSchema = elekIoCoreOptionsSchema
          *
          * Overrides the ELEK_IO_CLOUD_TOKEN environment variable.
          *
-         * @see ../../docs/cloud-account.md
+         * @see ../../contributing/cloud.md
          */
         token: cloudTokenSchema,
         /**

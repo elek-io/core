@@ -122,6 +122,7 @@ export const logAttributeNames = [
   'elek.entry.value.count',
   'elek.entry.value.slugs',
   'elek.error.status_code',
+  'elek.field_definition.ids',
   'elek.git.command',
   'elek.git.ref',
   'elek.log.repeat.count',
@@ -178,11 +179,10 @@ export type LogRecord = z.infer<typeof logRecordSchema>;
  * A window of log records, ready to be handed to someone else
  *
  * What `core.logger.tail()` returns and what a report carries when the
- * User consented to attaching their logs. The first doc below says what a
- * tail may contain, the second where it goes.
+ * User consented to attaching their logs. The doc below says what a tail
+ * may contain.
  *
  * @see ../../contributing/logging.md
- * @see ../../docs/reporting.md
  */
 export const logTailSchema = z.object({
   encoding: z.literal('gzip+base64'),

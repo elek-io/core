@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import Crypto from 'node:crypto';
+import { CoreError } from '../util/shared.js';
 import { toPascalCase } from '../cli/util.js';
 import {
   makeComponentsContext,
@@ -42,7 +43,7 @@ function walkReferencedComponents(
     inFlight: ReadonlySet<string>
   ) {
     if (inFlight.has(componentId)) {
-      throw new Error(
+      throw CoreError.badRequest(
         `Circular component reference detected: Component "${componentId}" is already in the schema generation chain`
       );
     }
@@ -50,7 +51,7 @@ function walkReferencedComponents(
 
     const component = ctx.componentMap.get(componentId);
     if (!component) {
-      throw new Error(
+      throw CoreError.notFound(
         `Component "${componentId}" referenced by dynamic field "${referencingSlug}" not found in Project`
       );
     }
@@ -123,7 +124,8 @@ function buildValueContentSchema(
 /**
  * Builds a Zod schema for the array value of a dynamic (component) field.
  * The schema validates the *stripped* shape produced by `transformEntryValues`
- * (no Value envelopes), keyed only by the Component slugs the field references.
+ * (no Value envelopes), one member per Component the field references,
+ * discriminated on the slug of that Component.
  *
  * Cycles must be rejected upstream by `walkReferencedComponents` - this builder
  * recurses eagerly and would otherwise loop forever.
@@ -134,14 +136,26 @@ function buildComponentArraySchema(
   ctx: ComponentsContext
 ): z.ZodTypeAny {
   const componentIds = resolveOfComponents(fieldDef, ctx.allIds);
+  const idBySlug = new Map<string, string>();
 
   const componentSchemas = componentIds.map((id) => {
     const component = ctx.componentMap.get(id);
     if (!component) {
-      throw new Error(
+      throw CoreError.notFound(
         `Component "${id}" referenced by dynamic field "${fieldDef.slug}" not found in Project`
       );
     }
+
+    // Two members carrying one discriminant are zod's `Duplicate
+    // discriminator value` while an Entry is validated, which names
+    // neither the Components nor the field
+    const clashing = idBySlug.get(component.slug);
+    if (clashing) {
+      throw CoreError.conflict(
+        `Both Component "${clashing}" and Component "${id}" carry the slug "${component.slug}", which the dynamic field "${fieldDef.slug}" discriminates its items on. Rename one of them.`
+      );
+    }
+    idBySlug.set(component.slug, id);
 
     const valuesShape: Record<string, z.ZodTypeAny> = {};
     for (const inner of component.fieldDefinitions) {
@@ -151,6 +165,7 @@ function buildComponentArraySchema(
     return z.object({
       id: z.string(),
       componentId: z.literal(id),
+      componentSlug: z.literal(component.slug),
       values: z.object(valuesShape),
     });
   });
@@ -163,7 +178,15 @@ function buildComponentArraySchema(
   } else if (!second) {
     itemSchema = first;
   } else {
-    itemSchema = z.discriminatedUnion('componentId', [first, second, ...rest]);
+    // Discriminated on the slug rather than the id, which is what a site
+    // dispatches on. Slugs are unique per Project, enforced by
+    // ComponentService, and the guard above covers a Project where they
+    // are not.
+    itemSchema = z.discriminatedUnion('componentSlug', [
+      first,
+      second,
+      ...rest,
+    ]);
   }
 
   let arr = z.array(itemSchema);
@@ -175,8 +198,8 @@ function buildComponentArraySchema(
 
 /**
  * Fingerprints everything the generated schema and types are built from: the
- * Collection's field definitions, the Project's languages and the Components
- * the fields reference.
+ * Collection's field definitions, the Project's languages and the Project's
+ * Components, whether a field references them or not.
  *
  * The loaders compare this digest on every dev reload, to notice that the
  * model moved underneath them. Field definitions keep their order, which the
@@ -204,11 +227,12 @@ export function buildModelDigest(
  * `transformEntryValues` produces rather than the stored `Value` objects.
  *
  * Keys are field definition slugs. Most are language keyed, a `component`
- * field is not: it yields an array of `{ id, componentId, values }` and
- * recurses into the referenced Components.
+ * field is not: it yields an array of `{ id, componentId, componentSlug,
+ * values }` and recurses into the referenced Components.
  *
- * Throws on a circular Component reference and on an `ofComponents` id naming
- * no Component of the Project.
+ * Throws `BadRequest` on a circular Component reference, `NotFound` on an
+ * `ofComponents` id naming no Component of the Project and `Conflict` on two
+ * Components of one field carrying the same slug.
  */
 export function buildEntryValuesSchema(
   fieldDefinitions: FieldDefinition[],
@@ -234,8 +258,8 @@ export function buildEntryValuesSchema(
  * `<Collection><field>Item` union per dynamic field, plus an `MdAstRoot`
  * import when any field is markdown.
  *
- * Throws the same way `buildEntryValuesSchema` does, and has to admit exactly
- * what it admits.
+ * Throws the way `buildEntryValuesSchema` does, plus `Conflict` on two slugs
+ * deriving one type name, and has to admit exactly what the schema admits.
  *
  * @see ../../contributing/astro-entry.md
  */
@@ -249,6 +273,20 @@ export function buildEntryValuesTypeString(
   const referenced = walkReferencedComponents(fieldDefinitions, ctx);
 
   const lines: string[] = [];
+
+  // Every name the string declares, so two slugs deriving one of them fail
+  // here rather than as two declarations in the file a consumer compiles
+  const declaredBy = new Map<string, string>();
+  const declare = (name: string, source: string): string => {
+    const existing = declaredBy.get(name);
+    if (existing) {
+      throw CoreError.conflict(
+        `Both ${existing} and ${source} derive the type name "${name}". Rename one of their slugs.`
+      );
+    }
+    declaredBy.set(name, source);
+    return name;
+  };
 
   // Import MdAstRoot when any field (top-level or inside a referenced
   // component) is a markdown field. The emitted type for mdast values
@@ -281,7 +319,10 @@ export function buildEntryValuesTypeString(
       if (fieldDef.valueType === valueTypeSchema.enum.component) {
         lines.push(
           renderItemUnion(
-            `${componentPascal}${toPascalCase(fieldDef.slug)}Item`,
+            declare(
+              `${componentPascal}${toPascalCase(fieldDef.slug)}Item`,
+              `the dynamic field "${fieldDef.slug}" of Component "${component.slug}"`
+            ),
             fieldDef,
             ctx
           )
@@ -289,6 +330,10 @@ export function buildEntryValuesTypeString(
       }
     }
 
+    declare(
+      `${componentPascal}ComponentValues`,
+      `Component "${component.slug}"`
+    );
     lines.push(
       renderComponentValuesType(componentPascal, component.fieldDefinitions)
     );
@@ -299,7 +344,10 @@ export function buildEntryValuesTypeString(
     if (fieldDef.valueType === valueTypeSchema.enum.component) {
       lines.push(
         renderItemUnion(
-          `${collectionPascalName}${toPascalCase(fieldDef.slug)}Item`,
+          declare(
+            `${collectionPascalName}${toPascalCase(fieldDef.slug)}Item`,
+            `the dynamic field "${fieldDef.slug}" of the Collection`
+          ),
           fieldDef,
           ctx
         )
@@ -336,13 +384,19 @@ function renderItemUnion(
   const variants = componentIds.map((id) => {
     const component = ctx.componentMap.get(id);
     if (!component) {
-      throw new Error(
+      throw CoreError.notFound(
         `Component "${id}" referenced by dynamic field "${fieldDef.slug}" not found in Project`
       );
     }
     const innerPascal = toPascalCase(component.slug);
-    return `  | { id: string; componentId: "${id}"; values: ${innerPascal}ComponentValues }`;
+    return `  | { id: string; componentId: "${id}"; componentSlug: "${component.slug}"; values: ${innerPascal}ComponentValues }`;
   });
+  if (variants.length === 0) {
+    // Open `ofComponents` with no Components in the Project: no item can
+    // ever satisfy the field, so the union has no members. `never` keeps
+    // the alias well-formed, mirroring the runtime schema's z.never().
+    return `type ${typeName} = never;`;
+  }
   return [`type ${typeName} =`, variants.join('\n') + ';'].join('\n');
 }
 

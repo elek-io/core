@@ -131,7 +131,36 @@ Nothing structural enforces the pairing. `buildValueContentSchema` and `fieldDef
 
 The emitted type names are PascalCased slugs: `${CollectionPascal}${FieldPascal}Item` and `${ComponentPascal}${FieldPascal}Item` for dynamic field item unions, `${ComponentPascal}ComponentValues` for a Component's values.
 
-That is the same `toPascalCase` derivation as the collection keys above, so it carries the same digit-boundary collision class. Unlike the keys, the collision is not detected here, and two declarations of one name land in a file the consumer has to compile. Closing that is open work.
+That is the same `toPascalCase` derivation as the collection keys above, so it carries the same digit-boundary collision class, detected where the name is emitted rather than left to the file a consumer compiles, see [Two slugs deriving one name](#two-slugs-deriving-one-name).
+
+## What a Component item names
+
+A `dynamic` field's items carry `componentSlug` beside the `componentId` they always had, and the item schema discriminates on the slug. The id alone cannot do the job on this surface:
+
+- The loader hands Astro its types as a string, so it has no runtime constant a page could switch on. `elek generate:types` does emit an id constant per Component and types its union on `componentId`.
+- The two generators therefore dispatch differently on purpose, and both say so, in [`../docs/usage.md`](../docs/usage.md#rendering-a-dynamic-field) and [`../docs/api-clients.md`](../docs/api-clients.md#generatetypes).
+- Every UUID is new after the content is re-created, from a seed or a fresh Project, while the slug is what the developer named. A page written against the id breaks there, and nothing in the page says why.
+- The id stays on every item and every union member, so a site that also calls Core's own methods or the local API addresses the same Component there.
+
+A Component's slug therefore reaches a consumer's data and types, which is what makes renaming one a major Release, see [`../docs/releases.md`](../docs/releases.md#every-change-a-diff-can-carry).
+
+Four consequences for the loader, of which the first two decide the order inside `syncEntries`:
+
+- `transformEntryValues` needs the Project's Components to resolve an item's slug, so `syncEntries` reads the model on every sync rather than only to compare the digest.
+- That read goes after the Collection rename guard, never before, and takes the id the guard resolved. `readModel` resolves without a catch, so a renamed Collection would throw and fail the build where the guard warns and keeps the Entries.
+- An item whose Component the Project cannot resolve throws `NotFound` naming the Entry, the field and the Component, and nothing an editor typed. Deleting the Component is not the route there, because `delete` refuses while a Collection or a Component still references it and narrowing an `ofComponents` strips the items it drops. A Project written outside Core is what reaches it.
+- The slug is part of the stored item, so the digest the loader compares changes when a Component is renamed and a second build into the same cache replaces every item of it.
+
+An item union with no members at all, which an open `ofComponents` in a Project without Components produces, is emitted as `never`. Emitting the members alone leaves `type X =` and a bare semicolon, which is a syntax error in a file the consumer compiles.
+
+## Two slugs deriving one name
+
+Component slugs are unique per Project, enforced by `ComponentService` on create and update, and `toPascalCase` collapses the difference between some of them anyway. Both collisions are caught where the name is derived, because the layer below reports neither usefully:
+
+- **One discriminant for two Components** of one field is `buildComponentArraySchema`'s `Conflict`, naming both ids and the field. Zod answers it with `Duplicate discriminator value` while an Entry is validated, which names neither the Components nor the field, and only once content happens to reach it.
+- **One type name for two declarations** is `buildEntryValuesTypeString`'s `Conflict`, naming both sources and the name. Two classes are reachable:
+  - The digit boundary of the collection keys above, where `hero-1` and `hero1` both derive `Hero1`.
+  - An item name a Collection and a Component both derive, where the Collection `Hero` with a `grid-items` field meets the Component `hero-grid` with an `items` field.
 
 ## What the mdast renderers return
 
@@ -149,15 +178,48 @@ Two consequences for the code:
 - A heading tag cannot be interpolated, since the static parts of a tagged template are the markup. The six depths are spelled out in `renderHeading` rather than built as a string.
 - Attributes go through `addAttribute`, which returns an empty string for `null` and `undefined`, so an absent `title` emits no attribute at all.
 
+A handler is given the node, its rendered children where it has any, and last its `MdastNodeContext`, see [`markdown-internals.md`](./markdown-internals.md). Three defaults need more than the node:
+
+| Default | Needs | Because |
+| --- | --- | --- |
+| `heading` | `node.depth` | the tag is static markup, see above |
+| `table` | its rendered rows | the `thead` and `tbody` split is a split of that array, the first row against the rest, and neither wrapper is emitted empty |
+| `tableCell` | its context | `th` or `td` follows from whether its row is the table's first, and the column's alignment is on the table rather than the cell |
+
+A cell's alignment is emitted as `style="text-align:..."` rather than the `align` attribute, which HTML dropped. A column mdast left unaligned gets no style at all, since `text-align: left` would override the consumer's own CSS and break a right to left reading direction.
+
 `src/astro/mdastRender.test.ts` renders every default by interpolating it into a `renderTemplate`, which puts it through the same `renderChild` dispatch an `.astro` file uses. A default that regressed to a vnode would show up as `[object Object]` in those assertions rather than passing and failing in a consumer's component.
 
 A consumer writing handlers as JSX inside an `.astro` template needs none of this: the compiler emits render-safe values for them. It only matters for what Core itself constructs.
+
+## What a default decides for the consumer
+
+A default renders every field of its node, because a field a default silently drops is a loss a consumer cannot see without reading Core's source. `src/astro/mdastRender.test.ts` accounts for every field per node type, either locating it in the output or naming it dropped with the reason, so a field added to a node schema cannot pass through unanswered.
+
+Five are dropped, and the test carries the reason for each. `code.lang` and `code.meta` because every highlighter wants them somewhere else, `list.spread` and `listItem.spread` because they apply inside the paragraphs a list and its items receive already rendered, and `footnoteDefinition.label` because it is the reference's text rather than the note's.
+
+Five decisions beyond that, each the cheaper half of a trade:
+
+| Decision | Against | Why |
+| --- | --- | --- |
+| `<ol start>` only where the list counts from something other than 1 | always writing it | `start="1"` is what `<ol>` does anyway, and emitting it would change the markup of every ordered list for no effect. A 0 is kept, GFM and HTML both allow it |
+| A task item's checkbox is `disabled` | a live checkbox | A rendered tree is not an editor, so a live box would offer a change that goes nowhere |
+| The checkbox is named with the text of the item's own blocks, a list directly inside the item left out | a nameless box, which is what remark and GitHub emit, or the text of the whole subtree | A disabled control is still announced, and a box called nothing leaves a screen reader with a checked state and no subject. The item's text cannot label it: the blocks arrive rendered and `<label>` takes phrasing content, so the name goes on `aria-label` and is read twice, once as the box's name and once as the text. A list directly inside the item is left out, so a nested task's text names its own checkbox and not the parent's as well, and a nested plain item's text names no checkbox. The name is trimmed, so an item carrying no text, an image on its own or a paragraph of spaces, gets no attribute |
+| No class name on a task item | `class="task-list-item"`, which is GFM's | The defaults promise no class names, and a name without the CSS that makes it mean something is a half measure. The item keeps its list marker, which is visible and therefore reported rather than hidden |
+| The footnote reference carries `id="fnref-<identifier>"` and the definition links back to it | leaving the way back to the consumer | Without an id the definition's `fn-` id has nothing to point at, so the one half Core shipped was unusable on its own |
+
+Two limits are left visible on the page:
+
+- A default cannot prefix the footnote ids, because `astroDefaults` is one module-level object shared by every render and counting trees would mean state in it. Two trees on one page therefore share the ids, and a note referenced twice repeats its reference id, so the way back lands on the first reference. The consumer-facing doc names the override.
+- The checkbox precedes the item's first paragraph and the way back follows the note's last one, rather than sitting inside either, see [`markdown-internals.md`](./markdown-internals.md#the-render-fold).
+
+The back-link's `aria-label` is English, which is the first copy Core puts on a page. A link whose only content is an arrow glyph gets whatever name the screen reader's symbol dictionary gives it, so the label is worth more than the consistency of shipping no text at all. The doc names the override for another language.
 
 ## The `astro/content/config` subpath
 
 `elekCollections` imports `defineCollection` from `astro/content/config`, not from the `astro:content` virtual module, which only exists inside a consumer's build and cannot be imported from package code.
 
-That subpath is a real export map entry in astro 6.1.3, 6.4.8 and 7.1.3, but it is not documented public API, so treat it as a pinned assumption. `src/index.astro.collections.test.ts` exercises it through a real `sync()`, which is what would catch its removal.
+That subpath is a real export map entry in astro 6.1.3, 6.4.8, 7.1.3 and 7.4.2, but it is not documented public API, so treat it as a pinned assumption. `src/index.astro.collections.test.ts` exercises it through a real `sync()`, which is what would catch its removal.
 
 If it ever disappears, the fallback is cheap: `defineCollection` is a validating passthrough that sets `type` to `content_layer` and returns its argument, so `{ type: 'content_layer', loader }` is equivalent. The only thing lost is astro's own validation of that object.
 
@@ -196,12 +258,22 @@ This is the same path Astro's own `image()` schema helper takes for content laye
 - **`filePath` plus the public `assetImports` field**. Fully documented, and it does get the file emitted, but it does not substitute the data value. The consumer is left with a relative string and no way to reach the content-hashed output. Verified, not assumed.
 - **The marker**, which does both. Chosen.
 
-`IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.1.3 and 7.1.3. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro collected the image as an import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
+`IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.1.3, 7.1.3 and 7.4.2. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro emitted an image import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
 
-Only extensions in Astro's `VALID_INPUT_FORMATS` may carry the marker:
+What the store holds afterwards is Astro's business, and it has already changed once inside the peer range:
 
-- For anything else Astro strips the prefix and hands the consumer an unanchored relative path, which is why `src` is `null` for non-images and they take the `href` route instead.
-- `imageExtensions` in `loaders.ts` mirrors that list and is tied to Astro's public `ImageInputFormat` with `satisfies`, so a format added or removed there is a compile error here.
+- From astro 7.4 on the marker is consumed while the store is written. `data.src` holds the plain relative path, and the entry carries `assetImports` and `imageImports` beside it.
+- So the marker's absence from the written store means Astro took it, not that Core stopped emitting it. The assertions read the emitted imports instead.
+
+Astro keeps two format lists, and an extension has to be in both to be worth a marker:
+
+- `VALID_INPUT_FORMATS` is what the content store recognizes a marker for. For anything else Astro strips the prefix and hands the consumer an unanchored relative path, which is why `src` is `null` for non-images and they take the `href` route instead.
+- `VALID_SUPPORTED_FORMATS` is what the image service validates against. `<Image>` on a format outside it throws `UnsupportedImageFormat` and fails the build, measured against the installed 7.4.2.
+- The second is the narrower one, and the difference is `apng`. It joined the input list in 7.2.5 and is in the supported list on no release, checked from 6.1.3 to 7.4.2, so an apng carrying the marker would reach the consumer as an image that cannot be rendered.
+- `imageExtensions` in `loaders.ts` therefore mirrors `VALID_SUPPORTED_FORMATS`, and an apng takes the `href` route a non-image takes. That list is identical on every astro the peer range allows, so the table needs no release per entry and the loader does not read the installed astro's version.
+- It is typed `Record<ImageInputFormat, boolean> & Record<string, boolean>`. The first half makes a format Astro adds to the input list a compile error here, which is where the two lists get compared again. The index signature is what lets the table name `apng`, which the types at the floor do not know, so pinning the floor type checks.
+
+`src/index.astro.assets.test.ts` takes an apng through a real `sync()`, and `src/astro/loaders.test.ts` covers the table itself. Neither sees Astro moving a format into the supported list, so read both lists when bumping astro, see [`peer-dependencies.md`](./peer-dependencies.md).
 
 The parse-time schema declares `src` as a nullable string, because a marker string is what is stored and validated. The type consumers see is declared separately through `createSchema`'s `types`, as `ImageMetadata | null`.
 

@@ -2,18 +2,36 @@ import { describe, expect, it } from 'vitest';
 import { z } from '@hono/zod-openapi';
 import { v4 as uuid } from 'uuid';
 import type { MarkdownFeatures } from '../schema/buildMdAstSchema.js';
-import type { Component } from '../schema/componentSchema.js';
+import {
+  makeComponentsContext,
+  type Component,
+} from '../schema/componentSchema.js';
 import type {
   DynamicFieldDefinition,
   FieldDefinition,
 } from '../schema/fieldSchema.js';
 import { assetSchema } from '../schema/assetSchema.js';
 import type { ProjectLanguages } from '../schema/projectSchema.js';
+import type { Value } from '../schema/valueSchema.js';
+import { CoreError } from '../util/shared.js';
+import { typeCheckMessages } from '../test/typeCheck.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
   buildModelDigest,
 } from './schema.js';
+import { transformEntryValues } from './transform.js';
+
+/** Runs the call and returns the `CoreError` it threw. */
+function coreErrorFrom(call: () => unknown): CoreError {
+  try {
+    call();
+  } catch (error) {
+    if (error instanceof CoreError) return error;
+    throw error;
+  }
+  throw new Error('Expected the call to throw a CoreError, it returned');
+}
 
 /** Markdown features with everything disabled, tests opt in. */
 const offMarkdownFeatures: MarkdownFeatures = {
@@ -78,6 +96,45 @@ function makeComponent(
     ...overrides,
   } as Component;
 }
+
+/** A required text field definition of the given slug. */
+const textField = (slug: string): FieldDefinition => ({
+  id: uuid(),
+  slug,
+  valueType: 'string',
+  fieldType: 'text',
+  label: { en: slug },
+  description: null,
+  isRequired: true,
+  isDisabled: false,
+  isUnique: false,
+  inputWidth: '12',
+  min: null,
+  max: null,
+  defaultValue: null,
+});
+
+/** A dynamic field definition, open when `ofComponents` is empty. */
+const dynamicField = (
+  slug: string,
+  ofComponents: string[],
+  overrides: Partial<DynamicFieldDefinition> = {}
+): FieldDefinition => ({
+  id: uuid(),
+  slug,
+  valueType: 'component',
+  fieldType: 'dynamic',
+  label: { en: slug },
+  description: null,
+  isRequired: false,
+  isDisabled: false,
+  isUnique: false,
+  inputWidth: '12',
+  ofComponents,
+  min: null,
+  max: null,
+  ...overrides,
+});
 
 describe('buildEntryValuesSchema', () => {
   it('generates schema for a text field definition', () => {
@@ -316,6 +373,7 @@ describe('buildEntryValuesSchema', () => {
         {
           id: uuid(),
           componentId: heroId,
+          componentSlug: 'hero',
           values: { heading: { en: 'Hello' } },
         },
       ],
@@ -417,12 +475,14 @@ describe('buildEntryValuesSchema with nested components', () => {
         {
           id: uuid(),
           componentId: heroId,
+          componentSlug: 'hero',
           values: {
             title: { en: 'Welcome', de: 'Willkommen' },
             'sub-blocks': [
               {
                 id: uuid(),
                 componentId: ctaId,
+                componentSlug: 'cta',
                 values: {
                   label: { en: 'Click', de: 'Klick' },
                 },
@@ -471,12 +531,14 @@ describe('buildEntryValuesSchema with nested components', () => {
         {
           id: uuid(),
           componentId: heroId,
+          componentSlug: 'hero',
           values: {
             title: { en: 'Welcome', de: 'Willkommen' },
             'sub-blocks': [
               {
                 id: uuid(),
                 componentId: ctaId,
+                componentSlug: 'cta',
                 values: {
                   // missing 'de'
                   label: { en: 'Click' },
@@ -867,7 +929,7 @@ describe('buildEntryValuesTypeString', () => {
     expect(types).toContain('type HeroComponentValues = {');
     expect(types).toContain('type BlogPostsBlocksItem =');
     expect(types).toContain(
-      `| { id: string; componentId: "${heroId}"; values: HeroComponentValues }`
+      `| { id: string; componentId: "${heroId}"; componentSlug: "hero"; values: HeroComponentValues }`
     );
     expect(types).toContain('"blocks": Array<BlogPostsBlocksItem>');
   });
@@ -944,7 +1006,7 @@ describe('buildEntryValuesTypeString', () => {
 
     expect(types).toContain('type HeroSubBlocksItem =');
     expect(types).toContain(
-      `| { id: string; componentId: "${ctaId}"; values: CtaComponentValues }`
+      `| { id: string; componentId: "${ctaId}"; componentSlug: "cta"; values: CtaComponentValues }`
     );
     expect(types).toContain('"sub-blocks": Array<HeroSubBlocksItem>');
   });
@@ -1055,43 +1117,6 @@ describe('buildEntryValuesTypeString', () => {
 });
 
 describe('buildEntryValuesSchema dynamic field arity edge cases', () => {
-  const textField = (slug: string): FieldDefinition => ({
-    id: uuid(),
-    slug,
-    valueType: 'string',
-    fieldType: 'text',
-    label: { en: slug },
-    description: null,
-    isRequired: true,
-    isDisabled: false,
-    isUnique: false,
-    inputWidth: '12',
-    min: null,
-    max: null,
-    defaultValue: null,
-  });
-
-  const dynamicField = (
-    slug: string,
-    ofComponents: string[],
-    overrides: Partial<DynamicFieldDefinition> = {}
-  ): FieldDefinition => ({
-    id: uuid(),
-    slug,
-    valueType: 'component',
-    fieldType: 'dynamic',
-    label: { en: slug },
-    description: null,
-    isRequired: false,
-    isDisabled: false,
-    isUnique: false,
-    inputWidth: '12',
-    ofComponents,
-    min: null,
-    max: null,
-    ...overrides,
-  });
-
   it('accepts only an empty array for an open dynamic field when the Project has no Components', () => {
     // ofComponents: [] means "any Component"; with none in the Project the
     // item schema collapses to z.never(), so no item can ever satisfy it.
@@ -1131,14 +1156,24 @@ describe('buildEntryValuesSchema dynamic field arity edge cases', () => {
     expect(
       schema.parse({
         blocks: [
-          { id: uuid(), componentId: alphaId, values: { a: { en: '1' } } },
+          {
+            id: uuid(),
+            componentId: alphaId,
+            componentSlug: 'alpha',
+            values: { a: { en: '1' } },
+          },
         ],
       })
     ).toBeTruthy();
     expect(
       schema.parse({
         blocks: [
-          { id: uuid(), componentId: betaId, values: { b: { en: '2' } } },
+          {
+            id: uuid(),
+            componentId: betaId,
+            componentSlug: 'beta',
+            values: { b: { en: '2' } },
+          },
         ],
       })
     ).toBeTruthy();
@@ -1167,7 +1202,12 @@ describe('buildEntryValuesSchema dynamic field arity edge cases', () => {
     expect(
       schema.parse({
         blocks: [
-          { id: uuid(), componentId: heroId, values: { title: { en: 'x' } } },
+          {
+            id: uuid(),
+            componentId: heroId,
+            componentSlug: 'hero',
+            values: { title: { en: 'x' } },
+          },
         ],
       })
     ).toBeTruthy();
@@ -1777,5 +1817,537 @@ describe('buildModelDigest', () => {
     expect(buildModelDigest(fieldDefs, languages, [first, second])).toBe(
       buildModelDigest(fieldDefs, languages, [second, first])
     );
+  });
+});
+
+describe('the Component an item names', () => {
+  const heroId = uuid();
+  const quoteId = uuid();
+  const hero = makeComponent({
+    id: heroId,
+    slug: 'hero',
+    fieldDefinitions: [textField('headline')],
+  });
+  const quote = makeComponent({
+    id: quoteId,
+    slug: 'quote',
+    fieldDefinitions: [textField('text')],
+  });
+  const components = [hero, quote];
+  const fieldDefs = [dynamicField('sections', [heroId, quoteId])];
+
+  /** One stored item per Component, the page builder shape of a site. */
+  const storedSections: Record<string, Value> = {
+    sections: {
+      objectType: 'value',
+      valueType: 'component',
+      content: [
+        {
+          id: uuid(),
+          componentId: heroId,
+          values: {
+            headline: {
+              objectType: 'value',
+              valueType: 'string',
+              content: { en: 'Welcome' },
+            },
+          },
+        },
+        {
+          id: uuid(),
+          componentId: quoteId,
+          values: {
+            text: {
+              objectType: 'value',
+              valueType: 'string',
+              content: { en: 'Quoted' },
+            },
+          },
+        },
+      ],
+    },
+  };
+
+  it('is the one its id names, for every item the transform produces', () => {
+    // The transform and the schema are two walks over one Component list,
+    // so the schema is what proves the pair the transform writes holds
+    const values = transformEntryValues(
+      storedSections,
+      makeComponentsContext(components),
+      uuid()
+    );
+    const schema = buildEntryValuesSchema(fieldDefs, ['en'], components);
+
+    const parsed = schema.parse(values);
+
+    expect(parsed).toEqual({
+      sections: [
+        expect.objectContaining({ componentId: heroId, componentSlug: 'hero' }),
+        expect.objectContaining({
+          componentId: quoteId,
+          componentSlug: 'quote',
+        }),
+      ],
+    });
+  });
+
+  it('is rejected when the slug sits on the id of the other Component', () => {
+    const schema = buildEntryValuesSchema(fieldDefs, ['en'], components);
+
+    expect(() =>
+      schema.parse({
+        sections: [
+          {
+            id: uuid(),
+            componentId: heroId,
+            componentSlug: 'quote',
+            values: { text: { en: 'Quoted' } },
+          },
+        ],
+      })
+    ).toThrow();
+  });
+});
+
+describe('two Components deriving one name', () => {
+  it('names both Components and the field when they share a slug', () => {
+    // Slugs are unique per Project, so this is a Project no service
+    // wrote. Zod answers it with `Duplicate discriminator value` alone,
+    // while an Entry is validated
+    const firstId = uuid();
+    const secondId = uuid();
+    const components = [
+      makeComponent({
+        id: firstId,
+        slug: 'hero',
+        fieldDefinitions: [textField('a')],
+      }),
+      makeComponent({
+        id: secondId,
+        slug: 'hero',
+        fieldDefinitions: [textField('b')],
+      }),
+    ];
+    const fieldDefs = [dynamicField('sections', [firstId, secondId])];
+
+    const error = coreErrorFrom(() =>
+      buildEntryValuesSchema(fieldDefs, ['en'], components)
+    );
+
+    expect(error.type).toBe('Conflict');
+    expect(error.message).toContain(firstId);
+    expect(error.message).toContain(secondId);
+    expect(error.message).toContain('sections');
+    expect(error.message).not.toContain('Duplicate discriminator value');
+  });
+
+  it('names both Components and the type name their slugs derive', () => {
+    // toPascalCase uppercases after a hyphen only, and a digit cannot be
+    // uppercased, so two ordinary slugs derive one name
+    const firstId = uuid();
+    const secondId = uuid();
+    const components = [
+      makeComponent({
+        id: firstId,
+        slug: 'hero-1',
+        fieldDefinitions: [textField('a')],
+      }),
+      makeComponent({
+        id: secondId,
+        slug: 'hero1',
+        fieldDefinitions: [textField('b')],
+      }),
+    ];
+    const fieldDefs = [dynamicField('sections', [firstId, secondId])];
+
+    const error = coreErrorFrom(() =>
+      buildEntryValuesTypeString(fieldDefs, ['en'], components, 'Pages')
+    );
+
+    expect(error.type).toBe('Conflict');
+    expect(error.message).toContain('hero-1');
+    expect(error.message).toContain('hero1');
+    expect(error.message).toContain('Hero1ComponentValues');
+    // No field is involved in a `ComponentValues` clash, so none is named
+    expect(error.message).not.toContain('sections');
+  });
+
+  it('names both fields when a Collection and a Component derive one item type', () => {
+    // The Collection Hero with a grid-items field and the Component
+    // hero-grid with an items field both derive HeroGridItemsItem
+    const innerId = uuid();
+    const heroGridId = uuid();
+    const components = [
+      makeComponent({
+        id: innerId,
+        slug: 'inner',
+        fieldDefinitions: [textField('a')],
+      }),
+      makeComponent({
+        id: heroGridId,
+        slug: 'hero-grid',
+        fieldDefinitions: [dynamicField('items', [innerId])],
+      }),
+    ];
+    const fieldDefs = [dynamicField('grid-items', [heroGridId])];
+
+    const error = coreErrorFrom(() =>
+      buildEntryValuesTypeString(fieldDefs, ['en'], components, 'Hero')
+    );
+
+    expect(error.type).toBe('Conflict');
+    expect(error.message).toContain('grid-items');
+    expect(error.message).toContain('items');
+    expect(error.message).toContain('HeroGridItemsItem');
+  });
+});
+
+describe('a dynamic field naming one Component twice', () => {
+  // `ofComponents` is the list of Components the field allows, so naming
+  // one twice allows it once. Two members of one Component would otherwise
+  // reach the union, and the clash guard would report a rename of a
+  // Component into itself, which no rename can fix
+  const heroId = uuid();
+  const quoteId = uuid();
+  const components = [
+    makeComponent({
+      id: heroId,
+      slug: 'hero',
+      fieldDefinitions: [textField('headline')],
+    }),
+    makeComponent({
+      id: quoteId,
+      slug: 'quote',
+      fieldDefinitions: [textField('text')],
+    }),
+  ];
+  const fieldDefs = [dynamicField('sections', [heroId, heroId, quoteId])];
+
+  it('admits its items rather than reporting a clash', () => {
+    const schema = buildEntryValuesSchema(fieldDefs, ['en'], components);
+
+    const valid = {
+      sections: [
+        {
+          id: uuid(),
+          componentId: heroId,
+          componentSlug: 'hero',
+          values: { headline: { en: 'Welcome' } },
+        },
+      ],
+    };
+
+    expect(schema.parse(valid)).toEqual(valid);
+  });
+
+  it('carries that Component once in the item type', () => {
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      components,
+      'Pages'
+    );
+
+    expect(types.split('componentSlug: "hero"')).toHaveLength(2);
+    expect(typeCheckMessages(types)).toEqual([]);
+  });
+});
+
+describe('an open dynamic field', () => {
+  const heroId = uuid();
+  const quoteId = uuid();
+  const hero = makeComponent({
+    id: heroId,
+    slug: 'hero',
+    fieldDefinitions: [textField('headline')],
+  });
+  const quote = makeComponent({
+    id: quoteId,
+    slug: 'quote',
+    fieldDefinitions: [textField('text')],
+  });
+  const fieldDefs = [dynamicField('sections', [])];
+
+  it('admits an item of every Component of the Project', () => {
+    const schema = buildEntryValuesSchema(fieldDefs, ['en'], [hero, quote]);
+
+    const valid = {
+      sections: [
+        {
+          id: uuid(),
+          componentId: heroId,
+          componentSlug: 'hero',
+          values: { headline: { en: 'Welcome' } },
+        },
+        {
+          id: uuid(),
+          componentId: quoteId,
+          componentSlug: 'quote',
+          values: { text: { en: 'Quoted' } },
+        },
+      ],
+    };
+
+    expect(schema.parse(valid)).toEqual(valid);
+  });
+
+  it('names every Component of the Project in the item type', () => {
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      [hero, quote],
+      'Pages'
+    );
+
+    expect(types).toContain(
+      `| { id: string; componentId: "${heroId}"; componentSlug: "hero"; values: HeroComponentValues }`
+    );
+    expect(types).toContain(
+      `| { id: string; componentId: "${quoteId}"; componentSlug: "quote"; values: QuoteComponentValues }`
+    );
+  });
+
+  it('compiles in a Project that has no Components at all', () => {
+    // No item can satisfy the field, so the union has no members and the
+    // alias is never. Emitting the members alone leaves a bare semicolon
+    const types = buildEntryValuesTypeString(fieldDefs, ['en'], [], 'Pages');
+
+    expect(types).toContain('type PagesSectionsItem = never;');
+    expect(typeCheckMessages(types)).toEqual([]);
+  });
+});
+
+describe('the documented dispatch over a dynamic field', () => {
+  const heroId = uuid();
+  const quoteId = uuid();
+  const gridId = uuid();
+  const hero = makeComponent({
+    id: heroId,
+    slug: 'hero',
+    fieldDefinitions: [textField('headline')],
+  });
+  const quote = makeComponent({
+    id: quoteId,
+    slug: 'quote',
+    fieldDefinitions: [textField('text')],
+  });
+  const grid = makeComponent({
+    id: gridId,
+    slug: 'grid',
+    fieldDefinitions: [textField('rows')],
+  });
+  const fieldDefs = [dynamicField('sections', [heroId, quoteId])];
+
+  /**
+   * The frontmatter of the dispatch `docs/usage.md` shows: a switch over
+   * the slug, one renderer per Component taking the narrowed values, and a
+   * default the compiler only reaches with every member handled.
+   */
+  function dispatchOver(types: string): string {
+    return `${types}
+
+type Section = Entry['sections'][number];
+
+function unhandled(section: never): never {
+  throw new Error(\`Unhandled Component "\${String(section)}"\`);
+}
+
+export function renderSections(sections: Section[]): string[] {
+  return sections.map((section) => {
+    switch (section.componentSlug) {
+      case 'hero':
+        return renderHero(section.values);
+      case 'quote':
+        return renderQuote(section.values);
+      default:
+        return unhandled(section);
+    }
+  });
+}
+
+function renderHero(
+  values: Extract<Section, { componentSlug: 'hero' }>['values']
+): string {
+  return values.headline.en;
+}
+
+function renderQuote(
+  values: Extract<Section, { componentSlug: 'quote' }>['values']
+): string {
+  return values.text.en;
+}
+`;
+  }
+
+  it('compiles while the site renders every Component the field allows', () => {
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      [hero, quote],
+      'Pages'
+    );
+
+    expect(typeCheckMessages(dispatchOver(types))).toEqual([]);
+  });
+
+  it('compiles against the same Components after the content was re-created', () => {
+    // What the slug is for. Re-creating the content gives every Component
+    // a new UUID, while the name the dispatch is written against holds
+    const reseeded = [
+      makeComponent({
+        id: uuid(),
+        slug: 'hero',
+        fieldDefinitions: [textField('headline')],
+      }),
+      makeComponent({
+        id: uuid(),
+        slug: 'quote',
+        fieldDefinitions: [textField('text')],
+      }),
+    ];
+    const types = buildEntryValuesTypeString(
+      [
+        dynamicField(
+          'sections',
+          reseeded.map((component) => component.id)
+        ),
+      ],
+      ['en'],
+      reseeded,
+      'Pages'
+    );
+
+    expect(types).not.toContain(heroId);
+    expect(typeCheckMessages(dispatchOver(types))).toEqual([]);
+  });
+
+  it('keeps a dispatch on the Component id compiling', () => {
+    // The key is added beside the id, so a site written before it keeps
+    // compiling and needs no change on upgrading
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      [hero, quote],
+      'Pages'
+    );
+    const source = `${types}
+
+type Section = Entry['sections'][number];
+
+export function slugOf(sections: Section[]): string[] {
+  return sections.map((section) =>
+    section.componentId === '${heroId}' ? 'hero' : 'other'
+  );
+}
+`;
+
+    expect(typeCheckMessages(source)).toEqual([]);
+  });
+
+  it('fails when the field allows a Component the site does not render', () => {
+    const widened = [dynamicField('sections', [heroId, quoteId, gridId])];
+    const types = buildEntryValuesTypeString(
+      widened,
+      ['en'],
+      [hero, quote, grid],
+      'Pages'
+    );
+
+    const messages = typeCheckMessages(dispatchOver(types));
+
+    expect(messages.length).toBeGreaterThan(0);
+    expect(messages.join('\n')).toContain('never');
+  });
+
+  it('fails when a Component the site renders is renamed', () => {
+    const renamed = makeComponent({
+      id: heroId,
+      slug: 'banner',
+      fieldDefinitions: [textField('headline')],
+    });
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      [renamed, quote],
+      'Pages'
+    );
+
+    const messages = typeCheckMessages(dispatchOver(types));
+
+    expect(messages.length).toBeGreaterThan(0);
+    expect(messages.join('\n')).toContain('"hero"');
+  });
+
+  it('compiles when an Extract alias alone names a Component the field does not allow', () => {
+    // Why the switch is what the documentation shows: an alias of a
+    // member that is gone becomes never rather than failing
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      [hero, quote],
+      'Pages'
+    );
+    const source = `${types}
+
+type Section = Entry['sections'][number];
+type GridSection = Extract<Section, { componentSlug: 'grid' }>;
+
+export const gridSections: GridSection[] = [];
+`;
+
+    expect(typeCheckMessages(source)).toEqual([]);
+  });
+
+  /**
+   * The chain of conditions `docs/usage.md` names beside the alias: a
+   * narrowing comparison per Component, which nothing asks to be complete.
+   */
+  function chainOver(types: string): string {
+    return `${types}
+
+type Section = Entry['sections'][number];
+
+export function renderSections(sections: Section[]): string[] {
+  return sections.map((section) => {
+    if (section.componentSlug === 'hero' && section.values.headline.en) {
+      return section.values.headline.en;
+    }
+    if (section.componentSlug === 'quote' && section.values.text.en) {
+      return section.values.text.en;
+    }
+    return '';
+  });
+}
+`;
+  }
+
+  it('compiles a chain of conditions when the field allows a Component the site does not render', () => {
+    const widened = [dynamicField('sections', [heroId, quoteId, gridId])];
+    const types = buildEntryValuesTypeString(
+      widened,
+      ['en'],
+      [hero, quote, grid],
+      'Pages'
+    );
+
+    expect(typeCheckMessages(chainOver(types))).toEqual([]);
+  });
+
+  it('fails a chain of conditions when a Component the site renders is renamed', () => {
+    const renamed = makeComponent({
+      id: heroId,
+      slug: 'banner',
+      fieldDefinitions: [textField('headline')],
+    });
+    const types = buildEntryValuesTypeString(
+      fieldDefs,
+      ['en'],
+      [renamed, quote],
+      'Pages'
+    );
+
+    const messages = typeCheckMessages(chainOver(types));
+
+    expect(messages.join('\n')).toContain('have no overlap');
   });
 });

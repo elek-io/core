@@ -30,6 +30,7 @@ import {
   componentHistorySchema,
   collectionFileSchema,
   entryFileSchema,
+  type EntryFile,
   flattenFieldDefinitions,
   type ComponentResolver,
   type FieldDefinition,
@@ -49,10 +50,12 @@ import {
   componentIdsOf,
   preloadComponentResolver,
 } from '../util/componentResolver.js';
+import { assertResolutionSlugsAreKnown } from '../util/entryTransform.js';
+import type { EntryIssue } from '../util/entryIssue.js';
 import {
-  assertResolutionSlugsAreKnown,
-  type EntryIssue,
-} from '../util/entryTransform.js';
+  updateRefusalMessage,
+  withoutAcceptedContentLoss,
+} from '../util/contentLoss.js';
 import {
   applyMigrations,
   componentMigrations,
@@ -361,6 +364,7 @@ export class ComponentService
         const {
           projectId: _,
           resolutions,
+          acceptedContentLoss,
           ...validatedUpdateProps
         } = validatedProps;
         const componentFile: ComponentFile = {
@@ -398,6 +402,7 @@ export class ComponentService
                 newFieldDefs,
                 changes,
                 resolutions,
+                acceptedContentLoss,
                 languages,
               }))
             );
@@ -454,10 +459,11 @@ export class ComponentService
    * Cascades field definition changes to every Entry that references this
    * Component through a dynamic field.
    *
-   * Transforms each affected Entry's values, applies caller-provided resolutions
-   * and writes the changed Entry files. Throws when transform issues remain
-   * unresolved, so the caller's git rollback reverts any writes. Returns the
-   * paths of the written Entry files so the caller can stage them.
+   * Transforms each affected Entry's values and applies caller-provided
+   * resolutions, then refuses or writes. Nothing is written until every
+   * Entry has been transformed, so a refusal leaves the Project as it was.
+   * Returns the paths of the written Entry files so the caller can stage
+   * them.
    */
   private async cascadeFieldDefinitionChanges(params: {
     projectId: Uuid;
@@ -466,6 +472,7 @@ export class ComponentService
     newFieldDefs: FieldDefinition[];
     changes: FieldChange[];
     resolutions: UpdateComponentProps['resolutions'];
+    acceptedContentLoss: UpdateComponentProps['acceptedContentLoss'];
     languages: ProjectLanguages;
   }): Promise<string[]> {
     const {
@@ -475,10 +482,15 @@ export class ComponentService
       newFieldDefs,
       changes,
       resolutions,
+      acceptedContentLoss,
       languages,
     } = params;
 
-    const filesToGitAdd: string[] = [];
+    const pendingWrites: Array<{
+      entryFilePath: string;
+      entryFile: EntryFile;
+      finalValues: Record<string, Value>;
+    }> = [];
     const allIssues: EntryIssue[] = [];
     const componentResolver = await this.buildComponentResolver(
       projectId,
@@ -568,37 +580,47 @@ export class ComponentService
             }
 
             if (isDeepStrictEqual(entryFile.values, finalValues) === false) {
-              const updatedEntryFile = {
-                ...entryFile,
-                values: finalValues,
-              };
-              await this.jsonFileService.update(
-                updatedEntryFile,
-                entryFilePath,
-                entryFileSchema
-              );
-              filesToGitAdd.push(entryFilePath);
+              pendingWrites.push({ entryFilePath, entryFile, finalValues });
             }
           }
         }
       }
     }
 
-    // Check for unresolved issues
-    if (allIssues.length > 0) {
-      const unresolvedIssues = resolutions
-        ? allIssues.filter((issue) => {
-            const entryResolutions = resolutions[issue.entryId];
-            return !(entryResolutions && issue.fieldSlug in entryResolutions);
-          })
-        : allIssues;
+    const openIssues = withoutAcceptedContentLoss(
+      allIssues,
+      acceptedContentLoss
+    );
+    // A content loss is accepted rather than resolved, so no resolution
+    // ever clears one
+    const blockingIssues = resolutions
+      ? openIssues.filter((issue) => {
+          if (issue.issue === 'content_loss') {
+            return true;
+          }
+          const entryResolutions = resolutions[issue.entryId];
+          return !(entryResolutions && issue.fieldSlug in entryResolutions);
+        })
+      : openIssues;
 
-      if (unresolvedIssues.length > 0) {
-        throw CoreError.conflict(
-          'Component field definition changes require entry resolutions',
-          unresolvedIssues
-        );
-      }
+    if (blockingIssues.length > 0) {
+      throw CoreError.conflict(
+        updateRefusalMessage(
+          blockingIssues,
+          'Component field definition changes require entry resolutions'
+        ),
+        blockingIssues
+      );
+    }
+
+    const filesToGitAdd: string[] = [];
+    for (const pending of pendingWrites) {
+      await this.jsonFileService.update(
+        { ...pending.entryFile, values: pending.finalValues },
+        pending.entryFilePath,
+        entryFileSchema
+      );
+      filesToGitAdd.push(pending.entryFilePath);
     }
 
     return filesToGitAdd;

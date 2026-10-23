@@ -102,16 +102,30 @@ describe('what a client asks Core to send', function () {
     }
   });
 
-  it('counts a length the way String.length does, so an emoji is two', function () {
-    // The unit a counter has to use, and the one elek.io Cloud counts in
+  it('counts a length in code points, so an emoji is one', function () {
+    // The unit a counter has to use, because it is the one Zod bounds in
     const emoji = '\u{1F600}';
 
     expect(
-      createReportSchema.safeParse({ ...bug, message: emoji.repeat(2500) })
+      createReportSchema.safeParse({ ...bug, message: emoji.repeat(5000) })
         .success
     ).toBe(true);
     expect(
-      createReportSchema.safeParse({ ...bug, message: emoji.repeat(2501) })
+      createReportSchema.safeParse({ ...bug, message: emoji.repeat(5001) })
+        .success
+    ).toBe(false);
+  });
+
+  it('counts a flag as the two code points it is made of', function () {
+    // A counter reading String.length would see four here, not two
+    const flag = '\u{1F1E9}\u{1F1EA}';
+
+    expect(
+      createReportSchema.safeParse({ ...bug, message: flag.repeat(2500) })
+        .success
+    ).toBe(true);
+    expect(
+      createReportSchema.safeParse({ ...bug, message: flag.repeat(2501) })
         .success
     ).toBe(false);
   });

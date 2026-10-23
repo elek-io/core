@@ -10,12 +10,12 @@ A class extending `Error` with 9 typed variants (`src/util/shared.ts`):
 | --- | --- | --- |
 | `NotFound` | 404 | Entity doesn't exist, whether addressed by id or by slug |
 | `BadRequest` | 400 | Invalid input, bad UUID, unsupported file type |
-| `Unauthorized` | 401 | No user configured, or elek.io Cloud refused the address, the password or the session |
-| `Conflict` | 409 | Sync failed, uncommitted changes, slug clash, an elek.io address that is not verified yet or that an account already holds |
-| `PreconditionFailed` | 412 | Remote origin missing (setup required), mutation attempted in read-only mode or on a provisioned copy, elek.io Cloud unreachable |
+| `Unauthorized` | 401 | No user configured, or the remote refused the credentials |
+| `Conflict` | 409 | Sync failed, uncommitted changes, slug clash, a field definition change that needs a resolution or would delete stored content |
+| `PreconditionFailed` | 412 | Remote origin missing (setup required), mutation attempted in read-only mode or on a provisioned copy |
 | `UpgradeFailed` | 422 | Project version upgrade failed |
 | `VersionSkew` | 422 | Content written by a newer Core than installed |
-| `RateLimited` | 429 | elek.io Cloud refused because this client passed its rate limit |
+| `RateLimited` | 429 | elek.io Cloud refused a call because this client passed its rate limit |
 | `Internal` | 500 | Git errors, FS errors, unexpected failures |
 
 Static factory methods:

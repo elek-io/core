@@ -48,7 +48,7 @@ Write for someone holding the published package with no `src`, no network and no
 
 `docs/` ships without the rest of the repository, so a relative link out of it dangles for its real reader. Point at the repository with an absolute `https://github.com/elek-io/core/blob/main/` URL instead, and let the link text show it leaves the package.
 
-Every page is listed in [`../docs/index.md`](../docs/index.md), and every example pastes and runs, imports included.
+Every page is listed in [`../docs/index.md`](../docs/index.md), and every example pastes and runs, imports included. Each page is a published subpath too, because `exports` maps `./docs/*`. Adding, renaming or deleting one changes the package's public API.
 
 ```markdown
 # Page title
@@ -157,7 +157,7 @@ Run `pnpm test` and `pnpm lint`. Neither list below needs remembering, they are 
 | Rule | Fails when |
 | --- | --- |
 | `structure/*` | a doc is missing from its index, its H1, its lead paragraph or its `## See also` |
-| `links/*` | a link, anchor, cited source path or `@see` does not resolve, `docs/` links out relatively, or anything links into `plans/` |
+| `links/*` | a link, anchor, cited source path or `@see` does not resolve, `docs/` links out relatively, anything links into `plans/`, or a table restating a declaration in the source has drifted from it. A documented bump has drifted when no `changeType` and `bump` pair anywhere in the classifying file carries it, which says nothing about the array the row names |
 | `prose/*` | em dashes, curly quotes, title case headings, an unknown fence language, a blocked word or phrase, a `**Label:**` list, or a word that dates a consumer doc |
 | `brevity/*` | a paragraph passes 400 characters, four paragraphs run in a row, a section passes 45 content lines, or a JSDoc block passes 12 lines |
 | `jsdoc/*` | an exported function, class or public member carries no block, JSDoc uses a tag outside the agreed set, a `@todo` carries no issue URL, or a comment names a `Class.member` that does not exist |

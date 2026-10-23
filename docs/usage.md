@@ -15,11 +15,11 @@ Core declares `zod` and `dugite` as required peer dependencies, so you install t
 - `dugite` (`^3.2.3`) is the git binding the Node entry point runs every Project operation through, see [git and sync](./git-and-sync.md).
   - On Linux its embedded git needs `libcurl.so.4` for HTTP(S) remotes. Older dugite releases need `libcurl-gnutls.so.4`, which Fedora, RHEL, openSUSE and NixOS do not ship.
   - A git that cannot load a shared library throws a `CoreError` of type `PreconditionFailed` naming it. Install the library, or point dugite's `LOCAL_GIT_DIRECTORY` variable at another git installation that has git-lfs.
-- `zod` is what Core authors its schemas with. Use a compatible version (`zod@^4.3.6`) that resolves to a single copy, otherwise zod's per-version branding makes Core's schemas incompatible with your own zod usage.
+- `zod` is what Core authors its schemas with. Use a compatible version (`zod@^4.6.6`) that resolves to a single copy, otherwise Zod's per-version branding makes Core's schemas incompatible with your own Zod usage.
 
 Three more peers are optional and needed by one feature each: `astro` for the [Astro integration](#astro-integration), and `tsdown` plus `typescript` for [compiling generated clients and types to JavaScript](./api-clients.md#compiling-to-javascript).
 
-You still install zod as above. As a convenience, Core also re-exports `z`, so in your own code you can import it from `@elek-io/core` instead of from `zod` directly. It is the same `z` plus `@hono/zod-openapi`'s `.openapi()` extension.
+You still install Zod as above. As a convenience, Core also re-exports `z`, so in your own code you can import it from `@elek-io/core` instead of from `zod` directly. It is the same `z` plus `@hono/zod-openapi`'s `.openapi()` extension.
 
 `ElekIoCore` is the Node entry point. It wires up all services and creates the directories it works in on construction.
 
@@ -59,19 +59,7 @@ The resolved options are exposed on `core.options`, and the running Core version
   - `dispose()` removes the handlers again either way.
 - **`log.hostVersion`** is the version of your own application, written to `service.version` on every record you log with a `source` other than `core`.
   - Core stamps its own version on its own records and has no way to read yours, so without this the records you write carry no version at all, and a log file someone hands you on its own cannot be matched to the build that produced it.
-  - It must be a semantic version. A value that is not one throws a `CoreError` rather than writing something the log file's own read contract would reject. See [`reporting.md`](./reporting.md) for what a log file and a report each carry.
-- **`cloud.url`** is the base URL of the elek.io Cloud API, which is where everything Core does over the network other than git goes. It has to be an http or https URL. It takes precedence over the `ELEK_IO_CLOUD_URL` environment variable, which takes precedence over the default `https://api.elek.io`.
-  - A trailing slash is dropped, since Core appends a path to it.
-  - A value that is not a URL throws a `CoreError`, rather than falling back to the default and sending to production on the strength of a typo.
-- **`cloud.token`** is a bearer token every elek.io Cloud call using the session carries, a report included. It takes precedence over the `ELEK_IO_CLOUD_TOKEN` environment variable, and there is no default.
-  - It is how a host hands back the token `core.cloud.account.signIn()` answered, see [`cloud-account.md`](./cloud-account.md#the-token).
-  - Core keeps it in memory and never writes it to disk, so it is not part of `core.options` either.
-  - Core forgets it on `signOut()` and when elek.io Cloud answers 401, and the calls after that carry none.
-  - A value holding whitespace or anything outside printable ASCII throws a `CoreError` of type `BadRequest`, whose message never repeats it.
-- **`cloud.gitUrl`** is the URL pattern of elek.io Cloud's git hosts, which git asks Core's own credential helper about, see [`cloud-git.md`](./cloud-git.md). It takes precedence over the `ELEK_IO_CLOUD_GIT_URL` environment variable, which takes precedence over the pattern derived from `cloud.url`.
-  - Derived, `https://api.<zone>` gives `https://*.git.<zone>`. A `cloud.url` whose host does not start with `api.` derives nothing, and Core installs no helper and logs a warning.
-  - git matches the value as written, so `*` stands for one label and a pattern without a port matches the default port only. A trailing slash is dropped.
-  - `core.options.cloud.gitUrl` holds the pattern in use, or `null` without one. A value that is not an http or https URL throws a `CoreError` of type `BadRequest`.
+  - It must be a semantic version. A value that is not one throws a `CoreError` rather than writing something the log file's own read contract would reject. See [log files](#log-files) for what a record carries.
 - **`cache`** decides whether Core keeps what it reads from a Project's files in memory between calls: parsed JSON files and the index that resolves Collection and Component slugs. It defaults to `true`, and everything kept is dropped whenever git changes a Project's working tree.
   - Set it to `false` when another application writes the same files while this Core runs. The Astro loaders do that for you during `astro dev`.
 - **`isReadOnly`** puts Core into read-only mode, meant for environments that only consume content, such as CI builds. It takes precedence over the `ELEK_IO_READ_ONLY` environment variable, which counts as true only when set to `true`.
@@ -86,12 +74,16 @@ Core reads its environment variables once at construction, never at import. All 
 | `ELEK_IO_DATA_DIR` | The directory Core reads and writes data in | `~/elek.io` |
 | `ELEK_IO_LOG_LEVEL` | The lowest level Core logs | `info` |
 | `ELEK_IO_READ_ONLY` | Set to `true` to put Core into read-only mode | unset |
-| `ELEK_IO_REMOTE_ACCESS_TOKEN` | Token git presents to a private remote, for every host but elek.io Cloud's while signed in | unset |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN` | Token git presents to a private remote | unset |
 | `ELEK_IO_REMOTE_ACCESS_TOKEN_USER` | The username presented alongside `ELEK_IO_REMOTE_ACCESS_TOKEN` | `x-access-token` |
 | `ELEK_IO_CHANNEL` | The channel provisioning follows, overrides configured refs | unset |
-| `ELEK_IO_CLOUD_URL` | Base URL of the elek.io Cloud API | `https://api.elek.io` |
-| `ELEK_IO_CLOUD_TOKEN` | Bearer token for elek.io Cloud, for a command line tool or a script | unset |
-| `ELEK_IO_CLOUD_GIT_URL` | URL pattern of elek.io Cloud's git hosts, see [`cloud-git.md`](./cloud-git.md) | derived from `cloud.url` |
+
+Core also reads `ELEK_IO_CLOUD_URL`, `ELEK_IO_CLOUD_TOKEN` and `ELEK_IO_CLOUD_GIT_URL`. They configure calls to elek.io Cloud:
+
+- Core reads and validates all three at construction, and an unusable value throws a `CoreError`. A well-formed value does not throw.
+- Constructing Core calls nothing. A request reaches elek.io Cloud only when you call a method that talks to it.
+- A well-formed `ELEK_IO_CLOUD_TOKEN` becomes the session token every later call carries, as `ELEK_IO_REMOTE_ACCESS_TOKEN` does for git.
+- They are not documented until elek.io Cloud is released.
 
 `ELEK_IO_REMOTE_ACCESS_TOKEN` is handed to git through Core's own credential helper:
 
@@ -99,7 +91,6 @@ Core reads its environment variables once at construction, never at import. All 
 - Prompts and askpass programs are disabled, `SSH_ASKPASS` included. A missing token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it.
 - A token the remote refuses fails the operation with `Unauthorized` after one attempt, a Git LFS transfer included.
 - While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before.
-- With an elek.io Cloud session, Cloud's git hosts get the session's tokens instead, see [`cloud-git.md`](./cloud-git.md). Signed out, they get this token too.
 - It applies to HTTP(S) remotes only. SSH remotes authenticate through the ambient SSH setup like ssh-agent.
 
 On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room.
@@ -143,7 +134,40 @@ So `info`, the default, is enough to reconstruct what was done and in what order
 
 A log file holds ids, paths, counts and error messages. It never holds the content of an Entry, the name of a Project, Collection or Asset, or the git signature of the User. It does hold the absolute data directory, which includes the account name, because it is written for the machine it is on. Anything that ships a log file elsewhere is responsible for scrubbing that prefix.
 
-`resource['service.name']` is the `source` the record was logged with, so your own records stay distinguishable from Core's in the same file. `service.version` is Core's version on Core's records, and yours on yours when you set the `log.hostVersion` option above. Set it: a log file someone sends you without a report around it has no other way to say which build wrote it.
+`resource['service.name']` is the `source` the record was logged with, so your own records stay distinguishable from Core's in the same file. `service.version` is Core's version on Core's records, and yours on yours when you set the `log.hostVersion` option above. Set it: a log file someone sends you has no other way to say which build wrote it.
+
+#### The log tail
+
+`core.logger.tail()` reads the last 24 hours of log files back as one blob:
+
+```typescript
+const tail = await core.logger.tail();
+// { encoding: 'gzip+base64', from, to, isTruncated: false, data: 'H4sIAAAA...' }
+```
+
+The records come back oldest first, one JSON object per line, gzipped and then base64 encoded. Two things keep a tail small:
+
+- Log files are read line by line and gunzipped on the way, so a very large one is never held in memory.
+- A run of identical records collapses into the first of them plus `elek.log.repeat.count` and `elek.log.repeat.last_timestamp`. A measured day of 78 MB, two thirds of it one stack repeating, came to 4 KB, and an ordinary day is 1 to 25 KB.
+
+Two things a tail does not promise:
+
+- It stops at 4 MB of collapsed records, counted before they are compressed, and sets `isTruncated` to `true` when it had to drop any. The oldest go first, and an ordinary day stays far below that ceiling.
+- A tail collected right after a crash can stop short of its last lines, which are usually the ones it was collected for. See [`features.md`](./features.md#intentional-constraints).
+
+**What a tail holds.** Ids, paths, timestamps, counts and error messages, which is to say what happened and in what order. Ids and timestamps are exact, and paths keep their structure below the data directory, because those are the join: a tail plus the repository replays what was done, in order, with the commit for every step. Hashing or truncating an id would destroy that and buy nothing.
+
+**What a tail does not hold.** The content of an Entry, the name of a Project, Collection or Asset, and the git signature of the User were never written to a log file in the first place, so they cannot be in a tail.
+
+What the tail itself removes is the short list a log file may hold because it is written for the machine it is on:
+
+- The home directory prefix becomes `~`.
+- An attribute whose key name is on Sentry's default denylist (`token`, `secret`, `password`, `auth` and the rest) is dropped with its value.
+- A git signature, a credential in a URL, or an address anywhere in the text is redacted.
+
+Nothing goes silently. What was replaced says what it was (`~`, `[redacted]`, `[email]`), and a record that changed carries `redaction.masked.count` and `redaction.redacted.count`, so a reader can tell a deliberate gap from an empty one.
+
+**A tail is still personal data.** The ids in it resolve against the repository, which makes it pseudonymized rather than anonymous. Scrubbing lowers what a tail carries. It does not change what it is. Ask for consent before collecting one, and decide how long you keep one.
 
 ## Setting the User (required before writing)
 
@@ -165,9 +189,11 @@ await core.user.set({
 `core.user.get()` returns the current `User` or `null` if none is set (a fresh install has no User). There are two kinds of User:
 
 - A `local` User has an `id` of `null`.
-- A `cloud` User carries the `id` of the elek.io account it signed in to. Setting one signs nobody in. `core.cloud.account.signIn()` signs in and sets the `cloud` User itself, see [`cloud-account.md`](./cloud-account.md).
+- A `cloud` User carries the `id` of an elek.io account. Setting one with `core.user.set()` signs nobody in. It only writes the signature commits are made with.
 
-`name` takes up to 256 characters, with no `|` and no control characters, and `email` is an address of up to 254. A length counts UTF-16 code units, as `String.length` does. `core.user.set()` throws `BadRequest` past either limit. A `user.json` written by an older Core that breaks one reads back as `null`, the same as no User, so set the User again.
+`name` takes up to 256 characters, with no `|` and no control characters, and `email` is an address of up to 254. A length counts Unicode code points, the way Zod counts them, so a smiling face emoji counts as one while a flag counts as two.
+
+`core.user.set()` throws `BadRequest` past either limit. A `user.json` written by an older Core that breaks one reads back as `null`, the same as no User, so set the User again.
 
 The `localApi` settings are a stored preference for elek.io clients. `isEnabled` records whether the local API should auto-start, which elek.io Desktop acts on, but Core itself does not. When using Core directly, start the API with `core.api.start()` or `elek api:start` (see [`local-api.md`](./local-api.md)).
 
@@ -470,6 +496,94 @@ const post = await getEntry('websitePosts', entry.data.related.en[0].id);
 ```
 
 An Entry carries no `body` and no rendered HTML, so Astro's `render()` and `<Content />` produce an empty page rather than an error. A `markdown` field arrives on `entry.data` as a tree, which [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro) renders with `mdastRender`.
+
+### Rendering a dynamic field
+
+A `dynamic` field is the page builder shape: an ordered array of items, each one holding the content of a Component the field allows. Every item names its Component twice.
+
+```typescript
+entry.data.sections[0].id; // string, the item's own id
+entry.data.sections[0].componentSlug; // "hero" | "quote", the Component's slug
+entry.data.sections[0].componentId; // the Component's UUID
+entry.data.sections[0].values; // that Component's own fields, language keyed
+```
+
+- `componentSlug` is what a template dispatches on. It is the name you gave the Component and it survives the content being re-created, where every UUID is new.
+- `componentId` addresses the same Component through Core's own methods, the [local API](./local-api.md) and the types [`elek generate:types`](./api-clients.md#generatetypes) writes, which dispatch on an id constant rather than on the slug.
+- The array is not language keyed, the `values` inside each item are. Editors order the items once for every language.
+
+The item type is a union discriminated on `componentSlug`, so a `switch` narrows `values` to the Component of that branch. A page hands the field's array to a component of its own, `<Sections sections={entry.data.sections} />`:
+
+```astro
+---
+// src/components/Sections.astro
+import type { CollectionEntry } from 'astro:content';
+import Hero from './Hero.astro';
+import Quote from './Quote.astro';
+
+type Section = CollectionEntry<'websitePages'>['data']['sections'][number];
+
+interface Props {
+  sections: Section[];
+}
+
+const { sections } = Astro.props;
+
+function unhandled(section: never): never {
+  throw new Error(`Unhandled Component "${String(section)}"`);
+}
+---
+{
+  sections.map((section) => {
+    switch (section.componentSlug) {
+      case 'hero':
+        return <Hero values={section.values} />;
+      case 'quote':
+        return <Quote values={section.values} />;
+      default:
+        return unhandled(section);
+    }
+  })
+}
+```
+
+One component per Component then takes the values of its own branch, named with `Extract`:
+
+```astro
+---
+// src/components/Hero.astro
+import type { CollectionEntry } from 'astro:content';
+
+type Section = CollectionEntry<'websitePages'>['data']['sections'][number];
+
+interface Props {
+  values: Extract<Section, { componentSlug: 'hero' }>['values'];
+}
+
+const { values } = Astro.props;
+---
+<h1>{values.headline.en}</h1>
+```
+
+### Keeping a dispatch and the content model in step
+
+`astro build` emits types, it does not check them, so a dispatch that no longer matches the content model builds a page with a section missing. `astro check` is what reads them, and it needs `@astrojs/check` and `typescript` in the project:
+
+```bash
+astro check && astro build
+```
+
+Two changes to the content model then fail, which is what the `default` branch above is for:
+
+- A Component the field allows that the `switch` does not handle. `section` is that member in the `default` branch rather than `never`, and `unhandled()` refuses it.
+- A Component the `switch` handles that was renamed. Its `case` matches no member of the union any more.
+
+Two shapes report less than the `switch` does:
+
+- An `Extract<Section, { componentSlug: 'hero' }>` alias that is only declared reports neither change, because an alias of a Component that is gone becomes `never` rather than failing. Reading values off that alias does report the rename, which is what `Hero.astro` above does with `['values']`.
+- A chain of `if (section.componentSlug === 'hero' && ...)` conditions reports the rename, because the comparison has no overlap left. It misses the Component the field gained, because nothing asks a chain to be complete.
+
+A field whose `ofComponents` is empty allows every Component of the Project, so its union gains a member whenever a Component is added anywhere, including one no page of yours renders. Give such a field a `default` branch that returns nothing, `default: return;` in place of `return unhandled(section);`, or list the Components the field allows and keep the exhaustive one.
 
 ### Choosing what to derive
 

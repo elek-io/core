@@ -15,6 +15,7 @@ export const fieldChangeTypeSchema = z.enum([
   'isRequiredToNotRequired',
   'isUniqueToNotUnique',
   'ofCollectionsChanged',
+  'ofComponentsChanged',
   'isNotRequiredToRequired',
   'isNotUniqueToUnique',
   'labelChanged',
@@ -37,7 +38,11 @@ export const fieldChangeSchema = z.object({
 });
 export type FieldChange = z.infer<typeof fieldChangeSchema>;
 
-export const collectionChangeTypeSchema = z.enum(['added', 'deleted']);
+export const collectionChangeTypeSchema = z.enum([
+  'added',
+  'deleted',
+  'slugChanged',
+]);
 export type CollectionChangeType = z.infer<typeof collectionChangeTypeSchema>;
 
 export const collectionChangeSchema = z.object({
@@ -88,7 +93,11 @@ export const entryChangeSchema = z.object({
 });
 export type EntryChange = z.infer<typeof entryChangeSchema>;
 
-export const componentChangeTypeSchema = z.enum(['added', 'deleted']);
+export const componentChangeTypeSchema = z.enum([
+  'added',
+  'deleted',
+  'slugChanged',
+]);
 export type ComponentChangeType = z.infer<typeof componentChangeTypeSchema>;
 
 export const componentChangeSchema = z.object({

@@ -799,7 +799,7 @@ async function generateTypesAs({
 
     await compileToJs({
       config: false,
-      external: ['@elek-io/core'],
+      deps: { neverBundle: ['@elek-io/core'] },
       entry: normalizedEntries,
       outDir: resolvedOutDir,
       format: 'esm',

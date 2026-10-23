@@ -2,7 +2,7 @@ import type { LoaderContext } from 'astro/loaders';
 import Path from 'node:path';
 import Url from 'node:url';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
-import core, { type Collection } from '../test/setup.js';
+import core, { uuid, type Collection } from '../test/setup.js';
 import {
   createAsset,
   createCollection,
@@ -12,7 +12,11 @@ import {
 } from '../test/util.js';
 import { elekCollections } from './collections.js';
 import { getCore } from './core.js';
-import { elekAssetsLoader, elekEntriesLoader } from './loaders.js';
+import {
+  elekAssetsLoader,
+  elekEntriesLoader,
+  hasImageExtension,
+} from './loaders.js';
 import type { ContentWatcher } from './watch.js';
 
 /** One logged line, with the level it was logged at. */
@@ -168,6 +172,41 @@ function renameCollection(projectId: string, collection: Collection) {
   });
 }
 
+/** An optional field, so no Entry needs a resolution for it. */
+function extraFieldDefinition() {
+  return {
+    id: uuid(),
+    slug: 'subtitle',
+    valueType: 'string' as const,
+    fieldType: 'text' as const,
+    label: { en: 'Subtitle', de: 'Subtitle' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false as const,
+    inputWidth: '12' as const,
+    min: null,
+    max: null,
+    defaultValue: null,
+  };
+}
+
+function changeModelOf(
+  projectId: string,
+  collection: Collection,
+  slug = collection.slug
+) {
+  return core.collections.update({
+    projectId,
+    id: collection.id,
+    icon: collection.icon,
+    name: collection.name,
+    description: collection.description,
+    fieldDefinitions: [...collection.fieldDefinitions, extraFieldDefinition()],
+    slug,
+  });
+}
+
 describe('the Entries loader while astro dev runs', function () {
   it('keeps reloading Entries while the Collection stays the same', async function () {
     const project = await createProject();
@@ -183,7 +222,7 @@ describe('the Entries loader while astro dev runs', function () {
 
     expect(store.has(entry.id)).toBe(true);
     expect(reportedSince()).toEqual([]);
-  }, 60000);
+  });
 
   it('asks for a restart when the Collection it loads is renamed', async function () {
     const project = await createProject();
@@ -199,7 +238,7 @@ describe('the Entries loader while astro dev runs', function () {
     expect(reported.map((line) => line.message)).toEqual([
       expect.stringContaining('was renamed or replaced'),
     ]);
-  }, 60000);
+  });
 
   it('asks for a restart when another Collection takes over its slug', async function () {
     const project = await createProject();
@@ -225,7 +264,73 @@ describe('the Entries loader while astro dev runs', function () {
     expect(reported.map((line) => line.message)).toEqual([
       expect.stringContaining('was renamed or replaced'),
     ]);
-  }, 60000);
+  });
+});
+
+describe('hasImageExtension', function () {
+  it('takes an extension Astro processes, however it is spelled', function () {
+    expect(hasImageExtension('png')).toBe(true);
+    expect(hasImageExtension('PNG')).toBe(true);
+  });
+
+  it('takes no apng, which Astro accepts but processes on no release', function () {
+    // apng joined Astro's input formats in 7.2.5, but its image service
+    // validates against VALID_SUPPORTED_FORMATS, which carries no apng on
+    // any release the peer range allows. An apng handed to the pipeline
+    // fails the build with UnsupportedImageFormat, so it takes the public
+    // route a non-image takes.
+    // See ../../contributing/astro-entry.md
+    expect(hasImageExtension('apng')).toBe(false);
+  });
+
+  it('takes no extension Astro does not process at all', function () {
+    expect(hasImageExtension('pdf')).toBe(false);
+  });
+});
+
+describe('the Entries loader on a content model that moved', function () {
+  it('asks for a restart and keeps the Entries it loaded', async function () {
+    const project = await createProject();
+    onTestFinished(() => project.destroy());
+    const collection = await createCollection(project.id);
+    const asset = await createAsset(project.id);
+    const entry = await createEntry(project.id, collection.id, asset.id);
+    const { store, reportedSince, reload } = await startLoader(project.id);
+    expect(store.has(entry.id)).toBe(true);
+
+    await changeModelOf(project.id, collection);
+    await reload(core.util.pathTo.collectionFile(project.id, collection.id));
+
+    const reported = reportedSince();
+    expect(reported.map((line) => line.level)).toEqual(['warn']);
+    expect(reported.map((line) => line.message)).toEqual([
+      expect.stringContaining('content model'),
+    ]);
+    // Reloading against the schema Astro built would strip the new field
+    // silently, so the Entries of the model it was built for stay
+    expect(store.has(entry.id)).toBe(true);
+  });
+
+  it('names the rename when the Collection and the model changed at once', async function () {
+    const project = await createProject();
+    onTestFinished(() => project.destroy());
+    const collection = await createCollection(project.id);
+    const { reportedSince, reload } = await startLoader(project.id);
+
+    // The Collection Astro named the collection after is gone, which is
+    // the reason to report whatever else changed with it
+    await changeModelOf(project.id, collection, {
+      singular: 'article',
+      plural: 'articles',
+    });
+    await reload(core.util.pathTo.collectionFile(project.id, collection.id));
+
+    const reported = reportedSince();
+    expect(reported.map((line) => line.level)).toEqual(['warn']);
+    expect(reported.map((line) => line.message)).toEqual([
+      expect.stringContaining('was renamed or replaced'),
+    ]);
+  });
 });
 
 describe('the loggers an astro build writes through', function () {

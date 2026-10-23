@@ -9,6 +9,7 @@ import {
   CoreError,
   flattenFieldDefinitions,
 } from '../index.node.js';
+import { makeComponentsContext } from '../schema/componentSchema.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
@@ -83,12 +84,18 @@ export function defaultPublicDir(alias: string): string {
 }
 
 /**
- * The extensions Astro's image pipeline understands, mirroring its own
- * VALID_INPUT_FORMATS. `satisfies` ties the list to Astro's public
- * ImageInputFormat, so adding or removing a format there is a compile
- * error here instead of a silent behavior change.
+ * The extensions Astro's image pipeline processes, mirroring its own
+ * VALID_SUPPORTED_FORMATS. `apng` is in its input list from 7.2.5 on and in
+ * that one on no release, so it is false here and takes the non-image route.
+ *
+ * `Record<ImageInputFormat, boolean>` ties the keys to Astro's public type,
+ * and the index signature beside it holds a format the floor does not know.
+ *
+ * @see ../../contributing/astro-entry.md
  */
-const imageExtensions = {
+const imageExtensions: Record<ImageInputFormat, boolean> &
+  Record<string, boolean> = {
+  apng: false,
   avif: true,
   gif: true,
   jpeg: true,
@@ -97,10 +104,20 @@ const imageExtensions = {
   svg: true,
   tiff: true,
   webp: true,
-} satisfies Record<ImageInputFormat, true>;
+};
 
-function hasImageExtension(extension: string): boolean {
-  return Object.hasOwn(imageExtensions, extension.toLowerCase());
+/**
+ * Whether Astro's image pipeline processes this extension.
+ *
+ * An extension it does not strips the marker and leaves a relative path
+ * nothing resolves, and one it only accepts as an input fails the image
+ * service, see `../../contributing/astro-entry.md`.
+ *
+ * Exported for this file's tests. Nothing re-exports it, so it is not part of
+ * the astro entry's surface.
+ */
+export function hasImageExtension(extension: string): boolean {
+  return imageExtensions[extension.toLowerCase()] === true;
 }
 
 /**
@@ -338,13 +355,20 @@ export function elekEntriesLoader<const T extends ElekConfig>(
 
   /**
    * Reads the Collection, the Project's languages and the Components,
-   * which is everything the schema is built from
+   * which is everything the schema is built from. Takes the resolved
+   * Collection id of a caller that resolved it already, which also keeps
+   * this from throwing `NotFound` on a Collection renamed since.
    */
-  const readModel = async (core: ReturnType<typeof getCore>) => {
-    const resolvedId = await core.collections.resolveCollectionId({
-      projectId,
-      idOrSlug: props.collectionIdOrSlug,
-    });
+  const readModel = async (
+    core: ReturnType<typeof getCore>,
+    knownCollectionId?: string
+  ) => {
+    const resolvedId =
+      knownCollectionId ??
+      (await core.collections.resolveCollectionId({
+        projectId,
+        idOrSlug: props.collectionIdOrSlug,
+      }));
     const collection = await core.collections.read({
       projectId,
       id: resolvedId,
@@ -410,15 +434,17 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       resolvedCollectionId = collectionId;
     }
 
-    if (modelDigest !== undefined) {
-      const { digest } = await readModel(core);
-      if (digest !== modelDigest) {
-        context.logger.warn(
-          `The content model of Collection "${props.collectionIdOrSlug}" of Project "${alias}" changed. Astro builds a collection's schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.`
-        );
-        return resolvedCollectionId;
-      }
+    // Read after the guard above, never before: transforming an Entry
+    // needs the Components to name each item's Component, and resolving
+    // the Collection again here would throw rather than warn
+    const model = await readModel(core, resolvedCollectionId);
+    if (modelDigest !== undefined && model.digest !== modelDigest) {
+      context.logger.warn(
+        `The content model of Collection "${props.collectionIdOrSlug}" of Project "${alias}" changed. Astro builds a collection's schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.`
+      );
+      return resolvedCollectionId;
     }
+    const componentsContext = makeComponentsContext(model.components);
 
     context.logger.info(
       `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" of Project "${alias}"`
@@ -438,7 +464,11 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     const seen = new Set<string>();
     for (const entry of entries) {
       seen.add(entry.id);
-      const values = transformEntryValues(entry.values);
+      const values = transformEntryValues(
+        entry.values,
+        componentsContext,
+        entry.id
+      );
       const digest = context.generateDigest(values);
 
       // Skip re-validating Entries whose data has not changed.

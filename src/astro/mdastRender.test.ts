@@ -1,13 +1,43 @@
 /// <reference types="astro/astro-jsx" />
 
 import { describe, it, expect, expectTypeOf } from 'vitest';
-import { renderTemplate } from 'astro/runtime/server/index.js';
+import { addAttribute, renderTemplate } from 'astro/runtime/server/index.js';
 import {
   mdastRender,
   astroDefaults,
   type MdastAstroRenderers,
 } from './mdastRender.js';
-import type { MdAstRoot } from '../schema/valueSchema.js';
+import {
+  isTableHeaderCell,
+  tableCellAlign,
+  type MdastNodeContext,
+} from '../util/mdastRender.js';
+import type {
+  MdAstBlockNode,
+  MdAstBlockquote,
+  MdAstBreak,
+  MdAstCode,
+  MdAstDelete,
+  MdAstEmphasis,
+  MdAstFootnoteDefinition,
+  MdAstFootnoteReference,
+  MdAstHeading,
+  MdAstImage,
+  MdAstInlineCode,
+  MdAstLink,
+  MdAstList,
+  MdAstListItem,
+  MdAstParagraph,
+  MdAstPhrasingNode,
+  MdAstRoot,
+  MdAstStrong,
+  MdAstTable,
+  MdAstTableAlign,
+  MdAstTableCell,
+  MdAstTableRow,
+  MdAstText,
+  MdAstThematicBreak,
+} from '../schema/valueSchema.js';
 
 const collectionId = '11111111-2222-3333-4444-555555555555';
 const entryId = '66666666-7777-8888-9999-aaaaaaaaaaaa';
@@ -59,6 +89,459 @@ function paragraphRoot(value: string): MdAstRoot {
   };
 }
 
+/** The tree a block node is rendered in: the only child of the root */
+function blockTree(node: MdAstBlockNode): MdAstRoot {
+  return { type: 'root', children: [node] };
+}
+
+/** The tree a phrasing node is rendered in: the only child of a paragraph */
+function phrasingTree(node: MdAstPhrasingNode): MdAstRoot {
+  return { type: 'root', children: [{ type: 'paragraph', children: [node] }] };
+}
+
+/** The tree a list item is rendered in, inside an unordered list */
+function listItemTree(node: MdAstListItem): MdAstRoot {
+  return blockTree({
+    type: 'list',
+    ordered: false,
+    start: null,
+    spread: false,
+    children: [node],
+  });
+}
+
+/** The tree a table row is rendered in, inside a table */
+function tableRowTree(node: MdAstTableRow): MdAstRoot {
+  return blockTree({ type: 'table', align: [null], children: [node] });
+}
+
+/** The tree a table cell is rendered in, inside a table's only row */
+function tableCellTree(node: MdAstTableCell): MdAstRoot {
+  return tableRowTree({ type: 'tableRow', children: [node] });
+}
+
+/** A paragraph holding one text node */
+function paragraphOf(value: string): MdAstParagraph {
+  return { type: 'paragraph', children: [{ type: 'text', value }] };
+}
+
+/**
+ * What a default does with one field of its node: a substring of the rendered
+ * HTML that only this field's value can have produced, or the reason it is
+ * deliberately left out plus a substring that proves it really is gone.
+ */
+type FieldAccount =
+  { inOutput: string } | { droppedBecause: string; absentFromOutput: string };
+
+/**
+ * Every field a node type carries, each accounted for. A field added to a node
+ * schema is a type error here until it is listed, which is what keeps the
+ * accounting honest as Core's mdast model grows.
+ *
+ * `type` is left out on purpose: it is the discriminator the fold dispatches
+ * on, so the default running at all is what proves it arrived.
+ */
+type FieldsOf<N> = { [K in Exclude<keyof N, 'type'>]-?: FieldAccount };
+
+/** One node type, the tree it is rendered in, and the HTML that comes out */
+interface DefaultCase {
+  type: string;
+  tree: MdAstRoot;
+  html: string;
+  fields: Record<string, FieldAccount>;
+  /** The node's field names as they exist at runtime, minus `type` */
+  nodeFields: string[];
+}
+
+/**
+ * Binds one node type's sample, tree, expected HTML and field accounting
+ * together, so `fields` is checked against that very node's type.
+ */
+function defaultCase<N extends { type: string }>(input: {
+  node: N;
+  tree: MdAstRoot;
+  html: string;
+  fields: FieldsOf<N> & Record<string, FieldAccount>;
+}): DefaultCase {
+  return {
+    type: input.node.type,
+    tree: input.tree,
+    html: input.html,
+    fields: input.fields,
+    nodeFields: Object.keys(input.node).filter((key) => key !== 'type'),
+  };
+}
+
+const spreadIsDropped = {
+  droppedBecause:
+    'a tight item still renders its paragraph, the fold hands a parent its children already rendered',
+  absentFromOutput: 'spread',
+} as const;
+
+const rootNode: MdAstRoot = {
+  type: 'root',
+  children: [paragraphOf('first block'), paragraphOf('second block')],
+};
+
+const paragraphNode: MdAstParagraph = paragraphOf('paragraph text');
+
+const headingNode: MdAstHeading = {
+  type: 'heading',
+  depth: 3,
+  children: [{ type: 'text', value: 'heading text' }],
+};
+
+const blockquoteNode: MdAstBlockquote = {
+  type: 'blockquote',
+  children: [paragraphOf('quoted text')],
+};
+
+const listNode: MdAstList = {
+  type: 'list',
+  ordered: true,
+  start: 5,
+  spread: false,
+  children: [
+    {
+      type: 'listItem',
+      spread: false,
+      checked: null,
+      children: [paragraphOf('ordered item')],
+    },
+  ],
+};
+
+const listItemNode: MdAstListItem = {
+  type: 'listItem',
+  spread: false,
+  checked: true,
+  children: [paragraphOf('task text')],
+};
+
+const codeNode: MdAstCode = {
+  type: 'code',
+  lang: 'typescript',
+  meta: 'showLineNumbers',
+  value: 'const answer = 42;',
+};
+
+const thematicBreakNode: MdAstThematicBreak = { type: 'thematicBreak' };
+
+const tableNode: MdAstTable = {
+  type: 'table',
+  align: ['left', 'center'],
+  children: [
+    {
+      type: 'tableRow',
+      children: [
+        { type: 'tableCell', children: [{ type: 'text', value: 'cell text' }] },
+      ],
+    },
+  ],
+};
+
+const tableRowNode: MdAstTableRow = {
+  type: 'tableRow',
+  children: [
+    { type: 'tableCell', children: [{ type: 'text', value: 'row cell' }] },
+  ],
+};
+
+const tableCellNode: MdAstTableCell = {
+  type: 'tableCell',
+  children: [{ type: 'text', value: 'cell content' }],
+};
+
+const footnoteDefinitionNode: MdAstFootnoteDefinition = {
+  type: 'footnoteDefinition',
+  identifier: 'note-id',
+  label: 'Note label',
+  children: [paragraphOf('note text')],
+};
+
+const textNode: MdAstText = { type: 'text', value: 'plain text' };
+
+const inlineCodeNode: MdAstInlineCode = {
+  type: 'inlineCode',
+  value: 'inline code',
+};
+
+const emphasisNode: MdAstEmphasis = {
+  type: 'emphasis',
+  children: [{ type: 'text', value: 'emphasized' }],
+};
+
+const strongNode: MdAstStrong = {
+  type: 'strong',
+  children: [{ type: 'text', value: 'strengthened' }],
+};
+
+const deleteNode: MdAstDelete = {
+  type: 'delete',
+  children: [{ type: 'text', value: 'deleted' }],
+};
+
+const linkNode: MdAstLink = {
+  type: 'link',
+  url: 'https://example.com/link',
+  title: 'Link title',
+  children: [{ type: 'text', value: 'link text' }],
+};
+
+const imageNode: MdAstImage = {
+  type: 'image',
+  url: 'https://cdn.example.com/image.png',
+  alt: 'image alt',
+  title: 'Image title',
+};
+
+const breakNode: MdAstBreak = { type: 'break' };
+
+const footnoteReferenceNode: MdAstFootnoteReference = {
+  type: 'footnoteReference',
+  identifier: 'ref-id',
+  label: 'Ref label',
+};
+
+/**
+ * One case per defaulted node type: the tree, the single HTML string it
+ * renders to, and every field of the node either located in that string or
+ * named as deliberately dropped.
+ */
+const defaultCases: DefaultCase[] = [
+  defaultCase({
+    node: rootNode,
+    tree: rootNode,
+    html: '<p>first block</p><p>second block</p>',
+    fields: {
+      children: { inOutput: '<p>first block</p><p>second block</p>' },
+    },
+  }),
+  defaultCase({
+    node: paragraphNode,
+    tree: blockTree(paragraphNode),
+    html: '<p>paragraph text</p>',
+    fields: { children: { inOutput: 'paragraph text' } },
+  }),
+  defaultCase({
+    node: headingNode,
+    tree: blockTree(headingNode),
+    html: '<h3>heading text</h3>',
+    fields: {
+      depth: { inOutput: '<h3>' },
+      children: { inOutput: 'heading text' },
+    },
+  }),
+  defaultCase({
+    node: blockquoteNode,
+    tree: blockTree(blockquoteNode),
+    html: '<blockquote><p>quoted text</p></blockquote>',
+    fields: { children: { inOutput: '<p>quoted text</p>' } },
+  }),
+  defaultCase({
+    node: listNode,
+    tree: blockTree(listNode),
+    html: '<ol start="5"><li><p>ordered item</p></li></ol>',
+    fields: {
+      ordered: { inOutput: '<ol' },
+      start: { inOutput: 'start="5"' },
+      spread: spreadIsDropped,
+      children: { inOutput: '<li><p>ordered item</p></li>' },
+    },
+  }),
+  defaultCase({
+    node: listItemNode,
+    tree: listItemTree(listItemNode),
+    html:
+      '<ul><li><input type="checkbox" aria-label="task text" checked disabled>' +
+      '<p>task text</p></li></ul>',
+    fields: {
+      checked: { inOutput: ' checked disabled>' },
+      spread: spreadIsDropped,
+      children: { inOutput: '<p>task text</p>' },
+    },
+  }),
+  defaultCase({
+    node: codeNode,
+    tree: blockTree(codeNode),
+    html: '<pre><code>const answer = 42;</code></pre>',
+    fields: {
+      value: { inOutput: 'const answer = 42;' },
+      lang: {
+        droppedBecause:
+          'every highlighter wants the language somewhere else, so the default names none',
+        absentFromOutput: 'typescript',
+      },
+      meta: {
+        droppedBecause:
+          'meta is the highlighter options string of whichever highlighter an override brings',
+        absentFromOutput: 'showLineNumbers',
+      },
+    },
+  }),
+  defaultCase({
+    node: thematicBreakNode,
+    tree: blockTree(thematicBreakNode),
+    html: '<hr>',
+    fields: {},
+  }),
+  defaultCase({
+    node: tableNode,
+    tree: blockTree(tableNode),
+    html: '<table><thead><tr><th scope="col" style="text-align:left">cell text</th></tr></thead></table>',
+    fields: {
+      align: { inOutput: 'style="text-align:left"' },
+      children: {
+        inOutput:
+          '<tr><th scope="col" style="text-align:left">cell text</th></tr>',
+      },
+    },
+  }),
+  defaultCase({
+    node: tableRowNode,
+    tree: tableRowTree(tableRowNode),
+    html: '<table><thead><tr><th scope="col">row cell</th></tr></thead></table>',
+    fields: { children: { inOutput: '<th scope="col">row cell</th>' } },
+  }),
+  defaultCase({
+    node: tableCellNode,
+    tree: tableCellTree(tableCellNode),
+    html: '<table><thead><tr><th scope="col">cell content</th></tr></thead></table>',
+    fields: { children: { inOutput: 'cell content' } },
+  }),
+  defaultCase({
+    node: footnoteDefinitionNode,
+    tree: blockTree(footnoteDefinitionNode),
+    html:
+      '<div id="fn-note-id"><p>note text</p>' +
+      '<a href="#fnref-note-id" aria-label="Back to content">↩</a></div>',
+    fields: {
+      identifier: { inOutput: 'id="fn-note-id"' },
+      label: {
+        droppedBecause:
+          'the label is the authored spelling of the identifier and is shown on the reference, not on the note',
+        absentFromOutput: 'Note label',
+      },
+      children: { inOutput: '<p>note text</p>' },
+    },
+  }),
+  defaultCase({
+    node: textNode,
+    tree: phrasingTree(textNode),
+    html: '<p>plain text</p>',
+    fields: { value: { inOutput: 'plain text' } },
+  }),
+  defaultCase({
+    node: inlineCodeNode,
+    tree: phrasingTree(inlineCodeNode),
+    html: '<p><code>inline code</code></p>',
+    fields: { value: { inOutput: 'inline code' } },
+  }),
+  defaultCase({
+    node: emphasisNode,
+    tree: phrasingTree(emphasisNode),
+    html: '<p><em>emphasized</em></p>',
+    fields: { children: { inOutput: 'emphasized' } },
+  }),
+  defaultCase({
+    node: strongNode,
+    tree: phrasingTree(strongNode),
+    html: '<p><strong>strengthened</strong></p>',
+    fields: { children: { inOutput: 'strengthened' } },
+  }),
+  defaultCase({
+    node: deleteNode,
+    tree: phrasingTree(deleteNode),
+    html: '<p><del>deleted</del></p>',
+    fields: { children: { inOutput: 'deleted' } },
+  }),
+  defaultCase({
+    node: linkNode,
+    tree: phrasingTree(linkNode),
+    html: '<p><a href="https://example.com/link" title="Link title">link text</a></p>',
+    fields: {
+      url: { inOutput: 'href="https://example.com/link"' },
+      title: { inOutput: 'title="Link title"' },
+      children: { inOutput: 'link text' },
+    },
+  }),
+  defaultCase({
+    node: imageNode,
+    tree: phrasingTree(imageNode),
+    html: '<p><img src="https://cdn.example.com/image.png" alt="image alt" title="Image title"></p>',
+    fields: {
+      url: { inOutput: 'src="https://cdn.example.com/image.png"' },
+      alt: { inOutput: 'alt="image alt"' },
+      title: { inOutput: 'title="Image title"' },
+    },
+  }),
+  defaultCase({
+    node: breakNode,
+    tree: phrasingTree(breakNode),
+    html: '<p><br></p>',
+    fields: {},
+  }),
+  defaultCase({
+    node: footnoteReferenceNode,
+    tree: phrasingTree(footnoteReferenceNode),
+    html: '<p><sup id="fnref-ref-id"><a href="#fn-ref-id">Ref label</a></sup></p>',
+    fields: {
+      identifier: { inOutput: 'id="fnref-ref-id"' },
+      label: { inOutput: '>Ref label<' },
+    },
+  }),
+];
+
+/** The ordered list of the given tree, with everything else left alone */
+function orderedList(start: number | null): MdAstRoot {
+  return blockTree({
+    type: 'list',
+    ordered: true,
+    start,
+    spread: false,
+    children: [
+      {
+        type: 'listItem',
+        spread: false,
+        checked: null,
+        children: [paragraphOf('a')],
+      },
+    ],
+  });
+}
+
+/** A one-item list whose item carries the given checked state and text */
+function taskList(checked: boolean | null, text = 'a'): MdAstRoot {
+  return listItemTree({
+    type: 'listItem',
+    spread: false,
+    checked,
+    children: [paragraphOf(text)],
+  });
+}
+
+/** A table of one `align` entry per column and one row per array of texts */
+function tableRoot(align: MdAstTableAlign[], rows: string[][]): MdAstRoot {
+  return {
+    type: 'root',
+    children: [
+      {
+        type: 'table',
+        align,
+        children: rows.map((cells) => ({
+          type: 'tableRow',
+          // The empty string stands for a cell with no content at all,
+          // which is what a blank markdown cell parses to.
+          children: cells.map((value) => ({
+            type: 'tableCell',
+            children: value === '' ? [] : [{ type: 'text', value }],
+          })),
+        })),
+      },
+    ],
+  };
+}
+
 describe('mdastRender (Astro wrapper)', () => {
   describe('renderable anywhere', () => {
     it('renders through renderChild rather than needing a page-level pass', () => {
@@ -71,107 +554,41 @@ describe('mdastRender (Astro wrapper)', () => {
     });
 
     it('renders every default without producing [object Object]', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'heading',
-            depth: 2,
-            children: [{ type: 'text', value: 'h' }],
-          },
-          { type: 'paragraph', children: [{ type: 'text', value: 'p' }] },
-          {
-            type: 'blockquote',
-            children: [
-              { type: 'paragraph', children: [{ type: 'text', value: 'q' }] },
-            ],
-          },
-          {
-            type: 'list',
-            ordered: false,
-            start: null,
-            spread: false,
-            children: [
-              {
-                type: 'listItem',
-                spread: false,
-                checked: null,
-                children: [
-                  {
-                    type: 'paragraph',
-                    children: [{ type: 'text', value: 'i' }],
-                  },
-                ],
-              },
-            ],
-          },
-          { type: 'code', lang: null, meta: null, value: 'x' },
-          { type: 'thematicBreak' },
-          {
-            type: 'table',
-            align: [null],
-            children: [
-              {
-                type: 'tableRow',
-                children: [
-                  {
-                    type: 'tableCell',
-                    children: [{ type: 'text', value: 'c' }],
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            type: 'footnoteDefinition',
-            identifier: 'n1',
-            label: null,
-            children: [
-              { type: 'paragraph', children: [{ type: 'text', value: 'f' }] },
-            ],
-          },
-          {
-            type: 'paragraph',
-            children: [
-              { type: 'inlineCode', value: 'c' },
-              { type: 'emphasis', children: [{ type: 'text', value: 'e' }] },
-              { type: 'strong', children: [{ type: 'text', value: 's' }] },
-              { type: 'delete', children: [{ type: 'text', value: 'd' }] },
-              {
-                type: 'link',
-                url: 'https://example.com',
-                title: null,
-                children: [{ type: 'text', value: 'l' }],
-              },
-              {
-                type: 'image',
-                url: 'https://cdn.example.com/x.png',
-                alt: 'x',
-                title: null,
-              },
-              { type: 'break' },
-              { type: 'footnoteReference', identifier: 'n1', label: null },
-            ],
-          },
-        ],
-      };
-
-      expect(render(root)).not.toContain('[object Object]');
+      for (const one of defaultCases) {
+        expect(render(one.tree), one.type).not.toContain('[object Object]');
+      }
     });
   });
 
-  describe('root combiner', () => {
-    it('concatenates top-level blocks without a wrapper by default', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          { type: 'paragraph', children: [{ type: 'text', value: 'one' }] },
-          { type: 'paragraph', children: [{ type: 'text', value: 'two' }] },
-        ],
-      };
-      expect(render(root)).toBe('<p>one</p><p>two</p>');
+  describe('every field a node carries', () => {
+    it('has one case per defaulted key', () => {
+      expect(defaultCases.map((one) => one.type).toSorted()).toEqual(
+        Object.keys(astroDefaults).toSorted()
+      );
     });
 
+    for (const one of defaultCases) {
+      it(`${one.type} renders every field it does not drop`, () => {
+        const html = render(one.tree);
+        expect(html).toBe(one.html);
+
+        expect(Object.keys(one.fields).toSorted()).toEqual(
+          one.nodeFields.toSorted()
+        );
+
+        for (const [field, account] of Object.entries(one.fields)) {
+          const where = `${one.type}.${field}`;
+          if ('inOutput' in account) {
+            expect(html, where).toContain(account.inOutput);
+          } else {
+            expect(html, where).not.toContain(account.absentFromOutput);
+          }
+        }
+      });
+    }
+  });
+
+  describe('root combiner', () => {
     it('allows the consumer to override root to wrap in <article>', () => {
       const overrides: MdastAstroRenderers = {
         ...minimalOverrides,
@@ -183,12 +600,8 @@ describe('mdastRender (Astro wrapper)', () => {
     });
   });
 
-  describe('paragraph / heading / inline defaults', () => {
-    it('renders paragraph as <p>', () => {
-      expect(render(paragraphRoot('hello'))).toBe('<p>hello</p>');
-    });
-
-    it('renders heading with computed h${depth} tag', () => {
+  describe('heading depths', () => {
+    it('renders every depth with its own tag', () => {
       for (const depth of [1, 2, 3, 4, 5, 6] as const) {
         const root: MdAstRoot = {
           type: 'root',
@@ -203,82 +616,218 @@ describe('mdastRender (Astro wrapper)', () => {
         expect(render(root)).toBe(`<h${depth}>x</h${depth}>`);
       }
     });
+  });
 
-    it('renders emphasis / strong / delete with semantic tags', () => {
-      const root: MdAstRoot = {
-        type: 'root',
+  describe('ordered list start', () => {
+    it('writes the start a list actually counts from', () => {
+      expect(render(orderedList(5))).toBe(
+        '<ol start="5"><li><p>a</p></li></ol>'
+      );
+    });
+
+    it('keeps a start of 0, which GFM and HTML both allow', () => {
+      expect(render(orderedList(0))).toBe(
+        '<ol start="0"><li><p>a</p></li></ol>'
+      );
+    });
+
+    it('writes no start attribute for 1, which <ol> counts from anyway', () => {
+      expect(render(orderedList(1))).toBe('<ol><li><p>a</p></li></ol>');
+    });
+
+    it('writes no start attribute when the node carries none', () => {
+      expect(render(orderedList(null))).toBe('<ol><li><p>a</p></li></ol>');
+    });
+
+    it('never writes start on an unordered list, where it is invalid', () => {
+      const root = blockTree({
+        type: 'list',
+        ordered: false,
+        start: 5,
+        spread: false,
+        children: [
+          {
+            type: 'listItem',
+            spread: false,
+            checked: null,
+            children: [paragraphOf('a')],
+          },
+        ],
+      });
+      expect(render(root)).toBe('<ul><li><p>a</p></li></ul>');
+    });
+  });
+
+  describe('task list items', () => {
+    it('renders a checked item as a checked checkbox', () => {
+      expect(render(taskList(true))).toBe(
+        '<ul><li><input type="checkbox" aria-label="a" checked disabled>' +
+          '<p>a</p></li></ul>'
+      );
+    });
+
+    it('renders an unchecked item as a checkbox without the attribute', () => {
+      expect(render(taskList(false))).toBe(
+        '<ul><li><input type="checkbox" aria-label="a" disabled>' +
+          '<p>a</p></li></ul>'
+      );
+    });
+
+    it('renders an ordinary item without a checkbox', () => {
+      expect(render(taskList(null))).toBe('<ul><li><p>a</p></li></ul>');
+    });
+
+    it('adds no class name, as the defaults promise', () => {
+      expect(render(taskList(true))).not.toContain('class=');
+    });
+
+    it('places the checkbox before the item instead of inside its first paragraph', () => {
+      // The fold hands `listItem` its children already rendered, so the
+      // text arrives as a block and the checkbox can only precede it. That
+      // is the one divergence from remark the defaults cannot close, and
+      // docs/markdown-content.md names it. See contributing/astro-entry.md.
+      expect(render(taskList(true))).toContain(
+        '<input type="checkbox" aria-label="a" checked disabled><p>a</p>'
+      );
+    });
+
+    it("names the checkbox with the text of the item's own blocks", () => {
+      // The box is a control, so it needs a name of its own. The item's
+      // text is a sibling of it rather than a <label> around it, and a
+      // <label> could not hold the item's blocks anyway.
+      const root = listItemTree({
+        type: 'listItem',
+        spread: false,
+        checked: false,
         children: [
           {
             type: 'paragraph',
             children: [
-              { type: 'emphasis', children: [{ type: 'text', value: 'em' }] },
-              { type: 'strong', children: [{ type: 'text', value: 'st' }] },
-              { type: 'delete', children: [{ type: 'text', value: 'del' }] },
+              { type: 'text', value: 'Pay the ' },
+              { type: 'strong', children: [{ type: 'text', value: 'rent' }] },
+            ],
+          },
+          paragraphOf('before Friday'),
+        ],
+      });
+      expect(render(root)).toBe(
+        '<ul><li><input type="checkbox" aria-label="Pay the rent before Friday" disabled>' +
+          '<p>Pay the <strong>rent</strong></p><p>before Friday</p></li></ul>'
+      );
+    });
+
+    it('escapes a name the author wrote a quote into', () => {
+      expect(render(taskList(true, 'Read "Dune"'))).toContain(
+        'aria-label="Read &quot;Dune&quot;"'
+      );
+    });
+
+    it('leaves a nested list out of the name it gives the box', () => {
+      // A nested item has a checkbox of its own, and its text names that
+      // one. Taking it into the parent's name would claim another
+      // control's label as well as the parent's.
+      const root = listItemTree({
+        type: 'listItem',
+        spread: false,
+        checked: false,
+        children: [
+          paragraphOf('Do the shopping'),
+          {
+            type: 'list',
+            ordered: false,
+            start: null,
+            spread: false,
+            children: [
+              {
+                type: 'listItem',
+                spread: false,
+                checked: true,
+                children: [paragraphOf('Buy milk')],
+              },
             ],
           },
         ],
-      };
+      });
       expect(render(root)).toBe(
-        '<p><em>em</em><strong>st</strong><del>del</del></p>'
+        '<ul><li><input type="checkbox" aria-label="Do the shopping" disabled>' +
+          '<p>Do the shopping</p>' +
+          '<ul><li><input type="checkbox" aria-label="Buy milk" checked disabled>' +
+          '<p>Buy milk</p></li></ul></li></ul>'
+      );
+    });
+
+    it('names an item whose text is only spaces nothing', () => {
+      // A name of spaces is read as no name, so the attribute is worth
+      // less than leaving it off.
+      const root = listItemTree({
+        type: 'listItem',
+        spread: false,
+        checked: false,
+        children: [paragraphOf('   ')],
+      });
+      expect(render(root)).toBe(
+        '<ul><li><input type="checkbox" disabled><p>   </p></li></ul>'
+      );
+    });
+
+    it('names an item that carries no text at all nothing', () => {
+      // An image on its own has alt text, which extractText leaves out
+      // because it is not the document's text. There is no name to give,
+      // and an empty one is worth no attribute.
+      const root = listItemTree({
+        type: 'listItem',
+        spread: false,
+        checked: false,
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              {
+                type: 'image',
+                url: 'https://example.com/a.png',
+                alt: 'a diagram',
+                title: null,
+              },
+            ],
+          },
+        ],
+      });
+      expect(render(root)).toBe(
+        '<ul><li><input type="checkbox" disabled>' +
+          '<p><img src="https://example.com/a.png" alt="a diagram"></p></li></ul>'
       );
     });
   });
 
-  describe('block and inline defaults (blockquote, hr, footnotes, inlineCode, break)', () => {
-    it('renders blockquote as <blockquote>', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'blockquote',
-            children: [
-              { type: 'paragraph', children: [{ type: 'text', value: 'q' }] },
-            ],
-          },
-        ],
-      };
-      expect(render(root)).toBe('<blockquote><p>q</p></blockquote>');
-    });
-
-    it('renders thematicBreak as <hr>', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [{ type: 'thematicBreak' }],
-      };
-      expect(render(root)).toBe('<hr>');
-    });
-
-    it('renders footnoteDefinition as <div id="fn-...">', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'footnoteDefinition',
-            identifier: 'n1',
-            label: null,
-            children: [
-              { type: 'paragraph', children: [{ type: 'text', value: 'fn' }] },
-            ],
-          },
-        ],
-      };
-      expect(render(root)).toBe('<div id="fn-n1"><p>fn</p></div>');
-    });
-
-    it('renders inlineCode as <code> and break as <br>', () => {
-      const root: MdAstRoot = {
+  describe('footnotes', () => {
+    /** A tree holding one reference to one definition */
+    function footnoteRoot(identifier: string): MdAstRoot {
+      return {
         type: 'root',
         children: [
           {
             type: 'paragraph',
-            children: [{ type: 'inlineCode', value: 'x' }, { type: 'break' }],
+            children: [{ type: 'footnoteReference', identifier, label: null }],
+          },
+          {
+            type: 'footnoteDefinition',
+            identifier,
+            label: null,
+            children: [paragraphOf('the note')],
           },
         ],
       };
-      expect(render(root)).toBe('<p><code>x</code><br></p>');
+    }
+
+    it('gives the reference and the definition ids of their own', () => {
+      expect(render(footnoteRoot('n1'))).toBe(
+        '<p><sup id="fnref-n1"><a href="#fn-n1">n1</a></sup></p>' +
+          '<div id="fn-n1"><p>the note</p>' +
+          '<a href="#fnref-n1" aria-label="Back to content">↩</a></div>'
+      );
     });
 
-    it('renders footnoteReference as <sup><a href="#fn-..."></sup>', () => {
+    it('lands the way back on the first reference when a note has several', () => {
       const root: MdAstRoot = {
         type: 'root',
         children: [
@@ -286,95 +835,184 @@ describe('mdastRender (Astro wrapper)', () => {
             type: 'paragraph',
             children: [
               { type: 'footnoteReference', identifier: 'n1', label: null },
+              { type: 'text', value: ' and ' },
+              { type: 'footnoteReference', identifier: 'n1', label: null },
             ],
           },
         ],
       };
-      expect(render(root)).toBe('<p><sup><a href="#fn-n1">n1</a></sup></p>');
+      // Both references carry the one id a default can build from the
+      // identifier, so an anchor resolves to the first of them. Counting
+      // references takes state across the walk, which only an override has.
+      const html = render(root);
+      expect([...html.matchAll(/id="fnref-n1"/g)]).toHaveLength(2);
     });
-  });
 
-  describe('list and listItem defaults', () => {
-    function listRoot(ordered: boolean): MdAstRoot {
-      return {
+    it('shows the label where the node carries one, the identifier otherwise', () => {
+      const labelled: MdAstRoot = {
         type: 'root',
         children: [
           {
-            type: 'list',
-            ordered,
-            start: ordered ? 1 : null,
-            spread: false,
+            type: 'paragraph',
             children: [
-              {
-                type: 'listItem',
-                spread: false,
-                checked: null,
-                children: [
-                  {
-                    type: 'paragraph',
-                    children: [{ type: 'text', value: 'a' }],
-                  },
-                ],
-              },
+              { type: 'footnoteReference', identifier: 'n1', label: '1' },
             ],
           },
         ],
       };
-    }
-
-    it('renders ordered list as <ol>', () => {
-      expect(render(listRoot(true))).toBe('<ol><li><p>a</p></li></ol>');
+      expect(render(labelled)).toBe(
+        '<p><sup id="fnref-n1"><a href="#fn-n1">1</a></sup></p>'
+      );
     });
 
-    it('renders unordered list as <ul>', () => {
-      expect(render(listRoot(false))).toBe('<ul><li><p>a</p></li></ul>');
+    it('lets an override prefix the ids, which is what separates two trees', () => {
+      const overrides: MdastAstroRenderers = {
+        ...minimalOverrides,
+        footnoteReference: (node) =>
+          renderTemplate`<sup${addAttribute(`second-fnref-${node.identifier}`, 'id')}><a${addAttribute(`#second-fn-${node.identifier}`, 'href')}>${node.identifier}</a></sup>`,
+        footnoteDefinition: (node, children) =>
+          renderTemplate`<div${addAttribute(`second-fn-${node.identifier}`, 'id')}>${children}</div>`,
+      };
+      const first = render(footnoteRoot('n1'));
+      const second = render(footnoteRoot('n1'), overrides);
+      expect(first).toContain('id="fnref-n1"');
+      expect(second).toContain('id="second-fnref-n1"');
+      expect(second).not.toContain('id="fnref-n1"');
     });
   });
 
   describe('table defaults', () => {
-    it('renders table / tableRow / tableCell with semantic tags', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'table',
-            align: [null, null],
-            children: [
-              {
-                type: 'tableRow',
-                children: [
-                  {
-                    type: 'tableCell',
-                    children: [{ type: 'text', value: 'a' }],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      };
-      expect(render(root)).toBe('<table><tr><td>a</td></tr></table>');
+    it('renders the header row as th cells and the body as td cells', () => {
+      const root = tableRoot(
+        [null, null],
+        [
+          ['H1', 'H2'],
+          ['a', 'b'],
+        ]
+      );
+      expect(render(root)).toBe(
+        '<table>' +
+          '<thead><tr><th scope="col">H1</th><th scope="col">H2</th></tr></thead>' +
+          '<tbody><tr><td>a</td><td>b</td></tr></tbody>' +
+          '</table>'
+      );
+    });
+
+    it('names no scope on a body cell', () => {
+      const html = render(tableRoot([null], [['H1'], ['a']]));
+      expect(html).toContain('<td>a</td>');
+      expect(html.match(/scope=/g)).toHaveLength(1);
+    });
+
+    it('applies a column alignment to the header and the body alike', () => {
+      const root = tableRoot(
+        ['left', 'center', 'right'],
+        [
+          ['H1', 'H2', 'H3'],
+          ['a', 'b', 'c'],
+        ]
+      );
+      expect(render(root)).toBe(
+        '<table>' +
+          '<thead><tr>' +
+          '<th scope="col" style="text-align:left">H1</th>' +
+          '<th scope="col" style="text-align:center">H2</th>' +
+          '<th scope="col" style="text-align:right">H3</th>' +
+          '</tr></thead>' +
+          '<tbody><tr>' +
+          '<td style="text-align:left">a</td>' +
+          '<td style="text-align:center">b</td>' +
+          '<td style="text-align:right">c</td>' +
+          '</tr></tbody>' +
+          '</table>'
+      );
+    });
+
+    it('emits no style at all for a column with no alignment', () => {
+      // text-align: left would override the consumer's own CSS and break a
+      // right to left reading direction.
+      const html = render(tableRoot([null], [['H1'], ['a']]));
+      expect(html).not.toContain('style=');
+      expect(html).not.toContain('text-align');
+    });
+
+    it('leaves a cell the align array does not cover without a style', () => {
+      const html = render(tableRoot(['center'], [['H1', 'H2']]));
+      expect(html).toBe(
+        '<table><thead><tr>' +
+          '<th scope="col" style="text-align:center">H1</th>' +
+          '<th scope="col">H2</th>' +
+          '</tr></thead></table>'
+      );
+    });
+
+    it('keeps an empty header cell a header cell', () => {
+      const html = render(tableRoot([null, null], [['', 'H2']]));
+      expect(html).toBe(
+        '<table><thead><tr>' +
+          '<th scope="col"></th><th scope="col">H2</th>' +
+          '</tr></thead></table>'
+      );
+    });
+
+    it('renders a table with only a header row without a tbody', () => {
+      expect(render(tableRoot([null], [['H1']]))).toBe(
+        '<table><thead><tr><th scope="col">H1</th></tr></thead></table>'
+      );
+    });
+
+    it('renders a table with no rows as an empty table, with no thead', () => {
+      expect(render(tableRoot([], []))).toBe('<table></table>');
+    });
+
+    it('wraps every row after the first in one tbody', () => {
+      const html = render(tableRoot([null], [['H1'], ['a'], ['b']]));
+      expect(html).toBe(
+        '<table><thead><tr><th scope="col">H1</th></tr></thead>' +
+          '<tbody><tr><td>a</td></tr><tr><td>b</td></tr></tbody></table>'
+      );
+    });
+
+    it('escapes cell text rather than emitting it as markup', () => {
+      expect(render(tableRoot([null], [['<b>x</b>']]))).toContain(
+        '&lt;b&gt;x&lt;/b&gt;'
+      );
+    });
+
+    it('lets a consumer override tableCell and decide from the context', () => {
+      // Written as a named function with its types spelled out, which is
+      // what the exported context type is for. An .astro frontmatter is
+      // TypeScript, so a handler up there cannot be JSX, but it can be this.
+      const tableCell = (
+        _node: MdAstTableCell,
+        children: astroHTML.JSX.Element[],
+        context: MdastNodeContext
+      ): astroHTML.JSX.Element =>
+        isTableHeaderCell(context)
+          ? renderTemplate`<th${addAttribute(tableCellAlign(context), 'data-align')}>${children}</th>`
+          : renderTemplate`<td>${children}</td>`;
+      const overrides: MdastAstroRenderers = { ...minimalOverrides, tableCell };
+      expect(render(tableRoot(['center'], [['H1'], ['a']]), overrides)).toBe(
+        '<table><thead><tr><th data-align="center">H1</th></tr></thead>' +
+          '<tbody><tr><td>a</td></tr></tbody></table>'
+      );
     });
   });
 
-  describe('code default - no language class', () => {
-    it('emits plain <pre><code> without a class even when lang is set', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          { type: 'code', lang: 'ts', meta: null, value: 'const x = 1;' },
-        ],
-      };
-      expect(render(root)).toBe('<pre><code>const x = 1;</code></pre>');
+  describe('escaping', () => {
+    it('escapes text rather than emitting it as markup', () => {
+      expect(render(paragraphRoot('<b>x</b>'))).toBe(
+        '<p>&lt;b&gt;x&lt;/b&gt;</p>'
+      );
     });
 
-    it('escapes the code value rather than emitting it as markup', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          { type: 'code', lang: null, meta: null, value: '<script>x</script>' },
-        ],
-      };
+    it('escapes a code value rather than emitting it as markup', () => {
+      const root = blockTree({
+        type: 'code',
+        lang: null,
+        meta: null,
+        value: '<script>x</script>',
+      });
       expect(render(root)).toBe(
         '<pre><code>&lt;script&gt;x&lt;/script&gt;</code></pre>'
       );
@@ -383,120 +1021,51 @@ describe('mdastRender (Astro wrapper)', () => {
 
   describe('link default - no rel / target', () => {
     it('emits plain <a href> for an absolute https URL', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'paragraph',
-            children: [
-              {
-                type: 'link',
-                url: 'https://example.com',
-                title: null,
-                children: [{ type: 'text', value: 'docs' }],
-              },
-            ],
-          },
-        ],
-      };
+      const root = phrasingTree({
+        type: 'link',
+        url: 'https://example.com',
+        title: null,
+        children: [{ type: 'text', value: 'docs' }],
+      });
       const html = render(root);
       expect(html).toBe('<p><a href="https://example.com">docs</a></p>');
       expect(html).not.toContain('rel=');
       expect(html).not.toContain('target=');
     });
-
-    it('emits the title attribute only when the node carries one', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'paragraph',
-            children: [
-              {
-                type: 'link',
-                url: 'https://example.com',
-                title: 'Docs',
-                children: [{ type: 'text', value: 'docs' }],
-              },
-            ],
-          },
-        ],
-      };
-      expect(render(root)).toBe(
-        '<p><a href="https://example.com" title="Docs">docs</a></p>'
-      );
-    });
   });
 
   describe('image default - plain <img>, not <Image>', () => {
-    it('emits a plain <img> element with src and alt', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'paragraph',
-            children: [
-              {
-                type: 'image',
-                url: 'https://cdn.example.com/x.png',
-                alt: 'x',
-                title: null,
-              },
-            ],
-          },
-        ],
-      };
+    it('emits no title attribute when the node carries none', () => {
+      const root = phrasingTree({
+        type: 'image',
+        url: 'https://cdn.example.com/x.png',
+        alt: 'x',
+        title: null,
+      });
       expect(render(root)).toBe(
         '<p><img src="https://cdn.example.com/x.png" alt="x"></p>'
       );
     });
   });
 
-  describe('text handler - returns string directly', () => {
-    it('lets text values render as native Astro strings', () => {
-      expect(render(paragraphRoot('hi'))).toBe('<p>hi</p>');
-    });
-
-    it('escapes text rather than emitting it as markup', () => {
-      expect(render(paragraphRoot('<b>x</b>'))).toBe(
-        '<p>&lt;b&gt;x&lt;/b&gt;</p>'
-      );
-    });
-  });
-
   describe('required overrides', () => {
     it('calls the consumer-provided assetReference handler', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'paragraph',
-            children: [
-              { type: 'assetReference', assetId, alt: 'a', title: null },
-            ],
-          },
-        ],
-      };
+      const root = phrasingTree({
+        type: 'assetReference',
+        assetId,
+        alt: 'a',
+        title: null,
+      });
       expect(render(root)).toBe(`<p>asset:${assetId}</p>`);
     });
 
     it('calls the consumer-provided entryReference handler with rendered children', () => {
-      const root: MdAstRoot = {
-        type: 'root',
-        children: [
-          {
-            type: 'paragraph',
-            children: [
-              {
-                type: 'entryReference',
-                collectionId,
-                entryId,
-                children: [{ type: 'text', value: 'click' }],
-              },
-            ],
-          },
-        ],
-      };
+      const root = phrasingTree({
+        type: 'entryReference',
+        collectionId,
+        entryId,
+        children: [{ type: 'text', value: 'click' }],
+      });
       const overrides: MdastAstroRenderers = {
         ...minimalOverrides,
         entryReference: (node, children) =>
@@ -592,38 +1161,6 @@ describe('mdastRender (Astro wrapper)', () => {
         entryReference: () => null,
       };
       expect(bad).toBeDefined();
-    });
-  });
-
-  describe('astroDefaults coverage', () => {
-    it('covers every defaulted key (no undefined entries in the map)', () => {
-      const defaultedKeys = [
-        'root',
-        'heading',
-        'paragraph',
-        'blockquote',
-        'list',
-        'listItem',
-        'code',
-        'thematicBreak',
-        'table',
-        'tableRow',
-        'tableCell',
-        'footnoteDefinition',
-        'text',
-        'inlineCode',
-        'emphasis',
-        'strong',
-        'delete',
-        'link',
-        'image',
-        'break',
-        'footnoteReference',
-      ] as const;
-      for (const key of defaultedKeys) {
-        expect(astroDefaults).toHaveProperty(key);
-        expect(typeof astroDefaults[key]).toBe('function');
-      }
     });
   });
 });

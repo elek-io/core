@@ -370,7 +370,7 @@ describe('collapsing what repeated', function () {
     // A report is about what just happened, so the newest records stay
     expect(messages).toContain(`4999 ${filler}`);
     expect(messages).not.toContain(`0 ${filler}`);
-  }, 60000);
+  });
 });
 
 describe('the scrubbers a tail runs, for the records Core did not author', function () {

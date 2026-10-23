@@ -2,7 +2,7 @@
 
 A capability reference for elek.io Core - what the content engine does, grouped by the questions a developer evaluating a CMS tends to ask. Each entry links to the deep-dive doc where relevant.
 
-For the data model these features operate on, see [`concepts.md`](./concepts.md). For a cross-CMS comparison against Strapi, Directus, Payload and TinaCMS, see [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md).
+For the data model these features operate on, see [`concepts.md`](./concepts.md).
 
 ## Storage & data ownership
 
@@ -40,6 +40,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 - **Migration on read** - historical data is run through the migration chain on read, so it always comes back in the current schema shape. See [`usage.md`](./usage.md#reading-from-history).
 - **Transactional writes** - create / update / delete operations are wrapped in an automatic git rollback that restores the working tree on failure. See [`error-handling.md`](./error-handling.md).
 - **Releases** - tagged snapshots of a Project at a point in time, managed through git tags.
+- **A version computed from the content** - a Release diffs the draft against the released state and takes its semver bump from what changed, so a rename that breaks a consumer's build arrives as a major. See [`releases.md`](./releases.md#how-the-bump-is-decided).
 - **Branching** - content edits happen on a `draft` branch, with `main` reserved for released content.
 
 ## Schema evolution
@@ -78,9 +79,13 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 ### Not yet implemented
 
 - **No full-text search** - a `searchProjectSchema` is defined, but there is no `search()` service method or API route behind it.
-- **No address verification or password reset** - `core.cloud.account.signUp()` can answer that an address has to be verified, but Core has no call that verifies one or resets a password. See [`cloud-account.md`](./cloud-account.md#signing-up).
 - **No conditional fields** - a field's visibility cannot depend on another field's value.
 - **Limited specialized field types** - no arbitrary JSON, color picker, geospatial, code-editor, or password / hash field types.
+- **Not every field property reaches a Release diff** - some property and field type pairs are unclassified, so changing one of them alone leaves the bump at the patch default. See [`releases.md`](./releases.md#every-change-a-diff-can-carry) for what a diff does carry.
+  - All of them are restated in the generated types, so a patch Release can stop a build compiling. Regenerate and compile after any Release rather than only after a major, see [`releases.md`](./releases.md#what-a-major-release-asks-of-a-consumer).
+  - The pairs are a `markdown` field's `ofCollections`, `ofAssetMimeTypes`, `features`, `min` and `max`, a `dynamic` field's `min` and `max`, an `asset` field's `ofAssetMimeTypes`, and a `select` field's `options`.
+  - The number variant of a `select` field forces `min` and `max` to `null` and can never hold a bound, so a diff that reports no bound change for it is right rather than a gap.
+  - A `dynamic` field's `ofComponents` is compared as declared, so replacing an empty list with an explicit one is reported, even though an empty list already allows every Component.
 
 ### Intentional constraints
 
@@ -106,16 +111,12 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **Astro's `render()` does not apply to Entries** - a `markdown` field arrives on `entry.data` as an mdast tree, not as the rendered HTML `render(entry)` and `<Content />` read, so the loaders leave Astro's rendered slot empty.
   - Filling it would flatten `entryReference` and `assetReference` nodes into finished markup and lose the UUIDs a page resolves them by, which is the reason to store a tree in the first place.
   - Calling `render()` on an Entry is not an error and renders nothing at all, so reach for `mdastRender` instead. See [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro).
+- **A major Release warns, it does not gate** - a build that provisions the `release` channel lands on the newest Release of a Project whatever its bump, so a major one reaches it like any other. A channel that stays within a major is not built yet. Pin an exact version to decide yourself when to move. See [`releases.md`](./releases.md#what-a-major-release-asks-of-a-consumer).
 - **No plugin or marketplace system** - extending the field catalogue means changing code, not installing a package.
 - **No nested composition** - groups cannot nest groups, and `dynamic` fields cannot nest `dynamic` fields. Components are the flat, predictable reuse mechanism.
-- **The elek.io Cloud token lives in memory only** - Core never writes the token of a session to disk, so a session ends with the process unless the host stores the token and hands it back through `cloud.token` or `ELEK_IO_CLOUD_TOKEN`. See [`cloud-account.md`](./cloud-account.md#the-token).
-- **Signing up, in and out are never retried** - each sends once, as a report does, because a retry after a timeout can create a second account or spend the rate limit on a password guess. See [`cloud-account.md`](./cloud-account.md#the-calls).
-- **A report is never retried** - `core.cloud.reports.create()` sends once. A retry after a timeout can duplicate a report elek.io Cloud already accepted, and Core cannot tell the difference from the outside, so a failure is handed back and sending again is left to whoever wrote it. See [`reporting.md`](./reporting.md#errors).
-- **A log tail can be truncated** - `core.logger.tail()` stops collecting at a size ceiling and sets `isTruncated`, dropping the oldest records first. Collapsing repeated records is what keeps a tail small, and it is worth far more than a bigger cap, so an ordinary day is 1 to 25 KB and the ceiling is a safety valve rather than a working limit. See [`reporting.md`](./reporting.md#the-log-tail).
+- **A log tail can be truncated** - `core.logger.tail()` stops collecting at a size ceiling and sets `isTruncated`, dropping the oldest records first. Collapsing repeated records is what keeps a tail small, and it is worth far more than a bigger cap, so the ceiling is a safety valve rather than a working limit. See [`usage.md`](./usage.md#the-log-tail) for the ceiling and what `isTruncated` means.
 - **A log tail can be missing its last lines** - winston hands a record to a write stream and offers no per transport flush, so a tail collected right after a crash can stop short of the lines it was collected for, which are usually the interesting ones.
   - `tail()` writes a marker and yields before reading to give the stream a chance to drain. That is a hedge rather than a fix, and the residual gap is documented instead of engineered around.
-
-For how these compare to other CMS platforms and where Core leads, see [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md).
 
 ## See also
 
@@ -133,6 +134,3 @@ For how these compare to other CMS platforms and where Core leads, see [`compari
 - [`export.md`](./export.md) - exporting Projects to JSON
 - [`markdown-content.md`](./markdown-content.md) - rich `markdown` content storage and rendering
 - [`error-handling.md`](./error-handling.md) - `CoreError` and error patterns
-- [`cloud-account.md`](./cloud-account.md) - signing in to an elek.io account and the token Core holds
-- [`reporting.md`](./reporting.md) - sending a report to elek.io Cloud, and handing a window of log files over
-- [`comparisons/fields.md`](https://github.com/elek-io/core/blob/main/contributing/comparisons/fields.md) - cross-CMS field comparison

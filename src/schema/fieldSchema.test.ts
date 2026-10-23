@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { z } from '@hono/zod-openapi';
+import { z } from '@hono/zod-openapi';
 import { uuid } from '../test/setup.js';
 import {
   dateFieldDefinitionSchema,
@@ -141,7 +141,7 @@ describe('resolveOfComponents', () => {
     expect(result).toEqual(componentIds);
   });
 
-  it('returns the field-defined ofComponents verbatim when non-empty', () => {
+  it('returns the field-defined ofComponents in order when non-empty', () => {
     const a = uuid();
     const b = uuid();
     const componentIds = [a, b, uuid()];
@@ -149,6 +149,18 @@ describe('resolveOfComponents', () => {
     const result = resolveOfComponents(
       { ...baseDynamicField, ofComponents: [a, b] },
       componentIds
+    );
+
+    expect(result).toEqual([a, b]);
+  });
+
+  it('names a Component the field lists twice once', () => {
+    const a = uuid();
+    const b = uuid();
+
+    const result = resolveOfComponents(
+      { ...baseDynamicField, ofComponents: [a, b, a] },
+      [a, b]
     );
 
     expect(result).toEqual([a, b]);
@@ -444,6 +456,28 @@ describe('textFieldDefinitionSchema defaultValue length refinement', () => {
     expect(() =>
       textFieldDefinitionSchema.parse(
         makeTextFieldDef({ max: 3, defaultValue: 'abcd' })
+      )
+    ).toThrow();
+  });
+
+  it('counts a defaultValue in code points, as the Value it has to pass does', () => {
+    // Two emoji are two code points and four UTF-16 code units. Counting
+    // code units here would refuse a default the Value itself takes, so the
+    // bound Zod applies to the Value is asserted next to the refinement.
+    const twoEmoji = '\u{1F600}\u{1F600}';
+
+    expect(z.string().min(2).max(2).safeParse(twoEmoji).success).toBe(true);
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeTextFieldDef({ min: 2, max: 2, defaultValue: twoEmoji })
+      )
+    ).not.toThrow();
+  });
+
+  it('rejects a defaultValue of more code points than max', () => {
+    expect(() =>
+      textFieldDefinitionSchema.parse(
+        makeTextFieldDef({ max: 2, defaultValue: '\u{1F600}'.repeat(3) })
       )
     ).toThrow();
   });

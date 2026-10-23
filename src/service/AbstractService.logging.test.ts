@@ -49,5 +49,5 @@ describe('a failure at a service boundary is structured, not prefixed', function
       'elek.error.status_code': 500,
     });
     error.mockRestore();
-  }, 30000);
+  });
 });

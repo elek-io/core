@@ -42,7 +42,7 @@ const cloudGitRemoteUrlSchema = z.url({ protocol: /^https?$/ });
  * for the Project's git host, which replaces every older token the session
  * holds on that host
  *
- * @see ../../docs/cloud-git.md
+ * @see ../../contributing/cloud.md
  */
 export const cloudGitTokenResponseSchema = z.object({
   gitToken: z.object({
@@ -57,7 +57,7 @@ export type CloudGitTokenResponse = z.infer<typeof cloudGitTokenResponseSchema>;
  * What `PUT /management/v1/projects/{id}/git-access` answers: the token the
  * session already holds for the Project's git host reaches it too
  *
- * @see ../../docs/cloud-git.md
+ * @see ../../contributing/cloud.md
  */
 export const cloudGitAccessResponseSchema = z.object({
   gitAccess: z.object({
