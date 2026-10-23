@@ -13,7 +13,8 @@
  * Margin every budget carries over the slowest duration measured for it.
  *
  * It is the smallest whole number above the run to run spread of one test on
- * the slowest runner, which reached 2.5x at the 90th percentile.
+ * the slowest runner, which reached 2.2x at the 90th percentile of the 306
+ * tests the measured jobs timed at least twice.
  */
 export const budgetMultiple = 3;
 
