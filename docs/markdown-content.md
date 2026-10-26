@@ -240,17 +240,13 @@ A parent's handler is given its children already rendered, so three placements a
 
 - **A list is tight or loose as a whole**, which is what mdast records in `list.spread` and `listItem.spread`. The list is loose when its own `spread` is true, when any item's is, or when an item that carries none holds more than one block. Every item of a loose list keeps its `<p>`.
 - **Only a paragraph directly inside the item loses its `<p>`.** A quote in a tight item keeps the one around its own text.
-- **The `<label>` names the checkbox**, so a screen reader reads the item's text once. A nested list stays outside the label, and an item whose text is an image is named by that image's alt text.
-- **Three helpers answer the placements from a context**, so an override does not walk the tree: `isInTightListItem`, `taskItemChecked` and `footnoteWayBackIdentifier`, all exported from `@elek-io/core`. The first two are what a `paragraph` override needs to keep the tight item and the box.
+- **The `<label>` names the checkbox** with the item's text, which a screen reader reads once where that text is plain. A link, an image or a footnote marker in it keeps its own name inside the box's name, so a screen reader reaches that part a second time there. A nested list stays outside the label, and an item whose text is an image is named by that image's alt text.
+- **Three helpers answer the placements from a context**, so an override does not walk the tree: `isInTightListItem`, `taskItemChecked` and `footnoteWayBackIdentifier`, all exported from `@elek-io/core`.
+- **A `paragraph` override here needs `isInTightListItem` alone**, because the item takes the box back and the note the way back the moment `paragraph` is yours. The other two are for a binding of your own, see the [fallback recipe](#fallback-recipe-for-frameworks-without-an-official-wrapper).
 
 ```typescript
-paragraph: (_, children, context) => {
-  const checked = taskItemChecked(context); // true | false | null
-  const inner = checked === null ? children : (
-    <label><input type="checkbox" checked={checked} disabled /> {children}</label>
-  );
-  return isInTightListItem(context) ? <>{inner}</> : <p>{inner}</p>;
-},
+paragraph: (_, children, context) =>
+  isInTightListItem(context) ? <>{children}</> : <p>{children}</p>,
 ```
 
 Where a paragraph cannot take one of them, the item and the note place it themselves:
@@ -260,8 +256,8 @@ Where a paragraph cannot take one of them, the item and the note place it themse
 
 An override moves whatever it takes over, so none of the three ever lands twice or nowhere:
 
-- **An override of `paragraph` hands both back**, so the item places every checkbox and the note every way back, and your own paragraph loses neither.
-- **An override of `listItem` keeps every checkbox**, because the box sits inside the item's text rather than in the `<li>` your handler writes.
+- **An override of `paragraph` hands both back**, so the item places every checkbox and the note every way back, and your own paragraph loses neither. Core cannot see that your paragraph placed one, so a box or a way back of your own in there is a second one.
+- **An override of `listItem` keeps the checkbox of every item whose first block is a paragraph**, because the box sits inside that paragraph's text rather than in the `<li>` your handler writes. For an item whose first block is no paragraph, or which holds none, the item itself places the box, so your handler replaces the one that placed it and that box is yours to re-add.
 - **An override of `footnoteDefinition` takes the way back over whole**, its wording included, and no paragraph places one. That is how a site in another language replaces "Back to content" without touching `paragraph`:
 
 ```typescript

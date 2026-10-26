@@ -33,7 +33,7 @@ A parent is called with its children already rendered, which is what makes the f
 | The first paragraph of a task item | opens with the checkbox, in a `<label>` holding the text | put the box before the item's blocks |
 | The last paragraph of a footnote | ends with the way back | let the link follow the note's blocks |
 
-`isInTightListItem`, `taskItemChecked` and `footnoteWayBackIdentifier` answer the three from a context and are exported, for the same reason as the two table cell helpers: an override of `paragraph` needs the same answers.
+`isInTightListItem`, `taskItemChecked` and `footnoteWayBackIdentifier` answer the three from a context and are exported, for the same reason as the two table cell helpers: a consumer rendering through the primitive makes the three placements itself. In the astro binding a `paragraph` override needs the first alone, because the item and the note take the other two back, see below.
 
 The item and the note still place what no paragraph of them can, which is an item whose first block is no paragraph, a note whose last block is none, and either of them holding no block at all. The box is named through `aria-label` there, since `<label>` takes phrasing content and the item's blocks arrive rendered.
 
@@ -45,7 +45,7 @@ The item and the note still place what no paragraph of them can, which is an ite
 | --- | --- | --- |
 | `paragraph` | the item places every checkbox, the note every way back | The override knows of neither, so leaving them to the paragraph alone would drop both |
 | `footnoteDefinition` | no paragraph places a way back | The note's handler owns that link whole, its English wording included, which is how another language replaces it without rewriting `paragraph` |
-| `listItem` | nothing | The box sits inside the item's text rather than in the `<li>`, so the wrapper is all that override replaces |
+| `listItem` | the box of an item whose first block is no paragraph is gone | The box sits inside the first paragraph's text where the item has one, so the wrapper is all that override replaces there. Where the item places the box itself, that is the handler the override replaces, and re-adding the box is the consumer's |
 
 ## How a handler learns where its node sits
 
