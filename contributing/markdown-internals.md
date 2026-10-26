@@ -23,17 +23,29 @@ It is framework-agnostic, `T` is the consumer's element type. A framework bindin
 
 Exhaustiveness is the point. A node type added in a later Core release becomes a type error in a consumer's renderers rather than a silent gap, and the three keys in `REQUIRED_RENDERER_KEYS` stay required because no default is safe for them.
 
-### What a parent handler cannot see
+### What only a paragraph can reach
 
-A parent is called with its children already rendered, which is what makes the fold framework-agnostic: `T` is opaque to it. Three placements are out of reach of a parent's handler because of it, and each one is a divergence from what remark emits:
+A parent is called with its children already rendered, which is what makes the fold framework-agnostic: `T` is opaque to it. Three placements are out of a parent's reach because of it, and the `paragraph` default makes all three, since its [context](#how-a-handler-learns-where-its-node-sits) names the item or the note it sits in:
 
-| Where | What the defaults do | What remark does |
+| Where | What the `paragraph` default does | What a parent could do |
 | --- | --- | --- |
-| A tight list item | `<li><p>text</p></li>` | `<li>text</li>` |
-| A task item's checkbox | before the item's first block | inside its first paragraph |
-| A footnote's way back | after the note's blocks | at the end of its last paragraph |
+| A paragraph of a tight item | renders its children without the `<p>` | keep `<li><p>text</p></li>` |
+| The first paragraph of a task item | opens with the checkbox, in a `<label>` holding the text | put the box before the item's blocks |
+| The last paragraph of a footnote | ends with the way back | let the link follow the note's blocks |
 
-A `paragraph` handler can reach all three, since its [context](#how-a-handler-learns-where-its-node-sits) names the item or the note it sits in. The defaults leave them to the `list`, `listItem` and `footnoteDefinition` handlers, so they ship the divergence visibly rather than working around it. A `<p>` of margin in a list item is reported, and CSS that hides it is not.
+`isInTightListItem`, `taskItemChecked` and `footnoteWayBackIdentifier` answer the three from a context and are exported, for the same reason as the two table cell helpers: an override of `paragraph` needs the same answers.
+
+The item and the note still place what no paragraph of them can, which is an item whose first block is no paragraph, a note whose last block is none, and either of them holding no block at all. The box is named through `aria-label` there, since `<label>` takes phrasing content and the item's blocks arrive rendered.
+
+#### What moves when a consumer brings a handler of its own
+
+`mdastRender` merges the defaults, then the placements that depend on the overrides, then the overrides, so none of the three lands twice and none lands nowhere:
+
+| Overridden | What changes | Why |
+| --- | --- | --- |
+| `paragraph` | the item places every checkbox, the note every way back | The override knows of neither, so leaving them to the paragraph alone would drop both |
+| `footnoteDefinition` | no paragraph places a way back | The note's handler owns that link whole, its English wording included, which is how another language replaces it without rewriting `paragraph` |
+| `listItem` | nothing | The box sits inside the item's text rather than in the `<li>`, so the wrapper is all that override replaces |
 
 ## How a handler learns where its node sits
 
