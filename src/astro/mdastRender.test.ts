@@ -172,12 +172,6 @@ function defaultCase<N extends { type: string }>(input: {
   };
 }
 
-const spreadIsDropped = {
-  droppedBecause:
-    'a tight item still renders its paragraph, the fold hands a parent its children already rendered',
-  absentFromOutput: 'spread',
-} as const;
-
 const rootNode: MdAstRoot = {
   type: 'root',
   children: [paragraphOf('first block'), paragraphOf('second block')],
@@ -341,24 +335,28 @@ const defaultCases: DefaultCase[] = [
   defaultCase({
     node: listNode,
     tree: blockTree(listNode),
-    html: '<ol start="5"><li><p>ordered item</p></li></ol>',
+    html: '<ol start="5"><li>ordered item</li></ol>',
     fields: {
       ordered: { inOutput: '<ol' },
       start: { inOutput: 'start="5"' },
-      spread: spreadIsDropped,
-      children: { inOutput: '<li><p>ordered item</p></li>' },
+      // Tight, so the item's paragraph renders as the item's own text. A
+      // loose list would keep the <p> around it.
+      spread: { inOutput: '<li>ordered item</li>' },
+      children: { inOutput: '<li>ordered item</li>' },
     },
   }),
   defaultCase({
     node: listItemNode,
     tree: listItemTree(listItemNode),
     html:
-      '<ul><li><input type="checkbox" aria-label="task text" checked disabled>' +
-      '<p>task text</p></li></ul>',
+      '<ul><li><label><input type="checkbox" checked disabled>' +
+      ' task text</label></li></ul>',
     fields: {
       checked: { inOutput: ' checked disabled>' },
-      spread: spreadIsDropped,
-      children: { inOutput: '<p>task text</p>' },
+      // Tight, so the box and the text share the item's line instead of
+      // sitting in a <p> of their own.
+      spread: { inOutput: '<li><label>' },
+      children: { inOutput: 'task text</label>' },
     },
   }),
   defaultCase({
@@ -413,8 +411,8 @@ const defaultCases: DefaultCase[] = [
     node: footnoteDefinitionNode,
     tree: blockTree(footnoteDefinitionNode),
     html:
-      '<div id="fn-note-id"><p>note text</p>' +
-      '<a href="#fnref-note-id" aria-label="Back to content">↩</a></div>',
+      '<div id="fn-note-id"><p>note text ' +
+      '<a href="#fnref-note-id" aria-label="Back to content">↩</a></p></div>',
     fields: {
       identifier: { inOutput: 'id="fn-note-id"' },
       label: {
@@ -422,7 +420,7 @@ const defaultCases: DefaultCase[] = [
           'the label is the authored spelling of the identifier and is shown on the reference, not on the note',
         absentFromOutput: 'Note label',
       },
-      children: { inOutput: '<p>note text</p>' },
+      children: { inOutput: '<p>note text ' },
     },
   }),
   defaultCase({
@@ -518,6 +516,49 @@ function taskList(checked: boolean | null, text = 'a'): MdAstRoot {
     checked,
     children: [paragraphOf(text)],
   });
+}
+
+/** An item of the given spreading and checked state, holding given blocks */
+function itemOf(
+  spread: boolean | null,
+  children: MdAstBlockNode[],
+  checked: boolean | null = null
+): MdAstListItem {
+  return { type: 'listItem', spread, checked, children };
+}
+
+/** An unordered list of the given spreading, holding the given items */
+function listRoot(spread: boolean | null, items: MdAstListItem[]): MdAstRoot {
+  return blockTree({
+    type: 'list',
+    ordered: false,
+    start: null,
+    spread,
+    children: items,
+  });
+}
+
+/** A tight one-item list holding the given blocks */
+function itemBlocks(
+  children: MdAstBlockNode[],
+  checked: boolean | null = null
+): MdAstRoot {
+  return listRoot(false, [itemOf(false, children, checked)]);
+}
+
+/** A footnote of one identifier, holding the given blocks */
+function noteRoot(children: MdAstBlockNode[]): MdAstRoot {
+  return blockTree({
+    type: 'footnoteDefinition',
+    identifier: 'n1',
+    label: null,
+    children,
+  });
+}
+
+/** A code block of the given value */
+function codeOf(value: string): MdAstBlockNode {
+  return { type: 'code', lang: null, meta: null, value };
 }
 
 /** A table of one `align` entry per column and one row per array of texts */
@@ -620,23 +661,19 @@ describe('mdastRender (Astro wrapper)', () => {
 
   describe('ordered list start', () => {
     it('writes the start a list actually counts from', () => {
-      expect(render(orderedList(5))).toBe(
-        '<ol start="5"><li><p>a</p></li></ol>'
-      );
+      expect(render(orderedList(5))).toBe('<ol start="5"><li>a</li></ol>');
     });
 
     it('keeps a start of 0, which GFM and HTML both allow', () => {
-      expect(render(orderedList(0))).toBe(
-        '<ol start="0"><li><p>a</p></li></ol>'
-      );
+      expect(render(orderedList(0))).toBe('<ol start="0"><li>a</li></ol>');
     });
 
     it('writes no start attribute for 1, which <ol> counts from anyway', () => {
-      expect(render(orderedList(1))).toBe('<ol><li><p>a</p></li></ol>');
+      expect(render(orderedList(1))).toBe('<ol><li>a</li></ol>');
     });
 
     it('writes no start attribute when the node carries none', () => {
-      expect(render(orderedList(null))).toBe('<ol><li><p>a</p></li></ol>');
+      expect(render(orderedList(null))).toBe('<ol><li>a</li></ol>');
     });
 
     it('never writes start on an unordered list, where it is invalid', () => {
@@ -654,131 +691,217 @@ describe('mdastRender (Astro wrapper)', () => {
           },
         ],
       });
-      expect(render(root)).toBe('<ul><li><p>a</p></li></ul>');
+      expect(render(root)).toBe('<ul><li>a</li></ul>');
+    });
+  });
+
+  describe('tight and loose lists', () => {
+    it("renders a tight item's text as the item's own content", () => {
+      // What mdast-util-to-hast emits for a tight list. A <p> inside every
+      // item is a block of margin the markdown does not ask for.
+      const root = listRoot(false, [
+        itemOf(false, [paragraphOf('one')]),
+        itemOf(false, [paragraphOf('two')]),
+      ]);
+      expect(render(root)).toBe('<ul><li>one</li><li>two</li></ul>');
+    });
+
+    it("keeps the paragraph of a block that is not the item's own child", () => {
+      // Only a paragraph directly inside the item loses its <p>, so a quote
+      // in a tight item keeps the one around its text.
+      const root = itemBlocks([
+        { type: 'blockquote', children: [paragraphOf('quote')] },
+      ]);
+      expect(render(root)).toBe(
+        '<ul><li><blockquote><p>quote</p></blockquote></li></ul>'
+      );
+    });
+
+    it("keeps every item's paragraph where the list itself spreads", () => {
+      const root = listRoot(true, [
+        itemOf(false, [paragraphOf('one')]),
+        itemOf(false, [paragraphOf('two')]),
+      ]);
+      expect(render(root)).toBe(
+        '<ul><li><p>one</p></li><li><p>two</p></li></ul>'
+      );
+    });
+
+    it('spreads the whole list where one of its items spreads', () => {
+      const root = listRoot(false, [
+        itemOf(false, [paragraphOf('one')]),
+        itemOf(true, [paragraphOf('two')]),
+      ]);
+      expect(render(root)).toBe(
+        '<ul><li><p>one</p></li><li><p>two</p></li></ul>'
+      );
+    });
+
+    it('reads an item that carries no spread off its block count', () => {
+      expect(render(listRoot(null, [itemOf(null, [paragraphOf('a')])]))).toBe(
+        '<ul><li>a</li></ul>'
+      );
+      const two = listRoot(null, [
+        itemOf(null, [paragraphOf('a'), paragraphOf('b')]),
+      ]);
+      expect(render(two)).toBe('<ul><li><p>a</p><p>b</p></li></ul>');
+    });
+
+    it('drops the <p> of every paragraph a tight item holds', () => {
+      const root = itemBlocks([paragraphOf('a'), paragraphOf('b')]);
+      expect(render(root)).toBe('<ul><li>ab</li></ul>');
+    });
+
+    it('decides tightness per list, so a nested list keeps its own', () => {
+      const root = listRoot(true, [
+        itemOf(false, [
+          paragraphOf('outer'),
+          {
+            type: 'list',
+            ordered: false,
+            start: null,
+            spread: false,
+            children: [itemOf(false, [paragraphOf('inner')])],
+          },
+        ]),
+      ]);
+      expect(render(root)).toBe(
+        '<ul><li><p>outer</p><ul><li>inner</li></ul></li></ul>'
+      );
+    });
+
+    it('keeps a paragraph outside a list in its <p>', () => {
+      expect(render(paragraphRoot('body'))).toBe('<p>body</p>');
     });
   });
 
   describe('task list items', () => {
-    it('renders a checked item as a checked checkbox', () => {
+    it('opens the text of a checked item with a checked checkbox', () => {
       expect(render(taskList(true))).toBe(
-        '<ul><li><input type="checkbox" aria-label="a" checked disabled>' +
-          '<p>a</p></li></ul>'
+        '<ul><li><label><input type="checkbox" checked disabled>' +
+          ' a</label></li></ul>'
       );
     });
 
     it('renders an unchecked item as a checkbox without the attribute', () => {
       expect(render(taskList(false))).toBe(
-        '<ul><li><input type="checkbox" aria-label="a" disabled>' +
-          '<p>a</p></li></ul>'
+        '<ul><li><label><input type="checkbox" disabled> a</label></li></ul>'
       );
     });
 
     it('renders an ordinary item without a checkbox', () => {
-      expect(render(taskList(null))).toBe('<ul><li><p>a</p></li></ul>');
+      expect(render(taskList(null))).toBe('<ul><li>a</li></ul>');
     });
 
     it('adds no class name, as the defaults promise', () => {
       expect(render(taskList(true))).not.toContain('class=');
     });
 
-    it('places the checkbox before the item instead of inside its first paragraph', () => {
-      // The fold hands `listItem` its children already rendered, so the
-      // text arrives as a block and the checkbox can only precede it. That
-      // is the one divergence from remark the defaults cannot close, and
-      // docs/markdown-content.md names it. See contributing/astro-entry.md.
-      expect(render(taskList(true))).toContain(
-        '<input type="checkbox" aria-label="a" checked disabled><p>a</p>'
+    it('names the box with a <label> around it and the text', () => {
+      // A paragraph's children are phrasing content, so a <label> holds the
+      // box and the text, and a screen reader reads that text once instead
+      // of once as the box's name and once as the text.
+      const html = render(taskList(true, 'Pay the rent'));
+      expect(html).toContain(
+        '<label><input type="checkbox" checked disabled> Pay the rent</label>'
       );
+      expect(html).not.toContain('aria-label');
     });
 
-    it("names the checkbox with the text of the item's own blocks", () => {
-      // The box is a control, so it needs a name of its own. The item's
-      // text is a sibling of it rather than a <label> around it, and a
-      // <label> could not hold the item's blocks anyway.
-      const root = listItemTree({
-        type: 'listItem',
-        spread: false,
-        checked: false,
-        children: [
-          {
-            type: 'paragraph',
-            children: [
-              { type: 'text', value: 'Pay the ' },
-              { type: 'strong', children: [{ type: 'text', value: 'rent' }] },
-            ],
-          },
-          paragraphOf('before Friday'),
-        ],
-      });
+    it("opens the first <p> of a loose item, not the item's line", () => {
+      const root = listRoot(null, [
+        itemOf(
+          null,
+          [
+            {
+              type: 'paragraph',
+              children: [
+                { type: 'text', value: 'Pay the ' },
+                { type: 'strong', children: [{ type: 'text', value: 'rent' }] },
+              ],
+            },
+            paragraphOf('before Friday'),
+          ],
+          false
+        ),
+      ]);
       expect(render(root)).toBe(
-        '<ul><li><input type="checkbox" aria-label="Pay the rent before Friday" disabled>' +
-          '<p>Pay the <strong>rent</strong></p><p>before Friday</p></li></ul>'
+        '<ul><li><p><label><input type="checkbox" disabled>' +
+          ' Pay the <strong>rent</strong></label></p>' +
+          '<p>before Friday</p></li></ul>'
       );
     });
 
-    it('escapes a name the author wrote a quote into', () => {
+    it('places the box before the first block where no paragraph can', () => {
+      // An item opening with a code block has no paragraph to open, so the
+      // item places the box and names it through aria-label.
+      const root = itemBlocks([codeOf('npm i')], true);
+      expect(render(root)).toBe(
+        '<ul><li><input type="checkbox" aria-label="npm i" checked disabled>' +
+          '<pre><code>npm i</code></pre></li></ul>'
+      );
+    });
+
+    it('places the box in an item that holds no blocks at all', () => {
+      expect(render(itemBlocks([], false))).toBe(
+        '<ul><li><input type="checkbox" disabled></li></ul>'
+      );
+    });
+
+    it('shows one checkbox per task item, whichever handler places it', () => {
+      const root = listRoot(false, [
+        itemOf(false, [paragraphOf('a')], true),
+        itemOf(false, [codeOf('b')], true),
+        itemOf(false, [], true),
+      ]);
+      expect([...render(root).matchAll(/type="checkbox"/g)]).toHaveLength(3);
+    });
+
+    it('escapes a quote the author wrote into the item', () => {
       expect(render(taskList(true, 'Read "Dune"'))).toContain(
-        'aria-label="Read &quot;Dune&quot;"'
+        '> Read &quot;Dune&quot;</label>'
       );
+      const root = itemBlocks([codeOf('Read "Dune"')], true);
+      expect(render(root)).toContain('aria-label="Read &quot;Dune&quot;"');
     });
 
-    it('leaves a nested list out of the name it gives the box', () => {
-      // A nested item has a checkbox of its own, and its text names that
-      // one. Taking it into the parent's name would claim another
-      // control's label as well as the parent's.
-      const root = listItemTree({
-        type: 'listItem',
-        spread: false,
-        checked: false,
-        children: [
+    it('leaves a nested list outside the label it gives the box', () => {
+      // A nested item has a checkbox of its own, and the label holds the
+      // paragraph's phrasing only, so that text names the nested box alone.
+      const root = itemBlocks(
+        [
           paragraphOf('Do the shopping'),
           {
             type: 'list',
             ordered: false,
             start: null,
             spread: false,
-            children: [
-              {
-                type: 'listItem',
-                spread: false,
-                checked: true,
-                children: [paragraphOf('Buy milk')],
-              },
-            ],
+            children: [itemOf(false, [paragraphOf('Buy milk')], true)],
           },
         ],
-      });
+        false
+      );
       expect(render(root)).toBe(
-        '<ul><li><input type="checkbox" aria-label="Do the shopping" disabled>' +
-          '<p>Do the shopping</p>' +
-          '<ul><li><input type="checkbox" aria-label="Buy milk" checked disabled>' +
-          '<p>Buy milk</p></li></ul></li></ul>'
+        '<ul><li><label><input type="checkbox" disabled>' +
+          ' Do the shopping</label>' +
+          '<ul><li><label><input type="checkbox" checked disabled>' +
+          ' Buy milk</label></li></ul></li></ul>'
       );
     });
 
-    it('names an item whose text is only spaces nothing', () => {
-      // A name of spaces is read as no name, so the attribute is worth
-      // less than leaving it off.
-      const root = listItemTree({
-        type: 'listItem',
-        spread: false,
-        checked: false,
-        children: [paragraphOf('   ')],
-      });
-      expect(render(root)).toBe(
-        '<ul><li><input type="checkbox" disabled><p>   </p></li></ul>'
+    it('names the box nothing where the item carries only spaces', () => {
+      // A label of nothing but whitespace names the box as little as the
+      // missing attribute of an item no paragraph opens.
+      expect(render(itemBlocks([paragraphOf('   ')], false))).toBe(
+        '<ul><li><label><input type="checkbox" disabled>    </label></li></ul>'
       );
     });
 
-    it('names an item that carries no text at all nothing', () => {
-      // An image on its own has alt text, which extractText leaves out
-      // because it is not the document's text. There is no name to give,
-      // and an empty one is worth no attribute.
-      const root = listItemTree({
-        type: 'listItem',
-        spread: false,
-        checked: false,
-        children: [
+    it("takes the alt text of an image as the box's name", () => {
+      // The label holds whatever the paragraph renders, so an item whose
+      // text is an image names its box with that image's alt text.
+      const root = itemBlocks(
+        [
           {
             type: 'paragraph',
             children: [
@@ -791,10 +914,12 @@ describe('mdastRender (Astro wrapper)', () => {
             ],
           },
         ],
-      });
+        false
+      );
       expect(render(root)).toBe(
-        '<ul><li><input type="checkbox" disabled>' +
-          '<p><img src="https://example.com/a.png" alt="a diagram"></p></li></ul>'
+        '<ul><li><label><input type="checkbox" disabled> ' +
+          '<img src="https://example.com/a.png" alt="a diagram">' +
+          '</label></li></ul>'
       );
     });
   });
@@ -822,9 +947,68 @@ describe('mdastRender (Astro wrapper)', () => {
     it('gives the reference and the definition ids of their own', () => {
       expect(render(footnoteRoot('n1'))).toBe(
         '<p><sup id="fnref-n1"><a href="#fn-n1">n1</a></sup></p>' +
-          '<div id="fn-n1"><p>the note</p>' +
+          '<div id="fn-n1"><p>the note ' +
+          '<a href="#fnref-n1" aria-label="Back to content">↩</a></p></div>'
+      );
+    });
+
+    it("ends the note's last paragraph with the way back", () => {
+      // Where mdast-util-to-hast puts it, so the arrow sits at the end of
+      // the note's text rather than on a line of its own.
+      expect(
+        render(noteRoot([paragraphOf('first'), paragraphOf('last')]))
+      ).toBe(
+        '<div id="fn-n1"><p>first</p><p>last ' +
+          '<a href="#fnref-n1" aria-label="Back to content">↩</a></p></div>'
+      );
+    });
+
+    it('lets the way back follow the blocks where the last is no paragraph', () => {
+      expect(render(noteRoot([paragraphOf('intro'), codeOf('x')]))).toBe(
+        '<div id="fn-n1"><p>intro</p><pre><code>x</code></pre>' +
           '<a href="#fnref-n1" aria-label="Back to content">↩</a></div>'
       );
+    });
+
+    it('keeps the way back out of a paragraph nested in the last block', () => {
+      const root = noteRoot([
+        {
+          type: 'list',
+          ordered: false,
+          start: null,
+          spread: false,
+          children: [itemOf(false, [paragraphOf('item')])],
+        },
+      ]);
+      const html = render(root);
+      expect(html).toBe(
+        '<div id="fn-n1"><ul><li>item</li></ul>' +
+          '<a href="#fnref-n1" aria-label="Back to content">↩</a></div>'
+      );
+      expect([...html.matchAll(/aria-label="Back to content"/g)]).toHaveLength(
+        1
+      );
+    });
+
+    it('shows the way back on a note that holds no blocks', () => {
+      expect(render(noteRoot([]))).toBe(
+        '<div id="fn-n1">' +
+          '<a href="#fnref-n1" aria-label="Back to content">↩</a></div>'
+      );
+    });
+
+    it('lets an override replace the label, and places no second way back', () => {
+      // A site in another language overrides footnoteDefinition alone, which
+      // takes the way back over whole, so the page shows one in one language.
+      const overrides: MdastAstroRenderers = {
+        ...minimalOverrides,
+        footnoteDefinition: (node, children) =>
+          renderTemplate`<div${addAttribute(`fn-${node.identifier}`, 'id')}>${children}<a${addAttribute(`#fnref-${node.identifier}`, 'href')} aria-label="Zurück zum Text">↩</a></div>`,
+      };
+      const html = render(footnoteRoot('n1'), overrides);
+      expect(html).toContain('aria-label="Zurück zum Text"');
+      expect(html).not.toContain('Back to content');
+      expect([...html.matchAll(/↩/g)]).toHaveLength(1);
     });
 
     it('lands the way back on the first reference when a note has several', () => {
@@ -878,6 +1062,83 @@ describe('mdastRender (Astro wrapper)', () => {
       expect(first).toContain('id="fnref-n1"');
       expect(second).toContain('id="second-fnref-n1"');
       expect(second).not.toContain('id="fnref-n1"');
+    });
+  });
+
+  describe('an override and the placements only a paragraph reaches', () => {
+    /** A consumer who overrides nothing but `paragraph` */
+    const leadParagraph: MdastAstroRenderers = {
+      ...minimalOverrides,
+      paragraph: (_node, children) =>
+        renderTemplate`<p class="lead">${children}</p>`,
+    };
+
+    /** A task item and a footnote in one tree */
+    const taskAndNote: MdAstRoot = {
+      type: 'root',
+      children: [
+        {
+          type: 'list',
+          ordered: false,
+          start: null,
+          spread: false,
+          children: [itemOf(false, [paragraphOf('a')], true)],
+        },
+        {
+          type: 'footnoteDefinition',
+          identifier: 'n1',
+          label: null,
+          children: [paragraphOf('the note')],
+        },
+      ],
+    };
+
+    it("leaves the checkbox to the item where paragraph is the consumer's", () => {
+      // The override knows nothing of the box, so the item places it the way
+      // it does for an item no paragraph of which can carry one.
+      expect(render(taskList(true), leadParagraph)).toBe(
+        '<ul><li><input type="checkbox" aria-label="a" checked disabled>' +
+          '<p class="lead">a</p></li></ul>'
+      );
+    });
+
+    it("leaves the way back to the note where paragraph is the consumer's", () => {
+      expect(render(noteRoot([paragraphOf('the note')]), leadParagraph)).toBe(
+        '<div id="fn-n1"><p class="lead">the note</p>' +
+          '<a href="#fnref-n1" aria-label="Back to content">↩</a></div>'
+      );
+    });
+
+    it('places each of the two exactly once, never twice and never none', () => {
+      const html = render(taskAndNote, leadParagraph);
+      expect([...html.matchAll(/type="checkbox"/g)]).toHaveLength(1);
+      expect([...html.matchAll(/aria-label="Back to content"/g)]).toHaveLength(
+        1
+      );
+    });
+
+    it("keeps the defaults placing both where paragraph is Core's", () => {
+      const html = render(taskAndNote);
+      expect([...html.matchAll(/type="checkbox"/g)]).toHaveLength(1);
+      expect([...html.matchAll(/aria-label="Back to content"/g)]).toHaveLength(
+        1
+      );
+    });
+
+    it("keeps the checkbox where only listItem is the consumer's", () => {
+      // The box sits inside the item's text rather than in the <li> wrapper,
+      // so an override of the wrapper keeps it.
+      const overrides: MdastAstroRenderers = {
+        ...minimalOverrides,
+        listItem: (_node, children) =>
+          renderTemplate`<li class="task">${children}</li>`,
+      };
+      const html = render(taskList(true), overrides);
+      expect(html).toBe(
+        '<ul><li class="task"><label>' +
+          '<input type="checkbox" checked disabled> a</label></li></ul>'
+      );
+      expect([...html.matchAll(/type="checkbox"/g)]).toHaveLength(1);
     });
   });
 
