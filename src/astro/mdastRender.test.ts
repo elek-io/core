@@ -1160,6 +1160,23 @@ describe('mdastRender (Astro wrapper)', () => {
       );
     });
 
+    it('leaves both to the consumer where paragraph and the note are theirs', () => {
+      // The note's own handler owns the way back, and the item still places
+      // the box the paragraph override cannot.
+      const overrides: MdastAstroRenderers = {
+        ...leadParagraph,
+        footnoteDefinition: (node, children) =>
+          renderTemplate`<aside${addAttribute(`fn-${node.identifier}`, 'id')}>${children}</aside>`,
+      };
+      const html = render(taskAndNote, overrides);
+      expect(html).toBe(
+        '<ul><li><input type="checkbox" aria-label="a" checked disabled>' +
+          '<p class="lead">a</p></li></ul>' +
+          '<aside id="fn-n1"><p class="lead">the note</p></aside>'
+      );
+      expect(html).not.toContain('Back to content');
+    });
+
     it("keeps the checkbox where only listItem is the consumer's", () => {
       // The box sits inside the item's text rather than in the <li> wrapper,
       // so an override of the wrapper keeps it.
