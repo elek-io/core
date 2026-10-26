@@ -7,14 +7,14 @@
 **The markup changes for every site that uses the defaults**, which is the point of the fix:
 
 - An item of a tight list renders `<li>text</li>` rather than `<li><p>text</p></li>`. A list is loose when its own `spread` is true, when any item's is, or when an item that carries none holds more than one block, which is how `mdast-util-to-hast` decides it. Every item of a loose list keeps its `<p>`, and a quote in a tight item keeps the one around its own text.
-- A task item renders `<li><label><input type="checkbox" checked disabled> text</label></li>`. The box opens the item's text in a tight list and its first `<p>` in a loose one, and the `<label>` around box and text names it, so a screen reader reads that text once instead of once as the box's name and once as the text.
+- A task item renders `<li><label><input type="checkbox" checked disabled> text</label></li>`. The box opens the item's text in a tight list and its first `<p>` in a loose one, and the `<label>` around box and text names it, so plain text is read once instead of once as the box's name and once as the text. A link, an image or a footnote marker in that text keeps its own name inside the box's name, so a screen reader reaches that part there as well.
 - A footnote's way back ends the note's last paragraph, as `<p>The note. <a href="#fnref-1" aria-label="Back to content">↩</a></p>`.
 
 There is no migration step, because what changed is the markup. Four things to check in your own site:
 
 - CSS that reached a list item's text through `li > p` selects the `li` itself for a tight list now. The box and its text share a line in both a tight and a loose item, so `li > p { display: inline }`, which the docs named for that, is no longer what puts them there.
-- An override of `listItem` keeps every checkbox, where it used to drop it. The box sits inside the item's text rather than in the `<li>` your handler writes.
-- An override of `paragraph` keeps every checkbox and every way back. The item and the note place them around their blocks then, which is where the defaults put them before.
+- An override of `listItem` keeps the checkbox of every item whose first block is a paragraph, where it used to drop every one. The box sits inside that paragraph's text rather than in the `<li>` your handler writes. For an item whose first block is no paragraph, or which holds none, the item itself still places the box, so your handler replaces the one that placed it and that box is yours to re-add.
+- An override of `paragraph` keeps every checkbox and every way back. The item and the note place them around their blocks then, which is where the defaults put them before, and Core cannot see a box or a link your own paragraph places, so one in there is a second one.
 - An override of `footnoteDefinition` owns the way back alone, so its wording is yours and no paragraph adds a second link. That is how a site in another language replaces "Back to content".
 
 Where no paragraph can take one of the three, the item and the note still place it. An item whose first block is not a paragraph carries its box before that block, named through `aria-label`, and a note whose last block is a list or a code block lets the way back follow its blocks.

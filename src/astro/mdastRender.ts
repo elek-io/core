@@ -87,8 +87,10 @@ function renderParagraph(
 ): ReturnType<typeof renderTemplate> {
   const checked = taskItemChecked(context);
   // A <label> can hold the box and the text here, because a paragraph's
-  // children are phrasing content, so no aria-label is needed and a screen
-  // reader reads the text once.
+  // children are phrasing content, so no aria-label is needed and plain
+  // text is read once rather than once as the box's name and once as the
+  // text. A link, an image or a footnote marker in it keeps its own name
+  // inside the box's name, see the doc below.
   const content =
     checked === null
       ? renderTemplate`${children}`

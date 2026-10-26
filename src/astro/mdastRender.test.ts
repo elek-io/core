@@ -799,8 +799,8 @@ describe('mdastRender (Astro wrapper)', () => {
 
     it('names the box with a <label> around it and the text', () => {
       // A paragraph's children are phrasing content, so a <label> holds the
-      // box and the text, and a screen reader reads that text once instead
-      // of once as the box's name and once as the text.
+      // box and the text, and a screen reader reads plain text like this
+      // once instead of once as the box's name and once as the text.
       const html = render(taskList(true, 'Pay the rent'));
       expect(html).toContain(
         '<label><input type="checkbox" checked disabled> Pay the rent</label>'
@@ -935,6 +935,82 @@ describe('mdastRender (Astro wrapper)', () => {
         '<ul><li><label><input type="checkbox" disabled> ' +
           '<img src="https://example.com/a.png" alt="a diagram">' +
           '</label></li></ul>'
+      );
+    });
+
+    it("keeps a link of the item's text inside the label naming the box", () => {
+      // The label holds whatever the paragraph renders, so the link keeps
+      // its own accessible name inside the name of the box and a screen
+      // reader reaches that text there a second time.
+      const root = itemBlocks(
+        [
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'text', value: 'See ' },
+              {
+                type: 'link',
+                url: 'https://example.com',
+                title: null,
+                children: [{ type: 'text', value: 'the docs' }],
+              },
+            ],
+          },
+        ],
+        true
+      );
+      expect(render(root)).toBe(
+        '<ul><li><label><input type="checkbox" checked disabled> See ' +
+          '<a href="https://example.com">the docs</a></label></li></ul>'
+      );
+    });
+
+    it("keeps an image beside the item's text inside that label", () => {
+      // Its alt text is part of the box's name here, and the image keeps
+      // that name of its own as well.
+      const root = itemBlocks(
+        [
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'text', value: 'Check ' },
+              {
+                type: 'image',
+                url: 'https://example.com/a.png',
+                alt: 'a diagram',
+                title: null,
+              },
+            ],
+          },
+        ],
+        true
+      );
+      expect(render(root)).toBe(
+        '<ul><li><label><input type="checkbox" checked disabled> Check ' +
+          '<img src="https://example.com/a.png" alt="a diagram">' +
+          '</label></li></ul>'
+      );
+    });
+
+    it("takes a footnote marker of the item's text into the box's name", () => {
+      // The marker is phrasing content, so the label holds it and its digit
+      // joins the name, where the aria-label of an item placing its own box
+      // leaves the marker out.
+      const root = itemBlocks(
+        [
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'text', value: 'done' },
+              { type: 'footnoteReference', identifier: '1', label: '1' },
+            ],
+          },
+        ],
+        true
+      );
+      expect(render(root)).toBe(
+        '<ul><li><label><input type="checkbox" checked disabled> done' +
+          '<sup id="fnref-1"><a href="#fn-1">1</a></sup></label></li></ul>'
       );
     });
   });
@@ -1108,6 +1184,13 @@ describe('mdastRender (Astro wrapper)', () => {
         renderTemplate`<p class="lead">${children}</p>`,
     };
 
+    /** A consumer who overrides nothing but `listItem` */
+    const taskWrapper: MdastAstroRenderers = {
+      ...minimalOverrides,
+      listItem: (_node, children) =>
+        renderTemplate`<li class="task">${children}</li>`,
+    };
+
     /** A task item and a footnote in one tree */
     const taskAndNote: MdAstRoot = {
       type: 'root',
@@ -1177,20 +1260,31 @@ describe('mdastRender (Astro wrapper)', () => {
       expect(html).not.toContain('Back to content');
     });
 
-    it("keeps the checkbox where only listItem is the consumer's", () => {
+    it("keeps the box of an item opening with a paragraph where listItem is the consumer's", () => {
       // The box sits inside the item's text rather than in the <li> wrapper,
       // so an override of the wrapper keeps it.
-      const overrides: MdastAstroRenderers = {
-        ...minimalOverrides,
-        listItem: (_node, children) =>
-          renderTemplate`<li class="task">${children}</li>`,
-      };
-      const html = render(taskList(true), overrides);
+      const html = render(taskList(true), taskWrapper);
       expect(html).toBe(
         '<ul><li class="task"><label>' +
           '<input type="checkbox" checked disabled> a</label></li></ul>'
       );
       expect([...html.matchAll(/type="checkbox"/g)]).toHaveLength(1);
+    });
+
+    it('leaves the box an item places itself to that same override', () => {
+      // No paragraph of this item can carry the box, so the default the
+      // override replaces is the one that placed it, and re-adding it is
+      // the consumer's.
+      const codeFirstTask = itemBlocks(
+        [codeOf('x'), paragraphOf('after')],
+        true
+      );
+      expect(render(codeFirstTask)).toContain('type="checkbox"');
+      const html = render(codeFirstTask, taskWrapper);
+      expect(html).toBe(
+        '<ul><li class="task"><pre><code>x</code></pre>after</li></ul>'
+      );
+      expect(html).not.toContain('type="checkbox"');
     });
   });
 
