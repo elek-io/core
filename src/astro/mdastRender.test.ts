@@ -897,6 +897,21 @@ describe('mdastRender (Astro wrapper)', () => {
       );
     });
 
+    it('places the box once in a loose item opening with a code block', () => {
+      // Two blocks and no spread make the list loose, so the paragraph keeps
+      // its <p> and is not the item's first block either.
+      const root = listRoot(null, [
+        itemOf(null, [codeOf('npm i'), paragraphOf('then run it')], true),
+      ]);
+      const html = render(root);
+      expect(html).toBe(
+        '<ul><li><input type="checkbox" aria-label="npm i then run it"' +
+          ' checked disabled><pre><code>npm i</code></pre>' +
+          '<p>then run it</p></li></ul>'
+      );
+      expect([...html.matchAll(/type="checkbox"/g)]).toHaveLength(1);
+    });
+
     it("takes the alt text of an image as the box's name", () => {
       // The label holds whatever the paragraph renders, so an item whose
       // text is an image names its box with that image's alt text.
@@ -994,6 +1009,26 @@ describe('mdastRender (Astro wrapper)', () => {
       expect(render(noteRoot([]))).toBe(
         '<div id="fn-n1">' +
           '<a href="#fnref-n1" aria-label="Back to content">↩</a></div>'
+      );
+    });
+
+    it('keeps the <p> of a note sitting in a tight list item', () => {
+      // The note is the item's block, so its paragraph's parent is the note
+      // rather than the item, and the way back ends it inside the <p>.
+      const root = listRoot(false, [
+        itemOf(false, [
+          {
+            type: 'footnoteDefinition',
+            identifier: 'n1',
+            label: null,
+            children: [paragraphOf('the note')],
+          },
+        ]),
+      ]);
+      expect(render(root)).toBe(
+        '<ul><li><div id="fn-n1"><p>the note ' +
+          '<a href="#fnref-n1" aria-label="Back to content">↩</a>' +
+          '</p></div></li></ul>'
       );
     });
 

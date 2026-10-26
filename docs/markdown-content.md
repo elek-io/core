@@ -247,7 +247,7 @@ A parent's handler is given its children already rendered, so three placements a
 paragraph: (_, children, context) => {
   const checked = taskItemChecked(context); // true | false | null
   const inner = checked === null ? children : (
-    <label><input type="checkbox" checked={checked} disabled readOnly /> {children}</label>
+    <label><input type="checkbox" checked={checked} disabled /> {children}</label>
   );
   return isInTightListItem(context) ? <>{inner}</> : <p>{inner}</p>;
 },
@@ -257,7 +257,11 @@ Where a paragraph cannot take one of them, the item and the note place it themse
 
 - An item whose first block is not a paragraph, or which holds no block at all, carries its checkbox before its first block. Its name goes on an `aria-label` there, which a screen reader reads beside the item's text, and an item with no text at all gets no name.
 - A note whose last block is a list or a code block lets the way back follow its blocks. A paragraph nested in that block never takes it.
-- **An override of `paragraph` hands both back**: the item places every checkbox and the note every way back, so you never lose one by writing your own paragraph.
+
+An override moves whatever it takes over, so none of the three ever lands twice or nowhere:
+
+- **An override of `paragraph` hands both back**, so the item places every checkbox and the note every way back, and your own paragraph loses neither.
+- **An override of `listItem` keeps every checkbox**, because the box sits inside the item's text rather than in the `<li>` your handler writes.
 - **An override of `footnoteDefinition` takes the way back over whole**, its wording included, and no paragraph places one. That is how a site in another language replaces "Back to content" without touching `paragraph`:
 
 ```typescript
