@@ -1,6 +1,7 @@
 import { exec as gitExec } from 'dugite';
 import Fs from 'fs-extra';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import { budgetMultiple } from '../test/budgets.js';
 import { startFakeCloud } from '../test/cloud.js';
 import { FakeCloudGit } from '../test/cloudGit.js';
 import { createCredentialRecorder } from '../test/credentialRecorder.js';
@@ -15,7 +16,20 @@ import { uuid } from './shared.js';
  * does for a fetch, so this needs no HTTP remote and runs on every
  * platform. A recording helper in the global config stands in for the
  * person's keychain, and a recording program for an askpass.
+ *
+ * Every call runs with terminal prompts off, as a test running git outside
+ * Core has to, so a run whose askpass answers nothing ends with git's reason
+ * instead of waiting for input, see ../../contributing/testing.md.
  */
+
+/**
+ * What the control call below may take before the test reads it as git
+ * waiting for input rather than running. No per-call budget, which the
+ * suite's measured globals bound, but the line between the two.
+ *
+ * @see ../../contributing/testing.md
+ */
+const controlCallCeilingMs = 3061 * budgetMultiple;
 
 const cloudPattern = 'https://*.git.example.test';
 const hostOne = 'cell-1.git.example.test';
@@ -54,6 +68,22 @@ async function setUp(
     SSH_ASKPASS: recorder.askpass,
     SSH_ASKPASS_REQUIRE: 'force',
     DISPLAY: ':0',
+    // Core's own invocations carry this, and so does every call here that
+    // runs without them, or a git whose askpass fails falls back to a prompt
+    // it reads from the terminal rather than from the stdin below
+    GIT_TERMINAL_PROMPT: '0',
+  };
+
+  /** Runs one git credential command inside an invocation */
+  const credential = async function (
+    env: Record<string, string>,
+    action: 'fill' | 'approve' | 'reject',
+    lines: string[]
+  ) {
+    return gitExec(['credential', action], dir, {
+      env: { ...environment, ...env },
+      stdin: `${lines.join('\n')}\n\n`,
+    });
   };
 
   return {
@@ -62,21 +92,38 @@ async function setUp(
     cloudClient,
     relay,
     dir,
-    /** Runs one git credential command inside an invocation */
-    credential: async function (
-      env: Record<string, string>,
-      action: 'fill' | 'approve' | 'reject',
-      lines: string[]
-    ) {
-      return gitExec(['credential', action], dir, {
-        env: { ...environment, ...env },
-        stdin: `${lines.join('\n')}\n\n`,
-      });
+    credential,
+    /**
+     * The control: the same call with none of Core's environment and an empty
+     * helper list, so the test's own askpass is the only thing that can
+     * answer it. It carries how long git took, for an assertion's message.
+     */
+    control: async function (askpass: string = recorder.askpass) {
+      const started = Date.now();
+      const result = await credential(
+        {
+          GIT_CONFIG_GLOBAL: recorder.emptyHelperConfig,
+          SSH_ASKPASS: askpass,
+        },
+        'fill',
+        request('other.example.test')
+      );
+      return { ...result, durationMs: Date.now() - started };
     },
     /** What the keychain stand-in and the askpass were asked */
     recorded: recorder.recorded,
-    emptyConfig: recorder.emptyConfig,
+    emptyHelperConfig: recorder.emptyHelperConfig,
+    failingAskpass: recorder.failingAskpass,
   };
+}
+
+/** What git said and how long it took, for a control assertion's message */
+function gitSaid(control: {
+  exitCode: number;
+  stderr: string;
+  durationMs: number;
+}): string {
+  return `The control call exited ${control.exitCode} after ${control.durationMs}ms and git said: ${control.stderr}`;
 }
 
 function request(host: string, projectId?: string): string[] {
@@ -247,12 +294,8 @@ describe('GitCredentialRelay on a Cloud host', function () {
     // Without Core's environment and the keychain, the askpass runs, which
     // proves it can
     vi.stubEnv('GIT_ASKPASS', undefined);
-    const bare = await t.credential(
-      { GIT_CONFIG_GLOBAL: t.emptyConfig },
-      'fill',
-      request('other.example.test')
-    );
-    expect(bare.stdout).toContain('askpass-secret');
+    const bare = await t.control();
+    expect(bare.stdout, gitSaid(bare)).toContain('askpass-secret');
     const askedBefore = (await t.recorded()).length;
 
     const invocation = await t.relay.begin();
@@ -398,7 +441,7 @@ describe('GitCredentialRelay for a host nobody answers', function () {
 
     const invocation = await t.relay.begin();
     const result = await t.credential(
-      { ...invocation.env, GIT_CONFIG_GLOBAL: t.emptyConfig },
+      { ...invocation.env, GIT_CONFIG_GLOBAL: t.emptyHelperConfig },
       'fill',
       request('other.example.test')
     );
@@ -443,5 +486,43 @@ describe('GitCredentialRelay without a pattern or a token', function () {
       GIT_TERMINAL_PROMPT: '0',
       GIT_ASKPASS: '',
     });
+  });
+});
+
+/**
+ * The control the signed out test leans on, which proves that an askpass runs
+ * without Core's environment. Nothing of Core's answers it and no helper of
+ * the platform's own can, so whether it ends at all is the askpass's doing.
+ */
+describe("The control call without Core's environment", function () {
+  it('ends at once when its askpass fails', async function () {
+    const t = await setUp();
+    vi.stubEnv('GIT_ASKPASS', undefined);
+
+    const failed = await t.control(t.failingAskpass);
+    const asked = await t.recorded();
+
+    // Terminal prompts are off, so git ends with its own reason rather than
+    // waiting for a terminal nobody is watching
+    expect(failed.exitCode, gitSaid(failed)).not.toEqual(0);
+    expect(failed.stderr, gitSaid(failed)).toContain(
+      'terminal prompts disabled'
+    );
+    expect(failed.stderr, gitSaid(failed)).toContain(
+      'unable to read askpass response'
+    );
+    expect(failed.durationMs, gitSaid(failed)).toBeLessThan(
+      controlCallCeilingMs
+    );
+
+    // The askpass that failed is the only thing git asked, so no helper of
+    // the platform's own answered ahead of it
+    expect(asked, `git asked: ${asked.join(', ')}`).toHaveLength(1);
+    expect(asked[0]).toContain('askpass-fails');
+
+    // Nothing of the call holds the directory it ran in, which the cleanup
+    // after a git waiting for input found busy
+    await Fs.remove(t.dir);
+    expect(await Fs.pathExists(t.dir)).toBe(false);
   });
 });

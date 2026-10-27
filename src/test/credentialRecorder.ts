@@ -7,19 +7,30 @@ import { tmpDirPath } from './util.js';
 export interface CredentialRecorder {
   /** A global git config whose only helper is the keychain stand-in */
   globalConfig: string;
-  /** An empty global git config, for a run without the keychain */
-  emptyConfig: string;
+  /**
+   * A global git config whose helper list is empty, for a run without the
+   * keychain. git reads an empty helper as a reset of every helper a config
+   * read before it added, so no helper of the platform's own answers ahead
+   * of the askpass
+   */
+  emptyHelperConfig: string;
   /** A program git runs as `GIT_ASKPASS` or `SSH_ASKPASS` */
   askpass: string;
-  /** Every request in order, `keychain <action>` or `askpass <prompt>` */
+  /** The same program, answering nothing and exiting non-zero */
+  failingAskpass: string;
+  /**
+   * Every request in order, `keychain <action>`, `askpass <prompt>` or
+   * `askpass-fails <prompt>`
+   */
   recorded: () => Promise<string[]>;
 }
 
 /**
  * A keychain stand-in, the only credential helper of a global config, that
- * answers `person` and `keychain-secret`, and an askpass that answers
- * `askpass-secret`. Both record every request, so a test asserts what
- * reached them rather than what Core believes it configured.
+ * answers `person` and `keychain-secret`, an askpass that answers
+ * `askpass-secret`, and one that answers nothing and fails. Each of them
+ * records every request, so a test asserts what reached them rather than what
+ * Core believes it configured.
  */
 export async function createCredentialRecorder(): Promise<CredentialRecorder> {
   const dir = tmpDirPath();
@@ -41,47 +52,72 @@ export async function createCredentialRecorder(): Promise<CredentialRecorder> {
     ].join('\n')
   );
   const globalConfig = Path.join(dir, 'gitconfig');
-  const emptyConfig = Path.join(dir, 'empty.gitconfig');
+  const emptyHelperConfig = Path.join(dir, 'empty-helper.gitconfig');
   await Fs.writeFile(globalConfig, '');
-  await Fs.writeFile(emptyConfig, '');
-  // An empty helper first, as a person setting their own helper writes it,
-  // so the stand-in is the whole list. MinGit's system config otherwise puts
-  // Git Credential Manager ahead of it on Windows
-  for (const value of ['', `!'${process.execPath}' '${helper}'`]) {
-    const configured = await gitExec(
-      ['config', '--file', globalConfig, '--add', 'credential.helper', value],
-      dir
-    );
-    if (configured.exitCode !== 0) {
-      throw new Error(`git config failed: ${configured.stderr}`);
+  await Fs.writeFile(emptyHelperConfig, '');
+  // An empty helper first, as a person setting their own helper writes it, so
+  // the stand-in is the whole list, and that empty helper alone is the config
+  // of a run without a keychain. git takes the empty value as a reset of every
+  // helper a config read before it added, which on Windows is the Git
+  // Credential Manager of MinGit's system config
+  const helperLists: [string, string[]][] = [
+    [globalConfig, ['', `!'${process.execPath}' '${helper}'`]],
+    [emptyHelperConfig, ['']],
+  ];
+  for (const [file, values] of helperLists) {
+    for (const value of values) {
+      const configured = await gitExec(
+        ['config', '--file', file, '--add', 'credential.helper', value],
+        dir
+      );
+      if (configured.exitCode !== 0) {
+        throw new Error(`git config failed: ${configured.stderr}`);
+      }
     }
   }
 
-  const askpassScript = Path.join(dir, 'askpass.cjs');
-  await Fs.writeFile(
-    askpassScript,
-    `require('node:fs').appendFileSync(${JSON.stringify(log)}, 'askpass ' + process.argv[2] + '\\n'); process.stdout.write('askpass-secret\\n');\n`
-  );
-  let askpass: string;
-  if (process.platform === 'win32') {
-    askpass = Path.join(dir, 'askpass.bat');
+  /**
+   * Writes an askpass program that records the prompt it was asked under
+   * `name` and then runs `answer`, and returns what git starts: a shell
+   * script, or on Windows a batch file that hands git the program's exit code.
+   */
+  async function writeAskpass(name: string, answer: string): Promise<string> {
+    const script = Path.join(dir, `${name}.cjs`);
     await Fs.writeFile(
-      askpass,
-      `@echo off\r\n"${process.execPath}" "${askpassScript}" %*\r\n`
+      script,
+      `require('node:fs').appendFileSync(${JSON.stringify(log)}, '${name} ' + process.argv[2] + '\\n'); ${answer}\n`
     );
-  } else {
-    askpass = Path.join(dir, 'askpass.sh');
+    if (process.platform === 'win32') {
+      const batch = Path.join(dir, `${name}.bat`);
+      await Fs.writeFile(
+        batch,
+        `@echo off\r\n"${process.execPath}" "${script}" %*\r\nexit /b %errorlevel%\r\n`
+      );
+      return batch;
+    }
+    const shell = Path.join(dir, `${name}.sh`);
     await Fs.writeFile(
-      askpass,
-      `#!/bin/sh\nexec "${process.execPath}" "${askpassScript}" "$@"\n`,
+      shell,
+      `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`,
       { mode: 0o700 }
     );
+    return shell;
   }
+
+  const askpass = await writeAskpass(
+    'askpass',
+    "process.stdout.write('askpass-secret\\n');"
+  );
+  const failingAskpass = await writeAskpass(
+    'askpass-fails',
+    'process.exit(1);'
+  );
 
   return {
     globalConfig,
-    emptyConfig,
+    emptyHelperConfig,
     askpass,
+    failingAskpass,
     recorded: async function () {
       if ((await Fs.pathExists(log)) === false) {
         return [];
