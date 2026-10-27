@@ -22,16 +22,18 @@ Cost is not the question. Vite+ is MIT licensed and free. VoidZero [dropped the 
 
 ### It would move the toolchain backwards and take the pins
 
-`vite-plus` depends on its tools with exact pins, not ranges. As of 1.3.0:
+`vite-plus` depends on its tools with exact pins, not ranges. As of 1.4.0:
 
 | Tool              | Pinned by vite-plus | Available standalone |
 | ----------------- | ------------------- | -------------------- |
-| `oxlint`          | `=1.88.0`           | 1.89.0               |
-| `oxfmt`           | `=0.73.0`           | 0.74.0               |
+| `oxlint`          | `=1.89.0`           | 1.89.0               |
+| `oxfmt`           | `=0.74.0`           | 0.74.0               |
 | `vitest`          | `5.0.5`             | 5.0.5                |
-| `oxlint-tsgolint` | `=7.0.2004`         | 7.0.2004             |
+| `oxlint-tsgolint` | `=7.0.2004`         | 7.0.2005             |
 
-Adopting it today downgrades oxlint. More importantly it hands the upgrade cadence of the whole toolchain to vite-plus releases. Core pins every dependency exactly and records why each range was chosen, which is the point of [`peer-dependencies.md`](./peer-dependencies.md). Putting a wrapper between Core and those versions gives that up for nothing.
+Adopting it today downgrades oxlint-tsgolint, and which tool the downgrade lands on moves with every release on either side.
+
+More importantly it hands the upgrade cadence of the whole toolchain to vite-plus releases. Core pins every dependency exactly and records why each range was chosen, which is the point of [`peer-dependencies.md`](./peer-dependencies.md). Putting a wrapper between Core and those versions gives that up for nothing.
 
 ### It wants the package manager and the Node runtime
 

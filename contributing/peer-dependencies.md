@@ -84,7 +84,7 @@ dugite-native changed the link in v2.53.0-4 ([desktop/dugite-native#554](https:/
 
 A git that cannot load a shared library throws `PreconditionFailed` naming the library, so an older build or a mismatched `libcurl.so.4` says what is missing rather than `Internal`.
 
-- Each dugite release ships an embedded git binary. 3.2.3 bundles git 2.53.0 and git-lfs 3.7.1, and the dev pin 3.3.0 bundles git 2.56.0 and git-lfs 3.8.0, so the test suite, which runs real git and Git LFS, is the real check.
+- Each dugite release ships an embedded git binary. 3.2.3 bundles git 2.53.0 and git-lfs 3.7.1, and the dev pin 3.3.1 bundles git 2.56.0 and git-lfs 3.8.1, so the test suite, which runs real git and Git LFS, is the real check.
 - `devDependencies` pins the latest 3.x for development, like the other peers.
 
 To re-verify the floor, pin the dev version to it and run the suite:
@@ -215,7 +215,7 @@ Because Core is not the one using it, Core's range must mirror what tsdown suppo
 
 When tsdown widens again, widen here in the same change.
 
-The tsdown range is `^0.23.0`, a 0.x line, so it stays inside the verified minor. `devDependencies` pins the latest 0.23.x for development, like the other peers, at 0.23.1.
+The tsdown range is `^0.23.0`, a 0.x line, so it stays inside the verified minor. `devDependencies` pins the latest 0.23.x for development, like the other peers, at 0.23.2.
 
 Two consequences of following a 0.x line:
 
