@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { budgetMultiple, jobTimeoutMinutes } from './budgets.js';
 import {
   foreignRemovalMs,
+  gonePid,
   isRunAlive,
   removalRetries,
   removeTree,
@@ -28,8 +29,17 @@ function killError(code: string): Error {
   return Object.assign(new Error(code), { code });
 }
 
-/** A run id of a pid this process does not hold */
-const foreignRunId = 'r424242-0123456789ab';
+/**
+ * A run id of a run that is not this one, probed rather than picked.
+ *
+ * A number picked by hand can be the pid of a live process, which the
+ * liveness check reads as a run still working, and it can be this process's
+ * own pid, which the sweep reads as a namesake it may remove. Both invert the
+ * assertions below without anybody touching them.
+ */
+function goneRunId(): string {
+  return createRunId(gonePid());
+}
 
 /** A base and a root to sweep, both removed when the test finishes */
 function scratch(): { base: string; root: string } {
@@ -49,18 +59,17 @@ describe('isRunAlive', () => {
   });
 
   it('reads a pid nothing holds as gone', () => {
-    expect(isRunAlive({ runId: 'r999999-0123456789ab' })).toBe(false);
+    expect(isRunAlive({ runId: goneRunId() })).toBe(false);
   });
 
   it('reads only ESRCH as gone, so EPERM keeps a foreign run alive', () => {
+    const foreign = goneRunId();
     const kill = (code: string) => () => {
       throw killError(code);
     };
 
-    expect(isRunAlive({ runId: foreignRunId, kill: kill('ESRCH') })).toBe(
-      false
-    );
-    expect(isRunAlive({ runId: foreignRunId, kill: kill('EPERM') })).toBe(true);
+    expect(isRunAlive({ runId: foreign, kill: kill('ESRCH') })).toBe(false);
+    expect(isRunAlive({ runId: foreign, kill: kill('EPERM') })).toBe(true);
   });
 
   it('reads a string that is no run id as gone', () => {
@@ -68,6 +77,7 @@ describe('isRunAlive', () => {
   });
 
   it('reads a throw it cannot put a code to as alive', () => {
+    const foreign = goneRunId();
     const withoutCode = () => {
       throw new Error('something else went wrong');
     };
@@ -75,10 +85,34 @@ describe('isRunAlive', () => {
       throw Object.assign(new Error('something else'), { code: 3 });
     };
 
-    expect(isRunAlive({ runId: foreignRunId, kill: withoutCode })).toBe(true);
-    expect(isRunAlive({ runId: foreignRunId, kill: withANumericCode })).toBe(
-      true
-    );
+    expect(isRunAlive({ runId: foreign, kill: withoutCode })).toBe(true);
+    expect(isRunAlive({ runId: foreign, kill: withANumericCode })).toBe(true);
+  });
+});
+
+describe('gonePid', () => {
+  it('hands out a pid the liveness check reads as gone', () => {
+    const pid = gonePid();
+
+    expect(pid).toBeGreaterThan(0);
+    expect(isRunAlive({ runId: createRunId(pid) })).toBe(false);
+  });
+
+  it('skips a candidate a process holds', () => {
+    // The first candidate exists and belongs to somebody else, the second
+    // is free, so the probe has to go past the first
+    const codes = ['EPERM', 'ESRCH'];
+    const kill = () => {
+      const code = codes.shift();
+      if (code !== undefined) throw killError(code);
+    };
+
+    expect(gonePid({ kill })).toBeGreaterThan(0);
+    expect(codes).toEqual([]);
+  });
+
+  it('throws rather than handing out a pid of a live process', () => {
+    expect(() => gonePid({ kill: () => undefined })).toThrow(/Probed 100 pids/);
   });
 });
 
@@ -128,7 +162,7 @@ describe('removeTree', () => {
 describe('sweepDeadRuns', () => {
   it('removes what a run that is gone left in both directories', async () => {
     const { base, root } = scratch();
-    const gone = 'r999999-0123456789ab';
+    const gone = goneRunId();
     const planted = [
       await plant(base, `worker-1-${gone}-${createFileId()}`),
       await plant(root, cliRunDirName(gone)),
@@ -149,9 +183,10 @@ describe('sweepDeadRuns', () => {
       await plant(base, `worker-1-${runId}-${createFileId()}`),
       await plant(root, cliRunDirName(runId)),
     ];
+    const otherRunId = goneRunId();
     const foreign = [
-      await plant(base, `worker-2-${foreignRunId}-${createFileId()}`),
-      await plant(root, nodeRunDirName(foreignRunId)),
+      await plant(base, `worker-2-${otherRunId}-${createFileId()}`),
+      await plant(root, nodeRunDirName(otherRunId)),
     ];
 
     await sweepDeadRuns({
@@ -219,7 +254,7 @@ describe('sweepDeadRuns', () => {
 
   it('removes a leftover of an alive pid once it is old enough', async () => {
     const { base, root } = scratch();
-    const stale = await plant(base, `worker-1-${foreignRunId}-aabbccddeeff`);
+    const stale = await plant(base, `worker-1-${goneRunId()}-aabbccddeeff`);
     const sweep = (now: number) =>
       sweepDeadRuns({
         base,
@@ -246,10 +281,7 @@ describe('sweepDeadRuns', () => {
 
   it('reports a directory it cannot remove and starts the run anyway', async () => {
     const { base, root } = scratch();
-    const held = await plant(
-      base,
-      'worker-1-r999999-0123456789ab-aabbccddeeff'
-    );
+    const held = await plant(base, `worker-1-${goneRunId()}-aabbccddeeff`);
     const kept: string[] = [];
 
     // A removal that never settles, which is what a directory another
@@ -272,10 +304,7 @@ describe('sweepDeadRuns', () => {
 
   it('reports a removal that fails rather than rejecting into the run', async () => {
     const { base, root } = scratch();
-    const held = await plant(
-      base,
-      'worker-1-r999999-0123456789ab-aabbccddeeff'
-    );
+    const held = await plant(base, `worker-1-${goneRunId()}-aabbccddeeff`);
     const kept: string[] = [];
 
     await sweepDeadRuns({
@@ -301,7 +330,7 @@ describe('sweepDeadRuns', () => {
   it('names what a rejection carrying no message went wrong with', async () => {
     const reported = async (rejection: unknown) => {
       const { base, root } = scratch();
-      await plant(base, 'worker-1-r999999-0123456789ab-aabbccddeeff');
+      await plant(base, `worker-1-${goneRunId()}-aabbccddeeff`);
       const kept: string[] = [];
 
       await sweepDeadRuns({

@@ -1,4 +1,5 @@
 import Fs from 'fs-extra';
+import Crypto from 'node:crypto';
 import Fsp from 'node:fs/promises';
 import Path from 'node:path';
 import { budgetMultiple, jobTimeoutMinutes } from './budgets.js';
@@ -82,6 +83,29 @@ export function isRunAlive(props: {
   } catch (error) {
     return codeOf(error) !== 'ESRCH';
   }
+}
+
+/**
+ * A pid no process holds, probed rather than picked.
+ *
+ * It is what a test names a run that is gone after. A number picked by hand
+ * is an attainable pid on a machine that has been up for a while, and a
+ * leftover named after it then reads as a live run's and stays. The candidates
+ * sit above the pids every platform hands out first, so `ESRCH` usually comes
+ * on the first try, and it is `ESRCH` that says the pid is free rather than
+ * the number being large.
+ */
+export function gonePid(props: { kill?: (pid: number) => void } = {}): number {
+  const kill = props.kill ?? ((target: number) => process.kill(target, 0));
+  for (let tries = 0; tries < 100; tries++) {
+    const candidate = Crypto.randomInt(1_000_000, 4_000_000);
+    try {
+      kill(candidate);
+    } catch (error) {
+      if (codeOf(error) === 'ESRCH') return candidate;
+    }
+  }
+  throw new Error('Probed 100 pids and a process held every one of them');
 }
 
 /**

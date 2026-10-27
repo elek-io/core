@@ -3,9 +3,11 @@ import Fs from 'fs-extra';
 import Path from 'node:path';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { testTimeoutMs } from './budgets.js';
+import { gonePid, isRunAlive } from './sweep.js';
 import {
   cliRunDirName,
   createFileId,
+  createRunId,
   currentDataDirBase,
   currentRunId,
 } from './worker.js';
@@ -81,8 +83,13 @@ describe('two suite runs in one checkout', () => {
   it('runs a second real run while one is in flight, and both are green', async () => {
     const base = currentDataDirBase();
     const runId = currentRunId();
-    // A pid nothing holds, so both spawned runs read these as removable
-    const gone = `r999999-${createFileId()}`;
+    // A pid nothing holds, probed rather than picked, so both spawned runs
+    // read these as removable
+    const gone = createRunId(gonePid());
+    expect(
+      isRunAlive({ runId: gone }),
+      `The planted leftovers name ${gone}, whose pid reads as alive`
+    ).toBe(false);
     const goneInBase = await plant(
       Path.join(base, `worker-9-${gone}-${createFileId()}`)
     );
