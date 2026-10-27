@@ -143,6 +143,14 @@ export function nodeRunDirName(runId: string): string {
   return `.elek.io-node-test-${runId}`;
 }
 
+/** The port a listener answers on, whatever shape its address comes in. */
+export function portOf(address: Net.AddressInfo | string | null): number {
+  if (address === null || typeof address === 'string') {
+    throw new Error(`Expected a bound TCP address, got ${String(address)}`);
+  }
+  return address.port;
+}
+
 /**
  * A port nothing holds, obtained by binding zero and letting it go again.
  *
@@ -156,11 +164,7 @@ export async function freePort(): Promise<number> {
       server.once('error', reject);
       server.listen(0, '127.0.0.1', resolve);
     });
-    const address = server.address();
-    if (address === null || typeof address === 'string') {
-      throw new Error(`Expected a bound TCP address, got ${String(address)}`);
-    }
-    return address.port;
+    return portOf(server.address());
   } finally {
     await new Promise<void>((resolve) => {
       server.close(() => resolve());

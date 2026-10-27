@@ -1,14 +1,17 @@
 import Net from 'node:net';
 import Path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   cliRunDirName,
   createFileId,
   createRunId,
+  currentDataDirBase,
   currentRunId,
   freePort,
   nodeRunDirName,
   pidOfRunId,
+  portOf,
+  runIdEnvVar,
   runIdOfRootDir,
   runIdOfWorkerDir,
   testDataDirBase,
@@ -82,6 +85,30 @@ describe('pidOfRunId', () => {
 describe('currentRunId', () => {
   it('is the run id globalSetup put into the environment', () => {
     expect(pidOfRunId(currentRunId())).toBeTypeOf('number');
+  });
+
+  it('says what is missing when the environment carries no run id', () => {
+    vi.stubEnv(runIdEnvVar, 'not-a-run-id');
+
+    expect(() => currentRunId()).toThrow(runIdEnvVar);
+
+    vi.unstubAllEnvs();
+  });
+});
+
+describe('currentDataDirBase', () => {
+  it('is the directory this run nests its per-file directories in', () => {
+    const dataDir = process.env['ELEK_IO_DATA_DIR'] ?? '';
+
+    expect(currentDataDirBase()).toBe(Path.dirname(dataDir));
+  });
+
+  it('refuses a data directory that is no directory of a run', () => {
+    vi.stubEnv('ELEK_IO_DATA_DIR', Path.resolve('/somewhere/else'));
+
+    expect(() => currentDataDirBase()).toThrow('ELEK_IO_DATA_DIR');
+
+    vi.unstubAllEnvs();
   });
 });
 
@@ -175,6 +202,19 @@ describe('runIdOfRootDir', () => {
     expect(runIdOfRootDir('.elek.io')).toBeUndefined();
     expect(runIdOfRootDir('.elek.io-node-test')).toBeUndefined();
     expect(runIdOfRootDir('.elek.io-r4321')).toBeUndefined();
+  });
+});
+
+describe('portOf', () => {
+  it('reads the port of a bound TCP listener', () => {
+    expect(portOf({ address: '127.0.0.1', family: 'IPv4', port: 31311 })).toBe(
+      31311
+    );
+  });
+
+  it('refuses an address that is no TCP one', () => {
+    expect(() => portOf(null)).toThrow('bound TCP address');
+    expect(() => portOf('/tmp/a.sock')).toThrow('bound TCP address');
   });
 });
 

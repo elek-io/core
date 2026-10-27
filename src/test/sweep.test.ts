@@ -66,6 +66,20 @@ describe('isRunAlive', () => {
   it('reads a string that is no run id as gone', () => {
     expect(isRunAlive({ runId: 'not-a-run-id' })).toBe(false);
   });
+
+  it('reads a throw it cannot put a code to as alive', () => {
+    const withoutCode = () => {
+      throw new Error('something else went wrong');
+    };
+    const withANumericCode = () => {
+      throw Object.assign(new Error('something else'), { code: 3 });
+    };
+
+    expect(isRunAlive({ runId: foreignRunId, kill: withoutCode })).toBe(true);
+    expect(isRunAlive({ runId: foreignRunId, kill: withANumericCode })).toBe(
+      true
+    );
+  });
 });
 
 describe('removeTree', () => {
@@ -253,6 +267,27 @@ describe('sweepDeadRuns', () => {
     expect(kept[0]).toContain('The run continued.');
     expect(await Fs.pathExists(held)).toBe(true);
     expect(foreignRemovalMs).toBeLessThan(1000);
+  });
+
+  it('reports a removal that fails rather than rejecting into the run', async () => {
+    const { base, root } = scratch();
+    const held = await plant(
+      base,
+      'worker-1-r999999-0123456789ab-aabbccddeeff'
+    );
+    const kept: string[] = [];
+
+    await sweepDeadRuns({
+      base,
+      root,
+      runId: createRunId(),
+      onKept: (message) => kept.push(message),
+      remove: () => Promise.reject(new Error('another process holds it')),
+    });
+
+    expect(kept).toHaveLength(1);
+    expect(kept[0]).toContain(held);
+    expect(await Fs.pathExists(held)).toBe(true);
   });
 
   it('passes a base and a root that are not there', async () => {
