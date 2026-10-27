@@ -4,7 +4,7 @@ Core declares five peer dependencies, so the consumer supplies them and Core sha
 
 | Peer | Range | Required | Used by |
 | --- | --- | --- | --- |
-| `zod` | `^4.6.6` | yes | every entry (schemas) |
+| `zod` | `^4.6.7` | yes | every entry (schemas) |
 | `dugite` | `^3.2.3` | yes | the Node entry (git) |
 | `astro` | `^6.1.3 \|\| ^7.0.0` | no | the `/astro` entry (content loaders) |
 | `tsdown` | `^0.23.0` | no | the CLI, `generate:* js` only |
@@ -12,7 +12,7 @@ Core declares five peer dependencies, so the consumer supplies them and Core sha
 
 The general rule for a floor: it is the lowest version whose API Core actually uses. Verify a candidate by installing it and running the suite. `zod` carries an extra constraint (a single physical copy), explained below.
 
-## zod (`^4.6.6`, required)
+## zod (`^4.6.7`, required)
 
 ### Why it is a peer, and the single-copy invariant
 
@@ -40,18 +40,18 @@ A peer's row is read at the version `devDependencies` pins, which is the newest 
 | Core's own schemas | `>=4.1.0` | `z.hash('sha1')` in `src/schema/gitSchema.ts` does not exist before 4.1.0 |
 | `@hono/zod-openapi` | `^4.0.0` | peer dependency |
 | `@hono/zod-validator` | `^3.25.0 \|\| ^4.0.0` | a dependency of `@hono/zod-openapi` |
-| `@scalar/types` | `^4.4.3` | via `@scalar/hono-api-reference`, a runtime dependency |
+| `@scalar/types` | `^4.6.7` | via `@scalar/hono-api-reference`, a runtime dependency |
 | `astro` | `^4.6.6` | the `/astro` entry's peer, read at the dev pin 7.4.2 |
 
-The maximum is `4.6.6`, so the peer range is `^4.6.6`. `devDependencies` pins the latest 4.x (`zod@4.6.7`) so Core develops against the newest patch, while the declared floor stays at the lowest version the graph can share.
+The maximum is `4.6.7`, so the peer range is `^4.6.7`. `devDependencies` pins the latest 4.x (`zod@4.6.7`) so Core develops against the newest patch. Floor and dev pin coincide here, because `@scalar/types` asks for that same patch, and they part again at the next zod release nothing in the graph requires.
 
 Reading astro's row at the lowest astro the range allows would give a lower floor, and it would be the wrong one. astro is in the tree whatever version a consumer resolves, so a consumer on a recent astro plus a zod pinned at that lower floor resolves two copies.
 
-That is the failure this peer exists to prevent, so the floor follows the astro the dev pin names, and bumping astro is one of the re-check triggers below.
+That is the failure this peer exists to prevent, so every row is read at the version the dev pin names, and bumping astro is one of the re-check triggers below.
 
 ### The caret caveat: why `pnpm dedupe` is sometimes needed
 
-`astro` and `@scalar/*` depend on zod through caret ranges (`^4.6.6`, `^4.4.3`). With pnpm's default highest-version resolution these resolve up to the newest zod available.
+`astro` and `@scalar/*` depend on zod through caret ranges (`^4.6.6`, `^4.6.7`). With pnpm's default highest-version resolution these resolve up to the newest zod available.
 
 A fresh or frozen install lands on a single copy, but a partial install (for example after bumping one dependency) can leave the newest zod alongside the version Core pins, giving two copies. The fix is `pnpm dedupe`, which collapses them back to one. The guard test fails until you do.
 
@@ -154,7 +154,7 @@ New in v7 is an optional `@astrojs/markdown-remark` peer for the opt-in remark p
 
 Two things did move inside the 7 line, and both are handled rather than pinned away:
 
-- **Its zod dependency rose to `^4.6.6` in 7.4.0**, which is what sets the zod floor above. astro depends on zod through a caret range, so its requirement feeds that floor, and bumping astro can raise it again. Re-check the zod single-copy invariant whenever you bump astro.
+- **Its zod dependency rose to `^4.6.6` in 7.4.0**, which fed the zod floor above until `@scalar/types` asked for more. astro depends on zod through a caret range, so its requirement feeds that floor, and bumping astro can raise it again. Re-check the zod single-copy invariant whenever you bump astro.
 - **`apng` joined `VALID_INPUT_FORMATS` in 7.2.5**, and `VALID_SUPPORTED_FORMATS` on no release, so the image service rejects one that reaches it. `imageExtensions` in `src/astro/loaders.ts` mirrors the supported list instead, so an apng Asset takes the public route. Compare both lists when you bump astro, see [`astro-entry.md`](./astro-entry.md).
 
 The coupling is also a runtime one:

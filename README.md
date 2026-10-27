@@ -24,7 +24,7 @@ npm install @elek-io/core zod dugite
 
 Core declares five peer dependencies, so you install them yourself. Two are required, three are optional and only needed by one feature each:
 
-- **`zod`** (`^4.6.6`, required) - Core authors its schemas with Zod v4. Core and your app must resolve to a single Zod copy, otherwise Zod's per-version branding makes Core's schemas incompatible with your own Zod usage (for example `@hookform/resolvers`' `zodResolver`).
+- **`zod`** (`^4.6.7`, required) - Core authors its schemas with Zod v4. Core and your app must resolve to a single Zod copy, otherwise Zod's per-version branding makes Core's schemas incompatible with your own Zod usage (for example `@hookform/resolvers`' `zodResolver`).
 - **`dugite`** (`^3.2.3`, required) - the git bindings Core runs every Project operation through. Used by the Node entry point, see [git and sync](./docs/git-and-sync.md).
 - **`astro`** (`^6.1.3 || ^7.0.0`, optional) - only needed for the Astro integration (`@elek-io/core/astro`), where your project already provides it.
 - **`tsdown`** (`^0.23.0`, optional) and **`typescript`** (`^5.0.0 || ^6.0.0 || ^7.0.0`, optional) - only needed to run `elek generate:client` or `elek generate:types` with `js` as the language, which compiles the generated TypeScript. See [generated API clients and types](./docs/api-clients.md#compiling-to-javascript).
