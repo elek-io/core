@@ -1,9 +1,18 @@
+import Net from 'node:net';
 import Path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  cliRunDirName,
+  createFileId,
+  createRunId,
+  currentRunId,
+  freePort,
+  nodeRunDirName,
+  pidOfRunId,
+  runIdOfRootDir,
+  runIdOfWorkerDir,
   testDataDirBase,
   testFileDataDir,
-  workerApiPort,
   workerDirPrefix,
 } from './worker.js';
 
@@ -39,52 +48,176 @@ describe('testDataDirBase', () => {
   });
 });
 
-describe('testFileDataDir', () => {
-  it('nests a unique directory per test file beneath the base', () => {
-    const dir = testFileDataDir({
-      envDataDir: undefined,
-      homedir,
-      poolId: '3',
-      uniqueId: 'abc-123',
-    });
+describe('createRunId', () => {
+  it('names the pid of the run and a random part next to it', () => {
+    expect(createRunId(4321)).toMatch(/^r4321-[0-9a-f]{12}$/);
+  });
 
-    expect(dir).toBe(Path.join(homedir, 'elek.io-test', 'worker-3-abc-123'));
+  it('is wider than the pid, so two runs of one pid differ', () => {
+    expect(createRunId(4321)).not.toBe(createRunId(4321));
+  });
+
+  it('takes the pid of this process by default', () => {
+    expect(pidOfRunId(createRunId())).toBe(process.pid);
+  });
+});
+
+describe('pidOfRunId', () => {
+  it('reads the pid out of a run id', () => {
+    expect(pidOfRunId('r98765-0123456789ab')).toBe(98765);
+  });
+
+  it('reads nothing out of a string that is no run id', () => {
+    expect(pidOfRunId('')).toBeUndefined();
+    expect(pidOfRunId('98765')).toBeUndefined();
+    expect(pidOfRunId('rabc-0123456789ab')).toBeUndefined();
+    expect(pidOfRunId('r98765')).toBeUndefined();
+  });
+
+  it('reads nothing out of pid zero, which names a whole process group', () => {
+    expect(pidOfRunId('r0-0123456789ab')).toBeUndefined();
+  });
+});
+
+describe('currentRunId', () => {
+  it('is the run id globalSetup put into the environment', () => {
+    expect(pidOfRunId(currentRunId())).toBeTypeOf('number');
+  });
+});
+
+describe('testFileDataDir', () => {
+  const props = {
+    envDataDir: undefined,
+    homedir,
+    poolId: '3',
+    runId: 'r4321-0123456789ab',
+    fileId: 'aabbccddeeff',
+  };
+
+  it('nests a unique directory per test file beneath the base', () => {
+    expect(testFileDataDir(props)).toBe(
+      Path.join(
+        homedir,
+        'elek.io-test',
+        'worker-3-r4321-0123456789ab-aabbccddeeff'
+      )
+    );
   });
 
   it('nests beneath a set ELEK_IO_DATA_DIR', () => {
     const envDataDir = Path.join(homedir, 'custom-test-data');
-    const dir = testFileDataDir({
-      envDataDir,
-      homedir,
-      poolId: '1',
-      uniqueId: 'abc-123',
-    });
 
-    expect(dir).toBe(Path.join(envDataDir, 'worker-1-abc-123'));
+    expect(testFileDataDir({ ...props, envDataDir })).toBe(
+      Path.join(envDataDir, 'worker-3-r4321-0123456789ab-aabbccddeeff')
+    );
   });
 
   it('names the directory with the prefix globalSetup sweeps for', () => {
-    const dir = testFileDataDir({
-      envDataDir: undefined,
-      homedir,
-      poolId: '1',
-      uniqueId: 'abc-123',
-    });
+    expect(
+      Path.basename(testFileDataDir(props)).startsWith(workerDirPrefix)
+    ).toBe(true);
+  });
 
-    expect(Path.basename(dir).startsWith(workerDirPrefix)).toBe(true);
+  it('gives two runs disjoint paths, and two files of one run as well', () => {
+    const first = createRunId(4321);
+    const second = createRunId(4321);
+    const paths = [
+      testFileDataDir({ ...props, runId: first, fileId: createFileId() }),
+      testFileDataDir({ ...props, runId: first, fileId: createFileId() }),
+      testFileDataDir({ ...props, runId: second, fileId: createFileId() }),
+    ];
+
+    expect(new Set(paths).size).toBe(3);
   });
 });
 
-describe('workerApiPort', () => {
-  it('offsets the default API port by the pool id', () => {
-    expect(workerApiPort('1')).toBe(31311);
-    expect(workerApiPort('4')).toBe(31314);
+describe('runIdOfWorkerDir', () => {
+  it('reads back the run a name was built from', () => {
+    const runId = createRunId(4321);
+    const name = Path.basename(
+      testFileDataDir({
+        envDataDir: undefined,
+        homedir,
+        poolId: '2',
+        runId,
+        fileId: createFileId(),
+      })
+    );
+
+    expect(runIdOfWorkerDir(name)).toBe(runId);
   });
 
-  it('throws for a missing or invalid pool id', () => {
-    expect(() => workerApiPort(undefined)).toThrow();
-    expect(() => workerApiPort('')).toThrow();
-    expect(() => workerApiPort('abc')).toThrow();
-    expect(() => workerApiPort('0')).toThrow();
+  it('reads nothing out of a name no run built', () => {
+    // What the suite wrote before the directories carried a run
+    expect(
+      runIdOfWorkerDir('worker-1-0d9a1f3e-7c2b-4a51-9f0e-2b6d8c4a1e73')
+    ).toBeUndefined();
+    expect(runIdOfWorkerDir('keep-me')).toBeUndefined();
+    expect(runIdOfWorkerDir('worker-1-r4321-xyz-aabbccddeeff')).toBeUndefined();
+  });
+});
+
+describe('runIdOfRootDir', () => {
+  it('reads back the run both repository-root names were built from', () => {
+    const runId = createRunId(4321);
+
+    expect(runIdOfRootDir(cliRunDirName(runId))).toBe(runId);
+    expect(runIdOfRootDir(nodeRunDirName(runId))).toBe(runId);
+  });
+
+  it('tells the two names apart, so neither is read as the other', () => {
+    const runId = createRunId(4321);
+
+    expect(cliRunDirName(runId)).not.toBe(nodeRunDirName(runId));
+  });
+
+  it('reads nothing out of the names that carry no run', () => {
+    expect(runIdOfRootDir('.elek.io')).toBeUndefined();
+    expect(runIdOfRootDir('.elek.io-node-test')).toBeUndefined();
+    expect(runIdOfRootDir('.elek.io-r4321')).toBeUndefined();
+  });
+});
+
+describe('freePort', () => {
+  it('gives a port that can then be bound', async () => {
+    const port = await freePort();
+    const server = Net.createServer();
+
+    await expect(
+      new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(port, '127.0.0.1', resolve);
+      })
+    ).resolves.toBeUndefined();
+
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
+  });
+
+  it('gives a different port while the last one is still held', async () => {
+    const held: Net.Server[] = [];
+    const ports: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      const port = await freePort();
+      const server = Net.createServer();
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(port, '127.0.0.1', resolve);
+      });
+      held.push(server);
+      ports.push(port);
+    }
+
+    expect(new Set(ports).size).toBe(ports.length);
+
+    await Promise.all(
+      held.map(
+        (server) =>
+          new Promise<void>((resolve) => {
+            server.close(() => resolve());
+          })
+      )
+    );
   });
 });

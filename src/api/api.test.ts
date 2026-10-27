@@ -17,7 +17,8 @@ import {
   createComponent,
   createEntry,
 } from '../test/util.js';
-import core, { testApiPort } from '../test/setup.js';
+import core from '../test/setup.js';
+import { freePort } from '../test/worker.js';
 
 const externalAddress = externalIpv4();
 
@@ -41,6 +42,8 @@ const app = createTestApi(
 const client = testClient(app);
 
 describe('API', function () {
+  /** Obtained rather than derived, so another run's API cannot hold it */
+  let apiPort: number;
   let project: Project & { destroy: () => Promise<void> };
   let asset: Asset;
   let collection: Collection;
@@ -48,6 +51,7 @@ describe('API', function () {
   let entry: Entry;
 
   beforeAll(async function () {
+    apiPort = await freePort();
     project = await createProject();
     asset = await createAsset(project.id);
     collection = await createCollection(project.id);
@@ -61,7 +65,7 @@ describe('API', function () {
 
   it('should be able to start the API and verify it is running', async function () {
     const isRunningBefore = core.api.isRunning();
-    await core.api.start(testApiPort);
+    await core.api.start(apiPort);
 
     const isRunningAfter = core.api.isRunning();
 
@@ -71,7 +75,7 @@ describe('API', function () {
 
   it('answers on loopback', async function () {
     const response = await fetch(
-      `http://127.0.0.1:${testApiPort}/content/v1/projects/count`
+      `http://127.0.0.1:${apiPort}/content/v1/projects/count`
     );
 
     expect(response.status).toEqual(200);
@@ -85,7 +89,7 @@ describe('API', function () {
       // docs/local-api.md both say localhost
       await expect(
         fetch(
-          `http://${externalAddress}:${testApiPort}/content/v1/projects/count`,
+          `http://${externalAddress}:${apiPort}/content/v1/projects/count`,
           {
             signal: AbortSignal.timeout(5000),
           }
@@ -97,9 +101,7 @@ describe('API', function () {
   it('serves the OpenAPI document', async function () {
     // Only a real server reaches `.doc()`, the in-process client below is
     // typed off the routes and never requests this path
-    const response = await fetch(
-      `http://127.0.0.1:${testApiPort}/openapi.json`
-    );
+    const response = await fetch(`http://127.0.0.1:${apiPort}/openapi.json`);
 
     expect(response.status).toEqual(200);
     expect(response.headers.get('content-type')).toContain('application/json');
@@ -113,9 +115,7 @@ describe('API', function () {
   });
 
   it('documents every route the reference UI lists', async function () {
-    const response = await fetch(
-      `http://127.0.0.1:${testApiPort}/openapi.json`
-    );
+    const response = await fetch(`http://127.0.0.1:${apiPort}/openapi.json`);
     const document = (await response.json()) as OpenApiDocument;
 
     // The paths docs/local-api.md promises, in the OpenAPI `{param}` form
@@ -145,9 +145,7 @@ describe('API', function () {
   it('resolves every $ref in the OpenAPI document', async function () {
     // A recursive schema without a component name makes the generator
     // inline itself until the stack runs out, so the whole document fails
-    const response = await fetch(
-      `http://127.0.0.1:${testApiPort}/openapi.json`
-    );
+    const response = await fetch(`http://127.0.0.1:${apiPort}/openapi.json`);
     const document = (await response.json()) as OpenApiDocument;
     const components = Object.keys(document.components?.schemas ?? {});
 
@@ -161,7 +159,7 @@ describe('API', function () {
   });
 
   it('serves the reference UI pointing at the OpenAPI document', async function () {
-    const response = await fetch(`http://127.0.0.1:${testApiPort}/`);
+    const response = await fetch(`http://127.0.0.1:${apiPort}/`);
 
     expect(response.status).toEqual(200);
     expect(response.headers.get('content-type')).toContain('text/html');
