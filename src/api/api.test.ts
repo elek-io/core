@@ -42,7 +42,11 @@ const app = createTestApi(
 const client = testClient(app);
 
 describe('API', function () {
-  /** Obtained rather than derived, so another run's API cannot hold it */
+  /**
+   * Obtained rather than derived, so another run's API cannot hold it, and
+   * taken immediately before the start rather than in the fixture setup, so
+   * nothing can take it while the fixtures are being created
+   */
   let apiPort: number;
   let project: Project & { destroy: () => Promise<void> };
   let asset: Asset;
@@ -51,7 +55,6 @@ describe('API', function () {
   let entry: Entry;
 
   beforeAll(async function () {
-    apiPort = await freePort();
     project = await createProject();
     asset = await createAsset(project.id);
     collection = await createCollection(project.id);
@@ -65,6 +68,7 @@ describe('API', function () {
 
   it('should be able to start the API and verify it is running', async function () {
     const isRunningBefore = core.api.isRunning();
+    apiPort = await freePort();
     await core.api.start(apiPort);
 
     const isRunningAfter = core.api.isRunning();
