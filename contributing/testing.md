@@ -168,6 +168,7 @@ The sweep in [`src/test/sweep.ts`](../src/test/sweep.ts) exists for the run that
 - A directory whose pid reads as alive but which has not been written to for the job cap times the budget multiple is removed anyway, so a recycled pid cannot make the base grow without bound.
 - A removal is retried, through `fs.rm`'s own `maxRetries` because `Fs.remove` takes no options. Which error a held file raises differs per platform, so nothing reads it.
 - Another run's directory that resists removal is reported in one line and left behind, within half a second, so the worst case is one leaked directory rather than a run that stalls before its first test. A failure on this run's own directories stays fatal.
+- That line carries the directory and what the removal said went wrong, the deadline included, because a permission problem and a process holding the directory send a maintainer to different places.
 
 ### One Astro suite per test file
 

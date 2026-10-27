@@ -97,20 +97,35 @@ export async function removeTree(
   await rm(path, { recursive: true, force: true, maxRetries: removalRetries });
 }
 
-/** Runs a removal under a deadline, and says whether it got there. */
+/**
+ * What a failed removal said went wrong, without asserting a shape.
+ *
+ * The message of a filesystem error carries its code and the path the
+ * operation failed on, which is what a maintainer needs to act.
+ */
+function reasonOf(error: unknown): string {
+  if (error instanceof Error && error.message !== '') return error.message;
+  return codeOf(error) ?? String(error);
+}
+
+/** Why a removal did not get there under its deadline, or nothing when it did. */
 async function removeWithin(props: {
   path: string;
   ms: number;
   remove: (path: string) => Promise<void>;
-}): Promise<boolean> {
-  // An abandoned removal keeps running and its failure is swallowed, so a
-  // directory another process holds cannot reject into the run start.
+}): Promise<string | undefined> {
+  // An abandoned removal keeps running and its rejection is reported rather
+  // than thrown, so a directory another process holds cannot reject into the
+  // run start.
   const removal = props.remove(props.path).then(
-    () => true,
-    () => false
+    () => undefined,
+    (error: unknown) => reasonOf(error)
   );
-  const deadline = new Promise<boolean>((resolve) => {
-    setTimeout(() => resolve(false), props.ms).unref();
+  const deadline = new Promise<string>((resolve) => {
+    setTimeout(
+      () => resolve(`it was still being removed after ${props.ms}ms`),
+      props.ms
+    ).unref();
   });
   return Promise.race([removal, deadline]);
 }
@@ -182,15 +197,13 @@ export async function sweepDeadRuns(props: SweepProps): Promise<void> {
         !(await isStale(path, now));
       if (keeps) return;
 
-      const isRemoved = await removeWithin({
+      const reason = await removeWithin({
         path,
         ms: foreignRemovalMs,
         remove,
       });
-      if (!isRemoved) {
-        props.onKept(
-          `Left ${path} behind, another process is holding it. The run continued.`
-        );
+      if (reason !== undefined) {
+        props.onKept(`Left ${path} behind: ${reason}. The run continued.`);
       }
     })
   );

@@ -264,6 +264,7 @@ describe('sweepDeadRuns', () => {
 
     expect(kept).toHaveLength(1);
     expect(kept[0]).toContain(held);
+    expect(kept[0]).toContain(`after ${foreignRemovalMs}ms`);
     expect(kept[0]).toContain('The run continued.');
     expect(await Fs.pathExists(held)).toBe(true);
     expect(foreignRemovalMs).toBeLessThan(1000);
@@ -282,12 +283,45 @@ describe('sweepDeadRuns', () => {
       root,
       runId: createRunId(),
       onKept: (message) => kept.push(message),
-      remove: () => Promise.reject(new Error('another process holds it')),
+      remove: () =>
+        Promise.reject(
+          new Error("EACCES: permission denied, rmdir '/somewhere'")
+        ),
     });
 
     expect(kept).toHaveLength(1);
     expect(kept[0]).toContain(held);
+    // The cause the removal gave, not a guess at it. A permission problem
+    // and a process holding the directory are different things to chase
+    expect(kept[0]).toContain("EACCES: permission denied, rmdir '/somewhere'");
+    expect(kept[0]).toContain('The run continued.');
     expect(await Fs.pathExists(held)).toBe(true);
+  });
+
+  it('names what a rejection carrying no message went wrong with', async () => {
+    const reported = async (rejection: unknown) => {
+      const { base, root } = scratch();
+      await plant(base, 'worker-1-r999999-0123456789ab-aabbccddeeff');
+      const kept: string[] = [];
+
+      await sweepDeadRuns({
+        base,
+        root,
+        runId: createRunId(),
+        onKept: (message) => kept.push(message),
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- a rejection that is not an Error is one of the cases
+        remove: () => Promise.reject(rejection),
+      });
+
+      return kept.join('\n');
+    };
+
+    expect(
+      await reported(Object.assign(new Error(''), { code: 'EBUSY' }))
+    ).toContain('EBUSY');
+    expect(await reported('nothing threw an Error')).toContain(
+      'nothing threw an Error'
+    );
   });
 
   it('passes a base and a root that are not there', async () => {
