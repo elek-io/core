@@ -24,7 +24,7 @@ import {
   resolveLogLevel,
   resolveRemoteAccessToken,
 } from './node.js';
-import { CoreError } from './shared.js';
+import { CoreError, uuid } from './shared.js';
 
 describe('isNotEmpty', () => {
   it('returns false for null', () => {
@@ -61,7 +61,7 @@ describe('isNotEmpty', () => {
 });
 
 describe('files', () => {
-  const testDir = Path.join(Os.tmpdir(), 'elek-io-test-files');
+  const testDir = Path.join(Os.tmpdir(), `elek-io-test-files-${uuid()}`);
 
   beforeAll(async () => {
     await Fs.ensureDir(testDir);
@@ -105,7 +105,7 @@ describe('files', () => {
 });
 
 describe('folders', () => {
-  const testDir = Path.join(Os.tmpdir(), 'elek-io-test-folders');
+  const testDir = Path.join(Os.tmpdir(), `elek-io-test-folders-${uuid()}`);
 
   beforeAll(async () => {
     await Fs.ensureDir(testDir);
@@ -147,15 +147,24 @@ describe('resolveDataDir', () => {
   });
 
   it('returns the ELEK_IO_DATA_DIR environment variable when set', () => {
-    const envDataDir = Path.join(Os.tmpdir(), 'elek-io-core-env-test');
+    const envDataDir = Path.join(
+      Os.tmpdir(),
+      `elek-io-core-env-test-${uuid()}`
+    );
     vi.stubEnv('ELEK_IO_DATA_DIR', envDataDir);
 
     expect(resolveDataDir()).toBe(envDataDir);
   });
 
   it('prefers the given data directory over the environment variable', () => {
-    const envDataDir = Path.join(Os.tmpdir(), 'elek-io-core-env-test');
-    const optionDataDir = Path.join(Os.tmpdir(), 'elek-io-core-option-test');
+    const envDataDir = Path.join(
+      Os.tmpdir(),
+      `elek-io-core-env-test-${uuid()}`
+    );
+    const optionDataDir = Path.join(
+      Os.tmpdir(),
+      `elek-io-core-option-test-${uuid()}`
+    );
     vi.stubEnv('ELEK_IO_DATA_DIR', envDataDir);
 
     expect(resolveDataDir(optionDataDir)).toBe(optionDataDir);
@@ -174,7 +183,10 @@ describe('resolveDataDir', () => {
     expect(resolveDataDir('')).toBe(defaultDataDir);
     expect(resolveDataDir('   ')).toBe(defaultDataDir);
 
-    const envDataDir = Path.join(Os.tmpdir(), 'elek-io-core-env-test');
+    const envDataDir = Path.join(
+      Os.tmpdir(),
+      `elek-io-core-env-test-${uuid()}`
+    );
     vi.stubEnv('ELEK_IO_DATA_DIR', envDataDir);
     expect(resolveDataDir('')).toBe(envDataDir);
   });
@@ -189,7 +201,10 @@ describe('resolveDataDir', () => {
 
   it('normalizes trailing separators', () => {
     vi.stubEnv('ELEK_IO_DATA_DIR', undefined);
-    const dataDir = Path.join(Os.tmpdir(), 'elek-io-core-trailing-test');
+    const dataDir = Path.join(
+      Os.tmpdir(),
+      `elek-io-core-trailing-test-${uuid()}`
+    );
 
     expect(resolveDataDir(dataDir + Path.sep)).toBe(dataDir);
   });
@@ -399,7 +414,7 @@ describe('resolveContentRef', () => {
 });
 
 describe('createPathTo', () => {
-  const root = Path.join(Os.tmpdir(), 'elek-io-core-path-test');
+  const root = Path.join(Os.tmpdir(), `elek-io-core-path-test-${uuid()}`);
   const pathTo = createPathTo(root);
 
   it('roots every static path under the given data directory', () => {
@@ -448,7 +463,10 @@ describe('createPathTo', () => {
   });
 
   it('yields disjoint paths for two different data directories', () => {
-    const otherRoot = Path.join(Os.tmpdir(), 'elek-io-core-other-path-test');
+    const otherRoot = Path.join(
+      Os.tmpdir(),
+      `elek-io-core-other-path-test-${uuid()}`
+    );
     const otherPathTo = createPathTo(otherRoot);
 
     expect(otherPathTo.projects).not.toBe(pathTo.projects);

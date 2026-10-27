@@ -1,19 +1,25 @@
+import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import { LogService } from './LogService.js';
 import type { ElekIoCoreOptions } from '../schema/index.js';
 import { createPathTo } from '../util/node.js';
+import { uuid } from '../util/shared.js';
 
 const options: ElekIoCoreOptions = {
   log: { level: 'debug', hasProcessErrorHandlers: true },
   cache: true,
   cloud: { url: 'https://api.elek.io', gitUrl: 'https://*.git.elek.io' },
-  dataDir: Path.join(Os.tmpdir(), 'elek-io-core-logservice-test'),
+  dataDir: Path.join(Os.tmpdir(), `elek-io-core-logservice-test-${uuid()}`),
   isReadOnly: false,
 };
 const pathTo = createPathTo(options.dataDir);
+
+afterAll(async function () {
+  await Fs.remove(options.dataDir);
+});
 
 // Other test files share this worker process, so assert on deltas, not
 // absolute process listener counts.
