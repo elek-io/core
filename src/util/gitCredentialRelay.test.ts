@@ -19,7 +19,8 @@ import { uuid } from './shared.js';
  *
  * Every call runs with terminal prompts off, as a test running git outside
  * Core has to, so a run whose askpass answers nothing ends with git's reason
- * instead of waiting for input, see ../../contributing/testing.md.
+ * instead of waiting for input. `GIT_TERMINAL_PROMPT=0` stops no askpass, so
+ * only the control runs one, see ../../contributing/testing.md.
  */
 
 /**

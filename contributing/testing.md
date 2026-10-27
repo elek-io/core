@@ -128,8 +128,10 @@ The shared test Core in [`src/test/setup.ts`](../src/test/setup.ts) logs at `deb
 
 ## Git run from a test
 
-A test that runs git itself, rather than through Core, passes `GIT_TERMINAL_PROMPT=0` wherever that git can ask for a credential, the way every invocation of Core's own carries it, see [`git-credentials.md`](./git-credentials.md#no-prompt-and-no-askpass). That is `git credential` and anything reaching a remote that authenticates.
+A test that runs git itself, rather than through Core, passes `GIT_TERMINAL_PROMPT=0` and an empty `GIT_ASKPASS` wherever that git can ask for a credential, the way every invocation of Core's own carries both, see [`git-credentials.md`](./git-credentials.md#no-prompt-and-no-askpass). That is `git credential` and anything reaching a remote that authenticates.
 
+- Prompts off alone does not bound such a call, because an askpass reached through `SSH_ASKPASS` or `core.askPass` still runs and may answer nothing for as long as it likes. [`workerSetup.ts`](../src/test/workerSetup.ts) clears no environment variable, so a developer's `SSH_ASKPASS` reaches every test.
+- A test that needs an askpass of its own, such as the control call below, leaves `GIT_ASKPASS` unset instead, and then that askpass has to exit by itself.
 - git skips its credential machinery for a local path, so the bare remotes the rest of the suite runs against never prompt.
 - Committing with git directly needs an identity of its own too, see [parallel test files](#parallel-test-files) below.
 
@@ -140,6 +142,13 @@ Without prompts off, git falls back to a terminal prompt whenever an askpass ans
 | prompts on, under a pty | printed `Username for ...` and was still waiting when the probe killed it 8 seconds later |
 | prompts on, no terminal attached | failed in 26ms to 28ms with `could not read Username ...: No such device or address` |
 | prompts off | failed in 26ms to 31ms with `could not read Username ...: terminal prompts disabled`, after running the askpass |
+
+An askpass that never answers is not bounded by prompts off at all. Measured the same way on Linux on 2026-10-28, with an askpass that sleeps:
+
+| The call | git |
+| --- | --- |
+| prompts off, the askpass in `SSH_ASKPASS` or `core.askPass` | was still waiting when the probe killed it 8 seconds later, with or without `DISPLAY` and `SSH_ASKPASS_REQUIRE` |
+| prompts off and an empty `GIT_ASKPASS` | failed in 3ms to 5ms with `could not read Username ...: terminal prompts disabled`, running neither askpass |
 
 So a prompt only hangs a test where the runner attaches a terminal, which fits the one timeout such a call has had: on `windows-2025` on 2026-10-21, where the other three platforms passed the same head. What it waited for that once was never recorded, and the timeout took the cleanup with it, the directory git ran in stayed busy and its removal failed with `EBUSY: resource busy or locked, rmdir`.
 
