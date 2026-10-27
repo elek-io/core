@@ -152,7 +152,7 @@ An askpass that never answers is not bounded by prompts off at all. Measured the
 
 So a prompt only hangs a test where the runner attaches a terminal, which fits the one timeout such a call has had: on `windows-2025` on 2026-10-21, where the other three platforms passed the same head. What it waited for that once was never recorded, and the timeout took the cleanup with it, the directory git ran in stayed busy and its removal failed with `EBUSY: resource busy or locked, rmdir`.
 
-[`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) makes one call without Core's environment, as the control for an askpass running at all, and asserts both sides of the rule:
+[`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) makes that call without Core's environment, as the control for an askpass running at all, and asserts it with an askpass that answers and with one that fails:
 
 - An askpass that answers still runs, which is what the control is there for.
 - One that fails ends the call with git's reason, inside the slowest test printed beside it on that runner, 3,061ms, times the margin in [`budgets.ts`](../src/test/budgets.ts). That ceiling is no per-call budget, which [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) keeps on the measured globals, but the line between a call that ran and one that waited.
