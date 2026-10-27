@@ -16,6 +16,6 @@ No export of any entry point was added, removed or renamed, and no public type c
 - `generate:types js` needs `isolatedDeclarations` switched on in your `tsconfig.json`. With it, the output directory stops mattering. Without it the command exits 1 saying TypeScript 7 "does not provide the classic TypeScript API required by tsc".
 - `generate:client js` has no route left. `isolatedDeclarations` rejects the client Core generates with `TS9007`, naming a function without an explicit return type, and without the option the failure above applies.
 
-With no Project to generate from, `generate:types js` writes nothing and exits 0 instead, and `isolatedDeclarations` has no Collection function of the client left to reject.
+With no Project at all, `generate:types js` writes nothing and exits 0 instead. The function `TS9007` names is a Collection's, so the client compiles as long as no Collection exists anywhere.
 
 TypeScript 6 compiles both, with no `tsconfig.json` at all and into any directory, so install it as the dev dependency `elek` compiles with. Generating with the default `ts` language is unaffected on every TypeScript the peer range allows. Core's own build and the published declarations are unaffected either way. See `docs/api-clients.md`.

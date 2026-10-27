@@ -89,13 +89,15 @@ Install them as dev dependencies of the project you run `elek` in. Without them 
 
 **TypeScript 7 compiles types and no longer compiles a client.** TypeScript 5 and 6 compile both, with no tsconfig at all and into any directory.
 
-On TypeScript 7 the compiler runs through `isolatedDeclarations`, which has to be switched on in the project's `tsconfig.json`. With at least one Project to generate from:
+On TypeScript 7 the compiler runs through `isolatedDeclarations`, which has to be switched on in the project's `tsconfig.json`. With at least one Collection to generate from:
 
 - Without it either command exits 1 saying TypeScript 7 "does not provide the classic TypeScript API required by tsc", and the generated `.ts` file is left behind. That holds with no tsconfig and with one, wherever you write, Core's default `./.elek.io` included.
 - With it, `generate:types js` compiles into any directory.
 - With it, `generate:client js` exits 1 on `TS9007`, naming a function of the generated client without an explicit return type. `isolatedDeclarations` rejects the client Core writes, so on TypeScript 7 the `js` language of that command has no route at all.
 
-With no Project in the data directory, `generate:types js` writes nothing and exits 0 before it loads the compiler, whatever the tsconfig says. `generate:client js` still writes a `client.ts`, which fails the same way without `isolatedDeclarations` and compiles with it, because a client without a Collection has no function missing a return type.
+`generate:types js` writes nothing and exits 0 before it loads the compiler when there is no Project at all, whatever the tsconfig says, and a Project without Collections still gives it a file to compile.
+
+`generate:client js` always writes its `client.ts`, and with `isolatedDeclarations` it compiles while no Collection exists anywhere, because the function `TS9007` names is a Collection's `entries.list`.
 
 `isolatedDeclarations` is also a project-wide option rather than one for the generated file, so every exported declaration of yours needs an explicit type once it is on. Two ways around all of it:
 

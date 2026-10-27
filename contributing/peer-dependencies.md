@@ -249,7 +249,7 @@ The typescript is pinned to 6 in that step on purpose. A plain `npm install -D t
 
 typescript 7 is the Go port, and it no longer exports the classic compiler API tsdown's dts generator calls. tsdown 0.23.2 refuses that combination outright and names the way out, `isolatedDeclarations`, which routes declaration generation through Oxc instead. typescript 6 asks for none of it.
 
-Measured against a packed 0.26.0 with tsdown 0.23.2 and typescript 7.0.2, with one Project in the data directory:
+Measured against a packed 0.26.0 with tsdown 0.23.2 and typescript 7.0.2, with one Project and one Collection in the data directory:
 
 | The consumer's project | `generate:types <dir> js` | `generate:client <dir> js` |
 | --- | --- | --- |
