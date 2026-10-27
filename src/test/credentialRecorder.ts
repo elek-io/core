@@ -1,7 +1,6 @@
-import { exec as gitExec } from 'dugite';
 import Fs from 'fs-extra';
 import Path from 'node:path';
-import { tmpDirPath } from './util.js';
+import { execGit, tmpDirPath } from './util.js';
 
 /** The person's own credential setup, recording whether git asked it */
 export interface CredentialRecorder {
@@ -66,13 +65,14 @@ export async function createCredentialRecorder(): Promise<CredentialRecorder> {
   ];
   for (const [file, values] of helperLists) {
     for (const value of values) {
-      const configured = await gitExec(
-        ['config', '--file', file, '--add', 'credential.helper', value],
-        dir
-      );
-      if (configured.exitCode !== 0) {
-        throw new Error(`git config failed: ${configured.stderr}`);
-      }
+      await execGit(dir, [
+        'config',
+        '--file',
+        file,
+        '--add',
+        'credential.helper',
+        value,
+      ]);
     }
   }
 
