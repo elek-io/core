@@ -51,12 +51,15 @@ describe('CLI', function () {
   let asset: Asset;
   let collection: Collection;
   let entry: Entry;
-  /** Obtained rather than derived, so another run's API cannot hold it */
+  /**
+   * Obtained rather than derived, so another run's API cannot hold it, and
+   * taken immediately before the start rather than here, so nothing can take
+   * it while the tests above run
+   */
   let apiPort: number;
 
   beforeAll(async function () {
     await fs.ensureDir(defaultCwd);
-    apiPort = await freePort();
     project1 = await createProject();
     project2 = await createProject();
     asset = await createAsset(project1.id);
@@ -160,6 +163,7 @@ describe('CLI', function () {
   });
 
   it('should be able to request a list of entries', async function () {
+    apiPort = await freePort();
     await core.api.start(apiPort);
 
     // Imported through its URL because it is generated while this file runs,
