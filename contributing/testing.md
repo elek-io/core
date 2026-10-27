@@ -155,7 +155,8 @@ Two runs may overlap, so every path either of them writes outside the repository
 | A path under the OS temp directory | `uuid()` in the name, or `mkdtemp` | Per call |
 
 - A run id is `r<pid>-<12 hex>`. The pid says whether the run still exists, and the random part makes a recycled pid a different run, so a leftover naming this run's own pid is swept rather than adopted.
-- The two directories in the repository root cannot move under the base. The generated client imports `@elek-io/core`, which resolves only by Node self-reference from inside the checkout. Both `.gitignore` and the `ignorePatterns` of [`.oxlintrc.json`](../.oxlintrc.json) carry `.elek.io-*`, so a leftover of a crashed run breaks neither `git status` nor a check.
+- The two directories in the repository root cannot move under the base. The generated client imports `@elek-io/core`, which resolves only by Node self-reference from inside the checkout.
+- Both `.gitignore` and the `ignorePatterns` of [`.oxlintrc.json`](../.oxlintrc.json) carry `.elek.io-*`, so a leftover of a crashed run breaks neither `git status` nor a check. [`ignoreLists.test.ts`](../src/test/ignoreLists.test.ts) plants a file in both directories and fails when either list stops covering them.
 - A fixed path under the OS temp directory would be shared by every run on the machine. [`tmpPaths.test.ts`](../src/test/tmpPaths.test.ts) reads the test sources and fails on a new one.
 - [`concurrentRuns.test.ts`](../src/test/concurrentRuns.test.ts) starts two real runs of [`collisions.test.ts`](../src/test/collisions.test.ts) at once, over all four shared resources, and plants the leftovers whose fate the run starts have to get right.
 
