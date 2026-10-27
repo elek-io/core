@@ -243,21 +243,23 @@ npx elek generate:types ./out js              # must now emit .mjs and .d.mts
 
 Installing the tarball with npm is the useful part. npm resolves optional peers even though it does not install them, so a range skew surfaces there and not under pnpm.
 
-The typescript is pinned to 6 in that step on purpose. A plain `npm install -D typescript` takes 7, where the step needs a `tsconfig.json` that covers `./out` as well, see below.
+The typescript is pinned to 6 in that step on purpose. A plain `npm install -D typescript` takes 7, where the step needs a `tsconfig.json` with `isolatedDeclarations` switched on as well, see below.
 
-### Consumers on typescript 7 need a tsconfig that covers the output
+### Consumers on typescript 7 need isolatedDeclarations
 
-typescript 7 is the Go port, and tsdown's dts generator running on it needs a `tsconfig.json` that covers the directory it writes into. typescript 6 has neither requirement. Measured against a packed 0.25.1 with tsdown 0.23.1 and typescript 7.0.2:
+typescript 7 is the Go port, and it no longer exports the classic compiler API tsdown's dts generator calls. tsdown 0.23.2 refuses that combination outright and names the way out, `isolatedDeclarations`, which routes declaration generation through Oxc instead. typescript 6 asks for none of it. Measured against a packed 0.26.0 with tsdown 0.23.2 and typescript 7.0.2:
 
-| The consumer's project | `generate:types ./out js` |
-| --- | --- |
-| No `tsconfig.json` | Exits 1 with "The tsgo generator requires a tsconfig file to be specified" |
-| `include: ["src"]`, writing to `./out` | Exits 1 with "tsgo did not generate dts file", and the generated `out/types.ts` stays behind |
-| `include: ["src"]`, writing to `./src/elek` | Exits 0 and writes the `.js` and the `.d.ts` |
+| The consumer's project | `generate:types <dir> js` | `generate:client <dir> js` |
+| --- | --- | --- |
+| No `tsconfig.json` | Exits 1 with "TypeScript 7.0.2 does not provide the classic TypeScript API required by tsc", and the generated `types.ts` stays behind | The same failure |
+| `include: ["src"]`, writing inside or outside it | The same failure, so the output directory no longer decides it | The same failure |
+| `isolatedDeclarations: true`, writing anywhere | Exits 0 and writes the `.mjs` and the `.d.mts` | Exits 1 on `TS9007`, because the generated client has functions without an explicit return type |
 
-Core's own default output directory is `./.elek.io`, which a typical `include: ["src"]` leaves out, so the command fails there with no `outDir` passed at all.
+- tsdown 0.23.1 failed differently, on a tsconfig that did not cover the output directory, and both commands succeeded without `isolatedDeclarations` when it did. So 0.23.2 takes `generate:client js` on typescript 7 away rather than moving its condition.
+- Core's own default output directory is `./.elek.io`, and it fails there like everywhere else.
+- Which of the two a consumer meets is decided by the tsdown they install inside the `^0.23.0` peer range, not by the tsdown pinned here. So pinning the newest 0.23.x is what makes this table describe what they get.
 
-This is tsdown's behavior rather than Core's and it only affects `generate:* js`, so it is documented in `docs/api-clients.md`, with the ways around it, instead of being worked around.
+This is tsdown's behavior rather than Core's and it only affects `generate:* js`, so it is documented in `docs/api-clients.md`, with the ways around it, instead of being worked around. Re-measure both commands on both typescript lines at every tsdown bump.
 
 ### Why the typescript dev pin is still 6.x
 
