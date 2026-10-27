@@ -118,7 +118,7 @@ Askpass never hears that its answer failed, so with a refused `ELEK_IO_REMOTE_AC
 
 | Rejected | Why |
 | --- | --- |
-| Waiting for git-lfs 3.8.0 | It bounds the loop at 3 attempts, but no dugite release bundles it, and the token stays in git's environment |
+| Waiting for git-lfs 3.8.0 | It bounds the loop at 3 attempts rather than stopping it, so each LFS request could still mint 3 tokens, and the token stays in git's environment. The bound ships on the dev pin dugite 3.3.1, which bundles git-lfs 3.8.1, and not on the peer floor 3.2.3, which bundles git-lfs 3.7.1 |
 | An erase-aware helper without a relay | It would keep state in marker files on disk |
 
 It also took the token out of git's environment and fixed askpass inside Electron, which ran `process.execPath` without `ELECTRON_RUN_AS_NODE`. The older transport alternatives still stand: `http.extraheader` puts the token on argv or into `.git/config`, a token in the URL persists and leaks into logs, and pre-seeding `git credential-cache` adds a daemon and a TTL for nothing.

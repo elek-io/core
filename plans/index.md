@@ -10,7 +10,7 @@ Plans are committed and reach `main`, so an idea survives until someone picks it
 - [`documentation-rule-gaps.md`](./documentation-rule-gaps.md) - three documentation checks that should have caught something and did not
 - [`git-service-object-parameters.md`](./git-service-object-parameters.md) - give every public `GitService` method one props object, a breaking change
 - [`gitignore-os-junk.md`](./gitignore-os-junk.md) - the non-dot OS files a generated Project `.gitignore` still misses
-- [`git-lfs-auth-bound.md`](./git-lfs-auth-bound.md) - pin git-lfs 3.8.0's bound on credential retries in a test once dugite bundles it
+- [`git-lfs-auth-bound.md`](./git-lfs-auth-bound.md) - pin git-lfs 3.8.0's bound on credential retries in a test, now that the dugite dev pin bundles it
 - [`project-description-shape.md`](./project-description-shape.md) - whether a Project description becomes optional and translatable like a Collection's
 - [`release-on-an-empty-remote.md`](./release-on-an-empty-remote.md) - a Release or preview made before the first push strands tags or lands `draft` alone
 - [`reporting.md`](./reporting.md) - Core's half of in-app reporting, and the request shape elek.io Cloud should be built against
