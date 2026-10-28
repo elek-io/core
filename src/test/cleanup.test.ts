@@ -199,6 +199,42 @@ describe('a step of dispose that never finishes', function () {
   });
 });
 
+describe('the bound of a step', function () {
+  /** The timers of this worker that are keeping its event loop alive. */
+  function referencedTimers(): number {
+    return process
+      .getActiveResourcesInfo()
+      .filter((resource) => resource === 'Timeout').length;
+  }
+
+  it('holds the event loop, so an idle host cannot exit past it', function () {
+    let finish = (): void => {};
+    const work = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+
+    // Read with nothing awaited in between, so no other timer of this
+    // worker can appear or go between the two readings
+    const before = referencedTimers();
+    const bounded = finishesWithin(work, hungTeardownMs);
+    const waiting = referencedTimers();
+
+    expect(
+      waiting - before,
+      'An unreferenced bound only holds while something else keeps the loop alive, so a host with nothing left to do would exit before dispose() resolved and report nothing.'
+    ).toBe(1);
+
+    finish();
+    return bounded.then((finished) => {
+      expect(finished).toBe(true);
+      expect(
+        referencedTimers(),
+        'A bound that is no longer waited on has to be cleared, or finishing work still costs the bound.'
+      ).toBe(before);
+    });
+  });
+});
+
 describe('the bound a consumer reads', function () {
   it('is the one Core gives a step', async function () {
     const usage = Path.join(
