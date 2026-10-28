@@ -12,6 +12,7 @@ import { GitCredentialRelay } from '../util/gitCredentialRelay.js';
 import { uuid } from '../util/shared.js';
 import { finishesWithin, TEARDOWN_BOUND_MS } from '../util/teardown.js';
 import { cleanupTimeoutMs, hungTeardownMs } from './budgets.js';
+import sharedCore from './setup.js';
 import { cleanUpTmpCore } from './util.js';
 
 /**
@@ -265,6 +266,36 @@ describe("the cleanup of a test's Core", function () {
     expect(await Fs.pathExists(dataDir)).toBe(false);
   });
 
+  it('fails in seconds naming the credential relay', async function () {
+    const dataDir = tmpDataDir();
+    const stalling = new ElekIoCore({ dataDir, log });
+    vi.spyOn(GitCredentialRelay.prototype, 'close').mockReturnValue(
+      neverFinishes()
+    );
+
+    const startedAt = Date.now();
+    await expect(cleanUpTmpCore(stalling, dataDir)).rejects.toThrow(
+      'gave up on: credential relay'
+    );
+
+    expect(Date.now() - startedAt).toBeLessThan(hungTeardownMs);
+    expect(await Fs.pathExists(dataDir)).toBe(false);
+  });
+
+  it('fails in seconds naming the logger', async function () {
+    const dataDir = tmpDataDir();
+    const stalling = coreWithAStuckLogFile(dataDir);
+
+    const startedAt = Date.now();
+    await expect(
+      // The stuck transport still holds the log file, so the directory is
+      // left to the helper above, which ends the transport for real first
+      cleanUpTmpCore(stalling, dataDir, async () => {})
+    ).rejects.toThrow('gave up on: logger');
+
+    expect(Date.now() - startedAt).toBeLessThan(hungTeardownMs);
+  });
+
   it('fails in seconds naming the data directory', async function () {
     const dataDir = tmpDataDir();
     const stalling = new ElekIoCore({ dataDir, log });
@@ -275,6 +306,21 @@ describe("the cleanup of a test's Core", function () {
     ).rejects.toThrow('gave up on: data directory');
 
     expect(Date.now() - startedAt).toBeLessThan(hungTeardownMs);
+    // Whoever reads the log of a failed run finds the step there too. The
+    // shared Core writes it, because the test's own logger is closed by
+    // then, and winston has no per transport flush, so the read repeats
+    await vi.waitFor(
+      async () => {
+        const records = await readRecords(sharedCore.util.pathTo.logs);
+        expect(
+          records.map((record) => [record.level, record.message])
+        ).toContainEqual([
+          'error',
+          "The cleanup of a test's Core gave up on: data directory",
+        ]);
+      },
+      { timeout: hungTeardownMs, interval: 20 }
+    );
   });
 
   it('fails nothing when a step is only slow', async function () {
