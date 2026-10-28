@@ -15,8 +15,8 @@ import { cleanupTimeoutMs, hungTeardownMs } from './budgets.js';
 import { cleanUpTmpCore } from './util.js';
 
 /**
- * Drives every teardown step into never finishing, which is what a handle a
- * platform does not give back does to a cleanup.
+ * Drives every teardown step into never finishing, which is what a cleanup
+ * looks like when one of its steps stops coming back.
  *
  * Each perturbation costs its bound in real time. Faking the timers would
  * take that back and leave the real IO of the steps around it unscheduled,

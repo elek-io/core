@@ -2,9 +2,10 @@
  * How long one step of tearing Core down may take before Core gives up on
  * it, in milliseconds.
  *
- * Over a full suite run of 208 `dispose()` calls the slowest step took 7ms,
- * so a step still running after five seconds is stuck rather than slow. The
- * bound is per step, so a `dispose()` whose every step stalls still resolves.
+ * A full suite run of 2026-10-28 timed 208 `dispose()` calls, whose slowest
+ * step took 7ms, so a step still running after five seconds is stuck rather
+ * than slow. The bound is per step, so a `dispose()` whose every step stalls
+ * still resolves.
  *
  * @see ../../docs/usage.md
  */

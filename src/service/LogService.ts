@@ -220,8 +220,8 @@ export class LogService {
   /**
    * Flushes and closes the logger, removing the process-level exception and
    * rejection handlers it registered. Resolves true once winston flushed,
-   * and false once it gave up waiting for it, which is a transport that
-   * never let go of its file.
+   * and false once it gave up waiting, which is a transport that never
+   * emitted `finish`.
    *
    * Safe to call twice and concurrently. The first call's promise is kept and
    * handed back to every later one, because winston ends the underlying

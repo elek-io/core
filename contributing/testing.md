@@ -115,7 +115,7 @@ When a measurement shows a test or a hook needs more, raise the global rather th
 
 ### How a cleanup step is bounded
 
-A cleanup step that never finishes used to cost the whole hook budget and name nothing. A test's Core ended on Windows with a handle the platform did not give back, and 236,388ms later the failure pointed at the `onTestFinished` of `createTmpCore` rather than at the step inside it.
+A cleanup step that never finishes used to cost the whole hook budget and name nothing. A test's Core stopped inside its cleanup on Windows, and 236,388ms later the failure pointed at the `onTestFinished` of `createTmpCore` rather than at the step inside it. Which step it was could not be read off anything the run left behind.
 
 So every step of a cleanup is bounded, and none of the bounds is a test's or a hook's own:
 
@@ -126,7 +126,7 @@ So every step of a cleanup is bounded, and none of the bounds is a test's or a h
 | `hungTeardownMs`, 15,000ms | how long a test waits for a bounded teardown before reading it as hung | [`src/test/budgets.ts`](../src/test/budgets.ts) |
 
 - Core bounds its own three steps. A stalled one is named in what `dispose()` hands back and in a `warn` record, except the logger, whose stream has ended by the time it is known.
-- `cleanUpTmpCore` in [`src/test/util.ts`](../src/test/util.ts) bounds the step left to it and throws naming every step that stalled, so a stuck handle says which one it is in seconds.
+- `cleanUpTmpCore` in [`src/test/util.ts`](../src/test/util.ts) bounds the step left to it and throws naming every step that stalled, so a step that stops coming back says which one it is in seconds.
 - The cleanup budget is measured like the others, 504ms times the multiple. Nothing in CI reports a cleanup duration, so that measurement is a Linux one scaled to the slowest runner rather than the windows-only set, see [`budgets.ts`](../src/test/budgets.ts).
 - [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) holds all three: the whole cleanup stays inside the hook budget, a test waits longer than Core does, and this doc states every number.
 - A cleanup that is only slow fails nothing. [`cleanup.test.ts`](../src/test/cleanup.test.ts) drives each step into never finishing and a step into taking a third of its bound, which is a fraction rather than a hair under it so no jitter on a slow runner reads slow as stalled.
