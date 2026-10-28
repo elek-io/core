@@ -2,13 +2,16 @@
  * The suite's time budgets, derived from measured durations.
  *
  * Each budget is the slowest measured duration of what it bounds times one
- * multiple. The measured set is windows-only and no platform is reliably the
- * slowest, so every number here is a floor that rises as the suite gains
- * tests, and a slower run supersedes one at the next re-measurement of the
- * whole set rather than on the spot.
+ * multiple. The measured set is windows-only, apart from the cleanup budget
+ * that says so itself, and no platform is reliably the slowest, so every
+ * number here is a floor that rises as the suite gains tests, and a slower
+ * run supersedes one at the next re-measurement of the whole set rather
+ * than on the spot.
  *
  * @see ../../contributing/testing.md
  */
+
+import { TEARDOWN_BOUND_MS } from '../util/teardown.js';
 
 /**
  * Margin every budget carries over the slowest duration measured for it.
@@ -62,3 +65,36 @@ export const hookTimeoutMs = slowestHookMs * budgetMultiple;
 export const jobTimeoutMinutes = Math.ceil(
   (slowestJobSeconds * budgetMultiple) / 60
 );
+
+/**
+ * Slowest step of a test Core's cleanup measured on 2026-10-28, scaled to
+ * the slowest runner, in milliseconds.
+ *
+ * Over one full run on Linux, removing the data directory peaked at 24ms of
+ * 184 cleanups and every step of `dispose()` stayed below 10ms of 208 calls.
+ * Nothing in CI reports a cleanup duration, so this is the one set here that
+ * is not windows-only, and the measurement is scaled by 21, the widest per
+ * operation factor between ubuntu and windows-2025 in the platform table.
+ *
+ * @see ../../contributing/testing.md
+ */
+export const slowestCleanupMs = 24 * 21;
+
+/**
+ * The bound the suite gives the one cleanup step Core does not bound itself,
+ * removing a test Core's data directory.
+ *
+ * It is no per-test and no per-hook budget. A hook keeps the global one and
+ * fails on this far sooner, with the step that stalled named.
+ */
+export const cleanupTimeoutMs = slowestCleanupMs * budgetMultiple;
+
+/**
+ * How long a test waits for a bounded teardown before it reads it as hung.
+ *
+ * Core gives one step of tearing down `TEARDOWN_BOUND_MS`, so a step that
+ * has not resolved by that times the multiple is hung rather than slow. It
+ * keeps a regression naming its step in seconds, which is what the bounds
+ * are for.
+ */
+export const hungTeardownMs = TEARDOWN_BOUND_MS * budgetMultiple;

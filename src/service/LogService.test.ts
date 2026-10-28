@@ -5,6 +5,8 @@ import DailyRotateFile from 'winston-daily-rotate-file';
 import { LogService } from './LogService.js';
 import type { ElekIoCoreOptions } from '../schema/index.js';
 import { createPathTo } from '../util/node.js';
+import { finishesWithin } from '../util/teardown.js';
+import { hungTeardownMs } from '../test/budgets.js';
 
 const options: ElekIoCoreOptions = {
   log: { level: 'debug', hasProcessErrorHandlers: true },
@@ -52,27 +54,23 @@ describe('LogService double close', function () {
     const log = new LogService(options, pathTo);
 
     await log.close();
-    await expect(
-      Promise.race([
-        log.close(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('close() never resolved')), 5000)
-        ),
-      ])
-    ).resolves.toBeUndefined();
+    const second = log.close();
+    expect(
+      await finishesWithin(second, hungTeardownMs),
+      'close() never resolved'
+    ).toBe(true);
+    expect(await second).toBe(true);
   });
 
   it('resolves both when two closes are in flight at once', async function () {
     const log = new LogService(options, pathTo);
 
-    await expect(
-      Promise.race([
-        Promise.all([log.close(), log.close()]),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('close() never resolved')), 5000)
-        ),
-      ])
-    ).resolves.toEqual([undefined, undefined]);
+    const both = Promise.all([log.close(), log.close()]);
+    expect(
+      await finishesWithin(both, hungTeardownMs),
+      'close() never resolved'
+    ).toBe(true);
+    expect(await both).toEqual([true, true]);
   });
 });
 
