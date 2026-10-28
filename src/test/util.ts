@@ -10,6 +10,8 @@ import type { RunnerTestCase } from 'vitest';
 import { expect, onTestFinished } from 'vitest';
 import ElekIoCore from '../index.node.js';
 import { CoreError } from '../util/shared.js';
+import { finishesWithin } from '../util/teardown.js';
+import { cleanupTimeoutMs } from './budgets.js';
 import type {
   Collection,
   Component,
@@ -44,17 +46,52 @@ export function tmpDirPath(): string {
  * Creates a Core instance on its own temporary data directory.
  * Disposal and directory removal are registered with vitest, so a failing
  * assertion cannot leak the directory or the logger's process handlers.
+ *
+ * A cleanup step that never finishes fails the test by name in seconds
+ * rather than after the hook budget, see `cleanUpTmpCore`.
  */
 export function createTmpCore(
   props?: Omit<NonNullable<ConstructorElekIoCoreProps>, 'dataDir'>
 ): { core: ElekIoCore; dataDir: string } {
   const dataDir = uniqueTmpPath();
   const tmpCore = new ElekIoCore({ ...props, dataDir });
-  onTestFinished(async () => {
-    await tmpCore.dispose();
-    await Fs.remove(dataDir);
-  });
+  onTestFinished(() => cleanUpTmpCore(tmpCore, dataDir));
   return { core: tmpCore, dataDir };
+}
+
+/**
+ * Disposes a test's Core, removes its data directory and throws naming every
+ * step that never finished.
+ *
+ * `dispose()` bounds its own steps and names them, and the removal gets the
+ * measured cleanup budget. Exported, and taking the removal, so a stalled
+ * step can be driven without failing the test that drives it.
+ *
+ * @see ../../contributing/testing.md
+ */
+export async function cleanUpTmpCore(
+  tmpCore: ElekIoCore,
+  dataDir: string,
+  remove: (path: string) => Promise<void> = Fs.remove
+): Promise<void> {
+  const { stalledSteps } = await tmpCore.dispose();
+  const stalled: string[] = [...stalledSteps];
+  if ((await finishesWithin(remove(dataDir), cleanupTimeoutMs)) === false) {
+    stalled.push('data directory');
+  }
+  if (stalled.length > 0) {
+    // No attributes, so the vocabulary in logSchema.ts stays the one Core
+    // itself writes. The steps are in the message already
+    core.logger.error({
+      source: 'core',
+      message: `The cleanup of a test's Core gave up on: ${stalled.join(', ')}`,
+    });
+    throw new Error(
+      `The cleanup of a test's Core gave up on: ${stalled.join(
+        ', '
+      )}. A step that never finishes costs seconds here rather than the hook budget, and still holds whatever it held, see contributing/testing.md.`
+    );
+  }
 }
 
 /**

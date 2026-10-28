@@ -6,13 +6,17 @@ import { describe, expect, it } from 'vitest';
 import vitestConfig from '../vitest.config.js';
 import {
   budgetMultiple,
+  cleanupTimeoutMs,
   hookTimeoutMs,
+  hungTeardownMs,
   jobTimeoutMinutes,
+  slowestCleanupMs,
   slowestHookMs,
   slowestJobSeconds,
   slowestTestMs,
   testTimeoutMs,
 } from './test/budgets.js';
+import { TEARDOWN_BOUND_MS } from './util/teardown.js';
 
 /**
  * Guards the suite's time budgets.
@@ -300,12 +304,36 @@ describe('timeout budgets', () => {
     expect(jobCap(workflow, 'absent')).toBeUndefined();
   });
 
+  it('bounds a cleanup well inside the hook it runs in', () => {
+    // dispose() bounds each of its three steps, then the suite bounds the
+    // one step left to it, so this is the whole of what a cleanup can cost
+    const slowestCleanup = 3 * TEARDOWN_BOUND_MS + cleanupTimeoutMs;
+
+    expect(
+      {
+        isCleanupInsideTheHook: slowestCleanup < hookTimeoutMs,
+        isHangLongerThanABoundedStep: hungTeardownMs > TEARDOWN_BOUND_MS,
+      },
+      'A cleanup has to give up long before the hook budget does, or a stalled step is a hook timeout again with nothing named. A test reading a teardown as hung has to wait longer than Core waits itself, or it reports a bound that worked as a hang. See contributing/testing.md.'
+    ).toEqual({
+      isCleanupInsideTheHook: true,
+      isHangLongerThanABoundedStep: true,
+    });
+  });
+
   it('states every measured budget in contributing/testing.md', async () => {
     const doc = await Fs.readFile(rulesDoc, 'utf8');
     const stated = [
-      ...[slowestTestMs, testTimeoutMs, slowestHookMs, hookTimeoutMs].map(
-        (ms) => `${ms.toLocaleString('en-US')}ms`
-      ),
+      ...[
+        slowestTestMs,
+        testTimeoutMs,
+        slowestHookMs,
+        hookTimeoutMs,
+        slowestCleanupMs,
+        cleanupTimeoutMs,
+        TEARDOWN_BOUND_MS,
+        hungTeardownMs,
+      ].map((ms) => `${ms.toLocaleString('en-US')}ms`),
       `${slowestJobSeconds}s`,
       `${jobTimeoutMinutes} minutes`,
       `multiple is ${budgetMultiple}`,
