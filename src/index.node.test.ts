@@ -5,6 +5,8 @@ import Os from 'node:os';
 import ElekIoCore, { CoreError } from './index.node.js';
 import core, { testUserProps } from './test/setup.js';
 import { createTmpCore, tmpDirPath } from './test/util.js';
+import { finishesWithin } from './util/teardown.js';
+import { hungTeardownMs } from './test/budgets.js';
 import Path from 'node:path';
 
 describe('Node.js', function () {
@@ -191,14 +193,12 @@ describe('Node.js', function () {
     const { core: disposedCore } = createTmpCore();
 
     await disposedCore.dispose();
-    await expect(
-      Promise.race([
-        disposedCore.dispose(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('dispose() never resolved')), 5000)
-        ),
-      ])
-    ).resolves.toBeUndefined();
+    const second = disposedCore.dispose();
+    expect(
+      await finishesWithin(second, hungTeardownMs),
+      'dispose() never resolved'
+    ).toBe(true);
+    expect(await second).toEqual({ stalledSteps: [] });
   });
 
   it('still takes a log level without being told about error handlers', function () {

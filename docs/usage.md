@@ -380,8 +380,14 @@ See [`error-handling.md`](./error-handling.md) for the full list of error types 
 `dispose()` stops the local API if running and closes the logger, removing the process-level exception handlers.
 
 ```typescript
-await core.dispose();
+const { stalledSteps } = await core.dispose();
 ```
+
+Each step gets 5,000ms, so a step that never finishes, such as a log file a platform does not let go of, costs seconds rather than your whole shutdown. `dispose()` resolves either way.
+
+- `stalledSteps` names what Core gave up on, `local API`, `credential relay` or `logger`, and is empty when every step finished.
+- A stalled step leaves a `warn` record naming it in the log file, except the logger, whose own stream has ended by the time Core knows.
+- What a stalled step holds stays held, a loopback port or the last lines Core wrote, so read a step in `stalledSteps` as something to report rather than to retry.
 
 ## The local API
 

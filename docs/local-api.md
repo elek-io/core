@@ -23,7 +23,7 @@ Or from the CLI, without writing code:
 elek api:start [port]   # port defaults to 31310
 ```
 
-`ElekIoCore.dispose()` stops the API if it is running, and the port is released once it resolves.
+`ElekIoCore.dispose()` stops the API if it is running, and the port is released once it resolves. A stop that never finishes is bounded instead and named in what `dispose()` hands back, which leaves the port held, see [`usage.md`](./usage.md#cleaning-up).
 
 When you embed Core yourself, the API only runs once you start it, with `core.api.start()` or `elek api:start`.
 
