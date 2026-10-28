@@ -452,9 +452,9 @@ export default class ElekIoCore {
    * and rejection handlers.
    *
    * Every step is bounded, so one that never finishes costs seconds rather
-   * than the host's whole shutdown, and `stalledSteps` names it. Safe to
-   * call twice, and a record logged afterwards is dropped rather than
-   * thrown at the ended stream.
+   * than the whole shutdown, and `stalledSteps` names it. So does a `warn`
+   * record, except the logger, whose own stream has ended by then. Safe to
+   * call twice, and a later record is dropped rather than thrown.
    *
    * @see ../docs/usage.md
    */
