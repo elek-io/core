@@ -128,7 +128,7 @@ So every step of a cleanup is bounded, and none of the bounds is a test's or a h
 - Core bounds its own three steps. A stalled one is named in what `dispose()` hands back and in a `warn` record, except the logger, whose stream has ended by the time it is known.
 - `cleanUpTmpCore` in [`src/test/util.ts`](../src/test/util.ts) bounds the step left to it and throws naming every step that stalled, so a step that stops coming back says which one it is in seconds.
 - The cleanup budget is measured like the others, 504ms times the multiple. Nothing in CI reports a cleanup duration, so that measurement is a Linux one scaled to the slowest runner rather than the windows-only set, see [`budgets.ts`](../src/test/budgets.ts).
-- [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) holds all three: the whole cleanup stays inside the hook budget, a test waits longer than Core does, and this doc states every number.
+- [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) holds what cannot drift: the whole cleanup stays inside the hook budget, a test waits longer than Core does, and this doc states every number.
 - A cleanup that is only slow fails nothing. [`cleanup.test.ts`](../src/test/cleanup.test.ts) drives each step into never finishing and a step into taking a third of its bound, which is a fraction rather than a hair under it so no jitter on a slow runner reads slow as stalled.
 
 ### A timed out test leaks into its own file only
