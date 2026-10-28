@@ -114,7 +114,7 @@ describe('a step of dispose that never finishes', function () {
       await finishesWithin(disposing, hungTeardownMs),
       'dispose() did not resolve, so nothing bounded the step'
     ).toBe(true);
-    expect((await disposing).stalledSteps).toEqual(['local API']);
+    expect((await disposing).stalledSteps).toEqual(['api']);
 
     const stalls = (await readRecords(stalling.util.pathTo.logs)).filter(
       (record) => record.attributes?.['elek.teardown.step'] !== undefined
@@ -126,7 +126,7 @@ describe('a step of dispose that never finishes', function () {
       ],
     ]);
     expect(stalls[0]?.attributes).toMatchObject({
-      'elek.teardown.step': 'local API',
+      'elek.teardown.step': 'api',
       'elek.duration_ms': TEARDOWN_BOUND_MS,
     });
   });
@@ -143,7 +143,7 @@ describe('a step of dispose that never finishes', function () {
       await finishesWithin(disposing, hungTeardownMs),
       'dispose() did not resolve, so nothing bounded the step'
     ).toBe(true);
-    expect((await disposing).stalledSteps).toEqual(['credential relay']);
+    expect((await disposing).stalledSteps).toEqual(['relay']);
 
     const messages = (await readRecords(stalling.util.pathTo.logs)).map(
       (record) => record.message

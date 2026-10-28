@@ -50,10 +50,23 @@ export type * from './util/entryIssue.js';
 /**
  * One step of `dispose()`, as a stall names it.
  *
- * The local API and the credential relay each release a loopback port, the
- * logger flushes what Core wrote and hands the process-level handlers back.
+ * `api` and `relay` each stop listening on their loopback port, `logger`
+ * flushes what Core wrote and hands the process-level handlers back.
  */
-export type DisposeStep = 'local API' | 'credential relay' | 'logger';
+export type DisposeStep = 'api' | 'relay' | 'logger';
+
+/**
+ * What Core calls each step of `dispose()` where a person reads it.
+ *
+ * A step is a value to branch on, so it is one lowercase word. Core's own
+ * `warn` record spells it out through this map, and a host that shows a
+ * stalled step has the same words to show.
+ */
+export const disposeStepNames: Record<DisposeStep, string> = {
+  api: 'local API',
+  relay: 'credential relay',
+  logger: 'logger',
+};
 
 /**
  * What `dispose()` gave up on, so a host can say so instead of guessing.
@@ -436,7 +449,7 @@ export default class ElekIoCore {
   /**
    * Stops the local API and the loopback listener git's credential helper
    * reaches, then closes the logger, removing the process-level exception
-   * and rejection handlers. A step that finishes releases what it held.
+   * and rejection handlers.
    *
    * Every step is bounded, so one that never finishes costs seconds rather
    * than the host's whole shutdown, and `stalledSteps` names it. Safe to
@@ -454,7 +467,7 @@ export default class ElekIoCore {
       stalledSteps.push(step);
       this.logService.warn({
         source: 'core',
-        message: `Gave up on the ${step} after ${TEARDOWN_BOUND_MS}ms while disposing elek.io Core`,
+        message: `Gave up on the ${disposeStepNames[step]} after ${TEARDOWN_BOUND_MS}ms while disposing elek.io Core`,
         meta: {
           'elek.teardown.step': step,
           'elek.duration_ms': TEARDOWN_BOUND_MS,
@@ -462,8 +475,8 @@ export default class ElekIoCore {
       });
     };
 
-    await bounded('local API', this.localApi.stop());
-    await bounded('credential relay', this.gitCredentialRelay.close());
+    await bounded('api', this.localApi.stop());
+    await bounded('relay', this.gitCredentialRelay.close());
     // Logged before closing so the final line is flushed
     this.logService.info({ source: 'core', message: 'Disposing elek.io Core' });
     // The logger bounds its own flush and reports it, because the record

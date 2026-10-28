@@ -8,7 +8,7 @@ import Path from 'node:path';
 import ts from 'typescript';
 import type { RunnerTestCase } from 'vitest';
 import { expect, onTestFinished } from 'vitest';
-import ElekIoCore from '../index.node.js';
+import ElekIoCore, { disposeStepNames } from '../index.node.js';
 import { CoreError } from '../util/shared.js';
 import { finishesWithin } from '../util/teardown.js';
 import { cleanupTimeoutMs } from './budgets.js';
@@ -75,7 +75,8 @@ export async function cleanUpTmpCore(
   remove: (path: string) => Promise<void> = Fs.remove
 ): Promise<void> {
   const { stalledSteps } = await tmpCore.dispose();
-  const stalled: string[] = [...stalledSteps];
+  // Spelled out, because this message is read rather than branched on
+  const stalled = stalledSteps.map((step) => disposeStepNames[step]);
   if ((await finishesWithin(remove(dataDir), cleanupTimeoutMs)) === false) {
     stalled.push('data directory');
   }
@@ -89,7 +90,7 @@ export async function cleanUpTmpCore(
     throw new Error(
       `The cleanup of a test's Core gave up on: ${stalled.join(
         ', '
-      )}. A step that never finishes costs seconds here rather than the hook budget, and still holds whatever it held, see contributing/testing.md.`
+      )}. A step that never finishes costs seconds here rather than the hook budget, and what it waited for is still waiting, see contributing/testing.md.`
     );
   }
 }
