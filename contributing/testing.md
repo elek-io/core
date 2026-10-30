@@ -4,7 +4,7 @@ Run the suite with `pnpm test`, watch mode with `pnpm dev`, coverage with `pnpm 
 
 The suite is integration heavy. Most service tests create real Projects, which means real git repositories. A full run spawns several thousand git subprocesses and writes tens of thousands of small files.
 
-Each test file writes to its own fresh data directory, `~/elek.io-test/worker-<poolId>-<uuid>` by default, see the parallel test files section below. This profile dominates how fast the suite runs on a given machine and explains the CI choices below.
+Each test file writes to its own fresh data directory, `~/elek.io-test/worker-<poolId>-<runId>-<fileId>` by default, see the parallel test files section below. This profile dominates how fast the suite runs on a given machine and explains the CI choices below.
 
 ## Coverage under-reports two areas
 
@@ -144,20 +144,83 @@ The shared test Core in [`src/test/setup.ts`](../src/test/setup.ts) logs at `deb
 - The Astro suites write Astro's own output past vitest's console capture, so it still prints.
 - Run by an AI agent, vitest picks its `agent` reporter, which hides passing files whatever the config says. Unset `AI_AGENT` and `CLAUDECODE` to see what CI prints.
 
+## Git run from a test
+
+A test that runs git itself, rather than through Core, passes `GIT_TERMINAL_PROMPT=0` and an empty `GIT_ASKPASS` wherever that git can ask for a credential, the way every invocation of Core's own carries both, see [`git-credentials.md`](./git-credentials.md#no-prompt-and-no-askpass). That is `git credential` and anything reaching a remote that authenticates.
+
+- Prompts off alone does not bound such a call, because an askpass reached through `SSH_ASKPASS` or `core.askPass` still runs and may answer nothing for as long as it likes. [`workerSetup.ts`](../src/test/workerSetup.ts) clears no environment variable, so a developer's `SSH_ASKPASS` reaches every test.
+- A test that needs an askpass of its own, such as the control call below, leaves `GIT_ASKPASS` unset instead, and then that askpass has to exit by itself.
+- git skips its credential machinery for a local path, so the bare remotes the rest of the suite runs against never prompt.
+- Committing with git directly needs an identity of its own too, see [parallel test files](#parallel-test-files) below.
+
+Without prompts off, git falls back to a terminal prompt whenever an askpass answers nothing, and it reads that prompt from the terminal rather than from the stdin the test wrote. Measured with `git credential fill` and an askpass that exits without answering, on Linux on 2026-10-27:
+
+| The call | git |
+| --- | --- |
+| prompts on, under a pty | printed `Username for ...` and was still waiting when the probe killed it 8 seconds later |
+| prompts on, no terminal attached | failed in 26ms to 28ms with `could not read Username ...: No such device or address` |
+| prompts off | failed in 26ms to 31ms with `could not read Username ...: terminal prompts disabled`, after running the askpass |
+
+An askpass that never answers is not bounded by prompts off at all. Measured the same way on Linux on 2026-10-28, with an askpass that sleeps:
+
+| The call | git |
+| --- | --- |
+| prompts off, the askpass in `SSH_ASKPASS` or `core.askPass` | was still waiting when the probe killed it 8 seconds later, with or without `DISPLAY` and `SSH_ASKPASS_REQUIRE` |
+| prompts off and an empty `GIT_ASKPASS` | failed in 3ms to 5ms with `could not read Username ...: terminal prompts disabled`, running neither askpass |
+
+So a prompt only hangs a test where the runner attaches a terminal, which fits the one timeout such a call has had: on `windows-2025` on 2026-10-21, where the other three platforms passed the same head. What it waited for that once was never recorded, and the timeout took the cleanup with it, the directory git ran in stayed busy and its removal failed with `EBUSY: resource busy or locked, rmdir`.
+
+[`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) makes that call without Core's environment, as the control for an askpass running at all, and asserts it with an askpass that answers and with one that fails:
+
+- An askpass that answers still runs, which is what the control is there for.
+- One that fails ends the call with git's reason, inside the slowest test printed beside it on that runner, 3,061ms, times the margin in [`budgets.ts`](../src/test/budgets.ts). That ceiling is no per-call budget, which [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) keeps on the measured globals, but the line between a call that ran and one that waited.
+- A failing control call puts git's own stderr into the assertion's message, so the next one says what git was waiting for.
+
 ## Parallel test files
 
 Test files run in parallel, one file per vitest worker. This works because no state is shared between files:
 
-- [`src/test/workerSetup.ts`](../src/test/workerSetup.ts) is a vitest setup file. It runs in the worker process before each test file and its imports, and points `ELEK_IO_DATA_DIR` at a fresh directory, `~/elek.io-test/worker-<poolId>-<uuid>`.
+- [`src/test/workerSetup.ts`](../src/test/workerSetup.ts) is a vitest setup file. It runs in the worker process before each test file and its imports, and points `ELEK_IO_DATA_DIR` at a fresh directory, `~/elek.io-test/worker-<poolId>-<runId>-<fileId>`.
   - Every Core the file constructs without an explicit `dataDir` resolves it, including CLI subprocesses (they inherit the worker's env) and the Astro loader (it runs in-process).
   - A developer-set `ELEK_IO_DATA_DIR` is respected as the base the worker directories nest beneath, so the whole suite can still be redirected.
 - Because the directory is unique per file, counts start at zero and tests may assert absolute totals. No reset step is needed between files.
 - The directories live under the home directory on purpose. Using the OS temp dir would put them on tmpfs on Linux, an artificial speedup of the git-bound workload that the Dev Drive decision above already rejected. Side effect of the layout: the suite no longer touches a real `~/elek.io` at all.
-- [`src/test/globalSetup.ts`](../src/test/globalSetup.ts) runs once in the main process and sweeps `worker-*` directories left by previous runs. It removes only that prefix, so a developer-pointed `ELEK_IO_DATA_DIR` keeps its unrelated contents.
+- [`src/test/globalSetup.ts`](../src/test/globalSetup.ts) runs once in the main process, names the run, and sweeps the `worker-*` directories of runs that are gone, and their `.elek.io-*` directories in the repository root. In the base it removes only that prefix, so a developer-pointed `ELEK_IO_DATA_DIR` keeps its unrelated contents.
   - Directories of the current run are left in place for debugging and swept at the next start. Long watch sessions accumulate them across reruns, they are mostly empty because test files destroy their Projects.
-- Tests that bind the local API use `testApiPort` from [`src/test/setup.ts`](../src/test/setup.ts), which is `31310 + poolId`, so concurrent workers never contend for a port. 31310 stays the documented product default.
-- `workerSetup.ts` also points `GIT_CONFIG_GLOBAL` at an empty file, so git ignores the developer's global config. CI runners carry no global identity, and one on a developer's machine once let a raw `git commit` in a test pass locally that would have failed in CI. A test that commits with git directly passes its own identity through `-c user.name=` and `-c user.email=`.
+- Tests that bind the local API take a port from `freePort()` in [`src/test/worker.ts`](../src/test/worker.ts) rather than deriving one from the worker slot. 31310 stays the documented product default and nothing in the suite binds it.
+- `workerSetup.ts` also points `GIT_CONFIG_GLOBAL` at an empty file inside the worker's own data directory, so git ignores the developer's global config. CI runners carry no global identity, and one on a developer's machine once let a raw `git commit` in a test pass locally that would have failed in CI.
+  - A test that commits with git directly passes its own identity through `-c user.name=` and `-c user.email=`.
 - All of this relies on the vitest `forks` pool (the default), where each test file gets its own process and env. Switching to the `threads` pool would break the per-file env derivation and the `vi.stubEnv` based tests.
+
+### Two runs in one checkout
+
+Two runs may overlap, so every path either of them writes carries the run that wrote it, except a path under the OS temp directory, which is unique per call instead. [`globalSetup.ts`](../src/test/globalSetup.ts) names the run and puts the name in `ELEK_IO_TEST_RUN_ID`, which the workers and everything they spawn inherit. It is the suite's own variable, not one Core reads.
+
+| What | Where | Named |
+| --- | --- | --- |
+| A test file's data directory | `<base>/worker-<poolId>-<runId>-<fileId>` | Per run and per file |
+| The CLI tests' output | `.elek.io-<runId>` in the repository root | Per run |
+| The Node entry test's relative data directory | `.elek.io-node-test-<runId>` in the repository root | Per run |
+| The empty git config | Inside the test file's own data directory | Per run and per file |
+| A path under the OS temp directory | `uuid()` in the name, or `mkdtemp` | Per call |
+
+- A run id is `r<pid>-<12 hex>`. The pid says whether the run still exists, and the random part makes a recycled pid a different run, so a leftover naming this run's own pid is swept rather than adopted.
+- The two directories in the repository root cannot move under the base. The generated client imports `@elek-io/core`, which resolves only by Node self-reference from inside the checkout.
+- Both `.gitignore` and the `ignorePatterns` of [`.oxlintrc.json`](../.oxlintrc.json) carry `.elek.io-*`, so a leftover of a crashed run breaks neither `git status` nor a check. [`ignoreLists.test.ts`](../src/test/ignoreLists.test.ts) plants a file in both directories and fails when either list stops covering them.
+- A fixed path under the OS temp directory would be shared by every run on the machine. [`tmpPaths.test.ts`](../src/test/tmpPaths.test.ts) reads the test sources and fails on a new one.
+- [`concurrentRuns.test.ts`](../src/test/concurrentRuns.test.ts) starts two real runs of [`collisions.test.ts`](../src/test/collisions.test.ts) at once, over all four shared resources, and plants the leftovers whose fate the run starts have to get right.
+
+### What a run start may remove
+
+The sweep in [`src/test/sweep.ts`](../src/test/sweep.ts) exists for the run that crashed before its cleanup, so it has to tell a crashed run from one that is still working:
+
+- A directory of this run stays, and so does one whose pid is still there.
+- Only `ESRCH` means gone. `EPERM` means the process exists and belongs to somebody else, so a filter reading every throw as dead would sweep a live run.
+- A test that means a run that is gone takes its pid from `gonePid()`, which probes until `ESRCH` answers for one. A number written into a test is an attainable pid on a machine that has been up a while, and the leftover then reads as a live run's.
+- A directory whose pid reads as alive but which has not been written to for the job cap times the budget multiple is removed anyway, so a recycled pid cannot make the base grow without bound.
+- A removal is retried, through `fs.rm`'s own `maxRetries` because `Fs.remove` takes no options. Which error a held file raises differs per platform, so nothing reads it.
+- Another run's directory that resists removal is reported in one line and left behind, within half a second, so the worst case is one leaked directory rather than a run that stalls before its first test. A failure on this run's own directories stays fatal.
+- That line carries the directory and what the removal said went wrong, the deadline included, because a permission problem and a process holding the directory send a maintainer to different places.
 
 ### One Astro suite per test file
 
@@ -199,8 +262,9 @@ The suite's usual remotes are bare repositories on the local filesystem, and git
 - [`src/test/gitHost.ts`](../src/test/gitHost.ts) is a git host over plain HTTP. It serves git's smart HTTP protocol and the Git LFS batch API behind basic auth. git and git-lfs reach it as a forward proxy through `http_proxy`, so any host name works without DNS or TLS.
   - It runs `upload-pack` and `receive-pack` with `--stateless-rpc` itself rather than `git http-backend`, which MinGit, dugite's git on Windows, does not ship. Through `http-backend` every request on Windows answered 500.
 - [`src/test/cloudGit.ts`](../src/test/cloudGit.ts) models elek.io Cloud's two git endpoints. The fake Cloud answers from it, and the git host asks it which token reaches which repository.
-- [`src/test/credentialRecorder.ts`](../src/test/credentialRecorder.ts) stands in for the person's keychain and askpass, and records whether git asked them.
+- [`src/test/credentialRecorder.ts`](../src/test/credentialRecorder.ts) stands in for the person's keychain and askpass, and records whether git asked them. It writes two askpass programs, one that answers and one that fails, so a test can run the same call both ways.
   - Its global config starts with an empty helper. MinGit's system config sets Git Credential Manager, which would otherwise be asked ahead of the stand-in and refuses a plain HTTP host whose name holds `github`.
+  - Its config for a run without the keychain carries that empty helper and nothing else, rather than being an empty file, because git takes the empty value as a reset of every helper a config read before it added. So a call meant to reach the askpass alone cannot be answered by a helper the platform set.
 
 Real Projects are pushed and cloned on two host names, LFS objects included. [`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) drives the same helper through dugite's own `git credential fill`, which needs no HTTP at all.
 

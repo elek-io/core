@@ -3,15 +3,22 @@
 import { renderTemplate, addAttribute } from 'astro/runtime/server/index.js';
 import {
   extractText,
+  footnoteWayBackIdentifier,
+  isInTightListItem,
   isTableHeaderCell,
   mdastRender as primitive,
   tableCellAlign,
+  taskItemChecked,
   type MdastRenderersBase,
   type DefaultedRendererKey,
   type FrameworkRenderers,
   type MdastNodeContext,
 } from '../util/mdastRender.js';
-import type { MdAstListItem, MdAstRoot } from '../schema/valueSchema.js';
+import type {
+  MdAstFootnoteDefinition,
+  MdAstListItem,
+  MdAstRoot,
+} from '../schema/valueSchema.js';
 
 type AstroElement = astroHTML.JSX.Element;
 
@@ -63,6 +70,96 @@ function taskItemName(node: MdAstListItem): string | null {
 }
 
 /**
+ * A paragraph, and with it the three placements only a paragraph can reach:
+ * the text of a tight item, which loses the `<p>`, the checkbox that opens a
+ * task item's text, and the way back that ends a footnote's last paragraph.
+ *
+ * `wayBackIdentifier` is the note the way back belongs to, or null where this
+ * paragraph ends none and where the consumer's own `footnoteDefinition` owns
+ * it.
+ *
+ * @see ../../contributing/markdown-internals.md
+ */
+function renderParagraph(
+  children: AstroElement[],
+  context: MdastNodeContext,
+  wayBackIdentifier: string | null
+): ReturnType<typeof renderTemplate> {
+  const checked = taskItemChecked(context);
+  // A <label> can hold the box and the text here, because a paragraph's
+  // children are phrasing content, so no aria-label is needed and plain
+  // text is read once rather than once as the box's name and once as the
+  // text. A link, an image or a footnote marker in it keeps its own name
+  // inside the box's name, see the doc below.
+  const content =
+    checked === null
+      ? renderTemplate`${children}`
+      : renderTemplate`<label><input type="checkbox"${addAttribute(checked, 'checked')} disabled> ${children}</label>`;
+  const wayBack =
+    wayBackIdentifier === null
+      ? ''
+      : renderTemplate` ${renderWayBack(wayBackIdentifier)}`;
+  return isInTightListItem(context)
+    ? renderTemplate`${content}${wayBack}`
+    : renderTemplate`<p>${content}${wayBack}</p>`;
+}
+
+/**
+ * A list item. `placesCheckbox` says whether the item has to place a task
+ * item's box itself, which is where its first paragraph cannot: an item whose
+ * first block is another type, one with no blocks, and one whose `paragraph`
+ * handler is the consumer's.
+ *
+ * The name goes on an `aria-label` there, since the item's blocks arrive
+ * rendered and a `<label>` holds phrasing only, so a screen reader reads the
+ * text twice.
+ */
+function renderListItem(
+  node: MdAstListItem,
+  children: AstroElement[],
+  placesCheckbox: boolean
+): ReturnType<typeof renderTemplate> {
+  if (node.checked === null || !placesCheckbox) {
+    return renderTemplate`<li>${children}</li>`;
+  }
+  return renderTemplate`<li><input type="checkbox"${addAttribute(taskItemName(node), 'aria-label')}${addAttribute(node.checked, 'checked')} disabled>${children}</li>`;
+}
+
+/** Whether no paragraph of the item can carry its checkbox. */
+function itemPlacesCheckbox(node: MdAstListItem): boolean {
+  return node.children[0]?.type !== 'paragraph';
+}
+
+/**
+ * A footnote. `placesWayBack` says whether the note has to let the way back
+ * follow its blocks, which is where its last paragraph cannot end with it: a
+ * note whose last block is another type, a list or a code block for one, one
+ * with no blocks, and one whose `paragraph` handler is the consumer's.
+ */
+function renderFootnoteDefinition(
+  node: MdAstFootnoteDefinition,
+  children: AstroElement[],
+  placesWayBack: boolean
+): ReturnType<typeof renderTemplate> {
+  const wayBack = placesWayBack ? renderWayBack(node.identifier) : '';
+  return renderTemplate`<div${addAttribute(`fn-${node.identifier}`, 'id')}>${children}${wayBack}</div>`;
+}
+
+/** Whether no paragraph of the note can end with its way back. */
+function notePlacesWayBack(node: MdAstFootnoteDefinition): boolean {
+  return node.children.at(-1)?.type !== 'paragraph';
+}
+
+/**
+ * The way back from a footnote to the reference that names it. Its label is
+ * English, so a site in another language overrides `footnoteDefinition`,
+ * which takes the way back over whole.
+ */
+function renderWayBack(identifier: string): ReturnType<typeof renderTemplate> {
+  return renderTemplate`<a${addAttribute(`#fnref-${identifier}`, 'href')} aria-label="Back to content">↩</a>`;
+}
+
+/**
  * A table's rows arrive rendered, so the header and body split is a split of
  * that array: the first row is the header, the rest are the body. Neither
  * wrapper is emitted empty, which keeps a table with no rows and one with a
@@ -101,10 +198,11 @@ function renderTableCell(
 /**
  * The default renderer for every node type that has a safe one, so a consumer
  * overrides only what they care about. Spread under an override object, which
- * is what `mdastRender` below does.
+ * is what `mdastRender` below does, together with `placementsFor`.
  *
- * Each default renders every field its node carries, except the five listed as
- * dropped in the doc below, which name what an override is still needed for.
+ * Each default renders every field its node carries, except the three listed
+ * as dropped in the doc below, which name what an override is still needed
+ * for.
  *
  * @see ../../docs/markdown-content.md
  */
@@ -113,7 +211,10 @@ export const astroDefaults: Pick<
   DefaultedRendererKey
 > = {
   root: (_, children) => renderTemplate`${children}`,
-  paragraph: (_, children) => renderTemplate`<p>${children}</p>`,
+  // The three placements a parent cannot reach are placed here, see
+  // renderParagraph above.
+  paragraph: (_, children, context) =>
+    renderParagraph(children, context, footnoteWayBackIdentifier(context)),
   heading: (node, children) => renderHeading(node.depth, children),
   blockquote: (_, children) =>
     renderTemplate`<blockquote>${children}</blockquote>`,
@@ -124,25 +225,19 @@ export const astroDefaults: Pick<
       ? renderTemplate`<ol${addAttribute(node.start === 1 ? null : node.start, 'start')}>${children}</ol>`
       : renderTemplate`<ul>${children}</ul>`,
   // A checked of null is an ordinary item, true and false are a task. The
-  // checkbox is disabled because a rendered tree is not an editor, and it
-  // precedes the item's first block rather than opening it. Its name is the
-  // item's own text, since the blocks arrive rendered and a <label> holds
-  // phrasing only, see taskItemName above for what counts as its own.
+  // checkbox is disabled because a rendered tree is not an editor, and the
+  // item places it only where its first paragraph cannot.
   listItem: (node, children) =>
-    node.checked === null
-      ? renderTemplate`<li>${children}</li>`
-      : renderTemplate`<li><input type="checkbox"${addAttribute(taskItemName(node), 'aria-label')}${addAttribute(node.checked, 'checked')} disabled>${children}</li>`,
+    renderListItem(node, children, itemPlacesCheckbox(node)),
   code: (node) => renderTemplate`<pre><code>${node.value}</code></pre>`,
   thematicBreak: () => renderTemplate`<hr>`,
   table: (_, children) => renderTableSections(children),
   tableRow: (_, children) => renderTemplate`<tr>${children}</tr>`,
   tableCell: (_, children, context) => renderTableCell(children, context),
-  // The way back follows the note's blocks rather than ending its last
-  // paragraph, which is where remark puts it, for the same reason as the
-  // checkbox above. Its label is English, so a site in another language
-  // overrides this handler.
+  // The way back ends the note's last paragraph, and follows the blocks only
+  // where no paragraph of the note can end with it.
   footnoteDefinition: (node, children) =>
-    renderTemplate`<div${addAttribute(`fn-${node.identifier}`, 'id')}>${children}<a${addAttribute(`#fnref-${node.identifier}`, 'href')} aria-label="Back to content">↩</a></div>`,
+    renderFootnoteDefinition(node, children, notePlacesWayBack(node)),
   text: (node) => node.value,
   inlineCode: (node) => renderTemplate`<code>${node.value}</code>`,
   emphasis: (_, children) => renderTemplate`<em>${children}</em>`,
@@ -158,6 +253,40 @@ export const astroDefaults: Pick<
   footnoteReference: (node) =>
     renderTemplate`<sup${addAttribute(`fnref-${node.identifier}`, 'id')}><a${addAttribute(`#fn-${node.identifier}`, 'href')}>${node.label ?? node.identifier}</a></sup>`,
 };
+
+/** The three defaults that place what a parent's handler cannot reach. */
+type PlacementRenderers = Pick<
+  MdastRenderersBase<AstroElement>,
+  'paragraph' | 'listItem' | 'footnoteDefinition'
+>;
+
+/**
+ * The defaults a consumer's own handlers move, because the `paragraph`
+ * default is what reaches inside a list item and a footnote:
+ *
+ * - A `paragraph` override cannot know of the checkbox or the way back, so
+ *   the item and the note place them around their blocks instead.
+ * - A `footnoteDefinition` override takes the way back over whole, its
+ *   wording included, so no paragraph places one.
+ *
+ * @see ../../contributing/markdown-internals.md
+ */
+function placementsFor(
+  overrides: MdastAstroRenderers
+): Partial<PlacementRenderers> {
+  const placements: Partial<PlacementRenderers> = {};
+  if (overrides.footnoteDefinition !== undefined) {
+    placements.paragraph = (_, children, context) =>
+      renderParagraph(children, context, null);
+  }
+  if (overrides.paragraph !== undefined) {
+    placements.listItem = (node, children) =>
+      renderListItem(node, children, true);
+    placements.footnoteDefinition = (node, children) =>
+      renderFootnoteDefinition(node, children, true);
+  }
+  return placements;
+}
 
 /**
  * Astro-bound `mdastRender`, returning something ready to interpolate in an
@@ -175,6 +304,7 @@ export function mdastRender(
 ): AstroElement {
   const renderers: MdastRenderersBase<AstroElement> = {
     ...astroDefaults,
+    ...placementsFor(overrides),
     ...overrides,
   };
   return primitive(root, renderers);

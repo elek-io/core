@@ -18,7 +18,13 @@
     "DisposableStack": "readonly",
     "SuppressedError": "readonly"
   },
-  "ignorePatterns": ["coverage/", "dist/", ".elek.io/", "*.config.ts"],
+  "ignorePatterns": [
+    "coverage/",
+    "dist/",
+    ".elek.io/",
+    ".elek.io-*/",
+    "*.config.ts"
+  ],
   "rules": {
     "no-var": "error",
     "prefer-const": "error",

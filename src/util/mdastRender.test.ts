@@ -1,15 +1,20 @@
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
+  footnoteWayBackIdentifier,
+  isInTightListItem,
   mdastRender,
   extractText,
   isTableHeaderCell,
   tableCellAlign,
+  taskItemChecked,
   type LeafHandler,
   type MdastNodeContext,
   type MdastRenderersBase,
   type ParentHandler,
 } from './mdastRender.js';
 import type {
+  MdAstBlockNode,
+  MdAstListItem,
   MdAstRoot,
   MdAstTableAlign,
   MdAstTableCell,
@@ -99,6 +104,76 @@ function recordCells(root: MdAstRoot): SeenCell[] {
         index: context.index,
         isHeader: isTableHeaderCell(context),
         align: tableCellAlign(context),
+      });
+      return '';
+    },
+  };
+  mdastRender(root, recording);
+  return seen;
+}
+
+/** A paragraph holding one text node */
+function paragraphOf(value: string): MdAstBlockNode {
+  return { type: 'paragraph', children: [{ type: 'text', value }] };
+}
+
+/** An item of the given spreading and checked state, holding given blocks */
+function itemOf(
+  spread: boolean | null,
+  children: MdAstBlockNode[],
+  checked: boolean | null = null
+): MdAstListItem {
+  return { type: 'listItem', spread, checked, children };
+}
+
+/** An unordered list of the given spreading, holding the given items */
+function listRoot(spread: boolean | null, items: MdAstListItem[]): MdAstRoot {
+  return {
+    type: 'root',
+    children: [
+      { type: 'list', ordered: false, start: null, spread, children: items },
+    ],
+  };
+}
+
+/** A footnote holding the given blocks */
+function footnoteRoot(children: MdAstBlockNode[]): MdAstRoot {
+  return {
+    type: 'root',
+    children: [
+      {
+        type: 'footnoteDefinition',
+        identifier: 'n1',
+        label: null,
+        children,
+      },
+    ],
+  };
+}
+
+/** What a `paragraph` override can answer about the paragraph it was handed. */
+interface SeenParagraph {
+  text: string;
+  isTight: boolean;
+  checked: boolean | null;
+  wayBack: string | null;
+}
+
+/**
+ * Renders a tree and records, per paragraph, what its context answers about
+ * the three placements. Returns nothing from the handler, so what is asserted
+ * is the mechanism rather than any markup.
+ */
+function recordParagraphs(root: MdAstRoot): SeenParagraph[] {
+  const seen: SeenParagraph[] = [];
+  const recording: MdastRenderersBase<string> = {
+    ...stringRenderers,
+    paragraph: (node, _children, context) => {
+      seen.push({
+        text: extractText(node),
+        isTight: isInTightListItem(context),
+        checked: taskItemChecked(context),
+        wayBack: footnoteWayBackIdentifier(context),
       });
       return '';
     },
@@ -583,6 +658,114 @@ describe('a table cell asks its context where it sits', () => {
     const outside: MdastNodeContext = { index: 0, ancestors: [] };
     expect(isTableHeaderCell(outside)).toBe(false);
     expect(tableCellAlign(outside)).toBeNull();
+  });
+});
+
+describe('a paragraph asks its context what it has to place', () => {
+  it('answers tight for every paragraph of a tight list', () => {
+    const seen = recordParagraphs(
+      listRoot(false, [
+        itemOf(false, [paragraphOf('one')]),
+        itemOf(false, [paragraphOf('two')]),
+      ])
+    );
+    expect(seen.map((one) => one.isTight)).toEqual([true, true]);
+  });
+
+  it("answers loose for every item when the list's own spread is true", () => {
+    const seen = recordParagraphs(
+      listRoot(true, [
+        itemOf(false, [paragraphOf('one')]),
+        itemOf(false, [paragraphOf('two')]),
+      ])
+    );
+    expect(seen.map((one) => one.isTight)).toEqual([false, false]);
+  });
+
+  it('answers loose for every item when one item spreads', () => {
+    const seen = recordParagraphs(
+      listRoot(false, [
+        itemOf(false, [paragraphOf('one')]),
+        itemOf(true, [paragraphOf('two')]),
+      ])
+    );
+    expect(seen.map((one) => one.isTight)).toEqual([false, false]);
+  });
+
+  it('reads an item carrying no spread off its block count', () => {
+    const one = recordParagraphs(
+      listRoot(null, [itemOf(null, [paragraphOf('a')])])
+    );
+    expect(one.map((seen) => seen.isTight)).toEqual([true]);
+    const two = recordParagraphs(
+      listRoot(null, [itemOf(null, [paragraphOf('a'), paragraphOf('b')])])
+    );
+    expect(two.map((seen) => seen.isTight)).toEqual([false, false]);
+  });
+
+  it("answers loose for a paragraph that is not the item's own child", () => {
+    // A quote inside a tight item keeps its own paragraph, so only a
+    // paragraph directly in the item loses the <p>.
+    const seen = recordParagraphs(
+      listRoot(false, [
+        itemOf(false, [
+          { type: 'blockquote', children: [paragraphOf('quote')] },
+        ]),
+      ])
+    );
+    expect(seen.map((one) => one.isTight)).toEqual([false]);
+  });
+
+  it('answers the checked state on the first block of a task item only', () => {
+    const seen = recordParagraphs(
+      listRoot(true, [
+        itemOf(false, [paragraphOf('first'), paragraphOf('second')], true),
+        itemOf(false, [paragraphOf('open')], false),
+        itemOf(false, [paragraphOf('plain')]),
+      ])
+    );
+    expect(seen.map((one) => [one.text, one.checked])).toEqual([
+      ['first', true],
+      ['second', null],
+      ['open', false],
+      ['plain', null],
+    ]);
+  });
+
+  it("answers the identifier on the note's last block only", () => {
+    const seen = recordParagraphs(
+      footnoteRoot([paragraphOf('first'), paragraphOf('last')])
+    );
+    expect(seen.map((one) => [one.text, one.wayBack])).toEqual([
+      ['first', null],
+      ['last', 'n1'],
+    ]);
+  });
+
+  it('answers null for a paragraph nested deeper in the note', () => {
+    // The way back follows the note's blocks there, so a paragraph inside
+    // the note's last list must not take it as well.
+    const seen = recordParagraphs(
+      footnoteRoot([
+        {
+          type: 'list',
+          ordered: false,
+          start: null,
+          spread: false,
+          children: [itemOf(false, [paragraphOf('item')])],
+        },
+      ])
+    );
+    expect(seen.map((one) => [one.text, one.wayBack])).toEqual([
+      ['item', null],
+    ]);
+  });
+
+  it('answers false and null outside a list and a note', () => {
+    const outside: MdastNodeContext = { index: 0, ancestors: [] };
+    expect(isInTightListItem(outside)).toBe(false);
+    expect(taskItemChecked(outside)).toBeNull();
+    expect(footnoteWayBackIdentifier(outside)).toBeNull();
   });
 });
 

@@ -765,7 +765,7 @@ const server = serve({ fetch: app.fetch, port: 0 });
 const core = new ElekIoCore({ cloud: { url: `http://localhost:${port}` } });
 ```
 
-Port `0` rather than the `31310 + poolId` scheme `src/test/setup.ts` uses for the local API, so parallel workers cannot contend at all.
+Port `0`, so neither parallel workers nor two runs can contend at all. `freePort()` in `src/test/worker.ts` binds `0` too, but lets the port go again before the local API tests bind it, so another process can take it in between.
 
 What to cover:
 

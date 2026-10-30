@@ -196,7 +196,11 @@ A consumer writing handlers as JSX inside an `.astro` template needs none of thi
 
 A default renders every field of its node, because a field a default silently drops is a loss a consumer cannot see without reading Core's source. `src/astro/mdastRender.test.ts` accounts for every field per node type, either locating it in the output or naming it dropped with the reason, so a field added to a node schema cannot pass through unanswered.
 
-Five are dropped, and the test carries the reason for each. `code.lang` and `code.meta` because every highlighter wants them somewhere else, `list.spread` and `listItem.spread` because they apply inside the paragraphs a list and its items receive already rendered, and `footnoteDefinition.label` because it is the reference's text rather than the note's.
+Three are dropped, and the test carries the reason for each:
+
+- `code.lang` and `code.meta`, because every highlighter wants them somewhere else.
+- `footnoteDefinition.label`, because it is the reference's text rather than the note's.
+- `list.spread` and `listItem.spread` left that list when the `paragraph` default started reading them off its context, see [what only a paragraph can reach](./markdown-internals.md#what-only-a-paragraph-can-reach).
 
 Five decisions beyond that, each the cheaper half of a trade:
 
@@ -204,22 +208,25 @@ Five decisions beyond that, each the cheaper half of a trade:
 | --- | --- | --- |
 | `<ol start>` only where the list counts from something other than 1 | always writing it | `start="1"` is what `<ol>` does anyway, and emitting it would change the markup of every ordered list for no effect. A 0 is kept, GFM and HTML both allow it |
 | A task item's checkbox is `disabled` | a live checkbox | A rendered tree is not an editor, so a live box would offer a change that goes nowhere |
-| The checkbox is named with the text of the item's own blocks, a list directly inside the item left out | a nameless box, which is what remark and GitHub emit, or the text of the whole subtree | A disabled control is still announced, and a box called nothing leaves a screen reader with a checked state and no subject. The item's text cannot label it: the blocks arrive rendered and `<label>` takes phrasing content, so the name goes on `aria-label` and is read twice, once as the box's name and once as the text. A list directly inside the item is left out, so a nested task's text names its own checkbox and not the parent's as well, and a nested plain item's text names no checkbox. The name is trimmed, so an item carrying no text, an image on its own or a paragraph of spaces, gets no attribute |
+| The checkbox is named by the `<label>` the first paragraph wraps around it and its text | a nameless box, which is what remark and GitHub emit | A disabled control is still announced, and a box called nothing leaves a screen reader with a checked state and no subject. A paragraph's children are phrasing content, so the `<label>` holds them and plain text is read once. A link, an image or a footnote marker in the text keeps its own name inside the box's, so that part is reached twice, which is still less than the whole item twice. A nested list is a block of the item rather than of the paragraph, so it stays outside the label and a nested task's text names its own box alone |
+| Where the item itself places the box, the name goes on an `aria-label` | a nameless box there | `<label>` takes phrasing content and the item's blocks arrive rendered, so the name is read twice, once as the box's name and once as the text. It leaves out a list directly inside the item and is trimmed, so an item carrying no text, an image on its own or a paragraph of spaces, gets no attribute |
 | No class name on a task item | `class="task-list-item"`, which is GFM's | The defaults promise no class names, and a name without the CSS that makes it mean something is a half measure. The item keeps its list marker, which is visible and therefore reported rather than hidden |
 | The footnote reference carries `id="fnref-<identifier>"` and the definition links back to it | leaving the way back to the consumer | Without an id the definition's `fn-` id has nothing to point at, so the one half Core shipped was unusable on its own |
 
 Two limits are left visible on the page:
 
 - A default cannot prefix the footnote ids, because `astroDefaults` is one module-level object shared by every render and counting trees would mean state in it. Two trees on one page therefore share the ids, and a note referenced twice repeats its reference id, so the way back lands on the first reference. The consumer-facing doc names the override.
-- The checkbox precedes the item's first paragraph and the way back follows the note's last one, rather than sitting inside either, see [`markdown-internals.md`](./markdown-internals.md#the-render-fold).
+- The checkbox opens the item's first paragraph and the way back ends the note's last one, which only the `paragraph` default can reach. Where no paragraph can take one, and where the consumer brings a handler of its own, the item and the note place them instead, see [`markdown-internals.md`](./markdown-internals.md#what-only-a-paragraph-can-reach).
 
-The back-link's `aria-label` is English, which is the first copy Core puts on a page. A link whose only content is an arrow glyph gets whatever name the screen reader's symbol dictionary gives it, so the label is worth more than the consistency of shipping no text at all. The doc names the override for another language.
+The back-link's `aria-label` is English, which is the first copy Core puts on a page. A link whose only content is an arrow glyph gets whatever name the screen reader's symbol dictionary gives it, so the label is worth more than the consistency of shipping no text at all.
+
+A `footnoteDefinition` override owns that link whole, so another language replaces the label there and no paragraph adds a second one. The doc names that override.
 
 ## The `astro/content/config` subpath
 
 `elekCollections` imports `defineCollection` from `astro/content/config`, not from the `astro:content` virtual module, which only exists inside a consumer's build and cannot be imported from package code.
 
-That subpath is a real export map entry in astro 6.1.3, 6.4.8, 7.1.3 and 7.4.2, but it is not documented public API, so treat it as a pinned assumption. `src/index.astro.collections.test.ts` exercises it through a real `sync()`, which is what would catch its removal.
+That subpath is a real export map entry in astro 6.1.3, 6.4.8, 7.1.3 and 7.4.4, but it is not documented public API, so treat it as a pinned assumption. `src/index.astro.collections.test.ts` exercises it through a real `sync()`, which is what would catch its removal.
 
 If it ever disappears, the fallback is cheap: `defineCollection` is a validating passthrough that sets `type` to `content_layer` and returns its argument, so `{ type: 'content_layer', loader }` is equivalent. The only thing lost is astro's own validation of that object.
 
@@ -258,7 +265,7 @@ This is the same path Astro's own `image()` schema helper takes for content laye
 - **`filePath` plus the public `assetImports` field**. Fully documented, and it does get the file emitted, but it does not substitute the data value. The consumer is left with a relative string and no way to reach the content-hashed output. Verified, not assumed.
 - **The marker**, which does both. Chosen.
 
-`IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.1.3, 7.1.3 and 7.4.2. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro emitted an image import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
+`IMAGE_IMPORT_PREFIX` is byte-identical in astro 6.1.3, 7.1.3 and 7.4.4. If it ever changes, images degrade to a bare relative string rather than crashing, which is why `src/index.astro.assets.test.ts` asserts that Astro emitted an image import of its own. That is the only observable proof the handover still works, since the substitution itself needs a rendered page.
 
 What the store holds afterwards is Astro's business, and it has already changed once inside the peer range:
 
@@ -268,12 +275,12 @@ What the store holds afterwards is Astro's business, and it has already changed 
 Astro keeps two format lists, and an extension has to be in both to be worth a marker:
 
 - `VALID_INPUT_FORMATS` is what the content store recognizes a marker for. For anything else Astro strips the prefix and hands the consumer an unanchored relative path, which is why `src` is `null` for non-images and they take the `href` route instead.
-- `VALID_SUPPORTED_FORMATS` is what the image service validates against. `<Image>` on a format outside it throws `UnsupportedImageFormat` and fails the build, measured against the installed 7.4.2.
-- The second is the narrower one, and the difference is `apng`. It joined the input list in 7.2.5 and is in the supported list on no release, checked from 6.1.3 to 7.4.2, so an apng carrying the marker would reach the consumer as an image that cannot be rendered.
-- `imageExtensions` in `loaders.ts` therefore mirrors `VALID_SUPPORTED_FORMATS`, and an apng takes the `href` route a non-image takes. That list is identical on every astro the peer range allows, so the table needs no release per entry and the loader does not read the installed astro's version.
+- `VALID_SUPPORTED_FORMATS` is what the image service validates against. `<Image>` on a format outside it throws `UnsupportedImageFormat` and fails the build, measured against the installed 7.4.4.
+- The second is the narrower one, and the difference is `apng`. It joined the input list in 7.2.5 and is in the supported list on no release, checked from 6.1.3 to 7.4.4, so an APNG carrying the marker would reach the consumer as an image that cannot be rendered.
+- `imageExtensions` in `loaders.ts` therefore mirrors `VALID_SUPPORTED_FORMATS`, and an APNG takes the `href` route a non-image takes. That list is identical on every astro the peer range allows, so the table needs no release per entry and the loader does not read the installed astro's version.
 - It is typed `Record<ImageInputFormat, boolean> & Record<string, boolean>`. The first half makes a format Astro adds to the input list a compile error here, which is where the two lists get compared again. The index signature is what lets the table name `apng`, which the types at the floor do not know, so pinning the floor type checks.
 
-`src/index.astro.assets.test.ts` takes an apng through a real `sync()`, and `src/astro/loaders.test.ts` covers the table itself. Neither sees Astro moving a format into the supported list, so read both lists when bumping astro, see [`peer-dependencies.md`](./peer-dependencies.md).
+`src/index.astro.assets.test.ts` takes an APNG through a real `sync()`, and `src/astro/loaders.test.ts` covers the table itself. Neither sees Astro moving a format into the supported list, so read both lists when bumping astro, see [`peer-dependencies.md`](./peer-dependencies.md).
 
 The parse-time schema declares `src` as a nullable string, because a marker string is what is stored and validated. The type consumers see is declared separately through `createSchema`'s `types`, as `ImageMetadata | null`.
 

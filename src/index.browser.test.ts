@@ -1,11 +1,14 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   extractText,
+  footnoteWayBackIdentifier,
+  isInTightListItem,
   isTableHeaderCell,
   mdastRender,
   projectSchema,
   REQUIRED_RENDERER_KEYS,
   tableCellAlign,
+  taskItemChecked,
   uuid,
   uuidSchema,
   type MdastNodeContext,
@@ -45,6 +48,43 @@ describe('Browser', function () {
     };
     expect(isTableHeaderCell(context)).toBe(true);
     expect(tableCellAlign(context)).toBe('center');
+  });
+
+  it('should expose what a paragraph handler needs to place the three', function () {
+    expectTypeOf(isInTightListItem).toBeFunction();
+    expectTypeOf(taskItemChecked).toBeFunction();
+    expectTypeOf(footnoteWayBackIdentifier).toBeFunction();
+
+    const item = {
+      type: 'listItem' as const,
+      spread: false,
+      checked: true,
+      children: [],
+    };
+    const inItem: MdastNodeContext = {
+      index: 0,
+      ancestors: [
+        {
+          type: 'list',
+          ordered: false,
+          start: null,
+          spread: false,
+          children: [item],
+        },
+        item,
+      ],
+    };
+    expect(isInTightListItem(inItem)).toBe(true);
+    expect(taskItemChecked(inItem)).toBe(true);
+
+    const note = {
+      type: 'footnoteDefinition' as const,
+      identifier: 'n1',
+      label: null,
+      children: [{ type: 'paragraph' as const, children: [] }],
+    };
+    const inNote: MdastNodeContext = { index: 0, ancestors: [note] };
+    expect(footnoteWayBackIdentifier(inNote)).toBe('n1');
   });
 
   it('should expose the extractText helper', function () {

@@ -7,6 +7,7 @@ import core, { testUserProps } from './test/setup.js';
 import { createTmpCore, tmpDirPath } from './test/util.js';
 import { finishesWithin } from './util/teardown.js';
 import { hungTeardownMs } from './test/budgets.js';
+import { currentRunId, nodeRunDirName } from './test/worker.js';
 import Path from 'node:path';
 
 describe('Node.js', function () {
@@ -230,9 +231,9 @@ describe('Node.js', function () {
   });
 
   it('should resolve a relative dataDir against the current working directory', function () {
-    // Owned by this test alone. The CLI test owns ./.elek.io, and sharing
-    // it would collide when both files run in parallel.
-    const relativeDataDir = './.elek.io-node-test';
+    // Owned by this test alone, and named for this run, so neither the CLI
+    // test next to it nor a second run in the same checkout shares it.
+    const relativeDataDir = `./${nodeRunDirName(currentRunId())}`;
     const customCore = new ElekIoCore({ dataDir: relativeDataDir });
     onTestFinished(async () => {
       await customCore.dispose();
