@@ -267,8 +267,8 @@ importers:
         specifier: 3.9.10
         version: 3.9.10
       tsdown:
-        specifier: 0.23.1
-        version: 0.23.1(typescript@6.0.3)
+        specifier: 0.23.3
+        version: 0.23.3(typescript@6.0.3)
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -2788,14 +2788,14 @@ packages:
     resolution: {integrity: sha512-JfJeIHke7y2egdGGgRAvpCwYFUsHlM2gPcrVOxFkznt/4uzQ7HFmvE63iFHVLBJNDuyDOQgijDK/tXH/f6Msjg==}
     engines: {node: '>=6.10'}
 
-  tsdown@0.23.1:
-    resolution: {integrity: sha512-MSC2WSOts3in95J334/VIS7KPfor3eCSvndJ6KdoVj9Aak9Kh1aNfz9ws5owhdukuTNSXRdfkPEzA/ihpDD6SA==}
+  tsdown@0.23.3:
+    resolution: {integrity: sha512-yAju1F5b7GDEPCLl4ewM3g54lq0NyyYpFnK2lh/ax7/uznmsn4wBOS9/49pI3cGvxtj2LoOjBUtzaT17UEQkhQ==}
     engines: {node: ^22.18.0 || ^24.11.0 || >=26.0.0}
     hasBin: true
     peerDependencies:
       '@arethetypeswrong/core': ^0.18.1
-      '@tsdown/css': 0.23.1
-      '@tsdown/exe': 0.23.1
+      '@tsdown/css': 0.23.3
+      '@tsdown/exe': 0.23.3
       '@vitejs/devtools': '*'
       publint: ^0.3.8
       tsx: '*'
@@ -5519,7 +5519,7 @@ snapshots:
 
   ts-dedent@2.3.0: {}
 
-  tsdown@0.23.1(typescript@6.0.3):
+  tsdown@0.23.3(typescript@6.0.3):
     dependencies:
       cac: 7.1.0
       defu: 6.1.7
