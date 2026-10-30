@@ -135,7 +135,7 @@ Test files run in parallel, one file per vitest worker. This works because no st
   - A developer-set `ELEK_IO_DATA_DIR` is respected as the base the worker directories nest beneath, so the whole suite can still be redirected.
 - Because the directory is unique per file, counts start at zero and tests may assert absolute totals. No reset step is needed between files.
 - The directories live under the home directory on purpose. Using the OS temp dir would put them on tmpfs on Linux, an artificial speedup of the git-bound workload that the Dev Drive decision above already rejected. Side effect of the layout: the suite no longer touches a real `~/elek.io` at all.
-- [`src/test/globalSetup.ts`](../src/test/globalSetup.ts) runs once in the main process, names the run, and sweeps the `worker-*` directories of runs that are gone. It removes only that prefix, so a developer-pointed `ELEK_IO_DATA_DIR` keeps its unrelated contents.
+- [`src/test/globalSetup.ts`](../src/test/globalSetup.ts) runs once in the main process, names the run, and sweeps the `worker-*` directories of runs that are gone, and their `.elek.io-*` directories in the repository root. In the base it removes only that prefix, so a developer-pointed `ELEK_IO_DATA_DIR` keeps its unrelated contents.
   - Directories of the current run are left in place for debugging and swept at the next start. Long watch sessions accumulate them across reruns, they are mostly empty because test files destroy their Projects.
 - Tests that bind the local API take a port from `freePort()` in [`src/test/worker.ts`](../src/test/worker.ts) rather than deriving one from the worker slot. 31310 stays the documented product default and nothing in the suite binds it.
 - `workerSetup.ts` also points `GIT_CONFIG_GLOBAL` at an empty file inside the worker's own data directory, so git ignores the developer's global config. CI runners carry no global identity, and one on a developer's machine once let a raw `git commit` in a test pass locally that would have failed in CI.
@@ -144,7 +144,7 @@ Test files run in parallel, one file per vitest worker. This works because no st
 
 ### Two runs in one checkout
 
-Two runs may overlap, so every path either of them writes outside the repository carries the run that wrote it. [`globalSetup.ts`](../src/test/globalSetup.ts) names the run and puts the name in `ELEK_IO_TEST_RUN_ID`, which the workers and everything they spawn inherit. It is the suite's own variable, not one Core reads.
+Two runs may overlap, so every path either of them writes carries the run that wrote it, except a path under the OS temp directory, which is unique per call instead. [`globalSetup.ts`](../src/test/globalSetup.ts) names the run and puts the name in `ELEK_IO_TEST_RUN_ID`, which the workers and everything they spawn inherit. It is the suite's own variable, not one Core reads.
 
 | What | Where | Named |
 | --- | --- | --- |
