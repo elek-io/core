@@ -23,7 +23,7 @@ Or from the CLI, without writing code:
 elek api:start [port]   # port defaults to 31310
 ```
 
-`ElekIoCore.dispose()` stops the API if it is running, and the port is released once it resolves. A stop that never finishes is bounded instead and named in what `dispose()` hands back. Closing the listener is what releases the port, and the stop then waits for the connections still open, so that wait is what a bounded stop gives up on, see [`usage.md`](./usage.md#cleaning-up).
+`ElekIoCore.dispose()` stops the API if it is running, and unless it names `api` in what it hands back, the port is released once it resolves. A stop first waits for a start still in progress, then closes the listener, which releases the port, and then waits for the connections still open. A bounded stop gives up on whichever wait it is in, see [`usage.md`](./usage.md#cleaning-up).
 
 When you embed Core yourself, the API only runs once you start it, with `core.api.start()` or `elek api:start`.
 
