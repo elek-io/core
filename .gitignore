@@ -1,8 +1,9 @@
 # CLI generated files
 .elek.io
 
-# Test-owned relative data directory, see src/index.node.test.ts
-.elek.io-node-test
+# Test-owned directories in the repository root, one per suite run, see
+# src/test/globalSetup.ts. Covers the CLI and the Node entry test directories
+.elek.io-*
 
 # Logs
 logs

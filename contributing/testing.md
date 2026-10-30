@@ -4,7 +4,7 @@ Run the suite with `pnpm test`, watch mode with `pnpm dev`, coverage with `pnpm 
 
 The suite is integration heavy. Most service tests create real Projects, which means real git repositories. A full run spawns several thousand git subprocesses and writes tens of thousands of small files.
 
-Each test file writes to its own fresh data directory, `~/elek.io-test/worker-<poolId>-<uuid>` by default, see the parallel test files section below. This profile dominates how fast the suite runs on a given machine and explains the CI choices below.
+Each test file writes to its own fresh data directory, `~/elek.io-test/worker-<poolId>-<runId>-<fileId>` by default, see the parallel test files section below. This profile dominates how fast the suite runs on a given machine and explains the CI choices below.
 
 ## Coverage under-reports two areas
 
@@ -130,16 +130,47 @@ The shared test Core in [`src/test/setup.ts`](../src/test/setup.ts) logs at `deb
 
 Test files run in parallel, one file per vitest worker. This works because no state is shared between files:
 
-- [`src/test/workerSetup.ts`](../src/test/workerSetup.ts) is a vitest setup file. It runs in the worker process before each test file and its imports, and points `ELEK_IO_DATA_DIR` at a fresh directory, `~/elek.io-test/worker-<poolId>-<uuid>`.
+- [`src/test/workerSetup.ts`](../src/test/workerSetup.ts) is a vitest setup file. It runs in the worker process before each test file and its imports, and points `ELEK_IO_DATA_DIR` at a fresh directory, `~/elek.io-test/worker-<poolId>-<runId>-<fileId>`.
   - Every Core the file constructs without an explicit `dataDir` resolves it, including CLI subprocesses (they inherit the worker's env) and the Astro loader (it runs in-process).
   - A developer-set `ELEK_IO_DATA_DIR` is respected as the base the worker directories nest beneath, so the whole suite can still be redirected.
 - Because the directory is unique per file, counts start at zero and tests may assert absolute totals. No reset step is needed between files.
 - The directories live under the home directory on purpose. Using the OS temp dir would put them on tmpfs on Linux, an artificial speedup of the git-bound workload that the Dev Drive decision above already rejected. Side effect of the layout: the suite no longer touches a real `~/elek.io` at all.
-- [`src/test/globalSetup.ts`](../src/test/globalSetup.ts) runs once in the main process and sweeps `worker-*` directories left by previous runs. It removes only that prefix, so a developer-pointed `ELEK_IO_DATA_DIR` keeps its unrelated contents.
+- [`src/test/globalSetup.ts`](../src/test/globalSetup.ts) runs once in the main process, names the run, and sweeps the `worker-*` directories of runs that are gone, and their `.elek.io-*` directories in the repository root. In the base it removes only that prefix, so a developer-pointed `ELEK_IO_DATA_DIR` keeps its unrelated contents.
   - Directories of the current run are left in place for debugging and swept at the next start. Long watch sessions accumulate them across reruns, they are mostly empty because test files destroy their Projects.
-- Tests that bind the local API use `testApiPort` from [`src/test/setup.ts`](../src/test/setup.ts), which is `31310 + poolId`, so concurrent workers never contend for a port. 31310 stays the documented product default.
-- `workerSetup.ts` also points `GIT_CONFIG_GLOBAL` at an empty file, so git ignores the developer's global config. CI runners carry no global identity, and one on a developer's machine once let a raw `git commit` in a test pass locally that would have failed in CI. A test that commits with git directly passes its own identity through `-c user.name=` and `-c user.email=`.
+- Tests that bind the local API take a port from `freePort()` in [`src/test/worker.ts`](../src/test/worker.ts) rather than deriving one from the worker slot. 31310 stays the documented product default and nothing in the suite binds it.
+- `workerSetup.ts` also points `GIT_CONFIG_GLOBAL` at an empty file inside the worker's own data directory, so git ignores the developer's global config. CI runners carry no global identity, and one on a developer's machine once let a raw `git commit` in a test pass locally that would have failed in CI.
+  - A test that commits with git directly passes its own identity through `-c user.name=` and `-c user.email=`.
 - All of this relies on the vitest `forks` pool (the default), where each test file gets its own process and env. Switching to the `threads` pool would break the per-file env derivation and the `vi.stubEnv` based tests.
+
+### Two runs in one checkout
+
+Two runs may overlap, so every path either of them writes carries the run that wrote it, except a path under the OS temp directory, which is unique per call instead. [`globalSetup.ts`](../src/test/globalSetup.ts) names the run and puts the name in `ELEK_IO_TEST_RUN_ID`, which the workers and everything they spawn inherit. It is the suite's own variable, not one Core reads.
+
+| What | Where | Named |
+| --- | --- | --- |
+| A test file's data directory | `<base>/worker-<poolId>-<runId>-<fileId>` | Per run and per file |
+| The CLI tests' output | `.elek.io-<runId>` in the repository root | Per run |
+| The Node entry test's relative data directory | `.elek.io-node-test-<runId>` in the repository root | Per run |
+| The empty git config | Inside the test file's own data directory | Per run and per file |
+| A path under the OS temp directory | `uuid()` in the name, or `mkdtemp` | Per call |
+
+- A run id is `r<pid>-<12 hex>`. The pid says whether the run still exists, and the random part makes a recycled pid a different run, so a leftover naming this run's own pid is swept rather than adopted.
+- The two directories in the repository root cannot move under the base. The generated client imports `@elek-io/core`, which resolves only by Node self-reference from inside the checkout.
+- Both `.gitignore` and the `ignorePatterns` of [`.oxlintrc.json`](../.oxlintrc.json) carry `.elek.io-*`, so a leftover of a crashed run breaks neither `git status` nor a check. [`ignoreLists.test.ts`](../src/test/ignoreLists.test.ts) plants a file in both directories and fails when either list stops covering them.
+- A fixed path under the OS temp directory would be shared by every run on the machine. [`tmpPaths.test.ts`](../src/test/tmpPaths.test.ts) reads the test sources and fails on a new one.
+- [`concurrentRuns.test.ts`](../src/test/concurrentRuns.test.ts) starts two real runs of [`collisions.test.ts`](../src/test/collisions.test.ts) at once, over all four shared resources, and plants the leftovers whose fate the run starts have to get right.
+
+### What a run start may remove
+
+The sweep in [`src/test/sweep.ts`](../src/test/sweep.ts) exists for the run that crashed before its cleanup, so it has to tell a crashed run from one that is still working:
+
+- A directory of this run stays, and so does one whose pid is still there.
+- Only `ESRCH` means gone. `EPERM` means the process exists and belongs to somebody else, so a filter reading every throw as dead would sweep a live run.
+- A test that means a run that is gone takes its pid from `gonePid()`, which probes until `ESRCH` answers for one. A number written into a test is an attainable pid on a machine that has been up a while, and the leftover then reads as a live run's.
+- A directory whose pid reads as alive but which has not been written to for the job cap times the budget multiple is removed anyway, so a recycled pid cannot make the base grow without bound.
+- A removal is retried, through `fs.rm`'s own `maxRetries` because `Fs.remove` takes no options. Which error a held file raises differs per platform, so nothing reads it.
+- Another run's directory that resists removal is reported in one line and left behind, within half a second, so the worst case is one leaked directory rather than a run that stalls before its first test. A failure on this run's own directories stays fatal.
+- That line carries the directory and what the removal said went wrong, the deadline included, because a permission problem and a process holding the directory send a maintainer to different places.
 
 ### One Astro suite per test file
 

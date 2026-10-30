@@ -1,32 +1,41 @@
 import Fs from 'fs-extra';
 import Os from 'node:os';
 import Path from 'node:path';
-import { testDataDirBase, workerDirPrefix } from './worker.js';
+import { sweepDeadRuns } from './sweep.js';
+import {
+  cliRunDirName,
+  createRunId,
+  runIdEnvVar,
+  testDataDirBase,
+} from './worker.js';
 
 /**
  * Runs once in the main process before the entire test suite.
- * Sweeps the per-file test data directories of previous runs, including
- * runs that failed before their cleanup code could execute.
+ *
+ * It names this run, hands the name to the workers through the environment
+ * and sweeps what runs that are gone left behind, including runs that failed
+ * before their cleanup code could execute, see contributing/testing.md.
  */
 export default async function globalSetup() {
+  const runId = createRunId();
+  // Read by workerSetup and inherited by every process a test spawns
+  process.env[runIdEnvVar] = runId;
+
   const base = testDataDirBase({
     envDataDir: process.env['ELEK_IO_DATA_DIR'],
     homedir: Os.homedir(),
   });
+  const root = Path.resolve();
 
-  // Remove only worker directories. A developer may point ELEK_IO_DATA_DIR
-  // at an existing directory whose other contents must survive.
-  if (await Fs.pathExists(base)) {
-    const entries = await Fs.readdir(base);
-    await Promise.all(
-      entries
-        .filter((entry) => entry.startsWith(workerDirPrefix))
-        .map((entry) => Fs.remove(Path.join(base, entry)))
-    );
-  }
+  // A failure on either of these is fatal. Without them this run has nowhere
+  // to write, while a directory of another run is only ever reported.
+  await Fs.ensureDir(base);
+  await Fs.ensureDir(Path.join(root, cliRunDirName(runId)));
 
-  // Crash protection for the cwd-relative directories owned by
-  // index.cli.test.ts and index.node.test.ts
-  await Fs.emptyDir(Path.resolve('.elek.io'));
-  await Fs.remove(Path.resolve('.elek.io-node-test'));
+  await sweepDeadRuns({
+    base,
+    root,
+    runId,
+    onKept: (message) => console.warn(message),
+  });
 }
