@@ -2,7 +2,7 @@
 '@elek-io/core': minor
 ---
 
-**Every dependency is up to date.** These dependencies Core ships inside its bundles moved:
+**Every dependency is up to date.** These dependencies npm installs alongside Core moved:
 
 | Dependency                   | From    | To      |
 | ---------------------------- | ------- | ------- |
