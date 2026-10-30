@@ -1,6 +1,6 @@
 # Pin git-lfs's bound on credential retries
 
-git-lfs 3.8.0 retries a refused credential at most 3 times ([git-lfs#6018](https://github.com/git-lfs/git-lfs/pull/6018), `defaultMaxAuthAttempts` in `lfsapi/auth.go`). Every dugite release so far bundles git-lfs 3.7.1, which calls `erase` and `get` again for as long as the helper answers.
+git-lfs 3.8.0 retries a refused credential at most 3 times ([git-lfs#6018](https://github.com/git-lfs/git-lfs/pull/6018), `defaultMaxAuthAttempts` in `lfsapi/auth.go`). Core's dev pin dugite 3.3.2 bundles git-lfs 3.8.1, so the bound can be pinned against it, while the peer floor 3.2.3 still bundles git-lfs 3.7.1, which calls `erase` and `get` again for as long as the helper answers.
 
 Core does not depend on the bound. Its helper answers `quit=1` after an `erase`, see [`git-credentials.md`](../contributing/git-credentials.md#erase-quit1-and-the-rerun). Keep that after the bump, or each LFS request could mint 3 git tokens.
 
