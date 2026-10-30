@@ -261,7 +261,7 @@ Measured against a packed 0.26.0 with tsdown 0.23.3 and typescript 7.0.2, with o
 - `isolatedDeclarations` routes declaration generation through Oxc instead of `tsgo`, which is why it lifts the `include` requirement for `generate:types js` and is the one setting that takes `generate:client js` away. Leave it off and both commands compile.
 - Core's own default output directory is `./.elek.io`. A bare `".elek.io"` in `include` does not cover it, because typescript's directory globs skip names beginning with a dot, so it takes an explicit `".elek.io/**/*"`.
 - The last row needs a Collection. A Project without one, and no Project at all, give `generate:client js` exit 0 under `isolatedDeclarations` too.
-- Which row a consumer meets is decided by the tsdown they install inside the `^0.23.0` peer range, not by the tsdown pinned here. So pinning the newest 0.23.x is what makes this table describe what they get, and the table reproduces on 0.23.4 as written.
+- Which row a consumer meets is decided by the tsdown they install inside the `^0.23.0` peer range, not by the tsdown pinned here. So the table is measured on the pin and on the newest 0.23.x in range, and it reproduces on 0.23.4 as written.
 - tsdown 0.23.2 was the one release in the line that failed the whole combination, because it took its declaration plugin to a prerelease that dropped the `tsgo` path. 0.23.3 went back to the released plugin and restored it.
 
 This is tsdown's behavior rather than Core's and it only affects `generate:* js`, so it is documented in `docs/api-clients.md`, with the ways around it, instead of being worked around. Re-measure both commands on both typescript lines at every tsdown bump.
