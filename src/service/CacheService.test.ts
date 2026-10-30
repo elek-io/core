@@ -118,7 +118,9 @@ describe('caches with caching off', function () {
       cache: false,
       log: { hasProcessErrorHandlers: false },
     });
-    onTestFinished(() => reader.dispose());
+    onTestFinished(async () => {
+      await reader.dispose();
+    });
     await reader.collections.resolveCollectionId({
       projectId: project.id,
       idOrSlug: 'products',

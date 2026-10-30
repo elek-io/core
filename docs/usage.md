@@ -377,11 +377,20 @@ See [`error-handling.md`](./error-handling.md) for the full list of error types 
 
 ## Cleaning up
 
-`dispose()` stops the local API if running and closes the logger, removing the process-level exception handlers.
+`dispose()` stops the local API if running, closes the loopback listener git's credential helper reaches, and closes the logger, removing the process-level exception handlers.
 
 ```typescript
-await core.dispose();
+const { stalledSteps } = await core.dispose();
 ```
+
+Each step gets 5,000ms, so a step that never finishes, such as a log file a platform does not let go of, costs seconds rather than your whole shutdown. `dispose()` resolves either way.
+
+- `stalledSteps` names what Core gave up on, `api`, `relay` or `logger`, and is empty when every step finished.
+- `disposeStepNames` holds the words Core itself uses for each step, so what you show a person reads like Core's own log record.
+- A stalled step leaves a `warn` record naming it in the log file, except the logger, whose own stream has ended by the time Core knows.
+- A stalled step is given up on rather than undone. `api` and `relay` stop accepting, which releases their port, and then wait for the connections still open. `api` first waits for a start still in progress, so one given up on there closes its listener only once that start finishes.
+- A stalled `logger` means winston never confirmed its flush, so a record still in a transport's buffer never reaches the log file.
+- So read a step in `stalledSteps` as something to report rather than to retry.
 
 ## The local API
 

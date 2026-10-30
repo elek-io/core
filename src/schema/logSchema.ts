@@ -141,6 +141,7 @@ export const logAttributeNames = [
   'elek.release.version',
   'elek.request.id',
   'elek.request.lookup',
+  'elek.teardown.step',
   'elek.upgrade.from_version',
   'elek.upgrade.to_version',
 ] as const;

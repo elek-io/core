@@ -113,6 +113,24 @@ When a measurement shows a test or a hook needs more, raise the global rather th
 
 [`published-docs.test.ts`](../src/published-docs.test.ts) is the only test that spawns the package manager, `pnpm pack --dry-run` in its `beforeAll` for the list of files a publish ships. Packing runs `prepack` and `prepare`, so adding either turns that hook into a full build on all four platforms, and whatever it writes to stdout lands in the JSON the test parses.
 
+### How a cleanup step is bounded
+
+A cleanup step that never finishes used to cost the whole hook budget and name nothing. A test's Core stopped inside its cleanup on Windows, and 236,388ms later the failure pointed at the `onTestFinished` of `createTmpCore` rather than at the step inside it. Which step it was could not be read off anything the run left behind.
+
+So every step of a cleanup is bounded, and none of the bounds is a test's or a hook's own:
+
+| Bound | Bounds | Where |
+| --- | --- | --- |
+| `TEARDOWN_BOUND_MS`, 5,000ms | one step of `dispose()`, and the logger's own flush | [`src/util/teardown.ts`](../src/util/teardown.ts) |
+| `cleanupTimeoutMs`, 1,512ms | removing a test Core's data directory | [`src/test/budgets.ts`](../src/test/budgets.ts) |
+| `hungTeardownMs`, 15,000ms | how long a test waits for a bounded teardown before reading it as hung | [`src/test/budgets.ts`](../src/test/budgets.ts) |
+
+- Core bounds its own three steps. A stalled one is named in what `dispose()` hands back and in a `warn` record, except the logger, whose stream has ended by the time it is known.
+- `cleanUpTmpCore` in [`src/test/util.ts`](../src/test/util.ts) bounds the step left to it and throws naming every step that stalled, so a step that stops coming back says which one it is in seconds.
+- The cleanup budget is measured like the others, 504ms times the multiple. Nothing in CI reports a cleanup duration, so that measurement is a Linux one scaled to the slowest runner rather than the windows-only set, see [`budgets.ts`](../src/test/budgets.ts).
+- [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) holds what cannot drift: the whole cleanup stays inside the hook budget, a test waits longer than Core does, and this doc states every number.
+- A cleanup that is only slow fails nothing. [`cleanup.test.ts`](../src/test/cleanup.test.ts) drives each step into never finishing and a step into taking a third of its bound, which is a fraction rather than a hair under it so no jitter on a slow runner reads slow as stalled.
+
 ### A timed out test leaks into its own file only
 
 When a test times out, vitest cannot abort its still-running async work, so leftover Projects can leak into later tests. Since every test file has its own data directory, that leak is confined to the file that timed out and cannot break other files. Generous timeouts still protect against the within-file cascade.

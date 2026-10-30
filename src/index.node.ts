@@ -38,6 +38,7 @@ import {
   type PathTo,
 } from './util/node.js';
 import { CoreError } from './util/shared.js';
+import { finishesWithin, TEARDOWN_BOUND_MS } from './util/teardown.js';
 
 // Export all schemas and shared code that works inside node environments,
 // including code that requires filesystem access / git integration etc.
@@ -45,6 +46,38 @@ export * from './schema/index.js';
 export * from './util/shared.js';
 // The `cause` an update throws, so a consumer can branch on it
 export type * from './util/entryIssue.js';
+
+/**
+ * One step of `dispose()`, as a stall names it.
+ *
+ * `api` and `relay` each stop listening on their loopback port, `logger`
+ * flushes what Core wrote and hands the process-level handlers back.
+ */
+export type DisposeStep = 'api' | 'relay' | 'logger';
+
+/**
+ * What Core calls each step of `dispose()` where a person reads it.
+ *
+ * A step is a value to branch on, so it is one lowercase word. Core's own
+ * `warn` record spells it out through this map, and a host that shows a
+ * stalled step has the same words to show.
+ */
+export const disposeStepNames: Record<DisposeStep, string> = {
+  api: 'local API',
+  relay: 'credential relay',
+  logger: 'logger',
+};
+
+/**
+ * What `dispose()` gave up on, so a host can say so instead of guessing.
+ *
+ * `stalledSteps` is empty when every step finished, which is the ordinary
+ * case. A stalled step also leaves a `warn` record behind, except the
+ * logger, whose own stream has ended by the time it is known.
+ */
+export interface DisposeResult {
+  stalledSteps: DisposeStep[];
+}
 
 /**
  * elek.io Core, the entry point every service hangs off.
@@ -416,17 +449,47 @@ export default class ElekIoCore {
   /**
    * Stops the local API and the loopback listener git's credential helper
    * reaches, then closes the logger, removing the process-level exception
-   * and rejection handlers. Both ports are released once this resolves.
+   * and rejection handlers.
    *
-   * Safe to call twice: every later call awaits the first one's teardown,
-   * and a record logged afterwards is dropped rather than thrown at the
-   * ended stream.
+   * Every step is bounded, so one that never finishes costs seconds rather
+   * than the whole shutdown, and `stalledSteps` names it. So does a `warn`
+   * record, except the logger, whose own stream has ended by then. Safe to
+   * call twice, and a later record is dropped rather than thrown.
+   *
+   * @see ../docs/usage.md
    */
-  public async dispose(): Promise<void> {
-    await this.localApi.stop();
-    await this.gitCredentialRelay.close();
+  public async dispose(): Promise<DisposeResult> {
+    const stalledSteps: DisposeStep[] = [];
+    const bounded = async (step: DisposeStep, work: Promise<unknown>) => {
+      if (await finishesWithin(work, TEARDOWN_BOUND_MS)) {
+        return;
+      }
+      stalledSteps.push(step);
+      this.logService.warn({
+        source: 'core',
+        message: `Gave up on the ${disposeStepNames[step]} after ${TEARDOWN_BOUND_MS}ms while disposing elek.io Core`,
+        meta: {
+          'elek.teardown.step': step,
+          'elek.duration_ms': TEARDOWN_BOUND_MS,
+        },
+      });
+    };
+
+    await bounded('api', this.localApi.stop());
+    await bounded('relay', this.gitCredentialRelay.close());
     // Logged before closing so the final line is flushed
     this.logService.info({ source: 'core', message: 'Disposing elek.io Core' });
-    await this.logService.close();
+    // The logger bounds its own flush and reports it, because the record
+    // that would name it cannot reach a stream winston has ended. Bounded
+    // here too, so a logger that never resolves at all stops here as well
+    const closing = this.logService.close();
+    if (
+      (await finishesWithin(closing, TEARDOWN_BOUND_MS)) === false ||
+      (await closing) === false
+    ) {
+      stalledSteps.push('logger');
+    }
+
+    return { stalledSteps };
   }
 }

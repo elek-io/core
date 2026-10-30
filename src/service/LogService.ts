@@ -9,6 +9,7 @@ import DailyRotateFile from 'winston-daily-rotate-file';
 import * as packageJson from '../../package.json' with { type: 'json' };
 import { type ElekIoCoreOptions } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
+import { finishesWithin, TEARDOWN_BOUND_MS } from '../util/teardown.js';
 import {
   DAY_MS,
   gzip,
@@ -50,7 +51,7 @@ import {
 export class LogService {
   private readonly logger: Logger;
   private readonly pathTo: PathTo;
-  private closePromise: Promise<void> | undefined;
+  private closePromise: Promise<boolean> | undefined;
 
   constructor(options: ElekIoCoreOptions, pathTo: PathTo) {
     this.pathTo = pathTo;
@@ -218,22 +219,27 @@ export class LogService {
 
   /**
    * Flushes and closes the logger, removing the process-level exception and
-   * rejection handlers it registered.
+   * rejection handlers it registered. Resolves true once winston flushed,
+   * and false once it gave up waiting, which is a transport that never
+   * emitted `finish`.
    *
    * Safe to call twice and concurrently. The first call's promise is kept and
    * handed back to every later one, because winston ends the underlying
    * stream and an ended stream never emits `finish` again.
    */
-  public close(): Promise<void> {
-    this.closePromise ??= new Promise<void>((resolve) => {
-      // Remove the process handlers first, synchronously, so an ended logger
-      // is never left with a live exception or rejection handler
-      this.logger.exceptions.unhandle();
-      this.logger.rejections.unhandle();
-      // Graceful flush, ends each transport before emitting 'finish'
-      this.logger.once('finish', () => resolve());
-      this.logger.end();
-    });
+  public close(): Promise<boolean> {
+    this.closePromise ??= finishesWithin(
+      new Promise<void>((resolve) => {
+        // Remove the process handlers first, synchronously, so an ended
+        // logger is never left with a live exception or rejection handler
+        this.logger.exceptions.unhandle();
+        this.logger.rejections.unhandle();
+        // Graceful flush, ends each transport before emitting 'finish'
+        this.logger.once('finish', () => resolve());
+        this.logger.end();
+      }),
+      TEARDOWN_BOUND_MS
+    );
 
     return this.closePromise;
   }
