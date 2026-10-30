@@ -87,22 +87,21 @@ npm install --save-dev tsdown typescript
 
 Install them as dev dependencies of the project you run `elek` in. Without them the `js` language fails with a message naming both, and every other command, including both generators with the default `ts` language, is unaffected.
 
-**TypeScript 7 compiles types and no longer compiles a client.** TypeScript 5 and 6 compile both, with no tsconfig at all and into any directory.
+**TypeScript 7 needs a `tsconfig.json`**, and TypeScript 5 and 6 need none:
 
-On TypeScript 7 the compiler runs through `isolatedDeclarations`, which has to be switched on in the project's `tsconfig.json`. With at least one Collection to generate from:
+- Without one, either command fails with "The `tsgo` generator requires a tsconfig file to be specified."
+- That `tsconfig.json` has to cover the output directory. Writing into a directory its `include` leaves out fails with `tsgo did not generate dts file` and exits 1, with the generated `.ts` file left behind.
 
-- Without it either command exits 1 saying TypeScript 7 "does not provide the classic TypeScript API required by tsc", and the generated `.ts` file is left behind. That holds with no tsconfig and with one, wherever you write, Core's default `./.elek.io` included.
-- With it, `generate:types js` compiles into any directory.
-- With it, `generate:client js` exits 1 on `TS9007`, naming a function of the generated client without an explicit return type. `isolatedDeclarations` rejects the client Core writes, so on TypeScript 7 the `js` language of that command has no route at all.
+Core's default `./.elek.io` is outside a typical `include: ["src"]`, so the command fails there with no `outDir` passed at all. Any one of these fixes it:
 
-`generate:types js` writes nothing and exits 0 before it loads the compiler when there is no Project at all, whatever the tsconfig says, and a Project without Collections still gives it a file to compile.
+- Generate into a directory the tsconfig already covers, for example `elek generate:types ./src/elek js`.
+- Add the output directory to the tsconfig's `include` as an explicit glob, `".elek.io/**/*"`. A bare `".elek.io"` does not cover it, because TypeScript's directory globs skip names beginning with a dot.
+- Use TypeScript 6, which compiles into either location.
 
-`generate:client js` always writes its `client.ts`, and with `isolatedDeclarations` it compiles while no Collection exists anywhere, because the function `TS9007` names is a Collection's `entries.list`.
+`isolatedDeclarations` is the one option that takes `generate:client js` away on TypeScript 7, whatever directory you write into. It routes declaration generation through Oxc instead of `tsgo`:
 
-`isolatedDeclarations` is also a project-wide option rather than one for the generated file, so every exported declaration of yours needs an explicit type once it is on. Two ways around all of it:
-
-- Install TypeScript 6 as the dev dependency `elek` compiles with. It needs neither the option nor a tsconfig, and the peer range allows it.
-- Generate with the default `ts` language and compile the output with your own build.
+- Oxc exits 1 on `TS9007` for a function of the generated client without an explicit return type. That function is a Collection's `entries.list`, so a client generated while no Collection exists anywhere still compiles.
+- `generate:types js` is unaffected, and compiles into any directory with the option on.
 
 ## Output location
 
