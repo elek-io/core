@@ -85,14 +85,14 @@ Both commands generate TypeScript first. Passing `js` as the language compiles i
 npm install --save-dev tsdown typescript
 ```
 
-Install them as dev dependencies of the project you run `elek` in. Without them the `js` language fails with a message naming both, and every other command, including both generators with the default `ts` language, is unaffected.
+Install them as dev dependencies of the project you run `elek` in. Without them the `js` language fails with a message naming both once there is something to compile, and every other command, including both generators with the default `ts` language, is unaffected.
 
 **TypeScript 7 needs a `tsconfig.json`**, and TypeScript 5 and 6 need none:
 
 - Without one, either command fails with "The `tsgo` generator requires a tsconfig file to be specified."
 - That `tsconfig.json` has to cover the output directory. Writing into a directory its `include` leaves out fails with `tsgo did not generate dts file` and exits 1, with the generated `.ts` file left behind.
 
-Core's default `./.elek.io` is outside a typical `include: ["src"]`, so the command fails there with no `outDir` passed at all. Any one of these fixes it:
+Core's default `./.elek.io` is outside a typical `include: ["src"]`, so writing into it fails, for example with `elek generate:types ./.elek.io js`. Any one of these fixes it:
 
 - Generate into a directory the tsconfig already covers, for example `elek generate:types ./src/elek js`.
 - Add the output directory to the tsconfig's `include` as an explicit glob, `".elek.io/**/*"`. A bare `".elek.io"` does not cover it, because TypeScript's directory globs skip names beginning with a dot.
@@ -109,5 +109,6 @@ Both commands default to `./.elek.io`. That directory is also the CLI's default 
 
 ## See also
 
-- [`local-api.md`](./local-api.md) - the REST API the generated client reads from- [`usage.md`](./usage.md) - the CLI and the Astro integration in context
+- [`local-api.md`](./local-api.md) - the REST API the generated client reads from
+- [`usage.md`](./usage.md) - the CLI and the Astro integration in context
 - [`export.md`](./export.md) - exporting content to plain JSON instead

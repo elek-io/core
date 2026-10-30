@@ -40,6 +40,7 @@ A peer's row is read at the version `devDependencies` pins, which is the newest 
 | Core's own schemas | `>=4.1.0` | `z.hash('sha1')` in `src/schema/gitSchema.ts` does not exist before 4.1.0 |
 | `@hono/zod-openapi` | `^4.0.0` | peer dependency |
 | `@hono/zod-validator` | `^3.25.0 \|\| ^4.0.0` | a dependency of `@hono/zod-openapi` |
+| `@asteasolutions/zod-to-openapi` | `^4.0.0` | a dependency of `@hono/zod-openapi` |
 | `@scalar/types` | `^4.6.7` | via `@scalar/hono-api-reference`, a runtime dependency |
 | `astro` | `^4.6.6` | the `/astro` entry's peer, read at the dev pin 7.4.4 |
 
@@ -144,7 +145,7 @@ Raising the floor to the release where astro fixed it is the honest fix, and it 
 
 Naming the verified majors explicitly makes a consumer on the next one get a peer warning that prompts that re-check, instead of silently claiming an untested major works. When a new astro major is verified, widen the range to include it.
 
-astro 7 was verified this way in July 2026 and the range widened to include it, and the 6 floor moved to 6.1.3 afterwards for the reason above. It is a speed release: Rust compiler, a Rust markdown pipeline replacing remark and rehype, Vite 8 on Rolldown, queued rendering. The content layer itself is untouched, verified again at the dev pin 7.4.4:
+astro 7 was verified this way in July 2026 and the range widened to include it, and the 6 floor moved to 6.1.3 afterward for the reason above. It is a speed release: Rust compiler, a Rust markdown pipeline replacing remark and rehype, Vite 8 on Rolldown, queued rendering. The content layer itself is untouched, verified again at the dev pin 7.4.4:
 
 - `Loader.createSchema` and `LoaderContext` (including `config: AstroConfig` and `DataEntry.filePath`) are unchanged from 6.4.8.
 - `astro/loaders`, `astro/jsx-runtime` and `astro/content/config` all exist with the same shapes.
@@ -155,7 +156,7 @@ New in v7 is an optional `@astrojs/markdown-remark` peer for the opt-in remark p
 Two things did move inside the 7 line, and both are handled rather than pinned away:
 
 - **Its zod dependency rose to `^4.6.6` in 7.4.0**, which fed the zod floor above until `@scalar/types` asked for more. astro depends on zod through a caret range, so its requirement feeds that floor, and bumping astro can raise it again. Re-check the zod single-copy invariant whenever you bump astro.
-- **`apng` joined `VALID_INPUT_FORMATS` in 7.2.5**, and `VALID_SUPPORTED_FORMATS` on no release, so the image service rejects one that reaches it. `imageExtensions` in `src/astro/loaders.ts` mirrors the supported list instead, so an apng Asset takes the public route. Compare both lists when you bump astro, see [`astro-entry.md`](./astro-entry.md).
+- **`apng` joined `VALID_INPUT_FORMATS` in 7.2.5**, and `VALID_SUPPORTED_FORMATS` on no release, so the image service rejects one that reaches it. `imageExtensions` in `src/astro/loaders.ts` mirrors the supported list instead, so an APNG Asset takes the public route. Compare both lists when you bump astro, see [`astro-entry.md`](./astro-entry.md).
 
 The coupling is also a runtime one:
 
@@ -258,7 +259,7 @@ Measured against a packed 0.26.0 with tsdown 0.23.3 and typescript 7.0.2, with o
 | A tsconfig whose `include` covers the output directory | Exits 0 and writes the `.mjs` and the `.d.mts` | Exits 0 and writes the client beside them |
 | `isolatedDeclarations: true`, writing anywhere | Exits 0 and writes the `.mjs` and the `.d.mts` | Exits 1 on `TS9007`, because a Collection's `entries.list` has no explicit return type |
 
-- `isolatedDeclarations` routes declaration generation through Oxc instead of `tsgo`, which is why it lifts the `include` requirement for `generate:types js` and is the one setting that takes `generate:client js` away. Leave it off and both commands compile.
+- `isolatedDeclarations` routes declaration generation through Oxc instead of `tsgo`, which is why it lifts the `include` requirement for `generate:types js` and is the one setting that takes `generate:client js` away. Leave it off and both commands compile with a tsconfig whose `include` covers the output directory.
 - Core's own default output directory is `./.elek.io`. A bare `".elek.io"` in `include` does not cover it, because typescript's directory globs skip names beginning with a dot, so it takes an explicit `".elek.io/**/*"`.
 - The last row needs a Collection. A Project without one, and no Project at all, give `generate:client js` exit 0 under `isolatedDeclarations` too.
 - Which row a consumer meets is decided by the tsdown they install inside the `^0.23.0` peer range, not by the tsdown pinned here. So the table is measured on the pin and on the newest 0.23.x in range, and it reproduces on 0.23.4 as written.

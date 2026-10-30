@@ -269,11 +269,11 @@ Astro keeps two format lists, and an extension has to be in both to be worth a m
 
 - `VALID_INPUT_FORMATS` is what the content store recognizes a marker for. For anything else Astro strips the prefix and hands the consumer an unanchored relative path, which is why `src` is `null` for non-images and they take the `href` route instead.
 - `VALID_SUPPORTED_FORMATS` is what the image service validates against. `<Image>` on a format outside it throws `UnsupportedImageFormat` and fails the build, measured against the installed 7.4.4.
-- The second is the narrower one, and the difference is `apng`. It joined the input list in 7.2.5 and is in the supported list on no release, checked from 6.1.3 to 7.4.4, so an apng carrying the marker would reach the consumer as an image that cannot be rendered.
-- `imageExtensions` in `loaders.ts` therefore mirrors `VALID_SUPPORTED_FORMATS`, and an apng takes the `href` route a non-image takes. That list is identical on every astro the peer range allows, so the table needs no release per entry and the loader does not read the installed astro's version.
+- The second is the narrower one, and the difference is `apng`. It joined the input list in 7.2.5 and is in the supported list on no release, checked from 6.1.3 to 7.4.4, so an APNG carrying the marker would reach the consumer as an image that cannot be rendered.
+- `imageExtensions` in `loaders.ts` therefore mirrors `VALID_SUPPORTED_FORMATS`, and an APNG takes the `href` route a non-image takes. That list is identical on every astro the peer range allows, so the table needs no release per entry and the loader does not read the installed astro's version.
 - It is typed `Record<ImageInputFormat, boolean> & Record<string, boolean>`. The first half makes a format Astro adds to the input list a compile error here, which is where the two lists get compared again. The index signature is what lets the table name `apng`, which the types at the floor do not know, so pinning the floor type checks.
 
-`src/index.astro.assets.test.ts` takes an apng through a real `sync()`, and `src/astro/loaders.test.ts` covers the table itself. Neither sees Astro moving a format into the supported list, so read both lists when bumping astro, see [`peer-dependencies.md`](./peer-dependencies.md).
+`src/index.astro.assets.test.ts` takes an APNG through a real `sync()`, and `src/astro/loaders.test.ts` covers the table itself. Neither sees Astro moving a format into the supported list, so read both lists when bumping astro, see [`peer-dependencies.md`](./peer-dependencies.md).
 
 The parse-time schema declares `src` as a nullable string, because a marker string is what is stored and validated. The type consumers see is declared separately through `createSchema`'s `types`, as `ImageMetadata | null`.
 

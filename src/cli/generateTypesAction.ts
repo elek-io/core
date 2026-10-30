@@ -825,10 +825,10 @@ async function generateTypesAs({
  * `types-{projectId}.ts` per Project, into `outDir`. It creates that
  * directory and overwrites on every run.
  *
- * `language: 'js'` loads the optional `tsdown` and `typescript` peers lazily,
- * throwing `PreconditionFailed` when they are absent, and deletes the
- * generated `.ts` sources once they compile. With `options.watch` it resolves
- * after the first generation and leaves a watcher running.
+ * `language: 'js'` loads the optional `tsdown` and `typescript` peers once a
+ * Project gave it something to compile, throwing `PreconditionFailed` when
+ * they are absent, and deletes the `.ts` sources once they compile. With
+ * `options.watch` it resolves after the first run and leaves a watcher running.
  *
  * @see ../../docs/api-clients.md
  */
