@@ -126,6 +126,38 @@ The shared test Core in [`src/test/setup.ts`](../src/test/setup.ts) logs at `deb
 - The Astro suites write Astro's own output past vitest's console capture, so it still prints.
 - Run by an AI agent, vitest picks its `agent` reporter, which hides passing files whatever the config says. Unset `AI_AGENT` and `CLAUDECODE` to see what CI prints.
 
+## Git run from a test
+
+A test that runs git itself, rather than through Core, passes `GIT_TERMINAL_PROMPT=0` and an empty `GIT_ASKPASS` wherever that git can ask for a credential, the way every invocation of Core's own carries both, see [`git-credentials.md`](./git-credentials.md#no-prompt-and-no-askpass). That is `git credential` and anything reaching a remote that authenticates.
+
+- Prompts off alone does not bound such a call, because an askpass reached through `SSH_ASKPASS` or `core.askPass` still runs and may answer nothing for as long as it likes. [`workerSetup.ts`](../src/test/workerSetup.ts) clears no environment variable, so a developer's `SSH_ASKPASS` reaches every test.
+- A test that needs an askpass of its own, such as the control call below, leaves `GIT_ASKPASS` unset instead, and then that askpass has to exit by itself.
+- git skips its credential machinery for a local path, so the bare remotes the rest of the suite runs against never prompt.
+- Committing with git directly needs an identity of its own too, see [parallel test files](#parallel-test-files) below.
+
+Without prompts off, git falls back to a terminal prompt whenever an askpass answers nothing, and it reads that prompt from the terminal rather than from the stdin the test wrote. Measured with `git credential fill` and an askpass that exits without answering, on Linux on 2026-10-27:
+
+| The call | git |
+| --- | --- |
+| prompts on, under a pty | printed `Username for ...` and was still waiting when the probe killed it 8 seconds later |
+| prompts on, no terminal attached | failed in 26ms to 28ms with `could not read Username ...: No such device or address` |
+| prompts off | failed in 26ms to 31ms with `could not read Username ...: terminal prompts disabled`, after running the askpass |
+
+An askpass that never answers is not bounded by prompts off at all. Measured the same way on Linux on 2026-10-28, with an askpass that sleeps:
+
+| The call | git |
+| --- | --- |
+| prompts off, the askpass in `SSH_ASKPASS` or `core.askPass` | was still waiting when the probe killed it 8 seconds later, with or without `DISPLAY` and `SSH_ASKPASS_REQUIRE` |
+| prompts off and an empty `GIT_ASKPASS` | failed in 3ms to 5ms with `could not read Username ...: terminal prompts disabled`, running neither askpass |
+
+So a prompt only hangs a test where the runner attaches a terminal, which fits the one timeout such a call has had: on `windows-2025` on 2026-10-21, where the other three platforms passed the same head. What it waited for that once was never recorded, and the timeout took the cleanup with it, the directory git ran in stayed busy and its removal failed with `EBUSY: resource busy or locked, rmdir`.
+
+[`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) makes that call without Core's environment, as the control for an askpass running at all, and asserts it with an askpass that answers and with one that fails:
+
+- An askpass that answers still runs, which is what the control is there for.
+- One that fails ends the call with git's reason, inside the slowest test printed beside it on that runner, 3,061ms, times the margin in [`budgets.ts`](../src/test/budgets.ts). That ceiling is no per-call budget, which [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) keeps on the measured globals, but the line between a call that ran and one that waited.
+- A failing control call puts git's own stderr into the assertion's message, so the next one says what git was waiting for.
+
 ## Parallel test files
 
 Test files run in parallel, one file per vitest worker. This works because no state is shared between files:
@@ -212,8 +244,9 @@ The suite's usual remotes are bare repositories on the local filesystem, and git
 - [`src/test/gitHost.ts`](../src/test/gitHost.ts) is a git host over plain HTTP. It serves git's smart HTTP protocol and the Git LFS batch API behind basic auth. git and git-lfs reach it as a forward proxy through `http_proxy`, so any host name works without DNS or TLS.
   - It runs `upload-pack` and `receive-pack` with `--stateless-rpc` itself rather than `git http-backend`, which MinGit, dugite's git on Windows, does not ship. Through `http-backend` every request on Windows answered 500.
 - [`src/test/cloudGit.ts`](../src/test/cloudGit.ts) models elek.io Cloud's two git endpoints. The fake Cloud answers from it, and the git host asks it which token reaches which repository.
-- [`src/test/credentialRecorder.ts`](../src/test/credentialRecorder.ts) stands in for the person's keychain and askpass, and records whether git asked them.
+- [`src/test/credentialRecorder.ts`](../src/test/credentialRecorder.ts) stands in for the person's keychain and askpass, and records whether git asked them. It writes two askpass programs, one that answers and one that fails, so a test can run the same call both ways.
   - Its global config starts with an empty helper. MinGit's system config sets Git Credential Manager, which would otherwise be asked ahead of the stand-in and refuses a plain HTTP host whose name holds `github`.
+  - Its config for a run without the keychain carries that empty helper and nothing else, rather than being an empty file, because git takes the empty value as a reset of every helper a config read before it added. So a call meant to reach the askpass alone cannot be answered by a helper the platform set.
 
 Real Projects are pushed and cloned on two host names, LFS objects included. [`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) drives the same helper through dugite's own `git credential fill`, which needs no HTTP at all.
 
