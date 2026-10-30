@@ -152,6 +152,68 @@ export function tableCellAlign(context: MdastNodeContext): MdAstTableAlign {
 }
 
 /**
+ * Whether a node sits directly in an item of a tight list, which is where a
+ * `paragraph` handler renders its children without the `<p>`, so the item's
+ * text is the item's own content.
+ *
+ * False for every item of a loose list, and for a context whose parent is not
+ * a list item.
+ */
+export function isInTightListItem(context: MdastNodeContext): boolean {
+  const item = context.ancestors.at(-1);
+  const list = context.ancestors.at(-2);
+  if (item?.type !== 'listItem' || list?.type !== 'list') return false;
+  return !isLooseList(list);
+}
+
+/**
+ * Whether a list is loose, meaning every one of its items keeps the
+ * paragraphs it holds. mdast records spreading per list and per item, and one
+ * spread item spreads the whole list.
+ */
+function isLooseList(list: MdAstList): boolean {
+  return list.spread === true || list.children.some(isLooseListItem);
+}
+
+/**
+ * Whether one item spreads: its own `spread` where it carries one, and more
+ * than one block where it carries none.
+ */
+function isLooseListItem(item: MdAstListItem): boolean {
+  return item.spread ?? item.children.length > 1;
+}
+
+/**
+ * The checked state of the task item whose checkbox opens the node this
+ * context names, which is the item's first block. A `paragraph` handler puts
+ * the box inside its text, on one line with it.
+ *
+ * Null where no checkbox belongs to the node: a block that is not the item's
+ * first, an item that is no task, and a parent that is no list item.
+ */
+export function taskItemChecked(context: MdastNodeContext): boolean | null {
+  const item = context.ancestors.at(-1);
+  if (item?.type !== 'listItem' || context.index !== 0) return null;
+  return item.checked;
+}
+
+/**
+ * The identifier of the footnote whose way back ends the node this context
+ * names, which is the note's last block. A `paragraph` handler ends its text
+ * with the link rather than letting it follow the note.
+ *
+ * Null for every other node, so a paragraph nested deeper in the note, in a
+ * list of its own for one, never takes the way back.
+ */
+export function footnoteWayBackIdentifier(
+  context: MdastNodeContext
+): string | null {
+  const note = context.ancestors.at(-1);
+  if (note?.type !== 'footnoteDefinition') return null;
+  return context.index === note.children.length - 1 ? note.identifier : null;
+}
+
+/**
  * Node types a consumer must render explicitly, because no default is safe
  * in any framework. The reasoning is in the doc below.
  *

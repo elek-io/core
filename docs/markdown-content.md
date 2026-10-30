@@ -50,7 +50,7 @@ Three things to know before writing a renderer:
 
 - **Astro's `render()` does not apply to an elek.io Entry.** It hands back the rendered HTML an entry carries with it, and the loaders store none, because a finished HTML string cannot keep the `entryReference` and `assetReference` nodes a page needs the UUIDs from.
   - Calling it anyway is not an error and produces nothing: `<Content />` renders empty, `headings` is `[]` and `remarkPluginFrontmatter` is `{}`, with no warning anywhere. Body content arrives on `entry.data` as a tree instead, and `mdastRender` is what turns it into markup.
-- **Three node types require an explicit override**, `html`, `assetReference` and `entryReference`. The other 21 have semantic HTML defaults that render every field their node carries, except the five in [what a default leaves to you](#what-a-default-leaves-to-you).
+- **Three node types require an explicit override**, `html`, `assetReference` and `entryReference`. The other 21 have semantic HTML defaults that render every field their node carries, except the three in [what a default leaves to you](#what-a-default-leaves-to-you).
   - The type system surfaces the required keys because content editors can flip `features.rawHtml`, `features.assetReferences` and `features.entryReferences`, or extend `ofCollections`, on any field at any time.
   - Forcing a documented decision per key stops the renderer from silently no-opping when a new node type appears. Choosing `() => null` is a valid decision and documents "render nothing if this ever appears."
 - **JSX belongs in the template, not in the frontmatter.** That is a property of Astro rather than of `mdastRender`. The `---` fence of an `.astro` file is TypeScript, not TSX, so a handler written as `(node) => <em>{node.alt}</em>` up there is a parse error.
@@ -205,7 +205,7 @@ const footnotes: astroHTML.JSX.Element[] = [];
 )}
 ```
 
-An override replaces the default whole, so the way back to the reference is yours to re-add here, as is the `fn-` id if you want another scheme.
+An override replaces the default whole, so the way back to the reference is yours to re-add here, as is the `fn-` id if you want another scheme. No paragraph places a way back once `footnoteDefinition` is yours, so the collected section carries exactly the one you write.
 
 **Custom top-level wrap via `root`.** The default wraps the rendered blocks in a Fragment so `<article>{rendered}</article>` works at the call site. You can override `root` to do the wrapping at the renderer level instead - useful when the renderer is responsible for the whole article shell:
 
@@ -215,25 +215,70 @@ root: (_, children) => <article class="prose">{children}</article>,
 
 ### What a default leaves to you
 
-Every default renders every field of its node except these five. Nothing else of a node is dropped, so an ordered list keeps the number it counts from and a task item keeps its checked state without you writing a handler.
+Every default renders every field of its node except these three. Nothing else of a node is dropped, so an ordered list keeps the number it counts from and a task item keeps its checked state without you writing a handler.
 
 | Field | What the default does with it | Override to get |
 | --- | --- | --- |
 | `code.lang` | nothing, `<pre><code>` carries no class | the class name your highlighter reads, see `code` above |
 | `code.meta` | nothing, it is the option string of a highlighter Core does not ship | whatever your highlighter makes of it |
-| `list.spread` | nothing, see the tight list below | a tight item, from a `paragraph` override that reads it off its [context](#where-a-node-sits) |
-| `listItem.spread` | the same | the same |
 | `footnoteDefinition.label` | nothing, the authored spelling of the identifier shows on the reference instead | it on the note as well |
+
+### Three placements the paragraph makes
+
+A parent's handler is given its children already rendered, so three placements are out of its reach. The `paragraph` default makes all three, because its [context](#where-a-node-sits) names the list item or the note it sits in:
+
+| What | Where it lands |
+| --- | --- |
+| The text of an item of a tight list | `<li>text</li>`, without the `<p>` a loose item keeps |
+| A task item's checkbox | inside a `<label>` that opens the item's text, on one line with it |
+| A footnote's way back | at the end of the note's last paragraph |
+
+```text
+<ul><li><label><input type="checkbox" checked disabled> Pay the rent</label></li></ul>
+<div id="fn-1"><p>The note. <a href="#fnref-1" aria-label="Back to content">↩</a></p></div>
+```
+
+- **A list is tight or loose as a whole**, which is what mdast records in `list.spread` and `listItem.spread`. The list is loose when its own `spread` is true, when any item's is, or when an item that carries none holds more than one block. Every item of a loose list keeps its `<p>`.
+- **Only a paragraph directly inside the item loses its `<p>`.** A quote in a tight item keeps the one around its own text.
+- **The `<label>` names the checkbox** with the item's text, which a screen reader reads once where that text is plain. A link, an image or a footnote marker in it keeps its own name inside the box's name, so a screen reader reaches that part a second time there. A nested list stays outside the label, and an item whose text is an image is named by that image's alt text.
+- **Three helpers answer the placements from a context**, so an override does not walk the tree: `isInTightListItem`, `taskItemChecked` and `footnoteWayBackIdentifier`, all exported from `@elek-io/core`.
+- **A `paragraph` override here needs `isInTightListItem` alone**, because the item takes the box back and the note the way back the moment `paragraph` is yours. The other two are for a binding of your own, see the [fallback recipe](#fallback-recipe-for-frameworks-without-an-official-wrapper).
+
+```typescript
+paragraph: (_, children, context) =>
+  isInTightListItem(context) ? <>{children}</> : <p>{children}</p>,
+```
+
+Where a paragraph cannot take one of them, the item and the note place it themselves:
+
+- An item whose first block is not a paragraph, or which holds no block at all, carries its checkbox before its first block. Its name goes on an `aria-label` there, which a screen reader reads beside the item's text, and an item with no text at all gets no name.
+- A note whose last block is a list or a code block lets the way back follow its blocks. A paragraph nested in that block never takes it.
+
+An override moves whatever it takes over, so none of the three ever lands twice or nowhere:
+
+- **An override of `paragraph` hands both back**, so the item places every checkbox and the note every way back, and your own paragraph loses neither. Core cannot see that your paragraph placed one, so a box or a way back of your own in there is a second one.
+- **An override of `listItem` keeps the checkbox of every item whose first block is a paragraph**, because the box sits inside that paragraph's text rather than in the `<li>` your handler writes. For an item whose first block is no paragraph, or which holds none, the item itself places the box, so your handler replaces the one that placed it and that box is yours to re-add.
+- **An override of `footnoteDefinition` takes the way back over whole**, its wording included, and no paragraph places one. That is how a site in another language replaces "Back to content" without touching `paragraph`:
+
+```typescript
+footnoteDefinition: (node, children) => (
+  <div id={`fn-${node.identifier}`}>
+    {children}
+    <a href={`#fnref-${node.identifier}`} aria-label="Zurück zum Text">
+      ↩
+    </a>
+  </div>
+),
+```
 
 ### Where a default cannot reach
 
-A parent's default is handed its children already rendered, so it cannot reach inside them, and one `astroDefaults` object serves every render. Five things follow, and the defaults ship them visibly rather than working around them.
+One `astroDefaults` object serves every render, so footnote ids are built from the identifier alone. A default cannot take a prefix, because that would mean state in a shared object.
 
-- **A task item's checkbox precedes its text** instead of opening the item's first paragraph, which is where remark puts it. The paragraph arrives already rendered, so it takes a `paragraph` override to put the box inside it. `li > p { display: inline }` is the CSS that puts box and text on one line, and it keeps the list marker, which the default leaves in place by adding no class name.
-- **A task item's checkbox is named with the item's own text.** A `<label>` cannot wrap blocks that arrive already rendered, so the name goes on an `aria-label` instead and is read twice, once as the box's name and once as the text. A list directly inside the item is left out, whether it holds tasks or plain items, and an item whose text is an image or only whitespace gets no attribute.
-- **A note's way back follows its blocks** instead of ending its last paragraph, for the same reason.
-- **A tight list item keeps its paragraph**, so `<li><p>text</p></li>` rather than `<li>text</li>`. It is valid and semantic, and it is one `<p>` of margin away from what other renderers emit.
-- **Footnote ids are built from the identifier alone.** Two trees on one page claim the same `fn-` and `fnref-` ids, and an anchor then lands on whichever rendered first. A note referenced twice repeats its reference id, so its way back lands on the first reference. A default cannot take a prefix, because one `astroDefaults` object serves every render. Give both handlers one of your own:
+- Two trees on one page claim the same `fn-` and `fnref-` ids, and an anchor then lands on whichever rendered first.
+- A note referenced twice repeats its reference id, so its way back lands on the first reference.
+
+Give both handlers one of your own:
 
 ```typescript
 footnoteReference: (node) => (
@@ -253,7 +298,7 @@ footnoteDefinition: (node, children) => (
 ),
 ```
 
-The back-link's `aria-label` is English, so a site in another language overrides `footnoteDefinition` for that too.
+A `footnoteDefinition` of your own owns the way back, so the prefixed version above is the only one the page shows.
 
 ### Where a node sits
 
@@ -355,15 +400,19 @@ The example below uses React (`T = ReactNode`). For Vue bind `T = VNode`, for So
 ```tsx
 import {
   extractText,
+  footnoteWayBackIdentifier,
+  isInTightListItem,
   isTableHeaderCell,
   mdastRender,
   tableCellAlign,
+  taskItemChecked,
   type MdAstListItem,
   type MdastRenderersBase,
 } from '@elek-io/core';
 import type { ReactNode } from 'react';
 
-// A task item's name is the text of its own blocks, a list directly inside
+// A task item's name where the item itself carries the box, which is where
+// no paragraph of it can: the text of its own blocks, a list directly inside
 // the item left out, whether its items are tasks naming a checkbox of their
 // own or plain items. Trimmed, so an item whose text is only whitespace gets
 // no name rather than a name of spaces.
@@ -375,9 +424,40 @@ function taskItemName(node: MdAstListItem): string | undefined {
   return extractText(ownBlocks).trim() || undefined;
 }
 
+// The way back from a footnote to the reference that names it
+function wayBack(identifier: string): ReactNode {
+  return (
+    <a href={`#fnref-${identifier}`} aria-label="Back to content">
+      ↩
+    </a>
+  );
+}
+
 const renderers: MdastRenderersBase<ReactNode> = {
   root: (_, children) => <>{children}</>,
-  paragraph: (_, children) => <p>{children}</p>,
+  // The three placements a parent cannot reach, each answered by the
+  // paragraph's context: a tight item's text, a task item's checkbox and the
+  // way back that ends a note's last paragraph
+  paragraph: (_, children, context) => {
+    const checked = taskItemChecked(context);
+    const identifier = footnoteWayBackIdentifier(context);
+    const content =
+      checked === null ? (
+        <>{children}</>
+      ) : (
+        <label>
+          <input type="checkbox" checked={checked} disabled readOnly />{' '}
+          {children}
+        </label>
+      );
+    const inner = (
+      <>
+        {content}
+        {identifier !== null && <> {wayBack(identifier)}</>}
+      </>
+    );
+    return isInTightListItem(context) ? inner : <p>{inner}</p>;
+  },
   heading: (node, children) => {
     const Tag = `h${node.depth}` as const;
     return <Tag>{children}</Tag>;
@@ -393,8 +473,10 @@ const renderers: MdastRenderersBase<ReactNode> = {
       <ul>{children}</ul>
     ),
   listItem: (node, children) =>
-    // A checked of null is an ordinary item, true and false are a task
-    node.checked === null ? (
+    // A checked of null is an ordinary item, true and false are a task. The
+    // item places the box only where its first block is no paragraph, since
+    // the paragraph above takes it inside the item's text otherwise
+    node.checked === null || node.children[0]?.type === 'paragraph' ? (
       <li>{children}</li>
     ) : (
       <li>
@@ -432,12 +514,12 @@ const renderers: MdastRenderersBase<ReactNode> = {
       <td style={style}>{children}</td>
     );
   },
+  // The way back follows the blocks only where the note's last one is no
+  // paragraph, a list or a code block for one
   footnoteDefinition: (node, children) => (
     <div id={`fn-${node.identifier}`}>
       {children}
-      <a href={`#fnref-${node.identifier}`} aria-label="Back to content">
-        ↩
-      </a>
+      {node.children.at(-1)?.type !== 'paragraph' && wayBack(node.identifier)}
     </div>
   ),
   text: (node) => node.value,
@@ -482,6 +564,7 @@ If you're building a reusable binding (what `@elek-io/core/astro` is) rather tha
 - Build a `Pick<MdastRenderersBase<T>, DefaultedRendererKey>` of safe defaults.
 - Expose `FrameworkRenderers<T>` as the consumer-facing override shape.
 - Merge `{ ...defaults, ...overrides }` before calling `mdastRender`.
+- Hand the two placements on where a consumer's own handler takes them over, which is what the Astro binding does while merging: a `paragraph` of theirs leaves the checkbox to `listItem` and the way back to `footnoteDefinition`, and a `footnoteDefinition` of theirs owns the way back alone.
 
 `REQUIRED_RENDERER_KEYS` names the three keys (`html`, `assetReference`, `entryReference`) that stay required because no default is safe for them. All four are exported from `@elek-io/core`.
 
