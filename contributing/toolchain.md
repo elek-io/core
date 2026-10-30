@@ -78,7 +78,7 @@ On defaults it wanted to rewrite 202 files. After `--migrate=prettier` that fell
 +  | AssetMimeMismatchIssue;
 ```
 
-So it was one prettier minor behind, measured on oxfmt 0.61.0. It is at 0.74.0 today and still before 1.0. Stable output is the entire value of a formatter, and a pre-1.0 one means repo-wide churn every time it converges or diverges. Formatting is also not slow enough to be worth risk. Re-check at 1.0, and specifically re-run the `--migrate=prettier` measurement above.
+So it was one prettier minor behind, measured on oxfmt 0.61.0. It is at 0.75.0 today and still before 1.0. Stable output is the entire value of a formatter, and a pre-1.0 one means repo-wide churn every time it converges or diverges. Formatting is also not slow enough to be worth risk. Re-check at 1.0, and specifically re-run the `--migrate=prettier` measurement above.
 
 ### oxlint `--type-check` instead of `tsc --noEmit`
 

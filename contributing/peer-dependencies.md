@@ -215,7 +215,7 @@ Because Core is not the one using it, Core's range must mirror what tsdown suppo
 
 When tsdown widens again, widen here in the same change.
 
-The tsdown range is `^0.23.0`, a 0.x line, so it stays inside the verified minor. `devDependencies` pins the latest 0.23.x for development, like the other peers, at 0.23.3.
+The tsdown range is `^0.23.0`, a 0.x line, so it stays inside the verified minor. `devDependencies` pins 0.23.3, the 0.23.x the suite proves. That is not always the newest in the line, because a release still inside the install cooldown waits for the next routine bump.
 
 Two consequences of following a 0.x line:
 
