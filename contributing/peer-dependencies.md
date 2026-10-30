@@ -41,7 +41,7 @@ A peer's row is read at the version `devDependencies` pins, which is the newest 
 | `@hono/zod-openapi` | `^4.0.0` | peer dependency |
 | `@hono/zod-validator` | `^3.25.0 \|\| ^4.0.0` | a dependency of `@hono/zod-openapi` |
 | `@scalar/types` | `^4.6.7` | via `@scalar/hono-api-reference`, a runtime dependency |
-| `astro` | `^4.6.6` | the `/astro` entry's peer, read at the dev pin 7.4.2 |
+| `astro` | `^4.6.6` | the `/astro` entry's peer, read at the dev pin 7.4.4 |
 
 The maximum is `4.6.7`, so the peer range is `^4.6.7`. `devDependencies` pins the latest 4.x (`zod@4.6.7`) so Core develops against the newest patch. Floor and dev pin coincide here, because `@scalar/types` asks for that same patch, and they part again at the next zod release nothing in the graph requires.
 
@@ -84,7 +84,7 @@ dugite-native changed the link in v2.53.0-4 ([desktop/dugite-native#554](https:/
 
 A git that cannot load a shared library throws `PreconditionFailed` naming the library, so an older build or a mismatched `libcurl.so.4` says what is missing rather than `Internal`.
 
-- Each dugite release ships an embedded git binary. 3.2.3 bundles git 2.53.0 and git-lfs 3.7.1, and the dev pin 3.3.1 bundles git 2.56.0 and git-lfs 3.8.1, so the test suite, which runs real git and Git LFS, is the real check.
+- Each dugite release ships an embedded git binary. 3.2.3 bundles git 2.53.0 and git-lfs 3.7.1, and the dev pin 3.3.2 bundles git 2.56.0 and git-lfs 3.8.1, so the test suite, which runs real git and Git LFS, is the real check.
 - `devDependencies` pins the latest 3.x for development, like the other peers.
 
 To re-verify the floor, pin the dev version to it and run the suite:
@@ -144,13 +144,13 @@ Raising the floor to the release where astro fixed it is the honest fix, and it 
 
 Naming the verified majors explicitly makes a consumer on the next one get a peer warning that prompts that re-check, instead of silently claiming an untested major works. When a new astro major is verified, widen the range to include it.
 
-astro 7 was verified this way in July 2026 and the range widened to include it, and the 6 floor moved to 6.1.3 afterwards for the reason above. It is a speed release: Rust compiler, a Rust markdown pipeline replacing remark and rehype, Vite 8 on Rolldown, queued rendering. The content layer itself is untouched, verified again at the dev pin 7.4.2:
+astro 7 was verified this way in July 2026 and the range widened to include it, and the 6 floor moved to 6.1.3 afterwards for the reason above. It is a speed release: Rust compiler, a Rust markdown pipeline replacing remark and rehype, Vite 8 on Rolldown, queued rendering. The content layer itself is untouched, verified again at the dev pin 7.4.4:
 
 - `Loader.createSchema` and `LoaderContext` (including `config: AstroConfig` and `DataEntry.filePath`) are unchanged from 6.4.8.
 - `astro/loaders`, `astro/jsx-runtime` and `astro/content/config` all exist with the same shapes.
 - The `__ASTRO_IMAGE_` marker is unchanged, and programmatic `sync` is unchanged.
 
-New in v7 is an optional `@astrojs/markdown-remark` peer for the opt-in remark pipeline, which adds no install friction. Engines require Node >= 22.23.4 at 7.4.2, and CI runs the version in `.node-version`. There is still no integration API for injecting content collections, so nothing in v7 changes how the `/astro` entry is designed.
+New in v7 is an optional `@astrojs/markdown-remark` peer for the opt-in remark pipeline, which adds no install friction. Engines require Node >= 22.23.4 at 7.4.4, and CI runs the version in `.node-version`. There is still no integration API for injecting content collections, so nothing in v7 changes how the `/astro` entry is designed.
 
 Two things did move inside the 7 line, and both are handled rather than pinned away:
 
@@ -215,7 +215,7 @@ Because Core is not the one using it, Core's range must mirror what tsdown suppo
 
 When tsdown widens again, widen here in the same change.
 
-The tsdown range is `^0.23.0`, a 0.x line, so it stays inside the verified minor. `devDependencies` pins the latest 0.23.x for development, like the other peers, at 0.23.2.
+The tsdown range is `^0.23.0`, a 0.x line, so it stays inside the verified minor. `devDependencies` pins the latest 0.23.x for development, like the other peers, at 0.23.3.
 
 Two consequences of following a 0.x line:
 
@@ -243,23 +243,26 @@ npx elek generate:types ./out js              # must now emit .mjs and .d.mts
 
 Installing the tarball with npm is the useful part. npm resolves optional peers even though it does not install them, so a range skew surfaces there and not under pnpm.
 
-The typescript is pinned to 6 in that step on purpose. A plain `npm install -D typescript` takes 7, where the step needs a `tsconfig.json` with `isolatedDeclarations` switched on as well, see below.
+The typescript is pinned to 6 in that step on purpose. A plain `npm install -D typescript` takes 7, where the step also needs a `tsconfig.json` whose `include` covers the output directory, see below.
 
-### Consumers on typescript 7 need isolatedDeclarations
+### Consumers on typescript 7 need a tsconfig that covers the output
 
-typescript 7 is the Go port, and it no longer exports the classic compiler API tsdown's dts generator calls. tsdown 0.23.2 refuses that combination outright and names the way out, `isolatedDeclarations`, which routes declaration generation through Oxc instead. typescript 6 asks for none of it.
+typescript 7 is the Go port, and it no longer exports the classic compiler API tsdown's dts generator calls. tsdown drives it through `tsgo` instead, which needs a tsconfig and only emits for the files that tsconfig includes. typescript 6 asks for none of it.
 
-Measured against a packed 0.26.0 with tsdown 0.23.2 and typescript 7.0.2, with one Project and one Collection in the data directory:
+Measured against a packed 0.26.0 with tsdown 0.23.3 and typescript 7.0.2, with one Project and one Collection in the data directory:
 
 | The consumer's project | `generate:types <dir> js` | `generate:client <dir> js` |
 | --- | --- | --- |
-| No `tsconfig.json` | Exits 1 with "TypeScript 7.0.2 does not provide the classic TypeScript API required by tsc", and the generated `types.ts` stays behind | The same failure |
-| `include: ["src"]`, writing inside or outside it | The same failure, so the output directory no longer decides it | The same failure |
-| `isolatedDeclarations: true`, writing anywhere | Exits 0 and writes the `.mjs` and the `.d.mts` | Exits 1 on `TS9007`, because the generated client has functions without an explicit return type |
+| No `tsconfig.json` | Exits 1 with "The `tsgo` generator requires a tsconfig file to be specified", and the generated `types.ts` stays behind | The same failure |
+| A tsconfig whose `include` leaves the output directory out | Exits 1 with "tsgo did not generate dts file for `<path>`, please check your tsconfig" | The same failure |
+| A tsconfig whose `include` covers the output directory | Exits 0 and writes the `.mjs` and the `.d.mts` | Exits 0 and writes the client beside them |
+| `isolatedDeclarations: true`, writing anywhere | Exits 0 and writes the `.mjs` and the `.d.mts` | Exits 1 on `TS9007`, because a Collection's `entries.list` has no explicit return type |
 
-- tsdown 0.23.1 failed differently, on a tsconfig that did not cover the output directory, and both commands succeeded without `isolatedDeclarations` when it did. So 0.23.2 takes `generate:client js` on typescript 7 away rather than moving its condition.
-- Core's own default output directory is `./.elek.io`, and it fails there like everywhere else.
-- Which of the two a consumer meets is decided by the tsdown they install inside the `^0.23.0` peer range, not by the tsdown pinned here. So pinning the newest 0.23.x is what makes this table describe what they get.
+- `isolatedDeclarations` routes declaration generation through Oxc instead of `tsgo`, which is why it lifts the `include` requirement for `generate:types js` and is the one setting that takes `generate:client js` away. Leave it off and both commands compile.
+- Core's own default output directory is `./.elek.io`. A bare `".elek.io"` in `include` does not cover it, because typescript's directory globs skip names beginning with a dot, so it takes an explicit `".elek.io/**/*"`.
+- The last row needs a Collection. A Project without one, and no Project at all, give `generate:client js` exit 0 under `isolatedDeclarations` too.
+- Which row a consumer meets is decided by the tsdown they install inside the `^0.23.0` peer range, not by the tsdown pinned here. So pinning the newest 0.23.x is what makes this table describe what they get, and the table reproduces on 0.23.4 as written.
+- tsdown 0.23.2 was the one release in the line that failed the whole combination, because it took its declaration plugin to a prerelease that dropped the `tsgo` path. 0.23.3 went back to the released plugin and restored it.
 
 This is tsdown's behavior rather than Core's and it only affects `generate:* js`, so it is documented in `docs/api-clients.md`, with the ways around it, instead of being worked around. Re-measure both commands on both typescript lines at every tsdown bump.
 
