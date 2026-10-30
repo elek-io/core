@@ -1,5 +1,53 @@
 # @elek-io/core
 
+## 0.27.0
+
+### Minor Changes
+
+- aeb502b: **A tight list, a checklist and a footnote land where the markdown puts them.** Three placements were out of reach of the handler that was given them, because a parent in `@elek-io/core/astro` is handed its children already rendered. A tight item kept the `<p>` around its text, a task item's checkbox sat before that text instead of opening it, and a footnote's way back followed the note instead of ending its last paragraph. The `paragraph` default makes all three now, because its context names the list item or the note it sits in.
+  
+  **The markup changes for every site that uses the defaults**, which is the point of the fix:
+  
+  - An item of a tight list renders `<li>text</li>` rather than `<li><p>text</p></li>`. A list is loose when its own `spread` is true, when any item's is, or when an item that carries none holds more than one block, which is how `mdast-util-to-hast` decides it. Every item of a loose list keeps its `<p>`, and a quote in a tight item keeps the one around its own text.
+  - A task item renders `<li><label><input type="checkbox" checked disabled> text</label></li>`. The box opens the item's text in a tight list and its first `<p>` in a loose one, and the `<label>` around box and text names it, so plain text is read once instead of once as the box's name and once as the text. A link, an image or a footnote marker in that text keeps its own name inside the box's name, so a screen reader reaches that part there as well.
+  - A footnote's way back ends the note's last paragraph, as `<p>The note. <a href="#fnref-1" aria-label="Back to content">↩</a></p>`.
+  
+  There is no migration step, because what changed is the markup. Four things to check in your own site:
+  
+  - CSS that reached a list item's text through `li > p` selects the `li` itself for a tight list now. The box and its text share a line in both a tight and a loose item, so `li > p { display: inline }`, which the docs named for that, is no longer what puts them there.
+  - An override of `listItem` keeps the checkbox of every item whose first block is a paragraph, where it used to drop every one. The box sits inside that paragraph's text rather than in the `<li>` your handler writes. For an item whose first block is no paragraph, or which holds none, the item itself still places the box, so your handler replaces the one that placed it and that box is yours to re-add.
+  - An override of `paragraph` keeps every checkbox and every way back. The item and the note place them around their blocks then, which is where the defaults put them before, and Core cannot see a box or a link your own paragraph places, so one in there is a second one.
+  - An override of `footnoteDefinition` owns the way back alone, so its wording is yours and no paragraph adds a second link. That is how a site in another language replaces "Back to content".
+  
+  Where no paragraph can take one of the three, the item and the note still place it. An item whose first block is not a paragraph carries its box before that block, named through `aria-label`, and a note whose last block is a list or a code block lets the way back follow its blocks.
+  
+  **New exports** `isInTightListItem`, `taskItemChecked` and `footnoteWayBackIdentifier`, which answer the three from a node's context the way `isTableHeaderCell` and `tableCellAlign` answer a table cell's two questions, so an override does not have to walk the tree.
+  
+  `list.spread` and `listItem.spread` leave the fields a default drops, which are three now: `code.lang`, `code.meta` and `footnoteDefinition.label`. See `docs/markdown-content.md`.
+- 896b8c6: `dispose()` resolves within seconds even when one of its steps never finishes, and says which step that was.
+  
+  **Every step is bounded.** Stopping the local API, closing the credential relay's loopback listener and closing the logger each get 5,000ms. A step that has not finished by then is given up on, the remaining steps still run, and `dispose()` resolves. Before, a step that stopped coming back took the whole shutdown with it, and a host that awaits `dispose()` on quit or after a failed start waited forever.
+  
+  **The stalled step is named.** `dispose()` now answers `{ stalledSteps }`, which lists what it gave up on as `api`, `relay` or `logger`, and is empty when every step finished. The new `disposeStepNames` holds the words Core itself uses for each, so what you show a person reads like Core's own log record. Each stalled step also leaves a `warn` record naming it in the log file, except the logger, whose own stream has ended by the time Core knows. A stalled step is given up on rather than undone. `api` and `relay` stop accepting, which releases their port, and then wait for the connections still open. `api` first waits for a start still in progress, so one given up on there closes its listener only once that start finishes. A stalled `logger` means winston never confirmed its flush, so a record still in a transport's buffer never reaches the log file. Read a named step as something to report rather than to retry.
+  
+  **`core.logger.close()` answers whether it flushed**, `true` once winston's `finish` arrived and `false` once Core gave up waiting for it. It used to wait for that event without a bound, so a shutdown could stop there.
+- 0eca7f1: **Three dependencies npm installs alongside Core moved:**
+  
+  | Dependency                   | From    | To      |
+  | ---------------------------- | ------- | ------- |
+  | `@scalar/hono-api-reference` | 0.12.13 | 0.12.16 |
+  | `hono`                       | 4.13.13 | 4.13.14 |
+  | `mime`                       | 4.1.1   | 4.1.2   |
+  
+  These moves add, remove or rename no export of any entry point and change no public type. The reference page `elek api:start` serves at `/` is byte-identical to the previous release's, and it lists the same 15 content routes. `mime`'s fix is to `getAllExtensions`, which Core never calls, and the `getType` and `getExtension` it does call answer identically.
+  
+  **`docs/api-clients.md` is more precise about compiling on TypeScript 7.** Adding Core's default output directory to your `tsconfig.json` takes the explicit glob `".elek.io/**/*"`, because TypeScript's directory globs skip names beginning with a dot, and a bare `".elek.io"` therefore leaves the generated file out. The doc also now names `isolatedDeclarations` as the one option that takes `generate:client js` away on TypeScript 7, whatever directory you write into.
+- c18c4ca: **Zod `^4.6.7` is required.** The peer range rises from `^4.6.6`. `@scalar/types` 0.25.2 depends on `zod ^4.6.7`. Core reaches it through `@scalar/hono-api-reference`, which serves the local API's reference page, and Core's floor is the highest Zod floor in the tree. A floor below that lets `@scalar/types` resolve its own newer Zod next to yours.
+  
+  Two copies break the Astro integration at runtime and every schema Core hands you at type-check time, because Zod v4 brands a schema with its exact version. Installing Core with `zod@4.6.6` now stops at an `ERESOLVE` error naming the `^4.6.7` peer, and forcing it through gives exactly the two copies the peer exists to prevent.
+  
+  Raise your own Zod to 4.6.7 or later when you take this Core, then run your package manager's dedupe. `pnpm why zod`, `npm ls zod` or `yarn why zod` has to report exactly one version.
+
 ## 0.26.0
 
 ### Minor Changes
