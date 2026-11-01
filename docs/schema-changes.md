@@ -100,7 +100,7 @@ A `content_loss` issue adds `reason`, which says what about the change deletes t
 
 ### The resolution workflow
 
-Retry the update with a `resolutions` map keyed by Entry id, then field slug, to the corrected `Value`. Resolutions are type-checked against the new field's schema, and an invalid one throws `BadRequest`.
+Retry the update with a `resolutions` map to the corrected `Value`. A `core.collections.update()` map is keyed by Entry id, then field slug. A `core.components.update()` map carries the Component item id in between, see [resolving a Component item's issue](#resolving-a-component-items-issue). Resolutions are type-checked against the new field's schema, and an invalid one throws `BadRequest`.
 
 A field slug the new definitions do not declare throws `BadRequest` too, naming the Entry and the slug. It is checked before anything is written, so a stale resolution fails the whole update rather than reaching one Entry. For a `unique_collision` the corrected `Value` must be unique within the Collection for that `language`, since reusing the colliding value just fails the scan again.
 
@@ -146,7 +146,61 @@ try {
 }
 ```
 
-`core.components.update()` takes the same `resolutions` shape. For Component-item issues, use the `componentItemId` on each issue to target the right item.
+### Resolving a Component item's issue
+
+A Component's field definitions are transformed per Component **item**, so every issue a `core.components.update()` raises carries the `componentItemId` of the item it belongs to. Its `resolutions` map takes that id as a key of its own:
+
+| Level | Key                     | Read from the issue |
+| ----- | ----------------------- | ------------------- |
+| 1     | the Entry's id          | `entryId`           |
+| 2     | the Component item's id | `componentItemId`   |
+| 3     | the field's new slug    | `fieldSlug`         |
+
+Two items of the same Component in one Entry each take their own resolution, and an item left out keeps the update refused. An item id the Entry does not hold, an item belonging to another Component and a field slug the new definitions do not declare each throw `BadRequest` before anything is written.
+
+```typescript
+import { CoreError, type EntryIssue, type Value } from '@elek-io/core';
+
+const updatedDefinitions = /* the Component's fieldDefinitions with your edits */;
+
+try {
+  await core.components.update({
+    ...component,
+    projectId: project.id,
+    fieldDefinitions: updatedDefinitions,
+  });
+} catch (error) {
+  if (error instanceof CoreError && error.type === 'Conflict') {
+    const issues = error.cause as EntryIssue[];
+
+    // The item id is the middle key, so the Value lands in the item that
+    // raised the issue rather than at the Entry's top level
+    const resolutions: Record<
+      string,
+      Record<string, Record<string, Value>>
+    > = {};
+    for (const issue of issues) {
+      if (issue.issue === 'content_loss' || !issue.componentItemId) continue;
+      resolutions[issue.entryId] ??= {};
+      resolutions[issue.entryId][issue.componentItemId] ??= {};
+      resolutions[issue.entryId][issue.componentItemId][issue.fieldSlug] =
+        /* a valid Value for the new schema */;
+    }
+
+    await core.components.update({
+      ...component,
+      projectId: project.id,
+      fieldDefinitions: updatedDefinitions,
+      resolutions,
+      acceptedContentLoss: issues
+        .filter((issue) => issue.issue === 'content_loss')
+        .map((issue) => issue.fieldDefinitionId),
+    });
+  } else {
+    throw error;
+  }
+}
+```
 
 ## Accepting content loss
 
