@@ -965,6 +965,7 @@ describe('a model change that deletes content is refused', function () {
       },
       fieldDefinitions: [dynamicField(uuid(), 'blocks', [holder.id])],
     });
+    const holderItemId = uuid();
     const holderEntry = await core.entries.create({
       projectId: project.id,
       collectionId: holders.id,
@@ -974,7 +975,7 @@ describe('a model change that deletes content is refused', function () {
           valueType: 'component',
           content: [
             {
-              id: uuid(),
+              id: holderItemId,
               componentId: holder.id,
               values: {
                 nested: {
@@ -1016,15 +1017,17 @@ describe('a model change that deletes content is refused', function () {
         ],
         resolutions: {
           [holderEntry.id]: {
-            nested: {
-              objectType: 'value',
-              valueType: 'component',
-              content: [],
-            },
-            headline: {
-              objectType: 'value',
-              valueType: 'string',
-              content: { en: 'Headline', de: 'Headline' },
+            [holderItemId]: {
+              nested: {
+                objectType: 'value',
+                valueType: 'component',
+                content: [],
+              },
+              headline: {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Headline', de: 'Headline' },
+              },
             },
           },
         },

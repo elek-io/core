@@ -50,7 +50,11 @@ import {
   componentIdsOf,
   preloadComponentResolver,
 } from '../util/componentResolver.js';
-import { assertResolutionSlugsAreKnown } from '../util/entryTransform.js';
+import {
+  assertComponentResolutionSlugsAreKnown,
+  findComponentItem,
+  withComponentItemValues,
+} from '../util/componentItemResolution.js';
 import type { EntryIssue } from '../util/entryIssue.js';
 import {
   updateRefusalMessage,
@@ -388,7 +392,7 @@ export class ComponentService
         const newFieldDefs = validatedProps.fieldDefinitions;
         const changes = diffFieldDefinitions(oldFieldDefs, newFieldDefs);
 
-        assertResolutionSlugsAreKnown(resolutions, newFieldDefs);
+        assertComponentResolutionSlugsAreKnown(resolutions, newFieldDefs);
 
         await this.withGitRollback(projectPath, async () => {
           const filesToGitAdd: string[] = [componentFilePath];
@@ -567,16 +571,17 @@ export class ComponentService
 
           if (result.changed || result.issues.length > 0) {
             // Apply resolutions if provided
-            const finalValues = result.values;
+            let finalValues = result.values;
             if (resolutions && result.issues.length > 0) {
-              this.applyEntryResolutions(
-                finalValues,
+              finalValues = this.applyEntryResolutions({
+                values: finalValues,
                 resolutions,
-                entryFile.id,
+                entryId: entryFile.id,
+                componentId,
                 newFieldDefs,
                 languages,
-                componentResolver
-              );
+                componentResolver,
+              });
             }
 
             if (isDeepStrictEqual(entryFile.values, finalValues) === false) {
@@ -592,14 +597,18 @@ export class ComponentService
       acceptedContentLoss
     );
     // A content loss is accepted rather than resolved, so no resolution
-    // ever clears one
+    // ever clears one. Every other issue of this cascade belongs to one
+    // Component item, and only that item's resolution clears it
     const blockingIssues = resolutions
       ? openIssues.filter((issue) => {
-          if (issue.issue === 'content_loss') {
+          if (issue.issue === 'content_loss' || !issue.componentItemId) {
             return true;
           }
-          const entryResolutions = resolutions[issue.entryId];
-          return !(entryResolutions && issue.fieldSlug in entryResolutions);
+          const itemResolutions =
+            resolutions[issue.entryId]?.[issue.componentItemId];
+          return !(
+            itemResolutions && Object.hasOwn(itemResolutions, issue.fieldSlug)
+          );
         })
       : openIssues;
 
@@ -644,28 +653,54 @@ export class ComponentService
   }
 
   /**
-   * Applies a single Entry's resolutions onto its final values in place.
+   * One Entry's values with each resolution applied to the Component item it
+   * names, at any depth, as a new tree.
    *
    * Every slug is known to be declared by the new field definitions, because
-   * `update` rejects an unknown one at its boundary before any Entry is
-   * touched. Each value is validated against its field definition here and
-   * throws `BadRequest` when it does not fit, which fails the update inside
-   * the git rollback rather than midway through the Entries.
+   * `update` rejects an unknown one at its boundary. Throws `BadRequest` when
+   * the Entry holds no such item, when the item belongs to another Component,
+   * or when a Value does not fit its field definition, each while nothing is
+   * written yet.
    */
-  private applyEntryResolutions(
-    finalValues: Record<string, Value>,
-    resolutions: NonNullable<UpdateComponentProps['resolutions']>,
-    entryId: Uuid,
-    newFieldDefs: FieldDefinition[],
-    languages: ProjectLanguages,
-    componentResolver: ComponentResolver
-  ): void {
-    const entryResolutions = resolutions[entryId];
-    if (!entryResolutions) return;
+  private applyEntryResolutions(params: {
+    values: Record<string, Value>;
+    resolutions: NonNullable<UpdateComponentProps['resolutions']>;
+    entryId: Uuid;
+    componentId: Uuid;
+    newFieldDefs: FieldDefinition[];
+    languages: ProjectLanguages;
+    componentResolver: ComponentResolver;
+  }): Record<string, Value> {
+    const {
+      values,
+      resolutions,
+      entryId,
+      componentId,
+      newFieldDefs,
+      languages,
+      componentResolver,
+    } = params;
+    const itemResolutions = resolutions[entryId];
+    if (!itemResolutions) return values;
 
-    for (const [fieldSlug, resolvedValue] of Object.entries(entryResolutions)) {
-      const fieldDef = newFieldDefs.find((fd) => fd.slug === fieldSlug);
-      if (fieldDef) {
+    for (const [itemId, fieldResolutions] of Object.entries(itemResolutions)) {
+      const item = findComponentItem(values, itemId);
+      if (!item) {
+        throw CoreError.badRequest(
+          `Resolution names Component item "${itemId}", which Entry "${entryId}" does not hold`
+        );
+      }
+      if (item.componentId !== componentId) {
+        throw CoreError.badRequest(
+          `Resolution names Component item "${itemId}" of Entry "${entryId}", which is an item of Component "${item.componentId}" rather than of the updated Component "${componentId}"`
+        );
+      }
+
+      for (const [fieldSlug, resolvedValue] of Object.entries(
+        fieldResolutions
+      )) {
+        const fieldDef = newFieldDefs.find((fd) => fd.slug === fieldSlug);
+        if (!fieldDef) continue;
         const schema = getValueSchemaFromFieldDefinition(
           fieldDef,
           languages,
@@ -679,8 +714,9 @@ export class ComponentService
           );
         }
       }
-      finalValues[fieldSlug] = resolvedValue;
     }
+
+    return withComponentItemValues(values, itemResolutions);
   }
 
   /**

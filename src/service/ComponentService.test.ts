@@ -1093,6 +1093,7 @@ describe('ComponentService - update entry resolutions', function () {
   let heroId: string;
   let collectionId: string;
   let entryId: string;
+  let itemId: string;
 
   // Adds a new REQUIRED field with no default to the hero Component, which
   // cannot be auto-resolved for the existing entry's component item.
@@ -1196,6 +1197,7 @@ describe('ComponentService - update entry resolutions', function () {
     });
     collectionId = collection.id;
 
+    itemId = uuid();
     const entry = await core.entries.create({
       projectId: project.id,
       collectionId,
@@ -1205,7 +1207,7 @@ describe('ComponentService - update entry resolutions', function () {
           valueType: 'component',
           content: [
             {
-              id: uuid(),
+              id: itemId,
               componentId: heroId,
               values: {
                 title: {
@@ -1239,10 +1241,12 @@ describe('ComponentService - update entry resolutions', function () {
         resolutions: {
           // Generically a valid Value, but the wrong valueType for a string field.
           [entryId]: {
-            subtitle: {
-              objectType: 'value',
-              valueType: 'number',
-              content: { en: 1, de: 1 },
+            [itemId]: {
+              subtitle: {
+                objectType: 'value',
+                valueType: 'number',
+                content: { en: 1, de: 1 },
+              },
             },
           },
         },
@@ -1265,15 +1269,17 @@ describe('ComponentService - update entry resolutions', function () {
         ...heroWithRequiredSubtitle(),
         resolutions: {
           [entryId]: {
-            subtitle: {
-              objectType: 'value',
-              valueType: 'string',
-              content: { en: 'Sub', de: 'Sub' },
-            },
-            'gone-away': {
-              objectType: 'value',
-              valueType: 'string',
-              content: { en: 'Stale', de: 'Stale' },
+            [itemId]: {
+              subtitle: {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Sub', de: 'Sub' },
+              },
+              'gone-away': {
+                objectType: 'value',
+                valueType: 'string',
+                content: { en: 'Stale', de: 'Stale' },
+              },
             },
           },
         },
