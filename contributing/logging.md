@@ -69,9 +69,9 @@ Core hands git the User's identity through the environment of each command, see 
 
 ### One helper decides what a credential in an address is
 
-A remote address can carry a user and a password, which git accepts and [`git-credentials.md`](./git-credentials.md) rejects as a way to authenticate. [`redactUrlCredentials`](../src/util/git.ts) is what every message, log line and command line that names an address goes through, so none of them can disagree about which address carries one.
+A remote address can carry a user and a password, which git accepts and [`git-credentials.md`](./git-credentials.md) rejects as a way to authenticate. [`redactUrlCredentials`](../src/util/git.ts) is the one place that decides it, for [`redactGitArgs`](#redacting-a-command-line), for the masker a tail runs and for every message that names a remote address, so none of them can disagree.
 
-- It takes the userinfo of a `scheme://` address up to the **last** `@` of the authority, the delimiter git itself reads, so a password holding an `@` goes whole rather than in half.
+- It takes the userinfo of a `scheme://` address up to the **last** `@` of its authority. Everything before that one is the credential or part of one whichever `@` the client reads as the delimiter, so a password holding an `@` goes whole rather than in half, and a host name holds none for this to swallow.
 - It stops at `?` and `#`, so an `@` in a query string is not mistaken for one.
 - The SSH shorthand `git@host:org/repo` has no scheme, so its user stays. There the user is part of the address.
 - The host and the path stay, which is what makes the line worth reading. Where a message has nothing to add beyond the address the caller just passed, it leaves the address out instead, per the call site rule below.

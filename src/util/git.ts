@@ -84,9 +84,10 @@ const REDACTED = '[redacted]';
 
 /**
  * The userinfo of a `scheme://` address, up to the last `@` of its
- * authority, which is the delimiter git itself reads. Taking the last one
- * is what keeps a password holding an `@` from surviving, and stopping at
- * `?` and `#` is what keeps an `@` in a query out of it.
+ * authority. Everything before that last one is the credential or part of
+ * one whichever `@` the client reads as the delimiter, and a host name
+ * holds none for this to swallow. Stopping at `?` and `#` keeps an `@` in
+ * a query string out of it.
  */
 const URL_CREDENTIALS = /([a-zA-Z][\w+.-]*:\/\/)[^/?#\s]*@/g;
 

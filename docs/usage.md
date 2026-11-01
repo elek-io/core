@@ -187,12 +187,12 @@ core.logger.mask('Cloning https://nils:ghp_x@github.com/org/repo.git failed');
 
 It is the call for an error screen, a copied stack or anything else a person can paste on. What it masks:
 
-- The home directory of the running process, as `~`, in both separator spellings and percent encoded inside a `file://` address.
+- The home directory of the running process, as `~`. On Windows in either case and either separator spelling, and everywhere percent encoded as a `file://` address spells it.
 - The user and password of an address, as `[redacted]`. The SSH shorthand `git@host:org/repo` keeps its user, which is part of the address there.
-- An email address, as `[email]`, a colon directly after it included.
+- An email address, as `[email]`, one a colon follows included, as in `mara@example.de: Permission denied`. Where that colon carries a path it is the SSH shorthand, and the address stays.
 - A git signature on a command line, as `[redacted]`.
 
-What it does not mask is anything it has no shape for: a token on its own, a name a User typed, or the content of an Entry. It needs no Project and no User, it reads the home directory of the running process, and it throws on no string. Run it in your main process, not in a renderer, which has no home directory to match.
+What it does not mask is anything it has no shape for: a token on its own, a name a User typed, or the content of an Entry. It needs no Project and no User, it reads the home directory of the running process, and it throws on no string. Call it where Core runs, which in a desktop application is the main process rather than a renderer.
 
 ## Setting the User (required before writing)
 

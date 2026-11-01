@@ -108,8 +108,8 @@ describe('redactUrlCredentials', function () {
   });
 
   it('takes all of a password holding an at sign, not the first half', function () {
-    // git reads the last `@` of the authority as the delimiter, so anything
-    // before it is the credential
+    // Everything before the last `@` of the authority is the credential or
+    // part of one, whichever `@` the client reads as the delimiter
     expect(
       redactUrlCredentials('https://nils:p@ssw0rd@example.com/org/repo.git')
     ).toBe('https://[redacted]@example.com/org/repo.git');
