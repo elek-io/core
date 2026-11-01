@@ -76,10 +76,13 @@ export function findComponentItem(
  * The Entry's values with each named Component item's fields replaced by the
  * Values given for it, as a new tree at every level.
  *
- * Nothing is mutated, because the transform hands back a tree sharing items
- * with the Entry as it is stored, and writing into one of those would both
- * change the stored Entry and hide the change from the comparison that
- * decides whether the Entry is written at all.
+ * An item's resolution goes in before the walk continues into it, so a
+ * resolution for an item inside a Component Value another resolution replaces
+ * still lands. It is spent once applied, so a Value naming the item it
+ * replaces is not walked forever.
+ *
+ * Nothing is mutated: the tree shares items with the stored Entry, and the
+ * comparison that decides whether to write it would miss the change.
  */
 export function withComponentItemValues(
   values: Record<string, Value>,
@@ -95,11 +98,20 @@ export function withComponentItemValues(
     next[fieldSlug] = {
       ...value,
       content: value.content.map((item) => {
-        const nested = withComponentItemValues(item.values, itemResolutions);
         const resolved = itemResolutions[item.id];
+        if (!resolved) {
+          return {
+            ...item,
+            values: withComponentItemValues(item.values, itemResolutions),
+          };
+        }
+        const { [item.id]: _spent, ...rest } = itemResolutions;
         return {
           ...item,
-          values: resolved ? { ...nested, ...resolved } : nested,
+          values: withComponentItemValues(
+            { ...item.values, ...resolved },
+            rest
+          ),
         };
       }),
     };
