@@ -83,6 +83,28 @@ export function classifyLoadError(stderr: string): CoreError | null {
 const REDACTED = '[redacted]';
 
 /**
+ * The userinfo of a `scheme://` address, up to the last `@` of its
+ * authority, which is the delimiter git itself reads. Taking the last one
+ * is what keeps a password holding an `@` from surviving, and stopping at
+ * `?` and `#` is what keeps an `@` in a query out of it.
+ */
+const URL_CREDENTIALS = /([a-zA-Z][\w+.-]*:\/\/)[^/?#\s]*@/g;
+
+/**
+ * Takes the credentials out of every remote address in a text, so an
+ * address a User or a pipeline put a password or a token into can be
+ * written down. The host, the path and the rest of the text stay.
+ *
+ * The SSH shorthand `git@host:org/repo` carries no scheme, so its user
+ * stays: there it is part of the address rather than a credential.
+ *
+ * @see ../../contributing/logging.md
+ */
+export function redactUrlCredentials(value: string): string {
+  return value.replace(URL_CREDENTIALS, `$1${REDACTED}@`);
+}
+
+/**
  * Redacts the User's identity out of a git command line before it is written
  * down, in a log record or in an error message.
  *
@@ -102,9 +124,7 @@ export function redactGitArgs(args: readonly string[]): string[] {
     if (previous === 'user.name' || previous === 'user.email') {
       return REDACTED;
     }
-    // scheme://userinfo@host, never the SSH shorthand git@host:org/repo,
-    // where the user is part of the address rather than a credential
-    return arg.replace(/^([a-zA-Z][\w+.-]*:\/\/)[^/@]+@/, `$1${REDACTED}@`);
+    return redactUrlCredentials(arg);
   });
 }
 

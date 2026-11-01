@@ -315,6 +315,43 @@ export const collections = {
     ]);
   });
 
+  it('names a remote carrying credentials without them', async function () {
+    // A hosted build keeps its build log, so the one line that names the
+    // declared remoteUrl may not repeat a token somebody put in it. The
+    // line is written before the provision, and the copy already in the
+    // data directory is what keeps the build going when the address, port 1
+    // here, cannot be reached
+    const token = 'zqx-canary-7b31d4-remote-token';
+    const withToken: ElekConfig = {
+      projects: {
+        website: {
+          id: seed.projectId,
+          remoteUrl: `http://nils:${token}@127.0.0.1:1/projects/website.git`,
+        },
+      },
+    };
+
+    await runSetup(elek({ config }));
+    let lines: LoggedLine[];
+    try {
+      lines = await runSetup(elek({ config: withToken }));
+    } finally {
+      // Provisioning points the copy's origin at the address it was given,
+      // so the working config goes back in before the next test reads it
+      await runSetup(elek({ config }));
+    }
+
+    expect(summarize(lines)).toEqual([
+      'info: Provisioning',
+      'warn: Could not reach the remote of Project',
+      'info: Provisioned',
+    ]);
+    expect(lines[0]?.message).toContain(
+      'from "http://[redacted]@127.0.0.1:1/projects/website.git"'
+    );
+    expect(lines.map((line) => line.message).join('\n')).not.toContain(token);
+  });
+
   // What elek() then does with such a config is asserted through a real
   // sync in src/index.astro.mixed.test.ts, which needs its own file
   // because every sync() costs the worker a full Astro pipeline

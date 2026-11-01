@@ -132,7 +132,14 @@ What each level carries is a promise rather than an accident:
 
 So `info`, the default, is enough to reconstruct what was done and in what order, and `debug` adds how Core did it. An application that ships Core to end users can run at `info` and still have a diagnostic record.
 
-A log file holds ids, paths, counts and error messages. It never holds the content of an Entry, the name of a Project, Collection or Asset, or the git signature of the User. It does hold the absolute data directory, which includes the account name, because it is written for the machine it is on. Anything that ships a log file elsewhere is responsible for scrubbing that prefix.
+A log file holds ids, paths, counts and error messages. It does hold the absolute data directory, which includes the account name, because it is written for the machine it is on. Anything that ships a log file elsewhere is responsible for scrubbing that prefix.
+
+Neither a log line nor the message of a `CoreError` holds:
+
+- the content of an Entry.
+- the name of a Project, Collection or Asset.
+- the git signature of the User.
+- the user and password of a remote address. Where Core names an address it writes `https://[redacted]@host/org/repo.git`, and where it has nothing to add it leaves the address out.
 
 `resource['service.name']` is the `source` the record was logged with, so your own records stay distinguishable from Core's in the same file. `service.version` is Core's version on Core's records, and yours on yours when you set the `log.hostVersion` option above. Set it: a log file someone sends you has no other way to say which build wrote it.
 

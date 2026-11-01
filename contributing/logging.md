@@ -67,6 +67,15 @@ Core hands git the User's identity through the environment of each command, see 
 
 [`redactGitArgs`](../src/util/git.ts) is the backstop. It takes the `--author` of a commit, the values of `config user.name` and `user.email`, and credentials embedded in a remote URL out of a git command before it reaches a log record or an error message. Ids, paths and flags pass through untouched. Anything that builds a string from git arguments has to go through it.
 
+### One helper decides what a credential in an address is
+
+A remote address can carry a user and a password, which git accepts and [`git-credentials.md`](./git-credentials.md) rejects as a way to authenticate. [`redactUrlCredentials`](../src/util/git.ts) is what every message, log line and command line that names an address goes through, so none of them can disagree about which address carries one.
+
+- It takes the userinfo of a `scheme://` address up to the **last** `@` of the authority, the delimiter git itself reads, so a password holding an `@` goes whole rather than in half.
+- It stops at `?` and `#`, so an `@` in a query string is not mistaken for one.
+- The SSH shorthand `git@host:org/repo` has no scheme, so its user stays. There the user is part of the address.
+- The host and the path stay, which is what makes the line worth reading. Where a message has nothing to add beyond the address the caller just passed, it leaves the address out instead, per the call site rule below.
+
 ### An error message has two audiences
 
 A `CoreError` message is written for whoever made the call, and [`AbstractService`](../src/service/AbstractService.ts) logs it at the service boundary. So one string is read by a User in a dialog and by whoever the log file is handed to, under different rules.
@@ -321,6 +330,7 @@ Plant a string nothing else in the suite produces, exercise the path, and assert
 - [`logPrivacy.test.ts`](../src/service/logPrivacy.test.ts) does this for names.
 - [`ProjectService.upgradeLogging.test.ts`](../src/service/ProjectService.upgradeLogging.test.ts) does it for authored Entry content.
 - [`GitService.redaction.test.ts`](../src/service/GitService.redaction.test.ts) does it for the git signature.
+- [`remoteCredentials.test.ts`](../src/service/remoteCredentials.test.ts) does it for a token in a remote address, against a git host over HTTP, which is the one way an address Core really clones from can carry one.
 
 [`logSweep.test.ts`](../src/service/logSweep.test.ts) is the broad one. It runs create, update, delete, release, upgrade and synchronize with a sentinel in every place a User types one, the git identity included, then checks the log files for all of them at once. The attribute vocabulary check rides along, since both questions want the same setup.
 
