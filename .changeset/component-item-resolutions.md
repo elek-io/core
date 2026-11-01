@@ -20,7 +20,7 @@ What that buys you:
 - Two items of the same Component in one Entry each take their own corrected Value, and an item you leave out keeps the update refused with its own issue.
 - An item nested inside another item's `dynamic` field is reached at any depth.
 - Every other Value of the Entry stays as it is, its own fields included.
-- An item id the Entry does not hold, an item belonging to another Component and a field slug the new definitions do not declare each throw `BadRequest` before anything is written, naming ids and slugs only.
+- An Entry id the Project does not hold, an item id the Entry does not hold, an item belonging to another Component and a field slug the new definitions do not declare each throw `BadRequest` before anything is written, naming ids and slugs only. Every key is checked, even when the Entry it names raised no issue of its own.
 
 **There is no compatibility path and no migration.** The former shape throws `BadRequest`, because its middle key is read as an item id now. Nothing repairs a Project an earlier version already wrote a top-level key into.
 

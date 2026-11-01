@@ -156,7 +156,12 @@ A Component's field definitions are transformed per Component **item**, so every
 | 2     | the Component item's id | `componentItemId`   |
 | 3     | the field's new slug    | `fieldSlug`         |
 
-Two items of the same Component in one Entry each take their own resolution, and an item left out keeps the update refused. An item id the Entry does not hold, an item belonging to another Component and a field slug the new definitions do not declare each throw `BadRequest` before anything is written.
+Two items of the same Component in one Entry each take their own resolution, and an item left out keeps the update refused. Each of these throws `BadRequest` before anything is written, whether or not the Entry it names raised an issue of its own:
+
+- an Entry id the Project does not hold
+- an item id that Entry does not hold
+- an item belonging to another Component
+- a field slug the new definitions do not declare
 
 ```typescript
 import { CoreError, type EntryIssue, type Value } from '@elek-io/core';

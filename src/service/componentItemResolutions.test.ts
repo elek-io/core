@@ -483,6 +483,122 @@ describe('a Component resolution lands in the item it names', function () {
     expect(await valuesOf(pages.id, entry.id)).toEqual(before);
   });
 
+  it('refuses a stale item id in an Entry that raised no issue of its own', async function () {
+    const { heroComponent, pages, withSubtitle } = await hero();
+    const item = heroItem(heroComponent.id, 'Welcome');
+    const withItem = await core.entries.create({
+      projectId: project.id,
+      collectionId: pages.id,
+      values: {
+        blocks: {
+          objectType: 'value',
+          valueType: 'component',
+          content: [item],
+        },
+      },
+    });
+    // The second Entry holds no item of the Component, so its own cascade
+    // raises no issue and resolves nothing
+    const withoutItem = await core.entries.create({
+      projectId: project.id,
+      collectionId: pages.id,
+      values: {
+        blocks: {
+          objectType: 'value',
+          valueType: 'component',
+          content: [],
+        },
+      },
+    });
+    const before = await valuesOf(pages.id, withItem.id);
+    const strangerId = uuid();
+
+    const error = await refusalOf(
+      core.components.update({
+        ...withSubtitle,
+        resolutions: {
+          [withItem.id]: { [item.id]: { subtitle: text('For the item') } },
+          [withoutItem.id]: { [strangerId]: { subtitle: text('Nowhere') } },
+        },
+      })
+    );
+
+    expect(error.type).toBe('BadRequest');
+    expect(error.message).toContain(strangerId);
+    expect(error.message).not.toContain('Nowhere');
+    // The resolution of the other Entry did not land either
+    expect(await valuesOf(pages.id, withItem.id)).toEqual(before);
+  });
+
+  it('refuses a resolution naming an Entry the Project does not hold', async function () {
+    const { heroComponent, pages, withSubtitle } = await hero();
+    const item = heroItem(heroComponent.id, 'Welcome');
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: pages.id,
+      values: {
+        blocks: {
+          objectType: 'value',
+          valueType: 'component',
+          content: [item],
+        },
+      },
+    });
+    const before = await valuesOf(pages.id, entry.id);
+    const ghostEntryId = uuid();
+
+    const error = await refusalOf(
+      core.components.update({
+        ...withSubtitle,
+        resolutions: {
+          [entry.id]: { [item.id]: { subtitle: text('For the item') } },
+          [ghostEntryId]: { [uuid()]: { subtitle: text('Ghost') } },
+        },
+      })
+    );
+
+    expect(error.type).toBe('BadRequest');
+    expect(error.message).toContain(ghostEntryId);
+    expect(error.message).not.toContain('Ghost');
+    expect(await valuesOf(pages.id, entry.id)).toEqual(before);
+  });
+
+  it('refuses a stale item id although no field definition changes', async function () {
+    const { heroComponent, pages } = await hero();
+    const item = heroItem(heroComponent.id, 'Welcome');
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: pages.id,
+      values: {
+        blocks: {
+          objectType: 'value',
+          valueType: 'component',
+          content: [item],
+        },
+      },
+    });
+    const strangerId = uuid();
+
+    const error = await refusalOf(
+      core.components.update({
+        projectId: project.id,
+        id: heroComponent.id,
+        name: heroComponent.name,
+        slug: heroComponent.slug,
+        description: heroComponent.description,
+        // The same definitions, so nothing cascades at all
+        fieldDefinitions: heroComponent.fieldDefinitions,
+        resolutions: {
+          [entry.id]: { [strangerId]: { title: text('Nowhere') } },
+        },
+      })
+    );
+
+    expect(error.type).toBe('BadRequest');
+    expect(error.message).toContain(strangerId);
+    expect(error.message).not.toContain('Nowhere');
+  });
+
   it('refuses a resolution naming an item of another Component', async function () {
     const titleId = uuid();
     const heroComponent = await component([textField(titleId, 'title', true)]);
