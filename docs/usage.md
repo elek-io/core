@@ -176,6 +176,24 @@ Nothing goes silently. What was replaced says what it was (`~`, `[redacted]`, `[
 
 **A tail is still personal data.** The ids in it resolve against the repository, which makes it pseudonymized rather than anonymous. Scrubbing lowers what a tail carries. It does not change what it is. Ask for consent before collecting one, and decide how long you keep one.
 
+#### Masking a text of your own
+
+`core.logger.mask()` runs those same rules over any string, so an application showing text Core wrote keeps no copy of them:
+
+```typescript
+core.logger.mask('Cloning https://nils:ghp_x@github.com/org/repo.git failed');
+// 'Cloning https://[redacted]@github.com/org/repo.git failed'
+```
+
+It is the call for an error screen, a copied stack or anything else a person can paste on. What it masks:
+
+- The home directory of the running process, as `~`, in both separator spellings and percent encoded inside a `file://` address.
+- The user and password of an address, as `[redacted]`. The SSH shorthand `git@host:org/repo` keeps its user, which is part of the address there.
+- An email address, as `[email]`, a colon directly after it included.
+- A git signature on a command line, as `[redacted]`.
+
+What it does not mask is anything it has no shape for: a token on its own, a name a User typed, or the content of an Entry. It needs no Project and no User, it reads the home directory of the running process, and it throws on no string. Run it in your main process, not in a renderer, which has no home directory to match.
+
 ## Setting the User (required before writing)
 
 Every create, update and delete operation commits to git, and git needs a signature. Set the User once before any write - without it, write operations throw a `CoreError` of type `Unauthorized`. Cloning, fetching and reading need no User.

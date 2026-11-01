@@ -117,6 +117,8 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
 - **A log tail can be truncated** - `core.logger.tail()` stops collecting at a size ceiling and sets `isTruncated`, dropping the oldest records first. Collapsing repeated records is what keeps a tail small, and it is worth far more than a bigger cap, so the ceiling is a safety valve rather than a working limit. See [`usage.md`](./usage.md#the-log-tail) for the ceiling and what `isTruncated` means.
 - **A log tail can be missing its last lines** - winston hands a record to a write stream and offers no per transport flush, so a tail collected right after a crash can stop short of the lines it was collected for, which are usually the interesting ones.
   - `tail()` writes a marker and yields before reading to give the stream a chance to drain. That is a hedge rather than a fix, and the residual gap is documented instead of engineered around.
+- **`core.logger.mask()` masks a shape, never a meaning** - it knows the home directory, an address with credentials, an email address and a git signature. A token on its own, a name somebody typed and the content of an Entry pass through it, because nothing in the text says what they are.
+  - It is the call for text Core wrote, so an application showing one of Core's messages or stacks keeps no copy of these rules. What a log file may hold at all is decided where a record is written. See [`usage.md`](./usage.md#masking-a-text-of-your-own).
 
 ## See also
 

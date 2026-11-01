@@ -8,6 +8,7 @@ import { createLogger, format, transports } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import * as packageJson from '../../package.json' with { type: 'json' };
 import { type ElekIoCoreOptions } from '../schema/index.js';
+import { redactUrlCredentials } from '../util/git.js';
 import type { PathTo } from '../util/node.js';
 import { finishesWithin, TEARDOWN_BOUND_MS } from '../util/teardown.js';
 import {
@@ -194,6 +195,26 @@ export class LogService {
       isTruncated: buffer.isTruncated,
       data: data.toString('base64'),
     };
+  }
+
+  /**
+   * Masks a text with the rules a tail runs over its records: the home
+   * directory becomes `~`, and a git signature, a credential in an
+   * address and an email address become a label saying what they were.
+   *
+   * For an application that shows text Core wrote, a message or a stack
+   * included, so it keeps no copy of these rules. It reads the running
+   * process's home directory, needs no Project and no User and never
+   * throws. It cannot see a secret it has no shape for.
+   *
+   * @see ../../contributing/logging.md
+   */
+  public mask(text: string): string {
+    const mask = LogService.createLogMasker({
+      homedir: Os.homedir(),
+      platform: process.platform,
+    });
+    return mask(text);
   }
 
   /**
@@ -494,14 +515,14 @@ export class LogService {
   }
 
   /**
-   * Rewrites what a string must not say, for the records Core did not
-   * author.
+   * Rewrites what a string must not say, for text Core did not author.
    *
-   * Core decides at the call site what it writes down, so this is only
-   * ever a backstop: for winston's uncaught exception text, and for the
-   * `meta` a host logs through Core. It preserves the kind of what it
-   * took out rather than removing it, because an absence reads as "this
-   * did not happen".
+   * Core decides at the call site what it writes down, so inside a record
+   * this is only ever a backstop: for winston's uncaught exception text,
+   * and for the `meta` a host logs through Core. `mask()` hands the same
+   * rules to an application for text of its own. It preserves the kind of
+   * what it took out rather than removing it, because an absence reads as
+   * "this did not happen".
    */
   private static createLogMasker(props: {
     homedir: string;
@@ -510,17 +531,20 @@ export class LogService {
     const home = LogService.homeExpressions(props);
 
     return (value) => {
-      let masked = value
-        // The git signature, which `redactGitArgs` takes out at the write
-        // site. This is the backstop under it
-        .replace(/--author=[^\s<][^<>\n]*<[^>\n]*>/g, `--author=${REDACTED}`)
-        .replace(/--author=\S+/g, `--author=${REDACTED}`)
-        .replace(/\buser\.(name|email)\s+\S.*/g, `user.$1 ${REDACTED}`)
-        // A credential in a URL, never the SSH shorthand git@host:org/repo,
-        // where the user is part of the address rather than a person
-        .replace(/([a-zA-Z][\w+.-]*:\/\/)[^/@\s]+@/g, `$1${REDACTED}@`)
+      let masked = redactUrlCredentials(
+        value
+          // The git signature, which `redactGitArgs` takes out at the write
+          // site. This is the backstop under it
+          .replace(/--author=[^\s<][^<>\n]*<[^>\n]*>/g, `--author=${REDACTED}`)
+          .replace(/--author=\S+/g, `--author=${REDACTED}`)
+          .replace(/\buser\.(name|email)\s+\S.*/g, `user.$1 ${REDACTED}`)
+      )
+        // An address, which a colon may follow: git says
+        // `mara@autohaus-ebersfelde.de: Permission denied`. The SSH
+        // shorthand `git@host:org/repo` is the colon followed by a path,
+        // and stays, the user being part of the address there
         .replace(
-          /(?<![\w@.-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![:\w-])/g,
+          /(?<![\w@.-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![\w-])(?!:[\w~./-])/g,
           REDACTED_EMAIL
         );
       for (const expression of home) {
@@ -535,7 +559,10 @@ export class LogService {
    *
    * On Windows both `C:\Users\Nils` and `C:\users\nils` occur, and a path
    * can arrive with either separator, so the needle is matched case
-   * insensitively and in both spellings there.
+   * insensitively and in both spellings there. A stack frame of a renderer
+   * loaded from a file shows the third spelling, percent encoded inside a
+   * `file://` address, which is where a space or an umlaut in the folder
+   * name would otherwise survive.
    */
   private static homeExpressions(props: {
     homedir: string;
@@ -546,13 +573,27 @@ export class LogService {
       return [];
     }
     const isWindows = platform === 'win32';
-    const needles = isWindows
-      ? [...new Set([homedir, homedir.replaceAll('\\', '/')])]
-      : [homedir];
-    return needles.map(
+    const slashed = isWindows ? homedir.replaceAll('\\', '/') : homedir;
+    const needles = new Set([
+      homedir,
+      slashed,
+      LogService.percentEncode(slashed),
+    ]);
+    return [...needles].map(
       (needle) =>
         new RegExp(LogService.escapeRegExp(needle), isWindows ? 'gi' : 'g')
     );
+  }
+
+  /**
+   * A path as a `file://` address spells it.
+   *
+   * `encodeURI` leaves the separators and the Windows drive letter alone
+   * and encodes a space, an umlaut and the rest, which is what a URL
+   * carries. The two characters it keeps and a URL does not are added.
+   */
+  private static percentEncode(path: string): string {
+    return encodeURI(path).replaceAll('#', '%23').replaceAll('?', '%3F');
   }
 
   private static escapeRegExp(value: string): string {
