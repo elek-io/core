@@ -2,7 +2,7 @@
 '@elek-io/core': minor
 ---
 
-**No message and no log line Core writes repeats the user or the password of a remote address.** An address can carry both, which git accepts and elek.io does not use as a way to authenticate. Four places wrote one down: cloning a Project that is already on the computer, provisioning a Project the remote does not hold, a Git LFS upload a remote would not take, and the line the Astro integration writes before every provision. The first three travel in a `CoreError` message, which is what an error screen shows and somebody pastes into a report, and all four also reach a log file, Core's own or a hosted build's.
+**No message and no log line Core writes repeats the user or the password of a remote address.** An address can carry both, which git accepts and elek.io does not use as a way to authenticate. Every place that names an address now redacts it: cloning a Project that is already on the computer, provisioning a Project the remote does not hold, a Git LFS upload a remote would not take, a remote pointing at another git host than the one it belongs to, and the line the Astro integration writes before every provision. All but the last travel in a `CoreError` message, which is what an error screen shows and somebody pastes into a report, and every one of them also reaches a log file, Core's own or a hosted build's.
 
 - Where a message names an address it writes `https://[redacted]@host/org/repo.git`. The host and the path stay, so the line still says which remote it was about.
 - `clone()` leaves the address out instead. Its `Conflict` reads `Cannot clone Project "<id>": it already exists locally. Delete it before cloning it again.`, which no longer hands you back the URL you just passed in.

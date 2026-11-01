@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 import { startFakeCloud } from '../test/cloud.js';
 import { FakeCloudGit } from '../test/cloudGit.js';
 import { createTmpCore, expectCoreError } from '../test/util.js';
 import { CloudClient } from './cloud.js';
 import { CloudGitAccess } from './cloudGit.js';
-import { uuid } from './shared.js';
+import { CoreError, uuid } from './shared.js';
 
 /**
  * The state behind the helper, against a real HTTP server standing in for
@@ -170,6 +170,39 @@ describe('CloudGitAccess', function () {
     const credential = await t.access.credentialFor(hostTwo, moved);
     expect(credential.password).toEqual('git-token-2');
     expect(t.cloudGit.calls).toHaveLength(3);
+  });
+
+  it('names that remote without credentials, wherever the address came from', async function () {
+    // The address is Cloud's answer rather than a caller's string, and the
+    // message that names it is read by a person and written to a log file
+    // like any other
+    const t = await setUp();
+    const moved = uuid();
+    const secret = 'zqx-canary-7b31d4-remote-token';
+    t.cloudGit.place(moved, hostTwo);
+    t.cloudGit.next.push(
+      Response.json(
+        {
+          gitToken: {
+            username: 'x-access-token',
+            token: 'git-token-1',
+            remoteUrl: `http://x-access-token:${secret}@${hostTwo}/projects/${moved}.git`,
+          },
+        },
+        { status: 201 }
+      )
+    );
+
+    const error: unknown = await t.access.credentialFor(hostOne, moved).then(
+      () => null,
+      (reason: unknown) => reason
+    );
+
+    assert(error instanceof CoreError);
+    expect(error.message).toContain(
+      `Set its remote to "http://[redacted]@${hostTwo}/projects/${moved}.git"`
+    );
+    expect(error.message).not.toContain(secret);
   });
 
   it('asks again for a Project it was told to forget', async function () {

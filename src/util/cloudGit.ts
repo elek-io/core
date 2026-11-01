@@ -4,6 +4,7 @@ import {
 } from '../schema/cloudSchema.js';
 import type { LogService } from '../service/LogService.js';
 import type { CloudClient, CloudRefusal } from './cloud.js';
+import { redactUrlCredentials } from './git.js';
 import { CoreError } from './shared.js';
 
 /** A username and a token, as git is handed them for one git host */
@@ -298,13 +299,19 @@ function refusalsFor(projectId: string): CloudRefusal[] {
   ];
 }
 
-/** The refusal for a remote pointing at another host than Cloud's answer */
+/**
+ * The refusal for a remote pointing at another host than Cloud's answer.
+ *
+ * The address is Cloud's answer rather than something a caller passed, and
+ * it is still written down redacted, because a message naming a remote
+ * address never carries a credential.
+ */
 function elsewhere(
   projectId: string,
   host: string,
   remoteUrl: string
 ): CoreError {
   return CoreError.preconditionFailed(
-    `Project "${projectId}" is not on the git host "${host}" its remote names. Set its remote to "${remoteUrl}".`
+    `Project "${projectId}" is not on the git host "${host}" its remote names. Set its remote to "${redactUrlCredentials(remoteUrl)}".`
   );
 }
