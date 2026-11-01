@@ -50,7 +50,11 @@ import {
   componentIdsOf,
   preloadComponentResolver,
 } from '../util/componentResolver.js';
-import { assertResolutionSlugsAreKnown } from '../util/entryTransform.js';
+import {
+  assertComponentResolutionSlugsAreKnown,
+  findComponentItem,
+  withComponentItemValues,
+} from '../util/componentItemResolution.js';
 import type { EntryIssue } from '../util/entryIssue.js';
 import {
   updateRefusalMessage,
@@ -388,7 +392,12 @@ export class ComponentService
         const newFieldDefs = validatedProps.fieldDefinitions;
         const changes = diffFieldDefinitions(oldFieldDefs, newFieldDefs);
 
-        assertResolutionSlugsAreKnown(resolutions, newFieldDefs);
+        assertComponentResolutionSlugsAreKnown(resolutions, newFieldDefs);
+        await this.assertResolutionItemsAreHeld(
+          validatedProps.projectId,
+          validatedProps.id,
+          resolutions
+        );
 
         await this.withGitRollback(projectPath, async () => {
           const filesToGitAdd: string[] = [componentFilePath];
@@ -453,6 +462,97 @@ export class ComponentService
         `Component slug is already in use by Component "${existingUuid[0]}"`
       );
     }
+  }
+
+  /**
+   * Rejects a resolution naming an Entry the Project does not hold, a
+   * Component item that Entry does not hold, or an item of another
+   * Component, before anything on disk is touched.
+   *
+   * It sits beside the field slug check at the boundary rather than inside
+   * the cascade, so every key of a resolution is checked whether or not the
+   * Entry it names raised an issue of its own. The messages carry ids only,
+   * which a log file may hold.
+   *
+   * @see ../../docs/schema-changes.md
+   */
+  private async assertResolutionItemsAreHeld(
+    projectId: Uuid,
+    componentId: Uuid,
+    resolutions: UpdateComponentProps['resolutions']
+  ): Promise<void> {
+    if (resolutions === undefined || Object.keys(resolutions).length === 0) {
+      return;
+    }
+
+    const collectionOfEntry = await this.mapEntriesToCollections(projectId);
+
+    for (const [entryId, itemResolutions] of Object.entries(resolutions)) {
+      const collectionId = collectionOfEntry.get(entryId);
+      if (!collectionId) {
+        throw CoreError.badRequest(
+          `Resolution names Entry "${entryId}", which Project "${projectId}" does not hold`
+        );
+      }
+
+      const entryFile = await this.jsonFileService.read(
+        this.pathTo.entryFile(projectId, collectionId, entryId),
+        entryFileSchema
+      );
+
+      for (const itemId of Object.keys(itemResolutions)) {
+        const item = findComponentItem(entryFile.values, itemId);
+        if (!item) {
+          throw CoreError.badRequest(
+            `Resolution names Component item "${itemId}", which Entry "${entryId}" does not hold`
+          );
+        }
+        if (item.componentId !== componentId) {
+          throw CoreError.badRequest(
+            `Resolution names Component item "${itemId}" of Entry "${entryId}", which is an item of Component "${item.componentId}" rather than of the updated Component "${componentId}"`
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Which Collection each Entry of the Project belongs to, read from the
+   * Project's folder and file names rather than from any Entry file, so an
+   * Entry a resolution names can be read by its id alone.
+   */
+  private async mapEntriesToCollections(
+    projectId: Uuid
+  ): Promise<Map<string, string>> {
+    const collectionOfEntry = new Map<string, string>();
+    if ((await Fs.pathExists(this.pathTo.collections(projectId))) === false) {
+      return collectionOfEntry;
+    }
+
+    const collectionReferences = await this.listReferences(
+      objectTypeSchema.enum.collection,
+      projectId
+    );
+
+    for (const collectionReference of collectionReferences) {
+      const entriesPath = this.pathTo.entries(
+        projectId,
+        collectionReference.id
+      );
+      if ((await Fs.pathExists(entriesPath)) === false) {
+        continue;
+      }
+      const entryReferences = await this.listReferences(
+        objectTypeSchema.enum.entry,
+        projectId,
+        collectionReference.id
+      );
+      for (const entryReference of entryReferences) {
+        collectionOfEntry.set(entryReference.id, collectionReference.id);
+      }
+    }
+
+    return collectionOfEntry;
   }
 
   /**
@@ -567,16 +667,16 @@ export class ComponentService
 
           if (result.changed || result.issues.length > 0) {
             // Apply resolutions if provided
-            const finalValues = result.values;
+            let finalValues = result.values;
             if (resolutions && result.issues.length > 0) {
-              this.applyEntryResolutions(
-                finalValues,
+              finalValues = this.applyEntryResolutions({
+                values: finalValues,
                 resolutions,
-                entryFile.id,
+                entryId: entryFile.id,
                 newFieldDefs,
                 languages,
-                componentResolver
-              );
+                componentResolver,
+              });
             }
 
             if (isDeepStrictEqual(entryFile.values, finalValues) === false) {
@@ -592,14 +692,18 @@ export class ComponentService
       acceptedContentLoss
     );
     // A content loss is accepted rather than resolved, so no resolution
-    // ever clears one
+    // ever clears one. Every other issue of this cascade belongs to one
+    // Component item, and only that item's resolution clears it
     const blockingIssues = resolutions
       ? openIssues.filter((issue) => {
-          if (issue.issue === 'content_loss') {
+          if (issue.issue === 'content_loss' || !issue.componentItemId) {
             return true;
           }
-          const entryResolutions = resolutions[issue.entryId];
-          return !(entryResolutions && issue.fieldSlug in entryResolutions);
+          const itemResolutions =
+            resolutions[issue.entryId]?.[issue.componentItemId];
+          return !(
+            itemResolutions && Object.hasOwn(itemResolutions, issue.fieldSlug)
+          );
         })
       : openIssues;
 
@@ -644,28 +748,39 @@ export class ComponentService
   }
 
   /**
-   * Applies a single Entry's resolutions onto its final values in place.
+   * One Entry's values with each resolution applied to the Component item it
+   * names, at any depth, as a new tree.
    *
-   * Every slug is known to be declared by the new field definitions, because
-   * `update` rejects an unknown one at its boundary before any Entry is
-   * touched. Each value is validated against its field definition here and
-   * throws `BadRequest` when it does not fit, which fails the update inside
-   * the git rollback rather than midway through the Entries.
+   * Every key is known to name a field the new definitions declare and an
+   * item of the updated Component the Entry holds, because `update` rejects
+   * an unknown one at its boundary. Throws `BadRequest` when a Value does not
+   * fit its field definition, while nothing is written yet.
    */
-  private applyEntryResolutions(
-    finalValues: Record<string, Value>,
-    resolutions: NonNullable<UpdateComponentProps['resolutions']>,
-    entryId: Uuid,
-    newFieldDefs: FieldDefinition[],
-    languages: ProjectLanguages,
-    componentResolver: ComponentResolver
-  ): void {
-    const entryResolutions = resolutions[entryId];
-    if (!entryResolutions) return;
+  private applyEntryResolutions(params: {
+    values: Record<string, Value>;
+    resolutions: NonNullable<UpdateComponentProps['resolutions']>;
+    entryId: Uuid;
+    newFieldDefs: FieldDefinition[];
+    languages: ProjectLanguages;
+    componentResolver: ComponentResolver;
+  }): Record<string, Value> {
+    const {
+      values,
+      resolutions,
+      entryId,
+      newFieldDefs,
+      languages,
+      componentResolver,
+    } = params;
+    const itemResolutions = resolutions[entryId];
+    if (!itemResolutions) return values;
 
-    for (const [fieldSlug, resolvedValue] of Object.entries(entryResolutions)) {
-      const fieldDef = newFieldDefs.find((fd) => fd.slug === fieldSlug);
-      if (fieldDef) {
+    for (const fieldResolutions of Object.values(itemResolutions)) {
+      for (const [fieldSlug, resolvedValue] of Object.entries(
+        fieldResolutions
+      )) {
+        const fieldDef = newFieldDefs.find((fd) => fd.slug === fieldSlug);
+        if (!fieldDef) continue;
         const schema = getValueSchemaFromFieldDefinition(
           fieldDef,
           languages,
@@ -679,8 +794,9 @@ export class ComponentService
           );
         }
       }
-      finalValues[fieldSlug] = resolvedValue;
     }
+
+    return withComponentItemValues(values, itemResolutions);
   }
 
   /**
