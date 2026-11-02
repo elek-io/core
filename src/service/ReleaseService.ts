@@ -1442,9 +1442,10 @@ export class ReleaseService extends AbstractService {
         const released = releasedById.get(id);
         if (!released) continue;
 
-        // An Entry's only change inside itself is that its Values moved, so
-        // where either side's file fails this Core's schema the file's own
-        // content answers it exactly rather than the parsed Values
+        // An Entry's only change inside itself is that its Values moved.
+        // Where either side's file fails this Core's schema its Values
+        // cannot be read, so the whole file answers instead, which counts a
+        // file whose shape alone was rewritten as modified
         const hasChanged =
           current.file === null || released.file === null
             ? current.content !== released.content
@@ -1907,7 +1908,7 @@ interface ReleasedSide {
  *
  * The tree lists the file, so the object is there whatever its shape. `file`
  * is null where this Core cannot read it even migrated, and `content` is
- * what git holds, which answers whether the object changed at all.
+ * what git holds, which is what a diff compares where `file` is null.
  */
 interface FileAtRef<T> {
   id: string;

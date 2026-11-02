@@ -135,7 +135,7 @@ Dropping such a file, which is what the readers did before, made the object read
 
 What is then reported of such an object:
 
-- An Entry, whose only change inside itself is that its Values moved, which its content answers exactly.
+- An Entry, whose only change inside itself is that its Values moved. An unreadable side has no Values to read, so the whole file is compared there instead, which counts a Release that rewrote such a file's shape alone as `modified`. Reporting no change was rejected: the Values of an unreadable file may well have moved, and an approximation beats a wrong answer.
 - A Collection, a Component or an Asset, whose change types each name a part of the file an unreadable one cannot answer, so its presence alone is reported. Inventing a change type was rejected: `metadataChanged` on an Asset whose binary moved is a wrong answer where no answer is an honest one.
 
 ## Invariants
