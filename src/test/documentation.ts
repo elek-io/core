@@ -291,14 +291,15 @@ function statusCodesOf(): Map<string, string> {
 }
 
 /**
- * Every value `CoreErrorReason` holds, read out of its declaration.
+ * Every value `CoreErrorReason` holds, read out of the given source of
+ * `src/util/shared.ts`.
  *
  * Two consumer docs restate the list as a table an app maps, and a table
  * maintained by hand drifts from the union it copies. Parsed rather than
- * imported, because a rule reads the repository as text.
+ * imported, because a rule reads the repository as text, and the source is
+ * an argument so a self-test can feed it a declaration that moved.
  */
-function errorReasonsOf(): Set<string> {
-  const source = readFile('src/util/shared.ts');
+export function errorReasonsOf(source: string): Set<string> {
   const block = /export type CoreErrorReason =([^;]*);/s.exec(source)?.[1];
   if (block === undefined) {
     throw new Error(
@@ -306,7 +307,7 @@ function errorReasonsOf(): Set<string> {
     );
   }
   return new Set(
-    [...block.matchAll(/'([a-z_]+)'/g)].map(([, value]) => value ?? '')
+    [...block.matchAll(/'[a-z_]+'/g)].map((value) => value[0].slice(1, -1))
   );
 }
 
@@ -1230,15 +1231,15 @@ export const rules: Rule[] = [
         exists(file)
       ),
     check: (file, content) => {
-      const declared = errorReasonsOf();
+      const declared = errorReasonsOf(readFile('src/util/shared.ts'));
       const documented = new Set<string>();
       const violations: Violation[] = [];
       for (const line of linesOf(content)) {
         if (!line.text.trimStart().startsWith('|')) continue;
         // | `uncommitted_changes` | the working tree holds changes ... |,
         // whichever column the reason sits in
-        for (const [, reason] of line.text.matchAll(/`([a-z]+_[a-z_]+)`/g)) {
-          if (reason === undefined) continue;
+        const reasons = line.text.match(/(?<=`)[a-z]+_[a-z_]+(?=`)/g) ?? [];
+        for (const reason of reasons) {
           documented.add(reason);
           if (declared.has(reason)) continue;
           violations.push({
