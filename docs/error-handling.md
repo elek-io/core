@@ -35,11 +35,11 @@ Three fields say what happened, and each is read differently:
 | --- | --- | --- |
 | `message` | one sentence for a person, never a string the caller sent and never text Core did not author | show it, and write it into a log file |
 | `reason` | one value of `CoreErrorReason` where Core has one for what it refused, absent otherwise | branch on it, and pass it anywhere |
-| `cause` | whatever was originally thrown, which is where the text the message leaves out lives | read it while debugging, and nothing else |
+| `cause` | whatever was originally thrown, which is where the text the message leaves out lives | read it while debugging, and keep it out of what you pass on |
 
 `error.cause` carries git's own stdout and stderr for a failed git command, while the message keeps the redacted command line and the exit code. A file that will not parse puts `JSON.parse`'s own failure there, and the message names the file.
 
-Nothing sends a `cause` elsewhere: git echoes its arguments back, so it can hold a User's name and email, and a parse failure quotes part of the file.
+Keep a `cause` out of anything you send elsewhere: git echoes its arguments back, so it can hold a User's name and email, and a parse failure quotes part of the file. The local API is the one exception, and answers with the cause's stack on purpose, because it is a developer tool that never leaves the computer, see [`local-api.md`](./local-api.md#responses-and-errors).
 
 ## The reason a call was refused
 
