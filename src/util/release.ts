@@ -21,15 +21,6 @@ export interface ReleaseVersion {
 }
 
 /**
- * The Release a version targets, which is the version itself for a full
- * Release and the version without its pre-release part for a preview, so
- * `0.3.0-preview.2` reads as `0.3.0`.
- */
-export function releaseVersionOf(version: string): string {
-  return Semver.coerce(version)?.version ?? version;
-}
-
-/**
  * The part of the semver triple that moved from one version to another, read
  * off the two versions rather than off what changed in the content. A
  * pre-release counts as the Release it targets.

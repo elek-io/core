@@ -3,7 +3,6 @@ import {
   baselineVersions,
   bumpBetween,
   INITIAL_PROJECT_VERSION,
-  releaseVersionOf,
 } from './release.js';
 
 /**
@@ -12,17 +11,6 @@ import {
  * a provisioned copy holds each of them without the history between them.
  * See contributing/releases.md.
  */
-describe('releaseVersionOf', function () {
-  it.each([
-    ['0.1.0', '0.1.0'],
-    ['0.3.0-preview.2', '0.3.0'],
-    ['1.2.3+build.4', '1.2.3'],
-    ['1.2.3-preview.1+build.4', '1.2.3'],
-  ])('reads %s as the Release %s', function (version, expected) {
-    expect(releaseVersionOf(version)).toEqual(expected);
-  });
-});
-
 describe('bumpBetween', function () {
   it.each([
     [INITIAL_PROJECT_VERSION, '0.1.0', 'minor'],
