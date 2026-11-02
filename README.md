@@ -107,7 +107,7 @@ const project = await core.projects.create({
 // Define a Collection with a single text Field
 const collection = await core.collections.create({
   projectId: project.id,
-  icon: 'home',
+  icon: 'package',
   name: {
     singular: { en: 'Product', de: 'Produkt' },
     plural: { en: 'Products', de: 'Produkte' },
@@ -156,6 +156,8 @@ const { list, total } = await core.entries.list({
   limit: 0,
 });
 ```
+
+A Collection's `icon` is the name of a Lucide icon, in Lucide's spelling of lowercase words joined by single dashes. Core checks that spelling rather than the name itself, so an app draws a fallback icon for a name it does not know, and [Lucide's icon list](https://lucide.dev/icons/) holds every name.
 
 For the full guide - options, Assets, references, reading from history, error handling, the local API, the CLI and the Astro integration - see [`docs/usage.md`](./docs/usage.md).
 
