@@ -159,6 +159,19 @@ Two failures fail hard by decision rather than by structure:
 
 `classifyAuthError` carries the weight of the `Unauthorized` decision, so it only reports an SSH failure as authentication when git's output actually names a permission problem. Without that, every offline SSH remote would classify as `Unauthorized` and lose the fallback entirely.
 
+### A refusal carries a value, not a message to match
+
+`CoreError` carries a `reason` from the closed `CoreErrorReason` list beside its `type`, filled by the refusals [`../docs/git-and-sync.md`](../docs/git-and-sync.md#a-refused-sync-names-its-cause) lists and by the read-only and provisioned-copy guards wherever they raise.
+
+It is a field of its own rather than `Error.cause`, which was the first pick and was rejected:
+
+- `cause` already carries git's stdout and stderr, which echo the command line and can hold a remote URL with a credential, so a host drops it at a process boundary rather than forwarding it.
+- A host that forwards the cause to a window would then have to tell structured data from git's text, and a refusal would arrive with nothing to branch on.
+
+Each value names the state Core refused for rather than the call that was refused, which is why `read_only_mode` and `provisioned_copy` are set in `assertNotReadOnly` and `assertNotProvisioned` and in the git-layer backstops alike. A refusal with no value leaves `reason` absent, so a caller still branches on the `type`.
+
+`synchronize()` reads the `reason` as well, to tell its own retryable non-fast-forward rejection from any other refusal. It matched the first words of the message before, which broke as soon as a message was reworded, the same reason the offline fallback above is scoped by phase.
+
 ### Stack traces in API error responses
 
 Error responses include `error.cause.stack` because the local API is used by developers integrating elek.io content into their own apps. The API is never exposed to the internet, and stack traces aid debugging during integration development.

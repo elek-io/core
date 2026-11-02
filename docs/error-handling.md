@@ -1,6 +1,6 @@
 # Error handling
 
-All services throw `CoreError` on failure. `CoreError` extends `Error` with `type` and `statusCode` fields. The `ElekIoCore` constructor throws a `CoreError` of type `BadRequest` for invalid options too.
+All services throw `CoreError` on failure. `CoreError` extends `Error` with a `type`, a `statusCode` and, where Core has a value for what it refused, a `reason`. The `ElekIoCore` constructor throws a `CoreError` of type `BadRequest` for invalid options too.
 
 ## CoreError
 
@@ -27,16 +27,37 @@ throw CoreError.internal('Git command failed', originalError);
 throw CoreError.fromUnknown(caughtException); // wraps any unknown into Internal
 ```
 
-## The message and the cause
+## The message, the reason and the cause
 
-`error.message` is written to be shown to a person and to be written into a log file, so it never repeats a string the caller sent and never carries text Core did not author.
+Three fields say what happened, and only two of them may leave the process:
 
-`error.cause` is where that text lives instead:
+| Field | Holds | Send it elsewhere |
+| --- | --- | --- |
+| `message` | one sentence for a person and for a log file, never a string the caller sent and never text Core did not author | yes |
+| `reason` | one value of `CoreErrorReason` where Core has one for what it refused, absent otherwise | yes |
+| `cause` | whatever was originally thrown, which is where the text the message leaves out lives | no |
 
-- a failed git command puts git's own stdout and stderr there, and the message keeps the redacted command line and the exit code
-- a file that will not parse puts `JSON.parse`'s own failure there, and the message names the file
+`error.cause` carries git's own stdout and stderr for a failed git command, while the message keeps the redacted command line and the exit code. A file that will not parse puts `JSON.parse`'s own failure there, and the message names the file.
 
 Show the `message`. Read the `cause` while debugging, and keep it out of anything you send elsewhere: git echoes its arguments back, so it can hold a User's name and email, and a parse failure quotes part of the file.
+
+## The reason a call was refused
+
+`error.reason` is a value to branch on rather than text to show, so an app maps each one to a sentence of its own. It is a plain lowercase token holding no git output, no address and no credential, which is what lets it cross a process boundary as it is.
+
+| Reason | Core refused because |
+| --- | --- |
+| `uncommitted_changes` | the working tree holds changes that are not committed |
+| `remote_holds_something_else` | the Git repository holds something other than this Project |
+| `remote_main_without_draft` | the remote holds a `main` without `draft` that the local `main` does not contain |
+| `remote_without_atomic_push` | the remote takes no atomic push, which the first push and a Release need |
+| `git_lfs_endpoint_unusable` | the remote will not take the Assets over Git LFS |
+| `textual_conflict` | a rebase stopped on a conflict between the local changes and the remote's |
+| `remote_advanced` | the remote kept moving, so the push was rejected as non-fast-forward |
+| `read_only_mode` | Core runs read-only |
+| `provisioned_copy` | the Project is a provisioned copy, which the next provision run overwrites |
+
+A refused `core.projects.synchronize()` names its cause for each state [`git-and-sync.md`](./git-and-sync.md#a-refused-sync-names-its-cause) lists. `read_only_mode` and `provisioned_copy` reach every other refused write too. A refusal Core has no value for leaves `reason` absent, so branch on the `type` as well.
 
 ## Consumer patterns
 

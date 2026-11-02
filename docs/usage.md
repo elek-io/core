@@ -361,7 +361,7 @@ Each commit an Entry's history returns also names the first Release that include
 
 ## Error handling
 
-Services throw `CoreError` (exported from `@elek-io/core`) with a `type` and `statusCode`. Catch it to branch on failure modes.
+Services throw `CoreError` (exported from `@elek-io/core`) with a `type` and `statusCode`, and a `reason` where Core has a value for what it refused. Catch it to branch on failure modes.
 
 ```typescript
 import { CoreError } from '@elek-io/core';
