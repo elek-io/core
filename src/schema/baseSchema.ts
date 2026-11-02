@@ -31,7 +31,24 @@ export const supportedLanguageSchema = z.enum([
 ]);
 export type SupportedLanguage = z.infer<typeof supportedLanguageSchema>;
 
-export const supportedIconSchema = z.enum(['home', 'plus']);
+/**
+ * The name of a Lucide icon, in Lucide's own spelling of lowercase words
+ * joined by single dashes, such as `newspaper` or `square-arrow-up-right`,
+ * and at most 64 characters. Lucide lists every name at
+ * https://lucide.dev/icons/.
+ *
+ * Core checks the spelling and the length rather than the name itself, so a
+ * name Lucide does not ship parses too. Draw a fallback icon for a name your
+ * app cannot resolve.
+ */
+export const supportedIconSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(
+    /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+    'String must be a Lucide icon name of lowercase words joined by single dashes (https://lucide.dev/icons/)'
+  );
 export type SupportedIcon = z.infer<typeof supportedIconSchema>;
 
 export const objectTypeSchema = z.enum([

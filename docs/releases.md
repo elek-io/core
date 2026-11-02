@@ -6,7 +6,7 @@ With a remote, a Release publishes `main`, `draft` and its tag together, so the 
 
 For the branch model these build on, see [`git-and-sync.md`](./git-and-sync.md).
 
-## The three operations
+## The three operations that make a Release
 
 | Method | What it does | Touches `main`? |
 | --- | --- | --- |
@@ -15,6 +15,8 @@ For the branch model these build on, see [`git-and-sync.md`](./git-and-sync.md).
 | `createPreview()` | Fetches `origin` if set, tags a pre-release snapshot on `draft` (for example `1.1.0-preview.3`) without promoting, pushes `draft` and the tag in one atomic push. | No |
 
 All three take `{ projectId }`. `prepare()` returns a `ReleaseDiff`. `create()` and `createPreview()` return a `ReleaseResult` (`{ version, diff }`).
+
+Two more read what was released: [`list()`](#reading-releases) and [`changes()`](#what-one-release-changed).
 
 ## What a Release compares against
 
@@ -114,7 +116,7 @@ Every change `prepare()` can report is below, with the bump it contributes. The 
 | `assetChanges` | `metadataChanged` | patch | The Asset's `name` or `description` |
 | `entryChanges` | `deleted` | major | The Entry is gone |
 | `entryChanges` | `added` | minor | An Entry the released state does not hold |
-| `entryChanges` | `modified` | patch | The Entry's values |
+| `entryChanges` | `modified` | patch | The Entry's values, or its whole file where either side is one this Core cannot read, see [A Release an older Core made](#a-release-an-older-core-made) |
 
 Every row compares the released state against the current `draft`, never the commits in between, so a rename and its undo inside one `draft` is no change at all. A Collection or Component added since the last Release is reported as `added` alone, whatever its slug did afterwards.
 
@@ -195,12 +197,26 @@ Recovery itself is best effort: a step that fails is logged at `warn` and the er
 
 ## Reading releases
 
-`core.releases.list()` returns the Releases and preview Releases of a Project, newest first. Each item carries the `version`, its `type` (`release` or `preview`), the `datetime`, and the `tagId` addressing it in git.
+`core.releases.list()` returns the Releases and preview Releases of a Project, newest first. Each item carries the `version`, its `type` (`release` or `preview`), the `datetime`, the `author` who made it, the `bump` it carried, and the `tagId` addressing it in git.
 
 ```typescript
 const { list, total } = await core.releases.list({ projectId: project.id });
-// list[0] -> { version: '1.1.0', type: 'release', datetime: '...', tagId: '...' }
+// list[0] -> {
+//   version: '1.1.0',
+//   type: 'release',
+//   datetime: '...',
+//   tagId: '...',
+//   author: { name: 'Ada Lovelace', email: 'ada@example.com' },
+//   bump: 'minor',
+// }
 ```
+
+Two of those read off the git tag rather than out of the Project:
+
+- `author` is who ran the Release, taken from the commit its tag points at.
+- `bump` is what this Release moved in the version against the full Release before it, and for a Project's first Release against the version `core.projects.create()` writes. A preview carries the bump of the Release it targets, so `1.1.0-preview.3` after `1.0.0` is `minor`. It is `null` only where two tags target one version, which Core's own Releases never do.
+
+The call reads the Project's git tags and nothing else, so listing costs the same whatever the Releases changed. What one of them changed is [`changes()`](#what-one-release-changed).
 
 Underneath, Releases, previews and Core upgrades are git tags, read through `core.git.tags`:
 
@@ -210,13 +226,74 @@ const { list } = await core.git.tags.list({
 });
 ```
 
-Each `GitTag` carries an `id`, an `author`, a `datetime`, and a discriminated `message`:
+Each `GitTag` carries an `id`, an `author`, a `datetime`, the `commitHash` it points at, and a discriminated `message`:
 
 - `{ type: 'release', version }`
 - `{ type: 'preview', version }`
 - `{ type: 'upgrade', coreVersion }` (created by the Project upgrade flow, not by `core.releases`)
 
 `core.git.tags` also exposes `read({ ... })` and `count({ ... })`.
+
+## The Release a change was first included in
+
+Every commit an Entry's history returns names the first Release that included it, so an app can say which changes are published and in which Release:
+
+```typescript
+const history = await core.entries.history({
+  projectId: project.id,
+  collectionId: collection.id,
+  id: entry.id,
+});
+// history[0].release -> null, no Release holds that change yet
+// history[1].release -> { tagId: '...', version: '1.1.0', datetime: '...' }
+```
+
+A Release commits `project.json` alone and tags that commit, so the Release of a change is not on the change's own commit. Core answers it from git's ancestry:
+
+- The Release named is the oldest one whose commit descends from the change. Sorting by date would answer differently, because a change another working copy made before a Release reaches this one only after it, and still belongs to the next Release.
+- `release` is null while no Release holds the change, which is every change made since the last one.
+- A preview Release tags a snapshot of `draft` rather than released content, so it never names a change. Full Releases alone do.
+- `tagId` and `version` address the same Release `core.releases.list()` returns, so the two join.
+- Core reads local tags and local history. A Release another working copy made counts once something fetched, such as `synchronize()`.
+- A Collection update that rewrote the Entry is one of its changes and names a Release like any other, see [`schema-changes.md`](./schema-changes.md).
+
+## What one Release changed
+
+`core.releases.changes()` reports what one Release or preview Release changed, in the `ReleaseDiff` shape `prepare()` returns, so one piece of code renders a past Release and the next one:
+
+```typescript
+const { list } = await core.releases.list({ projectId: project.id });
+const changes = await core.releases.changes({
+  projectId: project.id,
+  tagId: list[0].tagId,
+});
+// changes.currentVersion -> '1.0.0', the version it was built on
+// changes.nextVersion    -> '1.1.0', its own version
+// changes.bump           -> 'minor', the bump list() gives for it
+// changes.project        -> the Project as that Release holds it
+// changes.entryChanges   -> every Entry it added, deleted or modified
+```
+
+| The Release asked for | Compares against |
+| --- | --- |
+| a Release | the full Release it built on |
+| a preview Release | the last full Release before it |
+| either, with no full Release before it | the commit `core.projects.create()` made |
+
+The Release it was built on is the newest full Release whose version is below the version it targets, so a preview and the Release it targets answer the same side. Only the Release asked for is worked out, and only the two commits it compares are read.
+
+The call reads local tags and local commits, so it holds on a clone and on a working copy a synchronization brought another computer's Release into. It throws:
+
+- `NotFound` for a tag that is no Release of the Project.
+- `PreconditionFailed` when the side it compares against is not in this copy. A copy whose history is truncated, as a provisioned copy's is, holds each Release tag without the history between them, so a Release with no full Release before it cannot be read there. Clone the Project to read it.
+
+### A Release an older Core made
+
+A Release keeps the file shapes the Core that made it wrote. They are migrated in memory before they are read, as in any read from history, and an object whose file this Core cannot read even then is still reported from the Release's own tree:
+
+- An object the tree holds is present, so none is reported as added or deleted because its file's shape moved since.
+- An Entry carries one change inside itself, that its Values moved. Where both sides are readable its Values answer that, and where either side is not the whole file does, so a Release that only rewrote such a file's shape is reported as `modified` too.
+- For a Collection, a Component or an Asset, which part changed cannot be read, so such a Release reports that the object is there and no change inside it.
 
 ## Versioning
 

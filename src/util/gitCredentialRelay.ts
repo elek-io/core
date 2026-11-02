@@ -301,7 +301,9 @@ export class GitCredentialRelay {
       return invocation.quit(
         host,
         CoreError.preconditionFailed(
-          `The remote on elek.io Cloud's git host "${host}" names no Project. Its path has to be projects/<id>.git.`
+          `The remote on elek.io Cloud's git host "${host}" names no Project. Its path has to be projects/<id>.git.`,
+          undefined,
+          'remote_names_no_project'
         )
       );
     }

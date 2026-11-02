@@ -47,6 +47,10 @@ export const gitTagSchema = z.object({
   message: gitTagMessageSchema,
   author: gitSignatureSchema,
   datetime: z.iso.datetime(),
+  /**
+   * SHA-1 hash of the commit the tag points at
+   */
+  commitHash: z.hash('sha1'),
 });
 export type GitTag = z.infer<typeof gitTagSchema>;
 
@@ -108,6 +112,29 @@ export const gitCommitSchema = z.object({
   tag: gitTagSchema.nullable(),
 });
 export type GitCommit = z.infer<typeof gitCommitSchema>;
+
+/**
+ * The Release a commit belongs to, read from that Release's git tag.
+ *
+ * `tagId` and `version` address the same Release `core.releases.list()`
+ * returns, so an app can join the two.
+ */
+export const commitReleaseSchema = z.object({
+  tagId: uuidSchema,
+  version: versionSchema,
+  datetime: z.iso.datetime(),
+});
+export type CommitRelease = z.infer<typeof commitReleaseSchema>;
+
+/**
+ * A commit with the first Release that included it, `null` while no Release
+ * does. A preview Release is a snapshot of `draft` rather than released
+ * content, so it is never named here.
+ */
+export const gitCommitWithReleaseSchema = gitCommitSchema.extend({
+  release: commitReleaseSchema.nullable(),
+});
+export type GitCommitWithRelease = z.infer<typeof gitCommitWithReleaseSchema>;
 
 export const gitInitOptionsSchema = z.object({
   /**

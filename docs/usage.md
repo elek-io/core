@@ -235,12 +235,14 @@ const asset = await core.assets.create({
 
 A Collection holds the field definitions every Entry must follow. See [`fields.md`](./fields.md) for the full list of field types and their properties.
 
+`icon` is the name of a Lucide icon, in Lucide's spelling of lowercase words joined by single dashes, at most 64 characters. Core checks that spelling and the length rather than the name itself, so a name Lucide does not ship passes too. Draw a fallback icon for a name your app cannot resolve. [Lucide's icon list](https://lucide.dev/icons/) holds every name.
+
 ```typescript
 import { uuid } from '@elek-io/core';
 
 const collection = await core.collections.create({
   projectId: project.id,
-  icon: 'home',
+  icon: 'package',
   name: {
     singular: { en: 'Product', de: 'Produkt' },
     plural: { en: 'Products', de: 'Produkte' },
@@ -357,9 +359,11 @@ const past = await core.entries.read({
 });
 ```
 
+Each commit an Entry's history returns also names the first Release that included that change in `release`, or null while none does, see [`releases.md`](./releases.md#the-release-a-change-was-first-included-in).
+
 ## Error handling
 
-Services throw `CoreError` (exported from `@elek-io/core`) with a `type` and `statusCode`. Catch it to branch on failure modes.
+Services throw `CoreError` (exported from `@elek-io/core`) with a `type` and `statusCode`, and a `reason` where Core has a value for what it refused. Catch it to branch on failure modes.
 
 ```typescript
 import { CoreError } from '@elek-io/core';

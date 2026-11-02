@@ -1,6 +1,6 @@
 # Error handling
 
-All services throw `CoreError` on failure. `CoreError` extends `Error` with `type` and `statusCode` fields. The `ElekIoCore` constructor throws a `CoreError` of type `BadRequest` for invalid options too.
+All services throw `CoreError` on failure. `CoreError` extends `Error` with a `type`, a `statusCode` and, where Core has a value for what it refused, a `reason`. The `ElekIoCore` constructor throws a `CoreError` of type `BadRequest` for invalid options too.
 
 ## CoreError
 
@@ -27,16 +27,44 @@ throw CoreError.internal('Git command failed', originalError);
 throw CoreError.fromUnknown(caughtException); // wraps any unknown into Internal
 ```
 
-## The message and the cause
+## The message, the reason and the cause
 
-`error.message` is written to be shown to a person and to be written into a log file, so it never repeats a string the caller sent and never carries text Core did not author.
+Three fields say what happened, and each is read differently:
 
-`error.cause` is where that text lives instead:
+| Field | Holds | What to do with it |
+| --- | --- | --- |
+| `message` | one sentence for a person, never a string the caller sent and never text Core did not author | show it, and write it into a log file |
+| `reason` | one value of `CoreErrorReason` where Core has one for what it refused, absent otherwise | branch on it, and pass it anywhere |
+| `cause` | whatever was originally thrown, which is where the text the message leaves out lives | read it while debugging, and keep it out of what you pass on |
 
-- a failed git command puts git's own stdout and stderr there, and the message keeps the redacted command line and the exit code
-- a file that will not parse puts `JSON.parse`'s own failure there, and the message names the file
+`error.cause` carries git's own stdout and stderr for a failed git command, while the message keeps the redacted command line and the exit code. A file that will not parse puts `JSON.parse`'s own failure there, and the message names the file.
 
-Show the `message`. Read the `cause` while debugging, and keep it out of anything you send elsewhere: git echoes its arguments back, so it can hold a User's name and email, and a parse failure quotes part of the file.
+Keep a `cause` out of anything you send elsewhere: git echoes its arguments back, so it can hold a User's name and email, and a parse failure quotes part of the file. The local API is the one exception, and answers with the cause's stack on purpose, because it is a developer tool that never leaves the computer, see [`local-api.md`](./local-api.md#responses-and-errors).
+
+## The reason a call was refused
+
+`error.reason` is a value to branch on rather than text to show, so an app maps each one to a sentence of its own. It is a plain lowercase token holding no git output, no address and no credential, which is what lets it cross a process boundary as it is.
+
+| Reason | Core refused because |
+| --- | --- |
+| `uncommitted_changes` | the working tree holds changes that are not committed |
+| `remote_holds_something_else` | the Git repository holds something other than this Project |
+| `remote_main_without_draft` | the remote holds a `main` without `draft` that the local `main` does not contain |
+| `remote_without_atomic_push` | the remote takes no atomic push, which the first push and a Release need |
+| `git_lfs_endpoint_unusable` | the remote will not take the Assets over Git LFS |
+| `textual_conflict` | a rebase stopped on a conflict between the local changes and the remote's |
+| `remote_advanced` | the remote moved on, so the push was rejected as non-fast-forward |
+| `read_only_mode` | Core runs read-only |
+| `provisioned_copy` | the Project is a provisioned copy, which the next provision run overwrites |
+| `git_library_missing` | git could not load a shared library it needs |
+| `remote_names_no_project` | the remote on elek.io Cloud's git host names no Project |
+| `project_on_another_host` | elek.io Cloud keeps the Project on another git host than the remote names |
+| `cloud_unreachable` | elek.io Cloud could not be reached, or did not answer in time |
+| `git_host_unreachable` | elek.io Cloud could not reach its git host |
+
+Every `PreconditionFailed` of `core.projects.synchronize()` names its cause, one for each state [`git-and-sync.md`](./git-and-sync.md#a-refused-sync-names-its-cause) lists.
+
+Each value names the state rather than the call, so a read-only Core, a provisioned copy, a loader that fails and a Cloud or git host that refuses name theirs wherever they are met. A refusal Core has no value for leaves `reason` absent, so branch on the `type` as well.
 
 ## Consumer patterns
 
