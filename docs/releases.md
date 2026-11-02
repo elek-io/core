@@ -285,7 +285,7 @@ The Release it was built on is the newest full Release whose version is below th
 The call reads local tags and local commits, so it holds on a clone and on a working copy a synchronization brought another computer's Release into. It throws:
 
 - `NotFound` for a tag that is no Release of the Project.
-- `PreconditionFailed` when the side it compares against is not in this copy. A provisioned copy holds each Release tag without the history between them, so a Release with no full Release before it cannot be read there. Clone the Project to read it.
+- `PreconditionFailed` when the side it compares against is not in this copy. A copy whose history is truncated, as a provisioned copy's is, holds each Release tag without the history between them, so a Release with no full Release before it cannot be read there. Clone the Project to read it.
 
 ### A Release an older Core made
 

@@ -111,7 +111,7 @@ Rejected alternatives:
 
 ### Which side a Release is compared with
 
-The side is picked by version: the newest full Release whose version is below the one the asked tag targets, and the root commit for a Project's first Release.
+The side is picked by version: the newest full Release whose version is below the one the asked tag targets, and the root commit for each Release or preview with no full Release below it.
 
 `baselineVersions()` in [`../src/util/release.ts`](../src/util/release.ts) holds that rule for both callers, so the bump `list()` reads off the tags and the side `changes()` compares with can never disagree. It answers a whole list in one walk over the Releases in version order, rather than searching the list again for each of them.
 
@@ -123,9 +123,14 @@ Rejected alternatives:
 
 ### A side that is not in the copy
 
-A shallow repository answers `rev-list --max-parents=0` with its own shallow boundary, and holds another Release's commit without the history to it. So `changes()` refuses in two shapes: the side resolving to the Release's own commit, and a commit whose object is missing, which `rev-parse <hash>^{commit}` is what tells apart, a bare `rev-parse <hash>` answering any hash.
+A shallow repository answers `rev-list --max-parents=0` with its own shallow boundary, and holds another Release's commit without the history to it. So `changes()` refuses two shapes:
 
-A provisioned copy is the case that reaches this. Its tags all arrive with their trees, so every Release with a full Release before it reads, and only one with none is refused. Measured by provisioning the `release` and `preview` channels and an exact version of a Project of three Releases and a preview.
+- A root commit that is a boundary rather than the Project's creation. `GitService.rootCommit()` tells the two apart with `cat-file commit`, because every revision command applies the graft and reports a boundary as parentless, while the boundary's own object still names the parents it was fetched without.
+- A commit whose object is missing, which `rev-parse <hash>^{commit}` is what tells apart, a bare `rev-parse <hash>` answering any hash.
+
+Refusing only a root that equals the Release's own commit would have covered the one depth `provision()` fetches and no other. Two deep, the root git answers is the commit below the Release, whose tree is there and whose history is not, and a diff against it reports less than the Release changed.
+
+A provisioned copy is the copy Core itself makes of a truncated history. Its tags all arrive with their trees, so every Release with a full Release below it reads, and each one with none is refused. A copy `core.git.clone` fetched at another depth answers the same. Measured by provisioning the `release` and `preview` channels and an exact version of a Project of three Releases and a preview.
 
 ### An object whose file this Core cannot read
 

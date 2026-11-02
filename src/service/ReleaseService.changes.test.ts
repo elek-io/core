@@ -525,6 +525,39 @@ describe('Reading what each Release changed', function () {
     ]);
   });
 
+  it('should refuse a first Release a copy fetched two deep holds no creation commit for', async function () {
+    const remotePath = await createRemote();
+    const creator = await cloneOnOwnCore(remotePath);
+    await createTextCollection(creator.core, creator.project.id);
+    const first = await creator.core.releases.create({
+      projectId: creator.project.id,
+    });
+
+    // Two commits deep, so the copy holds history below the Release and
+    // still not the commit it was built on. Git answers its own shallow
+    // boundary as the oldest commit of the Release's ancestry. Through a
+    // `file://` URL, because git ignores a depth given for a local path
+    const { core: reader } = createTmpCore();
+    await reader.user.set(testUserProps);
+    const readerPath = reader.util.pathTo.project(creator.project.id);
+    await reader.git.clone(`file://${remotePath}`, readerPath, {
+      depth: 2,
+      singleBranch: true,
+      branch: 'main',
+    });
+    expect(await reader.git.log(readerPath)).toHaveLength(2);
+
+    const shallow = await releaseOf(reader, creator.project.id, first.version);
+    await expectCoreError(
+      reader.releases.changes({
+        projectId: creator.project.id,
+        tagId: shallow.tagId,
+      }),
+      'PreconditionFailed',
+      'is not in this copy'
+    );
+  });
+
   it('should hold on a provisioned copy once its tags are fetched', async function () {
     const remotePath = await createRemote();
     const creator = await cloneOnOwnCore(remotePath);

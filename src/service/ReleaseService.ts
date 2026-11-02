@@ -169,15 +169,15 @@ export class ReleaseService extends AbstractService {
           ? await this.gitService.rootCommit(projectPath, toRef)
           : baseline.commitHash;
 
-      // A shallow copy answers the Release's own commit as the oldest one of
-      // its ancestry, and holds the commit of another Release without the
+      // A copy whose history is truncated holds no commit the Project was
+      // created at, and holds the commit of another Release without the
       // history to it, so both shapes are refused rather than diffed
-      const isUnreachable =
-        fromRef === toRef ||
-        (await this.tipOf(projectPath, `${fromRef}^{commit}`)) === null;
-      if (isUnreachable) {
+      if (
+        fromRef === null ||
+        (await this.tipOf(projectPath, `${fromRef}^{commit}`)) === null
+      ) {
         throw CoreError.preconditionFailed(
-          `Cannot say what version ${tag.message.version} of Project "${props.projectId}" changed, because version ${currentVersion}, which it was built on, is not in this copy. A provisioned copy holds each Release without the history between them, so clone the Project to read this.`
+          `Cannot say what version ${tag.message.version} of Project "${props.projectId}" changed, because version ${currentVersion}, which it was built on, is not in this copy. A copy whose history is truncated, as a provisioned copy's is, holds each Release without the history between them, so clone the Project to read this.`
         );
       }
 

@@ -1161,16 +1161,16 @@ export class GitService {
 
   /**
    * The oldest commit of a revision's ancestry, which for a Project is the
-   * commit `core.projects.create()` made.
+   * commit `core.projects.create()` made, and null where this copy holds a
+   * truncated history instead, as a provisioned copy's is.
    *
-   * A repository whose history is truncated, as a provisioned copy's is,
-   * answers its own shallow boundary instead, which is how a caller tells a
-   * whole history from a truncated one. Two unrelated roots cannot reach one
-   * Project, so the oldest of them is the answer.
+   * Two unrelated roots cannot reach one Project, so the oldest of them is
+   * the answer.
    *
+   * @see ../../contributing/releases.md
    * @see https://git-scm.com/docs/git-rev-list
    */
-  public async rootCommit(path: string, rev: string): Promise<string> {
+  public async rootCommit(path: string, rev: string): Promise<string | null> {
     const result = await this.git(path, ['rev-list', '--max-parents=0', rev]);
     const roots = result.stdout
       .split('\n')
@@ -1184,7 +1184,16 @@ export class GitService {
       );
     }
 
-    return oldest;
+    // The raw object, because every revision command applies the graft and
+    // reports the boundary as parentless. The header ends at the first blank
+    // line, so a commit message of its own never reads as a parent
+    const object = await this.git(path, ['cat-file', 'commit', oldest]);
+    const header = object.stdout.split('\n\n', 1)[0] ?? '';
+    const isShallowBoundary = header
+      .split('\n')
+      .some((line) => line.startsWith('parent '));
+
+    return isShallowBoundary ? null : oldest;
   }
 
   /**
