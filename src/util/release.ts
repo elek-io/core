@@ -2,9 +2,10 @@ import Semver from 'semver';
 import { semverBumpSchema, type SemverBump } from '../schema/index.js';
 
 /**
- * The version `core.projects.create()` writes, which the first Release of a
+ * The version `ProjectService.create` writes, which the first Release of a
  * Project bumps from. A first Release has no Release before it, so this is
- * what its bump is read against and what its changes are compared with.
+ * what its bump is read against and what its changes are compared with, and
+ * both read it here rather than restating it.
  */
 export const INITIAL_PROJECT_VERSION = '0.0.1';
 

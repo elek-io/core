@@ -65,6 +65,7 @@ import {
 } from './migrations/index.js';
 import { isNotEmpty, PROVISIONED_MARKER } from '../util/node.js';
 import { acceptedContentLossOf } from '../util/contentLoss.js';
+import { INITIAL_PROJECT_VERSION } from '../util/release.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { AssetService } from './AssetService.js';
@@ -155,7 +156,7 @@ export class ProjectService
           created: datetime(),
           updated: null,
           coreVersion: this.coreVersion,
-          version: '0.0.1',
+          version: INITIAL_PROJECT_VERSION,
         };
 
         const projectPath = this.pathTo.project(id);
