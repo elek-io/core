@@ -170,7 +170,7 @@ It is a field of its own rather than `Error.cause`, which was the first pick and
 
 Each value names the state Core refused for rather than the call that was refused, which is why `read_only_mode` and `provisioned_copy` are set in `assertNotReadOnly` and `assertNotProvisioned` and in the git-layer backstops alike. A refusal with no value leaves `reason` absent, so a caller still branches on the `type`.
 
-`synchronize()` reads the `reason` as well, to tell its own retryable non-fast-forward rejection from any other refusal. It matched the first words of the message before, which broke as soon as a message was reworded, the same reason the offline fallback above is scoped by phase.
+`synchronize()` reads the `reason` as well, to tell its own retryable non-fast-forward rejection from any other refusal. It matched the first words of the message before, which a reworded message would have broken without a test noticing, the same reason the offline fallback above is scoped by phase.
 
 ### Stack traces in API error responses
 

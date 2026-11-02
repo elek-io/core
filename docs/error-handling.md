@@ -29,17 +29,17 @@ throw CoreError.fromUnknown(caughtException); // wraps any unknown into Internal
 
 ## The message, the reason and the cause
 
-Three fields say what happened, and only two of them may leave the process:
+Three fields say what happened, and each is read differently:
 
-| Field | Holds | Send it elsewhere |
+| Field | Holds | What to do with it |
 | --- | --- | --- |
-| `message` | one sentence for a person and for a log file, never a string the caller sent and never text Core did not author | yes |
-| `reason` | one value of `CoreErrorReason` where Core has one for what it refused, absent otherwise | yes |
-| `cause` | whatever was originally thrown, which is where the text the message leaves out lives | no |
+| `message` | one sentence for a person, never a string the caller sent and never text Core did not author | show it, and write it into a log file |
+| `reason` | one value of `CoreErrorReason` where Core has one for what it refused, absent otherwise | branch on it, and pass it anywhere |
+| `cause` | whatever was originally thrown, which is where the text the message leaves out lives | read it while debugging, and nothing else |
 
 `error.cause` carries git's own stdout and stderr for a failed git command, while the message keeps the redacted command line and the exit code. A file that will not parse puts `JSON.parse`'s own failure there, and the message names the file.
 
-Show the `message`. Read the `cause` while debugging, and keep it out of anything you send elsewhere: git echoes its arguments back, so it can hold a User's name and email, and a parse failure quotes part of the file.
+Nothing sends a `cause` elsewhere: git echoes its arguments back, so it can hold a User's name and email, and a parse failure quotes part of the file.
 
 ## The reason a call was refused
 
@@ -53,7 +53,7 @@ Show the `message`. Read the `cause` while debugging, and keep it out of anythin
 | `remote_without_atomic_push` | the remote takes no atomic push, which the first push and a Release need |
 | `git_lfs_endpoint_unusable` | the remote will not take the Assets over Git LFS |
 | `textual_conflict` | a rebase stopped on a conflict between the local changes and the remote's |
-| `remote_advanced` | the remote kept moving, so the push was rejected as non-fast-forward |
+| `remote_advanced` | the remote moved on, so the push was rejected as non-fast-forward |
 | `read_only_mode` | Core runs read-only |
 | `provisioned_copy` | the Project is a provisioned copy, which the next provision run overwrites |
 
