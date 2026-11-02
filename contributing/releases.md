@@ -94,16 +94,26 @@ Three git reads per history, none of them per commit or per Release:
 | `tag --list` | every Release tag with its version and the commit it points at, which is why `GitTag` carries `commitHash` |
 | `rev-list --all --parents --topo-order` | the whole local graph in one walk |
 
+One read per decorated commit joins them on an upgraded Project. An upgrade rewrites every Entry file and tags the commit it squashes into `draft`, so the Entry's log carries a decorated commit, and `log` resolves each decoration through `tags.read`, which runs `tag --list` once more.
+
 `firstReleaseByCommit()` in [`../src/util/git.ts`](../src/util/git.ts) then marks from each release commit, oldest first in the walk's reverse order, and stops at a commit an earlier Release already marked. Every commit is visited once, so the pass is linear in the walk.
 
-Measured on Linux, one run per size. On a Project of 153 commits with 30 Releases, an Entry holding 121 of them, the log alone took 17ms and the log with its Releases 34ms. At twice that size, 303 commits and 60 Releases, 28ms against 45ms. The log grows with the Project and the two added reads do not, so they cost about 17ms whatever it holds.
+Neither added read runs per change or per Release, and both grow with the Project all the same. `tag --list` reads every tag of it, and `rev-list --all` walks its whole local graph. Measured on Linux, on Projects built in the shape Core makes, as the range the medians of two runs of seven fell in:
+
+| Project | The Entry's commits | `log` alone | `history` | `tag --list` alone | `rev-list` alone |
+| --- | --- | --- | --- | --- | --- |
+| 212 changes, 30 Releases | 121 | 15ms | 27ms | 5ms | 6ms |
+| 842 changes, 120 Releases | 481 | 16 to 17ms | 33 to 34ms | 7 to 8ms | 7ms |
+| 3503 changes, 500 Releases | 2001 | 44 to 49ms | 84 to 85ms | 16 to 17ms | 12 to 13ms |
+
+The last two columns are the git commands timed on their own, which is why they fall short of the difference between the two columns before them. All of it is what those Projects cost on that machine, not a bound Core holds.
 
 Rejected alternatives:
 
 - `git tag --contains <commit>` or `git describe --contains` per commit. One git process per commit of the Entry, and `describe` picks the nearest tag by its own weighting rather than the oldest by ancestry.
 - One `log` per Release range. One git process per Release, which is the cost that grows fastest on a Project that releases often.
 - Sorting the release tags by date and taking the first after the change. It needs no walk and answers wrongly for a change a synchronization carried over a Release, which is the case the Entry's history is read for.
-- Carrying `tagId` alone and letting the caller join it against `core.releases.list()`. It saves the `tag --list` read, about 9ms, and every consumer that wants to show a version pays it again.
+- Carrying `tagId` alone and letting the caller join it against `core.releases.list()`. It saves the `tag --list` read, whose cost grows with the Project's Releases, and every consumer that wants to show a version pays it again.
 
 ## What a Release changed
 
