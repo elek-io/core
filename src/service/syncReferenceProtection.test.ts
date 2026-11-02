@@ -16,6 +16,7 @@ import {
   createPagesCollection,
   createProject,
   createRefCollection,
+  expectCoreError,
 } from '../test/util.js';
 
 /**
@@ -542,7 +543,7 @@ describe('Synchronize reference protection', function () {
     expect(changes.behind).toHaveLength(0);
   });
 
-  it('aborts cleanly and surfaces a PreconditionFailed on a textual conflict', async function () {
+  it('aborts cleanly and names the textual conflict as the cause', async function () {
     const project = await setupClient();
     const collection = await createRefCollection(project.id);
     const p = await core.entries.create({
@@ -582,9 +583,18 @@ describe('Synchronize reference protection', function () {
     expect(before.ahead).toHaveLength(1);
     expect(before.behind).toHaveLength(1);
 
-    await expect(
-      core.projects.synchronize({ id: project.id })
-    ).rejects.toMatchObject({ type: 'PreconditionFailed' });
+    const refusal = await core.projects.synchronize({ id: project.id }).then(
+      () => null,
+      (caught: unknown) => caught
+    );
+
+    // git's own output stays in the cause, where the conflicting path is, so
+    // the reason is the whole of what crosses a process boundary
+    expect(refusal).toMatchObject({
+      type: 'PreconditionFailed',
+      reason: 'textual_conflict',
+    });
+    expect(refusal instanceof CoreError && refusal.cause).toContain(x.id);
 
     // The rebase was aborted: the tree is clean and HEAD is the pre-sync commit,
     // so the repository was never left mid-rebase.
@@ -595,7 +605,7 @@ describe('Synchronize reference protection', function () {
     expect(after.behind).toHaveLength(1);
   });
 
-  it('refuses to sync a Project with uncommitted changes', async function () {
+  it('refuses to sync a Project with uncommitted changes and names them', async function () {
     const project = await createProject('Dirty sync');
     projectId = project.id;
     await createRefCollection(project.id);
@@ -603,9 +613,41 @@ describe('Synchronize reference protection', function () {
     // Dirty a tracked file so the working tree is not clean.
     await Fs.appendFile(core.util.pathTo.projectFile(project.id), '\n');
 
-    await expect(
-      core.projects.synchronize({ id: project.id })
-    ).rejects.toMatchObject({ type: 'PreconditionFailed' });
+    await expectCoreError(
+      core.projects.synchronize({ id: project.id }),
+      'PreconditionFailed',
+      'uncommitted changes',
+      'uncommitted_changes'
+    );
+  });
+
+  it('names a remote that advanced as the cause of a refused push', async function () {
+    const project = await setupClient();
+    const collection = await createRefCollection(project.id);
+    await core.projects.synchronize({ id: project.id });
+
+    // Another client pushes, so the remote holds a commit this one lacks
+    await pushFromOtherClient(project.id, async (copyId) => {
+      await core.entries.create({
+        projectId: copyId,
+        collectionId: collection.id,
+        values: { image: emptyRef(), related: emptyRef() },
+      });
+    });
+    await core.entries.create({
+      projectId: project.id,
+      collectionId: collection.id,
+      values: { image: emptyRef(), related: emptyRef() },
+    });
+
+    // Pushed without integrating first, which is what synchronize() answers
+    // by re-integrating, up to its cap
+    await expectCoreError(
+      core.git.push(core.util.pathTo.project(project.id)),
+      'PreconditionFailed',
+      'the remote advanced',
+      'remote_advanced'
+    );
   });
 
   it('retries the push after a non-fast-forward rejection', async function () {
@@ -618,7 +660,9 @@ describe('Synchronize reference protection', function () {
     pushSpy.mockImplementationOnce(() =>
       Promise.reject(
         CoreError.preconditionFailed(
-          'Push rejected because the remote advanced. Re-integrate the remote changes and try again.'
+          'Push rejected because the remote advanced. Re-integrate the remote changes and try again.',
+          undefined,
+          'remote_advanced'
         )
       )
     );
@@ -628,5 +672,30 @@ describe('Synchronize reference protection', function () {
     expect(pushSpy).toHaveBeenCalledTimes(2);
     const changes = await core.projects.getChanges({ id: project.id });
     expect(changes.ahead).toHaveLength(0);
+  });
+
+  it('retries nothing for a refusal that only reads like one', async function () {
+    const project = await setupClient();
+    await createRefCollection(project.id);
+
+    // The words of a non-fast-forward rejection without its reason. Core
+    // tells its own refusals apart by the reason alone, so this one reaches
+    // the caller rather than being retried
+    const pushSpy = vi.spyOn(core.git, 'push');
+    pushSpy.mockImplementationOnce(() =>
+      Promise.reject(
+        CoreError.preconditionFailed(
+          'Push rejected because the remote advanced. Re-integrate the remote changes and try again.'
+        )
+      )
+    );
+
+    await expectCoreError(
+      core.projects.synchronize({ id: project.id }),
+      'PreconditionFailed',
+      'the remote advanced'
+    );
+
+    expect(pushSpy).toHaveBeenCalledTimes(1);
   });
 });

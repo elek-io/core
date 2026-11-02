@@ -68,7 +68,9 @@ export class GitTagService
       // services guard earlier through assertNotProvisioned.
       if (await Fs.pathExists(Path.join(props.path, PROVISIONED_MARKER))) {
         throw CoreError.preconditionFailed(
-          `Cannot tag because "${props.path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+          `Cannot tag because "${props.path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`,
+          undefined,
+          'provisioned_copy'
         );
       }
 
@@ -139,7 +141,9 @@ export class GitTagService
       // services guard earlier through assertNotProvisioned.
       if (await Fs.pathExists(Path.join(props.path, PROVISIONED_MARKER))) {
         throw CoreError.preconditionFailed(
-          `Cannot delete a tag because "${props.path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+          `Cannot delete a tag because "${props.path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`,
+          undefined,
+          'provisioned_copy'
         );
       }
 

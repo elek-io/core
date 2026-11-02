@@ -199,21 +199,26 @@ export async function createLocalRemoteRepository() {
 
 /**
  * Awaits the promise and asserts it rejects with a `CoreError` of the given
- * type whose message contains the given text. Runs the call once, so it
- * suits calls that change state before they fail.
+ * type whose message contains the given text, and which names the given
+ * reason where one is passed. Runs the call once, so it suits calls that
+ * change state before they fail.
  */
 export async function expectCoreError(
   promise: Promise<unknown>,
   type: CoreError['type'],
-  text = ''
+  text = '',
+  reason?: CoreError['reason']
 ): Promise<void> {
   const error = await promise.then(
     () => null,
-    (reason: unknown) => reason
+    (caught: unknown) => caught
   );
   expect(error).toBeInstanceOf(CoreError);
   expect(error instanceof CoreError && error.type).toEqual(type);
   expect(error instanceof CoreError && error.message).toContain(text);
+  if (reason !== undefined) {
+    expect(error instanceof CoreError && error.reason).toEqual(reason);
+  }
 }
 
 /**

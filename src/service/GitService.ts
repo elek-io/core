@@ -128,7 +128,9 @@ export class GitService {
   ): Promise<void> {
     if (this.options.isReadOnly) {
       throw CoreError.preconditionFailed(
-        'Cannot init a repository because Core is in read-only mode'
+        'Cannot init a repository because Core is in read-only mode',
+        undefined,
+        'read_only_mode'
       );
     }
 
@@ -575,7 +577,8 @@ export class GitService {
         const url = await this.remotes.getOriginUrl(path).catch(() => null);
         throw CoreError.preconditionFailed(
           `Git LFS upload to the remote${url ? ` "${url}"` : ''} failed. The remote does not support Git LFS, has it disabled, or its LFS endpoint is unreachable. elek.io stores Asset binaries with Git LFS, please use a Git provider with LFS enabled.`,
-          error
+          error,
+          'git_lfs_endpoint_unusable'
         );
       }
     },
@@ -645,7 +648,8 @@ export class GitService {
       await this.rebaseAbort(path);
       throw CoreError.preconditionFailed(
         'Rebase stopped on a textual conflict. Your local changes conflict with the remote and were not integrated. Resolve them and synchronize again.',
-        `${result.stdout}\n${result.stderr}`.trim()
+        `${result.stdout}\n${result.stderr}`.trim(),
+        'textual_conflict'
       );
     }
 
@@ -833,7 +837,9 @@ export class GitService {
   ): Promise<void> {
     if (this.options.isReadOnly) {
       throw CoreError.preconditionFailed(
-        'Cannot push because Core is in read-only mode'
+        'Cannot push because Core is in read-only mode',
+        undefined,
+        'read_only_mode'
       );
     }
 
@@ -841,7 +847,9 @@ export class GitService {
     // guard earlier through assertNotProvisioned.
     if (await Fs.pathExists(Path.join(path, PROVISIONED_MARKER))) {
       throw CoreError.preconditionFailed(
-        `Cannot push because "${path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+        `Cannot push because "${path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`,
+        undefined,
+        'provisioned_copy'
       );
     }
 
@@ -899,7 +907,8 @@ export class GitService {
       if (result.stderr.includes('does not support --atomic push')) {
         throw CoreError.preconditionFailed(
           'Push refused because the remote does not support atomic pushes. Nothing was pushed.',
-          message
+          message,
+          'remote_without_atomic_push'
         );
       }
       // A non-fast-forward rejection is recoverable by re-integrating the
@@ -911,7 +920,8 @@ export class GitService {
       ) {
         throw CoreError.preconditionFailed(
           'Push rejected because the remote advanced. Re-integrate the remote changes and try again.',
-          message
+          message,
+          'remote_advanced'
         );
       }
       throw CoreError.internal(
@@ -936,7 +946,9 @@ export class GitService {
   public async commit(path: string, message: GitMessage): Promise<void> {
     if (this.options.isReadOnly) {
       throw CoreError.preconditionFailed(
-        'Cannot commit because Core is in read-only mode'
+        'Cannot commit because Core is in read-only mode',
+        undefined,
+        'read_only_mode'
       );
     }
 
@@ -944,7 +956,9 @@ export class GitService {
     // guard earlier through assertNotProvisioned, before writing files.
     if (await Fs.pathExists(Path.join(path, PROVISIONED_MARKER))) {
       throw CoreError.preconditionFailed(
-        `Cannot commit because "${path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+        `Cannot commit because "${path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`,
+        undefined,
+        'provisioned_copy'
       );
     }
 

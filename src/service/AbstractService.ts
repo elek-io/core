@@ -84,7 +84,9 @@ export abstract class AbstractService {
       return;
     }
     const error = CoreError.preconditionFailed(
-      `Cannot ${context} because Core is in read-only mode`
+      `Cannot ${context} because Core is in read-only mode`,
+      undefined,
+      'read_only_mode'
     );
     this.logBoundaryError(context, error);
     throw error;
@@ -108,7 +110,9 @@ export abstract class AbstractService {
       return;
     }
     const error = CoreError.preconditionFailed(
-      `Cannot ${context} because Project "${projectId}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+      `Cannot ${context} because Project "${projectId}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`,
+      undefined,
+      'provisioned_copy'
     );
     this.logBoundaryError(context, error);
     throw error;
