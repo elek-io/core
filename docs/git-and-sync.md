@@ -142,7 +142,7 @@ One call, five steps, and nothing reaches the remote until the last:
 
 A remote that advanced between the fetch and the push rejects the push as non-fast-forward. Core answers that by re-integrating and trying again, up to five attempts before the `PreconditionFailed` reaches you.
 
-Every refusal names its cause in `error.reason`, so an app can say the one thing to fix, see [A refused sync names its cause](#a-refused-sync-names-its-cause).
+Every refusal, which is every `PreconditionFailed` a sync raises, names its cause in `error.reason`, so an app can say the one thing to fix, see [A refused sync names its cause](#a-refused-sync-names-its-cause).
 
 There is no pre-check for an `origin`. Without one the underlying git command fails and surfaces as `Internal` carrying git's own message.
 
@@ -292,8 +292,19 @@ A `synchronize()` refused for one of these states names it in `reason`, so an ap
 | The remote kept moving, through five attempts | `remote_advanced` | synchronize again |
 | Core runs read-only | `read_only_mode` | run a writable Core |
 | The Project is a provisioned copy | `provisioned_copy` | delete it and clone the Project to work on it |
+| Git cannot load a shared library it needs | `git_library_missing` | install the library, see [`usage.md`](./usage.md#installing-and-instantiating) |
+| elek.io Cloud could not be reached | `cloud_unreachable` | check the connection and synchronize again |
+| elek.io Cloud could not reach its git host | `git_host_unreachable` | synchronize again later |
+| The remote on Cloud's git host names no Project | `remote_names_no_project` | set the remote's path to `projects/<id>.git` |
+| Cloud keeps the Project on another git host | `project_on_another_host` | set the remote to the address the message names |
 
-The dangling references of step 4 raise `Conflict` instead, carrying each reference rather than a `reason`. Any other refusal leaves `reason` absent, so an app answers it by its type: git that cannot load a shared library it needs, and whatever the credential helper for elek.io Cloud refuses.
+Each value names the state rather than the call, so the ones git and elek.io Cloud raise reach every other call that runs git or asks Cloud for a credential, and read-only mode and a provisioned copy reach every other refused write.
+
+The dangling references of step 4 raise `Conflict` instead, carrying each reference rather than a `reason`. A sync that fails for anything but a refusal leaves `reason` absent, so an app answers it by its type:
+
+- `Unauthorized`, for a credential the remote or elek.io Cloud rejected.
+- `RateLimited`, when Cloud asks to call again later.
+- `Internal`, for a git command that exited non-zero, a Project with no `origin` included.
 
 ## See also
 

@@ -1,7 +1,11 @@
 import type { ZodError, ZodType } from 'zod';
 import { cloudErrorResponseSchema } from '../schema/cloudSchema.js';
 import type { LogService } from '../service/LogService.js';
-import { CoreError, type CoreErrorType } from './shared.js';
+import {
+  CoreError,
+  type CoreErrorReason,
+  type CoreErrorType,
+} from './shared.js';
 
 /**
  * A refusal one call reads differently from the shared mapping, such as the
@@ -15,6 +19,8 @@ export interface CloudRefusal {
    */
   code?: string;
   type: CoreErrorType;
+  /** What Core refused for, where the type is `PreconditionFailed` */
+  reason?: CoreErrorReason;
   /** Says what was refused. The status is appended */
   message: string;
 }
@@ -152,7 +158,8 @@ export class CloudClient {
     } catch (error) {
       throw CoreError.preconditionFailed(
         `Could not reach elek.io Cloud at "${url}"`,
-        error
+        error,
+        'cloud_unreachable'
       );
     }
 
@@ -266,7 +273,12 @@ async function refusalOf(
       return refusal.code === undefined || refusal.code === code;
     });
     if (match !== undefined) {
-      return new CoreError(match.type, `${match.message} (${response.status})`);
+      return new CoreError(
+        match.type,
+        `${match.message} (${response.status})`,
+        undefined,
+        match.reason
+      );
     }
   }
 

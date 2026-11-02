@@ -76,7 +76,8 @@ export function classifyLoadError(stderr: string): CoreError | null {
   }
   return CoreError.preconditionFailed(
     `Git could not load the shared library "${library}". Install it, use dugite 3.2.3 or later, whose git links libcurl.so.4, or point LOCAL_GIT_DIRECTORY at another git installation.`,
-    gitOutputCause(stderr, '')
+    gitOutputCause(stderr, ''),
+    'git_library_missing'
   );
 }
 

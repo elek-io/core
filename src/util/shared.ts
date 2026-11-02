@@ -93,9 +93,9 @@ const statusCodes: Record<CoreErrorType, number> = {
  * What Core refused for, beside the `type` saying that it refused.
  *
  * A closed list an app maps to a sentence per value, with the compiler
- * naming the value it misses. `projects.synchronize()` carries one for each
- * state the doc below lists, and read-only mode and a provisioned copy carry
- * theirs wherever they refuse a write.
+ * naming the value it misses. Every `PreconditionFailed` of
+ * `projects.synchronize()` carries one. Each value names the state rather
+ * than the call, so it also reaches every other call that can meet it.
  *
  * @see ../../docs/git-and-sync.md
  */
@@ -108,7 +108,12 @@ export type CoreErrorReason =
   | 'textual_conflict'
   | 'remote_advanced'
   | 'read_only_mode'
-  | 'provisioned_copy';
+  | 'provisioned_copy'
+  | 'git_library_missing'
+  | 'remote_names_no_project'
+  | 'project_on_another_host'
+  | 'cloud_unreachable'
+  | 'git_host_unreachable';
 
 /**
  * The only error a service method throws, so `error instanceof CoreError` is

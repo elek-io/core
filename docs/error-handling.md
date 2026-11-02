@@ -56,8 +56,15 @@ Nothing sends a `cause` elsewhere: git echoes its arguments back, so it can hold
 | `remote_advanced` | the remote moved on, so the push was rejected as non-fast-forward |
 | `read_only_mode` | Core runs read-only |
 | `provisioned_copy` | the Project is a provisioned copy, which the next provision run overwrites |
+| `git_library_missing` | git could not load a shared library it needs |
+| `remote_names_no_project` | the remote on elek.io Cloud's git host names no Project |
+| `project_on_another_host` | elek.io Cloud keeps the Project on another git host than the remote names |
+| `cloud_unreachable` | elek.io Cloud could not be reached, or did not answer in time |
+| `git_host_unreachable` | elek.io Cloud could not reach its git host |
 
-A refused `core.projects.synchronize()` names its cause for each state [`git-and-sync.md`](./git-and-sync.md#a-refused-sync-names-its-cause) lists. `read_only_mode` and `provisioned_copy` reach every other refused write too. A refusal Core has no value for leaves `reason` absent, so branch on the `type` as well.
+Every `PreconditionFailed` of `core.projects.synchronize()` names its cause, one for each state [`git-and-sync.md`](./git-and-sync.md#a-refused-sync-names-its-cause) lists.
+
+Each value names the state rather than the call, so a read-only Core, a provisioned copy, a loader that fails and a Cloud or git host that refuses name theirs wherever they are met. A refusal Core has no value for leaves `reason` absent, so branch on the `type` as well.
 
 ## Consumer patterns
 

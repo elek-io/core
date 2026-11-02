@@ -1250,14 +1250,14 @@ export class ProjectService
   /**
    * Integrates `origin` into the current branch and pushes it, or makes the
    * first push when the remote holds no `draft`. A refusal pushes no ref and
-   * names its cause in `reason` where it has one: `uncommitted_changes`,
-   * `remote_holds_something_else`, `remote_main_without_draft`,
-   * `remote_without_atomic_push`, `git_lfs_endpoint_unusable`,
-   * `textual_conflict`, `remote_advanced`, `read_only_mode` or
-   * `provisioned_copy`. A `Conflict` means dangling references instead.
+   * names its cause: `uncommitted_changes`, `remote_holds_something_else`,
+   * `remote_main_without_draft`, `remote_without_atomic_push`,
+   * `git_lfs_endpoint_unusable`, `textual_conflict`, `remote_advanced`,
+   * `read_only_mode`, `provisioned_copy`, `git_library_missing`,
+   * `cloud_unreachable`, `git_host_unreachable`, `remote_names_no_project` or
+   * `project_on_another_host`. Dangling references raise `Conflict` instead.
    *
    * @see ../../docs/git-and-sync.md
-   * @see ../../contributing/reference-integrity.md
    */
   public synchronize(props: SynchronizeProjectProps): Promise<void> {
     return this.mutating(

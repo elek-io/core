@@ -288,11 +288,13 @@ function refusalsFor(projectId: string): CloudRefusal[] {
     {
       status: 502,
       type: 'PreconditionFailed',
+      reason: 'git_host_unreachable',
       message: 'elek.io Cloud could not reach the git host',
     },
     {
       status: 504,
       type: 'PreconditionFailed',
+      reason: 'git_host_unreachable',
       message: 'elek.io Cloud could not reach the git host',
     },
   ];
@@ -305,6 +307,8 @@ function elsewhere(
   remoteUrl: string
 ): CoreError {
   return CoreError.preconditionFailed(
-    `Project "${projectId}" is not on the git host "${host}" its remote names. Set its remote to "${remoteUrl}".`
+    `Project "${projectId}" is not on the git host "${host}" its remote names. Set its remote to "${remoteUrl}".`,
+    undefined,
+    'project_on_another_host'
   );
 }

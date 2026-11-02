@@ -79,6 +79,7 @@ describe('classifyLoadError', function () {
     );
 
     expect(error?.type).toEqual('PreconditionFailed');
+    expect(error?.reason).toEqual('git_library_missing');
     expect(error?.message).toContain('"libcurl-gnutls.so.4"');
     expect(error?.message).toContain('LOCAL_GIT_DIRECTORY');
   });

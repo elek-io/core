@@ -168,7 +168,16 @@ It is a field of its own rather than `Error.cause`, which was the first pick and
 - `cause` already carries git's stdout and stderr, which echo the command line and can hold a remote URL with a credential, so a host drops it at a process boundary rather than forwarding it.
 - A host that forwards the cause to a window would then have to tell structured data from git's text, and a refusal would arrive with nothing to branch on.
 
-Each value names the state Core refused for rather than the call that was refused, which is why `read_only_mode` and `provisioned_copy` are set in `assertNotReadOnly` and `assertNotProvisioned` and in the git-layer backstops alike. A refusal with no value leaves `reason` absent, so a caller still branches on the `type`.
+Each value names the state Core refused for rather than the call that was refused, which is why `read_only_mode` and `provisioned_copy` are set in `assertNotReadOnly` and `assertNotProvisioned` and in the git-layer backstops alike. The states below the service layer carry theirs the same way:
+
+- `classifyLoadError`, for a loader that failed.
+- `CloudClient.request`, for a Cloud that did not answer.
+- The `git-token` and `git-access` refusals, for a git host Cloud could not reach.
+- `GitCredentialRelay` and `CloudGitAccess`, for a remote naming no Project and for a Project on another host.
+
+A refusal with no value leaves `reason` absent, so a caller still branches on the `type`.
+
+That is also what keeps `synchronize()`'s own promise: every `PreconditionFailed` it can raise carries a value, the ones a git command throws out of `GitService.run` included, and a new refusal below the service layer has to pick one or break that promise.
 
 `synchronize()` reads the `reason` as well, to tell its own retryable non-fast-forward rejection from any other refusal. It matched the first words of the message before, which a reworded message would have broken without a test noticing, the same reason the offline fallback above is scoped by phase.
 
