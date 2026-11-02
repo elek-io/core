@@ -3,6 +3,7 @@ import {
   partialTranslatableStringSchema,
   slugSchema,
   reservedSlugs,
+  supportedIconSchema,
 } from './baseSchema.js';
 
 describe('translatableStringSchema', () => {
@@ -102,5 +103,93 @@ describe('slugSchema', () => {
     expect(slugSchema.safeParse(null).success).toBe(false);
     expect(slugSchema.safeParse(undefined).success).toBe(false);
     expect(slugSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('supportedIconSchema', () => {
+  it('accepts Lucide icon names', () => {
+    expect(supportedIconSchema.safeParse('newspaper').success).toBe(true);
+    expect(supportedIconSchema.safeParse('car').success).toBe(true);
+    expect(supportedIconSchema.safeParse('x').success).toBe(true);
+    expect(supportedIconSchema.safeParse('a-arrow-down').success).toBe(true);
+    expect(supportedIconSchema.safeParse('square-arrow-up-right').success).toBe(
+      true
+    );
+  });
+
+  it('accepts a Lucide name holding a digit', () => {
+    expect(supportedIconSchema.safeParse('building-2').success).toBe(true);
+    expect(supportedIconSchema.safeParse('arrow-down-0-1').success).toBe(true);
+    expect(supportedIconSchema.safeParse('axis-3d').success).toBe(true);
+  });
+
+  it('accepts a name Lucide does not ship, since Core holds no catalog', () => {
+    expect(supportedIconSchema.safeParse('no-such-lucide-icon').success).toBe(
+      true
+    );
+  });
+
+  it('accepts the names a Collection could carry before', () => {
+    expect(supportedIconSchema.safeParse('home').success).toBe(true);
+    expect(supportedIconSchema.safeParse('plus').success).toBe(true);
+  });
+
+  it('accepts a Lucide name that slugSchema reserves', () => {
+    for (const name of ['delete', 'edit', 'list', 'settings']) {
+      expect(
+        supportedIconSchema.safeParse(name).success,
+        `Expected icon name "${name}" to be accepted`
+      ).toBe(true);
+      expect(slugSchema.safeParse(name).success).toBe(false);
+    }
+  });
+
+  it('accepts the longest name Lucide ships, with room to spare', () => {
+    // 38 characters in lucide-react 1.63.0, against the cap of 64
+    expect(
+      supportedIconSchema.safeParse('triangles-centerline-dashed-horizontal')
+        .success
+    ).toBe(true);
+    expect(supportedIconSchema.safeParse('a'.repeat(64)).success).toBe(true);
+  });
+
+  it('rejects empty strings', () => {
+    expect(supportedIconSchema.safeParse('').success).toBe(false);
+  });
+
+  it('rejects strings exceeding max length', () => {
+    expect(supportedIconSchema.safeParse('a'.repeat(65)).success).toBe(false);
+  });
+
+  it('rejects uppercase characters', () => {
+    expect(supportedIconSchema.safeParse('Home').success).toBe(false);
+    expect(supportedIconSchema.safeParse('NEWSPAPER').success).toBe(false);
+    expect(supportedIconSchema.safeParse('aArrowDown').success).toBe(false);
+  });
+
+  it('rejects special characters', () => {
+    expect(supportedIconSchema.safeParse('a_arrow_down').success).toBe(false);
+    expect(supportedIconSchema.safeParse('a arrow down').success).toBe(false);
+    expect(supportedIconSchema.safeParse('a.arrow.down').success).toBe(false);
+    expect(supportedIconSchema.safeParse('a/arrow/down').success).toBe(false);
+    expect(supportedIconSchema.safeParse('@newspaper').success).toBe(false);
+    expect(supportedIconSchema.safeParse('newspaper\n').success).toBe(false);
+  });
+
+  it('rejects leading or trailing dashes', () => {
+    expect(supportedIconSchema.safeParse('-newspaper').success).toBe(false);
+    expect(supportedIconSchema.safeParse('newspaper-').success).toBe(false);
+    expect(supportedIconSchema.safeParse('-newspaper-').success).toBe(false);
+  });
+
+  it('rejects consecutive dashes', () => {
+    expect(supportedIconSchema.safeParse('a--arrow-down').success).toBe(false);
+  });
+
+  it('rejects non-string values', () => {
+    expect(supportedIconSchema.safeParse(123).success).toBe(false);
+    expect(supportedIconSchema.safeParse(null).success).toBe(false);
+    expect(supportedIconSchema.safeParse(undefined).success).toBe(false);
+    expect(supportedIconSchema.safeParse({}).success).toBe(false);
   });
 });

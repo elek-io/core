@@ -24,6 +24,7 @@ import {
   createEntry,
   createProject,
   ensureCleanGitStatus,
+  getFileHash,
 } from '../test/util.js';
 
 describe('CollectionService', function () {
@@ -1014,5 +1015,149 @@ describe('AbstractIndexedEntityService - stale index cache', function () {
       idOrSlug: 'seconds',
     });
     expect(resolvedId).to.equal(second.id);
+  });
+});
+
+describe('CollectionService - icon', function () {
+  let project: Project & { destroy: () => Promise<void> };
+
+  const collectionProps = (icon: string, singular: string, plural: string) => ({
+    projectId: project.id,
+    icon,
+    name: {
+      singular: { en: singular, de: singular },
+      plural: { en: plural, de: plural },
+    },
+    slug: { singular, plural },
+    description: { en: plural, de: plural },
+    fieldDefinitions: [],
+  });
+
+  beforeAll(async function () {
+    project = await createProject('CollectionService Icon Test');
+  });
+
+  afterAll(async function () {
+    await project.destroy();
+  });
+
+  afterEach(async function ({ task }) {
+    await ensureCleanGitStatus(task, project.id);
+  });
+
+  it('should be able to create and update a Collection with any Lucide icon name', async function () {
+    const created = await core.collections.create(
+      collectionProps('newspaper', 'article', 'articles')
+    );
+    expect(created.icon).toEqual('newspaper');
+    await expect(
+      core.collections.read({ projectId: project.id, id: created.id })
+    ).resolves.toMatchObject({ icon: 'newspaper' });
+
+    const updated = await core.collections.update({
+      projectId: project.id,
+      ...created,
+      icon: 'car',
+    });
+    expect(updated.icon).toEqual('car');
+
+    // "settings" is a Lucide name and a reserved slug, so it proves the icon
+    // follows the characters of a slug without taking its reserved words
+    const renamed = await core.collections.update({
+      projectId: project.id,
+      ...updated,
+      icon: 'settings',
+    });
+    expect(renamed.icon).toEqual('settings');
+    await expect(
+      core.collections.read({ projectId: project.id, id: created.id })
+    ).resolves.toMatchObject({ icon: 'settings' });
+
+    await core.collections.delete({ projectId: project.id, id: created.id });
+  });
+
+  it('should read a Collection stored with one of the two icons Core took before', async function () {
+    for (const icon of ['home', 'plus']) {
+      const created = await core.collections.create(
+        collectionProps(icon, `thing-${icon}`, `things-${icon}`)
+      );
+      const filePath = core.util.pathTo.collectionFile(project.id, created.id);
+      const hashBeforeRead = await getFileHash(filePath);
+
+      await expect(
+        core.collections.read({ projectId: project.id, id: created.id })
+      ).resolves.toMatchObject({ icon });
+
+      // Nothing migrates the stored name, so its file stays as it was
+      // written and the read at the commit that wrote it answers the same
+      expect(await Fs.readJson(filePath)).toMatchObject({ icon });
+      expect(await getFileHash(filePath)).toEqual(hashBeforeRead);
+
+      const history = await core.collections.history({
+        projectId: project.id,
+        id: created.id,
+      });
+      await expect(
+        core.collections.read({
+          projectId: project.id,
+          id: created.id,
+          commitHash: history.at(-1)?.hash,
+        })
+      ).resolves.toMatchObject({ icon });
+
+      await core.collections.delete({ projectId: project.id, id: created.id });
+    }
+  });
+
+  it('should refuse a create whose icon is no Lucide icon name and write nothing', async function () {
+    const countBefore = await core.collections.count({
+      projectId: project.id,
+    });
+    const foldersBefore = await Fs.readdir(
+      core.util.pathTo.collections(project.id)
+    );
+
+    for (const icon of [
+      '',
+      'Newspaper',
+      'my_icon',
+      'news paper',
+      '-newspaper',
+      'newspaper-',
+      'news--paper',
+      'a'.repeat(65),
+    ]) {
+      await expect(
+        core.collections.create(collectionProps(icon, 'refused', 'refuseds')),
+        `Expected the icon "${icon}" to be refused`
+      ).rejects.toMatchObject({ type: 'BadRequest' });
+    }
+
+    expect(await core.collections.count({ projectId: project.id })).toEqual(
+      countBefore
+    );
+    expect(await Fs.readdir(core.util.pathTo.collections(project.id))).toEqual(
+      foldersBefore
+    );
+  });
+
+  it('should refuse an update whose icon is no Lucide icon name and keep the stored one', async function () {
+    const created = await core.collections.create(
+      collectionProps('house', 'house', 'houses')
+    );
+
+    await expect(
+      core.collections.update({
+        projectId: project.id,
+        ...created,
+        icon: 'House',
+      })
+    ).rejects.toMatchObject({ type: 'BadRequest' });
+
+    await expect(
+      core.collections.read({ projectId: project.id, id: created.id })
+    ).resolves.toMatchObject({ icon: 'house' });
+
+    await core.collections.delete({ projectId: project.id, id: created.id });
   });
 });
