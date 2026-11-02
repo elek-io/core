@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { startFakeCloud } from '../test/cloud.js';
 import { FakeCloudGit } from '../test/cloudGit.js';
-import { createTmpCore, expectCoreError } from '../test/util.js';
+import { createTmpCore, expectCoreError, freezeClock } from '../test/util.js';
 import { CloudClient } from './cloud.js';
 import { CloudGitAccess } from './cloudGit.js';
 import { uuid } from './shared.js';
@@ -128,6 +128,9 @@ describe('CloudGitAccess', function () {
     t.cloudGit.next.push(
       Response.json({}, { status: 429, headers: { 'Retry-After': '120' } })
     );
+    // The message counts the seconds from a second reading of the clock, so
+    // a stall between the two would otherwise make it say 119 or 121
+    freezeClock();
 
     await expectCoreError(
       t.access.credentialFor(hostOne, first),
