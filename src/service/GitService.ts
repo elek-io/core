@@ -1160,6 +1160,34 @@ export class GitService {
   }
 
   /**
+   * The oldest commit of a revision's ancestry, which for a Project is the
+   * commit `core.projects.create()` made.
+   *
+   * A repository whose history is truncated, as a provisioned copy's is,
+   * answers its own shallow boundary instead, which is how a caller tells a
+   * whole history from a truncated one. Two unrelated roots cannot reach one
+   * Project, so the oldest of them is the answer.
+   *
+   * @see https://git-scm.com/docs/git-rev-list
+   */
+  public async rootCommit(path: string, rev: string): Promise<string> {
+    const result = await this.git(path, ['rev-list', '--max-parents=0', rev]);
+    const roots = result.stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '');
+    const oldest = roots[roots.length - 1];
+
+    if (oldest === undefined) {
+      throw CoreError.internal(
+        `Git rev-list found no root commit of "${rev}" in "${path}"`
+      );
+    }
+
+    return oldest;
+  }
+
+  /**
    * Retrieves the content of a file at a specific commit
    *
    * Reads the blob through `cat-file` instead of `show`. Revision commands like

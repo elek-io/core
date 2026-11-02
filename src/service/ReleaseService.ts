@@ -1,10 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import Semver from 'semver';
 import {
-  assetFileSchema,
-  collectionFileSchema,
-  componentFileSchema,
-  entryFileSchema,
   isVersionedTag,
   projectBranchSchema,
   projectFileSchema,
@@ -13,6 +9,7 @@ import {
   createReleaseSchema,
   createPreviewReleaseSchema,
   listReleasesSchema,
+  releaseChangesSchema,
   type AssetChange,
   type AssetFile,
   type CollectionFile,
@@ -28,6 +25,7 @@ import {
   type CreateReleaseProps,
   type CreatePreviewReleaseProps,
   type ListReleasesProps,
+  type ReleaseChangesProps,
   type ReleaseListItem,
   type ProjectChange,
   type ProjectFile,
@@ -36,9 +34,22 @@ import {
   type SemverBump,
   type FieldChange,
   type CollectionChange,
+  type VersionedGitTag,
 } from '../schema/index.js';
+import {
+  baselineVersions,
+  bumpBetween,
+  INITIAL_PROJECT_VERSION,
+  type ReleaseVersion,
+} from '../util/release.js';
 import { CoreError, datetime } from '../util/shared.js';
 import { AbstractService } from './AbstractService.js';
+import {
+  migrateAssetFile,
+  migrateCollectionFile,
+  migrateComponentFile,
+  migrateEntryFile,
+} from './migrations/index.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -55,11 +66,13 @@ import type { PathTo } from '../util/node.js';
  * @see ../../docs/releases.md
  */
 export class ReleaseService extends AbstractService {
+  private readonly coreVersion: string;
   private gitService: GitService;
   private jsonFileService: JsonFileService;
   private projectService: ProjectService;
 
   constructor(
+    coreVersion: string,
     options: ElekIoCoreOptions,
     pathTo: PathTo,
     logService: LogService,
@@ -69,16 +82,22 @@ export class ReleaseService extends AbstractService {
   ) {
     super(serviceTypeSchema.enum.Release, options, pathTo, logService);
 
+    this.coreVersion = coreVersion;
     this.gitService = gitService;
     this.jsonFileService = jsonFileService;
     this.projectService = projectService;
   }
 
   /**
-   * Lists the Releases and preview Releases of a Project, newest first
+   * Lists the Releases and preview Releases of a Project, newest first, each
+   * with who made it and the bump it carried
    *
-   * Reads the release and preview git tags. On a provisioned copy this
-   * works once the tag objects are fetched.
+   * Reads the release and preview git tags and nothing else, so listing costs
+   * the same whatever the Releases changed. What one Release changed is
+   * `changes()`. On a provisioned copy this works once the tag objects are
+   * fetched.
+   *
+   * @see ../../docs/releases.md
    */
   public list(
     props: ListReleasesProps
@@ -88,16 +107,102 @@ export class ReleaseService extends AbstractService {
         path: this.pathTo.project(props.projectId),
       });
 
-      const releases: ReleaseListItem[] = tags
-        .filter(isVersionedTag)
-        .map((tag) => ({
-          tagId: tag.id,
-          type: tag.message.type,
-          version: tag.message.version,
-          datetime: tag.datetime,
-        }));
+      const versioned = tags.filter(isVersionedTag);
+      const baselines = baselineVersions(versioned.map(releaseVersionOfTag));
+
+      const releases: ReleaseListItem[] = versioned.map((tag) => ({
+        tagId: tag.id,
+        type: tag.message.type,
+        version: tag.message.version,
+        datetime: tag.datetime,
+        author: tag.author,
+        bump: bumpBetween(
+          baselines.get(tag.id) ?? INITIAL_PROJECT_VERSION,
+          tag.message.version
+        ),
+      }));
 
       return { list: releases, total: releases.length };
+    });
+  }
+
+  /**
+   * What one Release or preview Release changed, in the shape `prepare()`
+   * reports, worked out for that Release alone. A Release compares against
+   * the full Release it built on, a first Release against the Project's
+   * creation and a preview against the last full Release before it.
+   *
+   * Throws `NotFound` for a tag that is no Release of this Project, and
+   * `PreconditionFailed` when the side it compares against is not in this
+   * copy, as on a provisioned copy whose history is truncated.
+   *
+   * @see ../../docs/releases.md
+   */
+  public changes(props: ReleaseChangesProps): Promise<ReleaseDiff> {
+    return this.validated('changes', releaseChangesSchema, props, async () => {
+      const projectPath = this.pathTo.project(props.projectId);
+      const { list: tags } = await this.gitService.tags.list({
+        path: projectPath,
+      });
+
+      const versioned = tags.filter(isVersionedTag);
+      const tag = versioned.find((candidate) => candidate.id === props.tagId);
+      if (!tag) {
+        throw CoreError.notFound(
+          `Provided tag with UUID "${props.tagId}" did not match any Release of Project "${props.projectId}"`
+        );
+      }
+
+      const baselineVersion = baselineVersions(
+        versioned.map(releaseVersionOfTag)
+      ).get(tag.id);
+      const baseline = versioned.find(
+        (candidate) =>
+          candidate.message.type === 'release' &&
+          candidate.message.version === baselineVersion
+      );
+      const currentVersion =
+        baseline?.message.version ?? INITIAL_PROJECT_VERSION;
+      const toRef = tag.commitHash;
+      const fromRef =
+        baseline === undefined
+          ? await this.gitService.rootCommit(projectPath, toRef)
+          : baseline.commitHash;
+
+      // A shallow copy answers the Release's own commit as the oldest one of
+      // its ancestry, and holds the commit of another Release without the
+      // history to it, so both shapes are refused rather than diffed
+      const isUnreachable =
+        fromRef === toRef ||
+        (await this.tipOf(projectPath, `${fromRef}^{commit}`)) === null;
+      if (isUnreachable) {
+        throw CoreError.preconditionFailed(
+          `Cannot say what version ${tag.message.version} of Project "${props.projectId}" changed, because version ${currentVersion}, which it was built on, is not in this copy. A provisioned copy holds each Release without the history between them, so clone the Project to read this.`
+        );
+      }
+
+      const project = await this.projectService.read({
+        id: props.projectId,
+        commitHash: toRef,
+      });
+      const { bump, changes } = await this.changesBetween(
+        props.projectId,
+        projectPath,
+        fromRef,
+        toRef,
+        project
+      );
+
+      return {
+        project,
+        // The bump the Release carried, which is the one `list()` shows for
+        // it. What the two commits say answers only where the two versions
+        // target one Release, which Core's own Releases never do
+        bump: bumpBetween(currentVersion, tag.message.version) ?? bump,
+        currentVersion,
+        nextVersion: tag.message.version,
+        ...changes,
+      };
     });
   }
 
@@ -457,81 +562,15 @@ export class ReleaseService extends AbstractService {
     const project = await this.projectService.read({ id: projectId });
     const currentVersion = project.version;
 
-    const releasedProject = await this.getProjectAtRef(
+    const { bump, changes } = await this.changesBetween(
       projectId,
       projectPath,
-      releasedRef
-    );
-    const projectDiff = this.diffProject(project, releasedProject);
-
-    const currentCollections = await this.getCollectionsAtRef(
-      projectId,
-      projectPath,
-      currentRef
-    );
-    const releasedCollections = await this.getCollectionsAtRef(
-      projectId,
-      projectPath,
-      releasedRef
-    );
-    const collectionDiff = this.diffCollections(
-      currentCollections,
-      releasedCollections
+      releasedRef,
+      currentRef,
+      project
     );
 
-    const currentAssets = await this.getAssetsAtRef(
-      projectId,
-      projectPath,
-      currentRef
-    );
-    const releasedAssets = await this.getAssetsAtRef(
-      projectId,
-      projectPath,
-      releasedRef
-    );
-    const assetDiff = this.diffAssets(currentAssets, releasedAssets);
-
-    const currentComponents = await this.getComponentsAtRef(
-      projectId,
-      projectPath,
-      currentRef
-    );
-    const releasedComponents = await this.getComponentsAtRef(
-      projectId,
-      projectPath,
-      releasedRef
-    );
-    const componentDiff = this.diffComponents(
-      currentComponents,
-      releasedComponents
-    );
-
-    const allCollectionIds = new Set([
-      ...currentCollections.map((c) => c.id),
-      ...releasedCollections.map((c) => c.id),
-    ]);
-
-    const entryDiff = await this.diffEntries(
-      projectId,
-      projectPath,
-      allCollectionIds,
-      releasedRef
-    );
-
-    // Combine bumps from all diffs
-    let finalBump: SemverBump | null = null;
-    for (const bump of [
-      projectDiff.bump,
-      collectionDiff.bump,
-      componentDiff.bump,
-      assetDiff.bump,
-      entryDiff.bump,
-    ]) {
-      if (bump) {
-        finalBump = finalBump ? this.higherBump(finalBump, bump) : bump;
-      }
-    }
-
+    let finalBump = bump;
     if (!finalBump) {
       const hasContentChanges = await this.hasCommitsBetween(
         projectPath,
@@ -553,6 +592,86 @@ export class ReleaseService extends AbstractService {
         bump: finalBump,
         currentVersion,
         nextVersion,
+        ...changes,
+      },
+      released,
+    };
+  }
+
+  /**
+   * Every change between two refs and the highest bump among them, which is
+   * what `prepare()` reports for `draft` against the released `main` and
+   * `changes()` for one Release against the one before it.
+   *
+   * `toProject` is the Project of the newer ref, which `prepare()` takes from
+   * the working copy, so an edit not committed yet still counts, and
+   * `changes()` reads at that Release's own commit.
+   */
+  private async changesBetween(
+    projectId: string,
+    projectPath: string,
+    fromRef: string,
+    toRef: string,
+    toProject: ProjectFile
+  ): Promise<{ bump: SemverBump | null; changes: ReleaseChanges }> {
+    const fromProject = await this.getProjectAtRef(
+      projectId,
+      projectPath,
+      fromRef
+    );
+    const projectDiff = this.diffProject(toProject, fromProject);
+
+    const toCollections = await this.getCollectionsAtRef(
+      projectId,
+      projectPath,
+      toRef
+    );
+    const fromCollections = await this.getCollectionsAtRef(
+      projectId,
+      projectPath,
+      fromRef
+    );
+    const collectionDiff = this.diffCollections(toCollections, fromCollections);
+
+    const assetDiff = this.diffAssets(
+      await this.getAssetsAtRef(projectId, projectPath, toRef),
+      await this.getAssetsAtRef(projectId, projectPath, fromRef)
+    );
+
+    const componentDiff = this.diffComponents(
+      await this.getComponentsAtRef(projectId, projectPath, toRef),
+      await this.getComponentsAtRef(projectId, projectPath, fromRef)
+    );
+
+    const allCollectionIds = new Set([
+      ...toCollections.map((c) => c.id),
+      ...fromCollections.map((c) => c.id),
+    ]);
+
+    const entryDiff = await this.diffEntries(
+      projectId,
+      projectPath,
+      allCollectionIds,
+      fromRef,
+      toRef
+    );
+
+    let bump: SemverBump | null = null;
+    for (const candidate of [
+      projectDiff.bump,
+      collectionDiff.bump,
+      componentDiff.bump,
+      assetDiff.bump,
+      entryDiff.bump,
+    ]) {
+      if (candidate) {
+        bump = bump ? this.higherBump(bump, candidate) : candidate;
+      }
+    }
+
+    return {
+      bump,
+      changes: {
         projectChanges: projectDiff.projectChanges,
         collectionChanges: collectionDiff.collectionChanges,
         fieldChanges: collectionDiff.fieldChanges,
@@ -561,20 +680,21 @@ export class ReleaseService extends AbstractService {
         assetChanges: assetDiff.assetChanges,
         entryChanges: entryDiff.entryChanges,
       },
-      released,
     };
   }
 
   /**
-   * The commit a branch points at, or null when it does not resolve, which
-   * is what a Project without a local `main` branch answers.
+   * The commit a revision points at, or null when it does not resolve, which
+   * is what a Project without a local `main` branch answers and what a
+   * commit this copy does not hold answers. A hash resolves whether or not
+   * the object is there, so ask for `<hash>^{commit}` to learn that.
    */
   private async tipOf(
     projectPath: string,
-    branch: string
+    rev: string
   ): Promise<string | null> {
     try {
-      return await this.gitService.revParse(projectPath, branch);
+      return await this.gitService.revParse(projectPath, rev);
     } catch {
       return null;
     }
@@ -677,47 +797,81 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads asset metadata files as they exist at a given git ref.
+   * One object file at a git ref: its content as git holds it and, where this
+   * Core can read it, the file parsed. It is migrated in memory first, like
+   * any read from history, because a ref keeps the shape the Core that wrote
+   * it used.
    *
-   * Lossy on purpose: a file that cannot be read is logged at debug, and one
-   * that fails `assetFileSchema` is dropped with no log at all. So a corrupt
-   * Asset reads as absent at that ref, and the diff reports it as added or
-   * deleted.
+   * A file that still fails its schema keeps its content alone, so the diff
+   * reports what the object did rather than counting it as absent. Null only
+   * when the content cannot be read at all.
+   */
+  private async fileAtRef<T>(
+    projectPath: string,
+    filePath: string,
+    ref: string,
+    id: string,
+    objectType: string,
+    migrate: (potentiallyOutdatedFile: unknown) => T
+  ): Promise<FileAtRef<T> | null> {
+    let content: string;
+    try {
+      content = await this.gitService.getFileContentAtCommit(
+        projectPath,
+        filePath,
+        ref
+      );
+    } catch {
+      this.logService.debug({
+        source: 'core',
+        message: `Skipping ${objectType} "${id}" at ref "${ref}" during release diff, its file cannot be read there`,
+        meta: { 'file.path': filePath, 'elek.git.ref': ref },
+      });
+      return null;
+    }
+
+    try {
+      return { id, content, file: migrate(JSON.parse(content)) };
+    } catch {
+      this.logService.debug({
+        source: 'core',
+        message: `Comparing ${objectType} "${id}" at ref "${ref}" by its content alone, its file does not match what this Core expects`,
+        meta: { 'file.path': filePath, 'elek.git.ref': ref },
+      });
+      return { id, content, file: null };
+    }
+  }
+
+  /**
+   * Reads asset metadata files as they exist at a given git ref, through
+   * `fileAtRef`, so an Asset is present wherever the tree lists it.
    */
   private async getAssetsAtRef(
     projectId: string,
     projectPath: string,
     ref: string
-  ): Promise<AssetFile[]> {
+  ): Promise<FileAtRef<AssetFile>[]> {
     const assetsPath = this.pathTo.assets(projectId);
     const fileNames = await this.gitService.listTreeAtCommit(
       projectPath,
       assetsPath,
       ref
     );
-    const assets: AssetFile[] = [];
+    const assets: FileAtRef<AssetFile>[] = [];
     const jsonFiles = fileNames.filter((f) => f.endsWith('.json'));
 
     for (const fileName of jsonFiles) {
       const assetId = fileName.replace('.json', '');
-      const assetFilePath = this.pathTo.assetFile(projectId, assetId);
-
-      try {
-        const content = await this.gitService.getFileContentAtCommit(
-          projectPath,
-          assetFilePath,
-          ref
-        );
-        const parsed = assetFileSchema.safeParse(JSON.parse(content));
-        if (parsed.success) {
-          assets.push(parsed.data);
-        }
-      } catch {
-        this.logService.debug({
-          source: 'core',
-          message: `Skipping asset "${fileName}" at ref "${ref}" during release diff`,
-          meta: { 'file.name': fileName, 'elek.git.ref': ref },
-        });
+      const asset = await this.fileAtRef(
+        projectPath,
+        this.pathTo.assetFile(projectId, assetId),
+        ref,
+        assetId,
+        'asset',
+        (file) => migrateAssetFile(this.coreVersion, file)
+      );
+      if (asset) {
+        assets.push(asset);
       }
     }
 
@@ -726,56 +880,38 @@ export class ReleaseService extends AbstractService {
 
   /**
    * Reads entry files for a single Collection as they exist at a given git
-   * ref, filtering `collection.json` out of the list.
-   *
-   * Lossy the same way `getAssetsAtRef` is: an unreadable or invalid file
-   * reads as absent at that ref.
+   * ref, filtering `collection.json` out of the list. Reads through
+   * `fileAtRef` the way `getAssetsAtRef` does.
    */
   private async getEntriesAtRef(
     projectId: string,
     projectPath: string,
     collectionId: string,
     ref: string
-  ): Promise<EntryFile[]> {
+  ): Promise<FileAtRef<EntryFile>[]> {
     const entriesPath = this.pathTo.entries(projectId, collectionId);
     const fileNames = await this.gitService.listTreeAtCommit(
       projectPath,
       entriesPath,
       ref
     );
-    const entries: EntryFile[] = [];
+    const entries: FileAtRef<EntryFile>[] = [];
     const entryFiles = fileNames.filter(
       (f) => f.endsWith('.json') && f !== 'collection.json'
     );
 
     for (const fileName of entryFiles) {
       const entryId = fileName.replace('.json', '');
-      const entryFilePath = this.pathTo.entryFile(
-        projectId,
-        collectionId,
-        entryId
+      const entry = await this.fileAtRef(
+        projectPath,
+        this.pathTo.entryFile(projectId, collectionId, entryId),
+        ref,
+        entryId,
+        'entry',
+        (file) => migrateEntryFile(this.coreVersion, file)
       );
-
-      try {
-        const content = await this.gitService.getFileContentAtCommit(
-          projectPath,
-          entryFilePath,
-          ref
-        );
-        const parsed = entryFileSchema.safeParse(JSON.parse(content));
-        if (parsed.success) {
-          entries.push(parsed.data);
-        }
-      } catch {
-        this.logService.debug({
-          source: 'core',
-          message: `Skipping entry "${fileName}" in collection "${collectionId}" at ref "${ref}" during release diff`,
-          meta: {
-            'file.name': fileName,
-            'elek.collection.id': collectionId,
-            'elek.git.ref': ref,
-          },
-        });
+      if (entry) {
+        entries.push(entry);
       }
     }
 
@@ -783,47 +919,33 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads Collections as they exist at a given git ref, branch or commit.
-   *
-   * Lossy the same way `getAssetsAtRef` is: a folder whose `collection.json`
-   * is unreadable or fails its schema is skipped, so it reads as absent at
-   * that ref.
+   * Reads Collections as they exist at a given git ref, branch or commit,
+   * through `fileAtRef` the way `getAssetsAtRef` does.
    */
   private async getCollectionsAtRef(
     projectId: string,
     projectPath: string,
     ref: string
-  ): Promise<CollectionFile[]> {
+  ): Promise<FileAtRef<CollectionFile>[]> {
     const collectionsPath = this.pathTo.collections(projectId);
     const folderNames = await this.gitService.listTreeAtCommit(
       projectPath,
       collectionsPath,
       ref
     );
-    const collections: CollectionFile[] = [];
+    const collections: FileAtRef<CollectionFile>[] = [];
 
     for (const folderName of folderNames) {
-      const collectionFilePath = this.pathTo.collectionFile(
-        projectId,
-        folderName
+      const collection = await this.fileAtRef(
+        projectPath,
+        this.pathTo.collectionFile(projectId, folderName),
+        ref,
+        folderName,
+        'collection',
+        (file) => migrateCollectionFile(this.coreVersion, file)
       );
-
-      try {
-        const content = await this.gitService.getFileContentAtCommit(
-          projectPath,
-          collectionFilePath,
-          ref
-        );
-        const parsed = collectionFileSchema.safeParse(JSON.parse(content));
-        if (parsed.success) {
-          collections.push(parsed.data);
-        }
-      } catch {
-        this.logService.debug({
-          source: 'core',
-          message: `Skipping folder "${folderName}" at ref "${ref}" during release diff`,
-          meta: { 'file.name': folderName, 'elek.git.ref': ref },
-        });
+      if (collection) {
+        collections.push(collection);
       }
     }
 
@@ -831,46 +953,33 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Reads component files as they exist at a given git ref.
-   *
-   * Lossy the same way `getCollectionsAtRef` is: a folder whose file is
-   * unreadable or invalid reads as absent at that ref.
+   * Reads component files as they exist at a given git ref, through
+   * `fileAtRef` the way `getAssetsAtRef` does.
    */
   private async getComponentsAtRef(
     projectId: string,
     projectPath: string,
     ref: string
-  ): Promise<ComponentFile[]> {
+  ): Promise<FileAtRef<ComponentFile>[]> {
     const componentsPath = this.pathTo.components(projectId);
     const folderNames = await this.gitService.listTreeAtCommit(
       projectPath,
       componentsPath,
       ref
     );
-    const components: ComponentFile[] = [];
+    const components: FileAtRef<ComponentFile>[] = [];
 
     for (const folderName of folderNames) {
-      const componentFilePath = this.pathTo.componentFile(
-        projectId,
-        folderName
+      const component = await this.fileAtRef(
+        projectPath,
+        this.pathTo.componentFile(projectId, folderName),
+        ref,
+        folderName,
+        'component',
+        (file) => migrateComponentFile(this.coreVersion, file)
       );
-
-      try {
-        const content = await this.gitService.getFileContentAtCommit(
-          projectPath,
-          componentFilePath,
-          ref
-        );
-        const parsed = componentFileSchema.safeParse(JSON.parse(content));
-        if (parsed.success) {
-          components.push(parsed.data);
-        }
-      } catch {
-        this.logService.debug({
-          source: 'core',
-          message: `Skipping component folder "${folderName}" at ref "${ref}" during release diff`,
-          meta: { 'file.name': folderName, 'elek.git.ref': ref },
-        });
+      if (component) {
+        components.push(component);
       }
     }
 
@@ -884,8 +993,8 @@ export class ReleaseService extends AbstractService {
    * Field-level changes within matched components reuse the same rules as collection fields.
    */
   private diffComponents(
-    currentComponents: ComponentFile[],
-    releasedComponents: ComponentFile[]
+    currentComponents: FileAtRef<ComponentFile>[],
+    releasedComponents: FileAtRef<ComponentFile>[]
   ): {
     bump: SemverBump | null;
     componentChanges: ComponentChange[];
@@ -923,9 +1032,14 @@ export class ReleaseService extends AbstractService {
     }
 
     // Matched components - a renamed slug and the field definitions
-    for (const [id, currentComponent] of currentById) {
-      const releasedComponent = releasedById.get(id);
-      if (!releasedComponent) continue;
+    for (const [id, current] of currentById) {
+      const released = releasedById.get(id);
+      if (!released) continue;
+      // What changed inside an object cannot be read where either side's
+      // file fails this Core's schema, so only its presence is reported
+      if (current.file === null || released.file === null) continue;
+      const currentComponent = current.file;
+      const releasedComponent = released.file;
 
       // The generated type names, the generated client and the API path are
       // built from the slug, so a rename breaks every consumer of them
@@ -1041,8 +1155,8 @@ export class ReleaseService extends AbstractService {
    * Always collects all changes so they can be displayed to the user.
    */
   private diffCollections(
-    currentCollections: CollectionFile[],
-    releasedCollections: CollectionFile[]
+    currentCollections: FileAtRef<CollectionFile>[],
+    releasedCollections: FileAtRef<CollectionFile>[]
   ): {
     bump: SemverBump | null;
     collectionChanges: CollectionChange[];
@@ -1080,9 +1194,14 @@ export class ReleaseService extends AbstractService {
     }
 
     // Matched collections - a renamed plural slug and the field definitions
-    for (const [id, currentCollection] of currentById) {
-      const releasedCollection = releasedById.get(id);
-      if (!releasedCollection) continue;
+    for (const [id, current] of currentById) {
+      const released = releasedById.get(id);
+      if (!released) continue;
+      // What changed inside an object cannot be read where either side's
+      // file fails this Core's schema, so only its presence is reported
+      if (current.file === null || released.file === null) continue;
+      const currentCollection = current.file;
+      const releasedCollection = released.file;
 
       // The plural slug names the generated types, the generated client and
       // the API path, so a rename breaks every consumer of them. The singular
@@ -1186,8 +1305,8 @@ export class ReleaseService extends AbstractService {
    * Diffs two sets of assets and returns all changes with the computed bump level.
    */
   private diffAssets(
-    currentAssets: AssetFile[],
-    releasedAssets: AssetFile[]
+    currentAssets: FileAtRef<AssetFile>[],
+    releasedAssets: FileAtRef<AssetFile>[]
   ): {
     bump: SemverBump | null;
     assetChanges: AssetChange[];
@@ -1219,9 +1338,14 @@ export class ReleaseService extends AbstractService {
     }
 
     // Modified assets - compare properties
-    for (const [id, current] of currentById) {
-      const released = releasedById.get(id);
-      if (!released) continue;
+    for (const [id, currentAsset] of currentById) {
+      const releasedAsset = releasedById.get(id);
+      if (!releasedAsset) continue;
+      // What changed inside an object cannot be read where either side's
+      // file fails this Core's schema, so only its presence is reported
+      if (currentAsset.file === null || releasedAsset.file === null) continue;
+      const current = currentAsset.file;
+      const released = releasedAsset.file;
 
       // Binary changed (extension, mimeType, or size differ) - PATCH
       if (
@@ -1255,13 +1379,14 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * Diffs entries across all collections between current and released.
+   * Diffs entries across all collections between two refs.
    */
   private async diffEntries(
     projectId: string,
     projectPath: string,
     allCollectionIds: Set<string>,
-    releasedRef: string
+    releasedRef: string,
+    currentRef: string
   ): Promise<{
     bump: SemverBump | null;
     entryChanges: EntryChange[];
@@ -1274,7 +1399,7 @@ export class ReleaseService extends AbstractService {
         projectId,
         projectPath,
         collectionId,
-        projectBranchSchema.enum.draft
+        currentRef
       );
       const releasedEntries = await this.getEntriesAtRef(
         projectId,
@@ -1317,7 +1442,16 @@ export class ReleaseService extends AbstractService {
         const released = releasedById.get(id);
         if (!released) continue;
 
-        if (isDeepStrictEqual(current.values, released.values) === false) {
+        // An Entry's only change inside itself is that its Values moved, so
+        // where either side's file fails this Core's schema the file's own
+        // content answers it exactly rather than the parsed Values
+        const hasChanged =
+          current.file === null || released.file === null
+            ? current.content !== released.content
+            : isDeepStrictEqual(current.file.values, released.file.values) ===
+              false;
+
+        if (hasChanged) {
           entryChanges.push({
             collectionId,
             entryId: id,
@@ -1747,10 +1881,47 @@ export class ReleaseService extends AbstractService {
 }
 
 /**
+ * A versioned git tag as `baselineVersions` orders it. A preview tags a
+ * snapshot of `draft` rather than released content, so a Release is built on
+ * the full Release before it and never on a preview.
+ */
+function releaseVersionOfTag(tag: VersionedGitTag): ReleaseVersion {
+  return {
+    id: tag.id,
+    version: tag.message.version,
+    isFull: tag.message.type === 'release',
+  };
+}
+
+/**
  * The commit a Release compares against and builds on, and whether it is the
  * remote's `main` rather than the local one.
  */
 interface ReleasedSide {
   commit: string;
   isRemote: boolean;
+}
+
+/**
+ * One object's file at a git ref, as a diff between two refs reads it.
+ *
+ * The tree lists the file, so the object is there whatever its shape. `file`
+ * is null where this Core cannot read it even migrated, and `content` is
+ * what git holds, which answers whether the object changed at all.
+ */
+interface FileAtRef<T> {
+  id: string;
+  content: string;
+  file: T | null;
+}
+
+/** Every change a `ReleaseDiff` carries, without the version it belongs to. */
+interface ReleaseChanges {
+  projectChanges: ProjectChange[];
+  collectionChanges: CollectionChange[];
+  fieldChanges: FieldChange[];
+  componentChanges: ComponentChange[];
+  componentFieldChanges: ComponentFieldChange[];
+  assetChanges: AssetChange[];
+  entryChanges: EntryChange[];
 }
