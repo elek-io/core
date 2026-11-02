@@ -165,7 +165,7 @@ Two failures fail hard by decision rather than by structure:
 
 It is a field of its own rather than `Error.cause`, which was the first pick and was rejected:
 
-- `cause` already carries git's stdout and stderr, which echo the command line and can hold a remote URL with a credential, so a host drops it at a process boundary rather than forwarding it.
+- `cause` already carries git's stdout and stderr, which echo the command line and can hold a remote URL with a credential, so a host such as Desktop drops it at its process boundary rather than forwarding it, while the local API answers with its stack because nothing there leaves the computer.
 - A host that forwards the cause to a window would then have to tell structured data from git's text, and a refusal would arrive with nothing to branch on.
 
 Each value names the state Core refused for rather than the call that was refused, which is why `read_only_mode` and `provisioned_copy` are set in `assertNotReadOnly` and `assertNotProvisioned` and in the git-layer backstops alike. The states below the service layer carry theirs the same way:
