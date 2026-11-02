@@ -24,6 +24,7 @@ import core, {
   uuid,
   type ProjectSettings,
 } from './setup.js';
+import { removeTree } from './sweep.js';
 
 function uniqueTmpPath(): string {
   return Path.join(Os.tmpdir(), `elek-io-core-test-${uuid()}`);
@@ -33,11 +34,14 @@ function uniqueTmpPath(): string {
  * Returns a unique directory path under the OS temp dir and registers its
  * removal with vitest, so a failing test cannot leak it. These directories
  * live outside the data directory that globalSetup cleans up.
+ *
+ * The removal retries, because a Core or a git process that wrote here may
+ * still hold a file in it, see `removeTree`.
  */
 export function tmpDirPath(): string {
   const dir = uniqueTmpPath();
   onTestFinished(async () => {
-    await Fs.remove(dir);
+    await removeTree(dir);
   });
   return dir;
 }
@@ -64,15 +68,17 @@ export function createTmpCore(
  * step that never finished.
  *
  * `dispose()` bounds its own steps and names them, and the removal gets the
- * measured cleanup budget. Exported, and taking the removal, so a stalled
- * step can be driven without failing the test that drives it.
+ * measured cleanup budget and `removeTree`'s retries, because something can
+ * still hold a file in the directory the moment the logger closed. Exported,
+ * and taking the removal, so a stalled step can be driven without failing
+ * the test that drives it.
  *
  * @see ../../contributing/testing.md
  */
 export async function cleanUpTmpCore(
   tmpCore: ElekIoCore,
   dataDir: string,
-  remove: (path: string) => Promise<void> = Fs.remove
+  remove: (path: string) => Promise<void> = removeTree
 ): Promise<void> {
   const { stalledSteps } = await tmpCore.dispose();
   // Spelled out, because this message is read rather than branched on
