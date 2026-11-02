@@ -83,13 +83,18 @@ export function classifyLoadError(stderr: string): CoreError | null {
 const REDACTED = '[redacted]';
 
 /**
- * The userinfo of a `scheme://` address, up to the last `@` of its
- * authority. Everything before that last one is the credential or part of
- * one whichever `@` the client reads as the delimiter, and a host name
- * holds none for this to swallow. Stopping at `?` and `#` keeps an `@` in
- * a query string out of it.
+ * The userinfo of an address, up to the last `@` of its authority.
+ * Everything before that last one is the credential or part of one
+ * whichever `@` the client reads as the delimiter, and a host name holds
+ * none for this to swallow. Stopping at `?` and `#` keeps an `@` in a
+ * query string out of it, and stopping at `/` keeps it inside one
+ * authority.
  */
-const URL_CREDENTIALS = /([a-zA-Z][\w+.-]*:\/\/)[^/?#\s]*@/g;
+const URL_CREDENTIALS = /:\/\/[^/?#\s]*@/g;
+
+/** A character a scheme is written with, and the one it must hold */
+const SCHEME_CHARACTER = /[\w+.-]/;
+const SCHEME_LETTER = /[a-zA-Z]/;
 
 /**
  * Takes the credentials out of every remote address in a text, so an
@@ -102,7 +107,31 @@ const URL_CREDENTIALS = /([a-zA-Z][\w+.-]*:\/\/)[^/?#\s]*@/g;
  * @see ../../contributing/logging.md
  */
 export function redactUrlCredentials(value: string): string {
-  return value.replace(URL_CREDENTIALS, `$1${REDACTED}@`);
+  return value.replace(URL_CREDENTIALS, function (match, offset: number) {
+    return hasSchemeBefore(value, offset) ? `://${REDACTED}@` : match;
+  });
+}
+
+/**
+ * Whether a scheme ends where the `://` at `end` begins, which is a run of
+ * scheme characters holding at least one letter.
+ *
+ * Read backwards from the `://` rather than matched in front of it: a
+ * pattern that matches the scheme first retries from every position of the
+ * text, which costs a masker handed a stack or a whole file quadratic
+ * time.
+ */
+function hasSchemeBefore(value: string, end: number): boolean {
+  for (let index = end - 1; index >= 0; index--) {
+    const character = value.charAt(index);
+    if (SCHEME_LETTER.test(character)) {
+      return true;
+    }
+    if (SCHEME_CHARACTER.test(character) === false) {
+      return false;
+    }
+  }
+  return false;
 }
 
 /**

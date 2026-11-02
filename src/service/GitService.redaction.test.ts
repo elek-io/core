@@ -121,6 +121,24 @@ describe('redactUrlCredentials', function () {
     );
   });
 
+  it('leaves a separator no scheme precedes, since that is no authority', function () {
+    // Nothing a client dials, so what is in front of the `@` is no more a
+    // credential than the user of the SSH shorthand is
+    expect(redactUrlCredentials('://nils:ghp_notreal@example.com/x')).toBe(
+      '://nils:ghp_notreal@example.com/x'
+    );
+    expect(redactUrlCredentials('see "://nils@example.com/x"')).toBe(
+      'see "://nils@example.com/x"'
+    );
+    expect(redactUrlCredentials('9://nils@example.com/x')).toBe(
+      '9://nils@example.com/x'
+    );
+    // A scheme holding a digit is still a scheme
+    expect(redactUrlCredentials('h9://nils:ghp_notreal@example.com/x')).toBe(
+      'h9://[redacted]@example.com/x'
+    );
+  });
+
   it('keeps the host, the path and the text around the address', function () {
     expect(
       redactUrlCredentials(
