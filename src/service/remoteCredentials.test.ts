@@ -171,4 +171,55 @@ describe('a Git LFS upload the remote will not take', function () {
     expect(error.message).not.toContain(sentinelToken);
     expect(await closedLogsOf(core)).not.toContain(sentinelToken);
   });
+
+  it('names no address at all when the stored one cannot be read', async function () {
+    const gitHost = await setUp((request) =>
+      request.rest.startsWith('/info/lfs/') ? 404 : 200
+    );
+    const { core, projectId } = await publishedProject(gitHost, {
+      withAsset: true,
+    });
+    // Reading the remote runs git again, and a git that fails there leaves
+    // the message with no address to name
+    vi.spyOn(core.git.remotes, 'getOriginUrl').mockRejectedValueOnce(
+      new Error('fatal: no such remote')
+    );
+
+    const error = await refusalOf(
+      core.git.lfs.push(core.util.pathTo.project(projectId))
+    );
+
+    expect(error.type).toBe('PreconditionFailed');
+    expect(error.message).toContain('Git LFS upload to the remote failed');
+    expect(error.message).not.toContain(sentinelToken);
+    expect(await closedLogsOf(core)).not.toContain(sentinelToken);
+  });
+});
+
+/**
+ * The elek.io Cloud address is configuration rather than something a
+ * caller passes, and a staging setup can put a user and a password in it.
+ * `fetch` refuses such an address outright, so every call ends in the
+ * message below, which is the one that was handed the credential.
+ */
+describe('an elek.io Cloud address carrying a credential', function () {
+  it('names the address without it when elek.io Cloud cannot be reached', async function () {
+    const { core } = createTmpCore({
+      log: { level: 'debug' },
+      cloud: { url: `http://nils:${sentinelToken}@127.0.0.1:1` },
+    });
+
+    const error = await refusalOf(
+      core.cloud.account.signIn({
+        email: 'mara@example.de',
+        password: 'correct horse battery staple',
+      })
+    );
+
+    expect(error.type).toBe('PreconditionFailed');
+    expect(error.message).toContain('[redacted]@127.0.0.1:1');
+    expect(error.message).not.toContain(sentinelToken);
+    expect(error.message).not.toContain('nils');
+    expect(await closedLogsOf(core)).not.toContain(sentinelToken);
+  });
 });
