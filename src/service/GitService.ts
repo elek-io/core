@@ -18,10 +18,12 @@ import type {
 import {
   gitCommitSchema,
   gitMessageSchema,
+  isVersionedTag,
   uuidSchema,
   type ElekIoCoreOptions,
   type GitCloneOptions,
   type GitCommit,
+  type GitCommitWithRelease,
   type GitInitOptions,
   type GitLogOptions,
   type GitStatus,
@@ -42,6 +44,7 @@ import {
   ATOMIC_NOT_FAST_FORWARD,
   classifyAuthError,
   classifyLoadError,
+  firstReleaseByCommit,
   gitOutputCause,
   isMutatingGitCommand,
   parsePorcelainStatusLine,
@@ -1076,6 +1079,70 @@ export class GitService {
     );
 
     return lineObjArr.filter((obj) => this.isGitCommit(obj));
+  }
+
+  /**
+   * The given commits, each with the first Release that included it, or null
+   * while none did. Found by git's ancestry rather than by date, so a change
+   * a synchronization carried over a Release made on another computer names
+   * the next Release instead of that one. A preview Release tags a snapshot
+   * of `draft` rather than released content, so it names no change.
+   *
+   * Reads local tags and local history in one walk, so a Release made on
+   * another computer counts once something fetched.
+   *
+   * @see ../../docs/releases.md
+   */
+  public async withFirstRelease(
+    path: string,
+    commits: GitCommit[]
+  ): Promise<GitCommitWithRelease[]> {
+    if (commits.length === 0) {
+      return [];
+    }
+
+    const releaseTags = (await this.tags.list({ path })).list
+      .filter(isVersionedTag)
+      .filter((tag) => tag.message.type === 'release');
+
+    if (releaseTags.length === 0) {
+      return commits.map((commit) => ({ ...commit, release: null }));
+    }
+
+    // Newest first, so the oldest tag wins a commit two tags point at
+    const tagByCommitHash = new Map(
+      releaseTags.map((tag) => [tag.commitHash, tag])
+    );
+    const walk = await this.git(path, [
+      'rev-list',
+      '--all',
+      '--parents',
+      '--topo-order',
+    ]);
+    const releaseByCommit = firstReleaseByCommit(
+      walk.stdout,
+      new Set(tagByCommitHash.keys())
+    );
+
+    return commits.map((commit) => {
+      const releaseCommit = releaseByCommit.get(commit.hash);
+      const tag =
+        releaseCommit === undefined
+          ? undefined
+          : tagByCommitHash.get(releaseCommit);
+
+      return {
+        ...commit,
+        release:
+          tag === undefined
+            ? null
+            : {
+                tagId: tag.id,
+                version: tag.message.version,
+                datetime: tag.datetime,
+              },
+      };
+    });
   }
 
   /**

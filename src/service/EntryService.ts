@@ -23,7 +23,7 @@ import {
   type ReadEntryProps,
   type UpdateEntryProps,
   type EntryHistoryProps,
-  type GitCommit,
+  type GitCommitWithRelease,
   type FieldDefinition,
   type ComponentResolver,
   type Value,
@@ -240,19 +240,28 @@ export class EntryService
 
   /**
    * The git log scoped to that Entry's file, newest commit first, including
-   * the commit that deleted the Entry.
+   * the commit that deleted the Entry and the commits of a Collection update
+   * that rewrote it.
+   *
+   * Each commit names in `release` the first Release that included it, found
+   * by git's ancestry rather than by date, and null while no Release did.
    *
    * An id that never existed returns an empty array rather than throwing.
+   *
+   * @see ../../docs/releases.md
    */
-  public history(props: EntryHistoryProps): Promise<GitCommit[]> {
+  public history(props: EntryHistoryProps): Promise<GitCommitWithRelease[]> {
     return this.validated('history', entryHistorySchema, props, async () => {
-      return this.gitService.log(this.pathTo.project(props.projectId), {
+      const projectPath = this.pathTo.project(props.projectId);
+      const commits = await this.gitService.log(projectPath, {
         filePath: this.pathTo.entryFile(
           props.projectId,
           props.collectionId,
           props.id
         ),
       });
+
+      return this.gitService.withFirstRelease(projectPath, commits);
     });
   }
 

@@ -1,8 +1,8 @@
 # Releases against a remote
 
-Why a clone lands on `draft`, which `main` a Release compares against, why it pushes atomically, and what the first `synchronize()` sends to a new remote. The consumer side is in [`../docs/releases.md`](../docs/releases.md#what-a-release-compares-against) and [`../docs/git-and-sync.md`](../docs/git-and-sync.md#the-first-push).
+Why a clone lands on `draft`, which `main` a Release compares against, why it pushes atomically, what the first `synchronize()` sends to a new remote, and how a change finds the Release that first included it. The consumer side is in [`../docs/releases.md`](../docs/releases.md#what-a-release-compares-against) and [`../docs/git-and-sync.md`](../docs/git-and-sync.md#the-first-push).
 
-Read it before changing `clone()` or `synchronize()` in [`ProjectService`](../src/service/ProjectService.ts), or the remote checks and push in [`ReleaseService`](../src/service/ReleaseService.ts).
+Read it before changing `clone()` or `synchronize()` in [`ProjectService`](../src/service/ProjectService.ts), or the remote checks, the push or `withFirstRelease()` in [`ReleaseService`](../src/service/ReleaseService.ts) and [`GitService`](../src/service/GitService.ts).
 
 ## The rule
 
@@ -76,6 +76,34 @@ Core never makes one. Following a git host's instructions for an existing reposi
 That needs the local `main` to contain the remote's. It is checked up front, so a `main` pushed from elsewhere is refused with a typed error rather than retried five times as a non-fast-forward.
 
 Refusing the remote was the alternative, and it was rejected. `clone()` refuses such a remote, and the only other call that repairs it is a Release, which needs a change to release. Pushing `draft` alone was rejected too, because it leaves earlier Release tags stranded on a working copy whose `main` is ahead of the remote's.
+
+## The Release of a change
+
+A Release commits `project.json` alone and tags that commit, so no commit of an Entry, an Asset or a Collection ever carries a Release tag. `GitService.withFirstRelease()` answers which Release first included a commit from git's ancestry: the oldest release tag whose commit descends from it.
+
+Two decisions sit in that sentence:
+
+- Ancestry rather than the dates of the two commits, because the two disagree exactly where it matters. A working copy that commits a change and synchronizes after another one released lands that change on top of the Release it is older than, and it belongs to the next Release. `GitCommit` carries no parents, so a consumer cannot tell the two apart itself.
+- Full Releases alone name a change. A preview tag sits on `draft` and promotes nothing into `main`, so a change only a preview holds is unreleased, which is what `core.releases.create()` makes it.
+
+Three git reads per history, none of them per commit or per Release:
+
+| Read | Answers |
+| --- | --- |
+| `log -- <file>` | the commits of that file, as before |
+| `tag --list` | every Release tag with its version and the commit it points at, which is why `GitTag` carries `commitHash` |
+| `rev-list --all --parents --topo-order` | the whole local graph in one walk |
+
+`firstReleaseByCommit()` in [`../src/util/git.ts`](../src/util/git.ts) then marks from each release commit, oldest first in the walk's reverse order, and stops at a commit an earlier Release already marked. Every commit is visited once, so the pass is linear in the walk.
+
+Measured on Linux, one run per size. On a Project of 153 commits with 30 Releases, an Entry holding 121 of them, the log alone took 17ms and the log with its Releases 34ms. At twice that size, 303 commits and 60 Releases, 28ms against 45ms. The log grows with the Project and the two added reads do not, so they cost about 17ms whatever it holds.
+
+Rejected alternatives:
+
+- `git tag --contains <commit>` or `git describe --contains` per commit. One git process per commit of the Entry, and `describe` picks the nearest tag by its own weighting rather than the oldest by ancestry.
+- One `log` per Release range. One git process per Release, which is the cost that grows fastest on a Project that releases often.
+- Sorting the release tags by date and taking the first after the change. It needs no walk and answers wrongly for a change a synchronization carried over a Release, which is the case the Entry's history is read for.
+- Carrying `tagId` alone and letting the caller join it against `core.releases.list()`. It saves the `tag --list` read, about 9ms, and every consumer that wants to show a version pays it again.
 
 ## Invariants
 

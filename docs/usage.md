@@ -357,6 +357,8 @@ const past = await core.entries.read({
 });
 ```
 
+Each commit an Entry's history returns also names the first Release that included that change in `release`, or null while none does, see [`releases.md`](./releases.md#the-release-a-change-was-first-included-in).
+
 ## Error handling
 
 Services throw `CoreError` (exported from `@elek-io/core`) with a `type` and `statusCode`. Catch it to branch on failure modes.

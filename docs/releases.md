@@ -218,6 +218,29 @@ Each `GitTag` carries an `id`, an `author`, a `datetime`, the `commitHash` it po
 
 `core.git.tags` also exposes `read({ ... })` and `count({ ... })`.
 
+## The Release a change was first included in
+
+Every commit an Entry's history returns names the first Release that included it, so an app can say which changes are published and in which Release:
+
+```typescript
+const history = await core.entries.history({
+  projectId: project.id,
+  collectionId: collection.id,
+  id: entry.id,
+});
+// history[0].release -> null, no Release holds that change yet
+// history[1].release -> { tagId: '...', version: '1.1.0', datetime: '...' }
+```
+
+A Release commits `project.json` alone and tags that commit, so the Release of a change is not on the change's own commit. Core answers it from git's ancestry:
+
+- The Release named is the oldest one whose commit descends from the change. Sorting by date would answer differently, because a change another working copy made before a Release reaches this one only after it, and still belongs to the next Release.
+- `release` is null while no Release holds the change, which is every change made since the last one.
+- A preview Release tags a snapshot of `draft` rather than released content, so it never names a change. Full Releases alone do.
+- `tagId` and `version` address the same Release `core.releases.list()` returns, so the two join.
+- Core reads local tags and local history. A Release another working copy made counts once something fetched, such as `synchronize()`.
+- A Collection update that rewrote the Entry is one of its changes and names a Release like any other, see [`schema-changes.md`](./schema-changes.md).
+
 ## Versioning
 
 The Project's `version` field follows [Semantic Versioning](https://semver.org/) and is the value a release writes. `main` holds the released version. `draft` tracks it after a full release and carries pre-release versions (`-preview.N`) in between.
