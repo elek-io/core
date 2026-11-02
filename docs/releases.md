@@ -272,18 +272,18 @@ const changes = await core.releases.changes({
 // changes.entryChanges   -> every Entry it added, deleted or modified
 ```
 
-| The Release asked for     | Compares against                         |
-| ------------------------- | ---------------------------------------- |
-| a Release                 | the full Release it built on             |
-| a Project's first Release | the commit `core.projects.create()` made |
-| a preview Release         | the last full Release before it          |
+| The Release asked for | Compares against |
+| --- | --- |
+| a Release | the full Release it built on |
+| a preview Release | the last full Release before it |
+| either, with no full Release before it | the commit `core.projects.create()` made |
 
 The Release it was built on is the newest full Release whose version is below the version it targets, so a preview and the Release it targets answer the same side. Only the Release asked for is worked out, and only the two commits it compares are read.
 
 The call reads local tags and local commits, so it holds on a clone and on a working copy a synchronization brought another computer's Release into. It throws:
 
 - `NotFound` for a tag that is no Release of the Project.
-- `PreconditionFailed` when the side it compares against is not in this copy. A provisioned copy holds each Release tag without the history between them, so a Project's first Release cannot be read there. Clone the Project to read it.
+- `PreconditionFailed` when the side it compares against is not in this copy. A provisioned copy holds each Release tag without the history between them, so a Release with no full Release before it cannot be read there. Clone the Project to read it.
 
 ### A Release an older Core made
 

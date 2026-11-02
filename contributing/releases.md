@@ -125,7 +125,7 @@ Rejected alternatives:
 
 A shallow repository answers `rev-list --max-parents=0` with its own shallow boundary, and holds another Release's commit without the history to it. So `changes()` refuses in two shapes: the side resolving to the Release's own commit, and a commit whose object is missing, which `rev-parse <hash>^{commit}` is what tells apart, a bare `rev-parse <hash>` answering any hash.
 
-A provisioned copy is the case that reaches this. Its tags all arrive with their trees, so every Release that has one before it reads, and only the first Release of a Project is refused.
+A provisioned copy is the case that reaches this. Its tags all arrive with their trees, so every Release with a full Release before it reads, and only one with none is refused. Measured by provisioning the `release` and `preview` channels and an exact version of a Project of three Releases and a preview.
 
 ### An object whose file this Core cannot read
 

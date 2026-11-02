@@ -376,6 +376,42 @@ describe('Reading what each Release changed', function () {
     ]);
   });
 
+  it('should report a Collection whose file this Core cannot read as present, without what changed inside it', async function () {
+    const project = await createProject('Older Collection');
+    onTestFinished(project.destroy);
+    const collection = await createTextCollection(core, project.id);
+    await core.releases.create({ projectId: project.id });
+
+    const projectPath = core.util.pathTo.project(project.id);
+    const collectionFilePath = core.util.pathTo.collectionFile(
+      project.id,
+      collection.id
+    );
+    await Fs.writeJson(collectionFilePath, {
+      ...collection,
+      coreVersion: '0.1.0',
+      fieldDefinitions: { title: { valueType: 'string' } },
+    });
+    await core.git.add(projectPath, [collectionFilePath]);
+    await core.git.commit(projectPath, {
+      method: 'update',
+      reference: { objectType: 'collection', id: collection.id },
+    });
+    const second = await core.releases.create({ projectId: project.id });
+
+    // Which part of a Collection changed cannot be read, so the Release
+    // reports no change inside it, and never that it was deleted
+    const changes = await core.releases.changes({
+      projectId: project.id,
+      tagId: (await releaseOf(core, project.id, second.version)).tagId,
+    });
+
+    expect(second.version).toEqual('0.1.1');
+    expect(changes.collectionChanges).toEqual([]);
+    expect(changes.fieldChanges).toEqual([]);
+    expect(changes.bump).toEqual('patch');
+  });
+
   it('should hold on a clone and for a Release a synchronization brought in', async function () {
     const remotePath = await createRemote();
     const creator = await cloneOnOwnCore(remotePath);
