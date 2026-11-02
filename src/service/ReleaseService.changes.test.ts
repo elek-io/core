@@ -4,6 +4,8 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type ElekIoCore from '../index.node.js';
 import core, { testUserProps, uuid, type Value } from '../test/setup.js';
 import {
+  createAsset,
+  createComponent,
   createLocalRemoteRepository,
   createProject,
   createTmpCore,
@@ -409,6 +411,53 @@ describe('Reading what each Release changed', function () {
     expect(second.version).toEqual('0.1.1');
     expect(changes.collectionChanges).toEqual([]);
     expect(changes.fieldChanges).toEqual([]);
+    expect(changes.bump).toEqual('patch');
+  });
+
+  it('should report an Asset and a Component whose files this Core cannot read as present, without what changed inside them', async function () {
+    const project = await createProject('Older Asset and Component');
+    onTestFinished(project.destroy);
+    const component = await createComponent(project.id);
+    const asset = await createAsset(project.id);
+    await core.releases.create({ projectId: project.id });
+
+    const projectPath = core.util.pathTo.project(project.id);
+    const componentFilePath = core.util.pathTo.componentFile(
+      project.id,
+      component.id
+    );
+    const assetFilePath = core.util.pathTo.assetFile(project.id, asset.id);
+
+    // Both files as a Core that wrote another shape left them: the loose
+    // migration schema takes them and this Core's own schema does not
+    await Fs.writeJson(componentFilePath, {
+      ...(await Fs.readJson(componentFilePath)),
+      coreVersion: '0.1.0',
+      fieldDefinitions: { title: { valueType: 'string' } },
+    });
+    await Fs.writeJson(assetFilePath, {
+      ...(await Fs.readJson(assetFilePath)),
+      coreVersion: '0.1.0',
+      size: 'a few bytes',
+    });
+    await core.git.add(projectPath, [componentFilePath, assetFilePath]);
+    await core.git.commit(projectPath, {
+      method: 'update',
+      reference: { objectType: 'project', id: project.id },
+    });
+    const second = await core.releases.create({ projectId: project.id });
+
+    // Which part of an Asset or a Component changed cannot be read, so the
+    // Release reports no change inside either, and never that it was deleted
+    const changes = await core.releases.changes({
+      projectId: project.id,
+      tagId: (await releaseOf(core, project.id, second.version)).tagId,
+    });
+
+    expect(second.version).toEqual('0.1.1');
+    expect(changes.componentChanges).toEqual([]);
+    expect(changes.componentFieldChanges).toEqual([]);
+    expect(changes.assetChanges).toEqual([]);
     expect(changes.bump).toEqual('patch');
   });
 
