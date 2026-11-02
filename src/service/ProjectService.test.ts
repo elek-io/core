@@ -1,6 +1,6 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, assert, describe, expect, it } from 'vitest';
 import core, { projectFileSchema, type Project } from '../test/setup.js';
 import {
   createAsset,
@@ -9,6 +9,7 @@ import {
   createLocalRemoteRepository,
   createProject,
   ensureCleanGitStatus,
+  expectTimestampBetween,
 } from '../test/util.js';
 
 describe('ProjectService', function () {
@@ -24,7 +25,9 @@ describe('ProjectService', function () {
   it('should be able to create a new Project locally', async function ({
     task,
   }) {
+    const before = Date.now();
     project = await createProject('project #1');
+    const after = Date.now();
 
     expect(project.name).toEqual('project #1');
     expect(project.settings, 'settings to default to').to.deep.equal({
@@ -33,9 +36,11 @@ describe('ProjectService', function () {
         default: 'en',
       },
     });
-    expect(
-      Math.floor(new Date(project.created).getTime() / 1000)
-    ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
+    expectTimestampBetween(
+      project.created,
+      { before, after },
+      "the Project's created"
+    );
     expect(project.updated).toBeNull();
     expect(await Fs.pathExists(core.util.pathTo.project(project.id))).toBe(
       true
@@ -68,14 +73,18 @@ describe('ProjectService', function () {
 
   it('should be able to update a Project', async function ({ task }) {
     project.name = 'Project #1';
+    const before = Date.now();
     await core.projects.update(project);
+    const after = Date.now();
     const updatedProject = await core.projects.read({ id: project.id });
 
     expect(updatedProject.name).toEqual('Project #1');
-    expect(
-      // @ts-expect-error updated is not allowed to be null
-      Math.floor(new Date(updatedProject.updated).getTime() / 1000)
-    ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
+    assert(updatedProject.updated !== null);
+    expectTimestampBetween(
+      updatedProject.updated,
+      { before, after },
+      "the Project's updated"
+    );
     const { history, fullHistory } = await core.projects.history({
       id: project.id,
     });

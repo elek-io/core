@@ -7,7 +7,7 @@ import Os from 'node:os';
 import Path from 'node:path';
 import ts from 'typescript';
 import type { RunnerTestCase } from 'vitest';
-import { expect, onTestFinished } from 'vitest';
+import { expect, onTestFinished, vi } from 'vitest';
 import ElekIoCore, { disposeStepNames } from '../index.node.js';
 import { CoreError } from '../util/shared.js';
 import { finishesWithin } from '../util/teardown.js';
@@ -214,6 +214,45 @@ export async function expectCoreError(
   expect(error).toBeInstanceOf(CoreError);
   expect(error instanceof CoreError && error.type).toEqual(type);
   expect(error instanceof CoreError && error.message).toContain(text);
+}
+
+/**
+ * Asserts a timestamp Core took from the clock lies between two readings of
+ * the same clock, taken around the call that wrote it. The window holds
+ * however long the machine stalls, which a tolerance in seconds does not.
+ *
+ * @see ../../contributing/testing.md
+ */
+export function expectTimestampBetween(
+  timestamp: string,
+  readings: { before: number; after: number },
+  what: string
+): void {
+  const at = Date.parse(timestamp);
+  expect(at, `${what} ("${timestamp}") to be a date`).not.toBeNaN();
+  expect(
+    at,
+    `${what} to be at or after the reading before the call`
+  ).toBeGreaterThanOrEqual(readings.before);
+  expect(
+    at,
+    `${what} to be at or before the reading after the call`
+  ).toBeLessThanOrEqual(readings.after);
+}
+
+/**
+ * Pins `Date.now()` at the moment of the call for the rest of the test and
+ * restores it afterwards, so a number Core builds from two readings of the
+ * clock is the same however long the machine stalls between them.
+ *
+ * @see ../../contributing/testing.md
+ */
+export function freezeClock(): void {
+  const at = Date.now();
+  const frozen = vi.spyOn(Date, 'now').mockReturnValue(at);
+  onTestFinished(function () {
+    frozen.mockRestore();
+  });
 }
 
 /**
