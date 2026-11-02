@@ -6,7 +6,7 @@ With a remote, a Release publishes `main`, `draft` and its tag together, so the 
 
 For the branch model these build on, see [`git-and-sync.md`](./git-and-sync.md).
 
-## The three operations
+## The three operations that make a Release
 
 | Method | What it does | Touches `main`? |
 | --- | --- | --- |
@@ -15,6 +15,8 @@ For the branch model these build on, see [`git-and-sync.md`](./git-and-sync.md).
 | `createPreview()` | Fetches `origin` if set, tags a pre-release snapshot on `draft` (for example `1.1.0-preview.3`) without promoting, pushes `draft` and the tag in one atomic push. | No |
 
 All three take `{ projectId }`. `prepare()` returns a `ReleaseDiff`. `create()` and `createPreview()` return a `ReleaseResult` (`{ version, diff }`).
+
+Two more read what was released: [`list()`](#reading-releases) and [`changes()`](#what-one-release-changed).
 
 ## What a Release compares against
 
