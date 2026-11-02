@@ -270,4 +270,61 @@ describe("An Entry's history and its Releases", function () {
     expect(history[0]?.release?.version).not.toEqual(elsewhere.version);
     expect(history[1]?.release?.version).toEqual(elsewhere.version);
   });
+
+  it('should name a Release made elsewhere that was fetched but not merged', async function () {
+    const remotePath = await createRemote();
+    const working = await core.projects.clone({ url: remotePath });
+    onTestFinished(async () => {
+      await core.projects.delete({ id: working.id, force: true });
+    });
+    const collection = await createTextCollection(core, working.id);
+    const entry = await core.entries.create({
+      projectId: working.id,
+      collectionId: collection.id,
+      values: titleValues('First'),
+    });
+    await core.projects.synchronize({ id: working.id });
+
+    const other = await cloneOnOwnCore(remotePath);
+    await other.core.projects.update({
+      ...(await other.core.projects.read({ id: other.project.id })),
+      name: 'Released elsewhere',
+    });
+    const elsewhere = await other.core.releases.create({
+      projectId: other.project.id,
+    });
+
+    const unknown = await core.entries.history({
+      projectId: working.id,
+      collectionId: collection.id,
+      id: entry.id,
+    });
+
+    expect(unknown[0]?.release).toBeNull();
+
+    // Brings the Release's commit and its tag into this copy without merging
+    // them, so a remote-tracking ref and the tag are all that hold them
+    await core.projects.getChanges({ id: working.id });
+
+    const projectPath = core.util.pathTo.project(working.id);
+    const tags = await core.git.tags.list({ path: projectPath });
+    const releaseTag = tags.list.find(
+      (tag) =>
+        tag.message.type === 'release' &&
+        tag.message.version === elsewhere.version
+    );
+    const branch = await core.git.log(projectPath);
+    const history = await core.entries.history({
+      projectId: working.id,
+      collectionId: collection.id,
+      id: entry.id,
+    });
+
+    // The Release is in this copy, yet the current branch has no commit of it
+    expect(releaseTag?.commitHash).toBeTypeOf('string');
+    expect(branch.map((commit) => commit.hash)).not.toContain(
+      releaseTag?.commitHash
+    );
+    expect(history[0]?.release?.version).toEqual(elsewhere.version);
+  });
 });
