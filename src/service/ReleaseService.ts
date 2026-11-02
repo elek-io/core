@@ -129,8 +129,8 @@ export class ReleaseService extends AbstractService {
   /**
    * What one Release or preview Release changed, in the shape `prepare()`
    * reports, worked out for that Release alone. A Release compares against
-   * the full Release it built on, a first Release against the Project's
-   * creation and a preview against the last full Release before it.
+   * the full Release it built on, a preview against the last full Release
+   * before it, and one with neither against the Project's creation.
    *
    * Throws `NotFound` for a tag that is no Release of this Project, and
    * `PreconditionFailed` when the side it compares against is not in this
