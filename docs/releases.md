@@ -210,7 +210,7 @@ const { list } = await core.git.tags.list({
 });
 ```
 
-Each `GitTag` carries an `id`, an `author`, a `datetime`, and a discriminated `message`:
+Each `GitTag` carries an `id`, an `author`, a `datetime`, the `commitHash` it points at, and a discriminated `message`:
 
 - `{ type: 'release', version }`
 - `{ type: 'preview', version }`

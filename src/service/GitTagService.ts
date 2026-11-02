@@ -168,6 +168,7 @@ export class GitTagService
         '%(*authorname)',
         '%(*authoremail)',
         '%(*authordate:iso-strict)',
+        '%(*objectname)',
       ].join('|');
       args = [...args, '--sort=-*authordate', `--format=${format}`];
 
@@ -201,6 +202,7 @@ export class GitTagService
             email: lineArray[5],
           },
           datetime: datetime(lineArray[6]),
+          commitHash: lineArray[7]?.trim(),
         };
       });
 
