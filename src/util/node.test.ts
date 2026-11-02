@@ -564,6 +564,15 @@ describe('resolveCloudGitUrl', () => {
       resolveCloudGitUrl(undefined, 'https://api.elek.io')
     ).toThrowError(/ELEK_IO_CLOUD_GIT_URL/);
   });
+
+  it('repeats a refused pattern without its credentials', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_GIT_URL', 'ftp://nils:ghp_notreal@git.elek.io');
+    expect(() =>
+      resolveCloudGitUrl(undefined, 'https://api.elek.io')
+    ).toThrowError(
+      'ELEK_IO_CLOUD_GIT_URL must be an http or https URL, got "ftp://[redacted]@git.elek.io"'
+    );
+  });
 });
 
 describe('resolveRemoteAccessToken', () => {

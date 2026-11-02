@@ -141,7 +141,7 @@ export function resolveCloudGitUrl(
     elekIoCoreOptionsSchema.shape.cloud.shape.gitUrl.safeParse(candidate);
   if (!parsed.success || parsed.data === null) {
     throw CoreError.badRequest(
-      `ELEK_IO_CLOUD_GIT_URL must be an http or https URL, got "${candidate}"`
+      `ELEK_IO_CLOUD_GIT_URL must be an http or https URL, got "${redactUrlCredentials(candidate)}"`
     );
   }
   return parsed.data.replace(/\/+$/, '');
