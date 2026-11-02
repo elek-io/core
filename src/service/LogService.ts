@@ -591,9 +591,15 @@ export class LogService {
    * `encodeURI` leaves the separators and the Windows drive letter alone
    * and encodes a space, an umlaut and the rest, which is what a URL
    * carries. The two characters it keeps and a URL does not are added.
+   *
+   * Half a character, which Windows hands through from `USERPROFILE`,
+   * becomes the replacement character first, which is what a URL spells
+   * it as and what `encodeURI` alone throws over.
    */
   private static percentEncode(path: string): string {
-    return encodeURI(path).replaceAll('#', '%23').replaceAll('?', '%3F');
+    return encodeURI(path.toWellFormed())
+      .replaceAll('#', '%23')
+      .replaceAll('?', '%3F');
   }
 
   private static escapeRegExp(value: string): string {

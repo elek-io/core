@@ -435,6 +435,27 @@ describe('the scrubbers a tail runs, for the records Core did not author', funct
     ).toBe('at render (file://~/app/index.js:1:1)');
   });
 
+  it('matches a home directory holding half a character, rather than throwing', function () {
+    // Windows hands an unpaired surrogate through from USERPROFILE, which
+    // a `file://` address spells as the replacement character
+    const homedir = `C:\\Users\\J${String.fromCharCode(0xd800)}rg`;
+
+    expect(
+      scrubbed({
+        message: `Created file "${homedir}\\elek.io\\a3f.json"`,
+        homedir,
+        platform: 'win32',
+      }).message
+    ).toBe('Created file "~\\elek.io\\a3f.json"');
+    expect(
+      scrubbed({
+        message: 'at render (file:///C:/Users/J%EF%BF%BDrg/app/index.js:1:1)',
+        homedir,
+        platform: 'win32',
+      }).message
+    ).toBe('at render (file:///~/app/index.js:1:1)');
+  });
+
   it('takes the git signature off a command line an older Core wrote', function () {
     expect(
       scrubbed({
