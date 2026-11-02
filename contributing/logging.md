@@ -69,11 +69,14 @@ Core hands git the User's identity through the environment of each command, see 
 
 ### One helper decides what a credential in an address is
 
-A remote address can carry a user and a password, which git accepts and [`git-credentials.md`](./git-credentials.md) rejects as a way to authenticate. [`redactUrlCredentials`](../src/util/git.ts) is the one place that decides it, for [`redactGitArgs`](#redacting-a-command-line), for the masker a tail runs and for every message that names a remote address, so none of them can disagree.
+A remote address can carry a user and a password, which git accepts and [`git-credentials.md`](./git-credentials.md) rejects as a way to authenticate. The elek.io Cloud address an option or `ELEK_IO_CLOUD_URL` configures can carry them too.
+
+[`redactUrlCredentials`](../src/util/git.ts) is the one place that decides what counts as one, for [`redactGitArgs`](#redacting-a-command-line), for the masker a tail runs and for every message naming either address, so none of them can disagree.
 
 - It takes the userinfo of a `scheme://` address up to the **last** `@` of its authority. Everything before that one is the credential or part of one whichever `@` the client reads as the delimiter, so a password holding an `@` goes whole rather than in half, and a host name holds none for this to swallow.
 - It stops at `?` and `#`, so an `@` in a query string is not mistaken for one.
 - The SSH shorthand `git@host:org/repo` has no scheme, so its user stays. There the user is part of the address.
+- It finds the `://` first and reads the scheme backwards from it. Matching the scheme first retries from every position of the text, which is quadratic on the long strings a masker is handed, a stack or a whole log line.
 - The host and the path stay, which is what makes the line worth reading. Where a message has nothing to add beyond the address the caller just passed, it leaves the address out instead, per the call site rule below.
 
 ### An error message has two audiences
@@ -343,7 +346,7 @@ Plant a string nothing else in the suite produces, exercise the path, and assert
 - [`logPrivacy.test.ts`](../src/service/logPrivacy.test.ts) does this for names.
 - [`ProjectService.upgradeLogging.test.ts`](../src/service/ProjectService.upgradeLogging.test.ts) does it for authored Entry content.
 - [`GitService.redaction.test.ts`](../src/service/GitService.redaction.test.ts) does it for the git signature.
-- [`remoteCredentials.test.ts`](../src/service/remoteCredentials.test.ts) does it for a token in a remote address, against a git host over HTTP, which is the one way an address Core really clones from can carry one.
+- [`remoteCredentials.test.ts`](../src/service/remoteCredentials.test.ts) does it for a token in a remote address, against a git host over HTTP, which is the one way an address Core really clones from can carry one. The elek.io Cloud address is in there too, which `fetch` refuses outright, so the reachability message is the one that is handed it.
 
 [`logSweep.test.ts`](../src/service/logSweep.test.ts) is the broad one. It runs create, update, delete, release, upgrade and synchronize with a sentinel in every place a User types one, the git identity included, then checks the log files for all of them at once. The attribute vocabulary check rides along, since both questions want the same setup.
 

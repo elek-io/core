@@ -134,12 +134,14 @@ So `info`, the default, is enough to reconstruct what was done and in what order
 
 A log file holds ids, paths, counts and error messages. It does hold the absolute data directory, which includes the account name, because it is written for the machine it is on. Anything that ships a log file elsewhere is responsible for scrubbing that prefix.
 
-Neither a log line nor the message of a `CoreError` holds:
+A log line never holds:
 
 - the content of an Entry.
 - the name of a Project, Collection or Asset.
 - the git signature of the User.
-- the user and password of a remote address. Where Core names an address it writes `https://[redacted]@host/org/repo.git`, and where it has nothing to add it leaves the address out.
+- the user and the password of an address, a Project's git remote and elek.io Cloud alike.
+
+The message of a `CoreError` carries no user and no password either. Where Core names an address it writes `https://[redacted]@host/org/repo.git`, and where it has nothing to add it leaves the address out. It does name the slug you addressed an object by, which a log line has no use for: a `NotFound` is how you learn which slug did not resolve.
 
 `resource['service.name']` is the `source` the record was logged with, so your own records stay distinguishable from Core's in the same file. `service.version` is Core's version on Core's records, and yours on yours when you set the `log.hostVersion` option above. Set it: a log file someone sends you has no other way to say which build wrote it.
 
