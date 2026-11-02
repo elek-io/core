@@ -195,12 +195,26 @@ Recovery itself is best effort: a step that fails is logged at `warn` and the er
 
 ## Reading releases
 
-`core.releases.list()` returns the Releases and preview Releases of a Project, newest first. Each item carries the `version`, its `type` (`release` or `preview`), the `datetime`, and the `tagId` addressing it in git.
+`core.releases.list()` returns the Releases and preview Releases of a Project, newest first. Each item carries the `version`, its `type` (`release` or `preview`), the `datetime`, the `author` who made it, the `bump` it carried, and the `tagId` addressing it in git.
 
 ```typescript
 const { list, total } = await core.releases.list({ projectId: project.id });
-// list[0] -> { version: '1.1.0', type: 'release', datetime: '...', tagId: '...' }
+// list[0] -> {
+//   version: '1.1.0',
+//   type: 'release',
+//   datetime: '...',
+//   tagId: '...',
+//   author: { name: 'Ada Lovelace', email: 'ada@example.com' },
+//   bump: 'minor',
+// }
 ```
+
+Two of those read off the git tag rather than out of the Project:
+
+- `author` is who ran the Release, taken from the commit its tag points at.
+- `bump` is what this Release moved in the version against the full Release before it, and for a Project's first Release against the version `core.projects.create()` writes. A preview carries the bump of the Release it targets, so `1.1.0-preview.3` after `1.0.0` is `minor`. It is `null` only where two tags target one version, which Core's own Releases never do.
+
+The call reads the Project's git tags and nothing else, so listing costs the same whatever the Releases changed. What one of them changed is [`changes()`](#what-one-release-changed).
 
 Underneath, Releases, previews and Core upgrades are git tags, read through `core.git.tags`:
 
@@ -240,6 +254,44 @@ A Release commits `project.json` alone and tags that commit, so the Release of a
 - `tagId` and `version` address the same Release `core.releases.list()` returns, so the two join.
 - Core reads local tags and local history. A Release another working copy made counts once something fetched, such as `synchronize()`.
 - A Collection update that rewrote the Entry is one of its changes and names a Release like any other, see [`schema-changes.md`](./schema-changes.md).
+
+## What one Release changed
+
+`core.releases.changes()` reports what one Release or preview Release changed, in the `ReleaseDiff` shape `prepare()` returns, so one piece of code renders a past Release and the next one:
+
+```typescript
+const { list } = await core.releases.list({ projectId: project.id });
+const changes = await core.releases.changes({
+  projectId: project.id,
+  tagId: list[0].tagId,
+});
+// changes.currentVersion -> '1.0.0', the version it was built on
+// changes.nextVersion    -> '1.1.0', its own version
+// changes.bump           -> 'minor', the bump list() gives for it
+// changes.project        -> the Project as that Release holds it
+// changes.entryChanges   -> every Entry it added, deleted or modified
+```
+
+| The Release asked for     | Compares against                         |
+| ------------------------- | ---------------------------------------- |
+| a Release                 | the full Release it built on             |
+| a Project's first Release | the commit `core.projects.create()` made |
+| a preview Release         | the last full Release before it          |
+
+The Release it was built on is the newest full Release whose version is below the version it targets, so a preview and the Release it targets answer the same side. Only the Release asked for is worked out, and only the two commits it compares are read.
+
+The call reads local tags and local commits, so it holds on a clone and on a working copy a synchronization brought another computer's Release into. It throws:
+
+- `NotFound` for a tag that is no Release of the Project.
+- `PreconditionFailed` when the side it compares against is not in this copy. A provisioned copy holds each Release tag without the history between them, so a Project's first Release cannot be read there. Clone the Project to read it.
+
+### A Release an older Core made
+
+A Release keeps the file shapes the Core that made it wrote. They are migrated in memory before they are read, as in any read from history, and an object whose file this Core cannot read even then is still reported from the Release's own tree:
+
+- An object the tree holds is present, so none is reported as added or deleted because its file's shape moved since.
+- An Entry carries one change inside itself, that its Values moved, and the file's content answers that exactly.
+- For a Collection, a Component or an Asset, which part changed cannot be read, so such a Release reports that the object is there and no change inside it.
 
 ## Versioning
 

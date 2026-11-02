@@ -105,6 +105,39 @@ Rejected alternatives:
 - Sorting the release tags by date and taking the first after the change. It needs no walk and answers wrongly for a change a synchronization carried over a Release, which is the case the Entry's history is read for.
 - Carrying `tagId` alone and letting the caller join it against `core.releases.list()`. It saves the `tag --list` read, about 9ms, and every consumer that wants to show a version pays it again.
 
+## What a Release changed
+
+`ReleaseService.changes()` compares the Release's commit with the commit of the full Release it was built on, and `changesBetween()` is the same pass `prepare()` runs between `draft` and the released `main`.
+
+### Which side a Release is compared with
+
+The side is picked by version: the newest full Release whose version is below the one the asked tag targets, and the root commit for a Project's first Release.
+
+`baselineVersions()` in [`../src/util/release.ts`](../src/util/release.ts) holds that rule for both callers, so the bump `list()` reads off the tags and the side `changes()` compares with can never disagree. It answers a whole list in one walk over the Releases in version order, rather than searching the list again for each of them.
+
+Rejected alternatives:
+
+- Ancestry, through `merge-base --is-ancestor`. Measured on a shallow clone that fetched its tags with `--depth 1`, which is what `provision()` makes: the earlier Release's commit is there with its whole tree, and `--is-ancestor` against the later one answers false, because the commits between them are not. Ancestry would read every Release of a provisioned copy as a first Release.
+- The order `GitTagService.list` returns, which is the tagged commit's author date. The tags of one Project can share a second, and a date is not the order the Releases were built in.
+- `releasedSide()`, the side `prepare()` compares with. It resolves `origin/main` or the local `main`, which is the newest Release rather than the one before the asked tag, and a clone has no local `main` at all.
+
+### A side that is not in the copy
+
+A shallow repository answers `rev-list --max-parents=0` with its own shallow boundary, and holds another Release's commit without the history to it. So `changes()` refuses in two shapes: the side resolving to the Release's own commit, and a commit whose object is missing, which `rev-parse <hash>^{commit}` is what tells apart, a bare `rev-parse <hash>` answering any hash.
+
+A provisioned copy is the case that reaches this. Its tags all arrive with their trees, so every Release that has one before it reads, and only the first Release of a Project is refused.
+
+### An object whose file this Core cannot read
+
+The readers at a ref take presence from the tree and the parsed file only to classify what moved inside an object. A file an older Core wrote runs through its migration chain first, as any read from history does, and one that still fails its schema keeps its content alone.
+
+Dropping such a file, which is what the readers did before, made the object read as absent at that ref: a Release made by an older Core reported every Entry it held as added, and the Release after it as deleted. The bump of a Release made against such a ref was major for content that never moved.
+
+What is then reported of such an object:
+
+- An Entry, whose only change inside itself is that its Values moved, which its content answers exactly.
+- A Collection, a Component or an Asset, whose change types each name a part of the file an unreadable one cannot answer, so its presence alone is reported. Inventing a change type was rejected: `metadataChanged` on an Asset whose binary moved is a wrong answer where no answer is an honest one.
+
 ## Invariants
 
 - With a remote, `origin/draft` is an ancestor of `draft`, or does not exist. Otherwise the atomic push is rejected, after the local Release was already made and has to unwind.

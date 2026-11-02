@@ -1,0 +1,11 @@
+---
+'@elek-io/core': minor
+---
+
+**Every listed Release says who made it and what it moved in the version.** Each item of `core.releases.list()` carries an `author` of `{ name, email }`, read from the commit its tag points at, and a `bump` of `major`, `minor` or `patch`, read off its version against the full Release before it. A preview carries the bump of the Release it targets, so `1.1.0-preview.3` after `1.0.0` is `minor`, and a Project's first Release is read against the version `core.projects.create()` writes. Every field the call answered before stays as it was, and it still reads the Project's git tags and nothing else, so listing costs the same whatever the Releases changed.
+
+**`core.releases.changes()` says what one Release changed**, in the `ReleaseDiff` shape `core.releases.prepare()` returns, so one piece of code renders a past Release and the next one. A Release compares against the full Release it built on, a Project's first Release against the commit `core.projects.create()` made, and a preview against the last full Release before it. `currentVersion` is that side's version, `nextVersion` the Release's own, and only the Release asked for is worked out. It reads local tags and local commits, so it holds on a clone and once a synchronization brought another computer's Release in. It throws `NotFound` for a tag that is no Release of the Project, and `PreconditionFailed` when the side it compares against is not in this copy, which is a provisioned copy's first Release.
+
+**A Release an older Core made reports what it really changed.** Every object file read at a Release is migrated in memory first, as any read from history is, and an object the Release's tree holds is reported as present even where its file fails this Core's schema. So none is read as added or deleted because its file's shape moved since, and a Release that only rewrote an Entry's shape is a patch rather than a major one. An Entry's change is then read from its file's content, while a Collection, a Component or an Asset reports its presence without which part of it changed.
+
+See `docs/releases.md`.
