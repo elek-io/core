@@ -235,7 +235,7 @@ const asset = await core.assets.create({
 
 A Collection holds the field definitions every Entry must follow. See [`fields.md`](./fields.md) for the full list of field types and their properties.
 
-`icon` is the name of a Lucide icon, in Lucide's spelling of lowercase words joined by single dashes, at most 64 characters. Core checks that spelling and the length rather than the name itself, so an app draws a fallback icon for a name it does not know. [Lucide's icon list](https://lucide.dev/icons/) holds every name.
+`icon` is the name of a Lucide icon, in Lucide's spelling of lowercase words joined by single dashes, at most 64 characters. Core checks that spelling and the length rather than the name itself, so a name Lucide does not ship passes too. Draw a fallback icon for a name your app cannot resolve. [Lucide's icon list](https://lucide.dev/icons/) holds every name.
 
 ```typescript
 import { uuid } from '@elek-io/core';

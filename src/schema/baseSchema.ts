@@ -38,8 +38,8 @@ export type SupportedLanguage = z.infer<typeof supportedLanguageSchema>;
  * https://lucide.dev/icons/.
  *
  * Core checks the spelling and the length rather than the name itself, so a
- * name Lucide does not ship parses too. An app draws a fallback icon for a
- * name it does not know.
+ * name Lucide does not ship parses too. Draw a fallback icon for a name your
+ * app cannot resolve.
  */
 export const supportedIconSchema = z
   .string()

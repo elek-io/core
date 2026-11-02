@@ -157,7 +157,7 @@ const { list, total } = await core.entries.list({
 });
 ```
 
-A Collection's `icon` is the name of a Lucide icon, in Lucide's spelling of lowercase words joined by single dashes. Core checks that spelling rather than the name itself, so an app draws a fallback icon for a name it does not know, and [Lucide's icon list](https://lucide.dev/icons/) holds every name.
+A Collection's `icon` is the name of a Lucide icon, in Lucide's spelling of lowercase words joined by single dashes, and [Lucide's icon list](https://lucide.dev/icons/) holds every name. Core checks that spelling rather than the name itself, so a name Lucide does not ship passes too. Draw a fallback icon for a name your app cannot resolve.
 
 For the full guide - options, Assets, references, reading from history, error handling, the local API, the CLI and the Astro integration - see [`docs/usage.md`](./docs/usage.md).
 
