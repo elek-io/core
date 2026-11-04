@@ -7,6 +7,7 @@ Plans are committed and reach `main`, so an idea survives until someone picks it
 ## Open
 
 - [`git-clone-progress.md`](./git-clone-progress.md) - report clone progress instead of asking git for it and discarding it
+- [`destinations.md`](./destinations.md) - one mechanism that sends a Release to a website first and to third-party APIs later, through a contract and an editor-made mapping
 - [`documentation-rule-gaps.md`](./documentation-rule-gaps.md) - three documentation checks that should have caught something and did not
 - [`git-service-object-parameters.md`](./git-service-object-parameters.md) - give every public `GitService` method one props object, a breaking change
 - [`gitignore-os-junk.md`](./gitignore-os-junk.md) - the non-dot OS files a generated Project `.gitignore` still misses
