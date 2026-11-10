@@ -85,7 +85,10 @@ export class LocalApi {
             description: 'elek.io local API',
             variables: {
               port: {
-                default: 31310,
+                // A string, as OpenAPI requires. Given a number, the
+                // reference leaves `{port}` in the server URL and a test
+                // request throws on it instead of being sent
+                default: '31310',
                 description:
                   'The port specified in elek.io Clients user configuration',
               },

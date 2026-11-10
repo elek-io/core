@@ -29,6 +29,10 @@ interface OpenApiDocument {
   info: { title: string; version: string };
   paths: Record<string, unknown>;
   components?: { schemas?: Record<string, unknown> };
+  servers?: {
+    url: string;
+    variables?: Record<string, { default: unknown }>;
+  }[];
 }
 
 const app = createTestApi(
@@ -208,6 +212,26 @@ describe('API', function () {
 
     // The build the page's second script calls registers this global
     expect(await response.text()).toContain('window.Scalar');
+  });
+
+  it('gives every server variable a default a request can be built from', async function () {
+    // OpenAPI asks for a string. Given a number, the reference leaves the
+    // placeholder in the server URL and a test request throws on it rather
+    // than reaching the API
+    const response = await fetch(`http://127.0.0.1:${apiPort}/openapi.json`);
+    const document = (await response.json()) as OpenApiDocument;
+    const servers = document.servers ?? [];
+
+    expect(servers.length).toBeGreaterThan(0);
+    for (const server of servers) {
+      let url = server.url;
+      for (const [name, variable] of Object.entries(server.variables ?? {})) {
+        expect(typeof variable.default).toEqual('string');
+        url = url.replaceAll(`{${name}}`, String(variable.default));
+      }
+      expect(url).not.toMatch(/[{}]/);
+      expect(() => new URL(url)).not.toThrow();
+    }
   });
 
   // Projects
