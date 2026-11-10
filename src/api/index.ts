@@ -135,6 +135,18 @@ export class LocalApi {
         // Core serves Scalar's bundle itself, so the page loads nothing from
         // jsDelivr and renders with no network at all
         cdn: scalarBundleRoute,
+        // Scalar's own typefaces are only served from fonts.scalar.com, so the
+        // page renders in the system font stack instead
+        withDefaultFonts: false,
+        // The Developer Tools bar offers Share and Register, which upload the
+        // OpenAPI document to Scalar
+        showDeveloperTools: 'never',
+        // Ask AI reads Scalar's registry and uploads the OpenAPI document with
+        // every message
+        agent: { disabled: true },
+        // Scalar's proxy would carry a test request whose address is not the
+        // local one, so Core sends the request itself or not at all
+        proxyUrl: '',
       })
     );
 

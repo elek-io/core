@@ -184,6 +184,20 @@ describe('API', function () {
     expect(html).toContain(`src="${scalarBundleRoute}"`);
   });
 
+  it('switches off what the reference would load from or send to Scalar', async function () {
+    const response = await fetch(`http://127.0.0.1:${apiPort}/`);
+    const configuration = referenceConfiguration(await response.text());
+
+    // Scalar's typefaces are only served from fonts.scalar.com
+    expect(configuration['withDefaultFonts']).toEqual(false);
+    // The Developer Tools bar's Share and Register upload the document
+    expect(configuration['showDeveloperTools']).toEqual('never');
+    // Ask AI reads Scalar's registry and uploads the document with a message
+    expect(configuration['agent']).toEqual({ disabled: true });
+    // Scalar's proxy would carry a request whose address is not the local one
+    expect(configuration['proxyUrl']).toEqual('');
+  });
+
   it('serves the bundle the reference page runs on', async function () {
     const response = await fetch(
       `http://127.0.0.1:${apiPort}${scalarBundleRoute}`
@@ -498,6 +512,21 @@ describe('API', function () {
     expect(isRunningAfter).toEqual(false);
   });
 });
+
+/**
+ * The configuration object the reference page hands the Scalar bundle, read
+ * out of the inline script that calls it.
+ */
+function referenceConfiguration(html: string): Record<string, unknown> {
+  const call = "Scalar.createApiReference('#app',";
+  // The UMD build Core serves is what registers that global. The default
+  // page loads the ESM build and imports from it instead
+  expect(html).toContain(call);
+
+  const open = html.indexOf('{', html.indexOf(call));
+  const close = html.lastIndexOf('}');
+  return JSON.parse(html.slice(open, close + 1)) as Record<string, unknown>;
+}
 
 /**
  * Names of every `#/components/schemas/<name>` a document references, so a
