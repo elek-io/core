@@ -14,6 +14,11 @@ import { CoreError } from '../util/shared.js';
 import createApi from './lib/util.js';
 import routes from './routes/index.js';
 import type { ApiEnv } from './lib/types.js';
+import {
+  readScalarBundle,
+  scalarBundleMediaType,
+  scalarBundleRoute,
+} from './lib/reference.js';
 import { Scalar } from '@scalar/hono-api-reference';
 
 // The only address the local API binds, see docs/local-api.md. Passed
@@ -23,8 +28,8 @@ const LOOPBACK = '127.0.0.1';
 
 /**
  * The local, read-only REST API. Constructing it assembles the whole Hono app,
- * the content routes, `/openapi.json` and the Scalar reference UI on `/`, but
- * binds no port. Nothing listens until `start()`.
+ * the content routes, `/openapi.json`, the Scalar reference UI on `/` and the
+ * bundle that UI runs on, but binds no port. Nothing listens until `start()`.
  *
  * CORS admits `http://localhost` and nothing else.
  *
@@ -127,8 +132,17 @@ export class LocalApi {
           targetKey: 'js',
           clientKey: 'fetch',
         },
+        // Core serves Scalar's bundle itself, so the page loads nothing from
+        // jsDelivr and renders with no network at all
+        cdn: scalarBundleRoute,
       })
     );
+
+    this.api.get(scalarBundleRoute, async (c) => {
+      return c.body(await readScalarBundle(), 200, {
+        'content-type': scalarBundleMediaType,
+      });
+    });
   }
 
   /**

@@ -23,3 +23,8 @@ allowBuilds:
   # optimization service. Core only provides Astro content loaders and never
   # processes images, so its native build is intentionally skipped.
   sharp: false
+  # vue-demi arrives transitively via @scalar/api-reference (a devDependency).
+  # Its postinstall picks the Vue 2 or Vue 3 entry point for a build. The build
+  # only copies that package's already built browser bundle, so nothing here
+  # ever imports vue-demi and the switch has nothing to decide.
+  vue-demi: false

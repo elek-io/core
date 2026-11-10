@@ -1,4 +1,5 @@
 import { testClient } from 'hono/testing';
+import { scalarBundleRoute } from './lib/reference.js';
 import { createTestApi } from './lib/util.js';
 import router from './routes/index.js';
 import type {
@@ -170,6 +171,29 @@ describe('API', function () {
 
     const html = await response.text();
     expect(html).toContain('/openapi.json');
+  });
+
+  it('serves a reference page that names no host of its own', async function () {
+    // Every address on the page is root absolute, so a browser asks the host
+    // it came from and no other. Scalar's default page pulls its bundle from
+    // jsDelivr and its typefaces from fonts.scalar.com instead
+    const response = await fetch(`http://127.0.0.1:${apiPort}/`);
+    const html = await response.text();
+
+    expect(html.match(/https?:\/\/[^\s"'<>]+/g)).toEqual(null);
+    expect(html).toContain(`src="${scalarBundleRoute}"`);
+  });
+
+  it('serves the bundle the reference page runs on', async function () {
+    const response = await fetch(
+      `http://127.0.0.1:${apiPort}${scalarBundleRoute}`
+    );
+
+    expect(response.status).toEqual(200);
+    expect(response.headers.get('content-type')).toContain('javascript');
+
+    // The build the page's second script calls registers this global
+    expect(await response.text()).toContain('window.Scalar');
   });
 
   // Projects
