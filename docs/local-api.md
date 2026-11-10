@@ -136,8 +136,35 @@ With the server running:
 
 - `GET /` serves an interactive [Scalar](https://scalar.com/) API reference UI.
 - `GET /openapi.json` serves the OpenAPI 3.0 document.
+- `GET /reference/scalar.js` serves the bundle that reference page runs on.
 
-Both are generated from the same Zod schemas the routes use, so they always match the running version. CORS is restricted to `http://localhost`.
+Both the page and the document are generated from the same Zod schemas the routes use, so they always match the running version. CORS is restricted to `http://localhost`.
+
+## The reference works offline
+
+Core serves every file the reference page loads, so the page asks the machine Core runs on and no other host. It renders with no network at all, and a tool that watches the connection sees nothing leave for jsDelivr, for Scalar or for anywhere else.
+
+What that costs and what it rules out:
+
+| Where | What |
+| --- | --- |
+| Typefaces | The page loads no font file. It renders in Scalar's font stack, which falls through to the system's own typefaces unless the machine has Inter and JetBrains Mono installed |
+| Developer Tools | The bar is off. Its Share and Register buttons upload the OpenAPI document to Scalar |
+| Ask AI | The agent is off. It reads Scalar's registry and uploads the OpenAPI document with every message |
+| Test Request | The request goes straight to the API. Scalar's proxy is off, so an address the proxy would be needed for fails instead of being relayed |
+
+The links to scalar.com stay. A reader has to click one, so nothing is loaded until they do.
+
+The bundle is `@scalar/api-reference`, copied into the package when Core is built. It ships at `dist/node/reference/scalar.js`, with the notice of its MIT license next to it.
+
+### Sending a test request
+
+Each operation offers a Test Request, which sends the request from the browser and shows what the API answered. It goes to the server the OpenAPI document names, `http://localhost:31310`, which is the port both `core.api.start()` and `elek api:start` default to.
+
+So open the reference at `http://localhost:31310`, where the request is same-origin. Two addresses send nothing back:
+
+- `http://127.0.0.1:31310` serves the page, but the request to `localhost` is cross-origin and CORS admits `http://localhost` without a port only.
+- Any other port serves the page too, and the request still goes to `31310`.
 
 Requests are logged through Core's logger, never as the URL. A log file can be handed to someone else, and both a `{collectionIdOrSlug}` segment and a query parameter carry whatever the caller sent. What a record holds instead is the matched route pattern and the ids the request addressed, so:
 
