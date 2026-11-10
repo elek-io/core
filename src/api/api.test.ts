@@ -194,7 +194,7 @@ describe('API', function () {
 
     // Scalar's typefaces are only served from fonts.scalar.com
     expect(configuration['withDefaultFonts']).toEqual(false);
-    // The Developer Tools bar's Share and Register upload the document
+    // Scalar's Developer Tools bar carries its own account features
     expect(configuration['showDeveloperTools']).toEqual('never');
     // Ask AI reads Scalar's registry and uploads the document with a message
     expect(configuration['agent']).toEqual({ disabled: true });

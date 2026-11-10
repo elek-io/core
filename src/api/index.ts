@@ -141,8 +141,8 @@ export class LocalApi {
         // Scalar's own typefaces are only served from fonts.scalar.com, so the
         // page renders in the system font stack instead
         withDefaultFonts: false,
-        // The Developer Tools bar offers Share and Register, which upload the
-        // OpenAPI document to Scalar
+        // Scalar's Developer Tools bar offers Share, Register and Generate
+        // SDK, which each work through an account on Scalar
         showDeveloperTools: 'never',
         // Ask AI reads Scalar's registry and uploads the OpenAPI document with
         // every message

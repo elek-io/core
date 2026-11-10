@@ -138,28 +138,28 @@ With the server running:
 - `GET /openapi.json` serves the OpenAPI 3.0 document.
 - `GET /reference/scalar.js` serves the bundle that reference page runs on.
 
-Both the page and the document are generated from the same Zod schemas the routes use, so they always match the running version. CORS is restricted to `http://localhost`.
+The document is generated from the same Zod schemas the routes use, and the page renders that document, so both always match the running version. CORS is restricted to `http://localhost`.
 
 ## The reference works offline
 
-Core serves every file the reference page loads, so the page asks the machine Core runs on and no other host. It renders with no network at all, and a tool that watches the connection sees nothing leave for jsDelivr, for Scalar or for anywhere else.
+Core serves every file the reference page loads, so the page asks the machine Core runs on and no other host. In a browser that blocks every host but loopback it renders in full, and nothing is blocked: not on load, not on a search, and not when a test request is opened and sent.
 
 What that costs and what it rules out:
 
 | Where | What |
 | --- | --- |
 | Typefaces | The page loads no font file. It renders in Scalar's font stack, which falls through to the system's own typefaces unless the machine has Inter and JetBrains Mono installed |
-| Developer Tools | The bar is off. Its Share and Register buttons upload the OpenAPI document to Scalar |
-| Ask AI | The agent is off. It reads Scalar's registry and uploads the OpenAPI document with every message |
-| Test Request | The request goes straight to the API. Scalar's proxy is off, so an address the proxy would be needed for fails instead of being relayed |
+| Developer Tools | The bar is off. Its Share, Register and Generate SDK buttons each work through an account on Scalar, which a local API has nothing to do with |
+| Ask AI | The agent is off. Opening it reads Scalar's registry over `api.scalar.com`, and its chat runs on Scalar's own service rather than on the machine |
+| Test Request | Scalar's proxy is off, so a request goes straight to the address it names rather than through Scalar |
 
-The links to scalar.com stay. A reader has to click one, so nothing is loaded until they do.
+The links to scalar.com stay, both of them plain links in the page. A reader has to click one, so nothing is loaded until they do.
 
 The bundle is `@scalar/api-reference`, copied into the package when Core is built. It ships at `dist/node/reference/scalar.js`, with the notice of its MIT license next to it.
 
 ### Sending a test request
 
-Each operation offers a Test Request, which sends the request from the browser and shows what the API answered. It goes to the server the OpenAPI document names, `http://localhost:31310`, which is the port both `core.api.start()` and `elek api:start` default to.
+Each operation offers a Test Request, which sends the request from the browser and shows what the API answered. It goes to the server the OpenAPI document names, `http://localhost:31310`, which is the port `elek api:start` defaults to and the one Core writes into a new User's `localApi` preference.
 
 So open the reference at `http://localhost:31310`, where the request is same-origin. Two addresses send nothing back:
 
