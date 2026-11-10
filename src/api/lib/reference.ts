@@ -48,15 +48,18 @@ export function scalarBundleCandidates(moduleDir: string): string[] {
 }
 
 /** The directory this module runs from, which decides the candidates above. */
-const moduleDir = Path.dirname(fileURLToPath(import.meta.url));
+const thisModuleDir = Path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * Reads Scalar's bundle off disk.
+ * Reads Scalar's bundle off disk, looking from `moduleDir`, which defaults to
+ * the directory this module itself runs from.
  *
  * Rejects with an `Internal` `CoreError` naming every path it looked in,
  * which is what a build that did not copy the bundle in looks like.
  */
-export async function readScalarBundle(): Promise<string> {
+export async function readScalarBundle(
+  moduleDir: string = thisModuleDir
+): Promise<string> {
   const candidates = scalarBundleCandidates(moduleDir);
 
   for (const candidate of candidates) {

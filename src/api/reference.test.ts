@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import Os from 'node:os';
 import Path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fs from 'fs-extra';
@@ -130,6 +131,26 @@ describe('the reference bundle', function () {
         entry,
         true,
       ]);
+    }
+  });
+
+  it('refuses and names every path it looked in when it is missing', async function () {
+    // What a build that dropped the copy looks like. A 500 naming both paths
+    // is the difference between a reference page nobody can explain and one
+    // whose own error says what to rebuild
+    const nowhere = await Fs.mkdtemp(
+      Path.join(Os.tmpdir(), 'elek-io-core-reference-')
+    );
+
+    try {
+      const refusal = readScalarBundle(nowhere);
+
+      await expect(refusal).rejects.toThrow(/was not found, looked in/);
+      for (const candidate of scalarBundleCandidates(nowhere)) {
+        await expect(refusal).rejects.toThrow(candidate);
+      }
+    } finally {
+      await Fs.remove(nowhere);
     }
   });
 
