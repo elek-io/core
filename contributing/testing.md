@@ -180,12 +180,14 @@ So a prompt only hangs a test where the runner attaches a terminal, which fits t
 
 A test never compares a time Core took from the clock against a reading of its own within a tolerance. The gap between the two is whatever the machine gives, and a tolerance is sized on the machine that wrote it.
 
+A duration a test measures between two readings of its own and holds against a budget, as [`cleanup.test.ts`](../src/test/cleanup.test.ts) and [`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) do, reads no time Core took, so this rule leaves it alone.
+
 Two shapes, both in [`util.ts`](../src/test/util.ts):
 
 | Shape | Asserts | How |
 | --- | --- | --- |
 | `expectTimestampBetween` | a timestamp Core wrote, such as a `created` or an `updated` | read the clock before and after the call, and assert the timestamp lies in that window |
-| `freezeClock` | a number Core builds from two readings of its own, such as the seconds a 429's `Retry-After` leaves | pin `Date.now()` for the test, so both readings are one moment |
+| `freezeClock` | a number Core builds from two readings of its own, such as the seconds a 429's `Retry-After` leaves | pin `Date.now()` from the call to the end of the test, so both readings are one moment. `new Date()`, and so `datetime()`, does not read it, which is why a `created` or an `updated` takes `expectTimestampBetween` |
 
 Neither shape waits, so a slow runner costs nothing:
 
