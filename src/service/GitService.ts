@@ -18,10 +18,12 @@ import type {
 import {
   gitCommitSchema,
   gitMessageSchema,
+  isVersionedTag,
   uuidSchema,
   type ElekIoCoreOptions,
   type GitCloneOptions,
   type GitCommit,
+  type GitCommitWithRelease,
   type GitInitOptions,
   type GitLogOptions,
   type GitStatus,
@@ -42,6 +44,7 @@ import {
   ATOMIC_NOT_FAST_FORWARD,
   classifyAuthError,
   classifyLoadError,
+  firstReleaseByCommit,
   gitOutputCause,
   isMutatingGitCommand,
   parsePorcelainStatusLine,
@@ -125,7 +128,9 @@ export class GitService {
   ): Promise<void> {
     if (this.options.isReadOnly) {
       throw CoreError.preconditionFailed(
-        'Cannot init a repository because Core is in read-only mode'
+        'Cannot init a repository because Core is in read-only mode',
+        undefined,
+        'read_only_mode'
       );
     }
 
@@ -572,7 +577,8 @@ export class GitService {
         const url = await this.remotes.getOriginUrl(path).catch(() => null);
         throw CoreError.preconditionFailed(
           `Git LFS upload to the remote${url ? ` "${url}"` : ''} failed. The remote does not support Git LFS, has it disabled, or its LFS endpoint is unreachable. elek.io stores Asset binaries with Git LFS, please use a Git provider with LFS enabled.`,
-          error
+          error,
+          'git_lfs_endpoint_unusable'
         );
       }
     },
@@ -642,7 +648,8 @@ export class GitService {
       await this.rebaseAbort(path);
       throw CoreError.preconditionFailed(
         'Rebase stopped on a textual conflict. Your local changes conflict with the remote and were not integrated. Resolve them and synchronize again.',
-        `${result.stdout}\n${result.stderr}`.trim()
+        `${result.stdout}\n${result.stderr}`.trim(),
+        'textual_conflict'
       );
     }
 
@@ -830,7 +837,9 @@ export class GitService {
   ): Promise<void> {
     if (this.options.isReadOnly) {
       throw CoreError.preconditionFailed(
-        'Cannot push because Core is in read-only mode'
+        'Cannot push because Core is in read-only mode',
+        undefined,
+        'read_only_mode'
       );
     }
 
@@ -838,7 +847,9 @@ export class GitService {
     // guard earlier through assertNotProvisioned.
     if (await Fs.pathExists(Path.join(path, PROVISIONED_MARKER))) {
       throw CoreError.preconditionFailed(
-        `Cannot push because "${path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+        `Cannot push because "${path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`,
+        undefined,
+        'provisioned_copy'
       );
     }
 
@@ -896,7 +907,8 @@ export class GitService {
       if (result.stderr.includes('does not support --atomic push')) {
         throw CoreError.preconditionFailed(
           'Push refused because the remote does not support atomic pushes. Nothing was pushed.',
-          message
+          message,
+          'remote_without_atomic_push'
         );
       }
       // A non-fast-forward rejection is recoverable by re-integrating the
@@ -908,7 +920,8 @@ export class GitService {
       ) {
         throw CoreError.preconditionFailed(
           'Push rejected because the remote advanced. Re-integrate the remote changes and try again.',
-          message
+          message,
+          'remote_advanced'
         );
       }
       throw CoreError.internal(
@@ -933,7 +946,9 @@ export class GitService {
   public async commit(path: string, message: GitMessage): Promise<void> {
     if (this.options.isReadOnly) {
       throw CoreError.preconditionFailed(
-        'Cannot commit because Core is in read-only mode'
+        'Cannot commit because Core is in read-only mode',
+        undefined,
+        'read_only_mode'
       );
     }
 
@@ -941,7 +956,9 @@ export class GitService {
     // guard earlier through assertNotProvisioned, before writing files.
     if (await Fs.pathExists(Path.join(path, PROVISIONED_MARKER))) {
       throw CoreError.preconditionFailed(
-        `Cannot commit because "${path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`
+        `Cannot commit because "${path}" is a provisioned copy. The next provision run overwrites it. Delete it and clone the Project to work on it.`,
+        undefined,
+        'provisioned_copy'
       );
     }
 
@@ -1076,6 +1093,107 @@ export class GitService {
     );
 
     return lineObjArr.filter((obj) => this.isGitCommit(obj));
+  }
+
+  /**
+   * The given commits, each with the first Release that included it, or null
+   * while none did. Found by git's ancestry rather than by date, so a change
+   * a synchronization carried over a Release made on another computer names
+   * the next Release instead of that one. A preview Release tags a snapshot
+   * of `draft` rather than released content, so it names no change.
+   *
+   * Reads local tags and local history in one walk, so a Release made on
+   * another computer counts once something fetched.
+   *
+   * @see ../../docs/releases.md
+   */
+  public async withFirstRelease(
+    path: string,
+    commits: GitCommit[]
+  ): Promise<GitCommitWithRelease[]> {
+    if (commits.length === 0) {
+      return [];
+    }
+
+    const releaseTags = (await this.tags.list({ path })).list
+      .filter(isVersionedTag)
+      .filter((tag) => tag.message.type === 'release');
+
+    if (releaseTags.length === 0) {
+      return commits.map((commit) => ({ ...commit, release: null }));
+    }
+
+    // Newest first, so the oldest tag wins a commit two tags point at
+    const tagByCommitHash = new Map(
+      releaseTags.map((tag) => [tag.commitHash, tag])
+    );
+    const walk = await this.git(path, [
+      'rev-list',
+      '--all',
+      '--parents',
+      '--topo-order',
+    ]);
+    const releaseByCommit = firstReleaseByCommit(
+      walk.stdout,
+      new Set(tagByCommitHash.keys())
+    );
+
+    return commits.map((commit) => {
+      const releaseCommit = releaseByCommit.get(commit.hash);
+      const tag =
+        releaseCommit === undefined
+          ? undefined
+          : tagByCommitHash.get(releaseCommit);
+
+      return {
+        ...commit,
+        release:
+          tag === undefined
+            ? null
+            : {
+                tagId: tag.id,
+                version: tag.message.version,
+                datetime: tag.datetime,
+              },
+      };
+    });
+  }
+
+  /**
+   * The oldest commit of a revision's ancestry, which for a Project is the
+   * commit `core.projects.create()` made, and null where this copy holds a
+   * truncated history instead, as a provisioned copy's is.
+   *
+   * Core never merges unrelated histories, so more than one root means a
+   * truncated history, and the oldest of them is read.
+   *
+   * @see ../../contributing/releases.md
+   * @see https://git-scm.com/docs/git-rev-list
+   */
+  public async rootCommit(path: string, rev: string): Promise<string | null> {
+    const result = await this.git(path, ['rev-list', '--max-parents=0', rev]);
+    const roots = result.stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '');
+    const oldest = roots[roots.length - 1];
+
+    if (oldest === undefined) {
+      throw CoreError.internal(
+        `Git rev-list found no root commit of "${rev}" in "${path}"`
+      );
+    }
+
+    // The raw object, because every revision command applies the graft and
+    // reports the boundary as parentless. The header ends at the first blank
+    // line, so a commit message of its own never reads as a parent
+    const object = await this.git(path, ['cat-file', 'commit', oldest]);
+    const header = object.stdout.split('\n\n', 1)[0] ?? '';
+    const isShallowBoundary = header
+      .split('\n')
+      .some((line) => line.startsWith('parent '));
+
+    return isShallowBoundary ? null : oldest;
   }
 
   /**

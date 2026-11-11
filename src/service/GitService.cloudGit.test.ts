@@ -216,7 +216,8 @@ describe('git with an elek.io Cloud session', function () {
     await expectCoreError(
       publish(t, core, project.id, hostOne),
       'PreconditionFailed',
-      'could not reach the git host'
+      'could not reach the git host',
+      'git_host_unreachable'
     );
   });
 

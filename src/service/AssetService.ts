@@ -4,7 +4,6 @@ import type { SaveAssetProps } from '../schema/index.js';
 import {
   assetFileSchema,
   assetSchema,
-  migrateAssetSchema,
   countAssetsSchema,
   createAssetSchema,
   deleteAssetSchema,
@@ -29,11 +28,7 @@ import {
   assetHistorySchema,
 } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
-import {
-  applyMigrations,
-  assetMigrations,
-  migrating,
-} from './migrations/index.js';
+import { migrateAssetFile } from './migrations/index.js';
 import { datetime, slug, uuid, CoreError } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { ReferenceService } from './ReferenceService.js';
@@ -519,14 +514,6 @@ export class AssetService extends AbstractEntityService {
    * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedAssetFile: unknown) {
-    return migrating('Asset', () => {
-      const loose = migrateAssetSchema.parse(potentiallyOutdatedAssetFile);
-      const migrated = applyMigrations(
-        loose,
-        assetMigrations,
-        this.coreVersion
-      );
-      return assetFileSchema.parse(migrated);
-    });
+    return migrateAssetFile(this.coreVersion, potentiallyOutdatedAssetFile);
   }
 }

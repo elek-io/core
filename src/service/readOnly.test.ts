@@ -8,8 +8,9 @@ import { CoreError } from '../util/shared.js';
 import ElekIoCore from '../index.node.js';
 
 /**
- * Awaits the given promise and asserts it rejects with the
- * typed read-only error
+ * Awaits the given promise and asserts it rejects with the typed read-only
+ * error, which names `read_only_mode` as its cause wherever it is raised,
+ * so a refused synchronization says what to turn off.
  */
 async function expectReadOnlyError(promise: Promise<unknown>) {
   let error: unknown = null;
@@ -24,6 +25,7 @@ async function expectReadOnlyError(promise: Promise<unknown>) {
     'PreconditionFailed'
   );
   expect(error instanceof CoreError && error.message).toContain('read-only');
+  expect(error instanceof CoreError && error.reason).toEqual('read_only_mode');
 }
 
 describe('Read-only mode', function () {

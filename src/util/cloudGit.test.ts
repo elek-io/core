@@ -116,7 +116,22 @@ describe('CloudGitAccess', function () {
     await expectCoreError(
       t.access.credentialFor(hostOne, id),
       'PreconditionFailed',
-      'could not reach the git host (504)'
+      'could not reach the git host (504)',
+      'git_host_unreachable'
+    );
+  });
+
+  it('throws PreconditionFailed when elek.io Cloud is not there', async function () {
+    const t = await setUp();
+    const id = uuid();
+    t.cloudGit.place(id, hostOne);
+    await t.cloud.close();
+
+    await expectCoreError(
+      t.access.credentialFor(hostOne, id),
+      'PreconditionFailed',
+      'Could not reach elek.io Cloud',
+      'cloud_unreachable'
     );
   });
 
@@ -158,7 +173,8 @@ describe('CloudGitAccess', function () {
     await expectCoreError(
       t.access.credentialFor(hostOne, moved),
       'PreconditionFailed',
-      `Set its remote to "http://${hostTwo}/projects/${moved}.git"`
+      `Set its remote to "http://${hostTwo}/projects/${moved}.git"`,
+      'project_on_another_host'
     );
     expect(t.cloudGit.calls.map((call) => call.endpoint)).toEqual([
       'git-token',

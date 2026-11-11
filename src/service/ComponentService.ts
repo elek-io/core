@@ -4,7 +4,6 @@ import { isDeepStrictEqual } from 'node:util';
 import {
   componentFileSchema,
   countComponentsSchema,
-  migrateComponentSchema,
   deleteComponentSchema,
   getCreateComponentSchemaFromLanguages,
   getUpdateComponentSchemaFromLanguages,
@@ -56,11 +55,7 @@ import {
   updateRefusalMessage,
   withoutAcceptedContentLoss,
 } from '../util/contentLoss.js';
-import {
-  applyMigrations,
-  componentMigrations,
-  migrating,
-} from './migrations/index.js';
+import { migrateComponentFile } from './migrations/index.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { GitService } from './GitService.js';
@@ -812,17 +807,10 @@ export class ComponentService
    * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedComponentFile: unknown) {
-    return migrating('Component', () => {
-      const loose = migrateComponentSchema.parse(
-        potentiallyOutdatedComponentFile
-      );
-      const migrated = applyMigrations(
-        loose,
-        componentMigrations,
-        this.coreVersion
-      );
-      return componentFileSchema.parse(migrated);
-    });
+    return migrateComponentFile(
+      this.coreVersion,
+      potentiallyOutdatedComponentFile
+    );
   }
 
   private toComponent(componentFile: ComponentFile): Component {

@@ -6,8 +6,9 @@ import { createProject, seedRemoteWithRelease } from '../test/util.js';
 import { CoreError } from '../util/shared.js';
 
 /**
- * Awaits the given promise and asserts it rejects with the typed
- * provisioned copy error
+ * Awaits the given promise and asserts it rejects with the typed provisioned
+ * copy error, which names `provisioned_copy` as its cause wherever it is
+ * raised, so a refused synchronization says the copy is disposable.
  */
 async function expectProvisionedError(promise: Promise<unknown>) {
   let error: unknown = null;
@@ -23,6 +24,9 @@ async function expectProvisionedError(promise: Promise<unknown>) {
   );
   expect(error instanceof CoreError && error.message).toContain(
     'provisioned copy'
+  );
+  expect(error instanceof CoreError && error.reason).toEqual(
+    'provisioned_copy'
   );
 }
 

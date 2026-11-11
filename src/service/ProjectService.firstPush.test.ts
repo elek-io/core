@@ -302,7 +302,8 @@ describe('ProjectService first push', function () {
       await expectCoreError(
         core.projects.synchronize({ id: project.id }),
         'PreconditionFailed',
-        'empty repository'
+        'empty repository',
+        'remote_holds_something_else'
       );
 
       expect(await refsOf(remotePath)).toEqual(remoteBefore);
@@ -369,7 +370,8 @@ describe('ProjectService first push', function () {
     await expectCoreError(
       core.projects.synchronize({ id: project.id }),
       'PreconditionFailed',
-      'the local "main" lacks'
+      'the local "main" lacks',
+      'remote_main_without_draft'
     );
 
     expect(await refsOf(remotePath)).toEqual(remoteBefore);
@@ -414,7 +416,8 @@ describe('ProjectService first push', function () {
     await expectCoreError(
       core.projects.synchronize({ id: project.id }),
       'PreconditionFailed',
-      'does not support atomic pushes'
+      'does not support atomic pushes',
+      'remote_without_atomic_push'
     );
 
     expect(await refsOf(remotePath)).toEqual('');

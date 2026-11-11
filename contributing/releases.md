@@ -1,8 +1,8 @@
 # Releases against a remote
 
-Why a clone lands on `draft`, which `main` a Release compares against, why it pushes atomically, and what the first `synchronize()` sends to a new remote. The consumer side is in [`../docs/releases.md`](../docs/releases.md#what-a-release-compares-against) and [`../docs/git-and-sync.md`](../docs/git-and-sync.md#the-first-push).
+Why a clone lands on `draft`, which `main` a Release compares against, why it pushes atomically, what the first `synchronize()` sends to a new remote, and how a change finds the Release that first included it. The consumer side is in [`../docs/releases.md`](../docs/releases.md#what-a-release-compares-against) and [`../docs/git-and-sync.md`](../docs/git-and-sync.md#the-first-push).
 
-Read it before changing `clone()` or `synchronize()` in [`ProjectService`](../src/service/ProjectService.ts), or the remote checks and push in [`ReleaseService`](../src/service/ReleaseService.ts).
+Read it before changing `clone()` or `synchronize()` in [`ProjectService`](../src/service/ProjectService.ts), or the remote checks, the push or `withFirstRelease()` in [`ReleaseService`](../src/service/ReleaseService.ts) and [`GitService`](../src/service/GitService.ts).
 
 ## The rule
 
@@ -76,6 +76,82 @@ Core never makes one. Following a git host's instructions for an existing reposi
 That needs the local `main` to contain the remote's. It is checked up front, so a `main` pushed from elsewhere is refused with a typed error rather than retried five times as a non-fast-forward.
 
 Refusing the remote was the alternative, and it was rejected. `clone()` refuses such a remote, and the only other call that repairs it is a Release, which needs a change to release. Pushing `draft` alone was rejected too, because it leaves earlier Release tags stranded on a working copy whose `main` is ahead of the remote's.
+
+## The Release of a change
+
+A Release commits `project.json` alone and tags that commit, so no commit of an Entry, an Asset or a Collection ever carries a Release tag. `GitService.withFirstRelease()` answers which Release first included a commit from git's ancestry: the oldest release tag whose commit descends from it.
+
+Two decisions sit in that sentence:
+
+- Ancestry rather than the dates of the two commits, because the two disagree exactly where it matters. A working copy that commits a change and synchronizes after another one released lands that change on top of the Release it is older than, and it belongs to the next Release. `GitCommit` carries no parents, so a consumer cannot tell the two apart itself.
+- Full Releases alone name a change. A preview tag sits on `draft` and promotes nothing into `main`, so a change only a preview holds is unreleased, which is what `core.releases.create()` makes it.
+
+Three git reads per history, none of them per commit or per Release:
+
+| Read | Answers |
+| --- | --- |
+| `log -- <file>` | the commits of that file, as before |
+| `tag --list` | every Release tag with its version and the commit it points at, which is why `GitTag` carries `commitHash` |
+| `rev-list --all --parents --topo-order` | the whole local graph in one walk |
+
+One read per decorated commit joins them on an upgraded Project. An upgrade rewrites every Entry file and tags the commit it squashes into `draft`, so the Entry's log carries a decorated commit, and `log` resolves each decoration through `tags.read`, which runs `tag --list` once more.
+
+`firstReleaseByCommit()` in [`../src/util/git.ts`](../src/util/git.ts) then marks from each release commit, oldest first in the walk's reverse order, and stops at a commit an earlier Release already marked. Every commit is visited once, so the pass is linear in the walk.
+
+Neither added read runs per change or per Release, and both grow with the Project all the same. `tag --list` reads every tag of it, and `rev-list --all` walks its whole local graph. Measured on Linux, on Projects built in the shape Core makes, as the range the medians of two runs of seven fell in:
+
+| Project | The Entry's commits | `log` alone | `history` | `tag --list` alone | `rev-list` alone |
+| --- | --- | --- | --- | --- | --- |
+| 212 changes, 30 Releases | 121 | 15ms | 27ms | 5ms | 6ms |
+| 842 changes, 120 Releases | 481 | 16 to 17ms | 33 to 34ms | 7 to 8ms | 7ms |
+| 3503 changes, 500 Releases | 2001 | 44 to 49ms | 84 to 85ms | 16 to 17ms | 12 to 13ms |
+
+The last two columns are the git commands timed on their own, which is why they fall short of the difference between the two columns before them. All of it is what those Projects cost on that machine, not a bound Core holds.
+
+Rejected alternatives:
+
+- `git tag --contains <commit>` or `git describe --contains` per commit. One git process per commit of the Entry, and `describe` picks the nearest tag by its own weighting rather than the oldest by ancestry.
+- One `log` per Release range. One git process per Release, which is the cost that grows fastest on a Project that releases often.
+- Sorting the release tags by date and taking the first after the change. It needs no walk and answers wrongly for a change a synchronization carried over a Release, which is the case the Entry's history is read for.
+- Carrying `tagId` alone and letting the caller join it against `core.releases.list()`. It saves the `tag --list` read, whose cost grows with the Project's Releases, and every consumer that wants to show a version pays it again.
+
+## What a Release changed
+
+`ReleaseService.changes()` compares the Release's commit with the commit of the full Release it was built on, and `changesBetween()` is the same pass `prepare()` runs between `draft` and the released `main`.
+
+### Which side a Release is compared with
+
+The side is picked by version: the newest full Release whose version is below the one the asked tag targets, and the root commit for each Release or preview with no full Release below it.
+
+`baselineVersions()` in [`../src/util/release.ts`](../src/util/release.ts) holds that rule for both callers, so the bump `list()` reads off the tags and the side `changes()` compares with can never disagree. It answers a whole list in one walk over the Releases in version order, rather than searching the list again for each of them.
+
+Rejected alternatives:
+
+- Ancestry, through `merge-base --is-ancestor`. Measured on a shallow clone that fetched its tags with `--depth 1`, which is what `provision()` makes: the earlier Release's commit is there with its whole tree, and `--is-ancestor` against the later one answers false, because the commits between them are not. Ancestry would read every Release of a provisioned copy as a first Release.
+- The order `GitTagService.list` returns, which is the tagged commit's author date. The tags of one Project can share a second, and a date is not the order the Releases were built in.
+- `releasedSide()`, the side `prepare()` compares with. It resolves `origin/main` or the local `main`, which is the newest Release rather than the one before the asked tag, and a clone has no local `main` at all.
+
+### A side that is not in the copy
+
+A shallow repository answers `rev-list --max-parents=0` with its own shallow boundary, and holds another Release's commit without the history to it. So `changes()` refuses two shapes:
+
+- A root commit that is a boundary rather than the Project's creation. `GitService.rootCommit()` tells the two apart with `cat-file commit`, because every revision command applies the graft and reports a boundary as parentless, while the boundary's own object still names the parents it was fetched without.
+- A commit whose object is missing, which `rev-parse <hash>^{commit}` is what tells apart, a bare `rev-parse <hash>` answering any hash.
+
+Refusing only a root that equals the Release's own commit would have covered the one depth `provision()` fetches and no other. Two deep, the root git answers is the commit below the Release, whose tree is there and whose history is not, and a diff against it reports less than the Release changed.
+
+A provisioned copy is the copy Core itself makes of a truncated history. Its tags all arrive with their trees, so every Release with a full Release below it reads, and each one with none is refused. A copy `core.git.clone` fetched at another depth answers the same. Measured by provisioning the `release` and `preview` channels and an exact version of a Project of three Releases and a preview.
+
+### An object whose file this Core cannot read
+
+The readers at a ref take presence from the tree and the parsed file only to classify what moved inside an object. A file an older Core wrote runs through its migration chain first, as any read from history does, and one that still fails its schema keeps its content alone.
+
+Dropping such a file, which is what the readers did before, made the object read as absent at that ref: a Release made by an older Core reported every Entry it held as added, and the Release after it as deleted. The bump of a Release made against such a ref was major for content that never moved.
+
+What is then reported of such an object:
+
+- An Entry, whose only change inside itself is that its Values moved. An unreadable side has no Values to read, so the whole file is compared there instead, which counts a Release that rewrote such a file's shape alone as `modified`. Reporting no change was rejected: the Values of an unreadable file may well have moved, and an approximation beats a wrong answer.
+- A Collection, a Component or an Asset, whose change types each name a part of the file an unreadable one cannot answer, so its presence alone is reported. Inventing a change type was rejected: `metadataChanged` on an Asset whose binary moved is a wrong answer where no answer is an honest one.
 
 ## Invariants
 
