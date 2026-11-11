@@ -1,5 +1,136 @@
 # @elek-io/core
 
+## 0.28.0
+
+### Minor Changes
+
+- 9a30587: **Every listed Release says who made it and what it moved in the version.** Each item of `core.releases.list()` carries an `author` of `{ name, email }`, read from the commit its tag points at, and a `bump` of `major`, `minor` or `patch`, read off its version against the full Release before it. A preview carries the bump of the Release it targets, so `1.1.0-preview.3` after `1.0.0` is `minor`, and a Project's first Release is read against the version `core.projects.create()` writes. The `bump` is `null` instead only where a Release targets the version it is read against, after a full Release of the same version or for a first Release or preview at `0.0.1`, and Core makes neither. Every field the call answered before stays as it was, and it still reads the Project's git tags and nothing else, so listing costs the same whatever the Releases changed.
+  
+  **`core.releases.changes()` says what one Release changed**, in the `ReleaseDiff` shape `core.releases.prepare()` returns, so one piece of code renders a past Release and the next one. A Release compares against the full Release it built on, a Project's first Release against the commit `core.projects.create()` made, and a preview against the last full Release before it. `currentVersion` is that side's version, `nextVersion` the Release's own, and only the Release asked for is worked out. It reads local tags and local commits, so it holds on a clone and once a synchronization brought another computer's Release in. It throws `NotFound` for a tag that is no Release of the Project, and `PreconditionFailed` when the side it compares against is not in this copy, as a Release with no full Release before it is on a copy whose history is truncated.
+  
+  **A Release an older Core made reports what it really changed.** Every object file read at a Release is migrated in memory first, as any read from history is, and an object the Release's tree holds is reported as present even where its file fails this Core's schema. So none is read as added or deleted because its file's shape moved since, and a Release that only rewrote an Entry's shape is a patch rather than a major one. An Entry's change is then read from its file's content, while a Collection, a Component or an Asset reports its presence without which part of it changed.
+  
+  See `docs/releases.md`.
+- d20668c: **Five of Core's own dependencies moved:**
+  
+  | Dependency                   | From    | To      |
+  | ---------------------------- | ------- | ------- |
+  | `@hono/node-server`          | 2.1.5   | 2.1.6   |
+  | `@scalar/hono-api-reference` | 0.12.16 | 0.12.18 |
+  | `@sindresorhus/slugify`      | 3.0.1   | 4.0.1   |
+  | `hono`                       | 4.13.14 | 4.13.17 |
+  | `semver`                     | 7.8.5   | 7.8.6   |
+  
+  They add, remove or rename no export of any entry point and change no public type. Two of them change behavior you can see.
+  
+  **An uppercase umlaut or ligature no longer splits the word it sits in.** `slug()` is the helper Core runs over an Asset's `name` on write, over the slug you give a Collection or a Component, and over a `slug` field's Value to check it is already canonical. A Project's name never goes through it. Transliterating `Ä` to `ae` used to read as a camel case boundary to the `decamelize` step, so a name in capitals broke apart where the umlaut was:
+  
+  | Name       | Before        | Now         |
+  | ---------- | ------------- | ----------- |
+  | `ÄPFEL`    | `ae-pfel`     | `aepfel`    |
+  | `MÜNCHEN`  | `m-ue-nchen`  | `muenchen`  |
+  | `ÜBER UNS` | `ue-ber-uns`  | `ueber-uns` |
+  | `ÅNGSTRÖM` | `angstr-oe-m` | `angstroem` |
+  | `Æon`      | `a-eon`       | `aeon`      |
+  | `Þór`      | `t-hor`       | `thor`      |
+  
+  An umlaut followed by a lowercase letter was never affected, so `Über` and `Ärger im Büro` are unchanged, and a `slug` field with `decamelize` off never saw the split at all.
+  
+  **Three character classes that used to be dropped now transliterate.** A ligature, a titlecase digraph and a fullwidth letter: `ﬁsh` gave `sh` and gives `fish`, `ǅungla` gave `ungla` and gives `dzungla`, and a name written in fullwidth letters gave nothing at all, which a `slug` field rejects as empty.
+  
+  **Nothing stored stops validating.** A `slug` field accepts a value only when it equals its own slugified form, and every slug the old version produced is still canonical under the new one, measured on both versions over the characters this fix touches. An Asset's `name` is slugified on write, and re-slugifying a stored one gives the same value for the same reason. What changes is the slug a _new_ name gets, so a slug you generated from such a name before and one you generate now differ. Where a permalink has to stay as it is, keep the stored value rather than regenerating it.
+  
+  **The local API answers `400` to a request whose path holds a raw backslash.** `@hono/node-server` used to hand the path to the WHATWG URL parser, which reads `\` as `/`, so `GET /content\v1/projects` reached the router as `/content/v1/projects` and answered `200`. Such a request is now refused before routing, with an empty body, so that one status carries no JSON. A percent-encoded `%5C` and a backslash in the query string are read as before.
+  
+  **hono 4.13.16 carries five security fixes**, and none of them changes what the local API does. Four cover `mount()`, `validator('form')`, the `css` helper and `csrf()`, none of which Core uses. The fifth is the router skipping wildcard middleware for three kinds of path. Two of them need a route pattern Core declares nowhere, and on the third, a path carrying an encoded line terminator, the request id, the trailing slash trim, CORS and the request logger Core installs already ran before the fix.
+  
+  `@scalar/hono-api-reference` only moves its renderer. The page `elek api:start` serves at `/` comes out of this bump byte for byte unchanged, and so does the OpenAPI document behind it. `semver`'s release is a range parsing speedup.
+  
+  **The published declarations no longer end in a `sourceMappingURL` comment** for a map the package never shipped. That comes from the declaration generator in Core's build, and a tool that followed the comment stopped at a missing file before.
+- c926e43: **An Entry's history names the Release that first included each change.** Every commit `core.entries.history()` returns carries a `release` of `{ tagId, version, datetime }`, or `null` while no Release holds that change, so an app can say which changes are published and in which Release. `tagId` and `version` address the same Release `core.releases.list()` returns, so the two join.
+  
+  **The Release is found by git's ancestry**, which is the oldest Release whose commit descends from the change. A Release commits `project.json` alone and tags that commit, so no commit of an Entry ever carries a Release tag, and a date cannot answer it: a change another working copy committed before a Release reaches this one only after it, and still belongs to the next Release. Core reads local tags and local history, so a Release made elsewhere counts once something fetched, such as `synchronize()`.
+  
+  A preview Release tags a snapshot of `draft` rather than released content, so it names no change. A Collection update that rewrote the Entry is one of its changes and names its Release like any other. Every commit keeps the fields it carried before, so nothing read from `history()` today changes, and the two git reads this adds run once per history rather than per change or per Release, though both grow with the Project.
+  
+  **`GitTag` carries the `commitHash` of the commit it points at**, which `core.git.tags.list()`, `core.git.tags.read()` and a commit's own `tag` answer as well.
+  
+  See `docs/releases.md`.
+- 351818d: **A resolution for a Component field definition change lands in the Component item it answers for.** `core.components.update()` wrote it at the Entry's top level instead, reported success and committed. The item stayed without the Value it needed, so `core.projects.upgrade()` refused the Project from then on, and where the Component field shared its slug with one of the Entry's own fields, the Value somebody had written there was replaced with no error at all.
+  
+  **The `resolutions` of `core.components.update()` take the Component item's id as a key of its own**, between the Entry's id and the field's slug. Every issue such an update raises carries a `componentItemId`, which is the key to read it from:
+  
+  ```typescript
+  // Before
+  resolutions[issue.entryId][issue.fieldSlug] = correctedValue;
+  
+  // Now
+  resolutions[issue.entryId][issue.componentItemId][issue.fieldSlug] =
+    correctedValue;
+  ```
+  
+  What that buys you:
+  
+  - Two items of the same Component in one Entry each take their own corrected Value, and an item you leave out keeps the update refused with its own issue.
+  - An item nested inside another item's `dynamic` field is reached at any depth.
+  - Every other Value of the Entry stays as it is, its own fields included.
+  - An Entry id the Project does not hold, an item id the Entry does not hold, an item belonging to another Component and a field slug the new definitions do not declare each throw `BadRequest` before anything is written, naming ids and slugs only. Every key is checked, even when the Entry it names raised no issue of its own.
+  
+  **There is no compatibility path and no migration.** The former shape throws `BadRequest`, because its middle key is read as an item id now. Nothing repairs a Project an earlier version already wrote a top-level key into.
+  
+  `core.collections.update()` is unchanged and keeps its two keys, the Entry's id and the field's slug, because no Collection issue belongs to a Component item. See `docs/schema-changes.md`.
+- 3d020ea: The local API's reference page at `GET /` loads nothing from another host and sends nothing to one, so it renders with every other host unreachable and talks only to the machine Core runs on.
+  
+  **Core serves the Scalar bundle itself**, from the new `GET /reference/scalar.js`. The page used to pull it from jsDelivr, which left it blank offline and told a CDN that somebody had opened it. The bundle comes from an exactly pinned `@scalar/api-reference` that the build copies into `dist/node/reference/`, with the notice of its MIT license beside it. Installing Core brings no package it did not bring before, and the package grows by those two files, about 4.9 MB, and nothing else.
+  
+  **The page requests no font from Scalar**, because Scalar's typefaces are only served from `fonts.scalar.com`. With them switched off it renders in Scalar's font stack, which falls through to the system's own typefaces unless the machine has Inter and JetBrains Mono installed.
+  
+  **Scalar's Developer Tools bar and its Ask AI agent are gone.** Opening Ask AI read Scalar's registry over `api.scalar.com` before a reader had typed anything, and the agent's chat runs on Scalar's own service rather than on the machine. The bar's own Share, Register and Generate SDK buttons each work through an account on Scalar, which a local API has nothing to do with. Scalar's request proxy is off too, so a test request is sent straight to the address it names rather than through Scalar.
+  
+  **The sidebar's Open API Client button is gone as well.** It opened `client.scalar.com` with the address of the reader's API in the query string, so clicking it told Scalar where a reader's API runs. The "Powered by Scalar" credit at the foot of the sidebar stays, and is the page's only link to scalar.com, which a reader has to click for anything to reach Scalar at all.
+  
+  **A test request reaches the API again.** The OpenAPI document's `port` server variable carried a number, which OpenAPI does not allow, so the reference left `{port}` in the server URL and Test Request threw `Failed to construct 'URL': Invalid URL` instead of sending. It is a string now. The request goes to `http://localhost:31310`, the port `elek api:start` defaults to, so open the reference at that address and on that port.
+- 82b19ee: **A Collection's icon is the name of a Lucide icon**, rather than one of the two names Core listed. `core.collections.create()` and `core.collections.update()` take any name in Lucide's spelling of lowercase words joined by single dashes, at most 64 characters, so `newspaper`, `car` and `settings` all pass. A name that is empty, carries an uppercase letter, a space, an underscore, a leading, trailing or doubled dash, or passes the cap is refused with `BadRequest`, and nothing is written. Every Collection stored with `home` or `plus` reads back as it was, with no migration.
+  
+  **`SupportedIcon` is `string`** where it was `'home' | 'plus'`, and `supportedIconSchema` is a string schema rather than a `z.enum`. So a caller that read `supportedIconSchema.options` to offer a list of icons reads Lucide's own catalog instead: Core holds no list of Lucide's names and depends on no icon library. Core checks the spelling and the length rather than the name itself, so a name Lucide does not ship passes too. Draw a fallback icon for a name your app cannot resolve.
+  
+  See `docs/usage.md`.
+- 870a326: **No message and no log line Core writes repeats the user or the password of an address.** A remote address can carry both, which git accepts and elek.io does not use as a way to authenticate, and so can the elek.io Cloud address a staging setup points at. Every place that named one now redacts it: cloning a Project that is already on the computer, provisioning a Project the remote does not hold, a Git LFS upload a remote would not take, a remote pointing at another git host than the one it belongs to, an elek.io Cloud that could not be reached, an `ELEK_IO_CLOUD_URL` or `ELEK_IO_CLOUD_GIT_URL` that is no http or https address, and the line the Astro integration writes before every provision. A `CoreError` message is what an error screen shows and what somebody pastes into a report, and the ones a service method throws reach Core's log file as well. The Astro line reaches a hosted build's log instead.
+  
+  - Where a message names an address it writes `https://[redacted]@host/org/repo.git`. The host and the path stay, so the line still says which remote it was about.
+  - `clone()` leaves the address out instead. Its `Conflict` reads `Cannot clone Project "<id>": it already exists locally. Delete it before cloning it again.`, which no longer hands you back the URL you just passed in.
+  - An address with a `scheme://` counts as carrying a credential with a user alone, with a token alone and percent encoded. A password holding an `@` goes whole, where it used to keep everything after the first one: `https://nils:p@ssw0rd@host/repo.git` was written as `https://[redacted]@ssw0rd@host/repo.git`. The SSH shorthand `git@host:org/repo` keeps its user, which is part of the address there rather than a credential.
+  
+  **`core.logger.mask()` masks a text with the rules a log tail runs over its records**, so an application that shows text Core wrote keeps no copy of them. It is the call for an error screen, a copied stack or a dialog. It needs no Project and no User, it reads the home directory of the running process, and it throws on no string.
+  
+  ```typescript
+  core.logger.mask('Cloning https://nils:ghp_x@github.com/org/repo.git failed');
+  // 'Cloning https://[redacted]@github.com/org/repo.git failed'
+  ```
+  
+  - The home directory becomes `~`. On Windows in either case and either separator spelling, and everywhere percent encoded as a `file://` address spells it, which is the spelling a renderer loaded from a file puts in its own stack frames.
+  - The user and the password of an address become `[redacted]`, an email address becomes `[email]` and a git signature on a command line becomes `[redacted]`.
+  - Call it where Core runs, which in a desktop application is the main process rather than a renderer.
+  
+  **A log tail masks two more shapes**, both of them text git wrote rather than records Core authored: an email address a colon directly follows, as in `mara@autohaus-ebersfelde.de: Permission denied`, and the home directory percent encoded. The SSH shorthand stays, there the colon carries a path.
+  
+  What none of this masks is a shape it cannot see: a token on its own, a name somebody typed, or the content of an Entry. Those are kept out where a record is written, which has not changed. See `docs/usage.md`.
+- eaa1775: **A refused synchronization names its cause.** `CoreError` carries a `reason` beside its `type`, from the closed `CoreErrorReason` list Core exports, so an app can tell its user the one thing to fix without reading git's output. A refused `core.projects.synchronize()` names `uncommitted_changes`, `remote_holds_something_else`, `remote_main_without_draft`, `remote_without_atomic_push`, `git_lfs_endpoint_unusable`, `textual_conflict`, `remote_advanced`, `read_only_mode`, `provisioned_copy`, `git_library_missing`, `cloud_unreachable`, `git_host_unreachable`, `remote_names_no_project` or `project_on_another_host`. Each value names the state Core refused for rather than the call, so read-only mode, a provisioned copy, a loader that failed and a refusal from elek.io Cloud or its git host name theirs wherever they are met, not only in a sync.
+  
+  **The reason holds no git output, no address and no credential**, so it crosses a process boundary as it is, which `cause` cannot: that one keeps git's own stdout and stderr, where a remote URL can carry a password. A sync that stops on dangling references raises `Conflict` and carries them instead, and a refusal elsewhere in Core that has no value leaves `reason` absent, so branch on the `type` as well.
+  
+  Every type, message and status code stays as it was, so nothing a consumer reads from a `CoreError` today changes. Core itself stopped telling its own refusals apart by their message's text. `synchronize()` reads `remote_advanced` to decide whether to push again.
+  
+  See `docs/error-handling.md` and `docs/git-and-sync.md`.
+
+### Patch Changes
+
+- d20668c: **`docs/api-clients.md` names the deprecation warning TypeScript 7.0 now prints.** `elek generate:types js` and `elek generate:client js` compile through the tsdown you install inside the `^0.23.0` peer range, and from tsdown 0.23.5 on that compiler says "The `tsgo` generator on TypeScript 7.0 is deprecated and will be removed in the next minor. Upgrade to TypeScript 7.1 or later."
+  
+  - Both commands still do their work, and the rest of the TypeScript 7 behavior the doc describes is unchanged, re-measured on tsdown 0.23.7.
+  - The warning is tsdown's rather than Core's, so a newer TypeScript 7 is what answers it. Core's `typescript` peer range takes a released 7.1 and no prerelease of it, and every 7.1 published so far is a prerelease, so npm can refuse `typescript@7.1.0-beta` beside Core with `ERESOLVE`. TypeScript 7.0 and 6 both stay supported, so stay on either until 7.1 is released.
+  - A project with `isolatedDeclarations` on sees no warning, because declarations are generated by Oxc there.
+
 ## 0.27.0
 
 ### Minor Changes
