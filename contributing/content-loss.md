@@ -24,7 +24,7 @@ The guard is Core's, not a UI's, because guard code belongs where it always runs
 
 | Alternative | Why not |
 | --- | --- |
-| Reuse `resolutions` | `assertResolutionSlugsAreKnown` rejects a slug the new definitions do not declare, and a removed field's slug never is. A removal could not be consented to through that channel at all. |
+| Reuse `resolutions` | `assertResolutionSlugsAreKnown` for a Collection and `assertComponentResolutionSlugsAreKnown` for a Component reject a slug the new definitions do not declare, and a removed field's slug never is. A removal could not be consented to through that channel at all. |
 | A boolean such as `acceptContentLoss: true` | A setup script sets it once and from then on authorizes whatever loss exists at the next run, which re-creates the defect one call later. Keying by field definition id means an edit nobody looked at still refuses. |
 | A constructor option or a Project setting | Same failure, one scope wider: it would be set once and forgotten, and the person losing the content is never the person who set it. |
 | Report the loss after applying it | The caller writes the Entry files as part of the update, so "after" is after the content is gone. |
