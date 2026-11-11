@@ -116,7 +116,7 @@ Every change `prepare()` can report is below, with the bump it contributes. The 
 | `assetChanges` | `metadataChanged` | patch | The Asset's `name` or `description` |
 | `entryChanges` | `deleted` | major | The Entry is gone |
 | `entryChanges` | `added` | minor | An Entry the released state does not hold |
-| `entryChanges` | `modified` | patch | The Entry's values, or its whole file where either side is one this Core cannot read, see [A Release an older Core made](#a-release-an-older-core-made) |
+| `entryChanges` | `modified` | patch | The Entry's Values. Where either side is a file this Core cannot read, its whole file, see [A Release an older Core made](#a-release-an-older-core-made) |
 
 Every row compares the released state against the current `draft`, never the commits in between, so a rename and its undo inside one `draft` is no change at all. A Collection or Component added since the last Release is reported as `added` alone, whatever its slug did afterwards.
 
@@ -263,6 +263,7 @@ A Release commits `project.json` alone and tags that commit, so the Release of a
 
 ```typescript
 const { list } = await core.releases.list({ projectId: project.id });
+// list is newest first, and empty before the Project's first Release or preview
 const changes = await core.releases.changes({
   projectId: project.id,
   tagId: list[0].tagId,
@@ -285,14 +286,14 @@ The Release it was built on is the newest full Release whose version is below th
 The call reads local tags and local commits, so it holds on a clone and on a working copy a synchronization brought another computer's Release into. It throws:
 
 - `NotFound` for a tag that is no Release of the Project.
-- `PreconditionFailed` when the side it compares against is not in this copy. A copy whose history is truncated, as a provisioned copy's is, holds each Release tag without the history between them, so a Release with no full Release before it cannot be read there. Clone the Project to read it.
+- `PreconditionFailed` when the side it compares against is not in this copy. A copy whose history is truncated, as a provisioned copy's is, holds each Release tag without the history between them, so a Release or preview Release with no full Release before it cannot be read there. Clone the Project to read it.
 
 ### A Release an older Core made
 
 A Release keeps the file shapes the Core that made it wrote. They are migrated in memory before they are read, as in any read from history, and an object whose file this Core cannot read even then is still reported from the Release's own tree:
 
 - An object the tree holds is present, so none is reported as added or deleted because its file's shape moved since.
-- An Entry carries one change inside itself, that its Values moved. Where both sides are readable its Values answer that, and where either side is not the whole file does, so a Release that only rewrote such a file's shape is reported as `modified` too.
+- An Entry carries one change inside itself, that its Values moved. Where both sides are readable, its Values are compared. Where either side is not, its whole file is, so a Release that only rewrote such a file's shape is reported as `modified` too.
 - For a Collection, a Component or an Asset, which part changed cannot be read, so such a Release reports that the object is there and no change inside it.
 
 ## Versioning

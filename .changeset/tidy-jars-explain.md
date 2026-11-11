@@ -6,6 +6,6 @@
 
 **The reason holds no git output, no address and no credential**, so it crosses a process boundary as it is, which `cause` cannot: that one keeps git's own stdout and stderr, where a remote URL can carry a password. A sync that stops on dangling references raises `Conflict` and carries them instead, and a refusal elsewhere in Core that has no value leaves `reason` absent, so branch on the `type` as well.
 
-Every type, message and status code stays as it was, so nothing a consumer reads from a `CoreError` today changes. Core itself stopped telling its own refusals apart by their message's text, the retry of a push the remote outran reads the reason instead.
+Every type, message and status code stays as it was, so nothing a consumer reads from a `CoreError` today changes. Core itself stopped telling its own refusals apart by their message's text. `synchronize()` reads `remote_advanced` to decide whether to push again.
 
 See `docs/error-handling.md` and `docs/git-and-sync.md`.

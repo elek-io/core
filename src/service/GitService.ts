@@ -1164,8 +1164,8 @@ export class GitService {
    * commit `core.projects.create()` made, and null where this copy holds a
    * truncated history instead, as a provisioned copy's is.
    *
-   * Two unrelated roots cannot reach one Project, so the oldest of them is
-   * the answer.
+   * Core never merges unrelated histories, so more than one root means a
+   * truncated history, and the oldest of them is read.
    *
    * @see ../../contributing/releases.md
    * @see https://git-scm.com/docs/git-rev-list
