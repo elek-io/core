@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CoreError, uuid } from '../test/setup.js';
+import { CoreError, uuid, type CoreErrorReason } from '../test/setup.js';
 import core from '../test/setup.js';
 import {
   createCollection,
@@ -20,6 +20,28 @@ import {
  */
 
 type Call = [label: string, run: () => Promise<unknown>];
+
+/**
+ * Every value `CoreErrorReason` holds, as a map rather than a list, so one
+ * added to the type fails to compile here until it is listed. Mapping each
+ * cause to a sentence of its own is what an app does with the same shape.
+ */
+const reasons = {
+  uncommitted_changes: true,
+  remote_holds_something_else: true,
+  remote_main_without_draft: true,
+  remote_without_atomic_push: true,
+  git_lfs_endpoint_unusable: true,
+  textual_conflict: true,
+  remote_advanced: true,
+  read_only_mode: true,
+  provisioned_copy: true,
+  git_library_missing: true,
+  remote_names_no_project: true,
+  project_on_another_host: true,
+  cloud_unreachable: true,
+  git_host_unreachable: true,
+} satisfies Record<CoreErrorReason, true>;
 
 let projectId = '';
 let collectionId = '';
@@ -205,6 +227,15 @@ describe('every service method fails with a CoreError', function () {
     '%s',
     async function (_label, run) {
       expect(await rejection(run)).toBeInstanceOf(CoreError);
+    }
+  );
+});
+
+describe('a refused call names its cause from a closed list', function () {
+  it.each(Object.keys(reasons))(
+    '%s is one lowercase token, so it crosses a process boundary as it is',
+    function (reason) {
+      expect(reason).toMatch(/^[a-z]+(?:_[a-z]+)*$/);
     }
   );
 });

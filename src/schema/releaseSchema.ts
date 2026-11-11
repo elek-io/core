@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { uuidSchema, versionSchema } from './baseSchema.js';
+import { gitSignatureSchema } from './gitSchema.js';
 import { projectSchema } from './projectSchema.js';
 
 export const semverBumpSchema = z.enum(['major', 'minor', 'patch']);
@@ -170,5 +171,24 @@ export const releaseListItemSchema = z.object({
   type: z.enum(['release', 'preview']),
   version: versionSchema,
   datetime: z.iso.datetime(),
+  /**
+   * Who made this Release, the author of the commit it tags
+   */
+  author: gitSignatureSchema,
+  /**
+   * What this Release moved in the Project's version against the Release
+   * before it, `null` while the two versions target the same Release
+   */
+  bump: semverBumpSchema.nullable(),
 });
 export type ReleaseListItem = z.infer<typeof releaseListItemSchema>;
+
+export const releaseChangesSchema = z.object({
+  projectId: uuidSchema,
+  /**
+   * The git tag of the Release or preview Release to report, as
+   * `releases.list()` returns it
+   */
+  tagId: uuidSchema,
+});
+export type ReleaseChangesProps = z.infer<typeof releaseChangesSchema>;

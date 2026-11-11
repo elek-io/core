@@ -41,7 +41,7 @@ A peer's row is read at the version `devDependencies` pins, which is the newest 
 | `@hono/zod-openapi` | `^4.0.0` | peer dependency |
 | `@hono/zod-validator` | `^3.25.0 \|\| ^4.0.0` | a dependency of `@hono/zod-openapi` |
 | `@asteasolutions/zod-to-openapi` | `^4.0.0` | a dependency of `@hono/zod-openapi` |
-| `@scalar/types` | `^4.6.7` | via `@scalar/hono-api-reference`, a runtime dependency |
+| `@scalar/types` | `^4.6.7` | via `@scalar/hono-api-reference`, a runtime dependency. `@scalar/api-reference` pulls a newer copy asking for the same range, and being a devDependency it cannot reach a consumer anyway, see [`api-reference.md`](./api-reference.md) |
 | `astro` | `^4.6.6` | the `/astro` entry's peer, read at the dev pin 7.4.4 |
 
 The maximum is `4.6.7`, so the peer range is `^4.6.7`. `devDependencies` pins the latest 4.x (`zod@4.6.7`) so Core develops against the newest patch. Floor and dev pin coincide here, because `@scalar/types` asks for that same patch, and they part again at the next zod release nothing in the graph requires.

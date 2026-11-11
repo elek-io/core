@@ -66,6 +66,7 @@ import {
 import { isNotEmpty, PROVISIONED_MARKER } from '../util/node.js';
 import { acceptedContentLossOf } from '../util/contentLoss.js';
 import { redactUrlCredentials } from '../util/git.js';
+import { INITIAL_PROJECT_VERSION } from '../util/release.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { AssetService } from './AssetService.js';
@@ -156,7 +157,7 @@ export class ProjectService
           created: datetime(),
           updated: null,
           coreVersion: this.coreVersion,
-          version: '0.0.1',
+          version: INITIAL_PROJECT_VERSION,
         };
 
         const projectPath = this.pathTo.project(id);
@@ -1249,16 +1250,16 @@ export class ProjectService
   }
 
   /**
-   * Integrates the changes of `origin` into the current branch and pushes it.
-   * A remote without `draft`, such as a new and empty one, gets the first
-   * push instead: `main`, `draft` and the Release tags in one atomic push.
-   *
-   * A refused sync pushes no ref: `PreconditionFailed` for a remote holding
-   * anything but this Project or lacking atomic pushes for the first push,
-   * `Conflict` for dangling references, whose commits stay local for repair.
+   * Integrates `origin` into the current branch and pushes it, or makes the
+   * first push when the remote holds no `draft`. A refusal pushes no ref and
+   * names its cause: `uncommitted_changes`, `remote_holds_something_else`,
+   * `remote_main_without_draft`, `remote_without_atomic_push`,
+   * `git_lfs_endpoint_unusable`, `textual_conflict`, `remote_advanced`,
+   * `read_only_mode`, `provisioned_copy`, `git_library_missing`,
+   * `cloud_unreachable`, `git_host_unreachable`, `remote_names_no_project` or
+   * `project_on_another_host`. Dangling references raise `Conflict` instead.
    *
    * @see ../../docs/git-and-sync.md
-   * @see ../../contributing/reference-integrity.md
    */
   public synchronize(props: SynchronizeProjectProps): Promise<void> {
     return this.mutating(
@@ -1276,7 +1277,8 @@ export class ProjectService
         if (!uncommitted.isClean) {
           throw CoreError.preconditionFailed(
             `Project "${props.id}" has uncommitted changes. Commit or discard them before synchronizing.`,
-            uncommitted.files
+            uncommitted.files,
+            'uncommitted_changes'
           );
         }
 
@@ -1330,13 +1332,11 @@ export class ProjectService
           } catch (error) {
             // A non-fast-forward rejection means the remote advanced between the
             // fetch and the push. Re-integrate and try again, up to the cap.
-            // Matched on the message `push` sets for that specific case, so an
-            // unrelated `PreconditionFailed` (for example a broken LFS endpoint)
-            // is not mistaken for a retryable race.
+            // Told apart by the reason `push` names, so an unrelated refusal
+            // (for example a broken LFS endpoint) is not mistaken for a
+            // retryable race, and no message's text decides it.
             const isNonFastForward =
-              error instanceof CoreError &&
-              error.type === 'PreconditionFailed' &&
-              error.message.startsWith('Push rejected because the remote');
+              error instanceof CoreError && error.reason === 'remote_advanced';
             if (isNonFastForward && attempt < maxAttempts) {
               continue;
             }
@@ -1367,7 +1367,9 @@ export class ProjectService
     );
 
     const holdsSomethingElse = CoreError.preconditionFailed(
-      `The remote of Project "${id}" holds something other than this Project, so nothing was pushed. Core never merges unrelated histories. Connect the Project to an empty repository, created without a README, license or .gitignore.`
+      `The remote of Project "${id}" holds something other than this Project, so nothing was pushed. Core never merges unrelated histories. Connect the Project to an empty repository, created without a README, license or .gitignore.`,
+      undefined,
+      'remote_holds_something_else'
     );
     if (remoteRefs.length > 0 && remoteBranches.length === 0) {
       throw holdsSomethingElse;
@@ -1394,7 +1396,9 @@ export class ProjectService
         (await this.gitService.isAncestor(projectPath, `origin/${main}`, main));
       if (!containsRemoteMain) {
         throw CoreError.preconditionFailed(
-          `The remote holds the "${main}" of Project "${id}" without "${draft}", and that "${main}" holds commits the local "${main}" lacks, so nothing was pushed. Synchronize the working copy that pushed it instead, because a push from here would leave "${main}" and "${draft}" apart.`
+          `The remote holds the "${main}" of Project "${id}" without "${draft}", and that "${main}" holds commits the local "${main}" lacks, so nothing was pushed. Synchronize the working copy that pushed it instead, because a push from here would leave "${main}" and "${draft}" apart.`,
+          undefined,
+          'remote_main_without_draft'
         );
       }
     }

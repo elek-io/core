@@ -76,7 +76,8 @@ export function classifyLoadError(stderr: string): CoreError | null {
   }
   return CoreError.preconditionFailed(
     `Git could not load the shared library "${library}". Install it, use dugite 3.2.3 or later, whose git links libcurl.so.4, or point LOCAL_GIT_DIRECTORY at another git installation.`,
-    gitOutputCause(stderr, '')
+    gitOutputCause(stderr, ''),
+    'git_library_missing'
   );
 }
 
@@ -403,4 +404,54 @@ export function recordsGitIdentity(args: readonly string[]): boolean {
   }
   const command = args.find((arg) => !arg.startsWith('-'));
   return command !== undefined && !ANONYMOUS_GIT_COMMANDS.has(command);
+}
+
+/**
+ * For every commit of a `git rev-list --parents --topo-order` walk, the first
+ * of `releaseCommits` that contains it, by ancestry rather than by date.
+ *
+ * The walk lists a child before its parents, so reading it backwards reaches
+ * a release commit before every release commit that descends from it. Marking
+ * stops at a commit an earlier release already named, which both keeps the
+ * earlier Release and bounds the whole pass by the length of the walk.
+ *
+ * @see ../../contributing/releases.md
+ */
+export function firstReleaseByCommit(
+  walk: string,
+  releaseCommits: ReadonlySet<string>
+): Map<string, string> {
+  const parentsOf = new Map<string, string[]>();
+  const childrenFirst: string[] = [];
+
+  for (const line of walk.split('\n')) {
+    const [hash, ...parents] = line
+      .trim()
+      .split(/\s+/)
+      .filter((part) => part !== '');
+    if (hash === undefined) {
+      continue;
+    }
+    parentsOf.set(hash, parents);
+    childrenFirst.push(hash);
+  }
+
+  const releaseByCommit = new Map<string, string>();
+  for (let index = childrenFirst.length - 1; index >= 0; index -= 1) {
+    const releaseCommit = childrenFirst[index];
+    if (releaseCommit === undefined || !releaseCommits.has(releaseCommit)) {
+      continue;
+    }
+    const toMark = [releaseCommit];
+    while (toMark.length > 0) {
+      const commit = toMark.pop();
+      if (commit === undefined || releaseByCommit.has(commit)) {
+        continue;
+      }
+      releaseByCommit.set(commit, releaseCommit);
+      toMark.push(...(parentsOf.get(commit) ?? []));
+    }
+  }
+
+  return releaseByCommit;
 }

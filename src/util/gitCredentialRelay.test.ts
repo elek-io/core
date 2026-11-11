@@ -348,6 +348,7 @@ describe('GitCredentialRelay on a Cloud host', function () {
 
     expect(result.stderr).toContain('told us to quit');
     expect(outcome.failure?.type).toEqual('PreconditionFailed');
+    expect(outcome.failure?.reason).toEqual('remote_names_no_project');
     expect(t.cloudGit.calls).toEqual([]);
   });
 
@@ -367,6 +368,7 @@ describe('GitCredentialRelay on a Cloud host', function () {
 
     expect(result.stderr).toContain('told us to quit');
     expect(outcome.failure?.type).toEqual('PreconditionFailed');
+    expect(outcome.failure?.reason).toEqual('git_host_unreachable');
     expect(outcome.failure?.message).toContain('could not reach the git host');
     expect(await t.recorded()).toEqual([]);
   });

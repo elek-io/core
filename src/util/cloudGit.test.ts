@@ -1,7 +1,7 @@
 import { assert, describe, expect, it } from 'vitest';
 import { startFakeCloud } from '../test/cloud.js';
 import { FakeCloudGit } from '../test/cloudGit.js';
-import { createTmpCore, expectCoreError } from '../test/util.js';
+import { createTmpCore, expectCoreError, freezeClock } from '../test/util.js';
 import { CloudClient } from './cloud.js';
 import { CloudGitAccess } from './cloudGit.js';
 import { CoreError, uuid } from './shared.js';
@@ -116,7 +116,22 @@ describe('CloudGitAccess', function () {
     await expectCoreError(
       t.access.credentialFor(hostOne, id),
       'PreconditionFailed',
-      'could not reach the git host (504)'
+      'could not reach the git host (504)',
+      'git_host_unreachable'
+    );
+  });
+
+  it('throws PreconditionFailed when elek.io Cloud is not there', async function () {
+    const t = await setUp();
+    const id = uuid();
+    t.cloudGit.place(id, hostOne);
+    await t.cloud.close();
+
+    await expectCoreError(
+      t.access.credentialFor(hostOne, id),
+      'PreconditionFailed',
+      'Could not reach elek.io Cloud',
+      'cloud_unreachable'
     );
   });
 
@@ -128,6 +143,9 @@ describe('CloudGitAccess', function () {
     t.cloudGit.next.push(
       Response.json({}, { status: 429, headers: { 'Retry-After': '120' } })
     );
+    // The message counts the seconds from a second reading of the clock, so
+    // a stall between the two would otherwise make it say 119 or 121
+    freezeClock();
 
     await expectCoreError(
       t.access.credentialFor(hostOne, first),
@@ -158,7 +176,8 @@ describe('CloudGitAccess', function () {
     await expectCoreError(
       t.access.credentialFor(hostOne, moved),
       'PreconditionFailed',
-      `Set its remote to "http://${hostTwo}/projects/${moved}.git"`
+      `Set its remote to "http://${hostTwo}/projects/${moved}.git"`,
+      'project_on_another_host'
     );
     expect(t.cloudGit.calls.map((call) => call.endpoint)).toEqual([
       'git-token',

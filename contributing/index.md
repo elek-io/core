@@ -27,12 +27,13 @@ About to change an area? Read its doc first, so you change behavior on purpose r
 
 - [`git-credentials.md`](./git-credentials.md) - how git gets credentials through Core's own helper, for elek.io Cloud's git hosts and the remote token, and what to keep intact
 - [`git-identity.md`](./git-identity.md) - why a Project is changed through Core only, and who a commit is signed as
-- [`releases.md`](./releases.md) - why a clone lands on `draft`, which `main` a Release compares against, why it pushes atomically, and what the first push to a new remote sends
+- [`releases.md`](./releases.md) - why a clone lands on `draft`, which `main` a Release compares against, why it pushes atomically, what the first push to a new remote sends, and how a change finds its Release
 - [`error-handling-internals.md`](./error-handling-internals.md) - how `CoreError` and validation work inside Core
 - [`logging.md`](./logging.md) - what a log file may contain, and why names never appear in one
 - [`cloud.md`](./cloud.md) - the one seam every elek.io Cloud call goes through, and the token it holds
 - [`astro-entry.md`](./astro-entry.md) - the design and invariants behind `@elek-io/core/astro`
 - [`openapi-document.md`](./openapi-document.md) - how `GET /openapi.json` is generated, and the rule a recursive schema has to follow
+- [`api-reference.md`](./api-reference.md) - where the bundle behind `GET /` comes from, and why Core serves it itself
 
 ## Dependencies and tooling
 

@@ -14,6 +14,11 @@ import { CoreError } from '../util/shared.js';
 import createApi from './lib/util.js';
 import routes from './routes/index.js';
 import type { ApiEnv } from './lib/types.js';
+import {
+  readScalarBundle,
+  scalarBundleMediaType,
+  scalarBundleRoute,
+} from './lib/reference.js';
 import { Scalar } from '@scalar/hono-api-reference';
 
 // The only address the local API binds, see docs/local-api.md. Passed
@@ -23,8 +28,8 @@ const LOOPBACK = '127.0.0.1';
 
 /**
  * The local, read-only REST API. Constructing it assembles the whole Hono app,
- * the content routes, `/openapi.json` and the Scalar reference UI on `/`, but
- * binds no port. Nothing listens until `start()`.
+ * the content routes, `/openapi.json`, the Scalar reference UI on `/` and the
+ * bundle that UI runs on, but binds no port. Nothing listens until `start()`.
  *
  * CORS admits `http://localhost` and nothing else.
  *
@@ -80,7 +85,10 @@ export class LocalApi {
             description: 'elek.io local API',
             variables: {
               port: {
-                default: 31310,
+                // A string, as OpenAPI requires. Given a number, the
+                // reference leaves `{port}` in the server URL and a test
+                // request throws on it instead of being sent
+                default: '31310',
                 description:
                   'The port specified in elek.io Clients user configuration',
               },
@@ -127,8 +135,32 @@ export class LocalApi {
           targetKey: 'js',
           clientKey: 'fetch',
         },
+        // Core serves Scalar's bundle itself, so the page loads nothing from
+        // jsDelivr and renders with no network at all
+        cdn: scalarBundleRoute,
+        // Scalar's own typefaces are only served from fonts.scalar.com, so the
+        // page renders in the system font stack instead
+        withDefaultFonts: false,
+        // Scalar's Developer Tools bar offers Share, Register and Generate
+        // SDK, which each work through an account on Scalar
+        showDeveloperTools: 'never',
+        // Ask AI reads Scalar's registry and uploads the OpenAPI document with
+        // every message
+        agent: { disabled: true },
+        // Scalar's proxy would carry a test request whose address is not the
+        // local one, so Core sends the request itself or not at all
+        proxyUrl: '',
+        // The sidebar's Open API Client button opens client.scalar.com with
+        // the address of the reader's API in its query string
+        hideClientButton: true,
       })
     );
+
+    this.api.get(scalarBundleRoute, async (c) => {
+      return c.body(await readScalarBundle(), 200, {
+        'content-type': scalarBundleMediaType,
+      });
+    });
   }
 
   /**
