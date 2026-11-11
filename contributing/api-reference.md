@@ -9,7 +9,7 @@ Where the JavaScript bundle behind `GET /` comes from, why Core serves it rather
 - A local API that cannot be reached from another host still asks another host before it renders. With every host but loopback blocked, the default page leaves `#app` empty and renders not one character.
 - Nothing about Core should tell a third party that somebody opened it, which the request alone does.
 
-So the renderer's `cdn` option points at Core's own route, four switches turn off what would reach Scalar at runtime, and the bundle ships inside the package. [`../src/api/lib/reference.ts`](../src/api/lib/reference.ts) holds the route and finds the file, [`../src/api/index.ts`](../src/api/index.ts) holds the switches.
+So the renderer's `cdn` option points at Core's own route, a set of switches turns off what would reach Scalar at runtime or on a click, and the bundle ships inside the package. [`../src/api/lib/reference.ts`](../src/api/lib/reference.ts) holds the route and finds the file, [`../src/api/index.ts`](../src/api/index.ts) holds the switches.
 
 ## Where the bundle comes from
 
@@ -36,7 +36,7 @@ Nothing mechanical ties the two versions, because the renderer asks jsDelivr for
 ## What a change here has to keep true
 
 - The page names no absolute address, so a browser asks the host it came from and no other.
-- `withDefaultFonts`, `showDeveloperTools`, `agent` and `proxyUrl` stay as they are, or the page loads fonts from Scalar, offers its account features, or lets a request go through Scalar's proxy.
+- `withDefaultFonts`, `showDeveloperTools`, `agent`, `proxyUrl` and `hideClientButton` stay as they are, or the page loads fonts from Scalar, offers its account features, lets a request go through Scalar's proxy, or carries the address of the reader's API to `client.scalar.com` in a sidebar button.
 - Every server variable in the OpenAPI document carries a string default. A number leaves the placeholder in the server URL, and a test request throws on it instead of reaching the API.
 - The license notice names the file beside it. Core ships a third-party file, so it ships what that file is licensed under.
 

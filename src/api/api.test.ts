@@ -200,6 +200,9 @@ describe('API', function () {
     expect(configuration['agent']).toEqual({ disabled: true });
     // Scalar's proxy would carry a request whose address is not the local one
     expect(configuration['proxyUrl']).toEqual('');
+    // The Open API Client button opens client.scalar.com with the address of
+    // the reader's API in its query string
+    expect(configuration['hideClientButton']).toEqual(true);
   });
 
   it('serves the bundle the reference page runs on', async function () {

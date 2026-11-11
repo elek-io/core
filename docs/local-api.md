@@ -152,8 +152,9 @@ What that costs and what it rules out:
 | Developer Tools | The bar is off. Its Share, Register and Generate SDK buttons each work through an account on Scalar, which a local API has nothing to do with |
 | Ask AI | The agent is off. Opening it reads Scalar's registry over `api.scalar.com`, and its chat runs on Scalar's own service rather than on the machine |
 | Test Request | Scalar's proxy is off, so a request goes straight to the address it names rather than through Scalar |
+| Open API Client | The sidebar's button is gone. It opened `client.scalar.com` with the address of the reader's API in the query string |
 
-The links to scalar.com stay, both of them plain links in the page. A reader has to click one, so nothing is loaded until they do.
+The "Powered by Scalar" credit at the foot of the sidebar stays, and is the page's only link to scalar.com. A reader has to click it, so nothing reaches Scalar until they do.
 
 The bundle is `@scalar/api-reference`, copied into the package when Core is built. It ships at `dist/node/reference/scalar.js`, with the notice of its MIT license next to it.
 

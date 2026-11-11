@@ -150,6 +150,9 @@ export class LocalApi {
         // Scalar's proxy would carry a test request whose address is not the
         // local one, so Core sends the request itself or not at all
         proxyUrl: '',
+        // The sidebar's Open API Client button opens client.scalar.com with
+        // the address of the reader's API in its query string
+        hideClientButton: true,
       })
     );
 
