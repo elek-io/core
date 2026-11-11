@@ -4,7 +4,7 @@ import { assert, describe, expect, it } from 'vitest';
 import core, { testUserProps, uuid } from '../test/setup.js';
 import { createProject } from '../test/util.js';
 import { CoreError } from '../util/shared.js';
-import { redactGitArgs } from '../util/git.js';
+import { redactGitArgs, redactUrlCredentials } from '../util/git.js';
 
 /**
  * Core's log files can be attached to a bug report, so a git command line
@@ -63,6 +63,102 @@ describe('redactGitArgs', function () {
     expect(
       redactGitArgs(['clone', 'https://example.com/org/repo.git'])
     ).toEqual(['clone', 'https://example.com/org/repo.git']);
+  });
+
+  it('redacts all of a password holding an at sign', function () {
+    expect(
+      redactGitArgs([
+        'remote',
+        'add',
+        'origin',
+        'https://user:p@ssw0rd@example.com/org/repo.git',
+      ])
+    ).toEqual([
+      'remote',
+      'add',
+      'origin',
+      'https://[redacted]@example.com/org/repo.git',
+    ]);
+  });
+});
+
+/**
+ * The one helper every message, log line and command line goes through, so
+ * they all treat the same address as carrying a credential.
+ */
+describe('redactUrlCredentials', function () {
+  it('takes a user, a token and a password out of an address', function () {
+    expect(
+      redactUrlCredentials('https://nils:ghp_notreal@example.com/org/repo.git')
+    ).toBe('https://[redacted]@example.com/org/repo.git');
+    expect(
+      redactUrlCredentials('https://ghp_notreal@example.com/org/repo.git')
+    ).toBe('https://[redacted]@example.com/org/repo.git');
+    expect(redactUrlCredentials('http://nils@example.com/org/repo.git')).toBe(
+      'http://[redacted]@example.com/org/repo.git'
+    );
+  });
+
+  it('takes a percent encoded one out as well', function () {
+    expect(
+      redactUrlCredentials(
+        'https://nils%40example.com:tok%2Fen@example.com/org/repo.git'
+      )
+    ).toBe('https://[redacted]@example.com/org/repo.git');
+  });
+
+  it('takes all of a password holding an at sign, not the first half', function () {
+    // Everything before the last `@` of the authority is the credential or
+    // part of one, whichever `@` the client reads as the delimiter
+    expect(
+      redactUrlCredentials('https://nils:p@ssw0rd@example.com/org/repo.git')
+    ).toBe('https://[redacted]@example.com/org/repo.git');
+  });
+
+  it('leaves the SSH shorthand, where the user is part of the address', function () {
+    expect(redactUrlCredentials('git@github.com:elek-io/core.git')).toBe(
+      'git@github.com:elek-io/core.git'
+    );
+  });
+
+  it('leaves a separator no scheme precedes, since that is no authority', function () {
+    // Nothing a client dials, so what is in front of the `@` is no more a
+    // credential than the user of the SSH shorthand is
+    expect(redactUrlCredentials('://nils:ghp_notreal@example.com/x')).toBe(
+      '://nils:ghp_notreal@example.com/x'
+    );
+    expect(redactUrlCredentials('see "://nils@example.com/x"')).toBe(
+      'see "://nils@example.com/x"'
+    );
+    expect(redactUrlCredentials('9://nils@example.com/x')).toBe(
+      '9://nils@example.com/x'
+    );
+    // A scheme holding a digit is still a scheme
+    expect(redactUrlCredentials('h9://nils:ghp_notreal@example.com/x')).toBe(
+      'h9://[redacted]@example.com/x'
+    );
+  });
+
+  it('keeps the host, the path and the text around the address', function () {
+    expect(
+      redactUrlCredentials(
+        'Provisioning from "https://nils:ghp_notreal@example.com/org/repo.git" at "release"'
+      )
+    ).toBe(
+      'Provisioning from "https://[redacted]@example.com/org/repo.git" at "release"'
+    );
+    expect(redactUrlCredentials('https://example.com/org/repo.git')).toBe(
+      'https://example.com/org/repo.git'
+    );
+  });
+
+  it('reaches every address of a text and leaves an at sign in a query alone', function () {
+    expect(
+      redactUrlCredentials('https://a:1@one.example.com/x https://b:2@two.test')
+    ).toBe('https://[redacted]@one.example.com/x https://[redacted]@two.test');
+    expect(
+      redactUrlCredentials('https://example.com?to=nils@example.com')
+    ).toBe('https://example.com?to=nils@example.com');
   });
 });
 

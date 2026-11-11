@@ -13,6 +13,7 @@ import { uuid } from '../util/shared.js';
 import { finishesWithin, TEARDOWN_BOUND_MS } from '../util/teardown.js';
 import { cleanupTimeoutMs, hungTeardownMs } from './budgets.js';
 import sharedCore from './setup.js';
+import { removeTree } from './sweep.js';
 import { cleanUpTmpCore } from './util.js';
 
 /**
@@ -38,12 +39,17 @@ function neverFinishes(): Promise<never> {
   return new Promise<never>(() => {});
 }
 
-/** A data directory of its own, removed once the perturbation is restored. */
+/**
+ * A data directory of its own, removed once the perturbation is restored.
+ *
+ * The removal retries like the suite's own, because the transport a stuck
+ * log file test ends by hand can still hold the file it wrote.
+ */
 function tmpDataDir(): string {
   const dataDir = Path.join(Os.tmpdir(), `elek-io-core-teardown-${uuid()}`);
   onTestFinished(async () => {
     vi.restoreAllMocks();
-    await Fs.remove(dataDir);
+    await removeTree(dataDir);
   });
   return dataDir;
 }
@@ -337,6 +343,34 @@ describe("the cleanup of a test's Core", function () {
       cleanUpTmpCore(slow, dataDir, slowly)
     ).resolves.toBeUndefined();
     expect(await Fs.pathExists(dataDir)).toBe(false);
+  });
+
+  it('fails nothing while a log file in the directory is still held', async function () {
+    const dataDir = tmpDataDir();
+    const held = new ElekIoCore({ dataDir, log });
+    // Disposed first, so what the removal meets is the contention below
+    // rather than whatever the steps before it cost on a slow runner
+    expect(await held.dispose()).toEqual({ stalledSteps: [] });
+    // A file put back into the log directory stands in for whatever held the
+    // one a cleanup on Windows could not remove, which was never recorded.
+    // The window is a fraction of the bound, so retries are left inside it
+    // after the last file went back. Two writers, neither sleeping, so a
+    // removal has no gap between two files to slip through
+    const writingUntil = Date.now() + cleanupTimeoutMs / 6;
+    let isWriting = true;
+    const writers = [0, 1].map(async (writer) => {
+      for (let round = 0; isWriting && Date.now() < writingUntil; round++) {
+        await Fs.outputFile(
+          Path.join(held.util.pathTo.logs, `held-${writer}-${round}.log`),
+          'x'
+        ).catch(() => undefined);
+      }
+    });
+
+    await expect(cleanUpTmpCore(held, dataDir)).resolves.toBeUndefined();
+
+    isWriting = false;
+    await Promise.all(writers);
   });
 
   it('reports nothing when every step finishes', async function () {

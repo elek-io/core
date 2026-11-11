@@ -8,6 +8,7 @@ import {
   createCollection,
   createLocalRemoteRepository,
   createProject,
+  expectCoreError,
   getFileHash,
 } from '../test/util.js';
 
@@ -136,7 +137,7 @@ describe('Git LFS', function () {
     await Fs.remove(remotePath);
   });
 
-  it('throws a descriptive PreconditionFailed when the remote does not support LFS', async function () {
+  it('names the unusable LFS endpoint as the cause, with the address in the message alone', async function () {
     const remote = await createLocalRemoteRepository();
     const remotePath = Path.join(core.util.pathTo.tmp, remote.id);
 
@@ -153,9 +154,14 @@ describe('Git LFS', function () {
       core.util.pathTo.project(local.id)
     );
 
-    await expect(
-      core.git.push(core.util.pathTo.project(local.id))
-    ).rejects.toMatchObject({ type: 'PreconditionFailed' });
+    // The address is in the message, so the reason crosses a process
+    // boundary as it is
+    await expectCoreError(
+      core.git.push(core.util.pathTo.project(local.id)),
+      'PreconditionFailed',
+      remote.id,
+      'git_lfs_endpoint_unusable'
+    );
 
     await local.destroy();
     await Fs.remove(remotePath);

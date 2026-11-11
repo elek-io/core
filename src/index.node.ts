@@ -249,6 +249,7 @@ export default class ElekIoCore {
       this.referenceService
     );
     this.releaseService = new ReleaseService(
+      this.coreVersion,
       this.options,
       this.pathTo,
       this.logService,

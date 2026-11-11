@@ -142,6 +142,8 @@ One call, five steps, and nothing reaches the remote until the last:
 
 A remote that advanced between the fetch and the push rejects the push as non-fast-forward. Core answers that by re-integrating and trying again, up to five attempts before the `PreconditionFailed` reaches you.
 
+Every refusal, which is every `PreconditionFailed` a sync raises, names its cause in `error.reason`, so an app can say the one thing to fix, see [A refused sync names its cause](#a-refused-sync-names-its-cause).
+
 There is no pre-check for an `origin`. Without one the underlying git command fails and surfaces as `Internal` carrying git's own message.
 
 ## Cloning an existing Project
@@ -266,7 +268,7 @@ Tags made before the Project had a remote reach it with [the first push](#the-fi
 | Error type | When |
 | --- | --- |
 | `Unauthorized` (401) | A commit is attempted with no User set, or the remote rejects the credentials. Cloning needs no User. |
-| `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree, a rebase conflict or a remote holding anything but the Project, or a push fails because the remote does not support Git LFS or, for a Release or a first push, atomic pushes. Also when git cannot load a shared library it needs, see [`usage.md`](./usage.md#installing-and-instantiating). |
+| `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree, a rebase conflict or a remote holding anything but the Project, or a push fails because the remote does not support Git LFS or, for a Release or a first push, atomic pushes. Also when git cannot load a shared library it needs, see [`usage.md`](./usage.md#installing-and-instantiating), and when elek.io Cloud or its git host cannot answer for a Project's credential. A refused `synchronize()` names its cause, see below. |
 | `Conflict` (409) | `clone()` targets an already-present Project, a guarded `delete()` has unpushed commits, or `synchronize()` would integrate dangling references. |
 | `BadRequest` (400) | A `core.git.push()` combines the `all` and `refs` options, which are mutually exclusive. |
 | `Internal` (500) | The underlying git command exits non-zero (no upstream, merge conflict, network, ...). |
@@ -274,6 +276,35 @@ Tags made before the Project had a remote reach it with [the first push](#the-fi
 The read-only and provisioned-copy pair is the one to expect first, because it guards `init`, `commit` and `push` alike, at the git layer as well as in the services.
 
 See [`error-handling.md`](./error-handling.md) for the full error model.
+
+### A refused sync names its cause
+
+A `synchronize()` refused for one of these states names it in `reason`, so an app branches on a value rather than on git's output:
+
+| What stopped it | `reason` | What gets past it |
+| --- | --- | --- |
+| Changes that are not committed | `uncommitted_changes` | commit or discard them |
+| The Git repository holds something else | `remote_holds_something_else` | connect the Project to an empty repository |
+| The remote's `main` holds commits the local `main` lacks, with no `draft` | `remote_main_without_draft` | synchronize the working copy that pushed that `main` |
+| The remote takes no atomic push | `remote_without_atomic_push` | use a Git provider that supports one |
+| The remote will not take the Assets over Git LFS | `git_lfs_endpoint_unusable` | use a Git provider with Git LFS enabled |
+| A rebase stopped on a textual conflict | `textual_conflict` | resolve the local changes and synchronize again |
+| The remote kept moving, through five attempts | `remote_advanced` | synchronize again |
+| Core runs read-only | `read_only_mode` | run a writable Core |
+| The Project is a provisioned copy | `provisioned_copy` | delete it and clone the Project to work on it |
+| Git cannot load a shared library it needs | `git_library_missing` | install the library, see [`usage.md`](./usage.md#installing-and-instantiating) |
+| elek.io Cloud could not be reached | `cloud_unreachable` | check the connection and synchronize again |
+| elek.io Cloud could not reach its git host | `git_host_unreachable` | synchronize again later |
+| The remote on Cloud's git host names no Project | `remote_names_no_project` | set the remote's path to `projects/<id>.git` |
+| Cloud keeps the Project on another git host | `project_on_another_host` | set the remote to the address the message names |
+
+Each value names the state rather than the call, so the ones git and elek.io Cloud raise reach every other call that runs git or asks Cloud for a credential, and read-only mode and a provisioned copy reach every other refused write.
+
+The dangling references of step 4 raise `Conflict` instead, carrying each reference rather than a `reason`. A sync that fails for anything but a refusal leaves `reason` absent, so an app answers it by its type:
+
+- `Unauthorized`, for a credential the remote or elek.io Cloud rejected.
+- `RateLimited`, when Cloud asks to call again later.
+- `Internal`, for a git command that exited non-zero, a Project with no `origin` included.
 
 ## See also
 

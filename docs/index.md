@@ -4,7 +4,7 @@ Consumer documentation for `@elek-io/core`. These docs ship inside the published
 
 They cover how to use Core: the data model, the public API, the local REST API, the CLI and the Astro integration. They do not cover how to develop Core itself, that lives in the repository's `contributing/` folder and is not published.
 
-New to elek.io Core? Read [`concepts.md`](./concepts.md) for the data model, then [`usage.md`](./usage.md) for a runnable walkthrough. Reach for the reference docs below as needed.
+New to elek.io Core? Read [`concepts.md`](./concepts.md) for the data model, then [`usage.md`](./usage.md) for a runnable walkthrough. Reach for the reference docs below as needed. Where an example uses `core` or `project` without creating it, it means the two [`usage.md`](./usage.md) creates.
 
 ## Start here
 

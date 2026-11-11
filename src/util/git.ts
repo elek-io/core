@@ -76,11 +76,64 @@ export function classifyLoadError(stderr: string): CoreError | null {
   }
   return CoreError.preconditionFailed(
     `Git could not load the shared library "${library}". Install it, use dugite 3.2.3 or later, whose git links libcurl.so.4, or point LOCAL_GIT_DIRECTORY at another git installation.`,
-    gitOutputCause(stderr, '')
+    gitOutputCause(stderr, ''),
+    'git_library_missing'
   );
 }
 
 const REDACTED = '[redacted]';
+
+/**
+ * The userinfo of an address, up to the last `@` of its authority.
+ * Everything before that last one is the credential or part of one
+ * whichever `@` the client reads as the delimiter, and a host name holds
+ * none for this to swallow. Stopping at `?` and `#` keeps an `@` in a
+ * query string out of it, and stopping at `/` keeps it inside one
+ * authority.
+ */
+const URL_CREDENTIALS = /:\/\/[^/?#\s]*@/g;
+
+/** A character a scheme is written with, and the one it must hold */
+const SCHEME_CHARACTER = /[\w+.-]/;
+const SCHEME_LETTER = /[a-zA-Z]/;
+
+/**
+ * Takes the credentials out of every remote address in a text, so an
+ * address a User or a pipeline put a password or a token into can be
+ * written down. The host, the path and the rest of the text stay.
+ *
+ * The SSH shorthand `git@host:org/repo` carries no scheme, so its user
+ * stays: there it is part of the address rather than a credential.
+ *
+ * @see ../../contributing/logging.md
+ */
+export function redactUrlCredentials(value: string): string {
+  return value.replace(URL_CREDENTIALS, function (match, offset: number) {
+    return hasSchemeBefore(value, offset) ? `://${REDACTED}@` : match;
+  });
+}
+
+/**
+ * Whether a scheme ends where the `://` at `end` begins, which is a run of
+ * scheme characters holding at least one letter.
+ *
+ * Read backwards from the `://` rather than matched in front of it: a
+ * pattern that matches the scheme first retries from every position of the
+ * text, which costs a masker handed a stack or a whole file quadratic
+ * time.
+ */
+function hasSchemeBefore(value: string, end: number): boolean {
+  for (let index = end - 1; index >= 0; index--) {
+    const character = value.charAt(index);
+    if (SCHEME_LETTER.test(character)) {
+      return true;
+    }
+    if (SCHEME_CHARACTER.test(character) === false) {
+      return false;
+    }
+  }
+  return false;
+}
 
 /**
  * Redacts the User's identity out of a git command line before it is written
@@ -102,9 +155,7 @@ export function redactGitArgs(args: readonly string[]): string[] {
     if (previous === 'user.name' || previous === 'user.email') {
       return REDACTED;
     }
-    // scheme://userinfo@host, never the SSH shorthand git@host:org/repo,
-    // where the user is part of the address rather than a credential
-    return arg.replace(/^([a-zA-Z][\w+.-]*:\/\/)[^/@]+@/, `$1${REDACTED}@`);
+    return redactUrlCredentials(arg);
   });
 }
 
@@ -353,4 +404,54 @@ export function recordsGitIdentity(args: readonly string[]): boolean {
   }
   const command = args.find((arg) => !arg.startsWith('-'));
   return command !== undefined && !ANONYMOUS_GIT_COMMANDS.has(command);
+}
+
+/**
+ * For every commit of a `git rev-list --parents --topo-order` walk, the first
+ * of `releaseCommits` that contains it, by ancestry rather than by date.
+ *
+ * The walk lists a child before its parents, so reading it backwards reaches
+ * a release commit before every release commit that descends from it. Marking
+ * stops at a commit an earlier release already named, which both keeps the
+ * earlier Release and bounds the whole pass by the length of the walk.
+ *
+ * @see ../../contributing/releases.md
+ */
+export function firstReleaseByCommit(
+  walk: string,
+  releaseCommits: ReadonlySet<string>
+): Map<string, string> {
+  const parentsOf = new Map<string, string[]>();
+  const childrenFirst: string[] = [];
+
+  for (const line of walk.split('\n')) {
+    const [hash, ...parents] = line
+      .trim()
+      .split(/\s+/)
+      .filter((part) => part !== '');
+    if (hash === undefined) {
+      continue;
+    }
+    parentsOf.set(hash, parents);
+    childrenFirst.push(hash);
+  }
+
+  const releaseByCommit = new Map<string, string>();
+  for (let index = childrenFirst.length - 1; index >= 0; index -= 1) {
+    const releaseCommit = childrenFirst[index];
+    if (releaseCommit === undefined || !releaseCommits.has(releaseCommit)) {
+      continue;
+    }
+    const toMark = [releaseCommit];
+    while (toMark.length > 0) {
+      const commit = toMark.pop();
+      if (commit === undefined || releaseByCommit.has(commit)) {
+        continue;
+      }
+      releaseByCommit.set(commit, releaseCommit);
+      toMark.push(...(parentsOf.get(commit) ?? []));
+    }
+  }
+
+  return releaseByCommit;
 }

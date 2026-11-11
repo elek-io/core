@@ -290,6 +290,27 @@ function statusCodesOf(): Map<string, string> {
   );
 }
 
+/**
+ * Every value `CoreErrorReason` holds, read out of the given source of
+ * `src/util/shared.ts`.
+ *
+ * Two consumer docs restate the list as a table an app maps, and a table
+ * maintained by hand drifts from the union it copies. Parsed rather than
+ * imported, because a rule reads the repository as text, and the source is
+ * an argument so a self-test can feed it a declaration that moved.
+ */
+export function errorReasonsOf(source: string): Set<string> {
+  const block = /export type CoreErrorReason =([^;]*);/s.exec(source)?.[1];
+  if (block === undefined) {
+    throw new Error(
+      'CoreErrorReason is not declared as expected in src/util/shared.ts'
+    );
+  }
+  return new Set(
+    [...block.matchAll(/'[a-z_]+'/g)].map((value) => value[0].slice(1, -1))
+  );
+}
+
 /** A row of the documented release table, which names an array, a change type and a bump. */
 const tableRowSchema = z.object({
   arrays: z.string(),
@@ -1197,6 +1218,43 @@ export const rules: Rule[] = [
           file,
           line: 1,
           message: `the table has ${declared.size} types, the sentence says ${counted[1]}`,
+        });
+      }
+      return violations;
+    },
+  },
+  {
+    id: 'links/reason-table',
+    summary: 'the documented refusal reasons are the ones Core has',
+    files: () =>
+      ['docs/error-handling.md', 'docs/git-and-sync.md'].filter((file) =>
+        exists(file)
+      ),
+    check: (file, content) => {
+      const declared = errorReasonsOf(readFile('src/util/shared.ts'));
+      const documented = new Set<string>();
+      const violations: Violation[] = [];
+      for (const line of linesOf(content)) {
+        if (!line.text.trimStart().startsWith('|')) continue;
+        // | `uncommitted_changes` | the working tree holds changes ... |,
+        // whichever column the reason sits in
+        const reasons = line.text.match(/(?<=`)[a-z]+_[a-z_]+(?=`)/g) ?? [];
+        for (const reason of reasons) {
+          documented.add(reason);
+          if (declared.has(reason)) continue;
+          violations.push({
+            file,
+            line: line.number,
+            message: `${reason} is not a CoreErrorReason, drop the row`,
+          });
+        }
+      }
+      for (const reason of declared) {
+        if (documented.has(reason)) continue;
+        violations.push({
+          file,
+          line: 1,
+          message: `${reason} is a CoreErrorReason with no row in the table`,
         });
       }
       return violations;

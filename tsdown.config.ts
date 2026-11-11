@@ -11,6 +11,23 @@ export default defineConfig([
     sourcemap: true,
     clean: true,
     deps: { neverBundle: ['dugite', /^node:/] },
+    // The local API's reference page loads its bundle from Core rather than
+    // from a CDN, so the bundle of the pinned @scalar/api-reference
+    // devDependency ships next to the code that serves it, with the notice of
+    // the license it carries. `files` ships dist/node, so both are published.
+    // See contributing/api-reference.md
+    copy: [
+      {
+        from: 'node_modules/@scalar/api-reference/dist/browser/standalone.js',
+        to: 'dist/node/reference',
+        rename: 'scalar.js',
+      },
+      {
+        from: 'src/api/lib/scalar-license.txt',
+        to: 'dist/node/reference',
+        rename: 'scalar-license.txt',
+      },
+    ],
   },
   {
     entry: ['src/index.browser.ts'],

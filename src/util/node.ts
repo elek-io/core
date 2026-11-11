@@ -8,6 +8,7 @@ import {
   contentChannelSchema,
   projectFolderSchema,
 } from '../schema/projectSchema.js';
+import { redactUrlCredentials } from './git.js';
 import { CoreError } from './shared.js';
 
 /**
@@ -111,7 +112,7 @@ export function resolveCloudUrl(url?: string): string {
     elekIoCoreOptionsSchema.shape.cloud.shape.url.safeParse(candidate);
   if (!parsed.success) {
     throw CoreError.badRequest(
-      `ELEK_IO_CLOUD_URL must be an http or https URL, got "${candidate}"`
+      `ELEK_IO_CLOUD_URL must be an http or https URL, got "${redactUrlCredentials(candidate)}"`
     );
   }
   return parsed.data.replace(/\/+$/, '');
@@ -140,7 +141,7 @@ export function resolveCloudGitUrl(
     elekIoCoreOptionsSchema.shape.cloud.shape.gitUrl.safeParse(candidate);
   if (!parsed.success || parsed.data === null) {
     throw CoreError.badRequest(
-      `ELEK_IO_CLOUD_GIT_URL must be an http or https URL, got "${candidate}"`
+      `ELEK_IO_CLOUD_GIT_URL must be an http or https URL, got "${redactUrlCredentials(candidate)}"`
     );
   }
   return parsed.data.replace(/\/+$/, '');

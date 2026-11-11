@@ -90,26 +90,59 @@ const statusCodes: Record<CoreErrorType, number> = {
 };
 
 /**
+ * What Core refused for, beside the `type` saying that it refused.
+ *
+ * A closed list an app maps to a sentence per value, with the compiler
+ * naming the value it misses. Every `PreconditionFailed` of
+ * `projects.synchronize()` carries one. Each value names the state rather
+ * than the call, so it also reaches every other call that can meet it.
+ *
+ * @see ../../docs/git-and-sync.md
+ */
+export type CoreErrorReason =
+  | 'uncommitted_changes'
+  | 'remote_holds_something_else'
+  | 'remote_main_without_draft'
+  | 'remote_without_atomic_push'
+  | 'git_lfs_endpoint_unusable'
+  | 'textual_conflict'
+  | 'remote_advanced'
+  | 'read_only_mode'
+  | 'provisioned_copy'
+  | 'git_library_missing'
+  | 'remote_names_no_project'
+  | 'project_on_another_host'
+  | 'cloud_unreachable'
+  | 'git_host_unreachable';
+
+/**
  * The only error a service method throws, so `error instanceof CoreError` is
  * the whole catch.
  *
  * `type` is the nine-way discriminant to branch on. `statusCode` is the HTTP
  * status the local API answers with and is not unique, `UpgradeFailed` and
- * `VersionSkew` are both 422. `cause` keeps whatever was originally thrown.
- *
- * The factories below only pick a `type`, so none of them repeats this.
+ * `VersionSkew` are both 422. `reason` names what Core refused for, where it
+ * has a value for it. `cause` keeps whatever was originally thrown. The
+ * factories below only pick a `type`, so none of them repeats this.
  *
  * @see ../../docs/error-handling.md
  */
 export class CoreError extends Error {
   public readonly type: CoreErrorType;
   public readonly statusCode: number;
+  public readonly reason: CoreErrorReason | undefined;
 
-  constructor(type: CoreErrorType, message: string, cause?: unknown) {
+  constructor(
+    type: CoreErrorType,
+    message: string,
+    cause?: unknown,
+    reason?: CoreErrorReason
+  ) {
     super(message, { cause });
     this.name = 'CoreError';
     this.type = type;
     this.statusCode = statusCodes[type];
+    this.reason = reason;
   }
 
   /** The Project, entity or git object the id or slug names is not on disk. */
@@ -143,10 +176,15 @@ export class CoreError extends Error {
   /**
    * The write is refused before it runs, in read-only mode, on a provisioned
    * copy, or with no remote configured. `mutating()` raises it before the
-   * input is even parsed.
+   * input is even parsed. `reason` names what it refused for, wherever
+   * `CoreErrorReason` holds a value for it.
    */
-  static preconditionFailed(message: string, cause?: unknown) {
-    return new CoreError('PreconditionFailed', message, cause);
+  static preconditionFailed(
+    message: string,
+    cause?: unknown,
+    reason?: CoreErrorReason
+  ) {
+    return new CoreError('PreconditionFailed', message, cause, reason);
   }
   /**
    * A Project upgrade cannot run: the Project file carries no readable Core

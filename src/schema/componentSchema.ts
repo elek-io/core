@@ -96,6 +96,17 @@ export type ReadBySlugComponentProps = z.infer<
   typeof readBySlugComponentSchema
 >;
 
+/**
+ * A Component update, plus the two answers its cascade can ask for.
+ *
+ * `resolutions` is keyed by the Entry's id, then the Component item's id,
+ * then the field's slug, which is what each issue names, so a corrected
+ * Value lands in the item that raised it. A Collection update keys them by
+ * the Entry's id and the field's slug alone, because no Collection issue
+ * belongs to an item.
+ *
+ * @see ../../docs/schema-changes.md
+ */
 export const updateComponentSchema = componentFileSchema
   .pick({
     id: true,
@@ -107,7 +118,10 @@ export const updateComponentSchema = componentFileSchema
   .extend({
     projectId: uuidSchema.readonly(),
     resolutions: z
-      .record(uuidSchema, z.record(slugSchema, valueSchema))
+      .record(
+        uuidSchema,
+        z.record(uuidSchema, z.record(slugSchema, valueSchema))
+      )
       .optional(),
     acceptedContentLoss: z.array(uuidSchema).optional(),
   });

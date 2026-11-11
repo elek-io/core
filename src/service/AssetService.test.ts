@@ -7,6 +7,7 @@ import {
   createAsset,
   createProject,
   ensureCleanGitStatus,
+  expectTimestampBetween,
   getFileHash,
   tmpDirPath,
 } from '../test/util.js';
@@ -28,12 +29,16 @@ describe('AssetService', function () {
   });
 
   it('should be able to create a new Asset', async function () {
+    const before = Date.now();
     asset = await createAsset(project.id);
+    const after = Date.now();
 
     expect(asset.id).toBeDefined();
-    expect(
-      Math.floor(new Date(asset.created).getTime() / 1000)
-    ).to.approximately(Math.floor(Date.now() / 1000), 5); // 5 seconds of delta allowed
+    expectTimestampBetween(
+      asset.created,
+      { before, after },
+      "the Asset's created"
+    );
     expect(asset.extension).toEqual('png');
     expect(asset.mimeType).toEqual('image/png');
     const createHistory = await core.assets.history({

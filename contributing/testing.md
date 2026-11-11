@@ -111,7 +111,12 @@ A per-call budget below the global caps the heaviest work in a file tighter than
 
 When a measurement shows a test or a hook needs more, raise the global rather than that one call. Take the slowest of the four runners, put the number in [`src/test/budgets.ts`](../src/test/budgets.ts), and state it in the table above with its date.
 
-[`published-docs.test.ts`](../src/published-docs.test.ts) is the only test that spawns the package manager, `pnpm pack --dry-run` in its `beforeAll` for the list of files a publish ships. Packing runs `prepack` and `prepare`, so adding either turns that hook into a full build on all four platforms, and whatever it writes to stdout lands in the JSON the test parses.
+`pnpm pack --dry-run` spawns the package manager in the `beforeAll` of every test that needs the list of files a publish ships:
+
+- [`published-docs.test.ts`](../src/published-docs.test.ts), for the pages an installed package resolves.
+- [`reference.test.ts`](../src/api/reference.test.ts), for the bundle the reference page runs on and the notice of its license.
+
+Packing runs `prepack` and `prepare`, so adding either turns both hooks into a full build on all four platforms, and whatever it writes to stdout lands in the JSON those tests parse.
 
 ### How a cleanup step is bounded
 
@@ -127,9 +132,11 @@ So every step of a cleanup is bounded, and none of the bounds is a test's or a h
 
 - Core bounds its own three steps. A stalled one is named in what `dispose()` hands back and in a `warn` record, except the logger, whose stream has ended by the time it is known.
 - `cleanUpTmpCore` in [`src/test/util.ts`](../src/test/util.ts) bounds the step left to it and throws naming every step that stalled, so a step that stops coming back says which one it is in seconds.
+- The removal retries, through `removeTree` in [`src/test/sweep.ts`](../src/test/sweep.ts), and so does the one [`tmpDirPath`](../src/test/util.ts) registers. On `windows-2025` on 2026-11-02 one cleanup failed with `ENOTEMPTY` on the `rmdir` of its own `logs`, right after the logger closed. What held the directory that once was never recorded, which is why nothing reads the error here either.
+- The bound caps the whole step, the retries included, so retries outlasting it read as a stall and name the data directory.
 - The cleanup budget is measured like the others, 504ms times the multiple. Nothing in CI reports a cleanup duration, so that measurement is a Linux one scaled to the slowest runner rather than the windows-only set, see [`budgets.ts`](../src/test/budgets.ts).
 - [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) holds what cannot drift: the whole cleanup stays inside the hook budget, a test waits longer than Core does, and this doc states every number.
-- A cleanup that is only slow fails nothing. [`cleanup.test.ts`](../src/test/cleanup.test.ts) drives each step into never finishing and a step into taking a third of its bound, which is a fraction rather than a hair under it so no jitter on a slow runner reads slow as stalled.
+- A cleanup that is only slow fails nothing, and neither does one whose directory is held. [`cleanup.test.ts`](../src/test/cleanup.test.ts) drives each step into never finishing, a step into taking a third of its bound, and two writers putting a log file back for a sixth of it. Each is a fraction rather than a hair under the bound, so no jitter on a slow runner reads slow as stalled.
 
 ### A timed out test leaks into its own file only
 
@@ -175,6 +182,31 @@ So a prompt only hangs a test where the runner attaches a terminal, which fits t
 - An askpass that answers still runs, which is what the control is there for.
 - One that fails ends the call with git's reason, inside the slowest test printed beside it on that runner, 3,061ms, times the margin in [`budgets.ts`](../src/test/budgets.ts). That ceiling is no per-call budget, which [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) keeps on the measured globals, but the line between a call that ran and one that waited.
 - A failing control call puts git's own stderr into the assertion's message, so the next one says what git was waiting for.
+
+## A time Core read from the clock
+
+A test never compares a time Core took from the clock against a reading of its own within a tolerance. The gap between the two is whatever the machine gives, and a tolerance is sized on the machine that wrote it.
+
+A duration a test measures between two readings of its own and holds against a budget, as [`cleanup.test.ts`](../src/test/cleanup.test.ts) and [`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) do, reads no time Core took, so this rule leaves it alone.
+
+Two shapes, both in [`util.ts`](../src/test/util.ts):
+
+| Shape | Asserts | How |
+| --- | --- | --- |
+| `expectTimestampBetween` | a timestamp Core wrote, such as a `created` or an `updated` | read the clock before and after the call, and assert the timestamp lies in that window |
+| `freezeClock` | a number Core builds from two readings of its own, such as the seconds a 429's `Retry-After` leaves | pin `Date.now()` from the call to the end of the test, so both readings are one moment. `new Date()`, and so `datetime()`, does not read it, which is why a `created` or an `updated` takes `expectTimestampBetween` |
+
+Neither shape waits, so a slow runner costs nothing:
+
+- A window widens with the call it brackets, so a timestamp written inside it is in range however long the git work around it took.
+- A frozen clock takes the machine out of the arithmetic. `refusalOf` in [`cloud.ts`](../src/util/cloud.ts) reads the clock once for the deadline and once for the message, so the message says 119 seconds when a second passes between the two lines, and 121 when the wall clock steps back.
+
+What the tolerances before them took to fail:
+
+| The assertion | Failed on |
+| --- | --- |
+| a `created` against a reading taken at assertion time, within 5 seconds | 7 seconds between the two, on `windows-2025` on 2026-10-21, in a job whose suite took over 10 minutes. A 6 second stall after the call reproduces it anywhere |
+| the 429 message saying 120 seconds | 1.2 seconds between the two clock reads of `refusalOf`, which makes it say 119 |
 
 ## Parallel test files
 

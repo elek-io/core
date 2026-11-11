@@ -132,7 +132,16 @@ What each level carries is a promise rather than an accident:
 
 So `info`, the default, is enough to reconstruct what was done and in what order, and `debug` adds how Core did it. An application that ships Core to end users can run at `info` and still have a diagnostic record.
 
-A log file holds ids, paths, counts and error messages. It never holds the content of an Entry, the name of a Project, Collection or Asset, or the git signature of the User. It does hold the absolute data directory, which includes the account name, because it is written for the machine it is on. Anything that ships a log file elsewhere is responsible for scrubbing that prefix.
+A log file holds ids, paths, counts and error messages. It does hold the absolute data directory, which includes the account name, because it is written for the machine it is on. Anything that ships a log file elsewhere is responsible for scrubbing that prefix.
+
+A log line never holds:
+
+- the content of an Entry.
+- the name of a Project, Collection or Asset.
+- the git signature of the User.
+- the user and the password of an address, a Project's git remote and elek.io Cloud alike.
+
+The message of a `CoreError` carries no user and no password either. Where Core names an address it writes `https://[redacted]@host/org/repo.git`, and where it has nothing to add it leaves the address out. It does name the slug you addressed an object by, which a log line has no use for: a `NotFound` is how you learn which slug did not resolve.
 
 `resource['service.name']` is the `source` the record was logged with, so your own records stay distinguishable from Core's in the same file. `service.version` is Core's version on Core's records, and yours on yours when you set the `log.hostVersion` option above. Set it: a log file someone sends you has no other way to say which build wrote it.
 
@@ -168,6 +177,24 @@ What the tail itself removes is the short list a log file may hold because it is
 Nothing goes silently. What was replaced says what it was (`~`, `[redacted]`, `[email]`), and a record that changed carries `redaction.masked.count` and `redaction.redacted.count`, so a reader can tell a deliberate gap from an empty one.
 
 **A tail is still personal data.** The ids in it resolve against the repository, which makes it pseudonymized rather than anonymous. Scrubbing lowers what a tail carries. It does not change what it is. Ask for consent before collecting one, and decide how long you keep one.
+
+#### Masking a text of your own
+
+`core.logger.mask()` runs those same rules over any string, so an application showing text Core wrote keeps no copy of them:
+
+```typescript
+core.logger.mask('Cloning https://nils:ghp_x@github.com/org/repo.git failed');
+// 'Cloning https://[redacted]@github.com/org/repo.git failed'
+```
+
+It is the call for an error screen, a copied stack or anything else a person can paste on. What it masks:
+
+- The home directory of the running process, as `~`. On Windows in either case and either separator spelling, and everywhere percent encoded as a `file://` address spells it.
+- The user and password of an address, as `[redacted]`. The SSH shorthand `git@host:org/repo` keeps its user, which is part of the address there.
+- An email address, as `[email]`, one a colon follows included, as in `mara@example.de: Permission denied`. Where that colon carries a path it is the SSH shorthand, and the address stays.
+- A git signature on a command line, as `[redacted]`.
+
+What it does not mask is anything it has no shape for: a token on its own, a name a User typed, or the content of an Entry. It needs no Project and no User, it reads the home directory of the running process, and it throws on no string. Call it where Core runs, which in a desktop application is the main process rather than a renderer.
 
 ## Setting the User (required before writing)
 
@@ -235,12 +262,14 @@ const asset = await core.assets.create({
 
 A Collection holds the field definitions every Entry must follow. See [`fields.md`](./fields.md) for the full list of field types and their properties.
 
+`icon` is the name of a Lucide icon, in Lucide's spelling of lowercase words joined by single dashes, at most 64 characters. Core checks that spelling and the length rather than the name itself, so a name Lucide does not ship passes too. Draw a fallback icon for a name your app cannot resolve. [Lucide's icon list](https://lucide.dev/icons/) holds every name.
+
 ```typescript
 import { uuid } from '@elek-io/core';
 
 const collection = await core.collections.create({
   projectId: project.id,
-  icon: 'home',
+  icon: 'package',
   name: {
     singular: { en: 'Product', de: 'Produkt' },
     plural: { en: 'Products', de: 'Produkte' },
@@ -357,9 +386,11 @@ const past = await core.entries.read({
 });
 ```
 
+Each commit an Entry's history returns also names the first Release that included that change in `release`, or null while none does, see [`releases.md`](./releases.md#the-release-a-change-was-first-included-in).
+
 ## Error handling
 
-Services throw `CoreError` (exported from `@elek-io/core`) with a `type` and `statusCode`. Catch it to branch on failure modes.
+Services throw `CoreError` (exported from `@elek-io/core`) with a `type` and `statusCode`, and a `reason` where Core has a value for what it refused. Catch it to branch on failure modes.
 
 ```typescript
 import { CoreError } from '@elek-io/core';

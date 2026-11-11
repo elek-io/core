@@ -4,7 +4,6 @@ import { CoreError } from '../util/shared.js';
 import {
   collectionFileSchema,
   countCollectionsSchema,
-  migrateCollectionSchema,
   deleteCollectionSchema,
   entryFileSchema,
   type EntryFile,
@@ -59,11 +58,7 @@ import {
   componentIdsOf,
   preloadComponentResolver,
 } from '../util/componentResolver.js';
-import {
-  applyMigrations,
-  collectionMigrations,
-  migrating,
-} from './migrations/index.js';
+import { migrateCollectionFile } from './migrations/index.js';
 import { datetime, slug, uuid } from '../util/shared.js';
 import { AbstractSlugIndexedEntityService } from './AbstractSlugIndexedEntityService.js';
 import type { ReferenceService } from './ReferenceService.js';
@@ -850,17 +845,10 @@ export class CollectionService
    * written by a newer Core than the one installed. Reads no disk.
    */
   public migrate(potentiallyOutdatedCollectionFile: unknown) {
-    return migrating('Collection', () => {
-      const loose = migrateCollectionSchema.parse(
-        potentiallyOutdatedCollectionFile
-      );
-      const migrated = applyMigrations(
-        loose,
-        collectionMigrations,
-        this.coreVersion
-      );
-      return collectionFileSchema.parse(migrated);
-    });
+    return migrateCollectionFile(
+      this.coreVersion,
+      potentiallyOutdatedCollectionFile
+    );
   }
 
   /**

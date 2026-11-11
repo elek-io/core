@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import z from 'zod';
 import {
   anchorOf,
+  errorReasonsOf,
   exists,
   mermaidBlocks,
   readFile,
@@ -101,6 +102,68 @@ describe('documentation', () => {
     for (const [heading, expected] of cases) {
       expect(anchorOf(heading), `anchor for "${heading}"`).toEqual(expected);
     }
+  });
+
+  describe('links/reason-table', () => {
+    const doc = 'docs/error-handling.md';
+    const table = readFile(doc);
+    const conflictRow =
+      "| `textual_conflict` | a rebase stopped on a conflict between the local changes and the remote's |";
+
+    /** What the rule reports for a doc, which is the real one with one defect. */
+    const messagesOf = (content: string) =>
+      rules
+        .filter((rule) => rule.id === 'links/reason-table')
+        .flatMap((rule) => rule.check(doc, content))
+        .map((violation) => violation.message);
+
+    it('reports a reason the type does not hold', () => {
+      const messages = messagesOf(
+        table.replace('`textual_conflict`', '`textual_conflicts`')
+      );
+
+      expect(messages).toContain(
+        'textual_conflicts is not a CoreErrorReason, drop the row'
+      );
+    });
+
+    it('reports a reason whose row is gone', () => {
+      const messages = messagesOf(table.replace(conflictRow, ''));
+
+      expect(messages).toStrictEqual([
+        'textual_conflict is a CoreErrorReason with no row in the table',
+      ]);
+    });
+
+    it('reports a reason the doc only names in prose', () => {
+      const messages = messagesOf(
+        table.replace(
+          conflictRow,
+          'A rebase that stopped on a conflict names `textual_conflict`.'
+        )
+      );
+
+      expect(messages).toStrictEqual([
+        'textual_conflict is a CoreErrorReason with no row in the table',
+      ]);
+    });
+
+    it('takes the reason from whichever column it sits in', () => {
+      const messages = messagesOf(
+        table.replace(
+          conflictRow,
+          '| a rebase stopped on a conflict | `textual_conflict` |'
+        )
+      );
+
+      expect(messages).toStrictEqual([]);
+    });
+
+    it('reports the declaration being renamed away', () => {
+      expect(() =>
+        errorReasonsOf("export type CoreErrorCause =\n  | 'textual_conflict';")
+      ).toThrow('CoreErrorReason is not declared as expected');
+    });
   });
 
   describe('links/release-table', () => {

@@ -1,4 +1,5 @@
 import { testClient } from 'hono/testing';
+import { scalarBundleRoute } from './lib/reference.js';
 import { createTestApi } from './lib/util.js';
 import router from './routes/index.js';
 import type {
@@ -28,6 +29,10 @@ interface OpenApiDocument {
   info: { title: string; version: string };
   paths: Record<string, unknown>;
   components?: { schemas?: Record<string, unknown> };
+  servers?: {
+    url: string;
+    variables?: Record<string, { default: unknown }>;
+  }[];
 }
 
 const app = createTestApi(
@@ -170,6 +175,66 @@ describe('API', function () {
 
     const html = await response.text();
     expect(html).toContain('/openapi.json');
+  });
+
+  it('serves a reference page that names no host of its own', async function () {
+    // Every address on the page is root absolute, so a browser asks the host
+    // it came from and no other. Scalar's default page pulls its bundle from
+    // jsDelivr and its typefaces from fonts.scalar.com instead
+    const response = await fetch(`http://127.0.0.1:${apiPort}/`);
+    const html = await response.text();
+
+    expect(html.match(/https?:\/\/[^\s"'<>]+/g)).toEqual(null);
+    expect(html).toContain(`src="${scalarBundleRoute}"`);
+  });
+
+  it('switches off what the reference would load from or send to Scalar', async function () {
+    const response = await fetch(`http://127.0.0.1:${apiPort}/`);
+    const configuration = referenceConfiguration(await response.text());
+
+    // Scalar's typefaces are only served from fonts.scalar.com
+    expect(configuration['withDefaultFonts']).toEqual(false);
+    // Scalar's Developer Tools bar carries its own account features
+    expect(configuration['showDeveloperTools']).toEqual('never');
+    // Ask AI reads Scalar's registry and uploads the document with a message
+    expect(configuration['agent']).toEqual({ disabled: true });
+    // Scalar's proxy would carry a request whose address is not the local one
+    expect(configuration['proxyUrl']).toEqual('');
+    // The Open API Client button opens client.scalar.com with the address of
+    // the reader's API in its query string
+    expect(configuration['hideClientButton']).toEqual(true);
+  });
+
+  it('serves the bundle the reference page runs on', async function () {
+    const response = await fetch(
+      `http://127.0.0.1:${apiPort}${scalarBundleRoute}`
+    );
+
+    expect(response.status).toEqual(200);
+    expect(response.headers.get('content-type')).toContain('javascript');
+
+    // The build the page's second script calls registers this global
+    expect(await response.text()).toContain('window.Scalar');
+  });
+
+  it('gives every server variable a default a request can be built from', async function () {
+    // OpenAPI asks for a string. Given a number, the reference leaves the
+    // placeholder in the server URL and a test request throws on it rather
+    // than reaching the API
+    const response = await fetch(`http://127.0.0.1:${apiPort}/openapi.json`);
+    const document = (await response.json()) as OpenApiDocument;
+    const servers = document.servers ?? [];
+
+    expect(servers.length).toBeGreaterThan(0);
+    for (const server of servers) {
+      let url = server.url;
+      for (const [name, variable] of Object.entries(server.variables ?? {})) {
+        expect(typeof variable.default).toEqual('string');
+        url = url.replaceAll(`{${name}}`, String(variable.default));
+      }
+      expect(url).not.toMatch(/[{}]/);
+      expect(() => new URL(url)).not.toThrow();
+    }
   });
 
   // Projects
@@ -474,6 +539,21 @@ describe('API', function () {
     expect(isRunningAfter).toEqual(false);
   });
 });
+
+/**
+ * The configuration object the reference page hands the Scalar bundle, read
+ * out of the inline script that calls it.
+ */
+function referenceConfiguration(html: string): Record<string, unknown> {
+  const call = "Scalar.createApiReference('#app',";
+  // The UMD build Core serves is what registers that global. The default
+  // page loads the ESM build and imports from it instead
+  expect(html).toContain(call);
+
+  const open = html.indexOf('{', html.indexOf(call));
+  const close = html.lastIndexOf('}');
+  return JSON.parse(html.slice(open, close + 1)) as Record<string, unknown>;
+}
 
 /**
  * Names of every `#/components/schemas/<name>` a document references, so a
