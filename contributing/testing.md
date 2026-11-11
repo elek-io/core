@@ -183,6 +183,31 @@ So a prompt only hangs a test where the runner attaches a terminal, which fits t
 - One that fails ends the call with git's reason, inside the slowest test printed beside it on that runner, 3,061ms, times the margin in [`budgets.ts`](../src/test/budgets.ts). That ceiling is no per-call budget, which [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) keeps on the measured globals, but the line between a call that ran and one that waited.
 - A failing control call puts git's own stderr into the assertion's message, so the next one says what git was waiting for.
 
+## A time Core read from the clock
+
+A test never compares a time Core took from the clock against a reading of its own within a tolerance. The gap between the two is whatever the machine gives, and a tolerance is sized on the machine that wrote it.
+
+A duration a test measures between two readings of its own and holds against a budget, as [`cleanup.test.ts`](../src/test/cleanup.test.ts) and [`gitCredentialRelay.test.ts`](../src/util/gitCredentialRelay.test.ts) do, reads no time Core took, so this rule leaves it alone.
+
+Two shapes, both in [`util.ts`](../src/test/util.ts):
+
+| Shape | Asserts | How |
+| --- | --- | --- |
+| `expectTimestampBetween` | a timestamp Core wrote, such as a `created` or an `updated` | read the clock before and after the call, and assert the timestamp lies in that window |
+| `freezeClock` | a number Core builds from two readings of its own, such as the seconds a 429's `Retry-After` leaves | pin `Date.now()` from the call to the end of the test, so both readings are one moment. `new Date()`, and so `datetime()`, does not read it, which is why a `created` or an `updated` takes `expectTimestampBetween` |
+
+Neither shape waits, so a slow runner costs nothing:
+
+- A window widens with the call it brackets, so a timestamp written inside it is in range however long the git work around it took.
+- A frozen clock takes the machine out of the arithmetic. `refusalOf` in [`cloud.ts`](../src/util/cloud.ts) reads the clock once for the deadline and once for the message, so the message says 119 seconds when a second passes between the two lines, and 121 when the wall clock steps back.
+
+What the tolerances before them took to fail:
+
+| The assertion | Failed on |
+| --- | --- |
+| a `created` against a reading taken at assertion time, within 5 seconds | 7 seconds between the two, on `windows-2025` on 2026-10-21, in a job whose suite took over 10 minutes. A 6 second stall after the call reproduces it anywhere |
+| the 429 message saying 120 seconds | 1.2 seconds between the two clock reads of `refusalOf`, which makes it say 119 |
+
 ## Parallel test files
 
 Test files run in parallel, one file per vitest worker. This works because no state is shared between files:
