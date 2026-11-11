@@ -1,6 +1,7 @@
 import type { ZodError, ZodType } from 'zod';
 import { cloudErrorResponseSchema } from '../schema/cloudSchema.js';
 import type { LogService } from '../service/LogService.js';
+import { redactUrlCredentials } from './git.js';
 import {
   CoreError,
   type CoreErrorReason,
@@ -157,7 +158,7 @@ export class CloudClient {
       });
     } catch (error) {
       throw CoreError.preconditionFailed(
-        `Could not reach elek.io Cloud at "${url}"`,
+        `Could not reach elek.io Cloud at "${redactUrlCredentials(url)}"`,
         error,
         'cloud_unreachable'
       );
@@ -283,10 +284,14 @@ async function refusalOf(
   }
 
   const retryAfter = retryAfterOf(response);
+  // Every message naming an address goes through the one helper, rather
+  // than this one being the exception. `fetch` refuses an address that
+  // carries credentials, so today only the message above is handed one
+  const address = redactUrlCredentials(url);
   const detail =
     response.status === 429 && retryAfter !== null
-      ? `elek.io Cloud answered 429 to ${request.subject} at "${url}", call again in ${Math.ceil((retryAfter - Date.now()) / 1000)} seconds`
-      : `elek.io Cloud answered ${response.status} to ${request.subject} at "${url}"`;
+      ? `elek.io Cloud answered 429 to ${request.subject} at "${address}", call again in ${Math.ceil((retryAfter - Date.now()) / 1000)} seconds`
+      : `elek.io Cloud answered ${response.status} to ${request.subject} at "${address}"`;
   switch (response.status) {
     // The body was rejected, which is something a caller can act on
     case 400:

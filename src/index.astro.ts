@@ -3,6 +3,7 @@ import ElekIoCore, {
   CoreError,
   type ConstructorElekIoCoreProps,
 } from './index.node.js';
+import { redactUrlCredentials } from './util/git.js';
 import { resolveContentRef } from './util/node.js';
 import { assertElekConfig, type ElekConfig } from './astro/elekConfig.js';
 
@@ -118,7 +119,7 @@ export function elek(props: ElekIntegrationProps): AstroIntegration {
           for (const project of projects) {
             const ref = resolveContentRef(project.ref);
             logger.info(
-              `Provisioning "${project.alias}" (Project ${project.id}) at "${ref}" from "${project.remoteUrl}"`
+              `Provisioning "${project.alias}" (Project ${project.id}) at "${ref}" from "${redactUrlCredentials(project.remoteUrl)}"`
             );
             const result = await core.projects.provision({
               id: project.id,

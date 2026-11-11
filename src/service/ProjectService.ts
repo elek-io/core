@@ -65,6 +65,7 @@ import {
 } from './migrations/index.js';
 import { isNotEmpty, PROVISIONED_MARKER } from '../util/node.js';
 import { acceptedContentLossOf } from '../util/contentLoss.js';
+import { redactUrlCredentials } from '../util/git.js';
 import { INITIAL_PROJECT_VERSION } from '../util/release.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
@@ -253,7 +254,7 @@ export class ProjectService
 
         if (alreadyExists) {
           throw CoreError.conflict(
-            `Tried to clone Project "${projectFile.id}" from "${props.url}" - but the Project already exists locally`
+            `Cannot clone Project "${projectFile.id}": it already exists locally. Delete it before cloning it again.`
           );
         }
 
@@ -504,7 +505,7 @@ export class ProjectService
     );
     if (projectFile.id !== id) {
       throw CoreError.badRequest(
-        `The remote at "${url}" contains Project "${projectFile.id}", not the requested Project "${id}"`
+        `The remote at "${redactUrlCredentials(url)}" contains Project "${projectFile.id}", not the requested Project "${id}"`
       );
     }
     // Fails fast on version skew, before the copy is used

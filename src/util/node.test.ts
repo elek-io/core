@@ -314,6 +314,20 @@ describe('resolveCloudUrl', () => {
       /http or https/
     );
   });
+
+  it('repeats a refused address without its credentials', () => {
+    // A staging Cloud behind HTTP basic auth carries a password in its
+    // address, and no message Core writes repeats one
+    vi.stubEnv('ELEK_IO_CLOUD_URL', 'ftp://nils:ghp_notreal@127.0.0.1:31311');
+    expect(() => resolveCloudUrl()).toThrowError(
+      'ELEK_IO_CLOUD_URL must be an http or https URL, got "ftp://[redacted]@127.0.0.1:31311"'
+    );
+
+    vi.stubEnv('ELEK_IO_CLOUD_URL', undefined);
+    expect(() =>
+      resolveCloudUrl('ftp://nils:ghp_notreal@127.0.0.1:31311')
+    ).toThrowError('got "ftp://[redacted]@127.0.0.1:31311"');
+  });
 });
 
 describe('resolveCloudToken', () => {
@@ -549,6 +563,15 @@ describe('resolveCloudGitUrl', () => {
     expect(() =>
       resolveCloudGitUrl(undefined, 'https://api.elek.io')
     ).toThrowError(/ELEK_IO_CLOUD_GIT_URL/);
+  });
+
+  it('repeats a refused pattern without its credentials', () => {
+    vi.stubEnv('ELEK_IO_CLOUD_GIT_URL', 'ftp://nils:ghp_notreal@git.elek.io');
+    expect(() =>
+      resolveCloudGitUrl(undefined, 'https://api.elek.io')
+    ).toThrowError(
+      'ELEK_IO_CLOUD_GIT_URL must be an http or https URL, got "ftp://[redacted]@git.elek.io"'
+    );
   });
 });
 

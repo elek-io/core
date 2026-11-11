@@ -192,3 +192,77 @@ describe('LogService process error handlers', function () {
     expect(process.listenerCount('uncaughtException')).toBe(baseUncaught);
   });
 });
+
+/**
+ * `core.logger.mask()` is what an application showing text Core wrote runs
+ * it through, so it keeps no copy of these rules. See
+ * contributing/logging.md.
+ */
+describe('the masker an application can call', function () {
+  it('masks a credential, an address and this process home directory', async function () {
+    const log = new LogService(options, pathTo);
+    const home = Os.homedir();
+
+    expect(
+      log.mask(
+        `Cloning https://nils:ghp_notreal@github.com/a/b.git into ${Path.join(home, 'elek.io')}`
+      )
+    ).toBe(
+      `Cloning https://[redacted]@github.com/a/b.git into ${Path.join('~', 'elek.io')}`
+    );
+    expect(log.mask('mara@autohaus-ebersfelde.de: Permission denied')).toBe(
+      '[email]: Permission denied'
+    );
+    expect(log.mask('Remote git@github.com:elek-io/core.git')).toBe(
+      'Remote git@github.com:elek-io/core.git'
+    );
+    await log.close();
+  });
+
+  it('runs the rules a tail runs, rather than a copy of them', async function () {
+    const log = new LogService(options, pathTo);
+    const scrub = LogService.createLogScrubber({
+      homedir: Os.homedir(),
+      platform: process.platform,
+    });
+    const text = `git commit --author=John Doe <john.doe@test.com> in ${Os.homedir()} from https://nils:ghp_notreal@github.com/a/b.git`;
+
+    expect(log.mask(text)).toBe(
+      scrub({
+        timestamp: '2026-08-21T14:02:11.000Z',
+        level: 'info',
+        severityNumber: 9,
+        message: text,
+        resource: {
+          'service.name': 'core',
+          'service.version': '0.0.0',
+          'os.type': 'linux',
+          'host.arch': 'amd64',
+        },
+      }).message
+    );
+    await log.close();
+  });
+
+  it('answers any string without throwing, since it guards text it did not build', async function () {
+    const log = new LogService(options, pathTo);
+    const strange = [
+      '',
+      ' ',
+      '[]{}()*+?^$|\\',
+      '%',
+      '%E0%A4%A',
+      '\u{1F600}',
+      '\uD800',
+      'a@b',
+      'https://',
+      '@'.repeat(500),
+      'x'.repeat(100_000),
+    ];
+
+    for (const text of strange) {
+      expect(typeof log.mask(text)).toBe('string');
+    }
+    await log.close();
+  });
+});

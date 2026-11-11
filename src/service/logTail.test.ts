@@ -414,6 +414,48 @@ describe('the scrubbers a tail runs, for the records Core did not author', funct
     );
   });
 
+  it('matches the home directory percent encoded in a file address', function () {
+    // A renderer loaded from a file puts its own stack frames in a
+    // `file://` address, where a space and an umlaut arrive encoded
+    expect(
+      scrubbed({
+        message:
+          'at render (file:///C:/Users/J%C3%B6rg%20M%C3%BCller/AppData/Local/app/index.js:1:1)',
+        homedir: 'C:\\Users\\Jörg Müller',
+        platform: 'win32',
+      }).message
+    ).toBe('at render (file:///~/AppData/Local/app/index.js:1:1)');
+    // The needle carries the leading separator everywhere but Windows, so
+    // what is left of `file:///home/jörg` is the two slashes of the scheme
+    expect(
+      scrubbed({
+        message: 'at render (file:///home/j%C3%B6rg/app/index.js:1:1)',
+        homedir: '/home/jörg',
+      }).message
+    ).toBe('at render (file://~/app/index.js:1:1)');
+  });
+
+  it('matches a home directory holding half a character, rather than throwing', function () {
+    // Windows hands an unpaired surrogate through from USERPROFILE, which
+    // a `file://` address spells as the replacement character
+    const homedir = `C:\\Users\\J${String.fromCharCode(0xd800)}rg`;
+
+    expect(
+      scrubbed({
+        message: `Created file "${homedir}\\elek.io\\a3f.json"`,
+        homedir,
+        platform: 'win32',
+      }).message
+    ).toBe('Created file "~\\elek.io\\a3f.json"');
+    expect(
+      scrubbed({
+        message: 'at render (file:///C:/Users/J%EF%BF%BDrg/app/index.js:1:1)',
+        homedir,
+        platform: 'win32',
+      }).message
+    ).toBe('at render (file:///~/app/index.js:1:1)');
+  });
+
   it('takes the git signature off a command line an older Core wrote', function () {
     expect(
       scrubbed({
@@ -458,10 +500,30 @@ describe('the scrubbers a tail runs, for the records Core did not author', funct
     ).toBe('Reached out to [email].');
   });
 
+  it('names an address a colon follows, which is how git reports a refusal', function () {
+    expect(
+      scrubbed({
+        message: 'mara@autohaus-ebersfelde.de: Permission denied (publickey).',
+      }).message
+    ).toBe('[email]: Permission denied (publickey).');
+  });
+
   it('leaves the SSH shorthand, where the user is part of the address', function () {
     expect(
       scrubbed({ message: 'Remote git@github.com:elek-io/core.git' }).message
     ).toBe('Remote git@github.com:elek-io/core.git');
+    // The same shorthand as git prints it, with the path on the colon
+    expect(
+      scrubbed({ message: 'Cloning git@github.com:elek-io/core.git into' })
+        .message
+    ).toBe('Cloning git@github.com:elek-io/core.git into');
+  });
+
+  it('takes all of a password holding an at sign out of an address', function () {
+    expect(
+      scrubbed({ message: 'Cloning https://nils:p@ssw0rd@github.com/a/b.git' })
+        .message
+    ).toBe('Cloning https://[redacted]@github.com/a/b.git');
   });
 
   it('reaches into a nested attribute, since a host meta may nest', function () {

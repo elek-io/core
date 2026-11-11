@@ -50,6 +50,7 @@ import {
   parsePorcelainStatusLine,
   recordsGitIdentity,
   redactedCommand,
+  redactUrlCredentials,
 } from '../util/git.js';
 
 /**
@@ -576,7 +577,7 @@ export class GitService {
         }
         const url = await this.remotes.getOriginUrl(path).catch(() => null);
         throw CoreError.preconditionFailed(
-          `Git LFS upload to the remote${url ? ` "${url}"` : ''} failed. The remote does not support Git LFS, has it disabled, or its LFS endpoint is unreachable. elek.io stores Asset binaries with Git LFS, please use a Git provider with LFS enabled.`,
+          `Git LFS upload to the remote${url ? ` "${redactUrlCredentials(url)}"` : ''} failed. The remote does not support Git LFS, has it disabled, or its LFS endpoint is unreachable. elek.io stores Asset binaries with Git LFS, please use a Git provider with LFS enabled.`,
           error,
           'git_lfs_endpoint_unusable'
         );

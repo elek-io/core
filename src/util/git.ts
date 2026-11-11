@@ -84,6 +84,58 @@ export function classifyLoadError(stderr: string): CoreError | null {
 const REDACTED = '[redacted]';
 
 /**
+ * The userinfo of an address, up to the last `@` of its authority.
+ * Everything before that last one is the credential or part of one
+ * whichever `@` the client reads as the delimiter, and a host name holds
+ * none for this to swallow. Stopping at `?` and `#` keeps an `@` in a
+ * query string out of it, and stopping at `/` keeps it inside one
+ * authority.
+ */
+const URL_CREDENTIALS = /:\/\/[^/?#\s]*@/g;
+
+/** A character a scheme is written with, and the one it must hold */
+const SCHEME_CHARACTER = /[\w+.-]/;
+const SCHEME_LETTER = /[a-zA-Z]/;
+
+/**
+ * Takes the credentials out of every remote address in a text, so an
+ * address a User or a pipeline put a password or a token into can be
+ * written down. The host, the path and the rest of the text stay.
+ *
+ * The SSH shorthand `git@host:org/repo` carries no scheme, so its user
+ * stays: there it is part of the address rather than a credential.
+ *
+ * @see ../../contributing/logging.md
+ */
+export function redactUrlCredentials(value: string): string {
+  return value.replace(URL_CREDENTIALS, function (match, offset: number) {
+    return hasSchemeBefore(value, offset) ? `://${REDACTED}@` : match;
+  });
+}
+
+/**
+ * Whether a scheme ends where the `://` at `end` begins, which is a run of
+ * scheme characters holding at least one letter.
+ *
+ * Read backwards from the `://` rather than matched in front of it: a
+ * pattern that matches the scheme first retries from every position of the
+ * text, which costs a masker handed a stack or a whole file quadratic
+ * time.
+ */
+function hasSchemeBefore(value: string, end: number): boolean {
+  for (let index = end - 1; index >= 0; index--) {
+    const character = value.charAt(index);
+    if (SCHEME_LETTER.test(character)) {
+      return true;
+    }
+    if (SCHEME_CHARACTER.test(character) === false) {
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
  * Redacts the User's identity out of a git command line before it is written
  * down, in a log record or in an error message.
  *
@@ -103,9 +155,7 @@ export function redactGitArgs(args: readonly string[]): string[] {
     if (previous === 'user.name' || previous === 'user.email') {
       return REDACTED;
     }
-    // scheme://userinfo@host, never the SSH shorthand git@host:org/repo,
-    // where the user is part of the address rather than a credential
-    return arg.replace(/^([a-zA-Z][\w+.-]*:\/\/)[^/@]+@/, `$1${REDACTED}@`);
+    return redactUrlCredentials(arg);
   });
 }
 

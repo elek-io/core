@@ -67,6 +67,18 @@ Core hands git the User's identity through the environment of each command, see 
 
 [`redactGitArgs`](../src/util/git.ts) is the backstop. It takes the `--author` of a commit, the values of `config user.name` and `user.email`, and credentials embedded in a remote URL out of a git command before it reaches a log record or an error message. Ids, paths and flags pass through untouched. Anything that builds a string from git arguments has to go through it.
 
+### One helper decides what a credential in an address is
+
+A remote address can carry a user and a password, which git accepts and [`git-credentials.md`](./git-credentials.md) rejects as a way to authenticate. The elek.io Cloud address an option or `ELEK_IO_CLOUD_URL` configures can carry them too.
+
+[`redactUrlCredentials`](../src/util/git.ts) is the one place that decides what counts as one, for [`redactGitArgs`](#redacting-a-command-line), for the masker a tail runs and for every message naming either address, so none of them can disagree.
+
+- It takes the userinfo of a `scheme://` address up to the **last** `@` of its authority. Everything before that one is the credential or part of one whichever `@` the client reads as the delimiter, so a password holding an `@` goes whole rather than in half, and a host name holds none for this to swallow.
+- It stops at `?` and `#`, so an `@` in a query string is not mistaken for one.
+- The SSH shorthand `git@host:org/repo` has no scheme, so its user stays. There the user is part of the address.
+- It finds the `://` first and reads the scheme backwards from it. Matching the scheme first retries from every position of the text, which is quadratic on the long strings a masker is handed, a stack or a whole log line.
+- The host and the path stay, which is what makes the line worth reading. Where a message has nothing to add beyond the address the caller just passed, it leaves the address out instead, per the call site rule below.
+
 ### An error message has two audiences
 
 A `CoreError` message is written for whoever made the call, and [`AbstractService`](../src/service/AbstractService.ts) logs it at the service boundary. So one string is read by a User in a dialog and by whoever the log file is handed to, under different rules.
@@ -262,6 +274,18 @@ Three rules the scrubbers follow:
 - **Never hash, rotate or truncate an id.** Hashing buys correlation without the value, which is the right trade for a name and the wrong one here. The ids are the join against the repository, and that join is what makes a tail worth reading at all.
 - **A tail is personal data whatever the scrubbers do.** Data attributable to a person "by the use of additional information" is pseudonymised under GDPR Article 4(5), and pseudonymised data is still personal data. Scrubbing lowers what a report carries, it does not move it out of the category. Retention is the control, not redaction.
 
+### The masker is public, so an application keeps no copy of it
+
+`core.logger.mask()` runs the masker over any string, for an application showing text Core wrote: an error screen, a copied stack, a dialog. The alternative was each application writing these rules again, and a second copy of a rule about a secret is a second place for it to be wrong.
+
+Three shapes the rules carry because of that reader, each a stack frame or a line of git output rather than a log record:
+
+- **The home directory percent encoded**, inside a `file://` address. A renderer loaded with `loadFile` puts its own frames there, and a per user install sits under the home folder, so a space or an umlaut in the account name arrives as `%20` or `%C3%B6`. Matched in that spelling too, next to the two separator spellings.
+- **An address a colon follows**, which is how git reports a refusal: `mara@autohaus-ebersfelde.de: Permission denied`. The SSH shorthand is the same shape with a path on the colon, `git@github.com:org/repo`, and stays.
+- **No Project and no User**, and it throws on no string. It is reached off `core.logger` rather than a service, so an application can mask before it has either.
+
+It masks a shape, never a meaning. A token on its own, a name a User typed and the content of an Entry pass through it untouched, which is why the call site rule above is still where a leak is decided.
+
 ### Collapsing what repeated is the algorithm
 
 A measured day was 78 MB, and 67% of it was one `uncaughtException: write EPIPE` stack repeating at up to 5450 records a second. Collapsing a run of identical records into the first of them plus `elek.log.repeat.count` and `elek.log.repeat.last_timestamp` took that day to 0.04 MB without dropping anything a reader needs, and 4 KB once gzipped. An ordinary day is 1 to 25 KB.
@@ -273,7 +297,8 @@ That is why there is no trim loop. `TAIL_MAX_BYTES` is a safety valve rather tha
 - **Key off the extension, never off the date.** The transport only gzips on a rotation event while the process is running, so closing the app and reopening it the next day leaves yesterday's file plain forever.
 - **A file is named after a local date, a record is stamped in UTC.** The file names decide only which of the 30 kept files are worth opening, padded by a day either side. The record's own timestamp is what decides whether it is in the window.
 - **The `.*-audit.json` dotfile is not a log file.** It is the transport's own rotation state.
-- **Scrub after `JSON.parse`, never against the raw text.** On Windows a path is backslashed and JSON escapes it as `\\`, so a scrub over raw text would have to understand the escaping and a scrub over parsed strings does not. The home directory is matched case insensitively there, where `C:\Users\Nils` and `C:\users\nils` both occur, and in both separator spellings.
+- **Scrub after `JSON.parse`, never against the raw text.** On Windows a path is backslashed and JSON escapes it as `\\`, so a scrub over raw text would have to understand the escaping and a scrub over parsed strings does not.
+  - The home directory is matched case insensitively on Windows, where `C:\Users\Nils` and `C:\users\nils` both occur, in both separator spellings, and percent encoded as a `file://` address spells it.
 
 ### A line is a record or it is nothing
 
@@ -321,6 +346,7 @@ Plant a string nothing else in the suite produces, exercise the path, and assert
 - [`logPrivacy.test.ts`](../src/service/logPrivacy.test.ts) does this for names.
 - [`ProjectService.upgradeLogging.test.ts`](../src/service/ProjectService.upgradeLogging.test.ts) does it for authored Entry content.
 - [`GitService.redaction.test.ts`](../src/service/GitService.redaction.test.ts) does it for the git signature.
+- [`remoteCredentials.test.ts`](../src/service/remoteCredentials.test.ts) does it for a token in a remote address, against a git host over HTTP, which is the one way an address Core really clones from can carry one. The elek.io Cloud address is in there too, which `fetch` refuses outright, so the reachability message is the one that is handed it.
 
 [`logSweep.test.ts`](../src/service/logSweep.test.ts) is the broad one. It runs create, update, delete, release, upgrade and synchronize with a sentinel in every place a User types one, the git identity included, then checks the log files for all of them at once. The attribute vocabulary check rides along, since both questions want the same setup.
 
