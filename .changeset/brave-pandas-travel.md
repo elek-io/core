@@ -2,7 +2,7 @@
 '@elek-io/core': minor
 ---
 
-**Five dependencies npm installs alongside Core moved:**
+**Five of Core's own dependencies moved:**
 
 | Dependency                   | From    | To      |
 | ---------------------------- | ------- | ------- |

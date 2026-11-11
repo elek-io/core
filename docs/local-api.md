@@ -118,7 +118,9 @@ A path no route matches answers `404` with a message and nothing else, so branch
 
 A request whose path holds a raw backslash never reaches routing. The server answers `400` with an empty body, so that one status carries no JSON at all. Two requests that look like it are not refused:
 
-- A percent-encoded `%5C` stays encoded while the path is matched, so it belongs to a segment instead of separating two. `GET /content%5Cv1/projects/count` answers `404`, and a `%5C` inside a path parameter reaches that parameter's schema, so an id holding one fails with `422`.
+- A percent-encoded `%5C` is decoded to a backslash before the path is matched, and that backslash belongs to a segment instead of separating two. `GET /content%5Cv1/projects/count` answers `404` with the message `Not Found - /content\v1/projects/count`.
+  - `projectId`, `assetId` and `entryId` take a UUID, so one holding a `%5C` fails its schema with `422`.
+  - `collectionIdOrSlug` and `componentIdOrSlug` take any string, so the decoded value reaches the service, which answers `NotFound` when no Collection or Component has it as its UUID or slug.
 - A backslash in the query string never blocks the request, because only the path is matched.
 
 A path or query parameter that fails its schema never reaches a service. It answers `422` with Zod's own issues, which name the parameter and why it was rejected:
