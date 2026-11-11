@@ -33,6 +33,7 @@ About to change an area? Read its doc first, so you change behavior on purpose r
 - [`cloud.md`](./cloud.md) - the one seam every elek.io Cloud call goes through, and the token it holds
 - [`astro-entry.md`](./astro-entry.md) - the design and invariants behind `@elek-io/core/astro`
 - [`openapi-document.md`](./openapi-document.md) - how `GET /openapi.json` is generated, and the rule a recursive schema has to follow
+- [`api-reference.md`](./api-reference.md) - where the bundle behind `GET /` comes from, and why Core serves it itself
 
 ## Dependencies and tooling
 

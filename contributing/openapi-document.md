@@ -35,6 +35,7 @@ Nothing points at the schema. `.doc()` catches the generator's `RangeError` and 
 ## See also
 
 - [`../docs/local-api.md`](../docs/local-api.md) - what the local API serves, including this document
+- [`api-reference.md`](./api-reference.md) - the bundle the reference page renders this document with
 - [`../docs/api-clients.md`](../docs/api-clients.md) - the generated client, which is built from field definitions and not from this document
 - [`markdown-internals.md`](./markdown-internals.md) - the mdast schemas two of the three names sit on
 - [`testing.md`](./testing.md) - how the suite runs, and why each file gets its own port

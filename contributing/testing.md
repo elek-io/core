@@ -111,7 +111,12 @@ A per-call budget below the global caps the heaviest work in a file tighter than
 
 When a measurement shows a test or a hook needs more, raise the global rather than that one call. Take the slowest of the four runners, put the number in [`src/test/budgets.ts`](../src/test/budgets.ts), and state it in the table above with its date.
 
-[`published-docs.test.ts`](../src/published-docs.test.ts) is the only test that spawns the package manager, `pnpm pack --dry-run` in its `beforeAll` for the list of files a publish ships. Packing runs `prepack` and `prepare`, so adding either turns that hook into a full build on all four platforms, and whatever it writes to stdout lands in the JSON the test parses.
+`pnpm pack --dry-run` spawns the package manager in the `beforeAll` of every test that needs the list of files a publish ships:
+
+- [`published-docs.test.ts`](../src/published-docs.test.ts), for the pages an installed package resolves.
+- [`reference.test.ts`](../src/api/reference.test.ts), for the bundle the reference page runs on and the notice of its license.
+
+Packing runs `prepack` and `prepare`, so adding either turns both hooks into a full build on all four platforms, and whatever it writes to stdout lands in the JSON those tests parse.
 
 ### How a cleanup step is bounded
 
