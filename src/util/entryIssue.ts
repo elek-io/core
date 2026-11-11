@@ -24,6 +24,13 @@ export type EntryIssueType =
 /**
  * Where an issue sits: the Entry, the field definition by id and by its new
  * slug, and the Component item when the field belongs to a Component.
+ *
+ * A `components.update` resolution is keyed by `entryId`, then
+ * `componentItemId`, then `fieldSlug`, so the corrected Value lands in the
+ * item the issue names. A `collections.update` resolution leaves the middle
+ * key out, because no Collection issue belongs to an item.
+ *
+ * @see ../../docs/schema-changes.md
  */
 export interface EntryIssueLocation {
   entryId: Uuid;
@@ -37,7 +44,8 @@ export interface EntryIssueLocation {
 
 /**
  * A change an existing Value cannot follow on its own. The caller answers
- * with a corrected Value under `resolutions`.
+ * with a corrected Value under `resolutions`, keyed the way
+ * `EntryIssueLocation` says.
  */
 export interface EntryTransformIssue extends EntryIssueLocation {
   issue: 'missing_required' | 'type_mismatch' | 'constraint_violation';
