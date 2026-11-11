@@ -28,3 +28,15 @@ allowBuilds:
   # only copies that package's already built browser bundle, so nothing here
   # ever imports vue-demi and the switch has nothing to decide.
   vue-demi: false
+
+# What a dependency is allowed to do beyond installing its files.
+# pnpm 12 links the agent skills a dependency ships into the agent skill
+# directories of this repository once they are approved, and asks on every
+# install while the answer is missing.
+# See https://pnpm.io/settings#permissions
+permissions:
+  # tsdown ships a skill facade pointing at its own documentation. Core's
+  # guidance for agents and contributors lives in AGENTS.md and contributing/,
+  # so nothing links a dependency's skill in here.
+  tsdown:
+    skills: false

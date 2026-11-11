@@ -22,14 +22,14 @@ Cost is not the question. Vite+ is MIT licensed and free. VoidZero [dropped the 
 
 ### It would move the toolchain backwards and take the pins
 
-`vite-plus` depends on its tools with exact pins, not ranges. As of 1.4.0:
+`vite-plus` depends on its tools with exact pins, not ranges. As of 1.5.1:
 
 | Tool              | Pinned by vite-plus | Available standalone |
 | ----------------- | ------------------- | -------------------- |
-| `oxlint`          | `=1.89.0`           | 1.90.0               |
-| `oxfmt`           | `=0.74.0`           | 0.75.0               |
-| `vitest`          | `5.0.5`             | 5.0.5                |
-| `oxlint-tsgolint` | `=7.0.2004`         | 7.0.2005             |
+| `oxlint`          | `=1.91.0`           | 1.93.0               |
+| `oxfmt`           | `=0.76.0`           | 0.78.0               |
+| `vitest`          | `5.1.0`             | 5.1.0                |
+| `oxlint-tsgolint` | `=7.0.2005`         | 7.0.2006             |
 
 Adopting it today downgrades oxlint, oxfmt and oxlint-tsgolint, and which tool the downgrade lands on moves with every release on either side.
 
@@ -78,7 +78,7 @@ On defaults it wanted to rewrite 202 files. After `--migrate=prettier` that fell
 +  | AssetMimeMismatchIssue;
 ```
 
-So it was one prettier minor behind, measured on oxfmt 0.61.0. It is at 0.75.0 today and still before 1.0. Stable output is the entire value of a formatter, and a pre-1.0 one means repo-wide churn every time it converges or diverges. Formatting is also not slow enough to be worth risk. Re-check at 1.0, and specifically re-run the `--migrate=prettier` measurement above.
+So it was one prettier minor behind, measured on oxfmt 0.61.0. It is at 0.78.0 today and still before 1.0. Stable output is the entire value of a formatter, and a pre-1.0 one means repo-wide churn every time it converges or diverges. Formatting is also not slow enough to be worth risk. Re-check at 1.0, and specifically re-run the `--migrate=prettier` measurement above.
 
 ### oxlint `--type-check` instead of `tsc --noEmit`
 

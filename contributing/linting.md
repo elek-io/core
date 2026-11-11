@@ -27,14 +27,14 @@ For where oxlint sits in the wider stack, why the tools are adopted individually
 
 `no-await-in-loop` is off. Core awaits inside loops on purpose, because git operations against one Project have to run in sequence. The rule flagged 85 sites, all of them correct as written.
 
-Three categories are not enabled. The counts below are what they flagged when the swap was made, and they are recorded so the trade-off is visible rather than re-measured each time:
+These categories are not enabled. The counts below are what they flagged when the swap was made, and they are recorded so the trade-off is visible rather than re-measured each time:
 
-| Category      | Flagged | Why not                                        |
-| ------------- | ------- | ---------------------------------------------- |
-| `suspicious`  | 195     | Its two best rules are pulled out individually |
-| `restriction` | 583     | Opinionated bans, not correctness              |
-| `pedantic`    | 1478    | API preference rules, would bury real findings |
-| `style`       | 8544    | Formatting, which is prettier's job            |
+| Category | Flagged | Why not |
+| --- | --- | --- |
+| `suspicious` | 195 | The rules that catch bug classes are enabled one by one, see Additions above |
+| `restriction` | 583 | Opinionated bans, not correctness |
+| `pedantic` | 1478 | API preference rules, would bury real findings |
+| `style` | 8544 | Formatting, which is prettier's job |
 
 The category stays off rather than on because of these two:
 
