@@ -4,7 +4,7 @@
 
 The local API's reference page at `GET /` loads nothing from another host and sends nothing to one, so it renders with every other host unreachable and talks only to the machine Core runs on.
 
-**Core serves the Scalar bundle itself**, from the new `GET /reference/scalar.js`. The page used to pull it from jsDelivr, which left it blank offline and told a CDN that somebody had opened it. The bundle comes from an exactly pinned `@scalar/api-reference` that the build copies into `dist/node/reference/`, with the notice of its MIT license beside it. Installing Core brings no package it did not bring before, and the package grows by those two files and nothing else.
+**Core serves the Scalar bundle itself**, from the new `GET /reference/scalar.js`. The page used to pull it from jsDelivr, which left it blank offline and told a CDN that somebody had opened it. The bundle comes from an exactly pinned `@scalar/api-reference` that the build copies into `dist/node/reference/`, with the notice of its MIT license beside it. Installing Core brings no package it did not bring before, and the package grows by those two files, about 4.9 MB, and nothing else.
 
 **The page requests no font from Scalar**, because Scalar's typefaces are only served from `fonts.scalar.com`. With them switched off it renders in Scalar's font stack, which falls through to the system's own typefaces unless the machine has Inter and JetBrains Mono installed.
 
