@@ -14,7 +14,7 @@
 
 They add, remove or rename no export of any entry point and change no public type. Two of them change behavior you can see.
 
-**An uppercase umlaut or ligature no longer splits the word it sits in.** `slug()` is the helper a Project, Collection, Entry or Asset name goes through. Transliterating `Ä` to `ae` used to read as a camel case boundary to the `decamelize` step, so a name in capitals broke apart where the umlaut was:
+**An uppercase umlaut or ligature no longer splits the word it sits in.** `slug()` is the helper Core runs over an Asset's `name` on write, over the slug you give a Collection or a Component, and over a `slug` field's Value to check it is already canonical. A Project's name never goes through it. Transliterating `Ä` to `ae` used to read as a camel case boundary to the `decamelize` step, so a name in capitals broke apart where the umlaut was:
 
 | Name       | Before        | Now         |
 | ---------- | ------------- | ----------- |
@@ -35,6 +35,6 @@ An umlaut followed by a lowercase letter was never affected, so `Über` and `Är
 
 **hono 4.13.16 carries five security fixes**, and none of them changes what the local API does. Four cover `mount()`, `validator('form')`, the `css` helper and `csrf()`, none of which Core uses. The fifth is the router skipping wildcard middleware for three kinds of path. Two of them need a route pattern Core declares nowhere, and on the third, a path carrying an encoded line terminator, the request id, the trailing slash trim, CORS and the request logger Core installs already ran before the fix.
 
-`@scalar/hono-api-reference` only moves its renderer. The page `elek api:start` serves at `/` is byte-identical to the previous release's, and the OpenAPI document behind it is identical and still lists the same 15 content routes. `semver`'s release is a range parsing speedup.
+`@scalar/hono-api-reference` only moves its renderer. The page `elek api:start` serves at `/` comes out of this bump byte for byte unchanged, and so does the OpenAPI document behind it. `semver`'s release is a range parsing speedup.
 
 **The published declarations no longer end in a `sourceMappingURL` comment** for a map the package never shipped. That comes from the declaration generator in Core's build, and a tool that followed the comment stopped at a missing file before.
