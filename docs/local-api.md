@@ -116,6 +116,8 @@ A path no route matches answers `404` with a message and nothing else, so branch
 }
 ```
 
+A request whose path holds a raw backslash never reaches routing. The server answers `400` with an empty body, so that one status carries no JSON at all. A percent-encoded `%5C` and a backslash in the query string are read as before.
+
 A path or query parameter that fails its schema never reaches a service. It answers `422` with Zod's own issues, which name the parameter and why it was rejected:
 
 ```json

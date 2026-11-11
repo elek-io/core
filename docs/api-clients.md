@@ -103,6 +103,8 @@ Core's default `./.elek.io` is outside a typical `include: ["src"]`, so writing 
 - Oxc exits 1 on `TS9007` for a function of the generated client without an explicit return type. That function is a Collection's `entries.list`, so a client generated while no Collection exists anywhere still compiles.
 - `generate:types js` is unaffected, and compiles into any directory with the option on.
 
+**TypeScript 7.0 compiles with a deprecation warning**, from tsdown 0.23.5 on: "The `tsgo` generator on TypeScript 7.0 is deprecated and will be removed in the next minor. Upgrade to TypeScript 7.1 or later." Both commands still do their work, and the warning is tsdown's rather than Core's, so a newer TypeScript 7 is what answers it. `isolatedDeclarations` prints none, because Oxc generates there.
+
 ## Output location
 
 Both commands default to `./.elek.io`. That directory is also the CLI's default for `elek export`, so keep generated artifacts and exports together or pass a different `outDir`.
