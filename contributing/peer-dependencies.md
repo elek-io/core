@@ -266,7 +266,9 @@ Measured against a packed Core with tsdown 0.23.7 and typescript 7.0.2, with one
 - **Every row on the `tsgo` path also prints a deprecation warning from tsdown 0.23.5 on**, "The `tsgo` generator on TypeScript 7.0 is deprecated and will be removed in the next minor. Upgrade to TypeScript 7.1 or later."
   - tsdown's declaration plugin drives typescript-go through the `typescript` package from 7.1 on, and the separate 7.0 backend it still carries is the one it means to drop.
   - The `isolatedDeclarations` row prints none, because Oxc generates there.
-  - Nothing in the table changes yet, and the peer range already allows the typescript the warning asks for.
+  - Nothing in the table changes yet, because the peer range `^5.0.0 || ^6.0.0 || ^7.0.0` takes a released 7.1 and no prerelease of it, and every 7.1 published at the pins above is a prerelease.
+  - Beside a packed Core, `npm install -D typescript@7.1.0-beta` exits 1 with `ERESOLVE` naming that range where no typescript is installed yet, and goes through with an `ERESOLVE overriding peer dependency` warning where 6.0.3 or 7.0.2 already is. 7.0.2 installs with neither.
+  - typescript 6 and 7.0 both stay supported, so the warning has nothing to upgrade to until 7.1 is released.
 - tsdown 0.23.2 was the one release in the line that failed the whole combination, because it took its declaration plugin to a prerelease that dropped the `tsgo` path. 0.23.3 went back to the released plugin and restored it.
 
 This is tsdown's behavior rather than Core's and it only affects `generate:* js`, so it is documented in `docs/api-clients.md`, with the ways around it, instead of being worked around. Re-measure both commands on both typescript lines at every tsdown bump.
