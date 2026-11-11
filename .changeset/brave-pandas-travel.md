@@ -14,19 +14,20 @@
 
 They add, remove or rename no export of any entry point and change no public type. Two of them change behavior you can see.
 
-**A name with an uppercase umlaut, a ligature or a digraph now slugifies as one word.** `slug()` is the helper a Project, Collection, Entry or Asset name goes through, and slugify 4 fixed the word break those characters used to cause:
+**An uppercase umlaut or ligature no longer splits the word it sits in.** `slug()` is the helper a Project, Collection, Entry or Asset name goes through. Transliterating `Ä` to `ae` used to read as a camel case boundary to the `decamelize` step, so a name in capitals broke apart where the umlaut was:
 
 | Name       | Before        | Now         |
 | ---------- | ------------- | ----------- |
 | `ÄPFEL`    | `ae-pfel`     | `aepfel`    |
+| `MÜNCHEN`  | `m-ue-nchen`  | `muenchen`  |
 | `ÜBER UNS` | `ue-ber-uns`  | `ueber-uns` |
 | `ÅNGSTRÖM` | `angstr-oe-m` | `angstroem` |
-| `Œuvre`    | `o-euvre`     | `oeuvre`    |
+| `Æon`      | `a-eon`       | `aeon`      |
 | `Þór`      | `t-hor`       | `thor`      |
-| `ﬁsh`      | `sh`          | `fish`      |
-| `ǅungla`   | `ungla`       | `dzungla`   |
 
-A lowercase umlaut was never affected, so `über-cool` and `äöü` are unchanged. A fullwidth letter and a titlecase digraph used to be dropped entirely and are transliterated now, so a name made only of them has a slug at all instead of being rejected as empty.
+An umlaut followed by a lowercase letter was never affected, so `Über` and `Ärger im Büro` are unchanged, and a `slug` field with `decamelize` off never saw the split at all.
+
+**Three character classes that used to be dropped now transliterate.** A ligature, a titlecase digraph and a fullwidth letter: `ﬁsh` gave `sh` and gives `fish`, `ǅungla` gave `ungla` and gives `dzungla`, and a name written in fullwidth letters gave nothing at all, which a `slug` field rejects as empty.
 
 **Nothing stored stops validating.** A `slug` field accepts a value only when it equals its own slugified form, and every slug the old version produced is still canonical under the new one, measured on both versions over the characters this fix touches. An Asset's `name` is slugified on write, and re-slugifying a stored one gives the same value for the same reason. What changes is the slug a _new_ name gets, so a slug you generated from such a name before and one you generate now differ. Where a permalink has to stay as it is, keep the stored value rather than regenerating it.
 
