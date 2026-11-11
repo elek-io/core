@@ -214,7 +214,8 @@ const { list, total } = await core.releases.list({ projectId: project.id });
 Two of those read off the git tag rather than out of the Project:
 
 - `author` is who ran the Release, taken from the commit its tag points at.
-- `bump` is what this Release moved in the version against the full Release before it, and for a Project's first Release against the version `core.projects.create()` writes. A preview carries the bump of the Release it targets, so `1.1.0-preview.3` after `1.0.0` is `minor`. It is `null` only where two tags target one version, which Core's own Releases never do.
+- `bump` is what this Release moved in the version against the full Release before it, and for a Project's first Release against the version `core.projects.create()` writes. A preview carries the bump of the Release it targets, so `1.1.0-preview.3` after `1.0.0` is `minor`.
+  - It is `null` only where a Release targets the version it is read against: after a full Release of the same version, or for a first Release or preview at `0.0.1`. Core makes neither, because every Release and preview it makes targets a later version than the one it is read against.
 
 The call reads the Project's git tags and nothing else, so listing costs the same whatever the Releases changed. What one of them changed is [`changes()`](#what-one-release-changed).
 
