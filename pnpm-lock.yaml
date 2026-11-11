@@ -168,13 +168,13 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 2.1.5
-        version: 2.1.5(hono@4.13.14)
+        version: 2.1.5(hono@4.13.17)
       '@hono/zod-openapi':
         specifier: 1.6.3
-        version: 1.6.3(hono@4.13.14)(zod@4.6.7)
+        version: 1.6.3(hono@4.13.17)(zod@4.6.7)
       '@scalar/hono-api-reference':
         specifier: 0.12.16
-        version: 0.12.16(hono@4.13.14)
+        version: 0.12.16(hono@4.13.17)
       '@sindresorhus/slugify':
         specifier: 3.0.1
         version: 3.0.1
@@ -182,8 +182,8 @@ importers:
         specifier: 11.4.1
         version: 11.4.1
       hono:
-        specifier: 4.13.14
-        version: 4.13.14
+        specifier: 4.13.17
+        version: 4.13.17
       mime:
         specifier: 4.1.2
         version: 4.1.2
@@ -2703,8 +2703,8 @@ packages:
     resolution: {integrity: sha512-nbfWpyRMcMrPMmDwJB+dhX/eiaPKtc2RB+0QZskqJ3WjRA/FDS0e9hZrx8EC/lbEv8gXy98FcDbNa/dspAaJMg==}
     engines: {node: '>=12.0.0'}
 
-  hono@4.13.14:
-    resolution: {integrity: sha512-yhRLQ21U6qa9Hsu2N7Qcbh8tE+WKEcoErjIo56LeSGiGXGp9sA7UpE86Ui9uexb61KakiGwuHMn2QdV7w6i6kQ==}
+  hono@4.13.17:
+    resolution: {integrity: sha512-vZIcbkvjOR5hHRWERbGkr8fGfF0GGM1ooYkuH448iO3b2AdVEr3AXZSw4Z3Kn+1L5z0CVoVeyV29VGYmFh05kQ==}
     engines: {node: '>=16.9.0'}
 
   hookable@6.1.2:
@@ -4618,21 +4618,21 @@ snapshots:
       '@tanstack/vue-virtual': 3.13.52(vue@3.5.45(typescript@6.0.3))
       vue: 3.5.45(typescript@6.0.3)
 
-  '@hono/node-server@2.1.5(hono@4.13.14)':
+  '@hono/node-server@2.1.5(hono@4.13.17)':
     dependencies:
-      hono: 4.13.14
+      hono: 4.13.17
 
-  '@hono/zod-openapi@1.6.3(hono@4.13.14)(zod@4.6.7)':
+  '@hono/zod-openapi@1.6.3(hono@4.13.17)(zod@4.6.7)':
     dependencies:
       '@asteasolutions/zod-to-openapi': 9.1.0(zod@4.6.7)
-      '@hono/zod-validator': 0.9.1(hono@4.13.14)(zod@4.6.7)
-      hono: 4.13.14
+      '@hono/zod-validator': 0.9.1(hono@4.13.17)(zod@4.6.7)
+      hono: 4.13.17
       openapi3-ts: 4.6.2
       zod: 4.6.7
 
-  '@hono/zod-validator@0.9.1(hono@4.13.14)(zod@4.6.7)':
+  '@hono/zod-validator@0.9.1(hono@4.13.17)(zod@4.6.7)':
     dependencies:
-      hono: 4.13.14
+      hono: 4.13.17
       zod: 4.6.7
 
   '@iconify/types@2.0.0': {}
@@ -5256,10 +5256,10 @@ snapshots:
     dependencies:
       '@types/hast': 3.0.5
 
-  '@scalar/hono-api-reference@0.12.16(hono@4.13.14)':
+  '@scalar/hono-api-reference@0.12.16(hono@4.13.17)':
     dependencies:
       '@scalar/client-side-rendering': 0.4.15
-      hono: 4.13.14
+      hono: 4.13.17
 
   '@scalar/icons@0.7.8(typescript@6.0.3)':
     dependencies:
@@ -6741,7 +6741,7 @@ snapshots:
 
   highlight.js@11.12.0: {}
 
-  hono@4.13.14: {}
+  hono@4.13.17: {}
 
   hookable@6.1.2: {}
 
