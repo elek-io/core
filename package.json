@@ -71,7 +71,7 @@
     "@changesets/cli": "3.0.3",
     "@commander-js/extra-typings": "15.1.0",
     "@faker-js/faker": "10.6.0",
-    "@scalar/api-reference": "1.77.0",
+    "@scalar/api-reference": "1.78.0",
     "@tsconfig/node24": "24.0.5",
     "@tsconfig/strictest": "2.0.8",
     "@types/fs-extra": "11.0.4",
