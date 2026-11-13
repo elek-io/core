@@ -79,7 +79,7 @@
     "@types/node": "24.19.2",
     "@types/semver": "7.8.0",
     "@vitest/coverage-v8": "5.1.0",
-    "astro": "7.4.8",
+    "astro": "7.4.10",
     "chokidar": "6.0.0",
     "code-block-writer": "13.0.3",
     "commander": "15.1.0",
