@@ -249,8 +249,8 @@ importers:
         specifier: 15.1.0
         version: 15.1.0
       dugite:
-        specifier: 3.3.2
-        version: 3.3.2
+        specifier: 3.3.3
+        version: 3.3.3
       jiti:
         specifier: 2.7.0
         version: 2.7.0
@@ -2522,8 +2522,8 @@ packages:
       oxc-resolver:
         optional: true
 
-  dugite@3.3.2:
-    resolution: {integrity: sha512-deO3178Y8uQ0y4Es5eD31PST78nyWskfqLDi+Za5UBHYvdlMMwuFirwShgCuX+8aT3B1BZ6xlr4Bb8j0eq4Bag==}
+  dugite@3.3.3:
+    resolution: {integrity: sha512-rjsKuSTIitKChloA9E8czVE0zRnSsszP5QStAmx4uzsmEWVLFrtDAl9as/g2c2ceWBoXGqaWwHJ9eJT4nrhe4w==}
     engines: {node: '>= 20'}
 
   elkjs@0.12.1:
@@ -6464,7 +6464,7 @@ snapshots:
 
   dts-resolver@3.0.0: {}
 
-  dugite@3.3.2:
+  dugite@3.3.3:
     dependencies:
       progress: 2.0.3
       tar-stream: 3.2.0
