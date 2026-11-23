@@ -9,6 +9,7 @@ import {
   createEntry,
   createLocalRemoteRepository,
   createProject,
+  execGit,
   expectCoreError,
 } from '../test/util.js';
 
@@ -215,7 +216,9 @@ describe('A Project off its draft branch', function () {
     let tipBefore = '';
 
     beforeAll(async function () {
-      await core.projects.branches.switch({ id: project.id, branch: 'main' });
+      // Switched with git rather than through Core, the way the Project
+      // that found this got onto `main`
+      await execGit(projectPath, ['switch', 'main']);
       tipBefore = await core.git.revParse(projectPath, 'HEAD');
     });
 
@@ -225,6 +228,18 @@ describe('A Project off its draft branch', function () {
 
     it.each(writes())('refuses %s', async function (_label, run) {
       await expectOffDraftError(run(), 'main');
+    });
+
+    it('reads the released content, which is what main is for', async function () {
+      expect((await core.projects.read({ id: project.id })).id).toEqual(
+        project.id
+      );
+      // Nothing of `draft` was released, so `main` holds no Collection
+      const { total } = await core.collections.list({
+        projectId: project.id,
+        limit: 0,
+      });
+      expect(total).toEqual(0);
     });
 
     it('wrote nothing while refusing all of them', async function () {
@@ -364,13 +379,28 @@ describe('A Project off its draft branch', function () {
 
     expect(await core.git.revParse(remotePath, 'main')).toEqual(mainBefore);
 
-    await core.projects.branches.switch({
-      id: cloned.id,
-      branch: 'draft',
-      options: { discardChanges: true },
-    });
+    // Switching back is what gets a sync past the refusal
+    await core.projects.branches.switch({ id: cloned.id, branch: 'draft' });
+    await core.projects.synchronize({ id: cloned.id });
+
     await core.projects.delete({ id: cloned.id, force: true });
     await Fs.remove(remotePath);
+  });
+
+  it('still sets a remote and deletes a Project while on main', async function () {
+    const other = await createProject();
+    const url = 'https://example.com/acme/content.git';
+    await core.projects.branches.switch({ id: other.id, branch: 'main' });
+
+    // Neither writes a commit, and switching is how a Project gets back to
+    // `draft`, so the branch guards none of the three
+    await core.projects.setRemoteOriginUrl({ id: other.id, url });
+    expect(
+      (await core.projects.read({ id: other.id })).remoteOriginUrl
+    ).toEqual(url);
+
+    await core.projects.delete({ id: other.id, force: true });
+    expect(await Fs.pathExists(core.util.pathTo.project(other.id))).toBe(false);
   });
 
   it('leaves a Project that is not on disk to the read that follows', async function () {
