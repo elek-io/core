@@ -1,4 +1,5 @@
 import Fs from 'fs-extra';
+import Path from 'node:path';
 import { CoreError } from '../util/shared.js';
 import {
   fileReferenceSchema,
@@ -92,15 +93,20 @@ export abstract class AbstractEntityService extends AbstractService {
    * Called by every method that writes Project content or pushes, right
    * after `assertNotProvisioned`, so a provisioned copy keeps its own cause.
    *
-   * A Project that is not on disk has no branch, so the guard leaves it to
-   * the read that follows, which raises `NotFound`.
+   * A folder that holds no git repository, because the Project is not on disk
+   * at all or because something left half of one behind, has no branch to
+   * read. The guard leaves it to the read that follows, which raises
+   * `NotFound`, rather than answering a git failure for a state that says
+   * nothing about the branch.
    */
   protected async assertOnDraft(
     context: string,
     projectId: string
   ): Promise<void> {
     const projectPath = this.pathTo.project(projectId);
-    if (!(await Fs.pathExists(projectPath))) {
+    // `.git` is a folder in a Project and a file in a worktree, so its
+    // presence is what tells a repository from a folder, either way
+    if (!(await Fs.pathExists(Path.join(projectPath, '.git')))) {
       return;
     }
     const branch = await this.gitService.branches.current(projectPath);

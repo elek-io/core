@@ -35,7 +35,7 @@ Three guards sit around it, each raising a logged `CoreError.preconditionFailed`
 
 - `assertNotReadOnly(context)` refuses every write while `isReadOnly` is set. `mutating()` calls it, and a method that has to read before it can validate calls it directly at its entry point, so nothing touches disk first.
 - `assertNotProvisioned(context, projectId)` refuses a write to a provisioned copy, which the next provision run would overwrite. It needs the Project id, so it is called at the point that id is first known, not at the entry point. Deleting a Project is exempt, it is the escape hatch that removes a copy.
-- `assertOnDraft(context, projectId)` refuses a write while the Project's working tree is off `draft`. It reads the branch through git, and leaves a Project that is not on disk to the read that follows, which raises `NotFound`.
+- `assertOnDraft(context, projectId)` refuses a write while the Project's working tree is off `draft`. It reads the branch through git, and a folder with no `.git` in it has none to read, so a Project that is not on disk and half of one an interrupted copy or delete left behind are both left to the read that follows, which raises `NotFound`.
 
 The branch guard runs right after the provisioned one, so a provisioned copy, which sits detached on a Release tag, still names its own cause. Deleting a Project, `setRemoteOriginUrl` and `branches.switch` are exempt, the last one because it is what gets a Project back to `draft`.
 

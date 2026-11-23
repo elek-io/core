@@ -403,23 +403,49 @@ describe('A Project off its draft branch', function () {
     expect(await Fs.pathExists(core.util.pathTo.project(other.id))).toBe(false);
   });
 
-  it('leaves a Project that is not on disk to the read that follows', async function () {
+  it('leaves a folder with no repository in it to the read that follows', async function () {
     const missing = uuid();
     expect(await Fs.pathExists(core.util.pathTo.project(missing))).toBe(false);
 
-    await expectCoreError(
-      core.collections.create({
-        projectId: missing,
-        icon: 'home',
-        name: {
-          singular: { en: 'Never', de: 'Never' },
-          plural: { en: 'Nevers', de: 'Nevers' },
-        },
-        slug: { singular: 'never', plural: 'nevers' },
-        description: { en: 'Never created', de: 'Never created' },
-        fieldDefinitions: [],
-      }),
-      'NotFound'
-    );
+    // Half a Project, what an interrupted copy or delete leaves behind: a
+    // folder that is there and holds no repository, so it has no branch
+    const halfAProject = uuid();
+    await Fs.ensureDir(core.util.pathTo.project(halfAProject));
+
+    for (const id of [missing, halfAProject]) {
+      await expectCoreError(
+        core.collections.create({
+          projectId: id,
+          icon: 'home',
+          name: {
+            singular: { en: 'Never', de: 'Never' },
+            plural: { en: 'Nevers', de: 'Nevers' },
+          },
+          slug: { singular: 'never', plural: 'nevers' },
+          description: { en: 'Never created', de: 'Never created' },
+          fieldDefinitions: [],
+        }),
+        'NotFound'
+      );
+      await expectCoreError(
+        core.projects.update({
+          id,
+          name: 'Never renamed',
+          description: project.description,
+          settings: project.settings,
+        }),
+        'NotFound'
+      );
+      await expectCoreError(
+        core.entries.create({
+          projectId: id,
+          collectionId: collection.id,
+          values: {},
+        }),
+        'NotFound'
+      );
+    }
+
+    await Fs.remove(core.util.pathTo.project(halfAProject));
   });
 });
