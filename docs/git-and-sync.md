@@ -15,6 +15,8 @@ A Project is a git repository you can read with any tool, but change only throug
 
 Reading is safe: a log, a diff, a backup, or a copy of the folder.
 
+One state Core does guard against is the wrong branch. A working tree left off `draft`, by a `git switch` run by hand or by `branches.switch()`, has every write and every `synchronize()` refused until it is back, see [The branch model](#the-branch-model).
+
 ## The git backend
 
 Core runs git through [dugite](https://github.com/desktop/dugite) (the git bindings used by GitHub Desktop), declared as a peer dependency. All git commands for a Project are serialized through an internal queue, so two operations never overlap on the same repository.
@@ -34,6 +36,14 @@ A Project uses exactly two branches, defined by `projectBranchSchema` (`src/sche
 When `core.projects.create()` runs, it initializes the repository with `main` as the initial branch, makes the first commit there, then creates and switches to `draft`. After creation you are on `draft`, and every subsequent content change is committed there.
 
 `draft` is promoted into `main` through **Releases** (tagged snapshots managed by `core.releases`). Day-to-day create / update / delete operations never touch `main` directly.
+
+**Every write and every sync needs `draft`.** Off it, each one throws `PreconditionFailed` with the reason `not_on_draft`, naming the branch the Project is on, and writes nothing:
+
+- Every content create, update and delete, and `projects.update()`.
+- `projects.synchronize()`, so unreleased edits never reach the remote's `main`.
+- `releases.prepare()`, `releases.create()` and `releases.createPreview()`, which already compared `draft` against `main`.
+
+So switching to `main` is for reading released content, and `branches.switch({ branch: 'draft' })` is what makes a Project writable again. The one exception is Core itself: `projects.upgrade()` refuses off `draft` too, then migrates every file on an `upgrade/core-*` branch of its own, and a Release commits the version on `main`.
 
 Set `main` as the default branch of the repository at your git host, so the host and a plain `git clone` show released content. `core.projects.clone()` checks out `draft` either way, see [Cloning an existing Project](#cloning-an-existing-project).
 
@@ -105,8 +115,8 @@ A branch on the remote holds this Project when it shares history with the local 
 | The remote holds | `synchronize()` |
 | --- | --- |
 | no refs at all | makes the first push |
-| this Project's `main` and `draft` | integrates and pushes the current branch |
-| this Project's `draft` alone | integrates and pushes the current branch, the next Release adds `main` |
+| this Project's `main` and `draft` | integrates and pushes `draft` |
+| this Project's `draft` alone | integrates and pushes `draft`, the next Release adds `main` |
 | this Project's `main` alone | makes the first push, when the local `main` contains the remote's |
 | anything else, such as a README a git host created | throws `PreconditionFailed` and pushes nothing |
 
@@ -126,7 +136,7 @@ Before the first push the remote has no branch of that name, so every commit of 
 
 ## Synchronizing
 
-`synchronize()` integrates `origin` into the current branch, then pushes it. That is `draft` in day to day use. The `main` branch and the Release tags are published by `core.releases` instead, always together with `draft`, see [Tags](#tags).
+`synchronize()` integrates `origin` into `draft`, then pushes it, and is refused while the Project sits on another branch. The `main` branch and the Release tags are published by `core.releases` instead, always together with `draft`, see [Tags](#tags).
 
 ```typescript
 await core.projects.synchronize({ id: project.id });
@@ -134,9 +144,9 @@ await core.projects.synchronize({ id: project.id });
 
 One call, five steps, and nothing reaches the remote until the last:
 
-1. **Refuse a dirty working tree** with `PreconditionFailed`. A rebase against uncommitted changes fails and could cost you work, so commit or discard first.
+1. **Refuse a Project off `draft`, and a dirty working tree**, both with `PreconditionFailed`. A rebase against uncommitted changes fails and could cost you work, so commit or discard first.
 2. **Check the remote** and fetch, refusing a remote that holds anything but this Project. A remote without `draft` skips step 3 and gets [the first push](#the-first-push) in step 5.
-3. **Rebase** onto `origin/<branch>` rather than pulling, then top up the LFS objects of every ref so switching branches works offline.
+3. **Rebase** onto `origin/draft` rather than pulling, then top up the LFS objects of every ref so switching branches works offline.
 4. **Scan the integrated tree** for dangling references, throwing `Conflict` if it finds any. The integrated commits stay local, so you can repair them through Core's own update or delete and synchronize again.
 5. **Push**, uploading the LFS objects first, see [Git LFS](#git-lfs).
 
@@ -268,7 +278,7 @@ Tags made before the Project had a remote reach it with [the first push](#the-fi
 | Error type | When |
 | --- | --- |
 | `Unauthorized` (401) | A commit is attempted with no User set, or the remote rejects the credentials. Cloning needs no User. |
-| `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree, a rebase conflict or a remote holding anything but the Project, or a push fails because the remote does not support Git LFS or, for a Release or a first push, atomic pushes. Also when git cannot load a shared library it needs, see [`usage.md`](./usage.md#installing-and-instantiating), and when elek.io Cloud or its git host cannot answer for a Project's credential. A refused `synchronize()` names its cause, see below. |
+| `PreconditionFailed` (412) | `clone()` meets a remote without a `draft` branch, `getChanges()` or a guarded `delete()` runs without a remote `origin`, a write, a sync or a Release is attempted while the Project is off `draft`, a write is attempted on a read-only Core or against a provisioned copy, a push is rejected as non-fast-forward, `synchronize()` meets a dirty working tree, a rebase conflict or a remote holding anything but the Project, or a push fails because the remote does not support Git LFS or, for a Release or a first push, atomic pushes. Also when git cannot load a shared library it needs, see [`usage.md`](./usage.md#installing-and-instantiating), and when elek.io Cloud or its git host cannot answer for a Project's credential. A refused `synchronize()` names its cause, see below. |
 | `Conflict` (409) | `clone()` targets an already-present Project, a guarded `delete()` has unpushed commits, or `synchronize()` would integrate dangling references. |
 | `BadRequest` (400) | A `core.git.push()` combines the `all` and `refs` options, which are mutually exclusive. |
 | `Internal` (500) | The underlying git command exits non-zero (no upstream, merge conflict, network, ...). |
@@ -292,6 +302,7 @@ A `synchronize()` refused for one of these states names it in `reason`, so an ap
 | The remote kept moving, through five attempts | `remote_advanced` | synchronize again |
 | Core runs read-only | `read_only_mode` | run a writable Core |
 | The Project is a provisioned copy | `provisioned_copy` | delete it and clone the Project to work on it |
+| The Project sits off its `draft` branch | `not_on_draft` | switch it back to `draft` |
 | Git cannot load a shared library it needs | `git_library_missing` | install the library, see [`usage.md`](./usage.md#installing-and-instantiating) |
 | elek.io Cloud could not be reached | `cloud_unreachable` | check the connection and synchronize again |
 | elek.io Cloud could not reach its git host | `git_host_unreachable` | synchronize again later |

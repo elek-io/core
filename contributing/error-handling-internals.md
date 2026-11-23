@@ -31,12 +31,17 @@ The log record carries the type, the method and the status code as the `error.ty
 
 A method that changes a Project, its content or its remote uses `this.mutating()` rather than `validated()`. It is `validated()` with one thing in front: `assertNotReadOnly()`, called before the input is parsed, because a write is refused in read-only mode whatever its input says.
 
-Two guards sit around it, both raising a logged `CoreError.preconditionFailed`:
+Three guards sit around it, each raising a logged `CoreError.preconditionFailed`:
 
 - `assertNotReadOnly(context)` refuses every write while `isReadOnly` is set. `mutating()` calls it, and a method that has to read before it can validate calls it directly at its entry point, so nothing touches disk first.
 - `assertNotProvisioned(context, projectId)` refuses a write to a provisioned copy, which the next provision run would overwrite. It needs the Project id, so it is called at the point that id is first known, not at the entry point. Deleting a Project is exempt, it is the escape hatch that removes a copy.
+- `assertOnDraft(context, projectId)` refuses a write while the Project's working tree is off `draft`. It reads the branch through git, and leaves a Project that is not on disk to the read that follows, which raises `NotFound`.
 
-So a write can refuse before it validates, and the order is deliberate: read-only, then the id parse, then provisioned, then the real validation.
+The branch guard runs right after the provisioned one, so a provisioned copy, which sits detached on a Release tag, still names its own cause. Deleting a Project, `setRemoteOriginUrl` and `branches.switch` are exempt, the last one because it is what gets a Project back to `draft`.
+
+So a write can refuse before it validates, and the order is deliberate: read-only, then the id parse, then provisioned, then the branch, then the real validation.
+
+`projects.upgrade()` refuses off `draft` too, then commits the migrated files on an `upgrade/core-*` branch of its own. It migrates them through the same public update methods a consumer writes through, so it marks the Project as upgrading on that branch for the length of those writes, which is the one state `assertOnDraft` lets past besides `draft`.
 
 ### The two-stage parse
 
@@ -52,6 +57,7 @@ const { projectId, collectionId } = this.parseOrThrow(
   props
 );
 await this.assertNotProvisioned('create', projectId);
+await this.assertOnDraft('create', projectId);
 // ... read the Project's languages and the Collection, build the schema ...
 return this.mutating(
   'create',
