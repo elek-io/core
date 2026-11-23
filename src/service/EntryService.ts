@@ -101,11 +101,12 @@ export class EntryService
   /**
    * Creates an Entry in the given Collection, then commits it.
    *
-   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
-   * `BadRequest` when a Value fails the Collection's field definitions or
-   * points at something that is not there, and `Conflict` when a unique field
-   * repeats a value another Entry already holds. Nothing is written unless
-   * all three pass, and a failure mid-write rolls the working tree back.
+   * Throws `PreconditionFailed` in read-only mode, on a provisioned copy and
+   * off the `draft` branch, `BadRequest` when a Value fails the Collection's
+   * field definitions or points at something that is not there, and
+   * `Conflict` when a unique field repeats a value another Entry holds.
+   * Nothing is written unless all pass, and a failure mid-write rolls the
+   * working tree back.
    *
    * @see ../../contributing/error-handling-internals.md
    */
@@ -119,6 +120,7 @@ export class EntryService
       props
     );
     await this.assertNotProvisioned('create', projectId);
+    await this.assertOnDraft('create', projectId);
     const languages = await this.readProjectLanguages(projectId);
     const collection = await this.collectionService.read({
       projectId,
@@ -270,10 +272,10 @@ export class EntryService
    * Collection defines has to be present, or the call is a `BadRequest`, and
    * `updated` is stamped on write.
    *
-   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
-   * `BadRequest` when a Value fails the field definitions or points at
-   * something that is not there, and `Conflict` when a unique field repeats
-   * another Entry's value. A failure mid-write rolls the working tree back.
+   * Throws `PreconditionFailed` in read-only mode, on a provisioned copy and
+   * off the `draft` branch, `BadRequest` when a Value fails the field
+   * definitions or points at something absent, and `Conflict` when a unique
+   * field repeats another Entry's value. A failure mid-write rolls back.
    *
    * @see ../../contributing/error-handling-internals.md
    */
@@ -287,6 +289,7 @@ export class EntryService
       props
     );
     await this.assertNotProvisioned('update', projectId);
+    await this.assertOnDraft('update', projectId);
     const languages = await this.readProjectLanguages(projectId);
     const collection = await this.collectionService.read({
       projectId,
@@ -388,6 +391,7 @@ export class EntryService
   public delete(props: DeleteEntryProps): Promise<void> {
     return this.mutating('delete', deleteEntrySchema, props, async () => {
       await this.assertNotProvisioned('delete', props.projectId);
+      await this.assertOnDraft('delete', props.projectId);
 
       const referencingEntries =
         await this.referenceService.findEntriesReferencing({

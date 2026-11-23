@@ -328,10 +328,9 @@ describe('Unique field enforcement', function () {
     await Fs.remove(core.util.pathTo.entryFile(project.id, collection.id, id));
   });
 
-  it('re-reads a sibling from disk after a git working-tree change (e.g. a branch switch)', async function () {
+  it('re-reads a sibling from disk after a git working-tree change (a branch switch)', async function () {
     const projectPath = core.util.pathTo.project(project.id);
     const workBranch = await core.git.branches.current(projectPath);
-    const tmpBranch = `tmp-${uuid()}`;
 
     // Create an Entry on the working branch. Its value is now cached.
     const entry = await core.entries.create({
@@ -340,8 +339,7 @@ describe('Unique field enforcement', function () {
       values: values({ sku: { en: 'v1' } }),
     });
 
-    // On a throwaway branch, change the Entry's unique value. The cache now holds 'v2'.
-    await core.git.branches.switch(projectPath, tmpBranch, { create: true });
+    // Change the Entry's unique value. The cache now holds 'v2'.
     await core.entries.update({
       projectId: project.id,
       collectionId: collection.id,
@@ -349,9 +347,14 @@ describe('Unique field enforcement', function () {
       values: values({ sku: { en: 'v2' } }),
     });
 
-    // Switching back restores 'v1' on disk. The switch must clear the cache, or
-    // the scan would still see the stale 'v2'.
-    await core.git.branches.switch(projectPath, workBranch);
+    // Switching the branch back to the commit before that restores 'v1' on
+    // disk, as switching between two branches does. The switch must clear the
+    // cache, or the scan would still see the stale 'v2'. It stays on the
+    // working branch, because Core refuses a write anywhere else.
+    await core.git.branches.switch(projectPath, workBranch, {
+      forceCreate: true,
+      startPoint: 'HEAD~1',
+    });
 
     // The scan must see the on-disk 'v1' and reject a duplicate of it ...
     await expect(
@@ -371,9 +374,6 @@ describe('Unique field enforcement', function () {
         values: values({ sku: { en: 'v2' } }),
       })
     ).resolves.toBeDefined();
-
-    // Remove the throwaway branch (force, since its commit is not on workBranch)
-    await core.git.branches.delete(projectPath, tmpBranch, true);
   });
 });
 

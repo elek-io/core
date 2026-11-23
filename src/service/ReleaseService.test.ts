@@ -73,7 +73,10 @@ describe('ReleaseService', function () {
     try {
       await expect(
         core.releases.prepare({ projectId: project.id })
-      ).rejects.toThrow('Not on draft branch (currently on "main")');
+      ).rejects.toMatchObject({
+        type: 'PreconditionFailed',
+        reason: 'not_on_draft',
+      });
     } finally {
       await core.projects.branches.switch({ id: project.id, branch: 'draft' });
     }

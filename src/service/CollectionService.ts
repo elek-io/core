@@ -154,6 +154,7 @@ export class CollectionService
       props
     );
     await this.assertNotProvisioned('create', projectId);
+    await this.assertOnDraft('create', projectId);
     const languages = await this.readProjectLanguages(projectId);
 
     return this.mutating(
@@ -334,6 +335,7 @@ export class CollectionService
       props
     );
     await this.assertNotProvisioned('update', projectId);
+    await this.assertOnDraft('update', projectId);
     const languages = await this.readProjectLanguages(projectId);
 
     return this.mutating(
@@ -720,6 +722,7 @@ export class CollectionService
       props,
       async (validatedProps) => {
         await this.assertNotProvisioned('delete', validatedProps.projectId);
+        await this.assertOnDraft('delete', validatedProps.projectId);
 
         const referencingEntries =
           await this.referenceService.findEntriesReferencing({

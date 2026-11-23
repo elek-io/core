@@ -793,7 +793,8 @@ export class ProjectService
   /**
    * Writes `project.json` and commits it.
    *
-   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy.
+   * Throws `PreconditionFailed` in read-only mode, on a provisioned copy and
+   * off the `draft` branch.
    * A failure between the write and the commit rolls the working tree back,
    * so the Project on disk is the one before the call.
    *
@@ -806,6 +807,7 @@ export class ProjectService
       props,
       async (validatedProps) => {
         await this.assertNotProvisioned('update', validatedProps.id);
+        await this.assertOnDraft('update', validatedProps.id);
 
         const projectPath = this.pathTo.project(validatedProps.id);
         const filePath = this.pathTo.projectFile(validatedProps.id);
@@ -842,17 +844,17 @@ export class ProjectService
    *
    * Throws `UpgradeFailed` when the Project was written by a newer Core or is
    * already up to date without `force`, and `PreconditionFailed` in read-only
-   * mode and on a provisioned copy.
+   * mode, on a provisioned copy and while the Project is off `draft`.
    */
   public upgrade(props: UpgradeProjectProps): Promise<void> {
     return this.mutating('upgrade', upgradeProjectSchema, props, async () => {
       await this.assertNotProvisioned('upgrade', props.id);
+      await this.assertOnDraft('upgrade', props.id);
 
       const projectPath = this.pathTo.project(props.id);
       const projectFilePath = this.pathTo.projectFile(props.id);
 
       const currentProjectFile = await this.ensureProjectIsUpgradeable(
-        projectPath,
         projectFilePath,
         props.force
       );
@@ -884,11 +886,19 @@ export class ProjectService
           create: true,
         });
 
-        await this.upgradeAllObjectFiles(
-          props.id,
-          assetReferences,
-          componentReferences,
-          collectionReferences
+        // Every file is migrated through the same public update methods a
+        // consumer writes through, which refuse a Project off `draft`, so
+        // the upgrade allows its own calls on its own branch while they run
+        await AbstractEntityService.upgradingOn(
+          projectPath,
+          upgradeBranchName,
+          () =>
+            this.upgradeAllObjectFiles(
+              props.id,
+              assetReferences,
+              componentReferences,
+              collectionReferences
+            )
         );
 
         // Persist the migrated Project file directly. update() intentionally
@@ -967,25 +977,16 @@ export class ProjectService
   }
 
   /**
-   * Switches to the draft branch and verifies the Project can be upgraded.
+   * Verifies the Project can be upgraded.
    *
    * Throws when the Projects Core version is ahead of the current Core version,
    * or when it is already up to date and the upgrade was not forced.
    * Returns the current Project file so the caller can migrate it.
    */
   private async ensureProjectIsUpgradeable(
-    projectPath: string,
     projectFilePath: string,
     force: boolean | undefined
   ): Promise<Record<string, unknown> & { coreVersion: string }> {
-    const currentBranch = await this.gitService.branches.current(projectPath);
-    if (currentBranch !== projectBranchSchema.enum.draft) {
-      await this.gitService.branches.switch(
-        projectPath,
-        projectBranchSchema.enum.draft
-      );
-    }
-
     const readProjectFile = upgradeableFileSchema.safeParse(
       await this.jsonFileService.unsafeRead(projectFilePath)
     );
@@ -1131,13 +1132,14 @@ export class ProjectService
       );
     },
     /**
-     * Moves the Project's working tree, so every subsequent create, update
-     * and delete commits to whatever branch is now current. Switching back to
-     * `draft` is the caller's job.
+     * Moves the Project's working tree, so `main` can be read as released.
+     * Off `draft` every create, update and delete, `update()` and
+     * `synchronize()` are refused, so switching back is the caller's job.
      *
      * Throws `PreconditionFailed` on a provisioned copy, and git fails on
      * uncommitted changes unless `options.discardChanges` is set, which
-     * throws that work away. Not blocked in read-only mode.
+     * throws that work away. Not blocked in read-only mode, and not by the
+     * branch the Project is on, which is what gets it back to `draft`.
      */
     switch: (props: SwitchBranchProjectProps): Promise<void> => {
       return this.validated(
@@ -1250,14 +1252,14 @@ export class ProjectService
   }
 
   /**
-   * Integrates `origin` into the current branch and pushes it, or makes the
-   * first push when the remote holds no `draft`. A refusal pushes no ref and
-   * names its cause: `uncommitted_changes`, `remote_holds_something_else`,
-   * `remote_main_without_draft`, `remote_without_atomic_push`,
-   * `git_lfs_endpoint_unusable`, `textual_conflict`, `remote_advanced`,
-   * `read_only_mode`, `provisioned_copy`, `git_library_missing`,
-   * `cloud_unreachable`, `git_host_unreachable`, `remote_names_no_project` or
-   * `project_on_another_host`. Dangling references raise `Conflict` instead.
+   * Integrates `origin` into `draft` and pushes it, or makes the first push
+   * when the remote holds no `draft`. Refused while the Project is off
+   * `draft`, so unreleased edits never reach the remote's `main`.
+   *
+   * A refusal pushes no ref and names its cause in `reason`, one value of
+   * the table the doc holds, `not_on_draft` for the branch and
+   * `uncommitted_changes` for a dirty tree among them. Dangling references
+   * raise `Conflict` instead.
    *
    * @see ../../docs/git-and-sync.md
    */
@@ -1268,6 +1270,7 @@ export class ProjectService
       props,
       async () => {
         await this.assertNotProvisioned('synchronize', props.id);
+        await this.assertOnDraft('synchronize', props.id);
 
         const projectPath = this.pathTo.project(props.id);
 

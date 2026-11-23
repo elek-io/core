@@ -42,6 +42,7 @@ import {
   INITIAL_PROJECT_VERSION,
   type ReleaseVersion,
 } from '../util/release.js';
+import { notOnDraftError } from '../util/git.js';
 import { CoreError, datetime } from '../util/shared.js';
 import { AbstractService } from './AbstractService.js';
 import {
@@ -220,7 +221,7 @@ export class ReleaseService extends AbstractService {
    */
   public prepare(props: PrepareReleaseProps): Promise<ReleaseDiff> {
     return this.validated('prepare', prepareReleaseSchema, props, async () => {
-      const { diff } = await this.diff(props.projectId);
+      const { diff } = await this.diff('prepare', props.projectId);
       return diff;
     });
   }
@@ -245,7 +246,7 @@ export class ReleaseService extends AbstractService {
       const projectFilePath = this.pathTo.projectFile(props.projectId);
 
       const hasOrigin = await this.fetchOrigin(projectPath);
-      const { diff, released } = await this.diff(props.projectId);
+      const { diff, released } = await this.diff('create', props.projectId);
 
       if (!diff.bump || !diff.nextVersion) {
         throw CoreError.preconditionFailed(
@@ -373,7 +374,7 @@ export class ReleaseService extends AbstractService {
         const projectFilePath = this.pathTo.projectFile(props.projectId);
 
         const hasOrigin = await this.fetchOrigin(projectPath);
-        const { diff } = await this.diff(props.projectId);
+        const { diff } = await this.diff('createPreview', props.projectId);
 
         if (!diff.bump || !diff.nextVersion) {
           throw CoreError.preconditionFailed(
@@ -540,8 +541,13 @@ export class ReleaseService extends AbstractService {
    * The diff behind prepare(), create() and createPreview(), plus the
    * released commit it was taken against, so create() builds on exactly
    * that commit.
+   *
+   * Refuses a Project off `draft` with the `not_on_draft` cause every
+   * refused write carries, so all three refuse it before they read further.
+   * `context` is the calling method, for the message.
    */
   private async diff(
+    context: string,
     projectId: string
   ): Promise<{ diff: ReleaseDiff; released: ReleasedSide }> {
     const projectPath = this.pathTo.project(projectId);
@@ -549,9 +555,7 @@ export class ReleaseService extends AbstractService {
 
     const currentBranch = await this.gitService.branches.current(projectPath);
     if (currentBranch !== currentRef) {
-      throw CoreError.preconditionFailed(
-        `Not on draft branch (currently on "${currentBranch}")`
-      );
+      throw notOnDraftError(context, projectId, currentBranch);
     }
 
     const branches = await this.gitService.branches.list(projectPath);

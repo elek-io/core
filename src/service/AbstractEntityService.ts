@@ -1,8 +1,11 @@
 import Fs from 'fs-extra';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import Path from 'node:path';
 import { CoreError } from '../util/shared.js';
 import {
   fileReferenceSchema,
   objectTypeSchema,
+  projectBranchSchema,
   projectFileSchema,
   type ElekIoCoreOptions,
   type FileReference,
@@ -12,6 +15,7 @@ import {
   type ServiceType,
   type Uuid,
 } from '../schema/index.js';
+import { notOnDraftError } from '../util/git.js';
 import {
   files,
   folders,
@@ -51,6 +55,77 @@ export abstract class AbstractEntityService extends AbstractService {
     this.gitService = gitService;
     this.jsonFileService = jsonFileService;
     this.cacheService = cacheService;
+  }
+
+  /**
+   * The upgrade whose own calls are running right now, as the Project path
+   * and the branch it drove that Project's working tree onto.
+   * `assertOnDraft` reads it to let those calls write on that branch.
+   *
+   * An `AsyncLocalStorage`, so the allowance reaches the upgrade's own call
+   * chain and nothing else. Static, because the upgrade runs in
+   * `ProjectService` and those writes run in its sibling services.
+   *
+   * @see ../../contributing/error-handling-internals.md
+   */
+  private static readonly upgrade = new AsyncLocalStorage<{
+    projectPath: string;
+    branch: string;
+  }>();
+
+  /**
+   * Runs the body with its own writes to `projectPath` allowed on `branch`
+   * beside `draft`. The allowance ends with the body, whatever it does, so a
+   * failed upgrade leaves no Project writable off `draft`.
+   */
+  protected static upgradingOn<T>(
+    projectPath: string,
+    branch: string,
+    body: () => Promise<T>
+  ): Promise<T> {
+    return AbstractEntityService.upgrade.run({ projectPath, branch }, body);
+  }
+
+  /**
+   * Throws a logged `CoreError.preconditionFailed` when the Project's
+   * working tree is off `draft`, the branch Core commits every change to.
+   * Called by every method that writes Project content or pushes, right
+   * after `assertNotProvisioned`, so a provisioned copy keeps its own cause.
+   *
+   * A folder that holds no git repository, because the Project is not on disk
+   * at all or because something left half of one behind, has no branch to
+   * read. The guard leaves it to the read that follows, which raises
+   * `NotFound`, rather than answering a git failure for a state that says
+   * nothing about the branch.
+   */
+  protected async assertOnDraft(
+    context: string,
+    projectId: string
+  ): Promise<void> {
+    const projectPath = this.pathTo.project(projectId);
+    // `.git` is a folder in a Project and a file in a worktree, so its
+    // presence is what tells a repository from a folder, either way
+    if (!(await Fs.pathExists(Path.join(projectPath, '.git')))) {
+      return;
+    }
+    const branch = await this.gitService.branches.current(projectPath);
+    if (branch === projectBranchSchema.enum.draft) {
+      return;
+    }
+    // An upgrade in flight, on the branch it switched the tree to itself,
+    // and only for the upgrade's own calls. Every other caller keeps the
+    // refusal, so nothing lands on a branch a failed upgrade deletes
+    const upgrade = AbstractEntityService.upgrade.getStore();
+    if (
+      branch !== '' &&
+      upgrade?.projectPath === projectPath &&
+      upgrade.branch === branch
+    ) {
+      return;
+    }
+    const error = notOnDraftError(context, projectId, branch);
+    this.logBoundaryError(context, error);
+    throw error;
   }
 
   /**

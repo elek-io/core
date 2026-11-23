@@ -56,6 +56,7 @@ Keep a `cause` out of anything you send elsewhere: git echoes its arguments back
 | `remote_advanced` | the remote moved on, so the push was rejected as non-fast-forward |
 | `read_only_mode` | Core runs read-only |
 | `provisioned_copy` | the Project is a provisioned copy, which the next provision run overwrites |
+| `not_on_draft` | the Project's working tree sits off `draft`, the branch every change is committed to |
 | `git_library_missing` | git could not load a shared library it needs |
 | `remote_names_no_project` | the remote on elek.io Cloud's git host names no Project |
 | `project_on_another_host` | elek.io Cloud keeps the Project on another git host than the remote names |

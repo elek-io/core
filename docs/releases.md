@@ -45,7 +45,7 @@ A Project's first Release compares against the commit `core.projects.create()` m
 
 ## prepare(): the diff and the bump
 
-`prepare()` must be run while the Project is on the `draft` branch (otherwise it throws `PreconditionFailed`). It is read-only: it changes nothing, it just reports what a release would do.
+`prepare()` must be run while the Project is on the `draft` branch (otherwise it throws `PreconditionFailed` with the reason `not_on_draft`, as `create()` and `createPreview()` do). It is read-only: it changes nothing, it just reports what a release would do.
 
 It diffs `draft` against the released `main` across the Project file, Collections and Components with their field definitions, Assets and Entries, and returns a `ReleaseDiff`:
 

@@ -77,9 +77,9 @@ export class AssetService extends AbstractEntityService {
    * and commits both. `name` is slugified on write, and `extension`,
    * `mimeType` and `size` are derived from the file rather than passed in.
    *
-   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
-   * and `BadRequest` for a file type Core cannot recognise. A failure
-   * mid-write rolls the working tree back.
+   * Throws `PreconditionFailed` in read-only mode, on a provisioned copy and
+   * off the `draft` branch, and `BadRequest` for a file type Core cannot
+   * recognise. A failure mid-write rolls the working tree back.
    *
    * @see ../../contributing/error-handling-internals.md
    */
@@ -90,6 +90,7 @@ export class AssetService extends AbstractEntityService {
       props,
       async (validatedProps) => {
         await this.assertNotProvisioned('create', validatedProps.projectId);
+        await this.assertOnDraft('create', validatedProps.projectId);
 
         const id = uuid();
         const projectPath = this.pathTo.project(validatedProps.projectId);
@@ -236,9 +237,9 @@ export class AssetService extends AbstractEntityService {
    * `mimeType` and `size`, and deletes the previous binary only when the new
    * extension differs.
    *
-   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
-   * and `BadRequest` for an unrecognised file type. A failure mid-write rolls
-   * the working tree back.
+   * Throws `PreconditionFailed` in read-only mode, on a provisioned copy and
+   * off the `draft` branch, and `BadRequest` for an unrecognised file type. A
+   * failure mid-write rolls the working tree back.
    *
    * @see ../../contributing/error-handling-internals.md
    */
@@ -249,6 +250,7 @@ export class AssetService extends AbstractEntityService {
       props,
       async (validatedProps) => {
         await this.assertNotProvisioned('update', validatedProps.projectId);
+        await this.assertOnDraft('update', validatedProps.projectId);
 
         const projectPath = this.pathTo.project(validatedProps.projectId);
         const assetFilePath = this.pathTo.assetFile(
@@ -342,6 +344,7 @@ export class AssetService extends AbstractEntityService {
   public delete(props: DeleteAssetProps): Promise<void> {
     return this.mutating('delete', deleteAssetSchema, props, async () => {
       await this.assertNotProvisioned('delete', props.projectId);
+      await this.assertOnDraft('delete', props.projectId);
 
       const referencingEntries =
         await this.referenceService.findEntriesReferencing({
