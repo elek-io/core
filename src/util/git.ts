@@ -463,7 +463,8 @@ export function firstReleaseByCommit(
  * from every other refusal by a value rather than by a message.
  *
  * `branch` is what `branches.current` returned, which is empty for a
- * detached HEAD, a state with no branch to name.
+ * detached HEAD. That state has no branch to name, so it gets a clause of
+ * its own rather than the comparison the others read as.
  *
  * @see ../../docs/git-and-sync.md
  */
@@ -474,9 +475,11 @@ export function notOnDraftError(
 ): CoreError {
   const { draft } = projectBranchSchema.enum;
   const where =
-    branch === '' ? 'is not on a branch' : `is on branch "${branch}"`;
+    branch === ''
+      ? `is not on a branch, and every change is committed on "${draft}"`
+      : `is on branch "${branch}" rather than "${draft}", where every change is committed`;
   return CoreError.preconditionFailed(
-    `Cannot ${what} because Project "${projectId}" ${where} rather than "${draft}", where every change is committed. Switch the Project back to "${draft}" to work on it.`,
+    `Cannot ${what} because Project "${projectId}" ${where}. Switch the Project back to "${draft}" to work on it.`,
     undefined,
     'not_on_draft'
   );

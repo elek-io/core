@@ -263,7 +263,7 @@ describe('A Project off its draft branch', function () {
         values: entry.values,
       }),
       'PreconditionFailed',
-      'is not on a branch rather than "draft"',
+      'is not on a branch, and every change is committed on "draft"',
       'not_on_draft'
     );
 
