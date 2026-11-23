@@ -37,7 +37,7 @@ When `core.projects.create()` runs, it initializes the repository with `main` as
 
 `draft` is promoted into `main` through **Releases** (tagged snapshots managed by `core.releases`). Day-to-day create / update / delete operations never touch `main` directly.
 
-**Every write and every sync needs `draft`.** Off it, each one throws `PreconditionFailed` with the reason `not_on_draft`, naming the branch the Project is on, and writes nothing:
+**Every write and every sync needs `draft`.** Off it, each one throws `PreconditionFailed` with the reason `not_on_draft` and writes nothing. The message names the branch the Project is on, or says it is on none, which is what a detached `HEAD` is:
 
 - Every content create, update and delete, and `projects.update()`.
 - `projects.synchronize()`, so unreleased edits never reach the remote's `main`.
