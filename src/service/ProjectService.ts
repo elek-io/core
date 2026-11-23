@@ -888,7 +888,7 @@ export class ProjectService
 
         // Every file is migrated through the same public update methods a
         // consumer writes through, which refuse a Project off `draft`, so
-        // the upgrade allows its own branch while they run
+        // the upgrade allows its own calls on its own branch while they run
         await AbstractEntityService.upgradingOn(
           projectPath,
           upgradeBranchName,

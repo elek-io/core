@@ -1,6 +1,6 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import core, { uuid, type Collection, type Entry } from '../test/setup.js';
 import {
   createAsset,
@@ -333,6 +333,69 @@ describe('A Project off its draft branch', function () {
     expect((await core.git.status(projectPath)).files).toEqual([]);
     const { local } = await core.git.branches.list(projectPath);
     expect(local.filter((name) => name.startsWith('upgrade/'))).toEqual([]);
+  });
+
+  it('refuses a write beside an upgrade, whose allowance is its own calls', async function () {
+    const nameBefore = (await core.projects.read({ id: project.id })).name;
+    let upgradeBranch = '';
+    let isParked = false;
+    let reachedUpgradeBranch!: () => void;
+    let letTheUpgradeGoOn!: () => void;
+    const onUpgradeBranch = new Promise<void>(function (resolve) {
+      reachedUpgradeBranch = resolve;
+    });
+    const writeWasRefused = new Promise<void>(function (resolve) {
+      letTheUpgradeGoOn = resolve;
+    });
+
+    // Holds the upgrade still after its first migrating commit, so the write
+    // below runs while the allowance is open. That write is issued out here,
+    // beside the upgrade rather than inside its calls, which is what decides
+    // whether the allowance reaches it
+    const commit = core.git.commit.bind(core.git);
+    const spy = vi
+      .spyOn(core.git, 'commit')
+      .mockImplementation(async function (path, message) {
+        await commit(path, message);
+        if (isParked || path !== projectPath) {
+          return;
+        }
+        const branch = await core.git.branches.current(path);
+        if (!branch.startsWith('upgrade/')) {
+          return;
+        }
+        isParked = true;
+        upgradeBranch = branch;
+        reachedUpgradeBranch();
+        await writeWasRefused;
+      });
+
+    const upgrade = core.projects.upgrade({ id: project.id, force: true });
+    await onUpgradeBranch;
+
+    await expectOffDraftError(
+      core.projects.update({
+        id: project.id,
+        name: 'Never renamed',
+        description: project.description,
+        settings: project.settings,
+      }),
+      upgradeBranch
+    );
+
+    letTheUpgradeGoOn();
+    await upgrade;
+    spy.mockRestore();
+
+    // Nothing of the refused write reached the Project, which an allowance
+    // the upgrade branch alone opens would have let onto a branch that is
+    // gone by now
+    expect((await core.projects.read({ id: project.id })).name).toEqual(
+      nameBefore
+    );
+    expect(await core.projects.branches.current({ id: project.id })).toEqual(
+      'draft'
+    );
   });
 
   it('refuses a write again after an upgrade, which takes its allowance back', async function () {

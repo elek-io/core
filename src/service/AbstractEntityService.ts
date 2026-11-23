@@ -1,4 +1,5 @@
 import Fs from 'fs-extra';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import Path from 'node:path';
 import { CoreError } from '../util/shared.js';
 import {
@@ -57,34 +58,32 @@ export abstract class AbstractEntityService extends AbstractService {
   }
 
   /**
-   * The branch Core's own upgrade is driving a Project's working tree on
-   * right now, by Project path. While an entry is in here, `assertOnDraft`
-   * lets a write through on that branch as well, because the upgrade
-   * migrates every file through the same public methods a consumer writes
-   * through.
+   * The upgrade whose own calls are running right now, as the Project path
+   * and the branch it drove that Project's working tree onto.
+   * `assertOnDraft` reads it to let those calls write on that branch.
    *
-   * Static, because the upgrade runs in `ProjectService` and those writes
-   * run in its sibling services. Keyed by path, so two Core instances on two
-   * data directories never share an allowance.
+   * An `AsyncLocalStorage`, so the allowance reaches the upgrade's own call
+   * chain and nothing else. Static, because the upgrade runs in
+   * `ProjectService` and those writes run in its sibling services.
+   *
+   * @see ../../contributing/error-handling-internals.md
    */
-  private static upgradeBranches = new Map<string, string>();
+  private static readonly upgrade = new AsyncLocalStorage<{
+    projectPath: string;
+    branch: string;
+  }>();
 
   /**
-   * Runs the body with writes to `projectPath` allowed on `branch` beside
-   * `draft`, and takes that allowance back whatever the body does, so a
+   * Runs the body with its own writes to `projectPath` allowed on `branch`
+   * beside `draft`. The allowance ends with the body, whatever it does, so a
    * failed upgrade leaves no Project writable off `draft`.
    */
-  protected static async upgradingOn<T>(
+  protected static upgradingOn<T>(
     projectPath: string,
     branch: string,
     body: () => Promise<T>
   ): Promise<T> {
-    AbstractEntityService.upgradeBranches.set(projectPath, branch);
-    try {
-      return await body();
-    } finally {
-      AbstractEntityService.upgradeBranches.delete(projectPath);
-    }
+    return AbstractEntityService.upgrade.run({ projectPath, branch }, body);
   }
 
   /**
@@ -113,12 +112,14 @@ export abstract class AbstractEntityService extends AbstractService {
     if (branch === projectBranchSchema.enum.draft) {
       return;
     }
-    // An upgrade in flight, on the branch it switched the tree to itself.
-    // Any other branch is refused even then, so a call racing an upgrade
-    // cannot commit to `main`
+    // An upgrade in flight, on the branch it switched the tree to itself,
+    // and only for the upgrade's own calls. Every other caller keeps the
+    // refusal, so nothing lands on a branch a failed upgrade deletes
+    const upgrade = AbstractEntityService.upgrade.getStore();
     if (
       branch !== '' &&
-      branch === AbstractEntityService.upgradeBranches.get(projectPath)
+      upgrade?.projectPath === projectPath &&
+      upgrade.branch === branch
     ) {
       return;
     }

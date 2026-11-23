@@ -41,7 +41,10 @@ The branch guard runs right after the provisioned one, so a provisioned copy, wh
 
 So a write can refuse before it validates, and the order is deliberate: read-only, then the id parse, then provisioned, then the branch, then the real validation.
 
-`projects.upgrade()` refuses off `draft` too, then commits the migrated files on an `upgrade/core-*` branch of its own. It migrates them through the same public update methods a consumer writes through, so it marks the Project as upgrading on that branch for the length of those writes, which is the one state `assertOnDraft` lets past besides `draft`.
+`projects.upgrade()` refuses off `draft` too, then commits the migrated files on an `upgrade/core-*` branch of its own. It migrates them through the same public update methods a consumer writes through, so `AbstractEntityService.upgradingOn()` wraps those writes:
+
+- It allows the upgrade branch beside `draft`, which is the one state `assertOnDraft` lets past.
+- The allowance lives in an `AsyncLocalStorage`, so it reaches the upgrade's own calls and nothing else. A write a consumer starts beside a running upgrade reads no store and keeps its refusal, rather than committing onto a branch a failed upgrade deletes.
 
 ### The two-stage parse
 

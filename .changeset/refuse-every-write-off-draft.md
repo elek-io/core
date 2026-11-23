@@ -8,7 +8,7 @@ Off `draft`, each of these throws `PreconditionFailed` before anything is writte
 
 - Every content `create()`, `update()` and `delete()` of Collections, Components, Entries and Assets, and `projects.update()`.
 - `projects.synchronize()`, so no unreleased edit reaches the remote.
-- `projects.upgrade()`, which refuses at its start and then migrates every file on an `upgrade/core-*` branch of its own, as before.
+- `projects.upgrade()`, which refuses at its start and then migrates every file on an `upgrade/core-*` branch of its own, as before. Only the upgrade's own writes reach that branch, so a write started beside a running upgrade is refused as well.
 - `releases.prepare()`, `releases.create()` and `releases.createPreview()`, which already refused there.
 
 **One new `CoreErrorReason`, `not_on_draft`**, carried by every one of those refusals, so an app maps that state to a sentence of its own rather than reading a message. Code that maps `CoreErrorReason` exhaustively has one more value to answer. A detached `HEAD`, which has no branch to name, says so instead.

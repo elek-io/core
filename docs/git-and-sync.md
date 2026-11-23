@@ -43,7 +43,7 @@ When `core.projects.create()` runs, it initializes the repository with `main` as
 - `projects.synchronize()`, so unreleased edits never reach the remote's `main`.
 - `releases.prepare()`, `releases.create()` and `releases.createPreview()`, which already compared `draft` against `main`.
 
-So switching to `main` is for reading released content, and `branches.switch({ branch: 'draft' })` is what makes a Project writable again. The one exception is Core itself: `projects.upgrade()` refuses off `draft` too, then migrates every file on an `upgrade/core-*` branch of its own, and a Release commits the version on `main`.
+So switching to `main` is for reading released content, and `branches.switch({ branch: 'draft' })` is what makes a Project writable again. The one exception is Core itself: `projects.upgrade()` refuses off `draft` too, then migrates every file on an `upgrade/core-*` branch of its own, which only its own writes reach, and a Release commits the version on `main`.
 
 Set `main` as the default branch of the repository at your git host, so the host and a plain `git clone` show released content. `core.projects.clone()` checks out `draft` either way, see [Cloning an existing Project](#cloning-an-existing-project).
 
