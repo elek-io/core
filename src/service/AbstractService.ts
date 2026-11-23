@@ -42,7 +42,7 @@ export abstract class AbstractService {
    *
    * @see ../../contributing/logging.md
    */
-  private logBoundaryError(context: string, error: CoreError): void {
+  protected logBoundaryError(context: string, error: CoreError): void {
     this.logService.error({
       source: 'core',
       message: boundaryMessage(error),
@@ -123,9 +123,10 @@ export abstract class AbstractService {
    * `CoreError.preconditionFailed` before the input is parsed, because the
    * operation is forbidden regardless of its input.
    *
-   * That guard is all it adds. The provisioned-copy guard is not included,
-   * so the caller has to call `assertNotProvisioned(context, projectId)`
-   * itself once the Project id is known.
+   * That guard is all it adds. The provisioned-copy and draft-branch guards
+   * are not included, so the caller has to call
+   * `assertNotProvisioned(context, projectId)` and `assertOnDraft(context,
+   * projectId)` itself once the Project id is known.
    */
   protected async mutating<TSchema, TResult>(
     context: string,

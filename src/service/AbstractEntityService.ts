@@ -3,6 +3,7 @@ import { CoreError } from '../util/shared.js';
 import {
   fileReferenceSchema,
   objectTypeSchema,
+  projectBranchSchema,
   projectFileSchema,
   type ElekIoCoreOptions,
   type FileReference,
@@ -12,6 +13,7 @@ import {
   type ServiceType,
   type Uuid,
 } from '../schema/index.js';
+import { notOnDraftError } from '../util/git.js';
 import {
   files,
   folders,
@@ -51,6 +53,72 @@ export abstract class AbstractEntityService extends AbstractService {
     this.gitService = gitService;
     this.jsonFileService = jsonFileService;
     this.cacheService = cacheService;
+  }
+
+  /**
+   * The branch Core's own upgrade is driving a Project's working tree on
+   * right now, by Project path. While an entry is in here, `assertOnDraft`
+   * lets a write through on that branch as well, because the upgrade
+   * migrates every file through the same public methods a consumer writes
+   * through.
+   *
+   * Static, because the upgrade runs in `ProjectService` and those writes
+   * run in its sibling services. Keyed by path, so two Core instances on two
+   * data directories never share an allowance.
+   */
+  private static upgradeBranches = new Map<string, string>();
+
+  /**
+   * Runs the body with writes to `projectPath` allowed on `branch` beside
+   * `draft`, and takes that allowance back whatever the body does, so a
+   * failed upgrade leaves no Project writable off `draft`.
+   */
+  protected static async upgradingOn<T>(
+    projectPath: string,
+    branch: string,
+    body: () => Promise<T>
+  ): Promise<T> {
+    AbstractEntityService.upgradeBranches.set(projectPath, branch);
+    try {
+      return await body();
+    } finally {
+      AbstractEntityService.upgradeBranches.delete(projectPath);
+    }
+  }
+
+  /**
+   * Throws a logged `CoreError.preconditionFailed` when the Project's
+   * working tree is off `draft`, the branch Core commits every change to.
+   * Called by every method that writes Project content or pushes, right
+   * after `assertNotProvisioned`, so a provisioned copy keeps its own cause.
+   *
+   * A Project that is not on disk has no branch, so the guard leaves it to
+   * the read that follows, which raises `NotFound`.
+   */
+  protected async assertOnDraft(
+    context: string,
+    projectId: string
+  ): Promise<void> {
+    const projectPath = this.pathTo.project(projectId);
+    if (!(await Fs.pathExists(projectPath))) {
+      return;
+    }
+    const branch = await this.gitService.branches.current(projectPath);
+    if (branch === projectBranchSchema.enum.draft) {
+      return;
+    }
+    // An upgrade in flight, on the branch it switched the tree to itself.
+    // Any other branch is refused even then, so a call racing an upgrade
+    // cannot commit to `main`
+    if (
+      branch !== '' &&
+      branch === AbstractEntityService.upgradeBranches.get(projectPath)
+    ) {
+      return;
+    }
+    const error = notOnDraftError(context, projectId, branch);
+    this.logBoundaryError(context, error);
+    throw error;
   }
 
   /**

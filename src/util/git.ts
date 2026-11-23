@@ -1,5 +1,5 @@
 import { GitError, parseError } from 'dugite';
-import type { GitFileStatus } from '../schema/index.js';
+import { projectBranchSchema, type GitFileStatus } from '../schema/index.js';
 import { CoreError } from './shared.js';
 
 /**
@@ -454,4 +454,30 @@ export function firstReleaseByCommit(
   }
 
   return releaseByCommit;
+}
+
+/**
+ * The refusal every write, every sync and every Release carries while a
+ * Project's working tree sits off its `draft` branch, where Core commits
+ * every change. One `reason` for all of them, so an app tells that state
+ * from every other refusal by a value rather than by a message.
+ *
+ * `branch` is what `branches.current` returned, which is empty for a
+ * detached HEAD, a state with no branch to name.
+ *
+ * @see ../../docs/git-and-sync.md
+ */
+export function notOnDraftError(
+  what: string,
+  projectId: string,
+  branch: string
+): CoreError {
+  const { draft } = projectBranchSchema.enum;
+  const where =
+    branch === '' ? 'is not on a branch' : `is on branch "${branch}"`;
+  return CoreError.preconditionFailed(
+    `Cannot ${what} because Project "${projectId}" ${where} rather than "${draft}", where every change is committed. Switch the Project back to "${draft}" to work on it.`,
+    undefined,
+    'not_on_draft'
+  );
 }

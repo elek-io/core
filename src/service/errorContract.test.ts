@@ -36,6 +36,7 @@ const reasons = {
   remote_advanced: true,
   read_only_mode: true,
   provisioned_copy: true,
+  not_on_draft: true,
   git_library_missing: true,
   remote_names_no_project: true,
   project_on_another_host: true,

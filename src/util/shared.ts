@@ -109,6 +109,7 @@ export type CoreErrorReason =
   | 'remote_advanced'
   | 'read_only_mode'
   | 'provisioned_copy'
+  | 'not_on_draft'
   | 'git_library_missing'
   | 'remote_names_no_project'
   | 'project_on_another_host'

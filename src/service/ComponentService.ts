@@ -139,9 +139,9 @@ export class ComponentService
    * Component's `id`, but field-definition `id`s are caller-supplied and
    * become the identity later updates match on.
    *
-   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
-   * `Conflict` on a slug already in use, and `BadRequest` on a circular
-   * `ofComponents` reference.
+   * Throws `PreconditionFailed` in read-only mode, on a provisioned copy and
+   * off the `draft` branch, `Conflict` on a slug already in use, and
+   * `BadRequest` on a circular `ofComponents` reference.
    *
    * @see ../../contributing/error-handling-internals.md
    */
@@ -155,6 +155,7 @@ export class ComponentService
       props
     );
     await this.assertNotProvisioned('create', projectId);
+    await this.assertOnDraft('create', projectId);
     const languages = await this.readProjectLanguages(projectId);
 
     return this.mutating(
@@ -323,9 +324,9 @@ export class ComponentService
    * removes the Entry data keyed to the old one. The Component file and every
    * Entry the cascade rewrites land in one commit that rolls back as a unit.
    *
-   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
-   * `Conflict` on a taken slug or an ambiguous change, carrying structured
-   * issues, and `BadRequest` on a circular reference.
+   * Throws `PreconditionFailed` in read-only mode, on a provisioned copy and
+   * off the `draft` branch, `Conflict` on a taken slug or an ambiguous change,
+   * carrying structured issues, and `BadRequest` on a circular reference.
    *
    * @see ../../docs/schema-changes.md
    */
@@ -339,6 +340,7 @@ export class ComponentService
       props
     );
     await this.assertNotProvisioned('update', projectId);
+    await this.assertOnDraft('update', projectId);
     const languages = await this.readProjectLanguages(projectId);
 
     return this.mutating(
@@ -808,6 +810,7 @@ export class ComponentService
   public async delete(props: DeleteComponentProps): Promise<void> {
     return this.mutating('delete', deleteComponentSchema, props, async () => {
       await this.assertNotProvisioned('delete', props.projectId);
+      await this.assertOnDraft('delete', props.projectId);
 
       const referencingEntities = await this.findReferences(
         props.projectId,

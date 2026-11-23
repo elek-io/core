@@ -44,6 +44,21 @@ describe('ReleaseService against a remote', function () {
     await on.projects.update({ ...project, name });
   }
 
+  /**
+   * A commit on the checked-out branch, made through the git layer because
+   * Core refuses every write while a Project is off `draft`.
+   */
+  async function commitByHand(path: string, id: string, name: string) {
+    const filePath = core.util.pathTo.projectFile(id);
+    const projectFile = projectFileSchema.parse(await Fs.readJson(filePath));
+    await Fs.writeJson(filePath, { ...projectFile, name });
+    await core.git.add(path, [filePath]);
+    await core.git.commit(path, {
+      method: 'update',
+      reference: { objectType: 'project', id },
+    });
+  }
+
   /** The Project version committed on a ref of a repository. */
   async function versionAt(repositoryPath: string, ref: string) {
     const content = await core.git.getFileContentAtCommit(
@@ -306,7 +321,7 @@ describe('ReleaseService against a remote', function () {
 
     // A commit on main that was never pushed
     await core.projects.branches.switch({ id: project.id, branch: 'main' });
-    await rename(core, project.id, 'Edited on main');
+    await commitByHand(path, project.id, 'Edited on main');
     await core.projects.branches.switch({ id: project.id, branch: 'draft' });
     const mainBefore = await core.git.revParse(path, 'main');
 
