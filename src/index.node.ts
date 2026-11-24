@@ -50,6 +50,8 @@ export * from './util/shared.js';
 export type * from './util/entryIssue.js';
 // What a Destination cannot take, so a consumer can branch on it
 export type * from './util/destinationIssue.js';
+// What following a theme's new version left a website with
+export type * from './util/destinationVersion.js';
 
 /**
  * One step of `dispose()`, as a stall names it.

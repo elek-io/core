@@ -105,6 +105,11 @@ export const readThemeContractSchema = z.object({
 });
 export type ReadThemeContractProps = z.infer<typeof readThemeContractSchema>;
 
+export const themeVersionsSchema = readThemeContractSchema.omit({
+  version: true,
+});
+export type ThemeVersionsProps = z.infer<typeof themeVersionsSchema>;
+
 /** A Contract read from a theme, with the version and commit it came from */
 export const themeContractSchema = z.object({
   contract: contractSchema,

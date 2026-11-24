@@ -15,6 +15,7 @@ import {
   readContractVersionSchema,
   readThemeContractSchema,
   serviceTypeSchema,
+  themeVersionsSchema,
   CONTRACT_FILE_NAME,
   type CollectionFile,
   type ComponentFile,
@@ -32,6 +33,7 @@ import {
   type ReadContractVersionProps,
   type ReadThemeContractProps,
   type ThemeContract,
+  type ThemeVersionsProps,
   type Uuid,
 } from '../schema/index.js';
 import { missingContractReferences } from '../util/contract.js';
@@ -40,6 +42,7 @@ import { isFileNotFound, type PathTo } from '../util/node.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
 import {
   newestThemeVersion,
+  themeVersions,
   themeVersionTag,
   versionsNewestFirst,
 } from '../util/theme.js';
@@ -148,20 +151,7 @@ export class ContractService extends AbstractEntityService {
       readThemeContractSchema,
       props,
       async (validatedProps) => {
-        const unsafe = classifyUnsafeAddress(validatedProps.url);
-        if (unsafe) {
-          throw unsafe;
-        }
-
-        let refNames: string[];
-        try {
-          refNames = await this.gitService.lsRemote(validatedProps.url, {
-            tags: true,
-            isOwnGitAccess: true,
-          });
-        } catch (error) {
-          throw this.asUnreadableAddress(error);
-        }
+        const refNames = await this.tagRefNames(validatedProps.url);
         const version = validatedProps.version ?? newestThemeVersion(refNames);
         if (version === null) {
           throw CoreError.preconditionFailed(
@@ -214,6 +204,28 @@ export class ContractService extends AbstractEntityService {
         } finally {
           await Fs.remove(scratchPath).catch(() => undefined);
         }
+      }
+    );
+  }
+
+  /**
+   * The versions a theme tagged at a git address, newest first, read with
+   * the person's own git access. Empty for an address that tagged none.
+   *
+   * A pre-release is listed too, because an app may offer one. It is never
+   * taken unless it is named, see `readFromTheme`.
+   *
+   * Throws what `readFromTheme` throws about the address itself.
+   *
+   * @see ../../docs/destinations.md
+   */
+  public async versionsFromTheme(props: ThemeVersionsProps): Promise<string[]> {
+    return this.validated(
+      'versionsFromTheme',
+      themeVersionsSchema,
+      props,
+      async (validatedProps) => {
+        return themeVersions(await this.tagRefNames(validatedProps.url));
       }
     );
   }
@@ -441,6 +453,26 @@ export class ContractService extends AbstractEntityService {
         return (await this.contractIds(validatedProps.projectId)).length;
       }
     );
+  }
+
+  /**
+   * The ref names a git address advertises for its tags, read with the
+   * person's own git access. Refuses an address Core does not accept before
+   * git runs, because both callers write or read from it.
+   */
+  private async tagRefNames(url: string): Promise<string[]> {
+    const unsafe = classifyUnsafeAddress(url);
+    if (unsafe) {
+      throw unsafe;
+    }
+    try {
+      return await this.gitService.lsRemote(url, {
+        tags: true,
+        isOwnGitAccess: true,
+      });
+    } catch (error) {
+      throw this.asUnreadableAddress(error);
+    }
   }
 
   /** The Contract the Project keeps for an origin, or undefined for none */

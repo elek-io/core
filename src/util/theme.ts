@@ -48,6 +48,15 @@ export function themeVersions(refNames: readonly string[]): string[] {
 }
 
 /**
+ * Whether one version of a theme is newer than another, by what a version
+ * means rather than by its text, so `1.10.0` is newer than `1.9.0` and a
+ * pre-release older than the release it leads to.
+ */
+export function isNewerVersion(version: string, than: string): boolean {
+  return Semver.gt(version, than);
+}
+
+/**
  * The newest version of a theme, or null when it tagged none. A pre-release
  * is left out, because it is taken only when it is named.
  */

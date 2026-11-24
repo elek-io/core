@@ -39,9 +39,20 @@ export const destinationKindSchema = z.enum(['website']);
 export type DestinationKind = z.infer<typeof destinationKindSchema>;
 
 /**
+ * A newer version of the Contract that waits beside the one in use, with a
+ * Mapping of its own the editor fills while the website goes on using the
+ * version it uses.
+ */
+export const waitingVersionSchema = z.object({
+  version: versionSchema,
+  mapping: mappingSchema,
+});
+export type WaitingVersion = z.infer<typeof waitingVersionSchema>;
+
+/**
  * `destinations/<id>/destination.json`: one place a Project's content goes,
- * the Contract it follows, the version of it in use and the Mapping that
- * fills it.
+ * the Contract it follows, the version of it in use, the Mapping that fills
+ * it, and the newer version waiting beside it where one does.
  */
 export const destinationFileSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.destination).readonly(),
@@ -49,6 +60,11 @@ export const destinationFileSchema = baseFileSchema.extend({
   kind: destinationKindSchema,
   contract: z.object({ id: uuidSchema, version: versionSchema }),
   mapping: mappingSchema,
+  /**
+   * Defaults to none, so a Destination written before a version could wait
+   * reads as one that follows the version it uses.
+   */
+  waiting: waitingVersionSchema.nullable().default(null),
 });
 export type DestinationFile = z.infer<typeof destinationFileSchema>;
 
@@ -71,6 +87,8 @@ export const updateDestinationSchema = z.object({
   id: uuidSchema.readonly(),
   name: z.string().trim().min(1).max(128).optional(),
   mapping: mappingSchema.optional(),
+  /** The Mapping of the version that waits, rather than the one in use */
+  waitingMapping: mappingSchema.optional(),
 });
 export type UpdateDestinationProps = z.infer<typeof updateDestinationSchema>;
 
@@ -92,10 +110,33 @@ export type CountDestinationsProps = z.infer<typeof countDestinationsSchema>;
 export const checkDestinationSchema = readDestinationSchema.extend({
   entryId: uuidSchema,
   collectionId: uuidSchema,
+  /** Checks the version that waits rather than the one in use */
+  isWaitingVersion: z.boolean().optional(),
 });
 export type CheckDestinationProps = z.infer<typeof checkDestinationSchema>;
 
-export const checkAllDestinationSchema = readDestinationSchema.extend({});
+export const checkAllDestinationSchema = readDestinationSchema.extend({
+  /** Checks the version that waits rather than the one in use */
+  isWaitingVersion: z.boolean().optional(),
+});
 export type CheckAllDestinationProps = z.infer<
   typeof checkAllDestinationSchema
+>;
+
+export const newerDestinationVersionsSchema = readDestinationSchema.extend({});
+export type NewerDestinationVersionsProps = z.infer<
+  typeof newerDestinationVersionsSchema
+>;
+
+export const keepDestinationVersionSchema = readDestinationSchema.extend({
+  /** The newest version tagged at the theme when left out */
+  version: versionSchema.optional(),
+});
+export type KeepDestinationVersionProps = z.infer<
+  typeof keepDestinationVersionSchema
+>;
+
+export const switchDestinationVersionSchema = readDestinationSchema.extend({});
+export type SwitchDestinationVersionProps = z.infer<
+  typeof switchDestinationVersionSchema
 >;

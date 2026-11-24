@@ -2,9 +2,11 @@ import {
   flattenFieldDefinitions,
   getValuesSchema,
   type CollectionFile,
+  type CollectionMapping,
   type Contract,
   type EntryFile,
   type FieldDefinition,
+  type FieldMapping,
   type Mapping,
   type MdAstRoot,
   type ProjectLanguages,
@@ -31,26 +33,75 @@ export function mappingByMatchingIds(props: {
   contract: Contract;
   collections: readonly CollectionFile[];
 }): Mapping {
+  return mappingForVersion({ ...props, carryFrom: [] });
+}
+
+/**
+ * The Mapping a version of a Contract starts out with: what the Mappings in
+ * `carryFrom` already fill and the Project still holds, the first of them
+ * that does per Collection, and otherwise what `mappingByMatchingIds` gives.
+ *
+ * So a version put beside the one in use keeps what the editor mapped, and a
+ * Collection or field the new version added is filled by its id where the
+ * Project carries it. An entry naming a Collection or field definition that
+ * is gone is dropped rather than carried, so no Mapping keeps what the
+ * check would only report.
+ */
+export function mappingForVersion(props: {
+  contract: Contract;
+  collections: readonly CollectionFile[];
+  carryFrom: ReadonlyArray<Mapping>;
+}): Mapping {
   const projectCollections = new Map(
     props.collections.map((collection) => [collection.id, collection])
   );
   const mapping: Mapping = { collections: {} };
 
   for (const contractCollection of props.contract.collections) {
-    const projectCollection = projectCollections.get(contractCollection.id);
+    // Every carried entry for this Collection of the Contract whose source
+    // the Project still holds, in the order they were given
+    const carried: CollectionMapping[] = [];
+    for (const one of props.carryFrom) {
+      const entry = one.collections[contractCollection.id];
+      if (
+        entry !== undefined &&
+        projectCollections.has(entry.from.collectionId)
+      ) {
+        carried.push(entry);
+      }
+    }
+    const first = carried[0];
+    const projectCollection =
+      first === undefined
+        ? projectCollections.get(contractCollection.id)
+        : projectCollections.get(first.from.collectionId);
     if (projectCollection === undefined) {
       continue;
     }
+    const contractFields = flattenFieldDefinitions(
+      contractCollection.fieldDefinitions
+    );
     const projectFieldIds = new Set(
       flattenFieldDefinitions(projectCollection.fieldDefinitions).map(
         ({ id }) => id
       )
     );
-    const fields: Record<Uuid, { fieldDefinitionId: Uuid }> = {};
-    for (const contractField of flattenFieldDefinitions(
-      contractCollection.fieldDefinitions
-    )) {
-      if (projectFieldIds.has(contractField.id)) {
+    const fields: Record<Uuid, FieldMapping> = {};
+    for (const contractField of contractFields) {
+      // What was mapped by hand wins over the matching id, and only where
+      // it comes from the Collection this version reads through
+      const fromCarried = carried
+        .filter((one) => one.from.collectionId === projectCollection.id)
+        .flatMap((one) => {
+          const fieldMapping = one.fields[contractField.id];
+          return fieldMapping === undefined ? [] : [fieldMapping];
+        })
+        .find((fieldMapping) => {
+          return projectFieldIds.has(fieldMapping.fieldDefinitionId);
+        });
+      if (fromCarried !== undefined) {
+        fields[contractField.id] = fromCarried;
+      } else if (projectFieldIds.has(contractField.id)) {
         fields[contractField.id] = { fieldDefinitionId: contractField.id };
       }
     }
