@@ -196,6 +196,50 @@ describe('websiteUpdateAction', function () {
     expect(after.waiting?.version).toEqual('2.0.0');
   });
 
+  it('switches on the next run once the Mapping covers the new version', async function () {
+    const second = demanding('2.0.0');
+    const added = second.collections[0]?.fieldDefinitions.at(-1);
+    const filled = collection.fieldDefinitions[0];
+    if (added === undefined || filled === undefined) {
+      throw new Error('The Contract or the Collection holds no field');
+    }
+    const website = await websiteOn('mapped-later.example', [
+      at('1.0.0'),
+      second,
+    ]);
+    await expectCoreError(
+      websiteUpdateAction({ project: projectId, name: 'mapped-later.example' }),
+      'PreconditionFailed',
+      'keeps using'
+    );
+    const waiting = (await cli.destinations.read({ projectId, id: website.id }))
+      .waiting;
+    if (waiting === null) {
+      throw new Error('No version waits');
+    }
+    const mapping = structuredClone(waiting.mapping);
+    for (const collectionMapping of Object.values(mapping.collections)) {
+      collectionMapping.fields[added.id] = { fieldDefinitionId: filled.id };
+    }
+    await cli.destinations.update({
+      projectId,
+      id: website.id,
+      waitingMapping: mapping,
+    });
+
+    // The theme is read again and answers the same version, so what the
+    // editor mapped is what the second run switches to
+    await websiteUpdateAction({
+      project: projectId,
+      name: 'mapped-later.example',
+    });
+
+    const after = await cli.destinations.read({ projectId, id: website.id });
+    expect(after.contract.version).toEqual('2.0.0');
+    expect(after.mapping).toEqual(mapping);
+    expect(after.waiting).toBeNull();
+  });
+
   it('commits on the branch the Project is checked out on', async function () {
     await websiteOn('committed.example', [at('1.0.0'), at('1.1.0')]);
 

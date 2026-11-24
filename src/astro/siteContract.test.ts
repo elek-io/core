@@ -801,6 +801,13 @@ describe('a site reading its Entries through its own Contract', function () {
       projectId: siteProjectId,
       id: website.id,
     });
+    // A Mapping of its own that fills nothing, so a build reading it would
+    // stop rather than build what the version in use fills
+    const waiting = await core.destinations.update({
+      projectId: siteProjectId,
+      id: website.id,
+      waitingMapping: { collections: {} },
+    });
     const site = await buildSite({
       collectionIdOrSlug: 'posts',
       contract,
@@ -811,6 +818,7 @@ describe('a site reading its Entries through its own Contract', function () {
 
     expect(kept.destination.contract.version).toBe('1.0.0');
     expect(kept.destination.waiting?.version).toBe('1.1.0');
+    expect(waiting.mapping).toEqual(fullMapping());
     expect(site.store.get(secondEntryId)?.data).toMatchObject({
       title: { en: 'Polo', de: 'Polo' },
     });

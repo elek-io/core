@@ -1,10 +1,9 @@
 import Fs from 'fs-extra';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import {
-  destinationFileSchema,
-  type Contract,
-  type Mapping,
-  type StringFieldDefinition,
+import type {
+  Contract,
+  Mapping,
+  StringFieldDefinition,
 } from '../schema/index.js';
 import core, {
   flattenFieldDefinitions,
@@ -184,6 +183,20 @@ describe('a theme that tagged a new version', function () {
         'NotFound'
       );
     });
+
+    it('lists a version of a theme that holds no Contract', async function () {
+      const theme = await createFakeTheme();
+      await theme.release({ tag: 'v1.0.0', files: { 'README.md': 'A theme' } });
+
+      expect(
+        await core.contracts.versionsFromTheme({ url: theme.url })
+      ).toEqual(['1.0.0']);
+      await expectCoreError(
+        core.contracts.readFromTheme({ url: theme.url }),
+        'NotFound',
+        'has no elek.contract.json'
+      );
+    });
   });
 
   describe('keepVersion', function () {
@@ -215,6 +228,32 @@ describe('a theme that tagged a new version', function () {
         ).contract.version
       ).toEqual('2.0.0');
       expect(await isCommitted()).toBe(true);
+    });
+
+    it('fills a field the new version added whose id the Project carries', async function () {
+      // The reference field leaves the Contract and comes back at 2.0.0,
+      // which is a theme adding a field the Project already has
+      const first = at('1.0.0');
+      const dropped = first.collections[0]?.fieldDefinitions.pop();
+      if (dropped === undefined) {
+        throw new Error('The Contract holds no field definition');
+      }
+      const theme = await themeWith([first, at('2.0.0')]);
+      const website = await websiteOn(theme, { version: '1.0.0' });
+
+      const kept = await core.destinations.keepVersion({
+        projectId,
+        id: website.id,
+      });
+
+      expect(
+        website.mapping.collections[collection.id]?.fields[dropped.id]
+      ).toBeUndefined();
+      expect(
+        kept.destination.waiting?.mapping.collections[collection.id]?.fields[
+          dropped.id
+        ]
+      ).toEqual({ fieldDefinitionId: dropped.id });
     });
 
     it('keeps the version it is given instead', async function () {
@@ -331,6 +370,9 @@ describe('a theme that tagged a new version', function () {
       const other = await websiteOn(theme, { version: '1.0.0' });
 
       await core.destinations.keepVersion({ projectId, id: one.id });
+      // Both websites read the copies the Project keeps, so the switch needs
+      // no access to the theme
+      await Fs.remove(theme.url);
       const switched = await core.destinations.switchVersion({
         projectId,
         id: one.id,
@@ -369,10 +411,20 @@ describe('a theme that tagged a new version', function () {
       );
       expect(switched.destination.waiting).toBeNull();
       expect(await isCommitted()).toBe(true);
-      // The check now reads the Project against the version it switched to
+      // The check reads the Project against the version it switched to, and
+      // the copy of the version left behind stays
       expect(
         await core.destinations.checkAll({ projectId, id: website.id })
       ).toEqual([]);
+      expect(
+        (
+          await core.contracts.readVersion({
+            projectId,
+            id: website.contract.id,
+            version: '1.0.0',
+          })
+        ).contract.version
+      ).toEqual('1.0.0');
     });
 
     it('keeps the version in use while the Mapping lacks a required field', async function () {
@@ -518,19 +570,26 @@ describe('a theme that tagged a new version', function () {
     });
 
     it('reads a Destination written before a version could wait', async function () {
-      const theme = await themeWith([at('1.0.0')]);
-      const website = await websiteOn(theme);
-      const filePath = core.util.pathTo.destinationFile(projectId, website.id);
-      const { waiting: _, ...withoutTheKey } = destinationFileSchema.parse(
-        await Fs.readJson(filePath)
-      );
-      await Fs.outputJson(filePath, withoutTheKey);
+      // Written by hand rather than added, so nothing of it was read before
+      // and the file itself is what answers
+      const id = uuid();
+      await Fs.outputJson(core.util.pathTo.destinationFile(projectId, id), {
+        objectType: 'destination',
+        id,
+        coreVersion: '0.1.0',
+        created: '2026-01-01T00:00:00.000Z',
+        updated: null,
+        name: `predates-waiting-${id}.example`,
+        kind: 'website',
+        contract: { id: uuid(), version: '1.0.0' },
+        mapping: { collections: {} },
+      });
 
       expect(
-        (await core.destinations.read({ projectId, id: website.id })).waiting
+        (await core.destinations.read({ projectId, id })).waiting
       ).toBeNull();
 
-      await Fs.outputJson(filePath, website);
+      await Fs.remove(core.util.pathTo.destination(projectId, id));
     });
 
     it('refuses a Mapping for a waiting version', async function () {
