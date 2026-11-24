@@ -22,6 +22,7 @@ const contactDetails = await core.collections.create({
 - `core.entries.create()` throws `Conflict` for a second Entry, naming the Entry the Single Entry already holds, and writes nothing.
 - Whether a Collection is a Single Entry is decided when it is created. `core.collections.update()` throws `Conflict` for any other value than the one it was created with, and takes that value, so sending back a Collection you read changes nothing.
 - A Release diff says of an added or a deleted Collection whether it is a Single Entry, because the state the other side holds has no Collection to read it from.
+- A Contract holds a Collection as it is, so whether it is a Single Entry travels with it into a theme's `elek.contract.json`.
 
 **An Astro site reads a Single Entry as one item.** `elekCollections()` derives its collection like every other one, and `elekEntriesLoader` stores the one Entry under the id `single`, so no page needs the Entry's own id.
 

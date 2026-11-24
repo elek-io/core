@@ -208,6 +208,25 @@ describe('A Collection limited to one Entry', function () {
     await ensureCleanGitStatus(task, project.id);
   });
 
+  it('travels in a Contract, which holds a Collection as it is', async function () {
+    const project = await createProject();
+    onTestFinished(project.destroy);
+    const single = await createSingleEntryCollection(project.id);
+
+    const contract = await core.contracts.generate({
+      projectId: project.id,
+      name: '@acme/one-off-site',
+      version: '1.0.0',
+    });
+
+    expect(
+      contract.collections.map(({ id, isSingleEntry }) => ({
+        id,
+        isSingleEntry,
+      }))
+    ).toEqual([{ id: single.id, isSingleEntry: true }]);
+  });
+
   it('reads a Collection written before Single Entries existed as the list it is', async function () {
     const project = await createProject();
     onTestFinished(project.destroy);
