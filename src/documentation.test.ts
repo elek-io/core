@@ -166,6 +166,59 @@ describe('documentation', () => {
     });
   });
 
+  describe('links/entry-title-field-types', () => {
+    const doc = 'docs/fields.md';
+    const page = readFile(doc);
+    const opening = 'Only a one-line field type can title an Entry:';
+    const listed = '`telephone`, `slug`, `select`.';
+
+    /** What the rule reports for a page, which is the real one with one defect. */
+    const messagesOf = (content: string) =>
+      rules
+        .filter((rule) => rule.id === 'links/entry-title-field-types')
+        .flatMap((rule) => rule.check(doc, content))
+        .map((violation) => violation.message);
+
+    it('reports a field type that cannot title an Entry', () => {
+      const messages = messagesOf(
+        page.replace(listed, '`telephone`, `slug`, `select`, `textarea`.')
+      );
+
+      expect(messages).toStrictEqual([
+        'textarea cannot title an Entry, drop it from the sentence',
+      ]);
+    });
+
+    it('reports a field type the sentence leaves out', () => {
+      const messages = messagesOf(page.replace(listed, '`telephone`, `slug`.'));
+
+      expect(messages).toStrictEqual([
+        'select can title an Entry and the sentence leaves it out',
+      ]);
+    });
+
+    it('reports the sentence being reworded away', () => {
+      const messages = messagesOf(
+        page.replace(opening, 'One of these field types can title an Entry:')
+      );
+
+      expect(messages).toStrictEqual([
+        `the sentence listing the field types that can title an Entry is gone ("${opening}")`,
+      ]);
+    });
+
+    it('reads no field type out of the prose after the list', () => {
+      const messages = messagesOf(
+        page.replace(
+          'No other field type can, `textarea` included.',
+          'No other field type can, `textarea` and `markdown` included.'
+        )
+      );
+
+      expect(messages).toStrictEqual([]);
+    });
+  });
+
   describe('links/release-table', () => {
     const table = readFile('docs/releases.md');
     const entryRow = '| `entryChanges` | `modified` | patch |';
