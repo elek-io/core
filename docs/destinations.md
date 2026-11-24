@@ -27,6 +27,8 @@ const contract = await core.contracts.generate({
 ```
 
 - `collections` and `components` hold `collection.json` and `component.json` files as they are, ids and `coreVersion` included. Field definition ids are the identity a Mapping binds to.
+- So a Contract carries every Collection's and Component's name, description, icon and slug, and every field definition's label, description, default value and validation, in every language of the Project. It carries no Entry, no Asset and no Value.
+- Read it before it goes into a repository other people can see. A Collection named after one client, or a description written for the office, leaves the Project with it.
 - `name` is a package-like name of lowercase words, optionally scoped as `@scope/name`.
 - `languages` defaults to the Project's own supported languages, and `any` says the theme renders whatever the Project holds. It is recorded rather than checked, because which Project language fills a field is part of a Mapping.
 - Every Collection and Component a field definition points at is included. A field definition naming one the Project does not hold throws `BadRequest` naming it, rather than writing a Contract whose references lead nowhere.
@@ -79,7 +81,7 @@ The CLI does the same in one command, which also prints what the website cannot 
 elek website:add --project <id> --name autohaus-ebersfelde.de --theme https://github.com/acme/dealer-site.git
 ```
 
-Either way it reads the theme, keeps the Contract in the Project and writes the website, in one commit on the branch the Project is checked out on, which is `draft` for a working copy. Synchronize the Project to take it to its remote.
+Either way it reads the theme, keeps the Contract in the Project and writes the website, on the branch the Project is checked out on, which is `draft` for a working copy. That is a commit for the Contract, where the Project does not keep it yet, and one for the website. Synchronize the Project to take it to its remote.
 
 A second website on the same address shares the Contract the Project already keeps rather than a copy of its own, and removing one leaves that Contract to the others.
 

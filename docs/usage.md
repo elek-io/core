@@ -448,6 +448,7 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
   - See [`destinations.md`](./destinations.md#a-contract).
 - `elek website:add --project <id> --name <website> --theme <address>` - add a website to a Project from its theme's git address, at the newest version tagged there, and print what the website cannot take yet.
   - `--theme-version` pins a version instead. It is not `--version`, which answers with the CLI's own version.
+  - It commits, so it needs a User set with [`core.user.set()`](#setting-the-user-required-before-writing), which no `elek` command does, and a Project that is a working copy in the data directory rather than a provisioned copy. elek.io Desktop is both.
   - It writes and commits in the Project of the data directory, on the branch it is checked out on, which is `draft` for a working copy. Synchronize the Project to take it to its remote.
   - It exits non-zero while anything is unmapped or any Entry does not fit, naming each. The website stays, so you can map the rest.
   - Core reads the address with your own git access, see [reading an address with your own git access](./git-and-sync.md#reading-an-address-with-your-own-git-access).

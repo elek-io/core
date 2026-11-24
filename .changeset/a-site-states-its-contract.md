@@ -12,6 +12,7 @@ It writes `elek.contract.json` into the directory you name, which defaults to th
 
 - `--languages` takes `any` or the codes of the languages separated by commas, and defaults to the Project's own supported languages.
 - A field definition pointing at a Collection or Component the Project does not hold throws `BadRequest` naming it, rather than writing a Contract whose references lead nowhere.
+- A Contract carries the Collections and Components whole: every name, description, icon, slug, label, default value and validation rule they hold, in every language of the Project, and no Entry, Asset or Value. Read it before it goes into a repository other people can see.
 - Keep the Project a Contract was generated in. Field definition ids are what a Mapping binds to, so recreating a Collection by hand gives every field a new id and fills nothing.
 
 **`core.contracts` reads a theme's Contract from its git address, at the newest version it tagged.** A theme releases a version by tagging it `v<version>` with an `elek.contract.json` carrying that same version. A pre-release is taken only when it is named.

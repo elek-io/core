@@ -34,7 +34,7 @@ export const generateContractAction = async ({
   const resolvedVersion = version ?? previous?.version;
   if (resolvedName === undefined || resolvedVersion === undefined) {
     throw CoreError.badRequest(
-      `No ${CONTRACT_FILE_NAME} at "${filePath}" to take a name and a version from, so both have to be given. Pass --name and --version.`
+      `No ${CONTRACT_FILE_NAME} at "${filePath}" to take a name and a version from, so both have to be given. Pass --name and --contract-version.`
     );
   }
 
@@ -49,12 +49,18 @@ export const generateContractAction = async ({
   await Fs.ensureDir(resolvedOutDir);
   await Fs.writeFile(filePath, `${JSON.stringify(contract, null, 2)}\n`);
 
-  // The Project id rather than its name. This goes through Core's logger, so
-  // it lands in a log file that can be attached to a bug report, and names
-  // stay out of those. See contributing/logging.md.
+  // The person at the terminal gets the path they chose, and Core's logger
+  // gets the shape of what happened. A log file can be attached to a bug
+  // report, so neither the Contract's name nor a path somebody typed goes
+  // into it. See contributing/logging.md.
+  console.log(`Wrote the Contract to "${filePath}"`);
   core.logger.info({
     source: 'core',
-    message: `Wrote the Contract "${contract.name}" at version ${contract.version} of Project ${project} to "${filePath}", with ${contract.collections.length} Collections and ${contract.components.length} Components`,
+    message: `Wrote the Contract of Project ${project} at version ${contract.version}, with ${contract.collections.length} Collections and ${contract.components.length} Components`,
+    meta: {
+      'elek.project.id': project,
+      'elek.collection.count': contract.collections.length,
+    },
   });
 };
 
@@ -74,7 +80,7 @@ async function readPrevious(
     .safeParse(await Fs.readJson(filePath).catch(() => undefined));
   if (parsed.success === false) {
     throw CoreError.badRequest(
-      `The file at "${filePath}" carries no Contract name and version to keep. Move it aside, or pass --name and --version to write it again.`
+      `The file at "${filePath}" carries no Contract name and version to keep. Move it aside and run this again, which writes a Contract of its own.`
     );
   }
   return parsed.data;

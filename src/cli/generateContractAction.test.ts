@@ -1,8 +1,8 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { contractSchema, CONTRACT_FILE_NAME } from '../schema/index.js';
-import core, { uuid, type Collection } from '../test/setup.js';
+import core, { CoreError, uuid, type Collection } from '../test/setup.js';
 import {
   createCollection,
   createComponent,
@@ -145,6 +145,8 @@ describe('generateContractAction', function () {
   it('needs both a name and a version on a first run', async function () {
     const first = Path.join(core.options.dataDir, 'first-theme');
 
+    // The option the command registers, not `--version`, which answers with
+    // the CLI's own version and writes nothing
     await expectCoreError(
       generateContractAction({
         project: projectId,
@@ -152,7 +154,7 @@ describe('generateContractAction', function () {
         version: '1.0.0',
       }),
       'BadRequest',
-      'both have to be given'
+      'Pass --name and --contract-version.'
     );
     await expectCoreError(
       generateContractAction({
@@ -161,7 +163,7 @@ describe('generateContractAction', function () {
         name: '@acme/first-site',
       }),
       'BadRequest',
-      'both have to be given'
+      'Pass --name and --contract-version.'
     );
 
     expect(await Fs.pathExists(Path.join(first, CONTRACT_FILE_NAME))).toEqual(
@@ -176,15 +178,63 @@ describe('generateContractAction', function () {
       '{ "something": "else" }'
     );
 
-    await expectCoreError(
-      generateContractAction({ project: projectId, outDir: foreign }),
-      'BadRequest',
-      'carries no Contract name and version to keep'
+    const error = await generateContractAction({
+      project: projectId,
+      outDir: foreign,
+    }).then(
+      () => undefined,
+      (caught: unknown) => caught
     );
 
+    expect(error).toBeInstanceOf(CoreError);
+    expect(error instanceof CoreError && error.message).toContain(
+      'carries no Contract name and version to keep'
+    );
+    // Passing the two options does not get past this, because the file is
+    // read before they are, so the message does not offer them
+    expect(error instanceof CoreError && error.message).not.toContain('--name');
     expect(
       await Fs.readFile(Path.join(foreign, CONTRACT_FILE_NAME), 'utf8')
     ).toEqual('{ "something": "else" }');
+    await expectCoreError(
+      generateContractAction({
+        project: projectId,
+        outDir: foreign,
+        name: '@acme/foreign-site',
+        version: '1.0.0',
+      }),
+      'BadRequest',
+      'carries no Contract name and version to keep'
+    );
+  });
+
+  it("writes the path to the terminal and keeps it out of Core's log", async function () {
+    const logged = vi.spyOn(getCore().logger, 'info');
+    const printed = vi
+      .spyOn(console, 'log')
+      .mockImplementation(() => undefined);
+    let terminal = '';
+    let logFile = '';
+
+    try {
+      await generateContractAction({
+        project: projectId,
+        outDir,
+        name: '@acme/dealer-site',
+        version: '1.0.0',
+      });
+    } finally {
+      // Read before restoring, which drops what the spy recorded
+      terminal = JSON.stringify(printed.mock.calls);
+      logFile = JSON.stringify(logged.mock.calls);
+      printed.mockRestore();
+      logged.mockRestore();
+    }
+
+    expect(terminal).toContain(CONTRACT_FILE_NAME);
+    expect(logFile).toContain(projectId);
+    expect(logFile).not.toContain('@acme/dealer-site');
+    expect(logFile).not.toContain(outDir);
   });
 
   it('refuses a Project it cannot read, leaving the Contract as it was', async function () {

@@ -48,12 +48,21 @@ export const websiteAddAction = async ({
   }
 
   for (const issue of issues) {
+    // The words name a Collection, a field and an Entry of the Project, and
+    // a Value the Contract refused is quoted inside them, so they go to the
+    // person at the terminal. Core's logger gets the kind of issue and the
+    // ids, which is what resolves a line against the Project without putting
+    // anybody's words in a log file. See contributing/logging.md.
+    console.warn(issue.message);
     core.logger.warn({
       source: 'core',
-      message: issue.message,
+      message: `Website ${website.id} of Project ${project} reports "${issue.issue}"`,
       meta: {
         'elek.object.type': 'destination',
         'elek.object.id': website.id,
+        ...(issue.contractFieldDefinitionId === undefined
+          ? {}
+          : { 'elek.field_definition.ids': [issue.contractFieldDefinitionId] }),
         ...(isValueIssue(issue)
           ? {
               'elek.collection.id': issue.collectionId,

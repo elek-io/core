@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import core, { uuid, type Collection } from '../test/setup.js';
 import { contractFileOf, createFakeTheme } from '../test/theme.js';
 import {
@@ -129,6 +129,51 @@ describe('websiteAddAction', function () {
     expect(
       page.list.some((website) => website.name === 'unfillable.example')
     ).toEqual(true);
+  });
+
+  it("prints what the website cannot take and keeps the Project's own words out of the log", async function () {
+    const theme = await createFakeTheme();
+    const demanding = await core.contracts.generate({
+      projectId,
+      name: '@acme/printed-site',
+      version: '1.0.0',
+    });
+    const unfillable = structuredClone(demanding.collections[0]);
+    if (unfillable !== undefined) {
+      unfillable.id = uuid();
+      unfillable.slug = { singular: 'spielwiese', plural: 'spielwiesen' };
+      demanding.collections.push(unfillable);
+    }
+    await theme.release({ tag: 'v1.0.0', files: contractFileOf(demanding) });
+    const printed = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    const logged = vi.spyOn(getCore().logger, 'warn');
+
+    let terminal = '';
+    let logFile = '';
+    try {
+      await expectCoreError(
+        websiteAddAction({
+          project: projectId,
+          name: 'printed.example',
+          theme: theme.url,
+        }),
+        'PreconditionFailed',
+        'cannot take it yet'
+      );
+    } finally {
+      // Read before restoring, which drops what the spy recorded
+      terminal = JSON.stringify(printed.mock.calls);
+      logFile = JSON.stringify(logged.mock.calls);
+      printed.mockRestore();
+      logged.mockRestore();
+    }
+
+    // The Collection's own slug reaches the person and nothing else
+    expect(terminal).toContain('spielwiesen');
+    expect(logFile).toContain('collection_not_mapped');
+    expect(logFile).not.toContain('spielwiesen');
   });
 
   it('adds nothing for an address carrying a credential', async function () {

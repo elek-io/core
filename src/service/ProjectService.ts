@@ -131,9 +131,10 @@ export class ProjectService
   }
 
   /**
-   * Creates the Project folder with its `assets`, `collections`, `components`
-   * and `lfs` subfolders, writes `.gitignore` and `.gitattributes`, then
-   * initializes a git repository whose first commit lands on `main`.
+   * Creates the Project folder with its `assets`, `collections`, `components`,
+   * `contracts`, `destinations` and `lfs` subfolders, writes `.gitignore` and
+   * `.gitattributes`, then initializes a git repository whose first commit
+   * lands on `main`.
    * The Project is left checked out on `draft`.
    *
    * Throws `PreconditionFailed` in read-only mode and `Unauthorized` when no
