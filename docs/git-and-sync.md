@@ -128,8 +128,10 @@ Two shapes of address are refused before git runs, both with `BadRequest`:
 
 | Refused | Why |
 | --- | --- |
-| `https://user:token@host/org/repo.git` | A credential in the address would be committed into the Project |
+| A password under any scheme, and a user alone under http or https, as in `https://user:token@host/org/repo.git` | A credential in the address would be committed into the Project |
 | `ext::sh -c ...`, and anything starting with `-` | git runs a remote helper address as a command, and reads a leading dash as its own option |
+
+`ssh://git@host/org/repo.git` is accepted, because an SSH user is part of the address rather than a credential, as it is in the shorthand `git@host:org/repo.git`.
 
 Everything a Project's remote accepts is accepted otherwise, a local path included, which only works on the machine holding it. An address Core could read but that states no version of itself is refused too:
 

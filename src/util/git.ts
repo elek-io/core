@@ -155,6 +155,28 @@ function hasSchemeBefore(value: string, end: number): boolean {
 const REMOTE_HELPER_ADDRESS = /^[A-Za-z0-9][A-Za-z0-9+.-]*::/;
 
 /**
+ * The scheme and the userinfo of an address, up to the last `@` of its
+ * authority, which is the one every client reads as the delimiter.
+ */
+const ADDRESS_USERINFO = /^([\w+.-]+):\/\/([^/?#\s]*)@/;
+
+/**
+ * Whether the userinfo of an address is a credential rather than part of the
+ * address: a password under any scheme, and a user alone under http or
+ * https, where that is how a token is handed over. `ssh://git@host/repo`
+ * carries its user the way the shorthand `git@host:repo` does.
+ */
+function carriesCredential(address: string): boolean {
+  const match = ADDRESS_USERINFO.exec(address);
+  if (match === null) {
+    return false;
+  }
+  const scheme = (match[1] ?? '').toLowerCase();
+  const userinfo = match[2] ?? '';
+  return userinfo.includes(':') || scheme === 'http' || scheme === 'https';
+}
+
+/**
  * Why an address must not be handed to git, or null when it may be. Core
  * keeps the address of a theme in the Project, where a credential would
  * become a committed secret, and reads it with the person's own git access.
@@ -181,7 +203,7 @@ export function classifyUnsafeAddress(address: string): CoreError | null {
       `Refusing the git address "${redactUrlCredentials(address)}", because git runs a "${helper}" address through a remote helper, which can execute a command`
     );
   }
-  if (redactUrlCredentials(address) !== address) {
+  if (carriesCredential(address)) {
     return CoreError.badRequest(
       `Refusing the git address "${redactUrlCredentials(address)}", because it carries a credential, which must not be kept in a Project. Use an address without one and let your own git access answer for it`
     );

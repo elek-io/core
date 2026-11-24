@@ -55,7 +55,7 @@ theme.commit; // the commit the Contract was read from
 
 | What is wrong | What it throws |
 | --- | --- |
-| The address carries a credential, or git would run it as a command | `BadRequest` |
+| The address carries a credential, such as a password or a token, or git would run it as a command | `BadRequest` |
 | The address needs authentication you do not have | `Unauthorized` |
 | The address tagged no version | `PreconditionFailed`, reason `theme_without_version` |
 | The version is not tagged there, or holds no `elek.contract.json` | `NotFound` |

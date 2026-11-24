@@ -520,4 +520,76 @@ describe('CLI', function () {
       })
     ).rejects.toThrow();
   });
+
+  it("should write a theme's Contract via the generate:contract command", async function () {
+    const themeDir = out('contract-theme');
+
+    await execCommand({
+      command: 'node',
+      args: [
+        cliBinary,
+        'generate:contract',
+        themeDir,
+        '--project',
+        project1.id,
+        '--name',
+        '@acme/dealer-site',
+        '--contract-version',
+        '1.0.0',
+      ],
+    });
+
+    const contract = JSON.parse(
+      await fs.readFile(Path.join(themeDir, 'elek.contract.json'), 'utf-8')
+    );
+    expect(contract.name).toEqual('@acme/dealer-site');
+    expect(contract.version).toEqual('1.0.0');
+    expect(
+      contract.collections.map((written: Collection) => written.id)
+    ).toContain(collection.id);
+  });
+
+  it('should keep the name and the version on a second generate:contract run', async function () {
+    const themeDir = out('contract-theme-again');
+    const args = [
+      cliBinary,
+      'generate:contract',
+      themeDir,
+      '--project',
+      project1.id,
+    ];
+
+    await execCommand({
+      command: 'node',
+      args: [
+        ...args,
+        '--name',
+        '@acme/dealer-site',
+        '--contract-version',
+        '2.3.4',
+      ],
+    });
+    await execCommand({ command: 'node', args });
+
+    const contract = JSON.parse(
+      await fs.readFile(Path.join(themeDir, 'elek.contract.json'), 'utf-8')
+    );
+    expect(contract.name).toEqual('@acme/dealer-site');
+    expect(contract.version).toEqual('2.3.4');
+  });
+
+  it('should fail loudly when generate:contract has no name and no version', async function () {
+    await expect(
+      execCommand({
+        command: 'node',
+        args: [
+          cliBinary,
+          'generate:contract',
+          out('contract-theme-first'),
+          '--project',
+          project1.id,
+        ],
+      })
+    ).rejects.toThrow();
+  });
 });

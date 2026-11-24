@@ -289,7 +289,9 @@ export class DestinationService extends AbstractEntityService {
         );
 
         await this.withGitRollback(projectPath, async () => {
-          await Fs.remove(destinationPath);
+          // Through the file service, so what it cached below the folder goes
+          // with it and a later read does not answer from the cache
+          await this.jsonFileService.delete(destinationPath);
           await this.gitService.add(projectPath, [destinationPath]);
           await this.gitService.commit(projectPath, {
             method: 'delete',

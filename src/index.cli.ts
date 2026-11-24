@@ -126,8 +126,9 @@ program
     '-n, --name <name>',
     'The name of the Contract, such as "@acme/dealer-site". Kept from the Contract already in the directory when left out, which the first run has none of.'
   )
+  // Not `--version`, which the program's own version option answers first
   .option(
-    '-v, --version <version>',
+    '--contract-version <version>',
     'The version of the Contract, such as "1.2.0". Kept from the Contract already in the directory when left out, which the first run has none of.'
   )
   .option(
@@ -135,7 +136,12 @@ program
     'The languages the theme serves: "any", or the codes of the languages separated by commas. Defaults to the Project\'s own supported languages.'
   )
   .action(async (outDir, options) => {
-    const props = generateContractSchema.parse({ outDir, ...options });
+    const { contractVersion, ...rest } = options;
+    const props = generateContractSchema.parse({
+      outDir,
+      ...rest,
+      ...(contractVersion === undefined ? {} : { version: contractVersion }),
+    });
 
     await generateContractAction(props);
   });

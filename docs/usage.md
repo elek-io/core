@@ -442,7 +442,7 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 - `elek generate:client [outDir] [language] [format] [target]` - generate a JS/TS API client. `--watch` regenerates on content changes.
 - `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported. Both generators emit TypeScript by default. Passing `js` compiles it, which needs `tsdown` and `typescript` installed as dev dependencies of your project, see [compiling to JavaScript](./api-clients.md#compiling-to-javascript).
 - `elek generate:contract --project <id> [outDir]` - write a theme's `elek.contract.json` from a Project's Collections and Components, into `outDir`, which defaults to the current directory.
-  - `--name` and `--version` are kept from the Contract already in the directory when left out, so a rerun after the Project changed follows it without repeating them. The first run has no file to read them from and needs both.
+  - `--name` and `--contract-version` are kept from the Contract already in the directory when left out, so a rerun after the Project changed follows it without repeating them. The first run has no file to read them from and needs both. It is not `--version`, which answers with the CLI's own version.
   - `--languages` takes `any` or the codes of the languages separated by commas, and defaults to the Project's own supported languages.
   - See [`destinations.md`](./destinations.md#a-contract).
 - `elek api:start [port]` - start the local REST API (default port `31310`).
