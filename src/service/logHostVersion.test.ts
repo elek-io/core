@@ -1,6 +1,6 @@
 import Fs from 'fs-extra';
 import Path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { logRecordSchema, type LogRecord } from '../schema/logSchema.js';
 import { createTmpCore } from '../test/util.js';
 
@@ -19,7 +19,7 @@ describe('log.hostVersion', function () {
     });
 
     core.logger.info({ source: 'desktop', message: 'zqx-canary-host-record' });
-    const records = await readRecords(dataDir);
+    const records = await recordsHolding(dataDir, 'zqx-canary-host-record');
 
     const host = records.find((record) =>
       record.message.includes('zqx-canary-host-record')
@@ -39,7 +39,7 @@ describe('log.hostVersion', function () {
     const { core, dataDir } = createTmpCore({ log: { level: 'info' } });
 
     core.logger.info({ source: 'desktop', message: 'zqx-canary-no-version' });
-    const records = await readRecords(dataDir);
+    const records = await recordsHolding(dataDir, 'zqx-canary-no-version');
 
     const host = records.find((record) =>
       record.message.includes('zqx-canary-no-version')
@@ -58,13 +58,27 @@ describe('log.hostVersion', function () {
 });
 
 /**
- * Every record written so far, oldest file first. The transport writes on a
- * stream, so a yielded macrotask gives it a chance to drain first, the same
- * hedge `tail()` uses.
+ * Every record written so far, read again until the one holding the given
+ * text is among them. The transport writes on a stream, and a single yielded
+ * macrotask is not always enough for it to drain, which left the read empty
+ * and the assertion below it reading `undefined`.
  */
-async function readRecords(dataDir: string): Promise<LogRecord[]> {
-  await new Promise((resolve) => setImmediate(resolve));
+async function recordsHolding(
+  dataDir: string,
+  text: string
+): Promise<LogRecord[]> {
+  let records: LogRecord[] = [];
+  await vi.waitFor(async () => {
+    records = await readRecords(dataDir);
+    if (records.some((record) => record.message.includes(text)) === false) {
+      throw new Error(`no record holding "${text}" yet`);
+    }
+  });
+  return records;
+}
 
+/** Every record written so far, oldest file first. */
+async function readRecords(dataDir: string): Promise<LogRecord[]> {
   const dir = Path.join(dataDir, 'logs');
   if ((await Fs.pathExists(dir)) === false) {
     return [];
