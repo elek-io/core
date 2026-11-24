@@ -14,7 +14,7 @@ Every service (Asset, Collection, Component, Entry, Project) has a `migrate()` m
 
 The shared helper in `src/service/migrations/applyMigrations.ts` drives the chain:
 
-```
+```text
 Input data (structuredClone'd to prevent mutation)
   |
   v
@@ -72,7 +72,7 @@ export const projectMigrations: Migration[] = [
 
 `ProjectService.upgrade()` orchestrates upgrading an entire Project and all its objects to the current Core version.
 
-```
+```text
 upgrade({ id, force? })
   |
   v
@@ -143,7 +143,7 @@ When `read()` is called with a `commitHash`, the service retrieves the file cont
 
 ### Project history read
 
-```
+```text
 read({ id, commitHash })
   |
   v
@@ -167,7 +167,7 @@ Return Project
 
 Same pattern, with an additional step to retrieve the binary asset file:
 
-```
+```text
 read({ projectId, id, commitHash })
   |
   v

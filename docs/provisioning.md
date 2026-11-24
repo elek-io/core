@@ -80,6 +80,7 @@ SSH remote URLs work as well. They authenticate through the runner's ambient SSH
 An Astro site, where the integration provisions on its own:
 
 ```yaml
+# .github/workflows/deploy.yml
 name: Deploy website
 on:
   push:

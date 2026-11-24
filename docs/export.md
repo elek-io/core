@@ -45,7 +45,7 @@ Best when you want one file to load and walk in memory.
 
 Each Project becomes a folder tree, and Asset **binaries are copied in** (with each Asset's `absolutePath` updated to point at the copied file):
 
-```
+```text
 {outDir}/project-{projectId}/
 |-- project.json
 |-- assets/

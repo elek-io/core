@@ -35,7 +35,7 @@ There are two distinct schema layers for translatable content:
 
 When an Entry is created or updated, validation happens in one pass:
 
-```
+```text
 Input data
     |
     v

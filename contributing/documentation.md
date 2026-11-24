@@ -41,6 +41,8 @@ Then keep it short and scannable, because nobody reads a wall of text and an age
 - Plain words. No filler, no marketing, no metaphors standing in for a concrete noun.
 - Sentence case headings, straight quotes, no em dashes and no semicolons in prose.
 - Present tense. No word that dates the sentence, because docs ship versioned with the code.
+- Every code block names its language, so code is colored as its language and a diagram, a tree or a log reads as plain `text`. A language other than `text` is allowed only where GitHub and the elek.io website both color it.
+- A block that shows a file, or the top of one, names it in a comment on its first line, like `# .github/workflows/deploy.yml`. That name reads on GitHub and on npm, and a renderer turns it into the block's head. The block stays valid in the language it names, so one naming a JSON file takes `jsonc`.
 
 ## docs/
 
