@@ -565,7 +565,7 @@ const phone = contact?.data.phone.en ?? null;
 
 `getEntry` answers `undefined` while the Single Entry holds no Entry yet, which is what it answers for a Project whose editor has not filled it in. The build runs either way, so the page decides what an empty one shows, as the `??` above does.
 
-A reference pointing into a Single Entry carries the referenced Entry's own id, which is no store id there, so read it with `single` too. `elek generate:types`, `elek generate:client` and the local API give every Collection as a list, a Single Entry included.
+A reference pointing into a Single Entry carries the referenced Entry's own id, which is no store id there, so read it with `single` too. Nothing outside the loaders changes: `core.entries.list()` answers a Single Entry with a list of one, as it does for every other Collection, and so do the local API and the generated client that read through it.
 
 ### Rendering a dynamic field
 

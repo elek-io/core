@@ -125,6 +125,13 @@ describe('A Collection limited to one Entry', function () {
         collectionId: collection.id,
       })
     ).toBe(1);
+    // And it is read the way every other Collection's Entries are
+    const { list, total } = await core.entries.list({
+      projectId: project.id,
+      collectionId: collection.id,
+    });
+    expect(total).toBe(1);
+    expect(list.map(({ id }) => id)).toEqual([entry.id]);
     await ensureCleanGitStatus(task, project.id);
   });
 
@@ -221,5 +228,11 @@ describe('A Collection limited to one Entry', function () {
         collectionId: older.id,
       })
     ).toBe(2);
+
+    // Upgrading the Project, which is what opening one an older Core wrote
+    // does, writes the Collection back as the list it is
+    await core.projects.upgrade({ id: project.id, force: true });
+    const upgraded: unknown = await Fs.readJson(older.filePath);
+    expect(upgraded).toMatchObject({ isSingleEntry: false });
   });
 });

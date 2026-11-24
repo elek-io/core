@@ -97,18 +97,16 @@ export const collections = {
     ).toBe(true);
   });
 
-  it('should give a Single Entry as one item under a fixed id', async function () {
+  it('should give a Single Entry as one item under a fixed id, empty or not', async function () {
     const contactDetails = await createSingleEntryCollection(project.id);
-    const entry = await core.entries.create({
-      projectId: project.id,
-      collectionId: contactDetails.id,
-      values: singleEntryValues('+493012345678'),
-    });
     const root = await writeAstroProject('');
     // Astro's content store would otherwise land in node_modules,
     // which every test root shares through its symlink
     const cacheDir = Path.join(root, '.cache');
+    const storePath = Path.join(cacheDir, 'data-store.json');
 
+    // A Single Entry nobody has filled in yet, which is what every one of
+    // them looks like until an editor opens it
     await sync({ root, configFile: false, logLevel: 'info', cacheDir });
 
     const types = await Fs.readFile(
@@ -116,13 +114,20 @@ export const collections = {
       'utf-8'
     );
     expect(types).toContain('websiteContactDetails');
+    // Nothing to read, so getEntry() answers undefined rather than the
+    // site failing to build
+    expect(await Fs.readFile(storePath, 'utf-8')).not.toContain('"single"');
+
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: contactDetails.id,
+      values: singleEntryValues('+493012345678'),
+    });
+    await sync({ root, configFile: false, logLevel: 'info', cacheDir });
 
     // What getEntry('websiteContactDetails', 'single') reads. The Entry's
     // own id is in no store key, so no page can depend on it
-    const store = await Fs.readFile(
-      Path.join(cacheDir, 'data-store.json'),
-      'utf-8'
-    );
+    const store = await Fs.readFile(storePath, 'utf-8');
     expect(store).toContain('"single"');
     expect(store).not.toContain(entry.id);
   });

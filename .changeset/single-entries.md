@@ -30,4 +30,4 @@ const contact = await getEntry('websiteContactDetails', 'single');
 const phone = contact?.data.phone.en ?? null;
 ```
 
-`getEntry` answers `undefined` while the Single Entry holds no Entry yet, so such a site builds and the page decides what an empty one shows. A reference pointing into a Single Entry carries the referenced Entry's own id, which is no store id there, so read it with `single` too. `elek generate:types`, `elek generate:client` and the local API give every Collection as a list, a Single Entry included.
+`getEntry` answers `undefined` while the Single Entry holds no Entry yet, so such a site builds and the page decides what an empty one shows. A reference pointing into a Single Entry carries the referenced Entry's own id, which is no store id there, so read it with `single` too. Nothing outside the loaders changes: `core.entries.list()` answers a Single Entry with a list of one, as it does for every other Collection, and so do the local API and the generated client that read through it.

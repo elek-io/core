@@ -470,6 +470,44 @@ describe('Reading what each Release changed', function () {
     expect(changes.bump).toEqual('patch');
   });
 
+  it('should say nothing of a Single Entry for an added Collection this Core cannot read', async function () {
+    const project = await createProject('Added unreadable Collection');
+    onTestFinished(project.destroy);
+    await createTextCollection(core, project.id);
+    await core.releases.create({ projectId: project.id });
+
+    // A Single Entry whose file this Core cannot parse, as one a newer
+    // Core wrote would be
+    const added = await createSingleEntryCollection(project.id);
+    const projectPath = core.util.pathTo.project(project.id);
+    const collectionFilePath = core.util.pathTo.collectionFile(
+      project.id,
+      added.id
+    );
+    await Fs.writeJson(collectionFilePath, {
+      ...added,
+      coreVersion: '0.1.0',
+      fieldDefinitions: { phone: { valueType: 'string' } },
+    });
+    await core.git.add(projectPath, [collectionFilePath]);
+    await core.git.commit(projectPath, {
+      method: 'update',
+      reference: { objectType: 'collection', id: added.id },
+    });
+    const second = await core.releases.create({ projectId: project.id });
+
+    const changes = await core.releases.changes({
+      projectId: project.id,
+      tagId: (await releaseOf(core, project.id, second.version)).tagId,
+    });
+
+    // Whether it is a Single Entry is a property of a file nothing can
+    // read, so the change says it is there and no more
+    expect(changes.collectionChanges).toEqual([
+      { collectionId: added.id, changeType: 'added', bump: 'minor' },
+    ]);
+  });
+
   it('should report an Asset and a Component whose files this Core cannot read as present, without what changed inside them', async function () {
     const project = await createProject('Older Asset and Component');
     onTestFinished(project.destroy);
