@@ -56,6 +56,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 - **Generated API clients** - typed JavaScript / TypeScript clients (ESM or CJS) via `elek generate:client`.
 - **Generated TypeScript types** - type definitions emitted directly from Project content models via `elek generate:types`.
 - **Astro integration** - one `defineElekConfig()` declaration names every Project a site consumes, `elekCollections()` derives an Astro collection per elek.io Collection from it, and `elekAssetsLoader()` / `elekEntriesLoader()` stay available for declaring collections by hand. Plus a `mdastRender` helper, all from `@elek-io/core/astro`.
+- **A site on its theme's Contract** - a Project declared with a `destination` is read in the shape of the site's own `elek.contract.json`, so a theme's code names its Contract rather than one Project's Collections. See [`destinations.md`](./destinations.md#what-a-sites-build-reads).
 - **Provisioning** - the `elek()` Astro integration and `elek provision` provision Projects from their remotes into build environments, e.g. CI runners. See [`provisioning.md`](./provisioning.md).
 - **JSON export** - export Projects to JSON (nested or separate files) via `elek export`, with a `--watch` mode for automatic re-exports.
 
@@ -107,7 +108,7 @@ Core tries to keep a relatively small, predictable surface. Some of the items be
   - Core does not validate this. The limit depends on the platform and on whether long paths are enabled, so a fixed cap would reject setups that work. Keep `ELEK_IO_DATA_DIR` short instead, see [`usage.md`](./usage.md#environment-variables).
   - macOS and Linux allow 1024 and 4096 characters and are not affected.
 - **Astro dev picks up content changes but not model changes** - the loaders reload Entries and Assets while `astro dev` runs, so editing content in the Desktop app updates the open page.
-  - Editing the content model itself, a Collection's field definitions, a Component or a Project's languages, needs a dev server restart. Astro builds a collection's schema and TypeScript types once when it loads the content config and offers no way to rebuild them in place.
+  - Editing the content model itself needs a dev server restart: a Collection's field definitions, a Component, a Project's languages, or the Mapping a site reads its Entries through. Astro builds a collection's schema and TypeScript types once when it loads the content config and offers no way to rebuild them in place.
   - The loaders detect it and log what to do rather than reloading against a stale schema. See [`usage.md`](./usage.md#local-development).
 - **Astro's `render()` does not apply to Entries** - a `markdown` field arrives on `entry.data` as an mdast tree, not as the rendered HTML `render(entry)` and `<Content />` read, so the loaders leave Astro's rendered slot empty.
   - Filling it would flatten `entryReference` and `assetReference` nodes into finished markup and lose the UUIDs a page resolves them by, which is the reason to store a tree in the first place.
