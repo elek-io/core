@@ -546,11 +546,49 @@ describe('a site reading its Entries through its own Contract', function () {
       await expectCoreError(
         site.load(),
         'BadRequest',
-        '- Collection "articles" of Project "website" fills the Single Entry "contact-details" of the Contract with 2 Entries, of which the site would read an arbitrary one. Fill it from a Single Entry, or leave one Entry in "articles".'
+        '- Collection "articles" of Project "website" fills the Single Entry "contact-details" of the Contract with 2 Entries, of which the site would read an arbitrary one. Leave one Entry there, or fill it from a Collection that holds one.'
       );
       // Nothing is stored, so no page renders whichever Entry came first
       expect([...site.store.keys()]).toEqual([]);
     });
+  });
+
+  it('stops the build when a Single Entry of the Project ended up holding two', async function () {
+    // Core refuses a second Entry while a Single Entry holds one, so a
+    // second one comes from a pull, a merge or another writer, as here
+    const { list } = await core.entries.list({
+      projectId: siteProjectId,
+      collectionId: siteImprint.id,
+      limit: 0,
+    });
+    const [one] = list;
+    if (one === undefined) {
+      throw new Error('The Single Entry of the Project holds no Entry');
+    }
+    const secondId = uuid();
+    const secondPath = core.util.pathTo.entryFile(
+      siteProjectId,
+      siteImprint.id,
+      secondId
+    );
+    await Fs.outputJson(secondPath, { ...one, id: secondId });
+    onTestFinished(async function () {
+      await Fs.remove(secondPath);
+    });
+    const site = await buildSite({
+      collectionIdOrSlug: 'contact-details',
+      contract,
+      destination: 'autohaus-ebersfelde.de',
+    });
+
+    // The Collection filling it is a Single Entry itself, so the way out is
+    // the Entry rather than the Mapping
+    await expectCoreError(
+      site.load(),
+      'BadRequest',
+      '- Collection "imprints" of Project "website" fills the Single Entry "contact-details" of the Contract with 2 Entries, of which the site would read an arbitrary one. Leave one Entry there, or fill it from a Collection that holds one.'
+    );
+    expect([...site.store.keys()]).toEqual([]);
   });
 
   it('names the Collection of the Contract in the lines it logs', async function () {

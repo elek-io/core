@@ -586,7 +586,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       entries.length > 1
     ) {
       named.push(
-        `- Collection "${source.slug.plural}" of Project "${alias}" fills the Single Entry "${through.collection.slug.plural}" of the Contract with ${entries.length} Entries, of which the site would read an arbitrary one. Fill it from a Single Entry, or leave one Entry in "${source.slug.plural}".`
+        `- Collection "${source.slug.plural}" of Project "${alias}" fills the Single Entry "${through.collection.slug.plural}" of the Contract with ${entries.length} Entries, of which the site would read an arbitrary one. Leave one Entry there, or fill it from a Collection that holds one.`
       );
     }
     if (named.length === 0) {
