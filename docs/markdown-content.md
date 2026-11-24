@@ -234,15 +234,10 @@ A parent's handler is given its children already rendered, so three placements a
 | A task item's checkbox | inside a `<label>` that opens the item's text, on one line with it |
 | A footnote's way back | at the end of the note's last paragraph |
 
+<!-- prettier-ignore -->
 ```html
-<ul>
-  <li>
-    <label><input type="checkbox" checked disabled /> Pay the rent</label>
-  </li>
-</ul>
-<div id="fn-1">
-  <p>The note. <a href="#fnref-1" aria-label="Back to content">↩</a></p>
-</div>
+<ul><li><label><input type="checkbox" checked disabled> Pay the rent</label></li></ul>
+<div id="fn-1"><p>The note. <a href="#fnref-1" aria-label="Back to content">↩</a></p></div>
 ```
 
 - **A list is tight or loose as a whole**, which is what mdast records in `list.spread` and `listItem.spread`. The list is loose when its own `spread` is true, when any item's is, or when an item that carries none holds more than one block. Every item of a loose list keeps its `<p>`.
@@ -329,20 +324,11 @@ A handler that does not need it declares fewer parameters, which is why every re
 
 A table's header is its first row, which is all mdast records. The defaults turn that into the markup a screen reader needs:
 
+<!-- prettier-ignore -->
 ```html
 <table>
-  <thead>
-    <tr>
-      <th scope="col">Field</th>
-      <th scope="col">Type</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>slug</td>
-      <td>string</td>
-    </tr>
-  </tbody>
+  <thead><tr><th scope="col">Field</th><th scope="col">Type</th></tr></thead>
+  <tbody><tr><td>slug</td><td>string</td></tr></tbody>
 </table>
 ```
 
