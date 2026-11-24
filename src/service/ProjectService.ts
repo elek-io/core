@@ -131,16 +131,16 @@ export class ProjectService
   }
 
   /**
-   * Creates the Project folder with a subfolder per `ProjectFolder`, writes
+   * Creates the Project folder with its `assets`, `collections`,
+   * `components`, `contracts`, `destinations` and `lfs` subfolders, writes
    * `.gitignore` and `.gitattributes`, then initializes a git repository
-   * whose first commit lands on `main`. The Project is left checked out on
-   * `draft`.
+   * whose first commit lands on `main`. It is left checked out on `draft`.
    *
-   * Throws `PreconditionFailed` in read-only mode and `Unauthorized` when no
-   * User is set. A failure at any step removes the half-created folder, which
-   * is the only rollback available while there is no `HEAD` to reset to.
+   * Throws `PreconditionFailed` in read-only mode and `Unauthorized` without
+   * a User. A failure at any step removes the half-created folder, the only
+   * rollback available while there is no `HEAD` to reset to.
    *
-   * @see ../../docs/storage-layout.md
+   * @see ../../docs/git-and-sync.md
    */
   public create(props: CreateProjectProps): Promise<Project> {
     return this.mutating(

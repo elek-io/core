@@ -27,7 +27,7 @@ const contract = await core.contracts.generate({
 ```
 
 - `collections` and `components` hold `collection.json` and `component.json` files as they are, ids and `coreVersion` included. Field definition ids are the identity a Mapping binds to.
-- So a Contract carries every Collection's and Component's name, description, icon and slug, and every field definition's label, description, default value and validation, in every language of the Project. It carries no Entry, no Asset and no Value.
+- So a Contract carries every Collection's and Component's name, slug and description, each Collection's icon, and the labels, descriptions, default values and validation rules of their field definitions, in every language of the Project. No Entry, Asset or Value goes with it.
 - Read it before it goes into a repository other people can see. A Collection named after one client, or a description written for the office, leaves the Project with it.
 - `name` is a package-like name of lowercase words, optionally scoped as `@scope/name`.
 - `languages` defaults to the Project's own supported languages, and `any` says the theme renders whatever the Project holds. It is recorded rather than checked, because which Project language fills a field is part of a Mapping.
@@ -60,7 +60,7 @@ theme.commit; // the commit the Contract was read from
 | The address carries a credential, such as a password or a token, or git would run it as a command | `BadRequest` |
 | The address is a path on this machine and not an absolute one | `BadRequest` |
 | The address needs authentication you do not have | `Unauthorized` |
-| The address cannot be read at all, because nothing is there or this machine cannot reach it | `Internal`, with git's own words on the `cause` |
+| The address cannot be read at all, because nothing is there or this machine cannot reach it | `Internal`, with the git command that failed on the `cause` |
 | The address tagged no version | `PreconditionFailed`, reason `theme_without_version` |
 | The version is not tagged there, or holds no `elek.contract.json` | `NotFound` |
 | The `elek.contract.json` is no Contract, does not parse as JSON, or carries another version than its tag | `BadRequest` |

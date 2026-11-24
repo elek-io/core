@@ -12,7 +12,7 @@ It writes `elek.contract.json` into the directory you name, which defaults to th
 
 - `--languages` takes `any` or the codes of the languages separated by commas, and defaults to the Project's own supported languages.
 - A field definition pointing at a Collection or Component the Project does not hold throws `BadRequest` naming it, rather than writing a Contract whose references lead nowhere.
-- A Contract carries the Collections and Components whole: every name, description, icon, slug, label, default value and validation rule they hold, in every language of the Project, and no Entry, Asset or Value. Read it before it goes into a repository other people can see.
+- A Contract carries the Collections and Components whole: their names, slugs and descriptions, each Collection's icon, and the labels, descriptions, default values and validation rules of their field definitions, in every language of the Project. No Entry, Asset or Value goes with it, and you should read a Contract before it goes into a repository other people can see.
 - Keep the Project a Contract was generated in. Field definition ids are what a Mapping binds to, so recreating a Collection by hand gives every field a new id and fills nothing.
 
 **`core.contracts` reads a theme's Contract from its git address, at the newest version it tagged.** A theme releases a version by tagging it `v<version>` with an `elek.contract.json` carrying that same version. A pre-release is taken only when it is named.
@@ -23,7 +23,7 @@ const theme = await core.contracts.readFromTheme({
 });
 ```
 
-Core lists the tags, then fetches the one commit into a scratch repository under `tmp/`, which it removes again. Nothing is checked out and no Project is touched. An address that tagged no version throws `PreconditionFailed` with the reason `theme_without_version`, one whose version holds no `elek.contract.json` throws `NotFound`, and a file that is no Contract, does not parse as JSON or carries another version than its tag throws `BadRequest`. An address nothing answers at throws `Internal` saying the theme could not be read there, with git's own words on the `cause`.
+Core lists the tags, then fetches the one commit into a scratch repository under `tmp/`, which it removes again. Nothing is checked out and no Project is touched. An address that tagged no version throws `PreconditionFailed` with the reason `theme_without_version`, one whose version holds no `elek.contract.json` throws `NotFound`, and a file that is no Contract, does not parse as JSON or carries another version than its tag throws `BadRequest`. An address nothing answers at throws `Internal` saying the theme could not be read there, with the git command that failed on the `cause`.
 
 **Core reads a theme's address with your own git access and never with `ELEK_IO_REMOTE_ACCESS_TOKEN`.** It is the one git call that gets no token of Core's, because the address is kept in the Project and a credential must not be. A public theme needs nothing, and a private one answers to your own SSH key or git credential helper, with prompts off so a theme you have no access to fails with `Unauthorized` rather than hanging. The message names your own access and sends you to whoever maintains the address.
 
