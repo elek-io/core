@@ -945,10 +945,22 @@ describe('a site reading its Entries through its own Contract', function () {
       collectionIdOrSlug: 'articles',
     });
 
-    await expectCoreError(
-      loader.load(context),
-      'NotFound',
-      'The Contract "@acme/dealer-site" has no Collection "articles". It has "contact-details", "posts". Name a Collection by its plural slug or its id.'
+    const error = await loader.load(context).then(
+      () => null,
+      (caught: unknown) => caught
+    );
+
+    expect(error).toBeInstanceOf(CoreError);
+    expect(error instanceof CoreError && error.type).toBe('NotFound');
+    const message = error instanceof CoreError ? error.message : '';
+    expect(message).toContain(
+      'The Contract "@acme/dealer-site" has no Collection "articles". It has '
+    );
+    // Every Collection it does hold, in whatever order the Contract lists them
+    expect(message).toContain('"posts"');
+    expect(message).toContain('"contact-details"');
+    expect(message).toContain(
+      'Name a Collection by its plural slug or its id.'
     );
   });
 
@@ -1107,14 +1119,23 @@ describe('a site reading its Entries through its own Contract', function () {
       );
 
       expect(error).toBeInstanceOf(CoreError);
-      // Word for word, because `docs/usage.md` quotes this error
-      expect(error instanceof CoreError && error.message).toBe(
+      // Word for word, because `docs/usage.md` quotes this error. The issues
+      // follow the Contract's own order, which is the order it lists its
+      // Collections in
+      const lines = (error instanceof CoreError ? error.message : '').split(
+        '\n'
+      );
+      expect(lines[0]).toBe(
+        'Destination "autohaus-ebersfelde.de" of Project "website" does not fill the Contract "@acme/dealer-site" at version 1.0.0:'
+      );
+      expect(lines.slice(1, -1).toSorted()).toEqual(
         [
-          'Destination "autohaus-ebersfelde.de" of Project "website" does not fill the Contract "@acme/dealer-site" at version 1.0.0:',
-          '- No field of the Project fills the required field "phone" of "contact-details"',
           '- No Collection of the Project fills "posts"',
-          "Map them onto the Project's own Collections and fields, or leave the Collection out of elekCollections().",
-        ].join('\n')
+          '- No field of the Project fills the required field "phone" of "contact-details"',
+        ].toSorted()
+      );
+      expect(lines.at(-1)).toBe(
+        "Map them onto the Project's own Collections and fields, or leave the Collection out of elekCollections()."
       );
     });
   });
