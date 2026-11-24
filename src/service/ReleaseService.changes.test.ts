@@ -502,8 +502,10 @@ describe('Reading what each Release changed', function () {
     });
 
     // Whether it is a Single Entry is a property of a file nothing can
-    // read, so the change says it is there and no more
-    expect(changes.collectionChanges).toEqual([
+    // read, so the change says it is there and no more. Strictly, because a
+    // caller asking with `in` or `Object.keys` tells an absent key from one
+    // carrying undefined
+    expect(changes.collectionChanges).toStrictEqual([
       { collectionId: added.id, changeType: 'added', bump: 'minor' },
     ]);
   });
