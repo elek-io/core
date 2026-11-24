@@ -2,6 +2,7 @@ import Fs from 'fs-extra';
 import Path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { logRecordSchema, type LogRecord } from '../schema/logSchema.js';
+import { logDrainTimeoutMs } from '../test/budgets.js';
 import { createTmpCore } from '../test/util.js';
 
 /**
@@ -62,18 +63,24 @@ describe('log.hostVersion', function () {
  * text is among them. The transport writes on a stream, and a single yielded
  * macrotask is not always enough for it to drain, which left the read empty
  * and the assertion below it reading `undefined`.
+ *
+ * The wait carries the measured drain budget rather than vitest's 1,000ms
+ * default, which is under it on the slowest runner.
  */
 async function recordsHolding(
   dataDir: string,
   text: string
 ): Promise<LogRecord[]> {
   let records: LogRecord[] = [];
-  await vi.waitFor(async () => {
-    records = await readRecords(dataDir);
-    if (records.some((record) => record.message.includes(text)) === false) {
-      throw new Error(`no record holding "${text}" yet`);
-    }
-  });
+  await vi.waitFor(
+    async () => {
+      records = await readRecords(dataDir);
+      if (records.some((record) => record.message.includes(text)) === false) {
+        throw new Error(`no record holding "${text}" yet`);
+      }
+    },
+    { timeout: logDrainTimeoutMs, interval: 20 }
+  );
   return records;
 }
 

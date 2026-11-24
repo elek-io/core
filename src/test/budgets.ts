@@ -90,6 +90,27 @@ export const slowestCleanupMs = 24 * 21;
 export const cleanupTimeoutMs = slowestCleanupMs * budgetMultiple;
 
 /**
+ * Slowest drain of one log record measured on 2026-11-24, scaled to the
+ * slowest runner, in milliseconds.
+ *
+ * Nothing in CI reports that duration, so like the cleanup one above this
+ * is a Linux measurement scaled by 21, rounded up from the 18.8ms three
+ * runs of 25 rounds put it at.
+ *
+ * @see ../../contributing/testing.md
+ */
+export const slowestLogDrainMs = 19 * 21;
+
+/**
+ * The bound a test gives one log record to reach the file it reads.
+ *
+ * It is no per-test and no per-hook budget. `vi.waitFor` defaults to
+ * 1,000ms, which is under this and a number nobody here measured, so a
+ * call waiting for a drain passes this instead.
+ */
+export const logDrainTimeoutMs = slowestLogDrainMs * budgetMultiple;
+
+/**
  * How long a test waits for a bounded teardown before it reads it as hung.
  *
  * Core gives one step of tearing down `TEARDOWN_BOUND_MS`, so a step that
