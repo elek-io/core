@@ -163,7 +163,7 @@ A loader collects every issue of its Collection before it throws, and throws bef
 
 The issues come out of [`destinationCheck.ts`](../src/util/destinationCheck.ts), the same functions `core.destinations.check()` composes, so a build and the editor's check word the same problem the same way. Nothing else runs them, a Release included. Two things differ:
 
-- The Contract each reads. `check()` reads the Project's kept copy of the version in use, a build the site's own file.
+- The Contract each reads. `check()` reads the Project's kept copy of the version in use, or of the one that waits, a build the site's own file.
 - The build adds one issue of its own, several Entries filling a Single Entry of the Contract, which neither `check()` nor `checkAll()` reports because both read one Entry at a time.
 
 ## The generated schema and the generated types

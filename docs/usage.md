@@ -461,6 +461,11 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
   - It writes and commits in the Project of the data directory, on the branch it is checked out on, which is `draft` for a working copy. Synchronize the Project to take it to its remote.
   - It exits non-zero while anything is unmapped or any Entry does not fit, naming each. The website stays, so you can map the rest.
   - Core reads the address with your own git access, see [reading an address with your own git access](./git-and-sync.md#reading-an-address-with-your-own-git-access).
+- `elek website:update --project <id> --name <website>` - bring the theme's newest version to a website and switch to it. `<website>` is the name the website was given, or its ID.
+  - `--theme-version` switches to that version instead of the newest tagged one. It is not `--version`, which answers with the CLI's own version.
+  - It keeps the version beside the one in use first, so a run that cannot switch leaves it waiting for the Mapping rather than reading the theme again.
+  - It exits non-zero while anything the new version needs is unmapped or any Entry does not fit, naming each. The website keeps the version it uses, so the site goes on building.
+  - A website already on that version is left alone. Writing, committing and the access it needs are `website:add`'s, see [`destinations.md`](./destinations.md#following-a-themes-new-version).
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
 - `elek provision --project <id> --url <url>` - provision a copy of a Project from its remote into the data directory, for example in CI. It runs read-only, so no User is required, and private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`.

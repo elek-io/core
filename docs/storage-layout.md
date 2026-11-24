@@ -41,7 +41,7 @@ Each Project is a self-contained git repository:
 |   |   |-- {version}.json            one copy of the Contract per version a Destination uses
 |-- destinations/
 |   |-- {destinationId}/
-|   |   |-- destination.json          a Destination: name, kind, Contract, version in use, Mapping
+|   |   |-- destination.json          a Destination: name, kind, Contract, version in use, Mapping, waiting version
 |-- lfs/
 |   |-- {assetId}.{extension}         the actual binary asset file
 ```
@@ -76,7 +76,7 @@ On top of that envelope:
 - An Entry file adds `values`, keyed by field-definition slug.
 - An asset metadata file adds `extension`, `mimeType` and `size`.
 - `contract.json` adds `name` and the `origin` it comes from. A `{version}.json` beside it is no object file and carries the version, the commit and the Contract itself.
-- `destination.json` adds `name`, `kind`, the `contract` it follows with the version in use, and the `mapping`.
+- `destination.json` adds `name`, `kind`, the `contract` it follows with the version in use, the `mapping`, and `waiting` for a newer version of the Contract with a Mapping of its own. A file written before a version could wait carries no `waiting` and reads as one that follows the version it uses.
 
 The `coreVersion` stamp on each file is what the migration chain reads when upgrading a Project.
 

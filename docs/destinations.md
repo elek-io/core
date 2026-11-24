@@ -9,7 +9,7 @@ Where a Project's content goes, and what the place it goes to needs. A Destinati
 | theme | The code a developer writes, which states a Contract | Its own git repository |
 | Contract | What a theme needs, as Collections and Components | `elek.contract.json` in the theme, copied into the Project |
 | website | The kind of Destination an editor adds, shown by its own name | The Project |
-| Destination | One place content goes: its name, kind, Contract, version in use and Mapping | The Project |
+| Destination | One place content goes: its name, kind, Contract, version in use, Mapping and the newer version waiting for it | The Project |
 | Mapping | Which Project Collection and field definition fills which field of the Contract | Inside the Destination |
 
 One theme runs many websites, and one Project keeps each Contract once however many Destinations follow it.
@@ -53,6 +53,7 @@ theme.commit; // the commit the Contract was read from
 
 - Without a `version` it takes the newest tagged one. A pre-release such as `v2.0.0-beta.1` is taken only when it is named.
 - Core lists the tags, then fetches the one commit into a scratch repository under `tmp/`. Nothing is checked out and no Project is touched.
+- `core.contracts.versionsFromTheme({ url })` lists every version tagged there, newest first, pre-releases included, without reading a Contract.
 - It reads the address with your own git access, never with `ELEK_IO_REMOTE_ACCESS_TOKEN`, see [reading an address with your own git access](./git-and-sync.md#reading-an-address-with-your-own-git-access).
 
 | What is wrong | What it throws |
@@ -87,7 +88,7 @@ A second website on the same address shares the Contract the Project already kee
 
 - The Mapping starts out filling every field of the Contract whose id one of the Project's own field definitions carries, which is what a Contract generated from this Project gives. Nothing is guessed.
 - A name another Destination of the Project already carries throws `Conflict`.
-- `core.destinations.update()` replaces the Mapping, renames the website, or both. The version in use never changes there.
+- `core.destinations.update()` replaces the Mapping, renames the website, or both. No version in use changes there.
 - `core.destinations.delete()` removes the website and leaves every Contract as it is.
 - `core.contracts.keep()` puts a Contract into the Project under its own origin, which `addWebsite()` does for you. It refuses an address carrying a credential or one git would run as a command, the same way, because the origin is written into the Project.
 
@@ -120,6 +121,50 @@ const issues = await core.destinations.checkAll({
 
 The issues are spelled like the ones a field definition change raises, so an app words both the same way, see [`schema-changes.md`](./schema-changes.md#the-issues-an-update-reports).
 
+## Following a theme's new version
+
+A theme releases a version by tagging it, and each website keeps the version it uses until its Mapping covers a newer one, so a theme update never stops a Release.
+
+```typescript
+const newer = await core.destinations.newerVersions({
+  projectId: project.id,
+  id: website.id,
+});
+const kept = await core.destinations.keepVersion({
+  projectId: project.id,
+  id: website.id,
+});
+kept.outcome; // 'waiting', or 'in-use' for the version the website uses
+```
+
+- `newerVersions()` lists the versions tagged at the theme that are newer than the one in use, newest first, read with your own git access. A pre-release is listed and is taken only when it is named.
+- `keepVersion()` takes the newest version tagged there unless it is given one, keeps a copy of its Contract in the Project and puts that version beside the one in use, with a Mapping of its own. The website goes on using the version it uses.
+- The Mapping of the waiting version starts out as what the Mapping in use fills, plus every field the new version added whose id one of the Project's own field definitions carries.
+- A version newer than one that already waits replaces it and keeps what was mapped for it. One the website already uses is answered with the outcome `in-use` and writes nothing.
+- `check()` and `checkAll()` take `isWaitingVersion: true` for what the waiting version cannot take, and `update()` takes `waitingMapping` to replace its Mapping. Both throw `PreconditionFailed` while no version waits.
+
+```typescript
+const switched = await core.destinations.switchVersion({
+  projectId: project.id,
+  id: website.id,
+});
+switched.outcome; // 'switched', or 'kept' while switched.issues names what is left
+```
+
+`switchVersion()` switches the website once nothing of the Project is left that the waiting version cannot take. Otherwise the website keeps the version it uses, and `issues` names each item the way `checkAll()` does. Nothing waits after a switch, and the Contract copy of the version left behind stays in the Project.
+
+| What is wrong | What it throws |
+| --- | --- |
+| The version named is older than the one the website uses | `PreconditionFailed` |
+| The Contract at that version carries another name than the one the website follows | `BadRequest` |
+| No version waits, for a switch, a waiting Mapping or a check of one | `PreconditionFailed` |
+
+The CLI does both steps in one command, which prints each item that is left and exits non-zero while anything is:
+
+```bash
+elek website:update --project <id> --name autohaus-ebersfelde.de
+```
+
 ## What the Project holds
 
 ```text
@@ -130,12 +175,13 @@ The issues are spelled like the ones a field definition change raises, so an app
 |   |   |-- {version}.json            one copy per version a Destination uses
 |-- destinations/
 |   |-- {destinationId}/
-|   |   |-- destination.json          name, kind, Contract, version in use, Mapping
+|   |   |-- destination.json          name, kind, Contract, version in use, Mapping, waiting version
 ```
 
 - `contract.json` names where the Contract comes from, `{ "kind": "git", "url": "..." }` for a theme's address.
 - A `{version}.json` copy carries the Contract as it was read and the commit of its origin it came from, so the Project stays self-contained and offline.
 - A copy is never rewritten. A version already kept is the one a Destination keeps using.
+- A Destination holds a copy's version under `contract.version` for the one it uses, and under `waiting.version` with a Mapping of its own for a newer one that waits.
 - No credential of any kind goes into the Project. An address carrying one is refused.
 
 ## What a site's build reads
@@ -146,6 +192,7 @@ A site built with Core's Astro integration reads a Project's Entries through its
 - Its collections, schemas and types come from that Contract, so the theme's code never names one Project's Collections or fields.
 - The Contract's name is read from the Project's own copy and never from the theme's address, so a build needs no access to the theme.
 - A site one Contract version behind the website builds what its own Contract names, as long as the Mapping fills every Collection and required field of it, and one whose code moved ahead stops the build.
+- A build reads the version the website uses, never one that waits beside it, so a theme's new version changes nothing until the website switches to it.
 
 See [the Astro integration](./usage.md#building-on-the-sites-own-contract) for the config, what a failing build prints and what a pipeline of your own needs.
 
