@@ -145,7 +145,7 @@ A site built with Core's Astro integration reads a Project's Entries through its
 - The site names its website in `elek.config.ts` and imports its own `elek.contract.json` beside it.
 - Its collections, schemas and types come from that Contract, so the theme's code never names one Project's Collections or fields.
 - The Contract's name is read from the Project's own copy and never from the theme's address, so a build needs no access to the theme.
-- A site one Contract version behind the website still builds, and one whose code moved ahead stops the build.
+- A site one Contract version behind the website builds what its own Contract names, as long as the Mapping fills every Collection and required field of it, and one whose code moved ahead stops the build.
 
 See [the Astro integration](./usage.md#building-on-the-sites-own-contract) for the config, what a failing build prints and what a pipeline of your own needs.
 

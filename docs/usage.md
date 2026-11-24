@@ -320,6 +320,7 @@ Passing `isSingleEntry: true` to `create()` limits the Collection to one Entry, 
 - `core.entries.create()` throws `Conflict` naming the Entry the Single Entry already holds, so update that Entry rather than adding one. It counts the Entries on disk, so one a pull or merge brought in holds the place too.
 - That count is a scan-then-write, the assumption uniqueness makes as well, see [`fields.md`](./fields.md#uniqueness). Two `create()` calls at once can both pass it, so a caller that writes in parallel serializes them itself.
 - A Single Entry can therefore end up holding two, and so can two Project copies that each filled the same empty one before a sync. Core refuses a third, an Astro site reads the first, and the build log warns.
+  - A site reading through a Contract stops its build there instead, see [what a build on a Contract receives](#what-a-build-on-a-contract-receives).
 - `core.collections.update()` throws `Conflict` for any other value than the one the Collection was created with. It takes that value, so sending back a Collection you read changes nothing.
 - A Collection never turns into a Single Entry or back. Create the Collection you need and add its Entries there.
 
@@ -717,19 +718,21 @@ export const config = defineElekConfig({
 `elekCollections()` then derives one collection per Collection of the Contract, so a Project aliased `website` on a Contract with a `posts` Collection produces `websitePosts`, however that Project's own Collection is named. Under `collections` a Collection is named by the Contract's plural slug or its id, the same two as before.
 
 ```typescript
-const post = await getEntry('websitePosts', id);
-post?.data.title.en; // the Contract's own field slug
+import { getCollection } from 'astro:content';
+
+const posts = await getCollection('websitePosts');
+posts[0]?.data.title.en; // the Contract's own field slug
 ```
 
 Everything else reads as it does without a Contract. Values are keyed by the Project's languages, an Entry reference carries the `collectionId` of the Contract Collection it landed in, and a Single Entry of the Contract is read under `single`.
 
-- A field of the Contract nothing fills is empty, `null` in every language or an empty list, which is what a field the editor left empty holds too.
-- A Value of the Project the Contract does not ask for is left out, so a site one Contract version behind still builds.
+- An optional field of the Contract nothing fills is empty, `null` in every language or an empty list, which is what a field the editor left empty holds too. A required one stops the build, see [what a build on a Contract receives](#what-a-build-on-a-contract-receives).
+- A Value of the Project the Contract does not ask for is left out, so a site one Contract version behind builds what its own Contract names.
 - Mapping a Project's content onto a Contract is the editor's work in elek.io Desktop. The build reads that Mapping and never guesses.
 
 ### What a build on a Contract receives
 
-The build stops on everything the website cannot fill. The Mapping comes first, naming every Collection and field of the Contract the Project leaves unfilled in one error:
+The build stops on everything the website cannot fill. The Mapping comes first, naming every Collection and every required field of the Contract the Project leaves unfilled in one error:
 
 ```text
 Destination "autohaus-ebersfelde.de" of Project "website" does not fill the
@@ -743,15 +746,17 @@ Then every Entry a Collection of the Contract refuses, naming the Entry, the fie
 ```text
 Collection "posts" of the Contract "@acme/dealer-site" at version 1.0.0 is not
 filled by Project "website" through Destination "autohaus-ebersfelde.de":
-- Entry "0b1f...": field "title" in "en": Too big: expected string to have <=10 characters
+- Entry "0b1f...", field "title" in "en": Too big: expected string to have <=10 characters
 ```
 
 Nothing of that collection is stored while it does not fit, so no page renders half a Collection. Astro loads its collections together and stops on the first one that fails, so the Entries of one Collection are named at a time.
 
+A Single Entry of the Contract filled from a Collection of the Project holding several Entries is named there too, because which of them the site would read is arbitrary.
+
 A pipeline of your own needs this site's repository and read access to the Project's content remote, and nothing else:
 
 - The Contract comes from this site's own file and its name from the Project's own copy, never from the theme's git address, so no build needs access to the theme.
-- The version in use is the Project's. A site one version behind builds, and a site whose code moved ahead stops the build naming what the Project does not fill yet.
+- The version in use is the Project's. A site one version behind builds what its own Contract names, and a site whose code moved ahead stops the build naming the Collections and required fields the Project does not fill yet. Either way the Mapping has to fill what this site's own Contract requires.
 - No elek.io Cloud takes part. [`provisioning.md`](./provisioning.md) covers fetching the Project itself, and [`elek()`](#provisioning-in-ci-with-elek) does it in the build.
 
 ### Declaring collections explicitly
@@ -894,6 +899,8 @@ The loaders notice all but the last and stop rather than pretend. Instead of rel
 Astro builds a collection's schema and types once, when it loads the content config,
 so restart the dev server to pick them up. Entries are not reloaded until then.
 ```
+
+A site reading through a Contract is named by it, `Collection "posts" of the Contract "@acme/dealer-site" of Project "website"`, because that Collection is the one its own code reads and the Project holds none of that name.
 
 Content editing carries on as normal after the restart. Adding or removing a whole Collection is not detected, because the set of collections is decided before any loader runs.
 

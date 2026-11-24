@@ -63,9 +63,10 @@ A site reading through a Destination adds two more things to that fingerprint, t
 
 Neither changes the schema, and both change what a reload would read against it.
 
-Two consequences for what is watched:
+Consequences for what is watched:
 
 - The Entries loader watches `pathTo.components(projectId)` even though it never reloads a Component. Without it, editing a Component that no Entry embeds yet changes nothing on disk that anyone watches, and the developer gets silence instead of the message.
+- It watches `pathTo.destination(projectId, destinationId)` for the same reason. Remapping a field in the app writes `destination.json` and nothing else, so without it the digest is never compared and the page keeps rendering Values under the Mapping the server started with.
 - `pathTo.entries()` is the Collection directory itself, so `collection.json` needs no separate watch.
 
 Two changes touch the set of collections itself:
@@ -154,13 +155,16 @@ The keys a consumer autocompletes against come from the types Astro generates af
 
 The check runs in two places on purpose, once over the Mapping and once over the Entries.
 
-- `elekCollections` checks the Mapping of the Collections it derives, before an Entry is read, so one error names every Collection and field the Project leaves unfilled. Astro's content layer loads its collections with `Promise.all` and surfaces the first rejection, so a check only in the loaders would name the Mapping one collection at a time.
+- `elekCollections` checks the Mapping of the Collections it derives, before an Entry is read, so one error names every Collection and required field the Project leaves unfilled. Astro's content layer loads its collections with `Promise.all` and surfaces the first rejection, so a check only in the loaders would name the Mapping one collection at a time.
 - Every loader checks its own Collection's Mapping again and then its Entries, because a collection declared by hand never passes through `elekCollections`, and the loader is what writes the store.
 - The Entries stay in the loader. Checking them in `elekCollections` as well would read every Entry of the site twice per sync.
 
 A loader collects every issue of its Collection before it throws, and throws before it stores anything, so no page renders half a Collection.
 
-The issues come out of [`destinationCheck.ts`](../src/util/destinationCheck.ts), the same functions `core.destinations.check()` composes, so a build and a Release word the same problem the same way. What differs is the Contract each reads: a Release reads the Project's kept copy of the version in use, a build reads the site's own file.
+The issues come out of [`destinationCheck.ts`](../src/util/destinationCheck.ts), the same functions `core.destinations.check()` composes, so a build and the editor's check word the same problem the same way. Nothing else runs them, a Release included. Two things differ:
+
+- The Contract each reads. `check()` reads the Project's kept copy of the version in use, a build the site's own file.
+- The build adds one issue of its own, several Entries filling a Single Entry of the Contract, which neither `check()` nor `checkAll()` reports because both read one Entry at a time.
 
 ## The generated schema and the generated types
 
