@@ -372,7 +372,7 @@ Only a one-line field type can title an Entry: `text`, `email`, `url`, `ipv4`, `
 - `core.collections.create()` and `core.collections.update()` both require it, so a Collection needs at least one one-line field definition. Either call throws `BadRequest` when the id is missing or names something that cannot title an Entry, and writes nothing.
 - An update that removes the named field definition, or changes it to a type that cannot title an Entry, is refused unless the same call names another one.
 - A Collection file without it fails to parse, so a Project written by an earlier Core has to add it to every `collection.json` before Core reads it again.
-- The named field is not forced to be required, so its Value can be empty in a language. An app needs something to show where it is.
+- The named field definition is not forced to be required, so its Value can be empty in every language. An app needs something to show where it is.
 
 ## Field grouping
 

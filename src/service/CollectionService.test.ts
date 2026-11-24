@@ -23,6 +23,7 @@ import core, {
 import {
   createAsset,
   createCollection,
+  createComponent,
   createEntry,
   createProject,
   ensureCleanGitStatus,
@@ -1293,6 +1294,24 @@ describe('CollectionService - the field definition that titles an Entry', functi
       core.collections.read({ projectId: project.id, id: created.id })
     ).resolves.toMatchObject({ entryTitleFieldDefinitionId: permalinkId });
 
+    // The named field definition is not forced to be required, so an Entry
+    // whose titling Value is empty in every language is accepted
+    const emptyValue = {
+      objectType: 'value' as const,
+      valueType: 'string' as const,
+      content: { en: null, de: null },
+    };
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: created.id,
+      values: { title: emptyValue, body: emptyValue, permalink: emptyValue },
+    });
+
+    await core.entries.delete({
+      projectId: project.id,
+      collectionId: created.id,
+      id: entry.id,
+    });
     await core.collections.delete({ projectId: project.id, id: created.id });
   });
 
@@ -1322,6 +1341,18 @@ describe('CollectionService - the field definition that titles an Entry', functi
     await expect(
       core.collections.create(
         collectionProps('refused', 'refuseds', uuid(), [])
+      )
+    ).rejects.toMatchObject({ type: 'BadRequest' });
+
+    // A Component's field definition is shared between Collections, so it
+    // cannot title an Entry of one of them
+    const component = await createComponent(project.id);
+    const componentFieldId = component.fieldDefinitions[0]?.id ?? uuid();
+    await expect(
+      core.collections.create(
+        collectionProps('refused', 'refuseds', componentFieldId, [
+          textFieldDefinition(uuid(), 'title'),
+        ])
       )
     ).rejects.toMatchObject({ type: 'BadRequest' });
 
