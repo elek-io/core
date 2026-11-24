@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { uuidSchema } from '../schema/baseSchema.js';
+import { contractSchema } from '../schema/contractSchema.js';
 import { contentRefSchema } from '../schema/projectSchema.js';
 import { CoreError } from '../util/shared.js';
 
@@ -32,6 +33,15 @@ export interface ElekProjectDeclaration {
    * @default 'release'
    */
   ref?: string;
+  /**
+   * The Destination of this Project the site builds on, by its own name or
+   * its id, which makes the site read the Project's Entries in the shape of
+   * the site's own Contract rather than in the Project's.
+   *
+   * Needs `contract` on the config beside it. Left out, the site reads the
+   * Project's own Collections, which is what it did before Contracts.
+   */
+  destination?: string;
 }
 
 export interface ElekConfig {
@@ -43,6 +53,16 @@ export interface ElekConfig {
    * `BadRequest` rather than producing an unusable key at sync time.
    */
   projects: Record<string, ElekProjectDeclaration>;
+  /**
+   * This site's own Contract, imported from the `elek.contract.json` beside
+   * the config rather than discovered, and read by every Project declared
+   * with a `destination`.
+   *
+   * Typed as data because TypeScript types a JSON import from its file. The
+   * config validates it against Core's own schema instead, so a file that is
+   * no Contract fails where you declared it.
+   */
+  contract?: unknown;
 }
 
 /**
@@ -55,32 +75,58 @@ const elekProjectDeclarationSchema = z.strictObject({
   id: uuidSchema,
   remoteUrl: z.string().trim().min(1).optional(),
   ref: contentRefSchema.optional(),
+  destination: z.string().trim().min(1).optional(),
 });
 
-const elekConfigSchema = z.strictObject({
-  projects: z
-    .record(z.string(), elekProjectDeclarationSchema)
-    .superRefine((projects, context) => {
-      const aliases = Object.keys(projects);
-      if (aliases.length === 0) {
-        context.addIssue({
-          code: 'custom',
-          message: 'Declare at least one Project',
-        });
-      }
-      for (const alias of aliases) {
-        if (aliasPattern.test(alias)) {
-          continue;
+const elekConfigSchema = z
+  .strictObject({
+    projects: z
+      .record(z.string(), elekProjectDeclarationSchema)
+      .superRefine((projects, context) => {
+        const aliases = Object.keys(projects);
+        if (aliases.length === 0) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Declare at least one Project',
+          });
         }
-        context.addIssue({
-          code: 'custom',
-          path: [alias],
-          message:
-            'A Project alias must start with a lowercase letter and continue with letters or digits, because it prefixes the keys of the derived collections',
-        });
-      }
-    }),
-});
+        for (const alias of aliases) {
+          if (aliasPattern.test(alias)) {
+            continue;
+          }
+          context.addIssue({
+            code: 'custom',
+            path: [alias],
+            message:
+              'A Project alias must start with a lowercase letter and continue with letters or digits, because it prefixes the keys of the derived collections',
+          });
+        }
+      }),
+    contract: contractSchema.optional(),
+  })
+  // A site reads its Entries through a Destination and its own Contract
+  // together, so one without the other is a half-wired site rather than a
+  // default. Both halves say so where they were written.
+  .superRefine((config, context) => {
+    const named = Object.entries(config.projects).filter(([, declaration]) => {
+      return declaration.destination !== undefined;
+    });
+    if (named.length > 0 && config.contract === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['contract'],
+        message: `Project "${named[0]?.[0] ?? ''}" names a Destination, so add this site's own elek.contract.json as "contract"`,
+      });
+    }
+    if (named.length === 0 && config.contract !== undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['contract'],
+        message:
+          'No declared Project names a Destination, so nothing reads this Contract. Add "destination" to the Project the site builds on, or drop the Contract',
+      });
+    }
+  });
 
 /**
  * Validates an elek config and throws a `BadRequest` naming what is

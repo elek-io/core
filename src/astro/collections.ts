@@ -5,10 +5,11 @@ import {
   flattenFieldDefinitions,
   type FieldDefinition,
 } from '../schema/fieldSchema.js';
-import type { Collection } from '../schema/collectionSchema.js';
+import type { CollectionFile } from '../schema/collectionSchema.js';
 import { assertElekConfig, type ElekConfig } from './elekConfig.js';
 import { elekAssetsLoader, elekEntriesLoader } from './loaders.js';
 import { getCore, ensureProjectAvailable } from './core.js';
+import { readSiteContract } from './siteContract.js';
 
 type ElekCollection = ReturnType<typeof defineCollection>;
 
@@ -61,19 +62,19 @@ function optionFor<V>(
 }
 
 /**
- * Narrows a Project's Collections to the selection, matching each name
- * against the plural slug and the id, the same two a loader's
- * `collectionIdOrSlug` accepts.
+ * Narrows the Collections to the selection, matching each name against the
+ * plural slug and the id, the same two a loader's `collectionIdOrSlug`
+ * accepts.
  *
  * A name that matches nothing throws rather than being skipped. The
  * selection exists to leave Collections out, so a silently dropped one
  * is indistinguishable from the feature working.
  */
 function selectCollections(
-  list: Collection[],
+  list: readonly CollectionFile[],
   selection: string[],
-  alias: string
-): Collection[] {
+  holder: string
+): CollectionFile[] {
   const unknown = selection.filter(
     (name) =>
       !list.some(
@@ -83,7 +84,7 @@ function selectCollections(
   );
   if (unknown.length > 0) {
     throw CoreError.notFound(
-      `Project "${alias}" has no Collection ${unknown
+      `${holder} has no Collection ${unknown
         .map((name) => `"${name}"`)
         .join(', ')}. It has ${list
         .map((collection) => `"${collection.slug.plural}"`)
@@ -122,9 +123,10 @@ function canReferenceAssets(fieldDefinition: FieldDefinition): boolean {
  * the build says it up front too.
  */
 function assertAssetsReachable(
-  selected: Collection[],
+  selected: readonly CollectionFile[],
   hasAssets: boolean,
-  alias: string
+  alias: string,
+  holder: string
 ): void {
   if (hasAssets) {
     return;
@@ -135,7 +137,7 @@ function assertAssetsReachable(
     ).filter(canReferenceAssets);
     if (referencing.length > 0) {
       throw CoreError.badRequest(
-        `Collection "${collection.slug.plural}" of Project "${alias}" can reference Assets through ${referencing
+        `Collection "${collection.slug.plural}" of ${holder} can reference Assets through ${referencing
           .map((fieldDefinition) => `"${fieldDefinition.slug}"`)
           .join(
             ', '
@@ -150,6 +152,9 @@ function assertAssetsReachable(
  * name. That object is the complete list, nothing outside it is derived, and
  * with no options at all it derives everything and warns. Keys are the alias
  * plus the plural slug in PascalCase (`websitePosts`), Assets `${alias}Assets`.
+ *
+ * A Project declared with a `destination` contributes the Collections of the
+ * site's own Contract instead of its own, named by the Contract's slugs.
  *
  * Reads the content model from disk. Throws `Conflict` on a key two sources
  * derive, `BadRequest` on a selection naming nothing, deriving nothing, or
@@ -184,10 +189,23 @@ export async function elekCollections<const T extends ElekConfig>(
   for (const [alias, declaration] of Object.entries(declared.projects)) {
     await ensureProjectAvailable(core, alias, declaration.id);
 
-    const { list } = await core.collections.list({
-      projectId: declaration.id,
-      limit: 0,
-    });
+    // A Project declared with a Destination contributes the Collections of
+    // the site's own Contract, so every derived key, schema and type is the
+    // site's rather than one Project's
+    const site = await readSiteContract({ core, config: declared, alias });
+    const holder =
+      site === undefined
+        ? `Project "${alias}"`
+        : `the Contract "${site.contract.name}" of Project "${alias}"`;
+    const list =
+      site === undefined
+        ? (
+            await core.collections.list({
+              projectId: declaration.id,
+              limit: 0,
+            })
+          ).list
+        : site.contract.collections;
     // No options at all derives everything, which is the exploration
     // step. Any options object is the complete list instead.
     const selected =
@@ -196,17 +214,17 @@ export async function elekCollections<const T extends ElekConfig>(
         : selectCollections(
             list,
             optionFor(options.collections, alias) ?? [],
-            alias
+            holder
           );
 
     const assets =
       options === undefined ? true : optionFor(options.assets, alias);
-    assertAssetsReachable(selected, assets !== undefined, alias);
+    assertAssetsReachable(selected, assets !== undefined, alias, holder);
 
     for (const collection of selected) {
       add(
         `${alias}${toPascalCase(collection.slug.plural)}`,
-        `Collection "${collection.slug.plural}" of Project "${alias}"`,
+        `Collection "${collection.slug.plural}" of ${holder}`,
         defineCollection({
           loader: elekEntriesLoader({
             config: declared,

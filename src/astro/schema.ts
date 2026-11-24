@@ -210,12 +210,19 @@ function buildComponentArraySchema(
 export function buildModelDigest(
   fieldDefinitions: FieldDefinition[],
   languages: ProjectLanguages,
-  components: readonly Component[]
+  components: readonly Component[],
+  /**
+   * Whatever else a reload has to notice, which for a site reading through a
+   * Destination is its Mapping and the Collection of the Project it reads.
+   * Left out, the three above describe the model completely.
+   */
+  readThrough?: unknown
 ): string {
   const model = {
     fieldDefinitions,
     languages,
     components: components.toSorted((a, b) => a.id.localeCompare(b.id)),
+    readThrough,
   };
   return Crypto.createHash('sha256')
     .update(JSON.stringify(model))

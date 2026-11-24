@@ -6,10 +6,12 @@ import {
   type EntryFile,
   type FieldDefinition,
   type Mapping,
+  type MdAstRoot,
   type ProjectLanguages,
   type SupportedLanguage,
   type Uuid,
   type Value,
+  type ValueContentReference,
 } from '../schema/index.js';
 import type {
   DestinationIssue,
@@ -324,6 +326,63 @@ export function entryIssuesOf(props: {
   return issues;
 }
 
+/**
+ * One Entry's Values keyed by the field slugs of one Collection of the
+ * Contract, which is the shape a site built on that Contract reads.
+ *
+ * Each Value comes from the Project field definition the Mapping names, with
+ * every Entry reference moved onto the Contract's Collection ids. A field of
+ * the Contract nothing fills, and one whose Project field holds no Value, is
+ * empty rather than absent, so the shape is the Contract's whatever the
+ * Project holds. A field of the Project the Contract does not name is left
+ * out.
+ */
+export function contractValuesOf(props: {
+  contract: Contract;
+  mapping: Mapping;
+  contractCollectionId: Uuid;
+  collection: CollectionFile;
+  entry: EntryFile;
+  languages: ProjectLanguages;
+}): Record<string, Value> {
+  const contractCollection = props.contract.collections.find(({ id }) => {
+    return id === props.contractCollectionId;
+  });
+  if (contractCollection === undefined) {
+    return {};
+  }
+  const collectionMapping =
+    props.mapping.collections[props.contractCollectionId];
+  const projectFields = new Map(
+    flattenFieldDefinitions(props.collection.fieldDefinitions).map((field) => [
+      field.id,
+      field,
+    ])
+  );
+  const contractCollectionsOf = contractCollectionsBySource(props.mapping);
+
+  const values: Record<string, Value> = {};
+  for (const contractField of flattenFieldDefinitions(
+    contractCollection.fieldDefinitions
+  )) {
+    const fieldMapping = collectionMapping?.fields[contractField.id];
+    const projectField =
+      fieldMapping === undefined
+        ? undefined
+        : projectFields.get(fieldMapping.fieldDefinitionId);
+    const value =
+      projectField === undefined
+        ? undefined
+        : props.entry.values[projectField.slug];
+    values[contractField.slug] =
+      value === undefined
+        ? emptyValueOf(contractField, props.languages)
+        : onContractCollections(value, contractField, contractCollectionsOf)
+            .value;
+  }
+  return values;
+}
+
 /** Every issue of `issues` that is about an Entry rather than the Mapping */
 export function isValueIssue(
   issue: DestinationIssue
@@ -485,6 +544,62 @@ function componentProblemsOf(
   }
 
   return problems;
+}
+
+/** One empty slot per language of the Project, which is what a Value keys by */
+function perLanguage<T>(
+  languages: ProjectLanguages,
+  empty: T
+): Partial<Record<SupportedLanguage, T>> {
+  const content: Partial<Record<SupportedLanguage, T>> = {};
+  for (const language of languages) {
+    content[language] = empty;
+  }
+  return content;
+}
+
+/**
+ * The Value a field of the Contract holds while nothing fills it: `null` in
+ * every language, or an empty list. It is the same Value an editor who left
+ * the field empty produces, so a site reads one as the other.
+ *
+ * A boolean field is always required, so nothing filling it is a Mapping the
+ * check reports rather than a Value anything reads.
+ */
+function emptyValueOf(
+  field: FieldDefinition,
+  languages: ProjectLanguages
+): Value {
+  switch (field.valueType) {
+    case 'component':
+      return { objectType: 'value', valueType: 'component', content: [] };
+    case 'reference':
+      return {
+        objectType: 'value',
+        valueType: 'reference',
+        content: perLanguage<ValueContentReference[]>(languages, []),
+      };
+    case 'boolean':
+      return { objectType: 'value', valueType: 'boolean', content: {} };
+    case 'number':
+      return {
+        objectType: 'value',
+        valueType: 'number',
+        content: perLanguage<number | null>(languages, null),
+      };
+    case 'string':
+      return {
+        objectType: 'value',
+        valueType: 'string',
+        content: perLanguage<string | null>(languages, null),
+      };
+    case 'mdast':
+      return {
+        objectType: 'value',
+        valueType: 'mdast',
+        content: perLanguage<MdAstRoot | null>(languages, null),
+      };
+  }
 }
 
 /**
