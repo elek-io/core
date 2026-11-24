@@ -30,12 +30,16 @@ What it accepts:
 - `create` and `update` both require it, so a Collection needs at least one one-line field definition. Either call throws `BadRequest` and writes nothing when the id is missing or names something that cannot title an Entry.
 - An update that removes the named field definition, or changes it to a type that cannot title an Entry, is refused unless the same call names another one.
 
-**An older Project has to add the key to every `collection.json` by hand.** There is no migration, so until then Core refuses to read each Collection, and with it the Project. Pick a one-line field definition of that Collection and add its `id`:
+**An older Project has to add the key to every `collection.json` by hand.** There is no migration, and nothing is loud until a Collection is read. `projects.read()` still opens the Project, `collections.count()` still counts the Collection, and `collections.list()` answers it in `total` while leaving it out of `list`, so it drops out of a list with no error. Its Entries still list and read. `collections.read()` throws `Internal`, as it does for any `collection.json` Core cannot parse, and `projects.upgrade()` refuses the whole Project with `BadRequest`. Pick a one-line field definition of that Collection and add its `id`:
 
 ```diff
    "icon": "home",
 +  "entryTitleFieldDefinitionId": "<the id of one of its one-line field definitions>",
    "fieldDefinitions": [
 ```
+
+A Collection with no one-line field definition at all, such as one holding only `markdown` and `asset` fields, has nothing to pick. Add a one-line field definition to its `fieldDefinitions` too and name that one. Its Entries hold no Value for it until each is updated, so there is nothing to read as their title yet.
+
+A read at a `commitHash` an older Core wrote keeps failing after the edit, because the Project's history still holds the file without the key.
 
 See `docs/fields.md`.
