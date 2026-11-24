@@ -361,6 +361,162 @@ describe('a theme that tagged a new version', function () {
         ]
       ).toEqual({ fieldDefinitionId: textFieldId });
     });
+
+    it('replaces the version that waits with one older than it', async function () {
+      const theme = await themeWith([at('1.0.0'), at('2.0.0'), at('3.0.0')]);
+      const website = await websiteOn(theme, { version: '1.0.0' });
+      await core.destinations.keepVersion({ projectId, id: website.id });
+
+      const kept = await core.destinations.keepVersion({
+        projectId,
+        id: website.id,
+        version: '2.0.0',
+      });
+
+      // Every version newer than the one in use can be put beside it, so an
+      // editor who picks 2.0.0 while 3.0.0 waits gets 2.0.0
+      expect(kept.outcome).toEqual('waiting');
+      expect(kept.version).toEqual('2.0.0');
+      expect(kept.destination.waiting?.version).toEqual('2.0.0');
+    });
+
+    it('fills what the Project gained for the version that already waits', async function () {
+      const second = withRequiredField('2.0.0');
+      // Its own slug, because the Project's Collection keeps the field
+      // definition this test adds to it
+      second.field.slug = 'gained-subtitle';
+      const theme = await themeWith([at('1.0.0'), second.contract]);
+      const website = await websiteOn(theme, { version: '1.0.0' });
+      const before = await core.destinations.keepVersion({
+        projectId,
+        id: website.id,
+      });
+
+      // The field the new version added, with the id its Contract carries,
+      // which is what a Contract generated from this Project gives
+      await core.collections.update({
+        ...collection,
+        projectId,
+        fieldDefinitions: [...collection.fieldDefinitions, second.field],
+        resolutions: {
+          [entry.id]: {
+            [second.field.slug]: {
+              objectType: 'value',
+              valueType: 'string',
+              content: { en: 'A subtitle', de: 'Ein Untertitel' },
+            },
+          },
+        },
+      });
+      const after = await core.destinations.keepVersion({
+        projectId,
+        id: website.id,
+      });
+
+      expect(
+        before.destination.waiting?.mapping.collections[collection.id]?.fields[
+          second.field.id
+        ]
+      ).toBeUndefined();
+      expect(after.destination.waiting?.version).toEqual('2.0.0');
+      expect(
+        after.destination.waiting?.mapping.collections[collection.id]?.fields[
+          second.field.id
+        ]
+      ).toEqual({ fieldDefinitionId: second.field.id });
+      // So the switch the run before was refused goes through, without the
+      // theme tagging anything else
+      expect(
+        (await core.destinations.switchVersion({ projectId, id: website.id }))
+          .outcome
+      ).toEqual('switched');
+    });
+
+    it('writes nothing while the version that waits is filled the same', async function () {
+      const second = withRequiredField('2.0.0');
+      const theme = await themeWith([at('1.0.0'), second.contract]);
+      const website = await websiteOn(theme, { version: '1.0.0' });
+      const first = await core.destinations.keepVersion({
+        projectId,
+        id: website.id,
+      });
+
+      const again = await core.destinations.keepVersion({
+        projectId,
+        id: website.id,
+      });
+
+      expect(again.outcome).toEqual('waiting');
+      expect(again.destination.updated).toEqual(first.destination.updated);
+      expect(await isCommitted()).toBe(true);
+    });
+
+    it('reads the name from the version the website uses', async function () {
+      // A second website on the same theme keeps a version whose Contract was
+      // renamed, which writes that name into the Contract the Project keeps
+      const renamed = at('2.0.0');
+      renamed.name = '@acme/other-site';
+      const theme = await themeWith([at('1.0.0'), renamed, at('3.0.0')]);
+      const website = await websiteOn(theme, { version: '1.0.0' });
+      const other = await websiteOn(theme, { version: '2.0.0' });
+
+      const kept = await core.destinations.keepVersion({
+        projectId,
+        id: website.id,
+        version: '3.0.0',
+      });
+
+      expect(other.contract.version).toEqual('2.0.0');
+      expect(
+        (await core.contracts.read({ projectId, id: website.contract.id })).name
+      ).toEqual('@acme/dealer-site');
+      // 3.0.0 carries the name 1.0.0 carries, which is what this website
+      // follows, so the other website's rename does not refuse it
+      expect(kept.destination.waiting?.version).toEqual('3.0.0');
+    });
+
+    it('builds the Mapping from the version the Project kept', async function () {
+      // Both versions leave the reference field out, which the Project holds
+      const first = at('1.0.0');
+      const dropped = first.collections[0]?.fieldDefinitions.pop();
+      const second = { ...structuredClone(first), version: '2.0.0' };
+      if (dropped === undefined) {
+        throw new Error('The Contract holds no field definition');
+      }
+      const theme = await themeWith([first, second]);
+      const website = await websiteOn(theme, { version: '1.0.0' });
+      await core.destinations.keepVersion({ projectId, id: website.id });
+
+      // The theme moves the 2.0.0 tag onto a Contract that names the
+      // reference field again. The Project never rewrites a copy, so the copy
+      // it read is the Contract a switch would put the website on
+      await theme.release({
+        tag: 'v2.0.0',
+        files: contractFileOf(at('2.0.0')),
+        isMoved: true,
+      });
+      const kept = await core.destinations.keepVersion({
+        projectId,
+        id: website.id,
+        version: '2.0.0',
+      });
+
+      expect(
+        (
+          await core.contracts.readVersion({
+            projectId,
+            id: website.contract.id,
+            version: '2.0.0',
+          })
+        ).contract.collections[0]?.fieldDefinitions.map(({ id }) => id)
+      ).not.toContain(dropped.id);
+      expect(
+        Object.keys(
+          kept.destination.waiting?.mapping.collections[collection.id]
+            ?.fields ?? {}
+        )
+      ).not.toContain(dropped.id);
+    });
   });
 
   describe('two websites on one theme', function () {
@@ -454,6 +610,40 @@ describe('a theme that tagged a new version', function () {
           })
         ).map((issue) => issue.issue)
       ).toContain('field_not_mapped');
+    });
+
+    it('reads one Entry against the version that waits', async function () {
+      // What the screen of one Entry asks while the editor maps the new
+      // version, which is the check of that Entry against what waits
+      const theme = await themeWith([at('1.0.0'), withTightenedField('2.0.0')]);
+      const website = await websiteOn(theme, { version: '1.0.0' });
+      await core.destinations.keepVersion({ projectId, id: website.id });
+
+      const ofWaiting = await core.destinations.check({
+        projectId,
+        id: website.id,
+        collectionId: collection.id,
+        entryId: entry.id,
+        isWaitingVersion: true,
+      });
+      const ofInUse = await core.destinations.check({
+        projectId,
+        id: website.id,
+        collectionId: collection.id,
+        entryId: entry.id,
+      });
+
+      expect(ofWaiting.map((issue) => issue.issue)).toContain(
+        'constraint_violation'
+      );
+      expect(
+        ofWaiting.every((issue) => {
+          return 'entryId' in issue && issue.entryId === entry.id;
+        })
+      ).toBe(true);
+      // The version in use takes the same Entry, so the issues come from the
+      // version that waits rather than from the Entry alone
+      expect(ofInUse).toEqual([]);
     });
 
     it('keeps the version in use while an Entry does not fit', async function () {

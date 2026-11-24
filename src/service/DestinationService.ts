@@ -1,4 +1,5 @@
 import Fs from 'fs-extra';
+import { isDeepStrictEqual } from 'node:util';
 import {
   addWebsiteSchema,
   checkAllDestinationSchema,
@@ -498,13 +499,13 @@ export class DestinationService extends AbstractEntityService {
 
   /**
    * Keeps a newer version of the theme's Contract beside the one in use, with
-   * a Mapping of its own, and commits. The website stays on the version it
-   * uses, and the newest version tagged is taken unless one is given.
+   * a Mapping of its own, and commits. The newest version tagged is taken
+   * unless one is given, and the website stays on the version it uses.
    *
-   * A newer version replaces one that waits, keeping what was mapped for it,
-   * and the version the website uses is answered with `in-use`. Throws
-   * `PreconditionFailed` for an older version and `BadRequest` for one whose
-   * Contract is named differently, each before anything is written.
+   * Every version newer than the one in use replaces the one that waits, and
+   * the one that already waits fills what the Project has gained. Both keep
+   * what was mapped. Throws `PreconditionFailed` for an older version and
+   * `BadRequest` for one named differently, before anything is written.
    *
    * @see ../../docs/destinations.md
    */
@@ -550,17 +551,18 @@ export class DestinationService extends AbstractEntityService {
             `Version "${theme.version}" of the theme is older than version "${destination.contract.version}", which Destination "${destination.id}" uses. Name a newer version, or add a website on the older one.`
           );
         }
-        if (theme.contract.name !== kept.name) {
+        // The name of the version this website uses, rather than the one
+        // `contract.json` carries, which a second website keeping a renamed
+        // version of the same theme writes
+        const inUse = await this.contractService.readVersion({
+          projectId: validatedProps.projectId,
+          id: destination.contract.id,
+          version: destination.contract.version,
+        });
+        if (theme.contract.name !== inUse.contract.name) {
           throw CoreError.badRequest(
-            `Version "${theme.version}" of the theme carries the Contract "${theme.contract.name}" while Destination "${destination.id}" follows "${kept.name}". Keep the name the Contract had, or add a website for the other theme.`
+            `Version "${theme.version}" of the theme carries the Contract "${theme.contract.name}" while Destination "${destination.id}" follows "${inUse.contract.name}". Keep the name the Contract had, or add a website for the other theme.`
           );
-        }
-        if (destination.waiting?.version === theme.version) {
-          return {
-            outcome: 'waiting' as const,
-            version: theme.version,
-            destination,
-          };
         }
 
         await this.contractService.keep({
@@ -569,6 +571,15 @@ export class DestinationService extends AbstractEntityService {
           contract: theme.contract,
           commit: theme.commit,
         });
+        // Through the copy the Project keeps rather than what the theme just
+        // answered. A copy is never rewritten, so a theme that moved the tag
+        // leaves the kept one in place, and that is the Contract a switch
+        // would put the website on
+        const copy = await this.contractService.readVersion({
+          projectId: validatedProps.projectId,
+          id: destination.contract.id,
+          version: theme.version,
+        });
         const carryFrom =
           destination.waiting === null
             ? [destination.mapping]
@@ -576,11 +587,24 @@ export class DestinationService extends AbstractEntityService {
         const waiting = {
           version: theme.version,
           mapping: mappingForVersion({
-            contract: theme.contract,
+            contract: copy.contract,
             collections: await this.readCollections(validatedProps.projectId),
             carryFrom,
           }),
         };
+        // The Mapping of a version that already waits is built again, so a
+        // field definition the Project gained since the last run fills what
+        // it left unmapped. Nothing is written while it fills the same
+        if (
+          destination.waiting?.version === waiting.version &&
+          isDeepStrictEqual(destination.waiting.mapping, waiting.mapping)
+        ) {
+          return {
+            outcome: 'waiting' as const,
+            version: theme.version,
+            destination,
+          };
+        }
 
         return {
           outcome: 'waiting' as const,

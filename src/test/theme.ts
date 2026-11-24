@@ -12,11 +12,15 @@ export interface FakeTheme {
   /**
    * Commits a file tree and tags it, annotated by default, so a tag object
    * rather than the commit is what the address advertises
+   *
+   * With `isMoved` it takes a tag that is already there onto the new commit,
+   * which is what a theme re-tagging a version it released does.
    */
   release: (props: {
     tag: string;
     files: Record<string, string>;
     isLightweight?: boolean;
+    isMoved?: boolean;
   }) => Promise<string>;
 }
 
@@ -46,7 +50,7 @@ export async function createFakeTheme(): Promise<FakeTheme> {
 
   return {
     url: barePath,
-    release: async ({ tag, files, isLightweight }) => {
+    release: async ({ tag, files, isLightweight, isMoved }) => {
       for (const [name, content] of Object.entries(files)) {
         await Fs.outputFile(Path.join(workPath, name), content);
       }
@@ -57,13 +61,21 @@ export async function createFakeTheme(): Promise<FakeTheme> {
         '--allow-empty',
         `--message=Release ${tag}`,
       ]);
+      const force = isMoved === true ? ['--force'] : [];
       await execGit(
         workPath,
         isLightweight === true
-          ? ['tag', tag]
-          : ['tag', '--annotate', tag, `--message=Release ${tag}`]
+          ? ['tag', ...force, tag]
+          : ['tag', '--annotate', ...force, tag, `--message=Release ${tag}`]
       );
-      await execGit(workPath, ['push', '--quiet', barePath, 'main', '--tags']);
+      await execGit(workPath, [
+        'push',
+        '--quiet',
+        ...force,
+        barePath,
+        'main',
+        '--tags',
+      ]);
       return execGit(workPath, ['rev-parse', 'HEAD']);
     },
   };
