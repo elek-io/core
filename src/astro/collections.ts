@@ -6,10 +6,11 @@ import {
   type FieldDefinition,
 } from '../schema/fieldSchema.js';
 import type { CollectionFile } from '../schema/collectionSchema.js';
+import { mappingIssuesOf } from '../util/destinationCheck.js';
 import { assertElekConfig, type ElekConfig } from './elekConfig.js';
 import { elekAssetsLoader, elekEntriesLoader } from './loaders.js';
 import { getCore, ensureProjectAvailable } from './core.js';
-import { readSiteContract } from './siteContract.js';
+import { readSiteContract, type SiteContract } from './siteContract.js';
 
 type ElekCollection = ReturnType<typeof defineCollection>;
 
@@ -148,6 +149,68 @@ function assertAssetsReachable(
 }
 
 /**
+ * Refuses a Mapping that leaves a Collection or a required field of the
+ * derived Contract Collections unfilled, naming every one of them at once.
+ *
+ * Here rather than only in the loaders, because Astro loads its collections
+ * together and stops on the first that fails, which would name the Mapping
+ * one collection at a time. Every loader checks its own again, so a
+ * collection declared by hand is checked too.
+ */
+async function assertMappingFills(props: {
+  core: ReturnType<typeof getCore>;
+  projectId: string;
+  alias: string;
+  site: SiteContract;
+  selected: readonly CollectionFile[];
+}): Promise<void> {
+  const { destination, contract } = props.site;
+  const derived = new Set(props.selected.map(({ id }) => id));
+  const sources = new Set(
+    Object.values(destination.mapping.collections).map((collection) => {
+      return collection.from.collectionId;
+    })
+  );
+  const collections: CollectionFile[] = [];
+  for (const id of sources) {
+    // A Mapping naming a Collection the Project dropped fills nothing,
+    // which is reported below rather than failing to read here
+    const collection = await props.core.collections
+      .read({ projectId: props.projectId, id })
+      .catch((error: unknown) => {
+        if (error instanceof CoreError && error.type === 'NotFound') {
+          return undefined;
+        }
+        throw error;
+      });
+    if (collection !== undefined) {
+      collections.push(collection);
+    }
+  }
+
+  const issues = mappingIssuesOf({
+    destinationId: destination.id,
+    contract,
+    mapping: destination.mapping,
+    collections,
+  }).filter((issue) => derived.has(issue.contractCollectionId));
+  if (issues.length === 0) {
+    return;
+  }
+  const at =
+    destination.contract.version === contract.version
+      ? `version ${contract.version}`
+      : `version ${contract.version} while the website uses ${destination.contract.version}`;
+  throw CoreError.badRequest(
+    `Destination "${destination.name}" of Project "${props.alias}" does not fill the Contract "${contract.name}" at ${at}:\n${issues
+      .map((issue) => `- ${issue.message}`)
+      .join(
+        '\n'
+      )}\nMap them onto the Project's own Collections and fields, or leave the Collection out of elekCollections().`
+  );
+}
+
+/**
  * Derives Astro content collections from the elek.io Collections the options
  * name. That object is the complete list, nothing outside it is derived, and
  * with no options at all it derives everything and warns. Keys are the alias
@@ -157,8 +220,9 @@ function assertAssetsReachable(
  * site's own Contract instead of its own, named by the Contract's slugs.
  *
  * Reads the content model from disk. Throws `Conflict` on a key two sources
- * derive, `BadRequest` on a selection naming nothing, deriving nothing, or
- * leaving out Assets a derived Collection can reference.
+ * derive, `BadRequest` on a selection naming nothing, deriving nothing,
+ * leaving out Assets a derived Collection can reference, or on a Mapping
+ * that leaves a derived Collection of the Contract unfilled.
  *
  * @see ../../docs/usage.md
  */
@@ -220,6 +284,15 @@ export async function elekCollections<const T extends ElekConfig>(
     const assets =
       options === undefined ? true : optionFor(options.assets, alias);
     assertAssetsReachable(selected, assets !== undefined, alias, holder);
+    if (site !== undefined) {
+      await assertMappingFills({
+        core,
+        projectId: declaration.id,
+        alias,
+        site,
+        selected,
+      });
+    }
 
     for (const collection of selected) {
       add(

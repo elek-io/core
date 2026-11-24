@@ -709,6 +709,55 @@ describe('a site reading its Entries through its own Contract', function () {
     expect(Object.keys(collections)).toEqual(['websitePosts']);
   });
 
+  it('names every Collection and field of the Contract the Mapping leaves unfilled', async function () {
+    const narrowed = mappingWithout({ collection: themePosts.id });
+    narrowed.collections[themeContacts.id] = {
+      from: { collectionId: siteImprint.id },
+      fields: {},
+    };
+
+    await withMapping(narrowed, async function () {
+      const error = await elekCollections({
+        projects: {
+          website: { id: siteProjectId, destination: 'autohaus-ebersfelde.de' },
+        },
+        contract,
+      }).then(
+        () => null,
+        (caught: unknown) => caught
+      );
+
+      expect(error).toBeInstanceOf(CoreError);
+      expect(error instanceof CoreError && error.message).toContain(
+        'No Collection of the Project fills "posts"'
+      );
+      expect(error instanceof CoreError && error.message).toContain(
+        'No field of the Project fills the required field "phone" of "contact-details"'
+      );
+    });
+  });
+
+  it('leaves a Collection of the Contract nothing fills to the loader when the site does not derive it', async function () {
+    const narrowed = mappingWithout({ collection: themePosts.id });
+
+    await withMapping(narrowed, async function () {
+      const collections = await elekCollections(
+        {
+          projects: {
+            website: {
+              id: siteProjectId,
+              destination: 'autohaus-ebersfelde.de',
+            },
+          },
+          contract,
+        },
+        { collections: { website: ['contact-details'] } }
+      );
+
+      expect(Object.keys(collections)).toEqual(['websiteContactDetails']);
+    });
+  });
+
   it('names the Contract when a selection names a Collection it does not hold', async function () {
     await expectCoreError(
       elekCollections(
