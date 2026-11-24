@@ -198,14 +198,14 @@ describe('websiteUpdateAction', function () {
 
     let terminal = '';
     let logFile = '';
+    let refused: unknown;
     try {
-      await expectCoreError(
-        websiteUpdateAction({
-          project: projectId,
-          name: 'demanding.example',
-        }),
-        'PreconditionFailed',
-        'keeps using'
+      refused = await websiteUpdateAction({
+        project: projectId,
+        name: 'demanding.example',
+      }).then(
+        () => null,
+        (caught: unknown) => caught
       );
     } finally {
       // Read before restoring, which drops what the spy recorded
@@ -214,6 +214,7 @@ describe('websiteUpdateAction', function () {
       printed.mockRestore();
       logged.mockRestore();
     }
+    const left = refused instanceof CoreError ? refused.message : '';
 
     // The field's own slug reaches the person at the terminal, and the log
     // file gets the kind of issue and the ids
@@ -223,6 +224,10 @@ describe('websiteUpdateAction', function () {
     expect(terminal).toContain('subtitle');
     expect(logFile).toContain('field_not_mapped');
     expect(logFile).not.toContain('subtitle');
+    // Every Entry fits this version, so nothing of them is named
+    expect(refused).toBeInstanceOf(CoreError);
+    expect(left).toContain('keeps using: 1 item it needs is unmapped.');
+    expect(left).not.toContain('Entry');
     const after = await cli.destinations.read({ projectId, id: website.id });
     expect(after.contract.version).toEqual('1.0.0');
     // It waits, so the editor maps the rest rather than reading the theme again
