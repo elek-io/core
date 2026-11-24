@@ -141,7 +141,7 @@ kept.outcome; // 'waiting', or 'in-use' for the version the website uses
 - `keepVersion()` takes the newest version tagged there unless it is given one, keeps a copy of its Contract in the Project and puts that version beside the one in use, with a Mapping of its own. The website goes on using the version it uses.
 - The Mapping of the waiting version starts out as what the Mapping in use fills, plus every field the new version added whose id one of the Project's own field definitions carries. It is read against the copy of that version the Project keeps, which a theme moving a tag afterwards does not change.
 - Every version newer than the one in use replaces the one that waits, keeping what was mapped for it. That holds for a version older than the one that waits too, so an app that offers a list of versions puts the one it is given beside the version in use whatever waits there. What the editor mapped for a field only the replaced version had is gone with it.
-- Keeping the version that already waits again keeps what was mapped and fills what the Project has gained since, so a field definition added after the last run covers what it left unmapped. Nothing is written while it fills the same.
+- Keeping the version that already waits again builds its Mapping the same way, so what was mapped stays and what the Project has gained since fills what was left unmapped. Nothing is written while it fills the same.
 - The version the website already uses is answered with the outcome `in-use` and writes nothing.
 - `check()` and `checkAll()` take `isWaitingVersion: true` for what the waiting version cannot take, and `update()` takes `waitingMapping` to replace its Mapping. Each of the three throws `PreconditionFailed` while no version waits.
 
@@ -160,6 +160,8 @@ switched.outcome; // 'switched', or 'kept' while switched.issues names what is l
 | The version named is older than the one the website uses | `PreconditionFailed` |
 | The Contract at that version carries another name than the version the website uses | `BadRequest` |
 | No version waits, for a switch, a waiting Mapping or a check of one | `PreconditionFailed` |
+
+Each of these is refused before anything is written, so the Project stays as it was and the website keeps the version it uses.
 
 The CLI does both steps in one command. While anything is left it prints each item, leaves the website on the version it uses and exits non-zero:
 

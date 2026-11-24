@@ -463,7 +463,7 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
   - Core reads the address with your own git access, see [reading an address with your own git access](./git-and-sync.md#reading-an-address-with-your-own-git-access).
 - `elek website:update --project <id> --name <website>` - bring the theme's newest version to a website and switch to it. `<website>` is the name the website was given, or its ID.
   - `--theme-version` switches to that version instead of the newest tagged one. It is not `--version`, which answers with the CLI's own version.
-  - It keeps the version beside the one in use first, so a run that cannot switch leaves it waiting with whatever is mapped for it. Every run fills what the Project has gained into that Mapping, so adding the field definition a run named and running it again switches.
+  - It keeps the version beside the one in use first, so a run that cannot switch leaves it waiting with whatever is mapped for it. Every run fills what the Project has gained into that Mapping, so a field definition carrying the id the new version's Contract names covers what an earlier run left unmapped and the next run switches.
   - It exits non-zero while anything the new version needs is unmapped or any Entry does not fit, naming each. The website keeps the version it uses, so the site goes on building.
   - A website already on the version asked for is left alone. It writes and commits in the data directory and reads the theme's address with your own git access, the way `website:add` does, see [`destinations.md`](./destinations.md#following-a-themes-new-version).
 - `elek api:start [port]` - start the local REST API (default port `31310`).

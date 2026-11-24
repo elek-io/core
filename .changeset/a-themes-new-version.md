@@ -8,7 +8,7 @@
 elek website:update --project <id> --name autohaus-ebersfelde.de
 ```
 
-One command brings the theme's newest tagged version to the website and switches to it. While anything the new version needs is unmapped or any Entry does not fit, it names each item, leaves the website on the version it uses and exits non-zero, so the site goes on building. Each run fills what the Project has gained into the waiting Mapping, so adding the field definition a run named and running it again switches. `--theme-version` switches to a version of your choice, and a website already on the version asked for is left alone.
+One command brings the theme's newest tagged version to the website and switches to it. While anything the new version needs is unmapped or any Entry does not fit, it names each item, leaves the website on the version it uses and exits non-zero, so the site goes on building. Each run fills what the Project has gained into the waiting Mapping, so a field definition carrying the id the new version's Contract names switches a run that was refused before. `--theme-version` switches to a version of your choice, and a website already on the version asked for is left alone.
 
 **`core.destinations` follows a theme's versions in three calls**, which is what an app offers an editor:
 

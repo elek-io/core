@@ -503,9 +503,9 @@ export class DestinationService extends AbstractEntityService {
    * unless one is given, and the website stays on the version it uses.
    *
    * Every version newer than the one in use replaces the one that waits, and
-   * the one that already waits fills what the Project has gained. Both keep
-   * what was mapped. Throws `PreconditionFailed` for an older version and
-   * `BadRequest` for one named differently, before anything is written.
+   * the one that already waits is built again. Both keep what was mapped and
+   * fill what the Project carries by id. Throws `PreconditionFailed` for an
+   * older version and `BadRequest` for one named differently.
    *
    * @see ../../docs/destinations.md
    */
@@ -593,8 +593,9 @@ export class DestinationService extends AbstractEntityService {
           }),
         };
         // The Mapping of a version that already waits is built again, so a
-        // field definition the Project gained since the last run fills what
-        // it left unmapped. Nothing is written while it fills the same
+        // field definition the Project gained under an id the Contract
+        // carries fills what the run before left unmapped. Nothing is
+        // written while it fills the same
         if (
           destination.waiting?.version === waiting.version &&
           isDeepStrictEqual(destination.waiting.mapping, waiting.mapping)
