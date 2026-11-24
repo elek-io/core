@@ -40,6 +40,31 @@ export const fieldTypeSchema = z.enum([
 ]);
 export type FieldType = z.infer<typeof fieldTypeSchema>;
 
+/**
+ * The field types whose Value can title an Entry, which are the one-line
+ * ones. Every other type holds no single line to read, `textarea` included.
+ *
+ * Extracted from `fieldTypeSchema` rather than written out again, so a field
+ * type that is renamed or dropped cannot leave a dead name behind here. An
+ * app offering the field definition that titles an Entry offers exactly
+ * these.
+ *
+ * @see ../../docs/fields.md
+ */
+export const entryTitleFieldTypeSchema = fieldTypeSchema.extract([
+  'text',
+  'email',
+  'url',
+  'ipv4',
+  'date',
+  'time',
+  'datetime',
+  'telephone',
+  'slug',
+  'select',
+]);
+export type EntryTitleFieldType = z.infer<typeof entryTitleFieldTypeSchema>;
+
 export const fieldWidthSchema = z.enum(['12', '6', '4', '3']);
 
 //
@@ -738,6 +763,47 @@ export const slugSourceReferencesSuperRefinement = (
 
   for (const { fieldDefinition, path } of withPaths) {
     validateSlugField(fieldDefinition, path);
+  }
+};
+
+/**
+ * Validates the field definition a Collection names as the one whose Value
+ * titles its Entries. It has to be one of that Collection's own definitions,
+ * at the top level or inside a group, and of a type in
+ * `entryTitleFieldTypeSchema`. A group's own id is no field definition, so it
+ * is reported as missing.
+ *
+ * Use it through `superRefine` on the Collection, where the id and the
+ * definitions are both visible, not on the `fieldDefinitions` array.
+ *
+ * @see ../../docs/fields.md
+ */
+export const entryTitleFieldDefinitionSuperRefinement = (
+  collection: {
+    entryTitleFieldDefinitionId: Uuid;
+    fieldDefinitions: FieldDefinitionOrGroup[];
+  },
+  ctx: z.RefinementCtx
+) => {
+  const target = flattenFieldDefinitions(collection.fieldDefinitions).find(
+    (fieldDefinition) =>
+      fieldDefinition.id === collection.entryTitleFieldDefinitionId
+  );
+  if (!target) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'The field definition that titles an Entry does not exist in this Collection',
+      path: ['entryTitleFieldDefinitionId'],
+    });
+    return;
+  }
+  if (entryTitleFieldTypeSchema.safeParse(target.fieldType).success === false) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `A "${target.fieldType}" field definition cannot title an Entry, which takes one of: ${entryTitleFieldTypeSchema.options.join(', ')}`,
+      path: ['entryTitleFieldDefinitionId'],
+    });
   }
 };
 

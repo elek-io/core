@@ -4,7 +4,12 @@ import Os from 'node:os';
 import Path from 'node:path';
 import Fs from 'fs-extra';
 import core, { uuid } from './test/setup.js';
-import { createProject, ensureCleanGitStatus } from './test/util.js';
+import {
+  createProject,
+  ensureCleanGitStatus,
+  titleFieldDefinition,
+  titleValue,
+} from './test/util.js';
 import type { Collection, Component, Project } from './index.node.js';
 
 /**
@@ -91,6 +96,7 @@ describe('Dynamic field items through astro sync', function () {
     hero = await createTextComponent('hero', 'headline');
     quote = await createTextComponent('quote', 'text');
 
+    const pagesTitleFieldDefinitionId = uuid();
     pages = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -100,7 +106,9 @@ describe('Dynamic field items through astro sync', function () {
       },
       slug: { singular: 'page', plural: 'pages' },
       description: { en: 'Pages', de: 'Pages' },
+      entryTitleFieldDefinitionId: pagesTitleFieldDefinitionId,
       fieldDefinitions: [
+        titleFieldDefinition(pagesTitleFieldDefinitionId),
         {
           id: uuid(),
           slug: 'sections',
@@ -125,6 +133,7 @@ describe('Dynamic field items through astro sync', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         sections: {
           objectType: 'value',
           valueType: 'component',

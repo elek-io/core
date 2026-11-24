@@ -167,6 +167,7 @@ function renameCollection(projectId: string, collection: Collection) {
     icon: collection.icon,
     name: collection.name,
     description: collection.description,
+    entryTitleFieldDefinitionId: collection.entryTitleFieldDefinitionId,
     fieldDefinitions: collection.fieldDefinitions,
     slug: { singular: 'article', plural: 'articles' },
   });
@@ -202,6 +203,7 @@ function changeModelOf(
     icon: collection.icon,
     name: collection.name,
     description: collection.description,
+    entryTitleFieldDefinitionId: collection.entryTitleFieldDefinitionId,
     fieldDefinitions: [...collection.fieldDefinitions, extraFieldDefinition()],
     slug,
   });
@@ -254,6 +256,7 @@ describe('the Entries loader while astro dev runs', function () {
       icon: collection.icon,
       name: collection.name,
       description: collection.description,
+      entryTitleFieldDefinitionId: collection.entryTitleFieldDefinitionId,
       fieldDefinitions: collection.fieldDefinitions,
       slug: collection.slug,
     });

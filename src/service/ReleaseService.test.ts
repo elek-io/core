@@ -17,6 +17,7 @@ import {
   createMediaComponent,
   createProject,
   ensureCleanGitStatus,
+  titleFieldDefinition,
 } from '../test/util.js';
 
 /** An optional text field, so a test can restate a whole definition list. */
@@ -791,6 +792,7 @@ describe('ReleaseService - slug field changes', function () {
       },
       slug: { singular: 'page', plural: 'pages' },
       description: { en: 'Pages', de: 'Pages' },
+      entryTitleFieldDefinitionId: titleFieldId,
       fieldDefinitions: [titleDef(), slugDef({})],
     });
     // Establish a released baseline to diff against
@@ -1051,6 +1053,7 @@ describe('ReleaseService - a renamed Collection and a narrowed dynamic field', f
   let media: Component;
   let collection: Collection;
   const blocksFieldId = uuid();
+  const titleFieldId = uuid();
 
   function blocksField(ofComponents: string[]) {
     return {
@@ -1083,7 +1086,11 @@ describe('ReleaseService - a renamed Collection and a narrowed dynamic field', f
       },
       slug: { singular: 'page', plural: 'pages' },
       description: { en: 'Pages', de: 'Pages' },
-      fieldDefinitions: [blocksField([hero.id, media.id])],
+      entryTitleFieldDefinitionId: titleFieldId,
+      fieldDefinitions: [
+        titleFieldDefinition(titleFieldId),
+        blocksField([hero.id, media.id]),
+      ],
     });
     // Establish a released baseline to diff against
     await core.releases.create({ projectId: project.id });

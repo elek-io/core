@@ -6,7 +6,11 @@ import core, {
   type Project,
   uuid,
 } from '../test/setup.js';
-import { createProject, expectTranspiles } from '../test/util.js';
+import {
+  createProject,
+  expectTranspiles,
+  titleFieldDefinition,
+} from '../test/util.js';
 import {
   generateTypes,
   generateTypesForProject,
@@ -103,6 +107,7 @@ describe('generateTypesForProject', () => {
       ],
     });
 
+    const blogPostTitleFieldDefinitionId = uuid();
     await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -112,7 +117,9 @@ describe('generateTypesForProject', () => {
       },
       slug: { singular: 'blog-post', plural: 'blog-posts' },
       description: { en: 'Blog posts', de: 'Blogeinträge' },
+      entryTitleFieldDefinitionId: blogPostTitleFieldDefinitionId,
       fieldDefinitions: [
+        titleFieldDefinition(blogPostTitleFieldDefinitionId),
         {
           id: uuid(),
           slug: 'blocks',
@@ -181,6 +188,7 @@ describe('generateTypesForProject - missing component reference', () => {
     // Collection.create does not validate ofComponents existence - referencing
     // an unknown UUID is accepted at write time and surfaces only at generation.
     orphanId = uuid();
+    const pageTitleFieldDefinitionId = uuid();
     await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -190,7 +198,9 @@ describe('generateTypesForProject - missing component reference', () => {
       },
       slug: { singular: 'page', plural: 'pages' },
       description: { en: 'Pages', de: 'Seiten' },
+      entryTitleFieldDefinitionId: pageTitleFieldDefinitionId,
       fieldDefinitions: [
+        titleFieldDefinition(pageTitleFieldDefinitionId),
         {
           id: uuid(),
           slug: 'blocks',
@@ -248,6 +258,7 @@ describe('generateTypesForProject - markdown field', () => {
       hardLineBreaks: false,
     };
 
+    const articleTitleFieldDefinitionId = uuid();
     await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -257,7 +268,9 @@ describe('generateTypesForProject - markdown field', () => {
       },
       slug: { singular: 'article', plural: 'articles' },
       description: { en: 'Articles', de: 'Articles' },
+      entryTitleFieldDefinitionId: articleTitleFieldDefinitionId,
       fieldDefinitions: [
+        titleFieldDefinition(articleTitleFieldDefinitionId),
         {
           id: uuid(),
           slug: 'body',
@@ -395,6 +408,7 @@ describe('generateTypesForProject - every field type', () => {
       isDisabled: false,
       inputWidth: '12' as const,
     };
+    const widgetTextFieldDefinitionId = uuid();
     await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -404,10 +418,11 @@ describe('generateTypesForProject - every field type', () => {
       },
       slug: { singular: 'widget', plural: 'widgets' },
       description: { en: 'Widgets' },
+      entryTitleFieldDefinitionId: widgetTextFieldDefinitionId,
       fieldDefinitions: [
         {
           ...base,
-          id: uuid(),
+          id: widgetTextFieldDefinitionId,
           slug: 'text-field',
           valueType: 'string',
           fieldType: 'text',
@@ -712,6 +727,7 @@ describe('generateTypes - writes type files to disk', () => {
       language: { default: 'en', supported: ['en'] },
     });
     outDir = Path.join(core.util.pathTo.tmp, `generate-types-${uuid()}`);
+    const noteTitleFieldDefinitionId = uuid();
     await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -721,9 +737,10 @@ describe('generateTypes - writes type files to disk', () => {
       },
       slug: { singular: 'note', plural: 'notes' },
       description: { en: 'Notes' },
+      entryTitleFieldDefinitionId: noteTitleFieldDefinitionId,
       fieldDefinitions: [
         {
-          id: uuid(),
+          id: noteTitleFieldDefinitionId,
           slug: 'title',
           valueType: 'string',
           fieldType: 'text',
@@ -771,16 +788,18 @@ describe('generateTypesForProject - optional and required fields', () => {
       inputWidth: '12' as const,
     };
 
+    const postTextFieldDefinitionId = uuid();
     await core.collections.create({
       projectId: project.id,
       icon: 'home',
       name: { singular: { en: 'Post' }, plural: { en: 'Posts' } },
       slug: { singular: 'post', plural: 'posts' },
       description: { en: 'Posts' },
+      entryTitleFieldDefinitionId: postTextFieldDefinitionId,
       fieldDefinitions: [
         {
           ...base,
-          id: uuid(),
+          id: postTextFieldDefinitionId,
           slug: 'required-text',
           valueType: 'string',
           fieldType: 'text',
@@ -979,12 +998,14 @@ describe('generateTypesForProject - free-form strings in a field definition', ()
       isDisabled: false,
       inputWidth: '12' as const,
     };
+    const choiceFieldDefinitionId = uuid();
     await core.collections.create({
       projectId: project.id,
       icon: 'home',
       name: { singular: { en: 'Note' }, plural: { en: 'Notes' } },
       slug: { singular: 'note', plural: 'notes' },
       description: { en: 'Notes' },
+      entryTitleFieldDefinitionId: choiceFieldDefinitionId,
       fieldDefinitions: [
         {
           ...base,
@@ -1001,7 +1022,7 @@ describe('generateTypesForProject - free-form strings in a field definition', ()
         },
         {
           ...base,
-          id: uuid(),
+          id: choiceFieldDefinitionId,
           slug: 'choice',
           valueType: 'string',
           fieldType: 'select',

@@ -18,6 +18,7 @@ import type {
   ConstructorElekIoCoreProps,
   EntryFieldDefinition,
   MarkdownFeatures,
+  Value,
 } from './setup.js';
 import core, {
   flattenFieldDefinitions,
@@ -138,6 +139,46 @@ const slugs = {
   assetReferenceFieldDefinition: 'header-image',
   entryReferenceFieldDefinition: 'related-products',
 };
+
+/** The slug of the one-line text field `titleFieldDefinition` declares. */
+export const titleFieldSlug = 'title';
+
+/**
+ * A text field definition that can title an Entry, for a Collection whose
+ * other fields cannot. Pass its id as `entryTitleFieldDefinitionId`.
+ */
+export function titleFieldDefinition(id: string) {
+  return {
+    id,
+    slug: titleFieldSlug,
+    valueType: 'string' as const,
+    fieldType: 'text' as const,
+    label: { en: 'Title', de: 'Titel' },
+    description: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12' as const,
+    min: null,
+    max: null,
+    defaultValue: null,
+  };
+}
+
+/**
+ * The `title` Value an Entry carries where its Collection holds a
+ * `titleFieldDefinition`. Spread it into the Entry's `values`, because Core
+ * demands a Value for every field definition of its Collection.
+ */
+export function titleValue(content = 'Title'): Record<string, Value> {
+  return {
+    [titleFieldSlug]: {
+      objectType: 'value',
+      valueType: 'string',
+      content: { en: content, de: content },
+    },
+  };
+}
 
 export async function ensureCleanGitStatus(
   task: Readonly<RunnerTestCase>,
@@ -398,6 +439,7 @@ export async function createCollection(projectId: string) {
       en: 'A Collection that contains our Products',
       de: 'A Collection that contains our Products',
     },
+    entryTitleFieldDefinitionId: ids.textFieldDefinition,
     fieldDefinitions: [
       {
         id: ids.textFieldDefinition,
@@ -568,11 +610,16 @@ export const offMarkdownFeatures: MarkdownFeatures = {
   hardLineBreaks: false,
 };
 
-/** Collection with optional flat `image` (asset) and `related` (entry) refs. */
+/**
+ * Collection with optional flat `image` (asset) and `related` (entry) refs,
+ * titled by a `title` text field, since neither reference field can title an
+ * Entry.
+ */
 export async function createRefCollection(
   projectId: string
 ): Promise<Collection> {
   const suffix = uuid();
+  const titleFieldDefinitionId = uuid();
   return core.collections.create({
     projectId,
     icon: 'home',
@@ -582,7 +629,9 @@ export async function createRefCollection(
     },
     slug: { singular: `ref-${suffix}`, plural: `refs-${suffix}` },
     description: { en: 'Refs', de: 'Refs' },
+    entryTitleFieldDefinitionId: titleFieldDefinitionId,
     fieldDefinitions: [
+      titleFieldDefinition(titleFieldDefinitionId),
       {
         id: uuid(),
         slug: 'image',
@@ -617,11 +666,16 @@ export async function createRefCollection(
   });
 }
 
-/** Collection with an optional markdown `body` allowing asset + entry refs. */
+/**
+ * Collection with an optional markdown `body` allowing asset + entry refs,
+ * titled by a `title` text field, since a markdown field cannot title an
+ * Entry.
+ */
 export async function createMarkdownCollection(
   projectId: string
 ): Promise<Collection> {
   const suffix = uuid();
+  const titleFieldDefinitionId = uuid();
   return core.collections.create({
     projectId,
     icon: 'home',
@@ -631,7 +685,9 @@ export async function createMarkdownCollection(
     },
     slug: { singular: `article-${suffix}`, plural: `articles-${suffix}` },
     description: { en: 'Articles', de: 'Articles' },
+    entryTitleFieldDefinitionId: titleFieldDefinitionId,
     fieldDefinitions: [
+      titleFieldDefinition(titleFieldDefinitionId),
       {
         id: uuid(),
         slug: 'body',
@@ -702,12 +758,17 @@ export async function createMediaComponent(
   });
 }
 
-/** Collection with a `blocks` dynamic field composing the given component. */
+/**
+ * Collection with a `blocks` dynamic field composing the given component,
+ * titled by a `title` text field, since a dynamic field cannot title an
+ * Entry.
+ */
 export async function createPagesCollection(
   projectId: string,
   componentId: string
 ): Promise<Collection> {
   const suffix = uuid();
+  const titleFieldDefinitionId = uuid();
   return core.collections.create({
     projectId,
     icon: 'home',
@@ -717,7 +778,9 @@ export async function createPagesCollection(
     },
     slug: { singular: `page-${suffix}`, plural: `pages-${suffix}` },
     description: { en: 'Pages', de: 'Pages' },
+    entryTitleFieldDefinitionId: titleFieldDefinitionId,
     fieldDefinitions: [
+      titleFieldDefinition(titleFieldDefinitionId),
       {
         id: uuid(),
         slug: 'blocks',

@@ -20,6 +20,8 @@ import {
   createEntry,
   createProject,
   ensureCleanGitStatus,
+  titleFieldDefinition,
+  titleValue,
 } from '../test/util.js';
 
 describe('EntryService', function () {
@@ -252,6 +254,7 @@ describe('EntryService - component values', function () {
     });
 
     // Create a collection with a dynamic field referencing the component
+    const dynamicTitleFieldId = uuid();
     dynamicCollection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -264,7 +267,9 @@ describe('EntryService - component values', function () {
         en: 'Pages with dynamic content blocks',
         de: 'Pages with dynamic content blocks',
       },
+      entryTitleFieldDefinitionId: dynamicTitleFieldId,
       fieldDefinitions: [
+        titleFieldDefinition(dynamicTitleFieldId),
         {
           id: uuid(),
           slug: 'blocks',
@@ -297,6 +302,7 @@ describe('EntryService - component values', function () {
       projectId: project.id,
       collectionId: dynamicCollection.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -330,6 +336,7 @@ describe('EntryService - component values', function () {
         projectId: project.id,
         collectionId: dynamicCollection.id,
         values: {
+          ...titleValue(),
           blocks: {
             objectType: 'value',
             valueType: 'component',
@@ -363,6 +370,7 @@ describe('EntryService - component values', function () {
       projectId: project.id,
       collectionId: dynamicCollection.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -438,6 +446,7 @@ describe('EntryService - reference validation', function () {
     // First create the markdown collection so we have somewhere to put a
     // referenced entry. Markdown features include entryReferences AND
     // assetReferences so we can test mdast tree refs end-to-end.
+    const markdownTitleFieldId = uuid();
     collectionWithMarkdown = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -450,7 +459,9 @@ describe('EntryService - reference validation', function () {
         en: 'Articles with markdown body content',
         de: 'Articles with markdown body content',
       },
+      entryTitleFieldDefinitionId: markdownTitleFieldId,
       fieldDefinitions: [
+        titleFieldDefinition(markdownTitleFieldId),
         {
           id: uuid(),
           slug: mdSlugs.body,
@@ -484,6 +495,7 @@ describe('EntryService - reference validation', function () {
       projectId: project.id,
       collectionId: collectionWithMarkdown.id,
       values: {
+        ...titleValue(),
         [mdSlugs.body]: {
           objectType: 'value',
           valueType: 'mdast',
@@ -493,6 +505,7 @@ describe('EntryService - reference validation', function () {
     });
 
     // Collection with flat asset + entry reference fields.
+    const refsTitleFieldId = uuid();
     collectionForRefs = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -502,7 +515,9 @@ describe('EntryService - reference validation', function () {
       },
       slug: { singular: 'product-ref', plural: 'products-ref' },
       description: { en: 'Products', de: 'Products' },
+      entryTitleFieldDefinitionId: refsTitleFieldId,
       fieldDefinitions: [
+        titleFieldDefinition(refsTitleFieldId),
         {
           id: uuid(),
           slug: refSlugs.assetImagesOnly,
@@ -555,6 +570,7 @@ describe('EntryService - reference validation', function () {
           projectId: project.id,
           collectionId: collectionForRefs.id,
           values: {
+            ...titleValue(),
             [refSlugs.assetImagesOnly]: {
               objectType: 'value',
               valueType: 'reference',
@@ -594,6 +610,7 @@ describe('EntryService - reference validation', function () {
           projectId: project.id,
           collectionId: collectionForRefs.id,
           values: {
+            ...titleValue(),
             [refSlugs.assetImagesOnly]: {
               objectType: 'value',
               valueType: 'reference',
@@ -634,6 +651,7 @@ describe('EntryService - reference validation', function () {
           projectId: project.id,
           collectionId: collectionForRefs.id,
           values: {
+            ...titleValue(),
             [refSlugs.assetImagesOnly]: {
               objectType: 'value',
               valueType: 'reference',
@@ -678,6 +696,7 @@ describe('EntryService - reference validation', function () {
         projectId: project.id,
         collectionId: collectionForRefs.id,
         values: {
+          ...titleValue(),
           [refSlugs.assetImagesOnly]: {
             objectType: 'value',
             valueType: 'reference',
@@ -711,6 +730,7 @@ describe('EntryService - reference validation', function () {
           projectId: project.id,
           collectionId: collectionWithMarkdown.id,
           values: {
+            ...titleValue(),
             [mdSlugs.body]: {
               objectType: 'value',
               valueType: 'mdast',
@@ -761,6 +781,7 @@ describe('EntryService - reference validation', function () {
           projectId: project.id,
           collectionId: collectionWithMarkdown.id,
           values: {
+            ...titleValue(),
             [mdSlugs.body]: {
               objectType: 'value',
               valueType: 'mdast',
@@ -811,6 +832,7 @@ describe('EntryService - reference validation', function () {
           projectId: project.id,
           collectionId: collectionWithMarkdown.id,
           values: {
+            ...titleValue(),
             [mdSlugs.body]: {
               objectType: 'value',
               valueType: 'mdast',
@@ -860,6 +882,7 @@ describe('EntryService - reference validation', function () {
           projectId: project.id,
           collectionId: collectionWithMarkdown.id,
           values: {
+            ...titleValue(),
             [mdSlugs.body]: {
               objectType: 'value',
               valueType: 'mdast',
@@ -911,6 +934,7 @@ describe('EntryService - reference validation', function () {
         projectId: project.id,
         collectionId: collectionWithMarkdown.id,
         values: {
+          ...titleValue(),
           [mdSlugs.body]: {
             objectType: 'value',
             valueType: 'mdast',
@@ -947,6 +971,7 @@ describe('EntryService - reference validation', function () {
         projectId: project.id,
         collectionId: collectionForRefs.id,
         values: {
+          ...titleValue(),
           [refSlugs.assetImagesOnly]: {
             objectType: 'value',
             valueType: 'reference',
@@ -1033,6 +1058,7 @@ describe('EntryService - dynamic field with open ofComponents', function () {
       ],
     });
 
+    const pagesTitleFieldId = uuid();
     const pages = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -1042,7 +1068,9 @@ describe('EntryService - dynamic field with open ofComponents', function () {
       },
       description: { en: 'Pages', de: 'Pages' },
       slug: { singular: 'page', plural: 'pages' },
+      entryTitleFieldDefinitionId: pagesTitleFieldId,
       fieldDefinitions: [
+        titleFieldDefinition(pagesTitleFieldId),
         {
           id: uuid(),
           slug: 'blocks',
@@ -1065,6 +1093,7 @@ describe('EntryService - dynamic field with open ofComponents', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -1121,6 +1150,7 @@ describe('EntryService - reference validation inside dynamic components', functi
       ],
     });
 
+    const nestedPagesTitleFieldId = uuid();
     pages = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -1130,7 +1160,9 @@ describe('EntryService - reference validation inside dynamic components', functi
       },
       description: { en: 'Pages', de: 'Pages' },
       slug: { singular: 'page', plural: 'pages' },
+      entryTitleFieldDefinitionId: nestedPagesTitleFieldId,
       fieldDefinitions: [
+        titleFieldDefinition(nestedPagesTitleFieldId),
         {
           id: uuid(),
           slug: 'blocks',
@@ -1166,6 +1198,7 @@ describe('EntryService - reference validation inside dynamic components', functi
         projectId: project.id,
         collectionId: pages.id,
         values: {
+          ...titleValue(),
           blocks: {
             objectType: 'value',
             valueType: 'component',

@@ -25,6 +25,7 @@ import {
   createProject,
   ensureCleanGitStatus,
   getFileHash,
+  titleFieldDefinition,
 } from '../test/util.js';
 
 describe('CollectionService', function () {
@@ -245,6 +246,7 @@ describe('CollectionService - slug uniqueness', function () {
   });
 
   it('should reject creating a second collection with the same slug', async function () {
+    const someFieldId = uuid();
     await expect(
       core.collections.create({
         projectId: project.id,
@@ -261,9 +263,10 @@ describe('CollectionService - slug uniqueness', function () {
           en: 'A duplicate slug collection',
           de: 'A duplicate slug collection',
         },
+        entryTitleFieldDefinitionId: someFieldId,
         fieldDefinitions: [
           {
-            id: uuid(),
+            id: someFieldId,
             slug: 'some-field',
             valueType: 'string',
             label: { en: 'Field', de: 'Field' },
@@ -284,6 +287,7 @@ describe('CollectionService - slug uniqueness', function () {
 
   it('should reject updating a collection slug to conflict with an existing one', async function () {
     // Create a second collection with a different slug
+    const otherFieldId = uuid();
     const secondCollection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -296,9 +300,10 @@ describe('CollectionService - slug uniqueness', function () {
         plural: 'others',
       },
       description: { en: 'Another collection', de: 'Another collection' },
+      entryTitleFieldDefinitionId: otherFieldId,
       fieldDefinitions: [
         {
-          id: uuid(),
+          id: otherFieldId,
           slug: 'other-field',
           valueType: 'string',
           label: { en: 'Field', de: 'Field' },
@@ -351,6 +356,7 @@ describe('CollectionService - fieldDefinition slug uniqueness', function () {
   });
 
   it('should reject creating a collection with duplicate fieldDefinition slugs', async function () {
+    const firstFieldId = uuid();
     await expect(
       core.collections.create({
         projectId: project.id,
@@ -364,9 +370,10 @@ describe('CollectionService - fieldDefinition slug uniqueness', function () {
           plural: 'items',
         },
         description: { en: 'Test', de: 'Test' },
+        entryTitleFieldDefinitionId: firstFieldId,
         fieldDefinitions: [
           {
-            id: uuid(),
+            id: firstFieldId,
             slug: 'duplicate-slug',
             valueType: 'string',
             label: { en: 'Field 1', de: 'Field 1' },
@@ -401,6 +408,7 @@ describe('CollectionService - fieldDefinition slug uniqueness', function () {
   });
 
   it('should reject updating a collection with duplicate fieldDefinition slugs', async function () {
+    const fieldAId = uuid();
     const collection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -413,9 +421,10 @@ describe('CollectionService - fieldDefinition slug uniqueness', function () {
         plural: 'widgets',
       },
       description: { en: 'Test', de: 'Test' },
+      entryTitleFieldDefinitionId: fieldAId,
       fieldDefinitions: [
         {
-          id: uuid(),
+          id: fieldAId,
           slug: 'field-a',
           valueType: 'string',
           label: { en: 'Field A', de: 'Field A' },
@@ -598,6 +607,7 @@ describe('CollectionService - slug index', function () {
   });
 
   it('should stop resolving a Collection by slug after deletion', async function () {
+    const tempTitleFieldId = uuid();
     const tempCollection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -610,7 +620,8 @@ describe('CollectionService - slug index', function () {
         plural: 'temps',
       },
       description: { en: 'Temporary', de: 'Temporary' },
-      fieldDefinitions: [],
+      entryTitleFieldDefinitionId: tempTitleFieldId,
+      fieldDefinitions: [titleFieldDefinition(tempTitleFieldId)],
     });
 
     await expect(
@@ -646,6 +657,7 @@ describe('CollectionService - update entry resolutions', function () {
     },
     description: { en: 'Articles', de: 'Articles' },
     slug: { singular: 'article', plural: 'articles' },
+    entryTitleFieldDefinitionId: titleFieldId,
     fieldDefinitions: [
       {
         id: titleFieldId,
@@ -693,6 +705,7 @@ describe('CollectionService - update entry resolutions', function () {
       },
       description: { en: 'Articles', de: 'Articles' },
       slug: { singular: 'article', plural: 'articles' },
+      entryTitleFieldDefinitionId: titleFieldId,
       fieldDefinitions: [
         {
           id: titleFieldId,
@@ -873,6 +886,7 @@ describe('CollectionService - cascade over a dynamic field', function () {
       },
       description: { en: 'Articles', de: 'Artikel' },
       slug: { singular: 'article', plural: 'articles' },
+      entryTitleFieldDefinitionId: titleFieldId,
       fieldDefinitions: [titleField(), blocksField(null)],
     });
     collectionId = collection.id;
@@ -928,6 +942,7 @@ describe('CollectionService - cascade over a dynamic field', function () {
         },
         description: { en: 'Articles', de: 'Artikel' },
         slug: { singular: 'article', plural: 'articles' },
+        entryTitleFieldDefinitionId: titleFieldId,
         fieldDefinitions: [titleField(), blocksField(5)],
       })
     ).resolves.toMatchObject({ id: collectionId });
@@ -957,6 +972,7 @@ describe('CollectionService - cascade over a dynamic field', function () {
         },
         description: { en: 'Articles', de: 'Artikel' },
         slug: { singular: 'article', plural: 'articles' },
+        entryTitleFieldDefinitionId: titleFieldId,
         fieldDefinitions: [
           titleField(),
           { ...blocksField(5), min: 2, isRequired: true },
@@ -977,8 +993,9 @@ describe('AbstractIndexedEntityService - stale index cache', function () {
     core_: typeof core,
     plural: string,
     singular: string
-  ) =>
-    core_.collections.create({
+  ) => {
+    const titleFieldDefinitionId = uuid();
+    return core_.collections.create({
       projectId: project.id,
       icon: 'home',
       name: {
@@ -987,8 +1004,10 @@ describe('AbstractIndexedEntityService - stale index cache', function () {
       },
       description: { en: plural, de: plural },
       slug: { singular, plural },
-      fieldDefinitions: [],
+      entryTitleFieldDefinitionId: titleFieldDefinitionId,
+      fieldDefinitions: [titleFieldDefinition(titleFieldDefinitionId)],
     });
+  };
 
   beforeAll(async function () {
     project = await createProject('IndexedEntity Stale Cache Test');
@@ -1021,17 +1040,21 @@ describe('AbstractIndexedEntityService - stale index cache', function () {
 describe('CollectionService - icon', function () {
   let project: Project & { destroy: () => Promise<void> };
 
-  const collectionProps = (icon: string, singular: string, plural: string) => ({
-    projectId: project.id,
-    icon,
-    name: {
-      singular: { en: singular, de: singular },
-      plural: { en: plural, de: plural },
-    },
-    slug: { singular, plural },
-    description: { en: plural, de: plural },
-    fieldDefinitions: [],
-  });
+  const collectionProps = (icon: string, singular: string, plural: string) => {
+    const titleFieldDefinitionId = uuid();
+    return {
+      projectId: project.id,
+      icon,
+      name: {
+        singular: { en: singular, de: singular },
+        plural: { en: plural, de: plural },
+      },
+      slug: { singular, plural },
+      description: { en: plural, de: plural },
+      entryTitleFieldDefinitionId: titleFieldDefinitionId,
+      fieldDefinitions: [titleFieldDefinition(titleFieldDefinitionId)],
+    };
+  };
 
   beforeAll(async function () {
     project = await createProject('CollectionService Icon Test');

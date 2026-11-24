@@ -10,10 +10,12 @@ import {
   getUpdateComponentSchemaFromLanguages,
   getUpdateEntrySchemaFromFieldDefinitions,
 } from './strictEntitySchema.js';
-import type {
-  FieldDefinition,
-  FieldDefinitionGroup,
-  FieldDefinitionOrGroup,
+import {
+  entryTitleFieldTypeSchema,
+  flattenFieldDefinitions,
+  type FieldDefinition,
+  type FieldDefinitionGroup,
+  type FieldDefinitionOrGroup,
 } from './fieldSchema.js';
 
 const singleLanguage = ['en'] as const;
@@ -43,6 +45,15 @@ function titleFieldDef(
   };
 }
 
+/** The id of the first field definition of the list that can title an Entry. */
+function entryTitleIdOf(fieldDefinitions: FieldDefinitionOrGroup[]): string {
+  const candidate = flattenFieldDefinitions(fieldDefinitions).find(
+    (fieldDefinition) =>
+      entryTitleFieldTypeSchema.safeParse(fieldDefinition.fieldType).success
+  );
+  return candidate?.id ?? uuid();
+}
+
 function fieldGroup(
   label: TranslatableString,
   fieldDefinitions: FieldDefinition[],
@@ -62,11 +73,13 @@ function bilingualCollection({
   namePlural = { en: 'Products', de: 'Produkte' },
   description = { en: 'A product', de: 'Ein Produkt' },
   fieldDefinitions = [titleFieldDef({ en: 'Title', de: 'Titel' })],
+  entryTitleFieldDefinitionId = entryTitleIdOf(fieldDefinitions),
 }: {
   nameSingular?: TranslatableString;
   namePlural?: TranslatableString;
   description?: TranslatableString;
   fieldDefinitions?: FieldDefinitionOrGroup[];
+  entryTitleFieldDefinitionId?: string;
 } = {}) {
   return {
     projectId: uuid(),
@@ -74,6 +87,7 @@ function bilingualCollection({
     name: { singular: nameSingular, plural: namePlural },
     slug: { singular: 'product', plural: 'products' },
     description,
+    entryTitleFieldDefinitionId,
     fieldDefinitions,
   };
 }

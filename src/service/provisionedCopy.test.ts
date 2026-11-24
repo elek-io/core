@@ -2,7 +2,11 @@ import Fs from 'fs-extra';
 import Path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import core, { uuid, type Project } from '../test/setup.js';
-import { createProject, seedRemoteWithRelease } from '../test/util.js';
+import {
+  createProject,
+  seedRemoteWithRelease,
+  titleFieldDefinition,
+} from '../test/util.js';
 import { CoreError } from '../util/shared.js';
 
 /**
@@ -78,6 +82,7 @@ describe('Provisioned copy', function () {
   });
 
   it('should reject content mutations on a provisioned copy', async function () {
+    const titleFieldId = uuid();
     await expectProvisionedError(
       core.collections.create({
         projectId: seed.projectId,
@@ -88,7 +93,8 @@ describe('Provisioned copy', function () {
         },
         slug: { singular: 'product', plural: 'products' },
         description: { en: 'Should never be created' },
-        fieldDefinitions: [],
+        entryTitleFieldDefinitionId: titleFieldId,
+        fieldDefinitions: [titleFieldDefinition(titleFieldId)],
       })
     );
     await expectProvisionedError(
@@ -102,7 +108,8 @@ describe('Provisioned copy', function () {
         },
         slug: { singular: 'product', plural: 'products' },
         description: { en: 'Should never be updated' },
-        fieldDefinitions: [],
+        entryTitleFieldDefinitionId: titleFieldId,
+        fieldDefinitions: [titleFieldDefinition(titleFieldId)],
       })
     );
     await expectProvisionedError(

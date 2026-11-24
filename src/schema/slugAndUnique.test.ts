@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { uuid } from '../test/setup.js';
+import { z } from '@hono/zod-openapi';
 import {
+  entryTitleFieldTypeSchema,
   slugFieldDefinitionSchema,
   slugSeparatorSchema,
   stringFieldDefinitionSchema,
@@ -64,8 +66,28 @@ function makeCollectionFile(fieldDefinitions: unknown[]) {
     slug: { singular: 'product', plural: 'products' },
     description: { en: 'desc' },
     icon: 'home',
+    entryTitleFieldDefinitionId: entryTitleIdOf(fieldDefinitions),
     fieldDefinitions,
   };
+}
+
+/**
+ * The id of the first definition that can title an Entry, so every Collection
+ * below names one without each test saying so. They arrive as `unknown`,
+ * because some of these tests build a definition on purpose that is invalid.
+ */
+function entryTitleIdOf(fieldDefinitions: unknown[]): string {
+  const canTitle = z.object({
+    id: z.string(),
+    fieldType: entryTitleFieldTypeSchema,
+  });
+  for (const fieldDefinition of fieldDefinitions) {
+    const parsed = canTitle.safeParse(fieldDefinition);
+    if (parsed.success) {
+      return parsed.data.id;
+    }
+  }
+  return uuid();
 }
 
 function makeComponentFile(fieldDefinitions: unknown[]) {

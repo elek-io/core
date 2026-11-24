@@ -142,6 +142,7 @@ describe('a model change that deletes content is refused', function () {
       },
       description: { en: 'Articles', de: 'Articles' },
       slug: { singular: `article-${suffix}`, plural: `articles-${suffix}` },
+      entryTitleFieldDefinitionId: keptId,
       fieldDefinitions: [textField(keptId, 'title'), textField(goneId, 'note')],
     });
     const entry = await core.entries.create({
@@ -179,6 +180,7 @@ describe('a model change that deletes content is refused', function () {
       },
       description: { en: 'Articles', de: 'Articles' },
       slug: collection.slug,
+      entryTitleFieldDefinitionId: keptId,
       fieldDefinitions: [textField(keptId, 'title')],
     };
   }
@@ -333,6 +335,7 @@ describe('a model change that deletes content is refused', function () {
   });
 
   it('refuses a narrowed ofComponents and a narrowed ofCollections, naming what goes', async function () {
+    const otherTitleId = uuid();
     const other = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -342,7 +345,8 @@ describe('a model change that deletes content is refused', function () {
       },
       description: { en: 'Notes', de: 'Notes' },
       slug: { singular: `note-${uuid()}`, plural: `notes-${uuid()}` },
-      fieldDefinitions: [textField(uuid(), 'title')],
+      entryTitleFieldDefinitionId: otherTitleId,
+      fieldDefinitions: [textField(otherTitleId, 'title')],
     });
     const otherEntry = await core.entries.create({
       projectId: project.id,
@@ -374,6 +378,7 @@ describe('a model change that deletes content is refused', function () {
 
     const blocksId = uuid();
     const relatedId = uuid();
+    const pageTitleId = uuid();
     const suffix = uuid();
     const page = await core.collections.create({
       projectId: project.id,
@@ -384,7 +389,9 @@ describe('a model change that deletes content is refused', function () {
       },
       description: { en: 'Pages', de: 'Pages' },
       slug: { singular: `page-${suffix}`, plural: `pages-${suffix}` },
+      entryTitleFieldDefinitionId: pageTitleId,
       fieldDefinitions: [
+        textField(pageTitleId, 'title'),
         {
           id: blocksId,
           slug: 'blocks',
@@ -421,6 +428,11 @@ describe('a model change that deletes content is refused', function () {
       projectId: project.id,
       collectionId: page.id,
       values: {
+        title: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'Page', de: 'Seite' },
+        },
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -465,11 +477,16 @@ describe('a model change that deletes content is refused', function () {
       },
       description: { en: 'Pages', de: 'Pages' },
       slug: page.slug,
-      fieldDefinitions: page.fieldDefinitions.map((definition) =>
-        definition.id === blocksId
-          ? { ...definition, ofComponents: [allowedComponent.id] }
-          : { ...definition, ofCollections: [page.id] }
-      ),
+      entryTitleFieldDefinitionId: pageTitleId,
+      fieldDefinitions: page.fieldDefinitions.map((definition) => {
+        if (definition.id === blocksId) {
+          return { ...definition, ofComponents: [allowedComponent.id] };
+        }
+        if (definition.id === relatedId) {
+          return { ...definition, ofCollections: [page.id] };
+        }
+        return definition;
+      }),
     };
     const before = await snapshot(project.id);
 
@@ -549,6 +566,7 @@ describe('a model change that deletes content is refused', function () {
     });
 
     const suffix = uuid();
+    const sectionTitleId = uuid();
     const page = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -558,7 +576,9 @@ describe('a model change that deletes content is refused', function () {
       },
       description: { en: 'Sections', de: 'Sections' },
       slug: { singular: `section-${suffix}`, plural: `sections-${suffix}` },
+      entryTitleFieldDefinitionId: sectionTitleId,
       fieldDefinitions: [
+        textField(sectionTitleId, 'title'),
         {
           id: uuid(),
           slug: 'blocks',
@@ -595,6 +615,11 @@ describe('a model change that deletes content is refused', function () {
       projectId: project.id,
       collectionId: page.id,
       values: {
+        title: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'Section', de: 'Abschnitt' },
+        },
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -671,6 +696,7 @@ describe('a model change that deletes content is refused', function () {
       fieldDefinitions: [textField(goneId, 'note')],
     });
     const suffix = uuid();
+    const cardTitleId = uuid();
     const cards = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -680,7 +706,9 @@ describe('a model change that deletes content is refused', function () {
       },
       description: { en: 'Cards', de: 'Cards' },
       slug: { singular: `card-${suffix}`, plural: `cards-${suffix}` },
+      entryTitleFieldDefinitionId: cardTitleId,
       fieldDefinitions: [
+        textField(cardTitleId, 'title'),
         {
           id: uuid(),
           slug: 'blocks',
@@ -702,6 +730,11 @@ describe('a model change that deletes content is refused', function () {
       projectId: project.id,
       collectionId: cards.id,
       values: {
+        title: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'Card', de: 'Karte' },
+        },
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -780,6 +813,7 @@ describe('a model change that deletes content is refused', function () {
       },
       description: { en: 'Drafts', de: 'Drafts' },
       slug: { singular: `draft-${suffix}`, plural: `drafts-${suffix}` },
+      entryTitleFieldDefinitionId: keptId,
       fieldDefinitions: [textField(keptId, 'title'), textField(goneId, 'note')],
     });
     // No Entry at all, so the removal drops nothing
@@ -790,6 +824,7 @@ describe('a model change that deletes content is refused', function () {
       name: collection.name,
       description: collection.description,
       slug: collection.slug,
+      entryTitleFieldDefinitionId: keptId,
       fieldDefinitions: [textField(keptId, 'title'), textField(goneId, 'note')],
     });
 
@@ -819,6 +854,7 @@ describe('a model change that deletes content is refused', function () {
       name: collection.name,
       description: collection.description,
       slug: collection.slug,
+      entryTitleFieldDefinitionId: keptId,
       fieldDefinitions: [
         textField(keptId, 'headline'),
         textField(addedId, 'teaser'),
@@ -837,6 +873,7 @@ describe('a model change that deletes content is refused', function () {
     // the new definitions declare. A caller that loops over every issue
     // and resolves it by slug reaches a loss that way, and a resolution
     // never clears one
+    const sourceTitleId = uuid();
     const source = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -846,7 +883,8 @@ describe('a model change that deletes content is refused', function () {
       },
       description: { en: 'Sources', de: 'Sources' },
       slug: { singular: `source-${uuid()}`, plural: `sources-${uuid()}` },
-      fieldDefinitions: [textField(uuid(), 'title')],
+      entryTitleFieldDefinitionId: sourceTitleId,
+      fieldDefinitions: [textField(sourceTitleId, 'title')],
     });
     const sourceEntry = await core.entries.create({
       projectId: project.id,
@@ -861,6 +899,7 @@ describe('a model change that deletes content is refused', function () {
     });
 
     const relatedId = uuid();
+    const linkTitleId = uuid();
     const linkSuffix = uuid();
     const links = await core.collections.create({
       projectId: project.id,
@@ -871,12 +910,21 @@ describe('a model change that deletes content is refused', function () {
       },
       description: { en: 'Links', de: 'Links' },
       slug: { singular: `link-${linkSuffix}`, plural: `links-${linkSuffix}` },
-      fieldDefinitions: [entryField(relatedId, 'related', [source.id])],
+      entryTitleFieldDefinitionId: linkTitleId,
+      fieldDefinitions: [
+        textField(linkTitleId, 'title'),
+        entryField(relatedId, 'related', [source.id]),
+      ],
     });
     const linkEntry = await core.entries.create({
       projectId: project.id,
       collectionId: links.id,
       values: {
+        title: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'Link', de: 'Link' },
+        },
         related: {
           objectType: 'value',
           valueType: 'reference',
@@ -902,7 +950,11 @@ describe('a model change that deletes content is refused', function () {
         name: links.name,
         description: links.description,
         slug: links.slug,
-        fieldDefinitions: [entryField(relatedId, 'related', [links.id])],
+        entryTitleFieldDefinitionId: linkTitleId,
+        fieldDefinitions: [
+          textField(linkTitleId, 'title'),
+          entryField(relatedId, 'related', [links.id]),
+        ],
         resolutions: {
           [linkEntry.id]: {
             related: {
@@ -951,6 +1003,7 @@ describe('a model change that deletes content is refused', function () {
       fieldDefinitions: [dynamicField(nestedId, 'nested', [held.id, spare.id])],
     });
     const holderSuffix = uuid();
+    const holdersTitleId = uuid();
     const holders = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -963,13 +1016,22 @@ describe('a model change that deletes content is refused', function () {
         singular: `holder-${holderSuffix}`,
         plural: `holders-${holderSuffix}`,
       },
-      fieldDefinitions: [dynamicField(uuid(), 'blocks', [holder.id])],
+      entryTitleFieldDefinitionId: holdersTitleId,
+      fieldDefinitions: [
+        textField(holdersTitleId, 'title'),
+        dynamicField(uuid(), 'blocks', [holder.id]),
+      ],
     });
     const holderItemId = uuid();
     const holderEntry = await core.entries.create({
       projectId: project.id,
       collectionId: holders.id,
       values: {
+        title: {
+          objectType: 'value',
+          valueType: 'string',
+          content: { en: 'Holder', de: 'Halter' },
+        },
         blocks: {
           objectType: 'value',
           valueType: 'component',

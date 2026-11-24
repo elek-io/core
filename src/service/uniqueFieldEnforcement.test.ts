@@ -16,6 +16,7 @@ import { createProject } from '../test/util.js';
  */
 async function createUniqueCollection(projectId: string): Promise<Collection> {
   const suffix = uuid();
+  const skuFieldDefinitionId = uuid();
   return core.collections.create({
     projectId,
     icon: 'home',
@@ -25,9 +26,10 @@ async function createUniqueCollection(projectId: string): Promise<Collection> {
     },
     slug: { singular: `item-${suffix}`, plural: `items-${suffix}` },
     description: { en: 'Items', de: 'Items' },
+    entryTitleFieldDefinitionId: skuFieldDefinitionId,
     fieldDefinitions: [
       {
-        id: uuid(),
+        id: skuFieldDefinitionId,
         slug: 'sku',
         valueType: 'string',
         fieldType: 'text',
@@ -417,6 +419,7 @@ async function createCodeCollection(
     },
     slug: { singular: `doc-${suffix}`, plural: `docs-${suffix}` },
     description: { en: 'Docs', de: 'Docs' },
+    entryTitleFieldDefinitionId: options.fieldId,
     fieldDefinitions: [codeFieldDef(options.fieldId, options.unique)],
   });
 }

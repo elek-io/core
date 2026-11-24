@@ -9,13 +9,17 @@ import {
 import { valueSchema } from './valueSchema.js';
 import { entryExportSchema } from './entrySchema.js';
 import {
+  entryTitleFieldDefinitionSuperRefinement,
   fieldDefinitionOrGroupSchema,
   fieldDefinitionSlugUniquenessSuperRefinement,
   slugSourceReferencesSuperRefinement,
 } from './fieldSchema.js';
 import { baseFileSchema } from './fileSchema.js';
 
-export const collectionFileSchema = baseFileSchema.extend({
+// Every derived schema picks or omits from this one rather than from
+// `collectionFileSchema`, because zod refuses both on a schema carrying a
+// refinement, and each adds the same refinement back.
+const collectionFileShapeSchema = baseFileSchema.extend({
   objectType: z.literal(objectTypeSchema.enum.collection).readonly(),
   name: z.object({
     singular: partialTranslatableStringSchema,
@@ -31,7 +35,16 @@ export const collectionFileSchema = baseFileSchema.extend({
     .array(fieldDefinitionOrGroupSchema)
     .superRefine(fieldDefinitionSlugUniquenessSuperRefinement)
     .superRefine(slugSourceReferencesSuperRefinement),
+  /**
+   * The field definition whose Value titles every Entry of this Collection,
+   * which is required and has to be one of the definitions above.
+   */
+  entryTitleFieldDefinitionId: uuidSchema,
 });
+
+export const collectionFileSchema = collectionFileShapeSchema.superRefine(
+  entryTitleFieldDefinitionSuperRefinement
+);
 export type CollectionFile = z.infer<typeof collectionFileSchema>;
 
 export const collectionSchema = collectionFileSchema.openapi('Collection');
@@ -48,7 +61,7 @@ export const collectionExportSchema = collectionSchema.extend({
 });
 export type CollectionExport = z.infer<typeof collectionExportSchema>;
 
-export const createCollectionSchema = collectionFileSchema
+export const createCollectionSchema = collectionFileShapeSchema
   .omit({
     id: true,
     objectType: true,
@@ -58,7 +71,8 @@ export const createCollectionSchema = collectionFileSchema
   })
   .extend({
     projectId: uuidSchema.readonly(),
-  });
+  })
+  .superRefine(entryTitleFieldDefinitionSuperRefinement);
 export type CreateCollectionProps = z.infer<typeof createCollectionSchema>;
 
 export const readCollectionSchema = z.object({
@@ -77,7 +91,7 @@ export type ReadBySlugCollectionProps = z.infer<
   typeof readBySlugCollectionSchema
 >;
 
-export const updateCollectionSchema = collectionFileSchema
+export const updateCollectionSchema = collectionFileShapeSchema
   .pick({
     id: true,
     name: true,
@@ -85,6 +99,7 @@ export const updateCollectionSchema = collectionFileSchema
     description: true,
     icon: true,
     fieldDefinitions: true,
+    entryTitleFieldDefinitionId: true,
   })
   .extend({
     projectId: uuidSchema.readonly(),
@@ -92,7 +107,8 @@ export const updateCollectionSchema = collectionFileSchema
       .record(uuidSchema, z.record(slugSchema, valueSchema))
       .optional(),
     acceptedContentLoss: z.array(uuidSchema).optional(),
-  });
+  })
+  .superRefine(entryTitleFieldDefinitionSuperRefinement);
 export type UpdateCollectionProps = z.infer<typeof updateCollectionSchema>;
 
 export const deleteCollectionSchema = readCollectionSchema.extend({});
@@ -104,7 +120,7 @@ export const countCollectionsSchema = z.object({
 export type CountCollectionsProps = z.infer<typeof countCollectionsSchema>;
 
 export const migrateCollectionSchema = z.looseObject(
-  collectionFileSchema.pick({ id: true, coreVersion: true }).shape
+  collectionFileShapeSchema.pick({ id: true, coreVersion: true }).shape
 );
 export type MigrateCollectionProps = z.infer<typeof migrateCollectionSchema>;
 

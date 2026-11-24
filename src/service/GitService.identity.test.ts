@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest';
 import type ElekIoCore from '../index.node.js';
 import type { SetUserProps } from '../schema/userSchema.js';
 import { startFakeCloud } from '../test/cloud.js';
-import { createTmpCore, execGit, tmpDirPath } from '../test/util.js';
+import {
+  createTmpCore,
+  execGit,
+  titleFieldDefinition,
+  tmpDirPath,
+} from '../test/util.js';
 import { recordsGitIdentity } from '../util/git.js';
 import { uuid } from '../util/shared.js';
 
@@ -45,13 +50,15 @@ async function createCollection(
   core: ElekIoCore,
   projectId: string
 ): Promise<void> {
+  const titleFieldDefinitionId = uuid();
   await core.collections.create({
     projectId,
     icon: 'home',
     name: { singular: { en: 'Page' }, plural: { en: 'Pages' } },
     slug: { singular: 'page', plural: 'pages' },
     description: { en: 'A page' },
-    fieldDefinitions: [],
+    entryTitleFieldDefinitionId: titleFieldDefinitionId,
+    fieldDefinitions: [titleFieldDefinition(titleFieldDefinitionId)],
   });
 }
 

@@ -3,7 +3,10 @@ import Os from 'node:os';
 import Path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import core, { uuid, type Project } from '../test/setup.js';
-import { createLocalRemoteRepository } from '../test/util.js';
+import {
+  createLocalRemoteRepository,
+  titleFieldDefinition,
+} from '../test/util.js';
 import { CoreError } from '../util/shared.js';
 import ElekIoCore from '../index.node.js';
 
@@ -112,6 +115,7 @@ describe('Read-only mode', function () {
   });
 
   it('should reject content mutations', async function () {
+    const titleFieldId = uuid();
     await expectReadOnlyError(
       readOnlyCore.collections.create({
         projectId: project.id,
@@ -122,7 +126,8 @@ describe('Read-only mode', function () {
         },
         slug: { singular: 'product', plural: 'products' },
         description: { en: 'Should never be created' },
-        fieldDefinitions: [],
+        entryTitleFieldDefinitionId: titleFieldId,
+        fieldDefinitions: [titleFieldDefinition(titleFieldId)],
       })
     );
     await expectReadOnlyError(

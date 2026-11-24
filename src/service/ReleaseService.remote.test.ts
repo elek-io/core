@@ -2,7 +2,7 @@ import Fs from 'fs-extra';
 import Path from 'node:path';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type ElekIoCore from '../index.node.js';
-import core, { projectFileSchema, testUserProps } from '../test/setup.js';
+import core, { projectFileSchema, testUserProps, uuid } from '../test/setup.js';
 import {
   createBareRemoteOf,
   createCollection,
@@ -11,6 +11,7 @@ import {
   createTmpCore,
   execGit,
   expectCoreError,
+  titleFieldDefinition,
 } from '../test/util.js';
 
 /**
@@ -25,6 +26,7 @@ describe('ReleaseService against a remote', function () {
   /** A minor change, with a slug of its own so it never clashes. */
   async function addCollection(on: ElekIoCore, projectId: string) {
     counter += 1;
+    const titleFieldDefinitionId = uuid();
     return on.collections.create({
       projectId,
       icon: 'home',
@@ -34,7 +36,8 @@ describe('ReleaseService against a remote', function () {
       },
       description: { en: 'A change', de: 'A change' },
       slug: { singular: `thing-${counter}`, plural: `things-${counter}` },
-      fieldDefinitions: [],
+      entryTitleFieldDefinitionId: titleFieldDefinitionId,
+      fieldDefinitions: [titleFieldDefinition(titleFieldDefinitionId)],
     });
   }
 
