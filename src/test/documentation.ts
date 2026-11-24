@@ -47,17 +47,24 @@ const allowedJsdocTags = new Set([
   'todo',
 ]);
 
-/** `ts` and `js` are deliberately absent, they duplicate the long form. */
+/**
+ * Every language a fence may name, which a block has to name one of.
+ *
+ * `ts` and `js` are deliberately absent, they duplicate the long form, and so
+ * is the empty language: a diagram, a tree or a log names `text`. Every other
+ * one is listed only where GitHub and the elek.io website both color it.
+ */
 const allowedFenceLanguages = new Set([
-  '',
   'typescript',
   'tsx',
   'javascript',
   'astro',
+  'html',
   'bash',
   'json',
   'jsonc',
   'yaml',
+  'http',
   'diff',
   'markdown',
   'mermaid',
@@ -959,6 +966,7 @@ export const rules: Rule[] = [
     files: styledFiles,
     check: (file, content) => {
       const violations: Violation[] = [];
+      const allowed = [...allowedFenceLanguages].join(', ');
       let inFence = false;
       for (const [index, text] of content.split('\n').entries()) {
         const trimmed = text.trimStart();
@@ -968,7 +976,10 @@ export const rules: Rule[] = [
           violations.push({
             file,
             line: index + 1,
-            message: `fence language "${language}" is not allowed, use one of ${[...allowedFenceLanguages].filter(Boolean).join(', ')}`,
+            message:
+              language === ''
+                ? `fence names no language, use one of ${allowed}`
+                : `fence language "${language}" is not allowed, use one of ${allowed}`,
           });
         }
         inFence = !inFence;
