@@ -36,12 +36,12 @@ One test decides whether a sentence belongs anywhere: does the reader learn some
 
 Then keep it short and scannable, because nobody reads a wall of text and an agent parses a list faster than a paragraph:
 
-- Reach for a table, a list or a mermaid diagram before a paragraph. Relations and flows belong in a diagram, not in prose describing one. Quote any diagram label holding a special character, so `|"@see"|` rather than `|@see|`.
+- Reach for a table, a list or a mermaid diagram before a paragraph, the diagram outside `docs/`. Relations and flows belong in a diagram, not in prose describing one. Quote any diagram label holding a special character, so `|"@see"|` rather than `|@see|`.
 - One idea per sentence. Name the actor rather than writing passively.
 - Plain words. No filler, no marketing, no metaphors standing in for a concrete noun.
 - Sentence case headings, straight quotes, no em dashes and no semicolons in prose.
 - Present tense. No word that dates the sentence, because docs ship versioned with the code.
-- Every code block names its language, so code is colored as its language and a diagram, a tree or a log reads as plain `text`. A language other than `text` is allowed only where GitHub and the elek.io website both color it.
+- Every code block names its language, so code is colored as its language and a diagram, a tree or a log reads as plain `text`. A language other than `text` is allowed only where GitHub and the elek.io website both color it, except `mermaid`: GitHub draws the diagram and the website shows its lines, which is why a mermaid diagram belongs outside `docs/`.
 - A block that shows a file, or the top of one, names it in a comment on its first line, like `# .github/workflows/deploy.yml`. That name reads on GitHub and on npm, and a renderer turns it into the block's head. The block stays valid in the language it names, so one naming a JSON file takes `jsonc`.
 
 ## docs/

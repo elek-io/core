@@ -52,7 +52,9 @@ const allowedJsdocTags = new Set([
  *
  * `ts` and `js` are deliberately absent, they duplicate the long form, and so
  * is the empty language: a diagram, a tree or a log names `text`. Every other
- * one is listed only where GitHub and the elek.io website both color it.
+ * one is listed only where GitHub and the elek.io website both color it, except
+ * `mermaid`: GitHub draws the diagram and the website shows its lines, so a
+ * mermaid diagram belongs outside `docs/`.
  */
 const allowedFenceLanguages = new Set([
   'typescript',
