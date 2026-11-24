@@ -290,6 +290,15 @@ export class ContractService extends AbstractEntityService {
           commit,
           contract,
         };
+        // Only what this call creates. A rollback removes these before it
+        // resets, so a file that was already there must not be in the list:
+        // a reset that fails too would leave it gone
+        const created: string[] = [];
+        if (kept === undefined) {
+          created.push(contractPath);
+        } else if (hasVersion === false) {
+          created.push(versionFilePath);
+        }
 
         await this.withGitRollback(
           projectPath,
@@ -325,7 +334,7 @@ export class ContractService extends AbstractEntityService {
               reference: { objectType: 'contract', id },
             });
           },
-          kept === undefined ? [contractPath] : [versionFilePath]
+          created
         );
 
         return this.read({ projectId: id_, id });
