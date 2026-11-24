@@ -1,8 +1,10 @@
-import type { LoaderContext } from 'astro/loaders';
 import Fs from 'fs-extra';
-import Path from 'node:path';
-import Url from 'node:url';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
+import {
+  createLoaderContext,
+  logLevels as levels,
+  type LoggedLine,
+} from '../test/astro.js';
 import core, { uuid, type Collection } from '../test/setup.js';
 import {
   createAsset,
@@ -23,14 +25,6 @@ import {
 } from './loaders.js';
 import type { ContentWatcher } from './watch.js';
 
-/** One logged line, with the level it was logged at. */
-interface LoggedLine {
-  level: 'debug' | 'info' | 'warn' | 'error';
-  message: string;
-}
-
-const levels = ['debug', 'info', 'warn', 'error'] as const;
-
 /**
  * Every line as `<level>: <message up to its first id, path or quoted name>`,
  * deduplicated and sorted, so a complete set of lines can be asserted without
@@ -42,51 +36,6 @@ function summarize(lines: LoggedLine[]): string[] {
       `${line.level}: ${line.message.replace(/["(][\S\s]*$/, '').trim()}`
   );
   return [...new Set(summaries)].toSorted();
-}
-
-/**
- * A `LoaderContext` whose logger records the level of every line, which is
- * what pins both the logger a message took and the level it took there.
- *
- * Without a watcher it is the context a build hands a loader, with one the
- * context `astro dev` hands it.
- */
-function createLoaderContext(options: {
-  root: string;
-  watcher?: ContentWatcher;
-}) {
-  const lines: LoggedLine[] = [];
-  const store = new Map<string, { data: unknown; digest: string }>();
-  const record = (level: LoggedLine['level']) => (message: string) => {
-    lines.push({ level, message });
-  };
-  const context = {
-    logger: {
-      debug: record('debug'),
-      info: record('info'),
-      warn: record('warn'),
-      error: record('error'),
-    },
-    store: {
-      get: (id: string) => store.get(id),
-      set: (entry: { id: string; data: unknown; digest: string }) =>
-        store.set(entry.id, entry),
-      keys: () => [...store.keys()],
-      delete: (id: string) => store.delete(id),
-    },
-    generateDigest: (data: unknown) => JSON.stringify(data),
-    parseData: ({ data }: { data: unknown }) => Promise.resolve(data),
-    config: {
-      root: Url.pathToFileURL(`${options.root}${Path.sep}`),
-      publicDir: Url.pathToFileURL(
-        `${Path.join(options.root, 'public')}${Path.sep}`
-      ),
-      base: '/',
-    },
-    ...(options.watcher === undefined ? {} : { watcher: options.watcher }),
-  } as unknown as LoaderContext;
-
-  return { context, lines, store };
 }
 
 /**

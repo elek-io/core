@@ -549,9 +549,15 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       through.versionInUse === through.contract.version
         ? `version ${through.contract.version}`
         : `version ${through.contract.version} while the website uses ${through.versionInUse}`;
+    // A Value issue carries zod's own wording, which says what is wrong
+    // without saying where, so the field and the language go in front of it
     const named = issues.map((issue) => {
-      const where = isValueIssue(issue) ? `Entry "${issue.entryId}": ` : '';
-      return `- ${where}${issue.message}`;
+      if (isValueIssue(issue) === false) {
+        return `- ${issue.message}`;
+      }
+      const language =
+        issue.language === undefined ? '' : ` in "${issue.language}"`;
+      return `- Entry "${issue.entryId}", field "${issue.contractFieldSlug}"${language}: ${issue.message}`;
     });
     throw CoreError.badRequest(
       `Collection "${through.collection.slug.plural}" of the Contract "${through.contract.name}" at ${at} is not filled by Project "${alias}" through Destination "${through.destination.name}":\n${named.join('\n')}`
