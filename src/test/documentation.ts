@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import Fs from 'fs-extra';
 import ts from 'typescript';
 import { z } from 'zod';
+import { entryTitleFieldTypeSchema } from '../schema/fieldSchema.js';
 import {
   releaseDiffSchema,
   semverBumpSchema,
@@ -1255,6 +1256,57 @@ export const rules: Rule[] = [
           file,
           line: 1,
           message: `${reason} is a CoreErrorReason with no row in the table`,
+        });
+      }
+      return violations;
+    },
+  },
+  {
+    id: 'links/entry-title-field-types',
+    summary:
+      'the documented field types that can title an Entry are the ones Core accepts',
+    files: () => ['docs/fields.md'].filter((file) => exists(file)),
+    check: (file, content) => {
+      const sentence = 'Only a one-line field type can title an Entry:';
+      const line = linesOf(content).find((candidate) =>
+        candidate.text.includes(sentence)
+      );
+      if (line === undefined) {
+        return [
+          {
+            file,
+            line: 1,
+            message: `the sentence listing the field types that can title an Entry is gone ("${sentence}")`,
+          },
+        ];
+      }
+
+      const declared = new Set<string>(entryTitleFieldTypeSchema.options);
+      // The list ends at the sentence's own period, so what follows it in
+      // the paragraph is prose rather than another field type
+      const rest = line.text.slice(
+        line.text.indexOf(sentence) + sentence.length
+      );
+      const listed = rest.slice(0, rest.indexOf('.'));
+      const documented = new Set(
+        [...listed.matchAll(/`(\w+)`/g)].map(([, name]) => name ?? '')
+      );
+      const violations: Violation[] = [];
+
+      for (const fieldType of documented) {
+        if (declared.has(fieldType)) continue;
+        violations.push({
+          file,
+          line: line.number,
+          message: `${fieldType} cannot title an Entry, drop it from the sentence`,
+        });
+      }
+      for (const fieldType of declared) {
+        if (documented.has(fieldType)) continue;
+        violations.push({
+          file,
+          line: line.number,
+          message: `${fieldType} can title an Entry and the sentence leaves it out`,
         });
       }
       return violations;

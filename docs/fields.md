@@ -362,6 +362,18 @@ Enforcement scans the Collection's Entries on each write rather than relying on 
 
 The check is a scan-then-write rather than an atomic transaction, so it assumes a single serialized writer (the same assumption Core's Collection and Component slug uniqueness already makes). Two writes racing in parallel for the same value could both pass the scan, so a caller that issues concurrent writes to one Collection must serialize them itself.
 
+## Titling an Entry
+
+Every Collection names the field definition whose Value titles its Entries, in `entryTitleFieldDefinitionId`. An app reads that Value to name an Entry in a list, a picker or a breadcrumb, so every app names an Entry the same way however the Collection's fields are ordered.
+
+Only a one-line field type can title an Entry: `text`, `email`, `url`, `ipv4`, `date`, `time`, `datetime`, `telephone`, `slug`, `select`. No other field type can, `textarea` included. `entryTitleFieldTypeSchema` parses that list and `EntryTitleFieldType` is its type, so an app can offer exactly those.
+
+- The id has to belong to one of the Collection's own field definitions, at the top level or inside a group. A group's own id is not one, and neither is a field definition of a Component, which is shared between Collections.
+- `core.collections.create()` and `core.collections.update()` both require it, so a Collection needs at least one one-line field definition. Either call throws `BadRequest` when the id is missing or names something that cannot title an Entry, and writes nothing.
+- An update that removes the named field definition, or changes it to a type that cannot title an Entry, is refused unless the same call names another one.
+- A Collection file without it fails to parse, so a Project written by an earlier Core has to add it to every `collection.json` before Core reads it again.
+- The named field is not forced to be required, so its Value can be empty in a language. An app needs something to show where it is.
+
 ## Field grouping
 
 Inside a Collection, field definitions can be wrapped in a `FieldDefinitionGroup` for visual organization. Groups are presentational only - they have no effect on Entry storage or value validation, and they do not appear in the Entry JSON.

@@ -46,6 +46,8 @@ A field whose Value holds nothing in any language is no loss, so removing it app
 
 Removing a field, narrowing a `dynamic` field's `ofComponents` and narrowing an `entry` field's `ofCollections` each make the next Release a major one, see [`releases.md`](./releases.md#every-change-a-diff-can-carry).
 
+Removing the field definition that titles an Entry, or changing it to a type that cannot, is refused before any of this, with `BadRequest` rather than an issue to resolve. Name another one in the same call, see [Titling an Entry](./fields.md#titling-an-entry).
+
 ### Default values for added fields
 
 A newly added field's value is built per its type:

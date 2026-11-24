@@ -104,7 +104,8 @@ const project = await core.projects.create({
   settings: { language: { default: 'en', supported: ['en', 'de'] } },
 });
 
-// Define a Collection with a single text Field
+// Define a Collection with a single text Field, which titles its Entries
+const nameFieldDefinitionId = uuid();
 const collection = await core.collections.create({
   projectId: project.id,
   icon: 'package',
@@ -117,9 +118,10 @@ const collection = await core.collections.create({
     en: 'The products we offer',
     de: 'Die Produkte, die wir anbieten',
   },
+  entryTitleFieldDefinitionId: nameFieldDefinitionId,
   fieldDefinitions: [
     {
-      id: uuid(),
+      id: nameFieldDefinitionId,
       slug: 'name',
       valueType: 'string',
       fieldType: 'text',
