@@ -332,6 +332,59 @@ describe('a site reading its Entries through its own Contract', function () {
     return { lines, store, load, types: built?.types ?? '' };
   }
 
+  /**
+   * Runs the Entries loader the way `astro dev` does, through the site's
+   * Contract, and reports a change below the Collection it reads from
+   */
+  async function startSite() {
+    const handlers: Array<(path: string) => unknown> = [];
+    const { context, lines } = createLoaderContext({
+      root: tmpDirPath(),
+      watcher: {
+        add: () => undefined,
+        on: (_event, handler) => {
+          handlers.push(handler);
+        },
+      },
+    });
+    const loader = elekEntriesLoader({
+      config: {
+        projects: {
+          website: { id: siteProjectId, destination: 'autohaus-ebersfelde.de' },
+        },
+        contract,
+      },
+      project: 'website',
+      collectionIdOrSlug: 'posts',
+    });
+    if ('createSchema' in loader && loader.createSchema !== undefined) {
+      await loader.createSchema();
+    }
+    await loader.load(context);
+    let before = lines.length;
+    const warned = () =>
+      lines
+        .slice(before)
+        .filter((line) => line.level === 'warn')
+        .map((line) => line.message);
+
+    return {
+      warnedSince: warned,
+      reload: async () => {
+        before = lines.length;
+        for (const handler of handlers) {
+          handler(core.util.pathTo.entries(siteProjectId, siteArticles.id));
+        }
+        await vi.waitFor(
+          function () {
+            if (warned().length === 0) throw new Error('Not reloaded yet');
+          },
+          { timeout: 10000, interval: 20 }
+        );
+      },
+    };
+  }
+
   /** The Contract at another version, with one field added to its posts */
   function contractAdding(
     version: string,
@@ -674,57 +727,68 @@ describe('a site reading its Entries through its own Contract', function () {
     );
   });
 
-  it('asks for a restart when the Mapping it reads through changes', async function () {
-    const handlers: Array<(path: string) => unknown> = [];
-    const { context, lines } = createLoaderContext({
-      root: tmpDirPath(),
-      watcher: {
-        add: () => undefined,
-        on: (_event, handler) => {
-          handlers.push(handler);
-        },
-      },
-    });
-    const loader = elekEntriesLoader({
-      config: {
-        projects: {
-          website: { id: siteProjectId, destination: 'autohaus-ebersfelde.de' },
-        },
-        contract,
-      },
-      project: 'website',
-      collectionIdOrSlug: 'posts',
-    });
-    if ('createSchema' in loader && loader.createSchema !== undefined) {
-      await loader.createSchema();
-    }
-    await loader.load(context);
-    const before = lines.length;
-
+  it('leaves a reference field of the Contract nothing fills as an empty list', async function () {
     await withMapping(
-      mappingWithout({ field: themeTeaser.id }),
+      mappingWithout({ field: themeRelated.id }),
       async function () {
-        for (const handler of handlers) {
-          handler(core.util.pathTo.entries(siteProjectId, siteArticles.id));
-        }
-        await vi.waitFor(
-          function () {
-            const warned = lines
-              .slice(before)
-              .some((line) => line.level === 'warn');
-            if (warned === false) throw new Error('Not reloaded yet');
-          },
-          { timeout: 10000, interval: 20 }
-        );
+        const site = await buildSite({
+          collectionIdOrSlug: 'posts',
+          contract,
+          destination: 'autohaus-ebersfelde.de',
+        });
+
+        await site.load();
+
+        expect(site.store.get(secondEntryId)?.data).toMatchObject({
+          related: { en: [], de: [] },
+        });
       }
     );
+  });
 
-    expect(
-      lines
-        .slice(before)
-        .filter((line) => line.level === 'warn')
-        .map((line) => line.message)
-    ).toEqual([expect.stringContaining('restart the dev server')]);
+  it('asks for a restart when the Mapping it reads through changes', async function () {
+    const site = await startSite();
+
+    await withMapping(mappingWithout({ field: themeTeaser.id }), () =>
+      site.reload()
+    );
+
+    expect(site.warnedSince()).toEqual([
+      expect.stringContaining('restart the dev server'),
+    ]);
+  });
+
+  it('asks for a restart when the Collection it reads through changes', async function () {
+    const site = await startSite();
+
+    await core.collections.update({
+      projectId: siteProjectId,
+      id: siteArticles.id,
+      icon: siteArticles.icon,
+      name: siteArticles.name,
+      description: siteArticles.description,
+      slug: siteArticles.slug,
+      fieldDefinitions: [
+        ...siteArticles.fieldDefinitions,
+        textField('byline', false),
+      ],
+    });
+    onTestFinished(async function () {
+      await core.collections.update({
+        projectId: siteProjectId,
+        id: siteArticles.id,
+        icon: siteArticles.icon,
+        name: siteArticles.name,
+        description: siteArticles.description,
+        slug: siteArticles.slug,
+        fieldDefinitions: siteArticles.fieldDefinitions,
+      });
+    });
+    await site.reload();
+
+    expect(site.warnedSince()).toEqual([
+      expect.stringContaining('restart the dev server'),
+    ]);
   });
 
   it('derives the Collections of the Contract rather than the Project', async function () {
