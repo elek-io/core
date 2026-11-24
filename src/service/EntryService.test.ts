@@ -992,6 +992,7 @@ describe('EntryService - reference validation', function () {
           collectionId: collectionForRefs.id,
           id: entry.id,
           values: {
+            ...titleValue(),
             [refSlugs.assetImagesOnly]: {
               objectType: 'value',
               valueType: 'reference',

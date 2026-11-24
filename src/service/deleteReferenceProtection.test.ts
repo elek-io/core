@@ -17,6 +17,7 @@ import {
   createProject,
   createRefCollection,
   ensureCleanGitStatus,
+  titleValue,
 } from '../test/util.js';
 
 /**
@@ -62,6 +63,7 @@ describe('Delete reference protection', function () {
         projectId: project.id,
         collectionId: refCollection.id,
         values: {
+          ...titleValue(),
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -111,6 +113,7 @@ describe('Delete reference protection', function () {
         projectId: project.id,
         collectionId: markdownCollection.id,
         values: {
+          ...titleValue(),
           body: {
             objectType: 'value',
             valueType: 'mdast',
@@ -162,6 +165,7 @@ describe('Delete reference protection', function () {
         projectId: project.id,
         collectionId: pagesCollection.id,
         values: {
+          ...titleValue(),
           blocks: {
             objectType: 'value',
             valueType: 'component',
@@ -217,6 +221,7 @@ describe('Delete reference protection', function () {
     it('reports every referring Entry when an Asset is referenced more than once', async function () {
       const asset = await createAsset(project.id);
       const imageValue = {
+        ...titleValue(),
         image: {
           objectType: 'value' as const,
           valueType: 'reference' as const,
@@ -275,6 +280,7 @@ describe('Delete reference protection', function () {
         projectId: project.id,
         collectionId: markdownCollection.id,
         values: {
+          ...titleValue(),
           body: {
             objectType: 'value',
             valueType: 'mdast',
@@ -286,6 +292,7 @@ describe('Delete reference protection', function () {
         projectId: project.id,
         collectionId: refCollection.id,
         values: {
+          ...titleValue(),
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -347,6 +354,7 @@ describe('Delete reference protection', function () {
         projectId: project.id,
         collectionId: refCollection.id,
         values: {
+          ...titleValue(),
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -363,6 +371,7 @@ describe('Delete reference protection', function () {
         projectId: project.id,
         collectionId: markdownCollection.id,
         values: {
+          ...titleValue(),
           body: {
             objectType: 'value',
             valueType: 'mdast',
@@ -416,6 +425,7 @@ describe('Delete reference protection', function () {
         projectId: project.id,
         collectionId: refCollection.id,
         values: {
+          ...titleValue(),
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -434,6 +444,7 @@ describe('Delete reference protection', function () {
         collectionId: refCollection.id,
         id: entry.id,
         values: {
+          ...titleValue(),
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -473,6 +484,7 @@ describe('Delete reference protection', function () {
         projectId: project.id,
         collectionId: refCollection.id,
         values: {
+          ...titleValue(),
           image: {
             objectType: 'value',
             valueType: 'reference',
@@ -504,6 +516,7 @@ describe('Delete reference protection', function () {
       related: Array<{ id: string; collectionId: string }>
     ): Record<string, Value> {
       return {
+        ...titleValue(),
         image: {
           objectType: 'value',
           valueType: 'reference',
@@ -589,6 +602,7 @@ describe('Delete reference protection', function () {
         projectId: project.id,
         collectionId: markdownCollection.id,
         values: {
+          ...titleValue(),
           body: {
             objectType: 'value',
             valueType: 'mdast',
@@ -648,6 +662,7 @@ describe('Delete reference protection', function () {
         projectId: project.id,
         collectionId: pagesCollection.id,
         values: {
+          ...titleValue(),
           blocks: {
             objectType: 'value',
             valueType: 'component',

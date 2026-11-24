@@ -58,7 +58,9 @@ async function createCollection(
     slug: { singular: 'page', plural: 'pages' },
     description: { en: 'A page' },
     entryTitleFieldDefinitionId: titleFieldDefinitionId,
-    fieldDefinitions: [titleFieldDefinition(titleFieldDefinitionId)],
+    fieldDefinitions: [
+      titleFieldDefinition(titleFieldDefinitionId, { en: 'Title' }),
+    ],
   });
 }
 

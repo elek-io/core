@@ -145,15 +145,19 @@ export const titleFieldSlug = 'title';
 
 /**
  * A text field definition that can title an Entry, for a Collection whose
- * other fields cannot. Pass its id as `entryTitleFieldDefinitionId`.
+ * other fields cannot. Pass its id as `entryTitleFieldDefinitionId`, and the
+ * label of a Project that supports other languages than English and German.
  */
-export function titleFieldDefinition(id: string) {
+export function titleFieldDefinition(
+  id: string,
+  label: Record<string, string> = { en: 'Title', de: 'Titel' }
+) {
   return {
     id,
     slug: titleFieldSlug,
     valueType: 'string' as const,
     fieldType: 'text' as const,
-    label: { en: 'Title', de: 'Titel' },
+    label,
     description: null,
     isRequired: false,
     isDisabled: false,

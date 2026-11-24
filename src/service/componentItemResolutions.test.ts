@@ -263,7 +263,7 @@ describe('a Component resolution lands in the item it names', function () {
 
     const values = await valuesOf(pages.id, entry.id);
     // The Value lands in the item, and the Entry gains no key of its own
-    expect(Object.keys(values)).toEqual(['blocks']);
+    expect(Object.keys(values).toSorted()).toEqual(['blocks', 'title']);
     expect(itemOf(values, item.id)['subtitle']).toEqual(text('Hero subtitle'));
 
     await expect(

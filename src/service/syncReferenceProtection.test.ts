@@ -17,6 +17,7 @@ import {
   createProject,
   createRefCollection,
   expectCoreError,
+  titleValue,
 } from '../test/util.js';
 
 /**
@@ -106,12 +107,13 @@ describe('findDanglingReferences (forward scan)', function () {
     const target = await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
-      values: { image: emptyRef(), related: emptyRef() },
+      values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
     });
     const referrer = await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
       values: {
+        ...titleValue(),
         image: emptyRef(),
         related: entryRef(target.id, collection.id),
       },
@@ -141,7 +143,11 @@ describe('findDanglingReferences (forward scan)', function () {
     const referrer = await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
-      values: { image: assetRef(asset.id), related: emptyRef() },
+      values: {
+        ...titleValue(),
+        image: assetRef(asset.id),
+        related: emptyRef(),
+      },
     });
     await Fs.remove(core.util.pathTo.assetFile(project.id, asset.id));
 
@@ -166,12 +172,13 @@ describe('findDanglingReferences (forward scan)', function () {
     const target = await core.entries.create({
       projectId: project.id,
       collectionId: refCollection.id,
-      values: { image: emptyRef(), related: emptyRef() },
+      values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
     });
     const referrer = await core.entries.create({
       projectId: project.id,
       collectionId: markdownCollection.id,
       values: {
+        ...titleValue(),
         body: {
           objectType: 'value',
           valueType: 'mdast',
@@ -226,13 +233,14 @@ describe('findDanglingReferences (forward scan)', function () {
     const target = await core.entries.create({
       projectId: project.id,
       collectionId: refCollection.id,
-      values: { image: emptyRef(), related: emptyRef() },
+      values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
     });
     const itemId = uuid();
     const referrer = await core.entries.create({
       projectId: project.id,
       collectionId: pagesCollection.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -280,12 +288,13 @@ describe('findDanglingReferences (forward scan)', function () {
     const target = await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
-      values: { image: emptyRef(), related: emptyRef() },
+      values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
     });
     const referrer = await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
       values: {
+        ...titleValue(),
         image: assetRef(asset.id),
         related: entryRef(target.id, collection.id),
       },
@@ -321,12 +330,13 @@ describe('findDanglingReferences (forward scan)', function () {
     const target = await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
-      values: { image: emptyRef(), related: emptyRef() },
+      values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
     });
     await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
       values: {
+        ...titleValue(),
         image: assetRef(asset.id),
         related: entryRef(target.id, collection.id),
       },
@@ -414,7 +424,7 @@ describe('Synchronize reference protection', function () {
     const target = await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
-      values: { image: emptyRef(), related: emptyRef() },
+      values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
     });
     await core.projects.synchronize({ id: project.id });
 
@@ -432,6 +442,7 @@ describe('Synchronize reference protection', function () {
       projectId: project.id,
       collectionId: collection.id,
       values: {
+        ...titleValue(),
         image: emptyRef(),
         related: entryRef(target.id, collection.id),
       },
@@ -526,7 +537,7 @@ describe('Synchronize reference protection', function () {
       await core.entries.create({
         projectId: copyId,
         collectionId: collection.id,
-        values: { image: emptyRef(), related: emptyRef() },
+        values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
       });
     });
 
@@ -534,7 +545,7 @@ describe('Synchronize reference protection', function () {
     await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
-      values: { image: emptyRef(), related: emptyRef() },
+      values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
     });
 
     await core.projects.synchronize({ id: project.id });
@@ -549,17 +560,17 @@ describe('Synchronize reference protection', function () {
     const p = await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
-      values: { image: emptyRef(), related: emptyRef() },
+      values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
     });
     const q = await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
-      values: { image: emptyRef(), related: emptyRef() },
+      values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
     });
     const x = await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
-      values: { image: emptyRef(), related: emptyRef() },
+      values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
     });
     await core.projects.synchronize({ id: project.id });
 
@@ -569,14 +580,22 @@ describe('Synchronize reference protection', function () {
         projectId: copyId,
         collectionId: collection.id,
         id: x.id,
-        values: { image: emptyRef(), related: entryRef(p.id, collection.id) },
+        values: {
+          ...titleValue(),
+          image: emptyRef(),
+          related: entryRef(p.id, collection.id),
+        },
       });
     });
     await core.entries.update({
       projectId: project.id,
       collectionId: collection.id,
       id: x.id,
-      values: { image: emptyRef(), related: entryRef(q.id, collection.id) },
+      values: {
+        ...titleValue(),
+        image: emptyRef(),
+        related: entryRef(q.id, collection.id),
+      },
     });
 
     const before = await core.projects.getChanges({ id: project.id });
@@ -631,13 +650,13 @@ describe('Synchronize reference protection', function () {
       await core.entries.create({
         projectId: copyId,
         collectionId: collection.id,
-        values: { image: emptyRef(), related: emptyRef() },
+        values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
       });
     });
     await core.entries.create({
       projectId: project.id,
       collectionId: collection.id,
-      values: { image: emptyRef(), related: emptyRef() },
+      values: { ...titleValue(), image: emptyRef(), related: emptyRef() },
     });
 
     // Pushed without integrating first, which is what synchronize() answers
