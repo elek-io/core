@@ -780,6 +780,47 @@ describe('a site reading its Entries through its own Contract', function () {
     });
   });
 
+  it('reads the version in use while a newer one waits', async function () {
+    const theme = await createFakeTheme();
+    // What the editor has not mapped yet, so the new version waits
+    const ahead = contractAdding('1.1.0', textField('author', true));
+    await theme.release({ tag: 'v1.0.0', files: contractFileOf(contract) });
+    await theme.release({ tag: 'v1.1.0', files: contractFileOf(ahead) });
+    const website = await core.destinations.addWebsite({
+      projectId: siteProjectId,
+      name: 'waiting.example',
+      url: theme.url,
+      version: '1.0.0',
+    });
+    await core.destinations.update({
+      projectId: siteProjectId,
+      id: website.id,
+      mapping: fullMapping(),
+    });
+    const kept = await core.destinations.keepVersion({
+      projectId: siteProjectId,
+      id: website.id,
+    });
+    const site = await buildSite({
+      collectionIdOrSlug: 'posts',
+      contract,
+      destination: 'waiting.example',
+    });
+
+    await site.load();
+
+    expect(kept.destination.contract.version).toBe('1.0.0');
+    expect(kept.destination.waiting?.version).toBe('1.1.0');
+    expect(site.store.get(secondEntryId)?.data).toMatchObject({
+      title: { en: 'Polo', de: 'Polo' },
+    });
+
+    await core.destinations.delete({
+      projectId: siteProjectId,
+      id: website.id,
+    });
+  });
+
   it('builds with the theme repository gone, which no pipeline needs', async function () {
     const theme = await createFakeTheme();
     await theme.release({ tag: 'v1.0.0', files: contractFileOf(contract) });
