@@ -121,6 +121,16 @@ export function hasImageExtension(extension: string): boolean {
 }
 
 /**
+ * The store id the one Entry of a Single Entry is kept under, so a site
+ * reads it with `getEntry("<alias><Slug>", "single")` rather than looking an
+ * id up. A Collection holding a list keeps every Entry under its own id.
+ *
+ * Exported for this file's tests. Nothing re-exports it, so it is not part of
+ * the astro entry's surface, and `docs/usage.md` names the string itself.
+ */
+export const SINGLE_ENTRY_ID = 'single';
+
+/**
  * Astro's marker for "resolve this string as an image import". Astro's
  * own image() schema helper emits the same prefix, the content store
  * picks it up and the runtime replaces the value with the resolved
@@ -326,6 +336,7 @@ export function elekAssetsLoader<const T extends ElekConfig>(
  * Astro content loader for elek.io Collection Entries, which also supplies
  * Astro with the Collection's schema and its generated `Entry` type. Both are
  * built from the content model once, when Astro loads the content config.
+ * A Single Entry's one Entry goes under `single`, nothing while it holds none.
  *
  * In dev it reloads Entries as they change. A change to the content model
  * stops it instead, with a log line saying the dev server has to be
@@ -461,9 +472,22 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       context.logger.info(`Found ${total} Entries`);
     }
 
+    // A Single Entry holds one Entry, which the site reads without knowing
+    // its id. Core refuses a second one, so a Collection carrying more was
+    // written outside Core and the rest is left out rather than overwriting
+    // the one the site reads
+    const { isSingleEntry } = model.collection;
+    const loaded = isSingleEntry ? entries.slice(0, 1) : entries;
+    if (loaded.length < entries.length) {
+      context.logger.warn(
+        `Collection "${props.collectionIdOrSlug}" of Project "${alias}" is a Single Entry holding ${entries.length} Entries, of which the site reads the first. Delete the others through elek.io, which never writes a second one.`
+      );
+    }
+
     const seen = new Set<string>();
-    for (const entry of entries) {
-      seen.add(entry.id);
+    for (const entry of loaded) {
+      const storeId = isSingleEntry ? SINGLE_ENTRY_ID : entry.id;
+      seen.add(storeId);
       const values = transformEntryValues(
         entry.values,
         componentsContext,
@@ -472,11 +496,11 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       const digest = context.generateDigest(values);
 
       // Skip re-validating Entries whose data has not changed.
-      const existing = context.store.get(entry.id);
+      const existing = context.store.get(storeId);
       if (existing?.digest === digest) continue;
 
-      const parsed = await context.parseData({ id: entry.id, data: values });
-      context.store.set({ id: entry.id, data: parsed, digest });
+      const parsed = await context.parseData({ id: storeId, data: values });
+      context.store.set({ id: storeId, data: parsed, digest });
     }
 
     // Remove store entries for Entries that no longer exist in the Collection.

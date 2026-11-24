@@ -107,6 +107,7 @@ function collection(
     slug: { singular: 'car', plural: 'cars' },
     description: { en: 'Cars' },
     icon: 'car',
+    isSingleEntry: false,
     fieldDefinitions,
   };
 }

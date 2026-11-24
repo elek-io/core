@@ -7,8 +7,11 @@ import {
   createAsset,
   createCollection,
   createEntry,
+  createSingleEntryCollection,
+  singleEntryValues,
   tmpDirPath,
 } from './test/util.js';
+import core from './test/setup.js';
 import type { Asset, Collection, Project } from './index.node.js';
 
 /**
@@ -92,6 +95,36 @@ export const collections = {
         )
       )
     ).toBe(true);
+  });
+
+  it('should give a Single Entry as one item under a fixed id', async function () {
+    const contactDetails = await createSingleEntryCollection(project.id);
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: contactDetails.id,
+      values: singleEntryValues('+493012345678'),
+    });
+    const root = await writeAstroProject('');
+    // Astro's content store would otherwise land in node_modules,
+    // which every test root shares through its symlink
+    const cacheDir = Path.join(root, '.cache');
+
+    await sync({ root, configFile: false, logLevel: 'info', cacheDir });
+
+    const types = await Fs.readFile(
+      Path.join(root, '.astro', 'content.d.ts'),
+      'utf-8'
+    );
+    expect(types).toContain('websiteContactDetails');
+
+    // What getEntry('websiteContactDetails', 'single') reads. The Entry's
+    // own id is in no store key, so no page can depend on it
+    const store = await Fs.readFile(
+      Path.join(cacheDir, 'data-store.json'),
+      'utf-8'
+    );
+    expect(store).toContain('"single"');
+    expect(store).not.toContain(entry.id);
   });
 
   it('should save Assets where a per Project imageDir points instead', async function () {

@@ -1169,25 +1169,35 @@ export class ReleaseService extends AbstractService {
     const currentById = new Map(currentCollections.map((c) => [c.id, c]));
     const releasedById = new Map(releasedCollections.map((c) => [c.id, c]));
 
+    // A Collection one side does not hold cannot be read there, so the
+    // change says itself whether it is a Single Entry. A file this Core
+    // cannot parse says nothing, the same as every other property of it
+    const singleEntryOf = (collection: FileAtRef<CollectionFile>) =>
+      collection.file === null
+        ? {}
+        : { isSingleEntry: collection.file.isSingleEntry };
+
     // Deleted collections (released but not in current)
-    for (const [id] of releasedById) {
+    for (const [id, released] of releasedById) {
       if (!currentById.has(id)) {
         collectionChanges.push({
           collectionId: id,
           changeType: 'deleted',
           bump: 'major',
+          ...singleEntryOf(released),
         });
         highestBump = 'major';
       }
     }
 
     // New collections (in current but not released)
-    for (const [id] of currentById) {
+    for (const [id, current] of currentById) {
       if (!releasedById.has(id)) {
         collectionChanges.push({
           collectionId: id,
           changeType: 'added',
           bump: 'minor',
+          ...singleEntryOf(current),
         });
         highestBump = this.higherBump(highestBump, 'minor');
       }

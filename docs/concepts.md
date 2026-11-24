@@ -35,6 +35,8 @@ Contains field definitions (a schema) for possible Values each Entry can or has 
 
 A definition says more than the type. It also says what the input field looks like and what a Value has to satisfy.
 
+A Collection can be limited to one Entry, which makes it a Single Entry. That is where one-off content lives, such as contact details or the logo, and a site reads it as one item rather than a list. Whether a Collection is one is decided when it is created, see [`usage.md`](./usage.md#creating-a-collection).
+
 For the full catalogue of field types and their constraints, see [`fields.md`](./fields.md).
 
 ## Components

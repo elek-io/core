@@ -50,6 +50,14 @@ export const collectionChangeSchema = z.object({
   collectionId: uuidSchema,
   changeType: collectionChangeTypeSchema,
   bump: semverBumpSchema,
+  /**
+   * Whether the added or deleted Collection is a Single Entry, so a caller
+   * can name it without reading a Collection one side does not hold.
+   *
+   * Absent on a `slugChanged`, whose Collection is there to read, and on a
+   * Collection whose file this Core cannot parse.
+   */
+  isSingleEntry: z.boolean().optional(),
 });
 export type CollectionChange = z.infer<typeof collectionChangeSchema>;
 

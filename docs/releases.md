@@ -134,6 +134,8 @@ A major Release says something your build depends on changed, either a name or a
 
 `prepare()` reports every change behind the bump before the Release is published. It runs on the `draft` branch, so whoever cuts the Release reads it rather than you. A Collection or Component change carries the id of what changed, so the name is yours to look up, see [`usage.md`](./usage.md#reading-from-history). A field change carries its `fieldSlug` as well.
 
+An `added` or `deleted` Collection carries `isSingleEntry`, because the state the other side holds has no Collection to read it from. It is absent on a `slugChanged`, whose Collection both sides hold, and on a Collection whose file this Core cannot read.
+
 ## create(): cutting a release
 
 `create()` fetches `origin` if set, computes what `prepare()` would and refuses to proceed if there is nothing to release (`PreconditionFailed`). Otherwise it:

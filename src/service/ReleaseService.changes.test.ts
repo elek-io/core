@@ -8,6 +8,7 @@ import {
   createComponent,
   createLocalRemoteRepository,
   createProject,
+  createSingleEntryCollection,
   createTmpCore,
   expectCoreError,
 } from '../test/util.js';
@@ -209,7 +210,12 @@ describe('Reading what each Release changed', function () {
     expect(changes.nextVersion).toEqual('0.1.0');
     expect(changes.bump).toEqual('minor');
     expect(changes.collectionChanges).toEqual([
-      { collectionId: collection.id, changeType: 'added', bump: 'minor' },
+      {
+        collectionId: collection.id,
+        changeType: 'added',
+        bump: 'minor',
+        isSingleEntry: false,
+      },
     ]);
     expect(changes.entryChanges).toEqual([]);
     // The Project as that Release holds it, not as it is named now
@@ -252,6 +258,56 @@ describe('Reading what each Release changed', function () {
       { collectionId: collection.id, changeType: 'slugChanged', bump: 'major' },
     ]);
     expect(majorChanges.entryChanges).toEqual([]);
+  });
+
+  it('should say of an added and a deleted Collection whether it is a Single Entry', async function () {
+    // A Collection one of the two states does not hold cannot be read
+    // there, so whoever lists the changes reads it off the change itself
+    const project = await createProject('Single Entries Released');
+    onTestFinished(project.destroy);
+    const single = await createSingleEntryCollection(project.id);
+    const list = await createTextCollection(core, project.id);
+    await core.releases.create({ projectId: project.id });
+
+    const added = await releaseOf(core, project.id, '0.1.0');
+    const addedChanges = await core.releases.changes({
+      projectId: project.id,
+      tagId: added.tagId,
+    });
+
+    expect(addedChanges.collectionChanges).toEqual(
+      expect.arrayContaining([
+        {
+          collectionId: single.id,
+          changeType: 'added',
+          bump: 'minor',
+          isSingleEntry: true,
+        },
+        {
+          collectionId: list.id,
+          changeType: 'added',
+          bump: 'minor',
+          isSingleEntry: false,
+        },
+      ])
+    );
+
+    await core.collections.delete({ projectId: project.id, id: single.id });
+    await core.releases.create({ projectId: project.id });
+    const deleted = await releaseOf(core, project.id, '1.0.0');
+    const deletedChanges = await core.releases.changes({
+      projectId: project.id,
+      tagId: deleted.tagId,
+    });
+
+    expect(deletedChanges.collectionChanges).toEqual([
+      {
+        collectionId: single.id,
+        changeType: 'deleted',
+        bump: 'major',
+        isSingleEntry: true,
+      },
+    ]);
   });
 
   it('should compare a preview Release against the last full Release before it', async function () {

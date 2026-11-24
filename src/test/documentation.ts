@@ -74,6 +74,8 @@ const capitalizedWords = new Set([
   'Component',
   'Entry',
   'Entries',
+  // Of "Single Entry", a Collection limited to one Entry
+  'Single',
   'Value',
   'Asset',
   'Release',

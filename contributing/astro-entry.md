@@ -93,6 +93,19 @@ Collisions throw rather than overwrite, naming both sources. Two classes are rea
 
 One class that looks reachable is not: a Collection can never take the `${alias}Assets` key, because `assets` is in `reservedSlugs` ([`src/schema/baseSchema.ts`](../src/schema/baseSchema.ts)) and no other plural slug derives `Assets`. If that reservation is ever lifted, this collision becomes real and needs a test.
 
+## The store id of a Single Entry
+
+A Collection limited to one Entry derives its collection like every other one, and `elekEntriesLoader` stores its one Entry under `SINGLE_ENTRY_ID`, the string `single`. The site has nothing to look up, which is the point: the Entry's id is written nowhere a page can reach, so an editor who replaces the Entry does not change a single line of the site.
+
+Two alternatives were rejected:
+
+- **The Entry's own id**, which keeps the store honest but makes every page read it from somewhere, and that somewhere is a list the Collection no longer is.
+- **One store entry under both ids**, so a reference into a Single Entry resolves by the id it carries. It doubles what `getCollection` returns and the digest work, to serve a case the Mapping covers in the Project instead.
+
+So a reference pointing into a Single Entry does not resolve by the id it carries. A page reads `single` there, which [`../docs/usage.md`](../docs/usage.md#reading-a-single-entry) says.
+
+A Collection carrying more than one Entry is unreachable through Core, which refuses the second. The loader still takes the first and warns, rather than letting the loop's last write decide what the site shows.
+
 ## Selecting what is derived
 
 One rule governs both options: **no options object derives everything, and an options object is the complete list.** A key left out contributes nothing, and so does an alias left out of a key. Deriving all twenty Collections of a Project to read two means syncing all twenty, and an Assets collection copies every binary into the site on each sync.

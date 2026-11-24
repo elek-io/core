@@ -1,4 +1,5 @@
 import type { LoaderContext } from 'astro/loaders';
+import Fs from 'fs-extra';
 import Path from 'node:path';
 import Url from 'node:url';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
@@ -8,6 +9,8 @@ import {
   createCollection,
   createEntry,
   createProject,
+  createSingleEntryCollection,
+  singleEntryValues,
   tmpDirPath,
 } from '../test/util.js';
 import { elekCollections } from './collections.js';
@@ -16,6 +19,7 @@ import {
   elekAssetsLoader,
   elekEntriesLoader,
   hasImageExtension,
+  SINGLE_ENTRY_ID,
 } from './loaders.js';
 import type { ContentWatcher } from './watch.js';
 
@@ -160,6 +164,24 @@ async function startLoader(projectId: string) {
   };
 }
 
+/**
+ * Runs the Entries loader the way a build does: `createSchema()` once, then
+ * `load()` without a watcher, so nothing reloads afterwards.
+ */
+async function loadOnce(projectId: string, collectionIdOrSlug: string) {
+  const { context, lines, store } = createLoaderContext({ root: tmpDirPath() });
+  const loader = elekEntriesLoader({
+    config: { projects: { website: { id: projectId } } },
+    project: 'website',
+    collectionIdOrSlug,
+  });
+  if ('createSchema' in loader) {
+    await loader.createSchema();
+  }
+  await loader.load(context);
+  return { lines, store };
+}
+
 function renameCollection(projectId: string, collection: Collection) {
   return core.collections.update({
     projectId,
@@ -264,6 +286,71 @@ describe('the Entries loader while astro dev runs', function () {
     expect(reported.map((line) => line.message)).toEqual([
       expect.stringContaining('was renamed or replaced'),
     ]);
+  });
+});
+
+describe('the Entries loader on a Single Entry', function () {
+  it('stores the one Entry under a fixed id rather than under its own', async function () {
+    const project = await createProject();
+    onTestFinished(() => project.destroy());
+    const collection = await createSingleEntryCollection(project.id);
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: collection.id,
+      values: singleEntryValues('+493012345678'),
+    });
+
+    const { store, lines } = await loadOnce(project.id, collection.id);
+
+    // One item under an id the site writes rather than looks up, so the
+    // Entry's own id and the slug of the Collection reach no page
+    expect([...store.keys()]).toEqual([SINGLE_ENTRY_ID]);
+    expect([...store.keys()]).not.toContain(entry.id);
+    expect(store.get(SINGLE_ENTRY_ID)?.data).toEqual({
+      phone: { en: '+493012345678', de: '+493012345678' },
+    });
+    expect(
+      summarize(lines).filter((line) => !line.startsWith('info:'))
+    ).toEqual([]);
+  });
+
+  it('stores nothing while it holds no Entry, and says so', async function () {
+    const project = await createProject();
+    onTestFinished(() => project.destroy());
+    const collection = await createSingleEntryCollection(project.id);
+
+    const { store, lines } = await loadOnce(project.id, collection.id);
+
+    // An empty Single Entry leaves getEntry() with nothing to answer,
+    // which is undefined rather than a failed build
+    expect([...store.keys()]).toEqual([]);
+    expect(store.get(SINGLE_ENTRY_ID)).toBeUndefined();
+    expect(summarize(lines)).toContain('warn: No Entries found');
+  });
+
+  it('reads the first Entry of a Collection written outside Core', async function () {
+    const project = await createProject();
+    onTestFinished(() => project.destroy());
+    const collection = await createSingleEntryCollection(project.id);
+    const entry = await core.entries.create({
+      projectId: project.id,
+      collectionId: collection.id,
+      values: singleEntryValues('+493012345678'),
+    });
+    // Core refuses a second Entry, so only another writer can put one
+    // there. The first one's Values, under an id of its own
+    const second = uuid();
+    await Fs.outputJson(
+      core.util.pathTo.entryFile(project.id, collection.id, second),
+      { ...entry, id: second }
+    );
+
+    const { store, lines } = await loadOnce(project.id, collection.id);
+
+    expect([...store.keys()]).toEqual([SINGLE_ENTRY_ID]);
+    expect(
+      lines.filter((line) => line.level === 'warn').map((line) => line.message)
+    ).toEqual([expect.stringContaining('is a Single Entry holding 2 Entries')]);
   });
 });
 

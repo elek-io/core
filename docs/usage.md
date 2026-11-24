@@ -315,6 +315,12 @@ const collection = await core.collections.create({
 });
 ```
 
+Passing `isSingleEntry: true` to `create()` limits the Collection to one Entry, a Single Entry, which is where one-off content such as contact details belongs. Left out, the Collection holds a list, which is what every Collection created before this option did.
+
+- `core.entries.create()` throws `Conflict` naming the Entry the Single Entry already holds, so update that Entry rather than adding one.
+- `core.collections.update()` throws `Conflict` for any other value than the one the Collection was created with. It takes that value, so sending back a Collection you read changes nothing.
+- A Collection never turns into a Single Entry or back. Create the Collection you need and add its Entries there.
+
 Field-definition `id`s are caller-supplied (hence the `uuid()` calls) - Core does not generate them. Each `id` is the stable identity Core uses to match field definitions when you update the Collection later, so reuse the same `id` for a field rather than minting a new one. See [`schema-changes.md`](./schema-changes.md#the-golden-rule-field-definitions-are-matched-by-id).
 
 Translatable fields (`label`, `description`, and Entry Values) must carry a value for every language the Project supports. With `supported: ['en', 'de']`, omitting `de` fails validation.
@@ -534,7 +540,7 @@ entry.data.related.en; // Array<{ id: string; objectType: 'entry'; collectionId:
 
 A `reference` field is an array, empty rather than null when nothing is referenced. The field definition decides what it points at, so the type does too: an Asset reference carries an id, an Entry reference carries the id and the `collectionId` of the Collection the Entry lives in.
 
-That id is also the Astro store id, so following a reference is a `getEntry` away. An Asset resolves against the Project's Assets collection:
+That id is also the Astro store id, outside a Single Entry, so following a reference is a `getEntry` away. An Asset resolves against the Project's Assets collection:
 
 ```typescript
 const cover = await getEntry('websiteAssets', entry.data.cover.en[0].id);
@@ -547,6 +553,19 @@ const post = await getEntry('websitePosts', entry.data.related.en[0].id);
 ```
 
 An Entry carries no `body` and no rendered HTML, so Astro's `render()` and `<Content />` produce an empty page rather than an error. A `markdown` field arrives on `entry.data` as a tree, which [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro) renders with `mdastRender`.
+
+### Reading a Single Entry
+
+A Collection limited to one Entry, a Single Entry, derives its Astro collection like every other one, under the alias plus its plural slug. Its one Entry is stored under the id `single`, so the site reads it as one item without knowing which Entry it is:
+
+```typescript
+const contact = await getEntry('websiteContactDetails', 'single');
+const phone = contact?.data.phone.en ?? null;
+```
+
+`getEntry` answers `undefined` while the Single Entry holds no Entry yet, which is what it answers for a Project whose editor has not filled it in. The build runs either way, so the page decides what an empty one shows, as the `??` above does.
+
+A reference pointing into a Single Entry carries the referenced Entry's own id, which is no store id there, so read it with `single` too. `elek generate:types`, `elek generate:client` and the local API give every Collection as a list, a Single Entry included.
 
 ### Rendering a dynamic field
 

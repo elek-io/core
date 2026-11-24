@@ -143,6 +143,9 @@ export class CollectionService
    * caller-supplied (pass a UUID per field definition, for example via
    * `uuid()`). They become the stable identity used to match field definitions
    * on later updates, see `update`.
+   *
+   * `isSingleEntry` limits the Collection to one Entry and is the one
+   * property `update` cannot change, so pass it here or never.
    */
   public async create<T extends Collection = Collection>(
     props: CreateCollectionProps
@@ -194,6 +197,7 @@ export class CollectionService
           objectType: 'collection',
           id,
           coreVersion: this.coreVersion,
+          isSingleEntry: validatedProps.isSingleEntry ?? false,
           slug: {
             singular: slug(validatedProps.slug.singular),
             plural: slugPlural,
@@ -320,7 +324,7 @@ export class CollectionService
    * field and removes the Entry data keyed to the old one. Deterministic
    * changes cascade automatically, a change that needs a decision throws
    * `Conflict` with structured `EntryIssue[]` the caller can retry with
-   * `resolutions`.
+   * `resolutions`. Changing `isSingleEntry` throws `Conflict`.
    *
    * @see ../../docs/schema-changes.md
    */
@@ -349,6 +353,15 @@ export class CollectionService
 
         const prevCollectionFile = await this.read(validatedProps);
 
+        if (
+          validatedProps.isSingleEntry !== undefined &&
+          validatedProps.isSingleEntry !== prevCollectionFile.isSingleEntry
+        ) {
+          throw CoreError.conflict(
+            `Cannot change whether Collection "${validatedProps.id}" is a Single Entry. It is set when the Collection is created and stays that way, so create the Collection you need and add its Entries there.`
+          );
+        }
+
         const {
           projectId: _,
           resolutions,
@@ -358,6 +371,9 @@ export class CollectionService
         const collectionFile: CollectionFile = {
           ...prevCollectionFile,
           ...validatedUpdateProps,
+          // What the Collection was created as, which the refusal above is
+          // what keeps the sent value from ever being another one
+          isSingleEntry: prevCollectionFile.isSingleEntry,
           updated: datetime(),
         };
 

@@ -14,6 +14,7 @@ For the data model these features operate on, see [`concepts.md`](./concepts.md)
 ## Content modeling
 
 - **Collections** - typed schemas (field definitions) every Entry must follow.
+- **Single Entries** - a Collection limited to one Entry, for one-off content such as contact details. A site reads it as one item, see [`usage.md`](./usage.md#creating-a-collection).
 - **Components** - reusable, named bundles of field definitions shared across Collections. Updating a Component propagates to every Collection that references it.
 - **18 field types across 6 value types** (`string`, `number`, `boolean`, `reference`, `component`, `mdast`) - including dedicated validated string types (`email`, `url`, `ipv4`, `telephone`), separate `date` / `time` / `datetime`, `range`, `select` (string or number), and a `slug` type that stores an always-unique, URL-friendly value. See [`fields.md`](./fields.md).
 - **References** - `asset` and `entry` reference fields, polymorphic via `ofCollections`, with cardinality controlled by `min` / `max`.
