@@ -182,3 +182,19 @@ export const websiteAddSchema = z.object({
   version: versionSchema.optional(),
 });
 export type WebsiteAddProps = z.infer<typeof websiteAddSchema>;
+
+export const websiteUpdateSchema = z.object({
+  /**
+   * The ID of the Project the website belongs to
+   */
+  project: uuidSchema,
+  /**
+   * The name of the website, or its ID
+   */
+  name: z.string().trim().min(1).max(128),
+  /**
+   * The newest version the theme tagged when left out
+   */
+  version: versionSchema.optional(),
+});
+export type WebsiteUpdateProps = z.infer<typeof websiteUpdateSchema>;

@@ -11,6 +11,7 @@ import {
   provisionAction,
   startApiAction,
   websiteAddAction,
+  websiteUpdateAction,
 } from './cli/index.js';
 import {
   apiStartSchema,
@@ -20,6 +21,7 @@ import {
   generateTypesSchema,
   provisionSchema,
   websiteAddSchema,
+  websiteUpdateSchema,
 } from './schema/index.js';
 import { CoreError } from './util/shared.js';
 
@@ -240,6 +242,34 @@ program
     });
 
     await websiteAddAction(props);
+  });
+
+program
+  .command('website:update')
+  .description(
+    "Brings a theme's newer version to a website of a Project and switches to it, or says what the new version cannot take yet"
+  )
+  .requiredOption(
+    '-p, --project <id>',
+    'The ID of the Project the website belongs to'
+  )
+  .requiredOption(
+    '-n, --name <website>',
+    'The name of the website, such as "autohaus-ebersfelde.de", or its ID'
+  )
+  // Not `--version`, which the program's own version option answers first
+  .option(
+    '--theme-version <version>',
+    'The version of the theme to switch to. Defaults to the newest version tagged at its address.'
+  )
+  .action(async (options) => {
+    const { themeVersion, ...rest } = options;
+    const props = websiteUpdateSchema.parse({
+      ...rest,
+      ...(themeVersion === undefined ? {} : { version: themeVersion }),
+    });
+
+    await websiteUpdateAction(props);
   });
 
 // Error presentation for every command in one place: actions throw,

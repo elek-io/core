@@ -62,6 +62,23 @@ async function bareThemeOf(themeDir: string): Promise<string> {
   return barePath;
 }
 
+/** Releases another version of a theme into the bare repository behind it */
+async function releaseThemeVersion(
+  themeDir: string,
+  barePath: string,
+  tag: string
+): Promise<void> {
+  await execGit(themeDir, ['add', '--all']);
+  await execGit(themeDir, [
+    'commit',
+    '--quiet',
+    '--allow-empty',
+    `--message=Release ${tag}`,
+  ]);
+  await execGit(themeDir, ['tag', '--annotate', tag, `--message=${tag}`]);
+  await execGit(themeDir, ['push', '--quiet', barePath, 'main', '--tags']);
+}
+
 describe('CLI', function () {
   let project1: Project & { destroy: () => Promise<void> };
   let project2: Project & { destroy: () => Promise<void> };
@@ -634,6 +651,70 @@ describe('CLI', function () {
       limit: 0,
     });
     expect(page.list.map((website) => website.name)).toContain('added.example');
+  });
+
+  it('should switch a website to a new theme version via the website:update command', async function () {
+    const themeDir = out('website-update-theme');
+    const contractArgs = [
+      cliBinary,
+      'generate:contract',
+      themeDir,
+      '--project',
+      project1.id,
+    ];
+    await execCommand({
+      command: 'node',
+      args: [
+        ...contractArgs,
+        '--name',
+        '@acme/update-site',
+        '--contract-version',
+        '1.0.0',
+      ],
+    });
+    const themeUrl = await bareThemeOf(themeDir);
+    await execCommand({
+      command: 'node',
+      args: [
+        cliBinary,
+        'website:add',
+        '--project',
+        project1.id,
+        '--name',
+        'updated.example',
+        '--theme',
+        themeUrl,
+      ],
+    });
+    // The theme tags its next version, which the Project knows nothing of
+    await execCommand({
+      command: 'node',
+      args: [...contractArgs, '--contract-version', '1.1.0'],
+    });
+    await releaseThemeVersion(themeDir, themeUrl, 'v1.1.0');
+
+    await expect(
+      execCommand({
+        command: 'node',
+        args: [
+          cliBinary,
+          'website:update',
+          '--project',
+          project1.id,
+          '--name',
+          'updated.example',
+        ],
+      })
+    ).resolves.toBeDefined();
+
+    const page = await core.destinations.list({
+      projectId: project1.id,
+      limit: 0,
+    });
+    expect(
+      page.list.find((website) => website.name === 'updated.example')?.contract
+        .version
+    ).toEqual('1.1.0');
   });
 
   it('should fail loudly when website:add gets an address with a credential', async function () {
