@@ -38,7 +38,11 @@ import { missingContractReferences } from '../util/contract.js';
 import { classifyUnsafeAddress } from '../util/git.js';
 import { isFileNotFound, type PathTo } from '../util/node.js';
 import { CoreError, datetime, uuid } from '../util/shared.js';
-import { newestThemeVersion, themeVersionTag } from '../util/theme.js';
+import {
+  newestThemeVersion,
+  themeVersionTag,
+  versionsNewestFirst,
+} from '../util/theme.js';
 import { AbstractEntityService } from './AbstractEntityService.js';
 import type { CacheService } from './CacheService.js';
 import type { GitService } from './GitService.js';
@@ -130,11 +134,12 @@ export class ContractService extends AbstractEntityService {
    * from.
    *
    * Core reads the address with the person's own git access and never with
-   * `ELEK_IO_REMOTE_ACCESS_TOKEN`, and refuses one carrying a credential or
-   * one git would run as a command. Throws `BadRequest` for such an address
-   * and for a Contract that does not parse or carries another version,
-   * `PreconditionFailed` when the address tagged no version, `NotFound` when
-   * the version holds no Contract, and `Unauthorized` without access.
+   * `ELEK_IO_REMOTE_ACCESS_TOKEN`, and refuses one carrying a credential,
+   * one git would run as a command and a path that is not absolute. Throws
+   * `BadRequest` for such an address and for a Contract that does not parse
+   * or carries another version, `PreconditionFailed` when the address tagged
+   * no version, `NotFound` when the version holds no Contract, `Unauthorized`
+   * without access and `Internal` when the address cannot be read at all.
    */
   public async readFromTheme(
     props: ReadThemeContractProps
@@ -181,9 +186,9 @@ export class ContractService extends AbstractEntityService {
             filePath: Path.join(scratchPath, CONTRACT_FILE_NAME),
             scratchPath,
           });
-          let read_: unknown;
+          let content: unknown;
           try {
-            read_ = JSON.parse(read.content);
+            content = JSON.parse(read.content);
           } catch (error) {
             // The file rather than what V8 quoted out of it, which is the
             // theme's own text. See contributing/logging.md
@@ -192,7 +197,7 @@ export class ContractService extends AbstractEntityService {
               error
             );
           }
-          const parsed = contractSchema.safeParse(read_);
+          const parsed = contractSchema.safeParse(content);
           if (parsed.success === false) {
             throw CoreError.badRequest(
               `The ${CONTRACT_FILE_NAME} of the theme at "${tag}" is no Contract: ${parsed.error.message}`,
@@ -380,6 +385,10 @@ export class ContractService extends AbstractEntityService {
   /**
    * One page of the Contracts the Project keeps, newest first.
    *
+   * Every Contract is read before the page is cut, because the folder order
+   * says nothing about when one was kept, so `total` counts the folders
+   * while the page comes out of the ones that read.
+   *
    * A Project holding no `contracts` folder, which every Project written
    * before Contracts existed is, lists nothing rather than failing.
    */
@@ -394,18 +403,22 @@ export class ContractService extends AbstractEntityService {
         const limit = validatedProps.limit ?? 15;
         const offset = validatedProps.offset ?? 0;
         const ids = await this.contractIds(validatedProps.projectId);
-        const page =
-          limit === 0 ? ids.slice(offset) : ids.slice(offset, offset + limit);
-        const list = await this.collectResults(
-          page.map((id) =>
+        const kept = await this.collectResults(
+          ids.map((id) =>
             this.read({ projectId: validatedProps.projectId, id })
           )
         );
+        const newestFirst = kept.toSorted((a, b) => {
+          return b.created.localeCompare(a.created);
+        });
         return {
           total: ids.length,
           limit,
           offset,
-          list: list.toSorted((a, b) => b.created.localeCompare(a.created)),
+          list:
+            limit === 0
+              ? newestFirst.slice(offset)
+              : newestFirst.slice(offset, offset + limit),
         };
       }
     );
@@ -466,11 +479,11 @@ export class ContractService extends AbstractEntityService {
         throw error;
       }
     );
-    return names
-      .filter((name) => name.endsWith('.json') && name !== 'contract.json')
-      .map((name) => name.slice(0, -'.json'.length))
-      .toSorted()
-      .toReversed();
+    return versionsNewestFirst(
+      names
+        .filter((name) => name.endsWith('.json') && name !== 'contract.json')
+        .map((name) => name.slice(0, -'.json'.length))
+    );
   }
 
   /** The stored file of a kept Contract, without what `read` added to it */

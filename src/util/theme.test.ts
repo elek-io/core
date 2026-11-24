@@ -1,5 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import { newestThemeVersion, themeVersions, themeVersionTag } from './theme.js';
+import {
+  newestThemeVersion,
+  themeVersions,
+  themeVersionTag,
+  versionsNewestFirst,
+} from './theme.js';
+
+describe('versionsNewestFirst', function () {
+  it('orders by what a version means rather than by its text', function () {
+    expect(versionsNewestFirst(['1.9.0', '1.10.0', '1.2.0'])).toEqual([
+      '1.10.0',
+      '1.9.0',
+      '1.2.0',
+    ]);
+  });
+
+  it('puts a pre-release before the release it leads to', function () {
+    expect(versionsNewestFirst(['1.0.0-rc.1', '1.0.0'])).toEqual([
+      '1.0.0',
+      '1.0.0-rc.1',
+    ]);
+  });
+
+  it('leaves out what semver cannot read and lists a version once', function () {
+    expect(versionsNewestFirst(['1.0.0', 'latest', '1.0', '1.0.0'])).toEqual([
+      '1.0.0',
+    ]);
+  });
+
+  it('is empty for nothing', function () {
+    expect(versionsNewestFirst([])).toEqual([]);
+  });
+});
 
 describe('themeVersions', function () {
   it('reads every v<version> tag and orders them newest first', function () {

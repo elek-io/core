@@ -238,6 +238,28 @@ describe('ContractService', function () {
       ).toMatchObject({ commit: 'a1b2c3d' });
     });
 
+    it('lists the versions it holds by what they mean rather than by their text', async function () {
+      const project = await createProject('Versioned Project');
+      await createCollection(project.id);
+      let kept = undefined;
+      for (const version of ['1.9.0', '1.10.0']) {
+        kept = await core.contracts.keep({
+          projectId: project.id,
+          origin: { kind: 'git', url: '/srv/themes/versioned.git' },
+          contract: await core.contracts.generate({
+            projectId: project.id,
+            name: '@acme/versioned-site',
+            version,
+          }),
+          commit: 'a1b2c3d',
+        });
+      }
+
+      expect(kept?.versions).toEqual(['1.10.0', '1.9.0']);
+
+      await project.destroy();
+    });
+
     it('leaves the copy of a version it already holds as it was', async function () {
       const kept = await core.contracts.keep({
         projectId,
@@ -405,6 +427,49 @@ describe('ContractService', function () {
       expect(await core.contracts.count({ projectId: older.id })).toEqual(0);
 
       await older.destroy();
+    });
+
+    it('holds the newest on the first page, whatever order the folders come back in', async function () {
+      // Written by hand rather than kept, so the folder order and the order
+      // the Contracts were created in are the reverse of one another, which
+      // is what a page cut out of the folders gets wrong
+      const project = await createProject('Ordered Project');
+      const ids = [uuid(), uuid(), uuid()];
+      for (const id of ids) {
+        await Fs.outputJson(core.util.pathTo.contractFile(project.id, id), {
+          objectType: 'contract',
+          id,
+          coreVersion: '0.1.0',
+          created: '2026-01-01T00:00:00.000Z',
+          updated: null,
+          name: '@acme/ordered-site',
+          origin: { kind: 'git', url: `/srv/themes/${id}.git` },
+        });
+      }
+      const folderOrder = (
+        await Fs.readdir(core.util.pathTo.contracts(project.id))
+      ).filter((name) => ids.includes(name));
+      for (const [index, id] of folderOrder.entries()) {
+        const filePath = core.util.pathTo.contractFile(project.id, id);
+        await Fs.outputJson(filePath, {
+          ...(await Fs.readJson(filePath)),
+          created: `2026-01-0${index + 1}T00:00:00.000Z`,
+        });
+      }
+      const newestFirst = folderOrder.toReversed();
+
+      expect(
+        (
+          await core.contracts.list({ projectId: project.id, limit: 1 })
+        ).list.map(({ id }) => id)
+      ).toEqual([newestFirst[0]]);
+      expect(
+        (
+          await core.contracts.list({ projectId: project.id, limit: 0 })
+        ).list.map(({ id }) => id)
+      ).toEqual(newestFirst);
+
+      await project.destroy();
     });
 
     it('answers a page of its own for a limit and an offset', async function () {

@@ -415,6 +415,51 @@ describe('DestinationService', function () {
       expect(page.list.length).toEqual(page.total);
     });
 
+    it('holds the newest on the first page, whatever order the folders come back in', async function () {
+      // Written by hand rather than added, so the folder order and the order
+      // the websites were created in are the reverse of one another, which is
+      // what a page cut out of the folders gets wrong
+      const ids = [uuid(), uuid(), uuid()];
+      const project = await createProject('Ordered Destinations');
+      for (const id of ids) {
+        await Fs.outputJson(core.util.pathTo.destinationFile(project.id, id), {
+          objectType: 'destination',
+          id,
+          coreVersion: '0.1.0',
+          created: '2026-01-01T00:00:00.000Z',
+          updated: null,
+          name: `ordered-${id}.example`,
+          kind: 'website',
+          contract: { id: uuid(), version: '1.0.0' },
+          mapping: { collections: {} },
+        });
+      }
+      const folderOrder = (
+        await Fs.readdir(core.util.pathTo.destinations(project.id))
+      ).filter((name) => ids.includes(name));
+      for (const [index, id] of folderOrder.entries()) {
+        const filePath = core.util.pathTo.destinationFile(project.id, id);
+        await Fs.outputJson(filePath, {
+          ...(await Fs.readJson(filePath)),
+          created: `2026-01-0${index + 1}T00:00:00.000Z`,
+        });
+      }
+      const newestFirst = folderOrder.toReversed();
+
+      expect(
+        (
+          await core.destinations.list({ projectId: project.id, limit: 1 })
+        ).list.map(({ id }) => id)
+      ).toEqual([newestFirst[0]]);
+      expect(
+        (
+          await core.destinations.list({ projectId: project.id, limit: 0 })
+        ).list.map(({ id }) => id)
+      ).toEqual(newestFirst);
+
+      await project.destroy();
+    });
+
     it('lists nothing for a Project whose folders predate Destinations', async function () {
       const older = await createProject('Older Project');
       await Fs.remove(core.util.pathTo.destinations(older.id));

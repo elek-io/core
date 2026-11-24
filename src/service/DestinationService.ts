@@ -305,6 +305,10 @@ export class DestinationService extends AbstractEntityService {
   /**
    * One page of the Project's Destinations, newest first.
    *
+   * Every Destination is read before the page is cut, because the folder
+   * order says nothing about when one was added, so `total` counts the
+   * folders while the page comes out of the ones that read.
+   *
    * A Project holding no `destinations` folder, which every Project written
    * before Destinations existed is, lists nothing rather than failing.
    */
@@ -319,18 +323,22 @@ export class DestinationService extends AbstractEntityService {
         const limit = validatedProps.limit ?? 15;
         const offset = validatedProps.offset ?? 0;
         const ids = await this.destinationIds(validatedProps.projectId);
-        const page =
-          limit === 0 ? ids.slice(offset) : ids.slice(offset, offset + limit);
-        const list = await this.collectResults(
-          page.map((id) =>
+        const destinations = await this.collectResults(
+          ids.map((id) =>
             this.read({ projectId: validatedProps.projectId, id })
           )
         );
+        const newestFirst = destinations.toSorted((a, b) => {
+          return b.created.localeCompare(a.created);
+        });
         return {
           total: ids.length,
           limit,
           offset,
-          list: list.toSorted((a, b) => b.created.localeCompare(a.created)),
+          list:
+            limit === 0
+              ? newestFirst.slice(offset)
+              : newestFirst.slice(offset, offset + limit),
         };
       }
     );
