@@ -8,7 +8,7 @@ import {
   vi,
 } from 'vitest';
 import core, { uuid, type MarkdownFeatures } from '../test/setup.js';
-import { createProject } from '../test/util.js';
+import { createProject, titleFieldDefinition } from '../test/util.js';
 import { CoreError } from '../util/shared.js';
 import { defineElekConfig } from './elekConfig.js';
 import { elekCollections } from './collections.js';
@@ -45,6 +45,7 @@ async function createCollectionWithSlug(
   singular: string,
   plural: string
 ) {
+  const titleFieldDefinitionId = uuid();
   return core.collections.create({
     projectId,
     icon: 'home',
@@ -54,7 +55,8 @@ async function createCollectionWithSlug(
     },
     slug: { singular, plural },
     description: { en: `The ${plural}`, de: `The ${plural}` },
-    fieldDefinitions: [],
+    entryTitleFieldDefinitionId: titleFieldDefinitionId,
+    fieldDefinitions: [titleFieldDefinition(titleFieldDefinitionId)],
   });
 }
 
@@ -260,6 +262,7 @@ describe('elekCollections', function () {
     // excluding the Assets collection breaks it at render time, in a
     // template far away from the config that caused it
     const referencing = await createProject('Derived Collections References');
+    const titleFieldDefinitionId = uuid();
     try {
       await core.collections.create({
         projectId: referencing.id,
@@ -270,7 +273,9 @@ describe('elekCollections', function () {
         },
         slug: { singular: 'post', plural: 'posts' },
         description: { en: 'The posts', de: 'The posts' },
+        entryTitleFieldDefinitionId: titleFieldDefinitionId,
         fieldDefinitions: [
+          titleFieldDefinition(titleFieldDefinitionId),
           {
             id: uuid(),
             slug: 'cover',
@@ -327,6 +332,7 @@ describe('elekCollections', function () {
     const referencing = await createProject('Derived Collections Markdown');
     try {
       async function createBodyCollection(assetReferences: boolean) {
+        const titleFieldDefinitionId = uuid();
         return core.collections.create({
           projectId: referencing.id,
           icon: 'home',
@@ -342,7 +348,9 @@ describe('elekCollections', function () {
             plural: assetReferences ? 'notes' : 'plain-notes',
           },
           description: { en: 'The notes', de: 'The notes' },
+          entryTitleFieldDefinitionId: titleFieldDefinitionId,
           fieldDefinitions: [
+            titleFieldDefinition(titleFieldDefinitionId),
             {
               id: uuid(),
               slug: 'body',

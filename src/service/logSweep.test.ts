@@ -73,6 +73,7 @@ beforeAll(async function () {
   const projectId = project.id;
   const projectPath = core.util.pathTo.project(projectId);
 
+  const titleFieldDefinitionId = uuid();
   const collection = await core.collections.create({
     projectId,
     icon: 'home',
@@ -85,9 +86,10 @@ beforeAll(async function () {
       plural: sentinel.collectionSlugPlural,
     },
     description: { en: sentinel.collection },
+    entryTitleFieldDefinitionId: titleFieldDefinitionId,
     fieldDefinitions: [
       {
-        id: uuid(),
+        id: titleFieldDefinitionId,
         slug: titleSlug,
         valueType: 'string',
         label: { en: 'Title' },

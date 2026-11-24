@@ -5,6 +5,7 @@ import {
   createCollection,
   createComponent,
   createProject,
+  titleFieldDefinition,
 } from '../test/util.js';
 
 /**
@@ -46,6 +47,7 @@ const reasons = {
 let projectId = '';
 let collectionId = '';
 const missing = uuid();
+const titleFieldId = uuid();
 let destroy: () => Promise<void>;
 
 beforeAll(async function () {
@@ -132,7 +134,8 @@ const otherFailures = (): Call[] => [
         name: { singular: { en: 'a' }, plural: { en: 'a' } },
         slug: { singular: 'a', plural: 'aa' },
         description: { en: 'a' },
-        fieldDefinitions: [],
+        entryTitleFieldDefinitionId: titleFieldId,
+        fieldDefinitions: [titleFieldDefinition(titleFieldId)],
       }),
   ],
   [

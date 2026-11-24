@@ -5,7 +5,11 @@ import core, {
   type Project,
   uuid,
 } from '../test/setup.js';
-import { createProject } from '../test/util.js';
+import {
+  createProject,
+  titleFieldDefinition,
+  titleValue,
+} from '../test/util.js';
 
 describe('ComponentService', function () {
   let project: Project & { destroy: () => Promise<void> };
@@ -160,6 +164,7 @@ describe('ComponentService', function () {
     });
 
     // Create a Collection with a dynamic field referencing the hero component
+    const pagesTitleFieldId = uuid();
     const pagesCollection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -172,7 +177,9 @@ describe('ComponentService', function () {
         de: 'Pages with dynamic blocks',
       },
       slug: { singular: 'page', plural: 'pages' },
+      entryTitleFieldDefinitionId: pagesTitleFieldId,
       fieldDefinitions: [
+        titleFieldDefinition(pagesTitleFieldId),
         {
           id: uuid(),
           slug: 'blocks',
@@ -196,6 +203,7 @@ describe('ComponentService', function () {
       projectId: project.id,
       collectionId: pagesCollection.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -482,6 +490,7 @@ describe('ComponentService', function () {
     });
 
     // Create collection with dynamic field -> outer component
+    const blockPageTitleFieldId = uuid();
     const collection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -494,7 +503,9 @@ describe('ComponentService', function () {
         de: 'Pages with nested blocks',
       },
       slug: { singular: 'block-page', plural: 'block-pages' },
+      entryTitleFieldDefinitionId: blockPageTitleFieldId,
       fieldDefinitions: [
+        titleFieldDefinition(blockPageTitleFieldId),
         {
           id: uuid(),
           slug: 'sections',
@@ -518,6 +529,7 @@ describe('ComponentService', function () {
       projectId: project.id,
       collectionId: collection.id,
       values: {
+        ...titleValue(),
         sections: {
           objectType: 'value',
           valueType: 'component',
@@ -683,6 +695,7 @@ describe('ComponentService', function () {
     });
 
     // Collection with dynamic field -> A
+    const nestedPageTitleFieldId = uuid();
     const collection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -695,7 +708,9 @@ describe('ComponentService', function () {
         de: 'Testing nested components',
       },
       slug: { singular: 'nested-page', plural: 'nested-pages' },
+      entryTitleFieldDefinitionId: nestedPageTitleFieldId,
       fieldDefinitions: [
+        titleFieldDefinition(nestedPageTitleFieldId),
         {
           id: uuid(),
           slug: 'blocks',
@@ -719,6 +734,7 @@ describe('ComponentService', function () {
       projectId: project.id,
       collectionId: collection.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -985,6 +1001,7 @@ describe('ComponentService - cascade over a nested dynamic field', function () {
     });
     quoteComponentId = quote.id;
 
+    const articleTitleFieldId = uuid();
     const collection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -994,7 +1011,9 @@ describe('ComponentService - cascade over a nested dynamic field', function () {
       },
       description: { en: 'Articles', de: 'Artikel' },
       slug: { singular: 'article', plural: 'articles' },
+      entryTitleFieldDefinitionId: articleTitleFieldId,
       fieldDefinitions: [
+        titleFieldDefinition(articleTitleFieldId),
         {
           id: uuid(),
           slug: 'blocks',
@@ -1018,6 +1037,7 @@ describe('ComponentService - cascade over a nested dynamic field', function () {
       projectId: project.id,
       collectionId,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -1168,6 +1188,7 @@ describe('ComponentService - update entry resolutions', function () {
     });
     heroId = hero.id;
 
+    const pageTitleFieldId = uuid();
     const collection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -1177,7 +1198,9 @@ describe('ComponentService - update entry resolutions', function () {
       },
       description: { en: 'Pages', de: 'Pages' },
       slug: { singular: 'page', plural: 'pages' },
+      entryTitleFieldDefinitionId: pageTitleFieldId,
       fieldDefinitions: [
+        titleFieldDefinition(pageTitleFieldId),
         {
           id: uuid(),
           slug: 'blocks',
@@ -1202,6 +1225,7 @@ describe('ComponentService - update entry resolutions', function () {
       projectId: project.id,
       collectionId,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',

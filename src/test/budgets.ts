@@ -2,8 +2,8 @@
  * The suite's time budgets, derived from measured durations.
  *
  * Each budget is the slowest measured duration of what it bounds times one
- * multiple. The measured set is windows-only, apart from the cleanup budget
- * that says so itself, and no platform is reliably the slowest, so every
+ * multiple. The measured set is windows-only, apart from the budgets that
+ * say so themselves, and no platform is reliably the slowest, so every
  * number here is a floor that rises as the suite gains tests, and a slower
  * run supersedes one at the next re-measurement of the whole set rather
  * than on the spot.
@@ -72,9 +72,9 @@ export const jobTimeoutMinutes = Math.ceil(
  *
  * Over one full run on Linux, removing the data directory peaked at 24ms of
  * 184 cleanups and every step of `dispose()` stayed below 10ms of 208 calls.
- * Nothing in CI reports a cleanup duration, so this is the one set here that
- * is not windows-only, and the measurement is scaled by 21, the widest per
- * operation factor between ubuntu and windows-2025 in the platform table.
+ * Nothing in CI reports a cleanup duration, so this measurement is not from
+ * the windows-only set, and it is scaled by 21, the widest per operation
+ * factor between ubuntu and windows-2025 in the platform table.
  *
  * @see ../../contributing/testing.md
  */
@@ -88,6 +88,27 @@ export const slowestCleanupMs = 24 * 21;
  * fails on this far sooner, with the step that stalled named.
  */
 export const cleanupTimeoutMs = slowestCleanupMs * budgetMultiple;
+
+/**
+ * Slowest drain of one log record measured on 2026-11-24, scaled to the
+ * slowest runner, in milliseconds.
+ *
+ * Nothing in CI reports that duration, so like the cleanup one above this
+ * is a Linux measurement scaled by 21, rounded up from the 18.8ms four
+ * runs of 25 rounds put it at.
+ *
+ * @see ../../contributing/testing.md
+ */
+export const slowestLogDrainMs = 19 * 21;
+
+/**
+ * The bound a test gives one log record to reach the file it reads.
+ *
+ * It is no per-test and no per-hook budget. `vi.waitFor` defaults to
+ * 1,000ms, which is under this and a number nobody here measured, so a
+ * call waiting for a drain passes this instead.
+ */
+export const logDrainTimeoutMs = slowestLogDrainMs * budgetMultiple;
 
 /**
  * How long a test waits for a bounded teardown before it reads it as hung.

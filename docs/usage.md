@@ -267,6 +267,8 @@ A Collection holds the field definitions every Entry must follow. See [`fields.m
 ```typescript
 import { uuid } from '@elek-io/core';
 
+const nameFieldDefinitionId = uuid();
+
 const collection = await core.collections.create({
   projectId: project.id,
   icon: 'package',
@@ -279,9 +281,10 @@ const collection = await core.collections.create({
     en: 'The products we offer',
     de: 'Die Produkte, die wir anbieten',
   },
+  entryTitleFieldDefinitionId: nameFieldDefinitionId,
   fieldDefinitions: [
     {
-      id: uuid(),
+      id: nameFieldDefinitionId,
       slug: 'name',
       valueType: 'string',
       fieldType: 'text',
@@ -315,6 +318,8 @@ const collection = await core.collections.create({
 ```
 
 Field-definition `id`s are caller-supplied (hence the `uuid()` calls) - Core does not generate them. Each `id` is the stable identity Core uses to match field definitions when you update the Collection later, so reuse the same `id` for a field rather than minting a new one. See [`schema-changes.md`](./schema-changes.md#the-golden-rule-field-definitions-are-matched-by-id).
+
+`entryTitleFieldDefinitionId` names the field definition whose Value titles an Entry of this Collection, which is why the `name` field's `id` is held in a variable above. It is required on `create` and on `update`, and only a one-line field type can carry it. See [Titling an Entry](./fields.md#titling-an-entry).
 
 Translatable fields (`label`, `description`, and Entry Values) must carry a value for every language the Project supports. With `supported: ['en', 'de']`, omitting `de` fails validation.
 

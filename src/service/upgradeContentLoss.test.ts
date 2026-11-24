@@ -101,6 +101,7 @@ describe('upgrading a Project whose migration deletes content', function () {
       },
       description: { en: 'Articles', de: 'Articles' },
       slug: { singular: `article-${suffix}`, plural: `articles-${suffix}` },
+      entryTitleFieldDefinitionId: keptId,
       fieldDefinitions: [
         textField(keptId, 'title'),
         textField(goneId, dropped.slug),

@@ -26,6 +26,7 @@ import {
   createProject,
   ensureCleanGitStatus,
   getFileHash,
+  titleFieldDefinition,
 } from '../test/util.js';
 
 describe('Error handling and rollback', function () {
@@ -165,6 +166,7 @@ describe('Error handling and rollback', function () {
         CoreError.internal('Simulated commit failure')
       );
 
+      const titleFieldId = uuid();
       await expect(
         core.collections.create({
           projectId: project.id,
@@ -175,7 +177,8 @@ describe('Error handling and rollback', function () {
           },
           slug: { singular: 'rollback-item', plural: 'rollback-items' },
           description: { en: 'Should not persist', de: 'Should not persist' },
-          fieldDefinitions: [],
+          entryTitleFieldDefinitionId: titleFieldId,
+          fieldDefinitions: [titleFieldDefinition(titleFieldId)],
         })
       ).rejects.toThrow();
 
@@ -248,6 +251,7 @@ describe('Error handling and rollback', function () {
     it('should keep the slug index out of the Project folder', async function () {
       // The index is a per Core instance cache with nothing on disk behind
       // it, so there is no write left to fail and none to be swallowed
+      const titleFieldId = uuid();
       const newCollection = await core.collections.create({
         projectId: project.id,
         icon: 'plus',
@@ -257,7 +261,8 @@ describe('Error handling and rollback', function () {
         },
         slug: { singular: 'index-test', plural: 'index-tests' },
         description: { en: 'Testing the index', de: 'Testing the index' },
-        fieldDefinitions: [],
+        entryTitleFieldDefinitionId: titleFieldId,
+        fieldDefinitions: [titleFieldDefinition(titleFieldId)],
       });
 
       expect(

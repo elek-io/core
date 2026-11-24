@@ -62,7 +62,7 @@ Every object file shares a common envelope (`baseFileSchema` in `src/schema/file
 On top of that envelope:
 
 - `project.json` adds `name`, `description`, `version` and `settings` (including the supported languages).
-- `collection.json` adds the translatable `name` (singular / plural), `slug`, `icon` and `fieldDefinitions`.
+- `collection.json` adds the translatable `name` (singular / plural), `slug`, `icon`, `fieldDefinitions` and `entryTitleFieldDefinitionId`.
 - `component.json` adds `name`, `slug` and `fieldDefinitions`.
 - An Entry file adds `values`, keyed by field-definition slug.
 - An asset metadata file adds `extension`, `mimeType` and `size`.

@@ -32,6 +32,7 @@ describe('Reading what each Release changed', function () {
       },
       slug: { singular: 'page', plural: 'pages' },
       description: { en: 'The pages', de: 'Die Seiten' },
+      entryTitleFieldDefinitionId: fieldDefinitionId,
       fieldDefinitions: [
         {
           id: fieldDefinitionId,

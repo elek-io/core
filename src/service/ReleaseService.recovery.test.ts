@@ -9,11 +9,12 @@ import {
   it,
   vi,
 } from 'vitest';
-import core, { type Project } from '../test/setup.js';
+import core, { type Project, uuid } from '../test/setup.js';
 import {
   createCollection,
   createLocalRemoteRepository,
   ensureCleanGitStatus,
+  titleFieldDefinition,
 } from '../test/util.js';
 import { CoreError } from '../util/shared.js';
 
@@ -32,6 +33,7 @@ describe('ReleaseService recovery', function () {
   /** A change to release, with a slug of its own so it never clashes. */
   async function addACollection() {
     counter += 1;
+    const titleFieldDefinitionId = uuid();
     await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -41,7 +43,8 @@ describe('ReleaseService recovery', function () {
       },
       description: { en: 'A change', de: 'A change' },
       slug: { singular: `thing-${counter}`, plural: `things-${counter}` },
-      fieldDefinitions: [],
+      entryTitleFieldDefinitionId: titleFieldDefinitionId,
+      fieldDefinitions: [titleFieldDefinition(titleFieldDefinitionId)],
     });
   }
 

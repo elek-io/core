@@ -33,6 +33,8 @@ Contains field definitions (a schema) for possible Values each Entry can or has 
 
 A definition says more than the type. It also says what the input field looks like and what a Value has to satisfy.
 
+A Collection also names which of its field definitions holds the Value that titles its Entries, so every app names an Entry the same way. See [Titling an Entry](./fields.md#titling-an-entry).
+
 For the full catalogue of field types and their constraints, see [`fields.md`](./fields.md).
 
 ## Components

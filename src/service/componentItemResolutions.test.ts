@@ -15,7 +15,12 @@ import core, {
   type Project,
   type Value,
 } from '../test/setup.js';
-import { createProject, ensureCleanGitStatus } from '../test/util.js';
+import {
+  createProject,
+  ensureCleanGitStatus,
+  titleFieldDefinition,
+  titleValue,
+} from '../test/util.js';
 
 /**
  * A Component's field definition change raises its issues per Component
@@ -104,6 +109,7 @@ describe('a Component resolution lands in the item it names', function () {
 
   async function collection(fieldDefinitions: FieldDefinition[]) {
     const suffix = uuid();
+    const titleFieldDefinitionId = uuid();
     return core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -113,7 +119,11 @@ describe('a Component resolution lands in the item it names', function () {
       },
       description: { en: 'Pages', de: 'Pages' },
       slug: { singular: `page-${suffix}`, plural: `pages-${suffix}` },
-      fieldDefinitions,
+      entryTitleFieldDefinitionId: titleFieldDefinitionId,
+      fieldDefinitions: [
+        titleFieldDefinition(titleFieldDefinitionId),
+        ...fieldDefinitions,
+      ],
     });
   }
 
@@ -234,6 +244,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -252,7 +263,7 @@ describe('a Component resolution lands in the item it names', function () {
 
     const values = await valuesOf(pages.id, entry.id);
     // The Value lands in the item, and the Entry gains no key of its own
-    expect(Object.keys(values)).toEqual(['blocks']);
+    expect(Object.keys(values).toSorted()).toEqual(['blocks', 'title']);
     expect(itemOf(values, item.id)['subtitle']).toEqual(text('Hero subtitle'));
 
     await expect(
@@ -269,6 +280,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -303,6 +315,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -338,6 +351,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -386,6 +400,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -458,6 +473,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -490,6 +506,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -503,6 +520,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -537,6 +555,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -570,6 +589,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -614,6 +634,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -666,6 +687,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',
@@ -702,6 +724,7 @@ describe('a Component resolution lands in the item it names', function () {
       projectId: project.id,
       collectionId: pages.id,
       values: {
+        ...titleValue(),
         blocks: {
           objectType: 'value',
           valueType: 'component',

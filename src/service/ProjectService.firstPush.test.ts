@@ -12,6 +12,7 @@ import {
   execGit,
   expectCoreError,
   getFileHash,
+  titleFieldDefinition,
   tmpDirPath,
 } from '../test/util.js';
 
@@ -85,6 +86,7 @@ describe('ProjectService first push', function () {
     projectId: string,
     slug: string
   ) {
+    const titleFieldDefinitionId = uuid();
     return on.collections.create({
       projectId,
       icon: 'home',
@@ -94,7 +96,8 @@ describe('ProjectService first push', function () {
       },
       description: { en: 'A change', de: 'A change' },
       slug: { singular: slug, plural: `${slug}s` },
-      fieldDefinitions: [],
+      entryTitleFieldDefinitionId: titleFieldDefinitionId,
+      fieldDefinitions: [titleFieldDefinition(titleFieldDefinitionId)],
     });
   }
 

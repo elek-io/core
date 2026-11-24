@@ -316,6 +316,7 @@ describe('Node.js', function () {
       description: 'A 150x150 image of the text "elek.io"',
     });
 
+    const featureNameFieldDefinitionId = uuid();
     const featuresCollection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -337,6 +338,7 @@ describe('Node.js', function () {
         singular: 'feature',
         plural: 'features',
       },
+      entryTitleFieldDefinitionId: featureNameFieldDefinitionId,
       fieldDefinitions: [
         {
           id: uuid(),
@@ -408,7 +410,7 @@ describe('Node.js', function () {
           defaultValue: null,
         },
         {
-          id: uuid(),
+          id: featureNameFieldDefinitionId,
           slug: 'name',
           valueType: 'string',
           fieldType: 'text',
@@ -1483,6 +1485,7 @@ describe('Node.js', function () {
       },
     });
 
+    const productNameFieldDefinitionId = uuid();
     const productsCollection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -1504,9 +1507,10 @@ describe('Node.js', function () {
         singular: 'product',
         plural: 'products',
       },
+      entryTitleFieldDefinitionId: productNameFieldDefinitionId,
       fieldDefinitions: [
         {
-          id: uuid(),
+          id: productNameFieldDefinitionId,
           slug: 'name',
           valueType: 'string',
           fieldType: 'text',
@@ -2151,6 +2155,7 @@ describe('Node.js', function () {
       ],
     });
 
+    const navigationNameFieldDefinitionId = uuid();
     const navigationCollection = await core.collections.create({
       projectId: project.id,
       icon: 'home',
@@ -2172,9 +2177,10 @@ describe('Node.js', function () {
         singular: 'navigation',
         plural: 'navigations',
       },
+      entryTitleFieldDefinitionId: navigationNameFieldDefinitionId,
       fieldDefinitions: [
         {
-          id: uuid(),
+          id: navigationNameFieldDefinitionId,
           slug: 'name',
           valueType: 'string',
           fieldType: 'text',

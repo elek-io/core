@@ -26,6 +26,7 @@ describe('caches after git rewrites the working tree', function () {
       icon: collection.icon,
       name: collection.name,
       description: collection.description,
+      entryTitleFieldDefinitionId: collection.entryTitleFieldDefinitionId,
       fieldDefinitions: collection.fieldDefinitions,
       slug: { singular: 'article', plural: 'articles' },
     });
@@ -133,6 +134,7 @@ describe('caches with caching off', function () {
       icon: renamed.icon,
       name: renamed.name,
       description: renamed.description,
+      entryTitleFieldDefinitionId: renamed.entryTitleFieldDefinitionId,
       fieldDefinitions: renamed.fieldDefinitions,
       slug: { singular: 'article', plural: 'articles' },
     });
@@ -164,6 +166,7 @@ describe('caches while a Collection is being created', function () {
       icon: like.icon,
       name: like.name,
       description: like.description,
+      entryTitleFieldDefinitionId: like.entryTitleFieldDefinitionId,
       fieldDefinitions: like.fieldDefinitions,
       slug,
     });

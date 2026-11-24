@@ -791,6 +791,7 @@ describe('ReleaseService - slug field changes', function () {
       },
       slug: { singular: 'page', plural: 'pages' },
       description: { en: 'Pages', de: 'Pages' },
+      entryTitleFieldDefinitionId: titleFieldId,
       fieldDefinitions: [titleDef(), slugDef({})],
     });
     // Establish a released baseline to diff against
@@ -1051,6 +1052,8 @@ describe('ReleaseService - a renamed Collection and a narrowed dynamic field', f
   let media: Component;
   let collection: Collection;
   const blocksFieldId = uuid();
+  /** Titles the Entries, so a test that restates the fields restates it. */
+  const headlineField = textField('headline');
 
   function blocksField(ofComponents: string[]) {
     return {
@@ -1083,7 +1086,8 @@ describe('ReleaseService - a renamed Collection and a narrowed dynamic field', f
       },
       slug: { singular: 'page', plural: 'pages' },
       description: { en: 'Pages', de: 'Pages' },
-      fieldDefinitions: [blocksField([hero.id, media.id])],
+      entryTitleFieldDefinitionId: headlineField.id,
+      fieldDefinitions: [headlineField, blocksField([hero.id, media.id])],
     });
     // Establish a released baseline to diff against
     await core.releases.create({ projectId: project.id });
@@ -1157,7 +1161,7 @@ describe('ReleaseService - a renamed Collection and a narrowed dynamic field', f
       projectId: project.id,
       ...collection,
       slug: { singular: 'page', plural: 'articles' },
-      fieldDefinitions: [blocksField([hero.id])],
+      fieldDefinitions: [headlineField, blocksField([hero.id])],
     });
 
     const diff = await core.releases.prepare({ projectId: project.id });
@@ -1189,7 +1193,7 @@ describe('ReleaseService - a renamed Collection and a narrowed dynamic field', f
       projectId: project.id,
       ...collection,
       slug: { singular: 'page', plural: 'articles' },
-      fieldDefinitions: [blocksField([hero.id]), title],
+      fieldDefinitions: [headlineField, blocksField([hero.id]), title],
     });
 
     const diff = await core.releases.prepare({ projectId: project.id });
