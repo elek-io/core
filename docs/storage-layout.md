@@ -35,6 +35,13 @@ Each Project is a self-contained git repository:
 |-- components/
 |   |-- {componentId}/
 |   |   |-- component.json            component metadata: name, slug, field definitions
+|-- contracts/
+|   |-- {contractId}/
+|   |   |-- contract.json             a Contract: its name and the origin it comes from
+|   |   |-- {version}.json            one copy of the Contract per version a Destination uses
+|-- destinations/
+|   |-- {destinationId}/
+|   |   |-- destination.json          a Destination: name, kind, Contract, version in use, Mapping
 |-- lfs/
 |   |-- {assetId}.{extension}         the actual binary asset file
 ```
@@ -43,6 +50,7 @@ A few things worth calling out:
 
 - **Entries live directly inside their Collection folder**, alongside `collection.json`, named `{entryId}.json`. Collections and Components each get their own UUID-named folder. Entries do not.
 - **Assets are split across two folders.** The metadata JSON lives in `assets/{assetId}.json`. The binary itself lives in `lfs/{assetId}.{extension}`. See [`asset-management.md`](./asset-management.md).
+- **A Contract's folder holds its own file and one copy per version.** `contract.json` names the Contract and where it comes from, and each `{version}.json` beside it carries the Contract as it was read at that version. See [`destinations.md`](./destinations.md#what-the-project-holds).
 - Every Project folder is created with a `.gitkeep` so empty folders are tracked.
 
 ## Object files
@@ -51,7 +59,8 @@ Every object file shares a common envelope (`baseFileSchema` in `src/schema/file
 
 ```typescript
 {
-  objectType: 'project' | 'collection' | 'component' | 'entry' | 'asset',
+  objectType: 'project' | 'collection' | 'component' | 'entry' | 'asset'
+    | 'contract' | 'destination',
   id: string,            // UUID, readonly
   coreVersion: string,   // the Core version that wrote it, readonly - drives migrations
   created: string,       // ISO datetime, readonly
@@ -66,6 +75,8 @@ On top of that envelope:
 - `component.json` adds `name`, `slug` and `fieldDefinitions`.
 - An Entry file adds `values`, keyed by field-definition slug.
 - An asset metadata file adds `extension`, `mimeType` and `size`.
+- `contract.json` adds `name` and the `origin` it comes from. A `{version}.json` beside it is no object file and carries the version, the commit and the Contract itself.
+- `destination.json` adds `name`, `kind`, the `contract` it follows with the version in use, and the `mapping`.
 
 The `coreVersion` stamp on each file is what the migration chain reads when upgrading a Project.
 
@@ -110,3 +121,4 @@ The working-tree file stays the real binary, so reading an Asset returns its con
 - [`concepts.md`](./concepts.md) - what these files represent
 - [`asset-management.md`](./asset-management.md) - the two-file Asset model in detail
 - [`git-and-sync.md`](./git-and-sync.md) - the git repository each Project lives in
+- [`destinations.md`](./destinations.md) - what the `contracts` and `destinations` folders hold

@@ -6,6 +6,7 @@ import {
   configureCore,
   exportAction,
   generateApiClientAction,
+  generateContractAction,
   generateTypesAction,
   provisionAction,
   startApiAction,
@@ -14,6 +15,7 @@ import {
   apiStartSchema,
   exportSchema,
   generateApiClientSchema,
+  generateContractSchema,
   generateTypesSchema,
   provisionSchema,
 } from './schema/index.js';
@@ -104,6 +106,38 @@ program
     });
 
     await generateTypesAction(props);
+  });
+
+program
+  .command('generate:contract')
+  .description(
+    "Generates a theme's elek.contract.json from the Collections and Components of a Project"
+  )
+  .requiredOption(
+    '-p, --project <id>',
+    'The ID of the Project to write the Contract of'
+  )
+  .argument(
+    '[outDir]',
+    "The directory to write the Contract in, which is the theme's repository",
+    '.'
+  )
+  .option(
+    '-n, --name <name>',
+    'The name of the Contract, such as "@acme/dealer-site". Kept from the Contract already in the directory when left out, which the first run has none of.'
+  )
+  .option(
+    '-v, --version <version>',
+    'The version of the Contract, such as "1.2.0". Kept from the Contract already in the directory when left out, which the first run has none of.'
+  )
+  .option(
+    '-l, --languages <languages>',
+    'The languages the theme serves: "any", or the codes of the languages separated by commas. Defaults to the Project\'s own supported languages.'
+  )
+  .action(async (outDir, options) => {
+    const props = generateContractSchema.parse({ outDir, ...options });
+
+    await generateContractAction(props);
   });
 
 program

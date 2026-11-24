@@ -7,6 +7,8 @@ export * from './CacheService.js';
 export * from './CloudService.js';
 export * from './CollectionService.js';
 export * from './ComponentService.js';
+export * from './ContractService.js';
+export * from './DestinationService.js';
 export * from './EntryService.js';
 export * from './GitService.js';
 export * from './GitTagService.js';

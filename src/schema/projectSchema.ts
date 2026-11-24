@@ -51,10 +51,11 @@ export const projectFolderSchema = z.enum([
   'assets',
   'collections',
   'components',
+  'contracts',
+  'destinations',
   'lfs',
   // 'logs',
   // 'public',
-  // 'theme',
 ]);
 export type ProjectFolder = z.infer<typeof projectFolderSchema>;
 

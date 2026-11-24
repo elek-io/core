@@ -14,6 +14,8 @@ import {
   CloudService,
   CollectionService,
   ComponentService,
+  ContractService,
+  DestinationService,
   EntryService,
   GitService,
   JsonFileService,
@@ -46,6 +48,8 @@ export * from './schema/index.js';
 export * from './util/shared.js';
 // The `cause` an update throws, so a consumer can branch on it
 export type * from './util/entryIssue.js';
+// What a Destination cannot take, so a consumer can branch on it
+export type * from './util/destinationIssue.js';
 
 /**
  * One step of `dispose()`, as a stall names it.
@@ -105,6 +109,8 @@ export default class ElekIoCore {
   private readonly projectService: ProjectService;
   private readonly collectionService: CollectionService;
   private readonly componentService: ComponentService;
+  private readonly contractService: ContractService;
+  private readonly destinationService: DestinationService;
   private readonly entryService: EntryService;
   private readonly referenceService: ReferenceService;
   private readonly releaseService: ReleaseService;
@@ -211,6 +217,25 @@ export default class ElekIoCore {
       this.jsonFileService,
       this.cacheService,
       this.gitService
+    );
+    this.contractService = new ContractService(
+      this.coreVersion,
+      this.options,
+      this.pathTo,
+      this.logService,
+      this.gitService,
+      this.jsonFileService,
+      this.cacheService
+    );
+    this.destinationService = new DestinationService(
+      this.coreVersion,
+      this.options,
+      this.pathTo,
+      this.logService,
+      this.gitService,
+      this.jsonFileService,
+      this.cacheService,
+      this.contractService
     );
     this.entryService = new EntryService(
       this.coreVersion,
@@ -410,6 +435,28 @@ export default class ElekIoCore {
    */
   public get entries(): EntryService {
     return this.entryService;
+  }
+
+  /**
+   * Contracts, each stating what a theme needs as Collections and
+   * Components. Generate one from a Project, read one from a theme's git
+   * address, and keep it in the Project for its Destinations.
+   *
+   * @see ../docs/destinations.md
+   */
+  public get contracts(): ContractService {
+    return this.contractService;
+  }
+
+  /**
+   * Destinations, each one place a Project's content goes. Add a website
+   * from its theme's git address, map the Project onto it, and ask what it
+   * cannot take.
+   *
+   * @see ../docs/destinations.md
+   */
+  public get destinations(): DestinationService {
+    return this.destinationService;
   }
 
   /**

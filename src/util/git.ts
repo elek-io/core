@@ -7,12 +7,14 @@ import { CoreError } from './shared.js';
  * missing credential surfaces as a typed `Unauthorized` naming the fix
  * instead of raw git output. Returns null for everything else.
  *
- * SSH remotes authenticate through keys, not the token, so their
- * failures name the SSH setup instead of the token env vars.
+ * SSH remotes authenticate through keys, not the token, so their failures
+ * name the SSH setup instead of the token env vars. With `isOwnGitAccess`
+ * no message names the token either, because the command never got it.
  */
 export function classifyAuthError(
   stderr: string,
-  hasToken: boolean
+  hasToken: boolean,
+  isOwnGitAccess = false
 ): CoreError | null {
   const parsed = parseError(stderr);
 
@@ -26,6 +28,11 @@ export function classifyAuthError(
     (parsed === GitError.SSHPermissionDenied &&
       /permission denied/i.test(stderr))
   ) {
+    if (isOwnGitAccess) {
+      return CoreError.unauthorized(
+        'The address rejected SSH authentication. Core reads it with your own git access, so provide a valid SSH key, for example through ssh-agent. Ask whoever maintains the address for access to it.'
+      );
+    }
     return CoreError.unauthorized(
       'The remote rejected SSH authentication. Provide a valid SSH key, for example through ssh-agent. ELEK_IO_REMOTE_ACCESS_TOKEN only applies to HTTP(S) remotes.'
     );
@@ -43,6 +50,11 @@ export function classifyAuthError(
     /Git credentials for .+ not found/i.test(stderr);
   if (!isAuthError) {
     return null;
+  }
+  if (isOwnGitAccess) {
+    return CoreError.unauthorized(
+      'The address needs authentication. Core reads it with your own git access and never with ELEK_IO_REMOTE_ACCESS_TOKEN, so sign in with your own git credential helper or SSH key. Ask whoever maintains the address for access to it.'
+    );
   }
   if (hasToken) {
     return CoreError.unauthorized(
@@ -133,6 +145,48 @@ function hasSchemeBefore(value: string, end: number): boolean {
     }
   }
   return false;
+}
+
+/**
+ * A remote helper address, `<helper>::<argument>`. git hands the argument to
+ * the program `git-remote-<helper>`, and the `ext` helper of them runs it as
+ * a command.
+ */
+const REMOTE_HELPER_ADDRESS = /^[A-Za-z0-9][A-Za-z0-9+.-]*::/;
+
+/**
+ * Why an address must not be handed to git, or null when it may be. Core
+ * keeps the address of a theme in the Project, where a credential would
+ * become a committed secret, and reads it with the person's own git access.
+ *
+ * @see ../../contributing/git-credentials.md
+ */
+export function classifyUnsafeAddress(address: string): CoreError | null {
+  if (address.trim() === '') {
+    return CoreError.badRequest('A git address must not be empty');
+  }
+  if (/\p{Cc}/u.test(address)) {
+    return CoreError.badRequest(
+      'A git address must not hold a control character'
+    );
+  }
+  if (address.startsWith('-')) {
+    return CoreError.badRequest(
+      `Refusing the git address "${redactUrlCredentials(address)}", because git would read an address starting with "-" as one of its own options`
+    );
+  }
+  const helper = REMOTE_HELPER_ADDRESS.exec(address)?.[0];
+  if (helper !== undefined) {
+    return CoreError.badRequest(
+      `Refusing the git address "${redactUrlCredentials(address)}", because git runs a "${helper}" address through a remote helper, which can execute a command`
+    );
+  }
+  if (redactUrlCredentials(address) !== address) {
+    return CoreError.badRequest(
+      `Refusing the git address "${redactUrlCredentials(address)}", because it carries a credential, which must not be kept in a Project. Use an address without one and let your own git access answer for it`
+    );
+  }
+  return null;
 }
 
 /**

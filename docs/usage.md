@@ -441,6 +441,10 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 
 - `elek generate:client [outDir] [language] [format] [target]` - generate a JS/TS API client. `--watch` regenerates on content changes.
 - `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported. Both generators emit TypeScript by default. Passing `js` compiles it, which needs `tsdown` and `typescript` installed as dev dependencies of your project, see [compiling to JavaScript](./api-clients.md#compiling-to-javascript).
+- `elek generate:contract --project <id> [outDir]` - write a theme's `elek.contract.json` from a Project's Collections and Components, into `outDir`, which defaults to the current directory.
+  - `--name` and `--version` are kept from the Contract already in the directory when left out, so a rerun after the Project changed follows it without repeating them. The first run has no file to read them from and needs both.
+  - `--languages` takes `any` or the codes of the languages separated by commas, and defaults to the Project's own supported languages.
+  - See [`destinations.md`](./destinations.md#a-contract).
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
 - `elek provision --project <id> --url <url>` - provision a copy of a Project from its remote into the data directory, for example in CI. It runs read-only, so no User is required, and private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`.
@@ -831,4 +835,5 @@ For rendering `markdown` field Values (including the required `html`, `assetRefe
 - [`api-clients.md`](./api-clients.md) - generating typed clients and TypeScript types
 - [`export.md`](./export.md) - exporting Projects to JSON
 - [`error-handling.md`](./error-handling.md) - `CoreError` and error patterns
+- [`destinations.md`](./destinations.md) - Contracts, websites and what a Destination can take
 - [`markdown-content.md`](./markdown-content.md) - rendering rich `markdown` Values

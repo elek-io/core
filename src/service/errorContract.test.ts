@@ -41,6 +41,7 @@ const reasons = {
   project_on_another_host: true,
   cloud_unreachable: true,
   git_host_unreachable: true,
+  theme_without_version: true,
 } satisfies Record<CoreErrorReason, true>;
 
 let projectId = '';

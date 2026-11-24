@@ -58,6 +58,8 @@ export const objectTypeSchema = z.enum([
   'component',
   'entry',
   'value',
+  'contract',
+  'destination',
 ]);
 export type ObjectType = z.infer<typeof objectTypeSchema>;
 
