@@ -334,14 +334,18 @@ describe('a site reading its Entries through its own Contract', function () {
 
   /**
    * Runs the Entries loader the way `astro dev` does, through the site's
-   * Contract, and reports a change below the Collection it reads from
+   * Contract, and reports a change at a path of the caller's choosing, which
+   * is the one the app writes for the edit the test made.
    */
-  async function startSite() {
+  async function startSite(destination = 'autohaus-ebersfelde.de') {
+    const added: string[] = [];
     const handlers: Array<(path: string) => unknown> = [];
-    const { context, lines } = createLoaderContext({
+    const { context, lines, store } = createLoaderContext({
       root: tmpDirPath(),
       watcher: {
-        add: () => undefined,
+        add: (path) => {
+          added.push(path);
+        },
         on: (_event, handler) => {
           handlers.push(handler);
         },
@@ -349,9 +353,7 @@ describe('a site reading its Entries through its own Contract', function () {
     });
     const loader = elekEntriesLoader({
       config: {
-        projects: {
-          website: { id: siteProjectId, destination: 'autohaus-ebersfelde.de' },
-        },
+        projects: { website: { id: siteProjectId, destination } },
         contract,
       },
       project: 'website',
@@ -369,11 +371,16 @@ describe('a site reading its Entries through its own Contract', function () {
         .map((line) => line.message);
 
     return {
+      /** The paths the loader asked the watcher to cover */
+      added,
+      store,
       warnedSince: warned,
-      reload: async () => {
+      reload: async (
+        changedPath = core.util.pathTo.entries(siteProjectId, siteArticles.id)
+      ) => {
         before = lines.length;
         for (const handler of handlers) {
-          handler(core.util.pathTo.entries(siteProjectId, siteArticles.id));
+          handler(changedPath);
         }
         await vi.waitFor(
           function () {
@@ -520,6 +527,48 @@ describe('a site reading its Entries through its own Contract', function () {
     });
   });
 
+  it('stops the build when several Entries fill a Single Entry of the Contract', async function () {
+    const narrowed = fullMapping();
+    // The Contract holds one Entry there, this Collection of the Project is
+    // no Single Entry and holds two
+    narrowed.collections[themeContacts.id] = {
+      from: { collectionId: siteArticles.id },
+      fields: { [themePhone.id]: { fieldDefinitionId: siteHeadline.id } },
+    };
+
+    await withMapping(narrowed, async function () {
+      const site = await buildSite({
+        collectionIdOrSlug: 'contact-details',
+        contract,
+        destination: 'autohaus-ebersfelde.de',
+      });
+
+      await expectCoreError(
+        site.load(),
+        'BadRequest',
+        '- Collection "articles" of Project "website" fills the Single Entry "contact-details" of the Contract with 2 Entries, of which the site would read an arbitrary one. Fill it from a Single Entry, or leave one Entry in "articles".'
+      );
+      // Nothing is stored, so no page renders whichever Entry came first
+      expect([...site.store.keys()]).toEqual([]);
+    });
+  });
+
+  it('names the Collection of the Contract in the lines it logs', async function () {
+    // The id is what elekCollections() hands a loader, so a line that
+    // named what it was given would read as a bare UUID
+    const site = await buildSite({
+      collectionIdOrSlug: themePosts.id,
+      contract,
+      destination: 'autohaus-ebersfelde.de',
+    });
+
+    await site.load();
+
+    expect(site.lines.map((line) => line.message)).toContain(
+      'Loading elek.io Entries of Collection "posts" of the Contract "@acme/dealer-site" of Project "website"'
+    );
+  });
+
   it('stops the build naming a Collection of the Contract nothing fills', async function () {
     const narrowed = mappingWithout({ collection: themePosts.id });
 
@@ -567,16 +616,30 @@ describe('a site reading its Entries through its own Contract', function () {
         'see-also': references(siteArticles.id, []),
       },
     });
+    // A second refused Entry, so a build that stopped at the first one
+    // would leave this one for the developer to find on the next run
+    const alsoTooLong = await core.entries.create({
+      projectId: siteProjectId,
+      collectionId: siteArticles.id,
+      values: {
+        headline: text('Arteon Shooting Brake'),
+        standfirst: text(null),
+        'see-also': references(siteArticles.id, []),
+      },
+    });
+    const refusedIds = [tooLong.id, alsoTooLong.id];
     // Every later test reads this Collection through the Contract, which
-    // this Entry stops until it is gone again
+    // these Entries stop until they are gone again
     onTestFinished(async function () {
-      await core.entries
-        .delete({
-          projectId: siteProjectId,
-          collectionId: siteArticles.id,
-          id: tooLong.id,
-        })
-        .catch(() => undefined);
+      for (const id of refusedIds) {
+        await core.entries
+          .delete({
+            projectId: siteProjectId,
+            collectionId: siteArticles.id,
+            id,
+          })
+          .catch(() => undefined);
+      }
     });
     const refused = await buildSite({
       collectionIdOrSlug: 'posts',
@@ -584,18 +647,31 @@ describe('a site reading its Entries through its own Contract', function () {
       destination: 'autohaus-ebersfelde.de',
     });
 
-    await expectCoreError(
-      refused.load(),
-      'BadRequest',
-      `Entry "${tooLong.id}", field "title" in "en"`
+    const error = await refused.load().then(
+      () => null,
+      (caught: unknown) => caught
     );
+
+    expect(error).toBeInstanceOf(CoreError);
+    const message = error instanceof CoreError ? error.message : '';
+    // Word for word, because `docs/usage.md` quotes these two lines
+    expect(message.split('\n')[0]).toBe(
+      'Collection "posts" of the Contract "@acme/dealer-site" at version 1.0.0 is not filled by Project "website" through Destination "autohaus-ebersfelde.de":'
+    );
+    for (const id of refusedIds) {
+      expect(message.split('\n')).toContain(
+        `- Entry "${id}", field "title" in "en": Too big: expected string to have <=10 characters`
+      );
+    }
     expect([...refused.store.keys()]).toEqual([]);
 
-    await core.entries.delete({
-      projectId: siteProjectId,
-      collectionId: siteArticles.id,
-      id: tooLong.id,
-    });
+    for (const id of refusedIds) {
+      await core.entries.delete({
+        projectId: siteProjectId,
+        collectionId: siteArticles.id,
+        id,
+      });
+    }
     const site = await buildSite({
       collectionIdOrSlug: 'posts',
       contract,
@@ -727,6 +803,155 @@ describe('a site reading its Entries through its own Contract', function () {
     );
   });
 
+  it('stops the build when the Mapping names a Collection the Project dropped', async function () {
+    const caption = textField('caption', true);
+    const offers = await createCollectionOf({
+      projectId: siteProjectId,
+      slug: { singular: 'offer', plural: 'offers' },
+      fieldDefinitions: [caption],
+    });
+    const theme = await createFakeTheme();
+    await theme.release({ tag: 'v1.0.0', files: contractFileOf(contract) });
+    const website = await core.destinations.addWebsite({
+      projectId: siteProjectId,
+      name: 'dropped-collection.example',
+      url: theme.url,
+    });
+    await core.destinations.update({
+      projectId: siteProjectId,
+      id: website.id,
+      mapping: {
+        collections: {
+          [themePosts.id]: {
+            from: { collectionId: offers.id },
+            fields: { [themeTitle.id]: { fieldDefinitionId: caption.id } },
+          },
+        },
+      },
+    });
+    onTestFinished(async function () {
+      await core.destinations.delete({
+        projectId: siteProjectId,
+        id: website.id,
+      });
+    });
+    // Nothing refuses this today, so a Mapping can outlive the Collection
+    // it reads from
+    await core.collections.delete({
+      projectId: siteProjectId,
+      id: offers.id,
+    });
+    const named = `The Mapping fills "posts" from the Collection "${offers.id}", which the Project does not hold, so nothing fills it`;
+
+    await expectCoreError(
+      elekCollections(
+        {
+          projects: {
+            website: {
+              id: siteProjectId,
+              destination: 'dropped-collection.example',
+            },
+          },
+          contract,
+        },
+        { collections: { website: ['posts'] } }
+      ),
+      'BadRequest',
+      named
+    );
+
+    const site = await buildSite({
+      collectionIdOrSlug: 'posts',
+      contract,
+      destination: 'dropped-collection.example',
+    });
+    await expectCoreError(site.load(), 'BadRequest', named);
+    expect([...site.store.keys()]).toEqual([]);
+  });
+
+  it('stops the build naming a refused Value that belongs to no language', async function () {
+    // A Collection of the Project the Mapping does not name, so a reference
+    // into it reaches no Collection of the Contract
+    const brands = await createCollectionOf({
+      projectId: siteProjectId,
+      slug: { singular: 'brand', plural: 'brands' },
+      fieldDefinitions: [textField('name', true)],
+    });
+    const brand = await core.entries.create({
+      projectId: siteProjectId,
+      collectionId: brands.id,
+      values: { name: text('Volkswagen') },
+    });
+    // Core refuses a reference the field does not allow, so an Entry
+    // holding one comes from a merge or another writer, as here
+    const first = await core.entries.read({
+      projectId: siteProjectId,
+      collectionId: siteArticles.id,
+      id: firstEntryId,
+    });
+    const strayId = uuid();
+    const strayPath = core.util.pathTo.entryFile(
+      siteProjectId,
+      siteArticles.id,
+      strayId
+    );
+    await Fs.outputJson(strayPath, {
+      ...first,
+      id: strayId,
+      values: {
+        ...first.values,
+        'see-also': references(brands.id, [brand.id]),
+      },
+    });
+    onTestFinished(async function () {
+      await Fs.remove(strayPath);
+      await core.entries.delete({
+        projectId: siteProjectId,
+        collectionId: brands.id,
+        id: brand.id,
+      });
+      await core.collections.delete({
+        projectId: siteProjectId,
+        id: brands.id,
+      });
+    });
+    const site = await buildSite({
+      collectionIdOrSlug: 'posts',
+      contract,
+      destination: 'autohaus-ebersfelde.de',
+    });
+
+    // No language in front of it, because the Mapping refuses this
+    // reference in every language at once
+    await expectCoreError(
+      site.load(),
+      'BadRequest',
+      `- Entry "${strayId}", field "related": The field "related" points at an Entry of the Collection "${brands.id}" of the Project, which fills no Collection of the Contract`
+    );
+  });
+
+  it('names the Contract when a collection declared by hand reads one it does not hold', async function () {
+    const { context } = createLoaderContext({ root: tmpDirPath() });
+    const loader = elekEntriesLoader({
+      config: {
+        projects: {
+          website: { id: siteProjectId, destination: 'autohaus-ebersfelde.de' },
+        },
+        contract,
+      },
+      project: 'website',
+      // The Project's own plural slug, which is what a collection declared
+      // by hand reaches for while the Contract names it "posts"
+      collectionIdOrSlug: 'articles',
+    });
+
+    await expectCoreError(
+      loader.load(context),
+      'NotFound',
+      'The Contract "@acme/dealer-site" has no Collection "articles". It has "contact-details", "posts". Name a Collection by its plural slug or its id.'
+    );
+  });
+
   it('leaves a reference field of the Contract nothing fills as an empty list', async function () {
     await withMapping(
       mappingWithout({ field: themeRelated.id }),
@@ -791,6 +1016,61 @@ describe('a site reading its Entries through its own Contract', function () {
     ]);
   });
 
+  it('asks for a restart when the Mapping changes and nothing else does', async function () {
+    const site = await startSite();
+
+    // Remapping a field in the app writes the Destination's own file, so
+    // that is the only path a reload can hear about it on
+    await withMapping(mappingWithout({ field: themeTeaser.id }), () =>
+      site.reload(core.util.pathTo.destinationFile(siteProjectId, websiteId))
+    );
+
+    expect(site.added).toContain(
+      core.util.pathTo.destination(siteProjectId, websiteId)
+    );
+    expect(site.warnedSince()).toEqual([
+      // The Collection named here is the Contract's, the one the site's own
+      // code reads, because the Project holds none of that name
+      'The content model of Collection "posts" of the Contract "@acme/dealer-site" of Project "website" changed. Astro builds a collection\'s schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.',
+    ]);
+  });
+
+  it('asks for a restart when the website it reads through is gone', async function () {
+    const theme = await createFakeTheme();
+    await theme.release({ tag: 'v1.0.0', files: contractFileOf(contract) });
+    const website = await core.destinations.addWebsite({
+      projectId: siteProjectId,
+      name: 'deleted-while-running.example',
+      url: theme.url,
+    });
+    await core.destinations.update({
+      projectId: siteProjectId,
+      id: website.id,
+      mapping: fullMapping(),
+    });
+    const site = await startSite('deleted-while-running.example');
+    expect([...site.store.keys()].toSorted()).toEqual(
+      [firstEntryId, secondEntryId].toSorted()
+    );
+
+    await core.destinations.delete({
+      projectId: siteProjectId,
+      id: website.id,
+    });
+    await site.reload(
+      core.util.pathTo.destinationFile(siteProjectId, website.id)
+    );
+
+    expect(site.warnedSince()).toEqual([
+      expect.stringContaining('restart the dev server'),
+    ]);
+    // The open page keeps rendering what was loaded, rather than losing it
+    // to a website the editor removed
+    expect([...site.store.keys()].toSorted()).toEqual(
+      [firstEntryId, secondEntryId].toSorted()
+    );
+  });
+
   it('derives the Collections of the Contract rather than the Project', async function () {
     const collections = await elekCollections(
       {
@@ -808,7 +1088,7 @@ describe('a site reading its Entries through its own Contract', function () {
     expect(Object.keys(collections)).toEqual(['websitePosts']);
   });
 
-  it('names every Collection and field of the Contract the Mapping leaves unfilled', async function () {
+  it('names every Collection and required field of the Contract the Mapping leaves unfilled', async function () {
     const narrowed = mappingWithout({ collection: themePosts.id });
     narrowed.collections[themeContacts.id] = {
       from: { collectionId: siteImprint.id },
@@ -827,11 +1107,14 @@ describe('a site reading its Entries through its own Contract', function () {
       );
 
       expect(error).toBeInstanceOf(CoreError);
-      expect(error instanceof CoreError && error.message).toContain(
-        'No Collection of the Project fills "posts"'
-      );
-      expect(error instanceof CoreError && error.message).toContain(
-        'No field of the Project fills the required field "phone" of "contact-details"'
+      // Word for word, because `docs/usage.md` quotes this error
+      expect(error instanceof CoreError && error.message).toBe(
+        [
+          'Destination "autohaus-ebersfelde.de" of Project "website" does not fill the Contract "@acme/dealer-site" at version 1.0.0:',
+          '- No field of the Project fills the required field "phone" of "contact-details"',
+          '- No Collection of the Project fills "posts"',
+          "Map them onto the Project's own Collections and fields, or leave the Collection out of elekCollections().",
+        ].join('\n')
       );
     });
   });

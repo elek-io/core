@@ -352,6 +352,18 @@ export function elekAssetsLoader<const T extends ElekConfig>(
 }
 
 /**
+ * What a reload follows while `astro dev` runs: the Collection of the Project
+ * the Entries come from, and the Destination whose Mapping decides which
+ * Value fills which field of the Contract. The Collection is undefined where
+ * nothing fills the collection, the Destination for a site that reads a
+ * Project's own Collections.
+ */
+interface WatchedSources {
+  collectionId: string | undefined;
+  destinationId: string | undefined;
+}
+
+/**
  * What one sync of a collection reads: where the Entries come from, what the
  * schema and the types describe, and what the site reads them through.
  */
@@ -401,7 +413,16 @@ export function elekEntriesLoader<const T extends ElekConfig>(
    * Collection from the Mapping rather than from a slug of the Project.
    */
   const readsContract = destination !== undefined;
-  const restartMessage = `The content model of Collection "${props.collectionIdOrSlug}" of Project "${alias}" changed. Astro builds a collection's schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.`;
+  /**
+   * How every line of this loader names the collection it reports on, set by
+   * the last plan that was read. A site reading through a Destination is told
+   * the Collection of the Contract, the one its own code names, because the
+   * Project holds no Collection of that name.
+   */
+  let holding = `Collection "${props.collectionIdOrSlug}" of Project "${alias}"`;
+  const restartMessage = (): string => {
+    return `The content model of ${holding} changed. Astro builds a collection's schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.`;
+  };
 
   /**
    * Fingerprint of the content model the schema and types were built
@@ -415,6 +436,12 @@ export function elekEntriesLoader<const T extends ElekConfig>(
    * Collection, or to none, needs a restart just like a model change.
    */
   let collectionId: string | undefined;
+  /**
+   * The Destination the schema was built through, so a reload watches its
+   * Mapping beside the Entries. Undefined for a site reading a Project's own
+   * Collections, which has none.
+   */
+  let destinationId: string | undefined;
 
   /**
    * Everything one sync reads, which is the Collection, the Project's
@@ -455,6 +482,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       const fieldDefinitions = flattenFieldDefinitions(
         collection.fieldDefinitions
       );
+      holding = `Collection "${collection.slug.plural}" of the Contract "${site.contract.name}" of Project "${alias}"`;
       return {
         source,
         isSingleEntry: collection.isSingleEntry,
@@ -502,9 +530,10 @@ export function elekEntriesLoader<const T extends ElekConfig>(
   };
 
   /**
-   * Throws `BadRequest` naming every Collection, field and Entry the site's
-   * Contract does not find in the Project, and why, in one error rather than
-   * on the first one it meets.
+   * Throws `BadRequest` naming every Collection, required field and Entry the
+   * site's Contract does not find in the Project, and why, in one error
+   * rather than on the first one it meets. A Collection of the Contract
+   * holding one Entry that is filled from several is named too.
    *
    * Only this Collection's half of the Mapping is read, because every other
    * Collection of the Contract is its own derived collection's to report.
@@ -538,13 +567,6 @@ export function elekEntriesLoader<const T extends ElekConfig>(
         );
       }
     }
-    if (issues.length === 0) {
-      return;
-    }
-    const at =
-      through.versionInUse === through.contract.version
-        ? `version ${through.contract.version}`
-        : `version ${through.contract.version} while the website uses ${through.versionInUse}`;
     // A Value issue carries zod's own wording, which says what is wrong
     // without saying where, so the field and the language go in front of it
     const named = issues.map((issue) => {
@@ -555,6 +577,25 @@ export function elekEntriesLoader<const T extends ElekConfig>(
         issue.language === undefined ? '' : ` in "${issue.language}"`;
       return `- Entry "${issue.entryId}", field "${issue.contractFieldSlug}"${language}: ${issue.message}`;
     });
+    // The Contract states how many Entries a Collection holds as well as
+    // what they hold, so several of them filling one Entry fits no better
+    // than a missing field. Which one the site would read is arbitrary.
+    if (
+      through.collection.isSingleEntry &&
+      source !== undefined &&
+      entries.length > 1
+    ) {
+      named.push(
+        `- Collection "${source.slug.plural}" of Project "${alias}" fills the Single Entry "${through.collection.slug.plural}" of the Contract with ${entries.length} Entries, of which the site would read an arbitrary one. Fill it from a Single Entry, or leave one Entry in "${source.slug.plural}".`
+      );
+    }
+    if (named.length === 0) {
+      return;
+    }
+    const at =
+      through.versionInUse === through.contract.version
+        ? `version ${through.contract.version}`
+        : `version ${through.contract.version} while the website uses ${through.versionInUse}`;
     throw CoreError.badRequest(
       `Collection "${through.collection.slug.plural}" of the Contract "${through.contract.name}" at ${at} is not filled by Project "${alias}" through Destination "${through.destination.name}":\n${named.join('\n')}`
     );
@@ -574,7 +615,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
   const syncEntries = async (
     context: LoaderContext,
     isReload = false
-  ): Promise<string | undefined> => {
+  ): Promise<WatchedSources> => {
     const core = getCore();
     await ensureProjectAvailable(core, alias, projectId);
     await logReadingProject(core, projectId, (message) =>
@@ -592,9 +633,9 @@ export function elekEntriesLoader<const T extends ElekConfig>(
         });
       if (current !== collectionId) {
         context.logger.warn(
-          `Collection "${props.collectionIdOrSlug}" of Project "${alias}" was renamed or replaced. Astro names a collection after the plural slug when it loads the content config, so restart the dev server to pick it up. Entries are not reloaded until then.`
+          `${holding} was renamed or replaced. Astro names a collection after the plural slug when it loads the content config, so restart the dev server to pick it up. Entries are not reloaded until then.`
         );
-        return collectionId;
+        return { collectionId, destinationId };
       }
       knownCollectionId = collectionId;
     }
@@ -610,20 +651,18 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       // the schema and the types Astro built once, which needs a restart
       // just as a model change does
       if (isReload && error instanceof CoreError && error.type === 'NotFound') {
-        context.logger.warn(restartMessage);
-        return collectionId;
+        context.logger.warn(restartMessage());
+        return { collectionId, destinationId };
       }
       throw error;
     }
     if (modelDigest !== undefined && plan.digest !== modelDigest) {
-      context.logger.warn(restartMessage);
-      return collectionId;
+      context.logger.warn(restartMessage());
+      return { collectionId, destinationId };
     }
     const componentsContext = makeComponentsContext(plan.components);
 
-    context.logger.info(
-      `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" of Project "${alias}"`
-    );
+    context.logger.info(`Loading elek.io Entries of ${holding}`);
 
     const source = plan.source;
     const read =
@@ -654,12 +693,8 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     // so the rest is left out rather than overwriting the one the site reads
     const loaded = plan.isSingleEntry ? entries.slice(0, 1) : entries;
     if (loaded.length < entries.length) {
-      const holding =
-        through === undefined
-          ? `Collection "${props.collectionIdOrSlug}" of Project "${alias}" is a Single Entry holding ${entries.length} Entries`
-          : `Collection "${plan.pluralSlug}" of the Contract "${through.contract.name}" is a Single Entry and the Collection of Project "${alias}" filling it holds ${entries.length} Entries`;
       context.logger.warn(
-        `${holding}, of which the site reads the first. Creating an Entry there is refused while it holds one, so a sync of two editors' work can leave two, as can two creates at once. Delete the ones the site should not read.`
+        `Collection "${props.collectionIdOrSlug}" of Project "${alias}" is a Single Entry holding ${entries.length} Entries, of which the site reads the first. Creating an Entry there is refused while it holds one, so a sync of two editors' work can leave two, as can two creates at once. Delete the ones the site should not read.`
       );
     }
 
@@ -699,7 +734,10 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     }
 
     context.logger.info('Finished loading Entries');
-    return source?.id;
+    return {
+      collectionId: source?.id,
+      destinationId: plan.through?.destination.id,
+    };
   };
 
   return {
@@ -712,6 +750,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       // Remembered so a reload can tell that the model moved on
       modelDigest = plan.digest;
       collectionId = plan.source?.id;
+      destinationId = plan.through?.destination.id;
 
       return {
         schema: buildEntryValuesSchema(
@@ -728,22 +767,32 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       };
     },
     load: async (context) => {
-      const sourceCollectionId = await syncEntries(context);
+      const watched = await syncEntries(context);
 
       // In dev the Desktop app keeps editing the Project, so reload
       // when this Collection's Entries change instead of waiting for a
       // restart. The Components are watched too, not to reload them but
       // to notice a model change that never touches an Entry, like
-      // renaming a Component field. Neither path covers .git, so a
-      // commit does not trigger a reload by itself.
+      // renaming a Component field. The Destination goes with them, so a
+      // Mapping edited in the app reaches the digest check rather than
+      // leaving the page on the Mapping it was built with. No path covers
+      // .git, so a commit does not trigger a reload by itself.
       if (context.watcher) {
         const core = getCore();
         watchContent({
           watcher: context.watcher,
           paths: [
-            ...(sourceCollectionId === undefined
+            ...(watched.collectionId === undefined
               ? []
-              : [core.util.pathTo.entries(projectId, sourceCollectionId)]),
+              : [core.util.pathTo.entries(projectId, watched.collectionId)]),
+            ...(watched.destinationId === undefined
+              ? []
+              : [
+                  core.util.pathTo.destination(
+                    projectId,
+                    watched.destinationId
+                  ),
+                ]),
             core.util.pathTo.components(projectId),
           ],
           onChange: async () => {
@@ -751,7 +800,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
           },
           onError: (error) =>
             context.logger.error(
-              `Reloading the Entries of Collection "${props.collectionIdOrSlug}" of Project "${alias}" failed: ${String(error)}`
+              `Reloading the Entries of ${holding} failed: ${String(error)}`
             ),
         });
       }
