@@ -354,7 +354,8 @@ export class DestinationService extends AbstractEntityService {
    *
    * Empty when the Entry fits. An Entry whose Collection fills nothing of
    * the Contract raises no issue of its own, and the Mapping's issues still
-   * come back.
+   * come back. The Mapping is read against the Collections the Project holds
+   * now, so it reads every one of them.
    */
   public async check(
     props: CheckDestinationProps
@@ -389,6 +390,7 @@ export class DestinationService extends AbstractEntityService {
             destinationId: destination.id,
             contract,
             mapping: destination.mapping,
+            collections: await this.readCollections(validatedProps.projectId),
           }),
           ...entryIssuesOf({
             destinationId: destination.id,
@@ -410,7 +412,8 @@ export class DestinationService extends AbstractEntityService {
    * its Mapping once, and every Value of every Entry the Contract refuses.
    *
    * Empty when the website can take the Project as it is. It reads every
-   * Entry of every mapped Collection, so it costs one read per Entry.
+   * Collection of the Project and every Entry of the mapped ones, so it
+   * costs one read per Entry.
    */
   public async checkAll(
     props: CheckAllDestinationProps
@@ -427,10 +430,14 @@ export class DestinationService extends AbstractEntityService {
         const languages = await this.readProjectLanguages(
           validatedProps.projectId
         );
+        const collections = await this.readCollections(
+          validatedProps.projectId
+        );
         const issues: DestinationIssue[] = mappingIssuesOf({
           destinationId: destination.id,
           contract,
           mapping: destination.mapping,
+          collections,
         });
 
         const collectionIds = new Set(
@@ -438,19 +445,13 @@ export class DestinationService extends AbstractEntityService {
             return collection.from.collectionId;
           })
         );
-        for (const collectionId of collectionIds) {
-          const collection = await this.jsonFileService
-            .read(
-              this.pathTo.collectionFile(
-                validatedProps.projectId,
-                collectionId
-              ),
-              collectionFileSchema
-            )
-            .catch(() => undefined);
-          if (collection === undefined) {
-            continue;
-          }
+        // Over what the Project holds rather than over what the Mapping
+        // names, because a Mapping naming a Collection the Project dropped is
+        // reported above rather than skipped here
+        for (const collection of collections.filter((one) => {
+          return collectionIds.has(one.id);
+        })) {
+          const collectionId = collection.id;
           const entryReferences = await this.listReferences(
             objectTypeSchema.enum.entry,
             validatedProps.projectId,

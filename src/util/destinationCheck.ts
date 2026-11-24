@@ -67,6 +67,11 @@ export function mappingByMatchingIds(props: {
  * definition, and every mapped reference field pointing at a Collection of
  * the Contract that is itself unmapped.
  *
+ * A Mapping entry naming a Collection or field definition the Project no
+ * longer holds fills nothing, so it is reported the same way rather than
+ * read as mapped. `collections` is what the Project holds now, which is what
+ * the Mapping is measured against.
+ *
  * These hold whatever the Entries say, so they are reported once per
  * Destination rather than per Entry.
  */
@@ -74,8 +79,12 @@ export function mappingIssuesOf(props: {
   destinationId: Uuid;
   contract: Contract;
   mapping: Mapping;
+  collections: readonly CollectionFile[];
 }): DestinationMappingIssue[] {
   const issues: DestinationMappingIssue[] = [];
+  const projectCollections = new Map(
+    props.collections.map((collection) => [collection.id, collection])
+  );
 
   for (const contractCollection of props.contract.collections) {
     const collectionMapping = props.mapping.collections[contractCollection.id];
@@ -88,6 +97,23 @@ export function mappingIssuesOf(props: {
       });
       continue;
     }
+    const projectCollection = projectCollections.get(
+      collectionMapping.from.collectionId
+    );
+    if (projectCollection === undefined) {
+      issues.push({
+        issue: 'collection_not_mapped',
+        destinationId: props.destinationId,
+        contractCollectionId: contractCollection.id,
+        message: `The Mapping fills "${contractCollection.slug.plural}" from the Collection "${collectionMapping.from.collectionId}", which the Project does not hold, so nothing fills it`,
+      });
+      continue;
+    }
+    const projectFieldIds = new Set(
+      flattenFieldDefinitions(projectCollection.fieldDefinitions).map(
+        ({ id }) => id
+      )
+    );
 
     for (const contractField of flattenFieldDefinitions(
       contractCollection.fieldDefinitions
@@ -101,6 +127,18 @@ export function mappingIssuesOf(props: {
             contractCollectionId: contractCollection.id,
             contractFieldDefinitionId: contractField.id,
             message: `No field of the Project fills the required field "${contractField.slug}" of "${contractCollection.slug.plural}"`,
+          });
+        }
+        continue;
+      }
+      if (projectFieldIds.has(fieldMapping.fieldDefinitionId) === false) {
+        if (contractField.isRequired === true) {
+          issues.push({
+            issue: 'field_not_mapped',
+            destinationId: props.destinationId,
+            contractCollectionId: contractCollection.id,
+            contractFieldDefinitionId: contractField.id,
+            message: `The Mapping fills the required field "${contractField.slug}" of "${contractCollection.slug.plural}" from the field definition "${fieldMapping.fieldDefinitionId}", which the Collection "${projectCollection.id}" does not hold, so nothing fills it`,
           });
         }
         continue;
@@ -134,6 +172,10 @@ export function mappingIssuesOf(props: {
  * `dynamic` field is checked by the Components its items name, their count
  * and whether one is there at all, and never inside an item, because no
  * Mapping maps a Component's own fields yet.
+ *
+ * A field the Mapping fills from a field definition this Collection no
+ * longer holds is left to `mappingIssuesOf`, which reports it once for the
+ * whole Destination rather than once per Entry.
  */
 export function entryIssuesOf(props: {
   destinationId: Uuid;
@@ -150,12 +192,7 @@ export function entryIssuesOf(props: {
       field,
     ])
   );
-  const contractCollectionIdOf = new Map(
-    Object.entries(props.mapping.collections).map(([id, collectionMapping]) => [
-      collectionMapping.from.collectionId,
-      id,
-    ])
-  );
+  const contractCollectionsOf = contractCollectionsBySource(props.mapping);
 
   for (const [contractCollectionId, collectionMapping] of Object.entries(
     props.mapping.collections
@@ -172,9 +209,19 @@ export function entryIssuesOf(props: {
 
     const contractFields = flattenFieldDefinitions(
       contractCollection.fieldDefinitions
-    ).filter((field) => collectionMapping.fields[field.id] !== undefined);
+    ).filter((field) => {
+      const fieldMapping = collectionMapping.fields[field.id];
+      return (
+        fieldMapping !== undefined &&
+        projectFields.has(fieldMapping.fieldDefinitionId)
+      );
+    });
     const sourceOf = new Map<string, FieldDefinition>();
     const values: Record<string, Value> = {};
+    const unfilledReferences: Array<{
+      field: FieldDefinition;
+      collectionId: Uuid;
+    }> = [];
 
     for (const contractField of contractFields) {
       const fieldMapping = collectionMapping.fields[contractField.id];
@@ -188,10 +235,15 @@ export function entryIssuesOf(props: {
       sourceOf.set(contractField.slug, projectField);
       const value = props.entry.values[projectField.slug];
       if (value !== undefined) {
-        values[contractField.slug] = onContractCollections(
+        const moved = onContractCollections(
           value,
-          contractCollectionIdOf
+          contractField,
+          contractCollectionsOf
         );
+        values[contractField.slug] = moved.value;
+        for (const collectionId of moved.unfilled) {
+          unfilledReferences.push({ field: contractField, collectionId });
+        }
       }
     }
 
@@ -219,6 +271,17 @@ export function entryIssuesOf(props: {
         message,
       });
     };
+
+    // A reference is checked here rather than through the Contract's own
+    // `ofCollections`, which takes any Collection when the list is empty and
+    // cannot tell a translated id from one that was left as it was
+    for (const { field, collectionId } of unfilledReferences) {
+      place(
+        field,
+        'constraint_violation',
+        `The field "${field.slug}" points at an Entry of the Collection "${collectionId}" of the Project, which fills no Collection of the Contract`
+      );
+    }
 
     // A dynamic field is checked here rather than through the value schema,
     // which would read a Component item's own Values against the Contract
@@ -285,50 +348,86 @@ function referencedCollectionIdsOf(field: FieldDefinition): Uuid[] {
 }
 
 /**
+ * The Collections of the Contract each Collection of the Project fills. A
+ * Mapping may fill two Collections of the Contract from one of the Project,
+ * so a reference into it is deliverable as either of them.
+ */
+function contractCollectionsBySource(mapping: Mapping): Map<Uuid, Uuid[]> {
+  const bySource = new Map<Uuid, Uuid[]>();
+  for (const [contractCollectionId, collectionMapping] of Object.entries(
+    mapping.collections
+  )) {
+    const source = collectionMapping.from.collectionId;
+    bySource.set(source, [
+      ...(bySource.get(source) ?? []),
+      contractCollectionId,
+    ]);
+  }
+  return bySource;
+}
+
+/**
  * The Value with every Entry reference moved from the Collection of the
  * Project holding it onto the Collection of the Contract that Collection
- * fills, so the Contract's own `ofCollections` can be read against it.
+ * fills, so the Contract's own `ofCollections` can be read against it, and
+ * the Collections of the Project it points at that fill nothing.
  *
- * A reference into a Collection no Mapping holds keeps its id, which the
- * Contract's field then refuses.
+ * Where two Collections of the Contract are filled from one of the Project,
+ * the reference becomes the one its field allows. A reference that fills
+ * nothing is named in `unfilled` and takes a Collection the field allows, so
+ * the one issue reported for it is the one these words can explain rather
+ * than the Contract's own refusal of an id it never saw.
  */
 function onContractCollections(
   value: Value,
-  contractCollectionIdOf: ReadonlyMap<Uuid, Uuid>
-): Value {
+  field: FieldDefinition,
+  contractCollectionsOf: ReadonlyMap<Uuid, Uuid[]>
+): { value: Value; unfilled: Uuid[] } {
   if (value.valueType !== 'reference') {
-    return value;
+    return { value, unfilled: [] };
   }
-  return {
-    ...value,
-    content: Object.fromEntries(
-      Object.entries(value.content).map(([language, references]) => [
-        language,
-        references?.map((reference) => {
-          if (reference.objectType !== 'entry') {
-            return reference;
-          }
-          const onContract = contractCollectionIdOf.get(reference.collectionId);
-          return onContract === undefined
+  const allowed = 'ofCollections' in field ? field.ofCollections : [];
+  const unfilled: Uuid[] = [];
+  const content = Object.fromEntries(
+    Object.entries(value.content).map(([language, references]) => [
+      language,
+      references?.map((reference) => {
+        if (reference.objectType !== 'entry') {
+          return reference;
+        }
+        const targets = contractCollectionsOf.get(reference.collectionId) ?? [];
+        const onContract =
+          targets.find((id) => allowed.includes(id)) ?? targets[0];
+        if (onContract === undefined) {
+          unfilled.push(reference.collectionId);
+          const substitute = allowed[0];
+          return substitute === undefined
             ? reference
-            : { ...reference, collectionId: onContract };
-        }),
-      ])
-    ),
-  };
+            : { ...reference, collectionId: substitute };
+        }
+        return { ...reference, collectionId: onContract };
+      }),
+    ])
+  );
+  return { value: { ...value, content }, unfilled };
 }
 
 /**
  * What a `dynamic` field of the Contract refuses about the Value filling it:
- * a missing one, a count outside `min` and `max`, and an item naming a
- * Component the field does not allow or the Contract does not hold.
+ * a missing one, a Value holding something other than Component items, a
+ * count outside `min` and `max`, and an item naming a Component the field
+ * does not allow or the Contract does not hold.
+ *
+ * A Value of another kind is refused whether the field is required or not,
+ * because the field is left out of the value schema and nothing else would
+ * read it.
  */
 function componentProblemsOf(
   field: FieldDefinition,
   value: Value | undefined,
   contract: Contract
 ): Array<{ issue: DestinationValueIssue['issue']; message: string }> {
-  if (value === undefined || value.valueType !== 'component') {
+  if (value === undefined) {
     return field.isRequired === true
       ? [
           {
@@ -337,6 +436,14 @@ function componentProblemsOf(
           },
         ]
       : [];
+  }
+  if (value.valueType !== 'component') {
+    return [
+      {
+        issue: 'constraint_violation',
+        message: `The field "${field.slug}" takes Component items and the Entry holds a Value of type "${value.valueType}"`,
+      },
+    ];
   }
   if (!('ofComponents' in field)) {
     return [];

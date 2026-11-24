@@ -101,16 +101,17 @@ const issues = await core.destinations.checkAll({
 
 | `issue` | What is wrong |
 | --- | --- |
-| `collection_not_mapped` | No Collection of the Project fills a Collection the Contract names |
-| `field_not_mapped` | No field definition fills a required field of the Contract |
+| `collection_not_mapped` | No Collection of the Project fills a Collection the Contract names, or the Mapping fills it from a Collection the Project no longer holds |
+| `field_not_mapped` | No field definition fills a required field of the Contract, or the Mapping fills it from a field definition its Collection no longer holds |
 | `reference_not_mapped` | A mapped reference field points at a Collection of the Contract that nothing fills |
 | `missing_required` | The Entry holds no Value for a required field of the Contract |
 | `constraint_violation` | The Entry's Value does not satisfy the Contract's field definition |
 
 - The first three are about the Mapping and come back whatever the Entries hold, so `checkAll()` reports each once.
 - The last two name both sides: the Contract's field and the Project's own `collectionId`, `fieldDefinitionId` and `fieldSlug`, so an app can open the Entry at the field that raised it.
-- Values are read against the Contract's own field definitions. An Entry reference is moved onto the Contract's Collection ids through the Mapping first, so one pointing into a Collection nothing fills is refused.
-- A `dynamic` field is checked by the Components its items name, their count and whether one is there at all, never inside an item, because no Mapping maps a Component's own fields yet.
+- The Mapping is read against the Collections the Project holds now. An entry of it naming a Collection or field definition that is gone fills nothing, so it is reported rather than taken as mapped, which is what a Project changing under a Mapping leaves behind.
+- Values are read against the Contract's own field definitions. An Entry reference is moved onto the Contract's Collection ids through the Mapping first, and one pointing into a Collection of the Project that fills nothing is refused, whatever the Contract's field allows.
+- A `dynamic` field is checked by the Components its items name, their count and whether one is there at all, never inside an item, because no Mapping maps a Component's own fields yet. A Value holding something other than Component items is refused, required or not.
 
 The issues are spelled like the ones a field definition change raises, so an app words both the same way, see [`schema-changes.md`](./schema-changes.md#the-issues-an-update-reports).
 

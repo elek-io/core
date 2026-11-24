@@ -62,7 +62,7 @@ describe('DestinationService', function () {
    * A Collection whose one text field is optional, so an Entry of it can
    * hold no Value for it and still be written through Core
    */
-  async function optionalCollection() {
+  async function optionalCollection(slug = 'note') {
     const fieldDefinitionId = uuid();
     const created = await core.collections.create({
       projectId,
@@ -71,7 +71,7 @@ describe('DestinationService', function () {
         singular: { en: 'Note', de: 'Note' },
         plural: { en: 'Notes', de: 'Notes' },
       },
-      slug: { singular: 'note', plural: 'notes' },
+      slug: { singular: slug, plural: `${slug}s` },
       description: { en: 'Notes', de: 'Notes' },
       fieldDefinitions: [
         {
@@ -677,6 +677,89 @@ describe('DestinationService', function () {
       });
 
       await core.destinations.delete({ projectId, id: strict.id });
+    });
+
+    it('names what the Mapping fills from a field definition the Project dropped', async function () {
+      const optional = await optionalCollection('stale-note');
+      const noteEntry = await core.entries.create({
+        projectId,
+        collectionId: optional.collection.id,
+        values: {
+          note: {
+            objectType: 'value',
+            valueType: 'string',
+            content: { en: 'A note', de: 'Eine Notiz' },
+          },
+        },
+      });
+      const demanding = await contractDemanding(optional.fieldDefinitionId);
+      const theme = await createFakeTheme();
+      await theme.release({
+        tag: `v${demanding.version}`,
+        files: contractFileOf(demanding),
+      });
+      const stale = await core.destinations.addWebsite({
+        projectId,
+        name: 'stale.example',
+        url: theme.url,
+      });
+
+      // The Project drops the field definition the theme needs, which Core
+      // takes once the content loss is accepted, and the Mapping goes on
+      // naming it
+      await core.collections.update({
+        ...optional.collection,
+        projectId,
+        fieldDefinitions: [],
+        acceptedContentLoss: [optional.fieldDefinitionId],
+      });
+
+      const afterField = await core.destinations.checkAll({
+        projectId,
+        id: stale.id,
+      });
+      expect(
+        afterField.filter((issue) => {
+          return (
+            issue.issue === 'field_not_mapped' &&
+            issue.contractCollectionId === optional.collection.id
+          );
+        })
+      ).toMatchObject([
+        {
+          issue: 'field_not_mapped',
+          contractFieldDefinitionId: optional.fieldDefinitionId,
+        },
+      ]);
+      expect(
+        await core.destinations.check({
+          projectId,
+          id: stale.id,
+          collectionId: optional.collection.id,
+          entryId: noteEntry.id,
+        })
+      ).toMatchObject(afterField);
+
+      // And the whole Collection goes, so nothing fills the Contract's own
+      await core.collections.delete({
+        projectId,
+        id: optional.collection.id,
+      });
+
+      const afterCollection = await core.destinations.checkAll({
+        projectId,
+        id: stale.id,
+      });
+      expect(
+        afterCollection.filter((issue) => {
+          return (
+            issue.issue === 'collection_not_mapped' &&
+            issue.contractCollectionId === optional.collection.id
+          );
+        })
+      ).toHaveLength(1);
+
+      await core.destinations.delete({ projectId, id: stale.id });
     });
 
     it('throws NotFound for a website the Project does not hold', async function () {

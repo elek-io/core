@@ -220,31 +220,103 @@ describe('mappingIssuesOf', function () {
         mapping: mappingOf({
           [ids.cars]: { from: ids.cars, fields: [ids.titleField] },
         }),
+        collections: [cars],
       })
     ).toEqual([]);
   });
 
-  it('leaves an unmapped optional field alone', function () {
+  it('names a Collection no Collection of the Project fills', function () {
+    const cars = collection(ids.cars, [textField()]);
+
     expect(
       mappingIssuesOf({
         destinationId: ids.destination,
-        contract: contractOf({
-          collections: [collection(ids.cars, [entryField([])])],
-        }),
+        contract: contractOf({ collections: [cars] }),
+        mapping: { collections: {} },
+        collections: [cars],
+      })
+    ).toMatchObject([
+      { issue: 'collection_not_mapped', contractCollectionId: ids.cars },
+    ]);
+  });
+
+  it('leaves an unmapped optional field alone', function () {
+    const cars = collection(ids.cars, [entryField([])]);
+
+    expect(
+      mappingIssuesOf({
+        destinationId: ids.destination,
+        contract: contractOf({ collections: [cars] }),
         mapping: mappingOf({ [ids.cars]: { from: ids.cars, fields: [] } }),
+        collections: [cars],
+      })
+    ).toEqual([]);
+  });
+
+  it('names a Collection the Mapping fills from one the Project no longer holds', function () {
+    const cars = collection(ids.cars, [textField()]);
+
+    const issues = mappingIssuesOf({
+      destinationId: ids.destination,
+      contract: contractOf({ collections: [cars] }),
+      mapping: mappingOf({
+        [ids.cars]: { from: ids.elsewhere, fields: [ids.titleField] },
+      }),
+      collections: [cars],
+    });
+
+    expect(issues).toMatchObject([
+      { issue: 'collection_not_mapped', contractCollectionId: ids.cars },
+    ]);
+    expect(issues[0]?.message).toContain(ids.elsewhere);
+  });
+
+  it('names a required field the Mapping fills from a field definition the Collection no longer holds', function () {
+    const cars = collection(ids.cars, [textField()]);
+
+    const issues = mappingIssuesOf({
+      destinationId: ids.destination,
+      contract: contractOf({ collections: [cars] }),
+      mapping: mappingOf({
+        [ids.cars]: { from: ids.cars, fields: [ids.titleField] },
+      }),
+      collections: [collection(ids.cars, [])],
+    });
+
+    expect(issues).toMatchObject([
+      {
+        issue: 'field_not_mapped',
+        contractCollectionId: ids.cars,
+        contractFieldDefinitionId: ids.titleField,
+      },
+    ]);
+    expect(issues[0]?.message).toContain(ids.titleField);
+  });
+
+  it('leaves an optional field whose field definition is gone alone', function () {
+    const cars = collection(ids.cars, [entryField([])]);
+
+    expect(
+      mappingIssuesOf({
+        destinationId: ids.destination,
+        contract: contractOf({ collections: [cars] }),
+        mapping: mappingOf({
+          [ids.cars]: { from: ids.cars, fields: [ids.dealerField] },
+        }),
+        collections: [collection(ids.cars, [])],
       })
     ).toEqual([]);
   });
 
   it('names a mapped reference pointing at an unmapped Collection', function () {
+    const cars = collection(ids.cars, [entryField([ids.dealers])]);
     const issues = mappingIssuesOf({
       destinationId: ids.destination,
-      contract: contractOf({
-        collections: [collection(ids.cars, [entryField([ids.dealers])])],
-      }),
+      contract: contractOf({ collections: [cars] }),
       mapping: mappingOf({
         [ids.cars]: { from: ids.cars, fields: [ids.dealerField] },
       }),
+      collections: [cars],
     });
 
     expect(issues).toMatchObject([
@@ -257,26 +329,27 @@ describe('mappingIssuesOf', function () {
   });
 
   it('leaves a reference that points at anything alone', function () {
+    const cars = collection(ids.cars, [entryField([])]);
+
     expect(
       mappingIssuesOf({
         destinationId: ids.destination,
-        contract: contractOf({
-          collections: [collection(ids.cars, [entryField([])])],
-        }),
+        contract: contractOf({ collections: [cars] }),
         mapping: mappingOf({
           [ids.cars]: { from: ids.cars, fields: [ids.dealerField] },
         }),
+        collections: [cars],
       })
     ).toEqual([]);
   });
 
   it('says nothing about a reference of a field nothing fills', function () {
+    const cars = collection(ids.cars, [entryField([ids.dealers])]);
     const issues = mappingIssuesOf({
       destinationId: ids.destination,
-      contract: contractOf({
-        collections: [collection(ids.cars, [entryField([ids.dealers])])],
-      }),
+      contract: contractOf({ collections: [cars] }),
       mapping: mappingOf({ [ids.cars]: { from: ids.cars, fields: [] } }),
+      collections: [cars],
     });
 
     expect(issues).toEqual([]);
@@ -341,6 +414,76 @@ describe('entryIssuesOf, references through the Mapping', function () {
     ]);
   });
 
+  it('refuses a reference whose Collection carries the id of a Contract Collection the field allows', function () {
+    const issues = entryIssuesOf({
+      destinationId: ids.destination,
+      contract: contractOf({
+        collections: [cars, collection(ids.dealers, [])],
+      }),
+      mapping: mappingOf({
+        [ids.cars]: { from: ids.cars, fields: [ids.dealerField] },
+        [ids.dealers]: { from: ids.elsewhere, fields: [] },
+      }),
+      collection: projectCars,
+      // A Collection of the Project carrying the id the Contract gave its own
+      // "dealers", which no Mapping entry fills from
+      entry: entryOf({ dealer: referenceTo(ids.dealers) }),
+      languages,
+    });
+
+    expect(issues).toMatchObject([
+      {
+        issue: 'constraint_violation',
+        contractFieldDefinitionId: ids.dealerField,
+      },
+    ]);
+    expect(issues[0]?.message).toContain(ids.dealers);
+  });
+
+  it('refuses a reference into an unfilled Collection even where the field takes any', function () {
+    const anyCollection = collection(ids.cars, [entryField([])]);
+    const issues = entryIssuesOf({
+      destinationId: ids.destination,
+      contract: contractOf({ collections: [anyCollection] }),
+      mapping: mappingOf({
+        [ids.cars]: { from: ids.cars, fields: [ids.dealerField] },
+      }),
+      collection: anyCollection,
+      entry: entryOf({ dealer: referenceTo(ids.gallery) }),
+      languages,
+    });
+
+    expect(issues).toMatchObject([
+      {
+        issue: 'constraint_violation',
+        contractFieldDefinitionId: ids.dealerField,
+      },
+    ]);
+  });
+
+  it('takes a reference the field allows where two Contract Collections share one source', function () {
+    expect(
+      entryIssuesOf({
+        destinationId: ids.destination,
+        contract: contractOf({
+          collections: [
+            cars,
+            collection(ids.dealers, []),
+            collection(ids.gallery, []),
+          ],
+        }),
+        mapping: mappingOf({
+          [ids.cars]: { from: ids.cars, fields: [ids.dealerField] },
+          [ids.gallery]: { from: ids.elsewhere, fields: [] },
+          [ids.dealers]: { from: ids.elsewhere, fields: [] },
+        }),
+        collection: projectCars,
+        entry: entryOf({ dealer: referenceTo(ids.elsewhere) }),
+        languages,
+      })
+    ).toEqual([]);
+  });
+
   it('says nothing about an Entry whose Collection fills nothing', function () {
     expect(
       entryIssuesOf({
@@ -351,6 +494,23 @@ describe('entryIssuesOf, references through the Mapping', function () {
         }),
         collection: projectCars,
         entry: entryOf({ dealer: referenceTo(ids.elsewhere) }),
+        languages,
+      })
+    ).toEqual([]);
+  });
+
+  it('leaves a field whose field definition the Collection no longer holds to the Mapping', function () {
+    const required = collection(ids.cars, [textField()]);
+
+    expect(
+      entryIssuesOf({
+        destinationId: ids.destination,
+        contract: contractOf({ collections: [required] }),
+        mapping: mappingOf({
+          [ids.cars]: { from: ids.cars, fields: [ids.titleField] },
+        }),
+        collection: collection(ids.cars, []),
+        entry: entryOf({}),
         languages,
       })
     ).toEqual([]);
@@ -430,6 +590,24 @@ describe('entryIssuesOf, a dynamic field by the Components its items name', func
 
   it('leaves an optional field the Entry holds no Value for alone', function () {
     expect(check(dynamicField([ids.hero]), undefined)).toEqual([]);
+  });
+
+  it('refuses a Value that holds no Component items at all', function () {
+    const text: Value = {
+      objectType: 'value',
+      valueType: 'string',
+      content: { en: 'not an item' },
+    };
+
+    const issues = check(dynamicField([ids.hero]), text);
+
+    expect(issues).toMatchObject([
+      { issue: 'constraint_violation', contractFieldSlug: 'blocks' },
+    ]);
+    expect(issues[0]?.message).toContain('"string"');
+    expect(
+      check(dynamicField([ids.hero], { isRequired: true }), text)
+    ).toMatchObject([{ issue: 'constraint_violation' }]);
   });
 
   it('refuses fewer items than min', function () {
