@@ -1,3 +1,4 @@
+import Fs from 'fs-extra';
 import {
   afterAll,
   beforeAll,
@@ -602,6 +603,40 @@ describe('a site reading its Entries through its own Contract', function () {
 
     expect(website.contract.version).toBe('1.1.0');
     expect(site.store.get(secondEntryId)?.data).not.toHaveProperty('author');
+    expect(site.store.get(secondEntryId)?.data).toMatchObject({
+      title: { en: 'Polo', de: 'Polo' },
+    });
+
+    await core.destinations.delete({
+      projectId: siteProjectId,
+      id: website.id,
+    });
+  });
+
+  it('builds with the theme repository gone, which no pipeline needs', async function () {
+    const theme = await createFakeTheme();
+    await theme.release({ tag: 'v1.0.0', files: contractFileOf(contract) });
+    const website = await core.destinations.addWebsite({
+      projectId: siteProjectId,
+      name: 'no-theme-access.example',
+      url: theme.url,
+    });
+    await core.destinations.update({
+      projectId: siteProjectId,
+      id: website.id,
+      mapping: fullMapping(),
+    });
+    // What a build on a runner that was never given the theme's address
+    // has, which is the Project and the site's own repository
+    await Fs.remove(theme.url);
+    const site = await buildSite({
+      collectionIdOrSlug: 'posts',
+      contract,
+      destination: 'no-theme-access.example',
+    });
+
+    await site.load();
+
     expect(site.store.get(secondEntryId)?.data).toMatchObject({
       title: { en: 'Polo', de: 'Polo' },
     });
