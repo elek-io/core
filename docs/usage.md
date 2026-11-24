@@ -884,6 +884,7 @@ Each loader watches only what it reads, so a Collection reloads when one of its 
 - Adding, removing or editing a **Component**, or the fields of one
 - Changing a Project's **supported languages**, which every translatable Value is keyed by
 - Renaming a **Collection's plural slug**, which Astro names the collection after
+- Changing the **Mapping** of a website the site reads through, or the **Collection of the Project** that fills one of its Contract's, both of which decide which Value arrives under which field of the Contract
 - Adding or removing a **Collection or Project**, which changes the set of collections `elekCollections()` returns
 
 The loaders notice all but the last and stop rather than pretend. Instead of reloading Entries against a schema that no longer describes them, which would silently drop a new field or fail on a removed one, the build log says what happened:
