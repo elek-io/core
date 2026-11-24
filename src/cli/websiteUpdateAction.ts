@@ -1,6 +1,7 @@
 import type ElekIoCore from '../index.node.js';
 import type { DestinationFile, WebsiteUpdateProps } from '../schema/index.js';
 import { isValueIssue } from '../util/destinationCheck.js';
+import type { DestinationIssue } from '../util/destinationIssue.js';
 import { CoreError } from '../util/shared.js';
 import { getCore } from './util.js';
 
@@ -60,7 +61,7 @@ export const websiteUpdateAction = async ({
     // person at the terminal. Core's logger gets the kind of issue and the
     // ids, which is what resolves a line against the Project without putting
     // anybody's words in a log file. See contributing/logging.md.
-    console.warn(issue.message);
+    console.warn(terminalLineOf(issue));
     core.logger.warn({
       source: 'core',
       message: `Version ${kept.version} of Contract ${website.contract.id} reports "${issue.issue}" for website ${website.id} of Project ${project}`,
@@ -83,12 +84,55 @@ export const websiteUpdateAction = async ({
   const entries = new Set(
     switched.issues.filter(isValueIssue).map((issue) => issue.entryId)
   );
-  const mapping =
+  const unmapped =
     switched.issues.length - switched.issues.filter(isValueIssue).length;
   throw CoreError.preconditionFailed(
-    `Version ${kept.version} waits beside version ${website.contract.version}, which website ${website.id} of Project ${project} keeps using: ${mapping} of what it needs is unmapped, and ${entries.size} Entries do not fit. Each is named above. Map the rest and run this again.`
+    `Version ${kept.version} waits beside version ${website.contract.version}, which website ${website.id} of Project ${project} keeps using: ${whatIsLeft(unmapped, entries.size)}. Each is named above. Map the rest and run this again.`
   );
 };
+
+/**
+ * What one issue says at the terminal.
+ *
+ * A Value issue carries the refusal of the Contract's own field definition,
+ * which says what is wrong without saying where, so the Entry, the Collection
+ * it is in, the field filling the Contract and the language go in front of
+ * it. That is what a person opens to change the Value. A Mapping issue names
+ * both sides itself.
+ */
+function terminalLineOf(issue: DestinationIssue): string {
+  if (isValueIssue(issue) === false) {
+    return issue.message;
+  }
+  const language =
+    issue.language === undefined ? '' : ` in "${issue.language}"`;
+  return `Entry "${issue.entryId}" of Collection "${issue.collectionId}", field "${issue.fieldSlug}"${language}: ${issue.message}`;
+}
+
+/**
+ * What is left before the website can take the new version, in words: what
+ * the Mapping does not fill and how many Entries do not fit.
+ *
+ * Only what is there is named, because a count of zero says nothing about
+ * what to do next, and one of them is always there while the switch is
+ * refused.
+ */
+function whatIsLeft(unmapped: number, entries: number): string {
+  const left: string[] = [];
+  if (unmapped > 0) {
+    left.push(
+      unmapped === 1
+        ? '1 item it needs is unmapped'
+        : `${unmapped} items it needs are unmapped`
+    );
+  }
+  if (entries > 0) {
+    left.push(
+      entries === 1 ? '1 Entry does not fit' : `${entries} Entries do not fit`
+    );
+  }
+  return left.join(' and ');
+}
 
 /**
  * The website of a Project by the name it was given or by its id, which is

@@ -1,6 +1,14 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type ElekIoCore from '../index.node.js';
-import core, { uuid, type Collection, type Contract } from '../test/setup.js';
+import type { StringFieldDefinition } from '../schema/index.js';
+import core, {
+  CoreError,
+  flattenFieldDefinitions,
+  uuid,
+  type Collection,
+  type Contract,
+  type Entry,
+} from '../test/setup.js';
 import { contractFileOf, createFakeTheme } from '../test/theme.js';
 import {
   createAsset,
@@ -22,6 +30,7 @@ import { websiteUpdateAction } from './websiteUpdateAction.js';
 describe('websiteUpdateAction', function () {
   let projectId = '';
   let collection: Collection;
+  let entry: Entry;
   let contract: Contract;
   /**
    * The Core the action writes through, which is the one every assertion
@@ -36,7 +45,7 @@ describe('websiteUpdateAction', function () {
     projectId = project.id;
     collection = await createCollection(projectId);
     const asset = await createAsset(projectId);
-    await createEntry(projectId, collection.id, asset.id);
+    entry = await createEntry(projectId, collection.id, asset.id);
     contract = await core.contracts.generate({
       projectId,
       name: '@acme/dealer-site',
@@ -49,12 +58,27 @@ describe('websiteUpdateAction', function () {
     return { ...structuredClone(contract), version };
   }
 
-  /** The Contract at another version, with a required field nothing fills */
-  function demanding(version: string): Contract {
-    const next = at(version);
-    next.collections[0]?.fieldDefinitions.push({
+  /**
+   * The Contract at another version, refusing the Value the Entry holds for
+   * the Project's own text field
+   */
+  function tightened(version: string): Contract {
+    const next = demanding(version);
+    for (const field of flattenFieldDefinitions(
+      next.collections[0]?.fieldDefinitions ?? []
+    )) {
+      if (field.valueType === 'string' && 'max' in field) {
+        field.max = 1;
+      }
+    }
+    return next;
+  }
+
+  /** A required text field no field definition of the Project has */
+  function requiredField(slug: string): StringFieldDefinition {
+    return {
       id: uuid(),
-      slug: 'subtitle',
+      slug,
       valueType: 'string',
       fieldType: 'text',
       label: { en: 'Subtitle', de: 'Untertitel' },
@@ -66,7 +90,16 @@ describe('websiteUpdateAction', function () {
       inputWidth: '12',
       min: null,
       max: null,
-    });
+    };
+  }
+
+  /** The Contract at another version, with a required field nothing fills */
+  function demanding(
+    version: string,
+    field: StringFieldDefinition = requiredField('subtitle')
+  ): Contract {
+    const next = at(version);
+    next.collections[0]?.fieldDefinitions.push(field);
     return next;
   }
 
@@ -262,5 +295,97 @@ describe('websiteUpdateAction', function () {
       'NotFound',
       'has no website "nothing.example"'
     );
+  });
+
+  it('names the Entry, the field and the language of a Value that does not fit', async function () {
+    const field = flattenFieldDefinitions(collection.fieldDefinitions)[0];
+    if (field === undefined) {
+      throw new Error('The Collection holds no field definition');
+    }
+    await websiteOn('refused.example', [at('1.0.0'), tightened('2.0.0')]);
+    const printed = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    const logged = vi.spyOn(getCore().logger, 'warn');
+
+    let terminal = '';
+    let logFile = '';
+    let refused: unknown;
+    try {
+      refused = await websiteUpdateAction({
+        project: projectId,
+        name: 'refused.example',
+      }).then(
+        () => null,
+        (caught: unknown) => caught
+      );
+    } finally {
+      // Read before restoring, which drops what the spy recorded
+      terminal = printed.mock.calls.map((call) => String(call[0])).join('\n');
+      logFile = JSON.stringify(logged.mock.calls);
+      printed.mockRestore();
+      logged.mockRestore();
+    }
+    const left = refused instanceof CoreError ? refused.message : '';
+
+    // The Contract's refusal says what is wrong without saying where, so the
+    // line in front of it names what a person opens to change the Value
+    expect(terminal).toContain(`Entry "${entry.id}"`);
+    expect(terminal).toContain(`Collection "${collection.id}"`);
+    expect(terminal).toContain(`field "${field.slug}" in "en"`);
+    expect(terminal).toContain(`field "${field.slug}" in "de"`);
+    expect(terminal).toContain('Too big');
+    // One Entry does not fit, in two languages, and the field of the Contract
+    // nothing fills is counted on its own
+    expect(left).toContain('keeps using');
+    expect(left).toContain('1 item it needs is unmapped');
+    expect(left).toContain('1 Entry does not fit');
+    // The log file gets the kind of issue and the ids, never a slug or a
+    // Value, see contributing/logging.md
+    expect(logFile).toContain('constraint_violation');
+    expect(logFile).toContain(entry.id);
+    expect(logFile).not.toContain(field.slug);
+    expect(logFile).not.toContain('Too big');
+  });
+
+  it('switches on the next run once the Project holds the field the version needs', async function () {
+    // Its own slug, because the Project's Collection keeps the field
+    // definition this test adds to it
+    const added = requiredField('gained-subtitle');
+    const website = await websiteOn('gained.example', [
+      at('1.0.0'),
+      demanding('2.0.0', added),
+    ]);
+    await expectCoreError(
+      websiteUpdateAction({ project: projectId, name: 'gained.example' }),
+      'PreconditionFailed',
+      'keeps using'
+    );
+
+    // No CLI command writes a Mapping, so what a developer with the CLI
+    // alone does is add the field definition the refusal named, with the id
+    // the Contract carries
+    await cli.collections.update({
+      ...collection,
+      projectId,
+      fieldDefinitions: [...collection.fieldDefinitions, added],
+      resolutions: {
+        [entry.id]: {
+          [added.slug]: {
+            objectType: 'value',
+            valueType: 'string',
+            content: { en: 'A subtitle', de: 'Ein Untertitel' },
+          },
+        },
+      },
+    });
+    await websiteUpdateAction({ project: projectId, name: 'gained.example' });
+
+    const after = await cli.destinations.read({ projectId, id: website.id });
+    expect(after.contract.version).toEqual('2.0.0');
+    expect(after.waiting).toBeNull();
+    expect(after.mapping.collections[collection.id]?.fields[added.id]).toEqual({
+      fieldDefinitionId: added.id,
+    });
   });
 });
