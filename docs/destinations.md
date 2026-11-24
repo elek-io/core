@@ -141,7 +141,7 @@ kept.outcome; // 'waiting', or 'in-use' for the version the website uses
 - `keepVersion()` takes the newest version tagged there unless it is given one, keeps a copy of its Contract in the Project and puts that version beside the one in use, with a Mapping of its own. The website goes on using the version it uses.
 - The Mapping of the waiting version starts out as what the Mapping in use fills, plus every field the new version added whose id one of the Project's own field definitions carries.
 - A version newer than one that already waits replaces it and keeps what was mapped for it. One the website already uses is answered with the outcome `in-use` and writes nothing.
-- `check()` and `checkAll()` take `isWaitingVersion: true` for what the waiting version cannot take, and `update()` takes `waitingMapping` to replace its Mapping. Both throw `PreconditionFailed` while no version waits.
+- `check()` and `checkAll()` take `isWaitingVersion: true` for what the waiting version cannot take, and `update()` takes `waitingMapping` to replace its Mapping. Each of the three throws `PreconditionFailed` while no version waits.
 
 ```typescript
 const switched = await core.destinations.switchVersion({
@@ -159,7 +159,7 @@ switched.outcome; // 'switched', or 'kept' while switched.issues names what is l
 | The Contract at that version carries another name than the one the website follows | `BadRequest` |
 | No version waits, for a switch, a waiting Mapping or a check of one | `PreconditionFailed` |
 
-The CLI does both steps in one command, which prints each item that is left and exits non-zero while anything is:
+The CLI does both steps in one command. While anything is left it prints each item, leaves the website on the version it uses and exits non-zero:
 
 ```bash
 elek website:update --project <id> --name autohaus-ebersfelde.de
