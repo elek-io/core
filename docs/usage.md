@@ -688,6 +688,72 @@ Three mistakes fail the build rather than passing quietly, because each would ot
 - A selection that derives nothing at all, including `elekCollections(config, {})`.
 - A derived Collection that can reference Assets, through a reference field or a markdown field with `assetReferences` enabled, while that Project's Assets are left out. Following such a reference is `getEntry('websiteAssets', ref.id)`, so without the collection it would break while a page renders, far from the config that caused it.
 
+A site whose theme states a Contract takes its Collections from that instead, see [building on the site's own Contract](#building-on-the-sites-own-contract).
+
+### Building on the site's own Contract
+
+A theme states what it needs as a Contract, the `elek.contract.json` of its own repository, see [`destinations.md`](./destinations.md). Name the website that follows it and the site reads every Entry in the shape of that Contract, whatever the Project's own Collections and fields are called:
+
+```typescript
+// elek.config.ts
+import { defineElekConfig } from '@elek-io/core/astro';
+import contract from './elek.contract.json';
+
+export const config = defineElekConfig({
+  projects: {
+    website: {
+      id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+      destination: 'autohaus-ebersfelde.de',
+    },
+  },
+  contract,
+});
+```
+
+- `destination` is the website's own name, the one the editor gave it, or its id.
+- `contract` is this site's own `elek.contract.json`, imported rather than discovered, so the file the theme ships is the one the build reads.
+- The two go together. Either one alone fails the config where you wrote it.
+
+`elekCollections()` then derives one collection per Collection of the Contract, so a Project aliased `website` on a Contract with a `posts` Collection produces `websitePosts`, however that Project's own Collection is named. Under `collections` a Collection is named by the Contract's plural slug or its id, the same two as before.
+
+```typescript
+const post = await getEntry('websitePosts', id);
+post?.data.title.en; // the Contract's own field slug
+```
+
+Everything else reads as it does without a Contract. Values are keyed by the Project's languages, an Entry reference carries the `collectionId` of the Contract Collection it landed in, and a Single Entry of the Contract is read under `single`.
+
+- A field of the Contract nothing fills is empty, `null` in every language or an empty list, which is what a field the editor left empty holds too.
+- A Value of the Project the Contract does not ask for is left out, so a site one Contract version behind still builds.
+- Mapping a Project's content onto a Contract is the editor's work in elek.io Desktop. The build reads that Mapping and never guesses.
+
+### What a build on a Contract receives
+
+The build stops on everything the website cannot fill. The Mapping comes first, naming every Collection and field of the Contract the Project leaves unfilled in one error:
+
+```text
+Destination "autohaus-ebersfelde.de" of Project "website" does not fill the
+Contract "@acme/dealer-site" at version 1.1.0 while the website uses 1.0.0:
+- No Collection of the Project fills "pages"
+- No field of the Project fills the required field "author" of "posts"
+```
+
+Then every Entry a Collection of the Contract refuses, naming the Entry, the field and the language:
+
+```text
+Collection "posts" of the Contract "@acme/dealer-site" at version 1.0.0 is not
+filled by Project "website" through Destination "autohaus-ebersfelde.de":
+- Entry "0b1f...": field "title" in "en": Too big: expected string to have <=10 characters
+```
+
+Nothing of that collection is stored while it does not fit, so no page renders half a Collection. Astro loads its collections together and stops on the first one that fails, so the Entries of one Collection are named at a time.
+
+A pipeline of your own needs this site's repository and read access to the Project's content remote, and nothing else:
+
+- The Contract comes from this site's own file and its name from the Project's own copy, never from the theme's git address, so no build needs access to the theme.
+- The version in use is the Project's. A site one version behind builds, and a site whose code moved ahead stops the build naming what the Project does not fill yet.
+- No elek.io Cloud takes part. [`provisioning.md`](./provisioning.md) covers fetching the Project itself, and [`elek()`](#provisioning-in-ci-with-elek) does it in the build.
+
 ### Declaring collections explicitly
 
 `elekCollections()` returns a plain object, so individual collections can be added next to it, and the loaders behind it are exported for when you want to name a collection yourself or give it a key of your own:

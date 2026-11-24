@@ -212,17 +212,12 @@ async function assertMappingFills(props: {
 
 /**
  * Derives Astro content collections from the elek.io Collections the options
- * name. That object is the complete list, nothing outside it is derived, and
- * with no options at all it derives everything and warns. Keys are the alias
- * plus the plural slug in PascalCase (`websitePosts`), Assets `${alias}Assets`.
- *
- * A Project declared with a `destination` contributes the Collections of the
- * site's own Contract instead of its own, named by the Contract's slugs.
- *
- * Reads the content model from disk. Throws `Conflict` on a key two sources
- * derive, `BadRequest` on a selection naming nothing, deriving nothing,
- * leaving out Assets a derived Collection can reference, or on a Mapping
- * that leaves a derived Collection of the Contract unfilled.
+ * name, or from the site's own Contract where a Project declares a
+ * `destination`. The options are the complete list, and without them it
+ * derives everything and warns. Keys are the alias plus the plural slug in
+ * PascalCase (`websitePosts`), Assets `${alias}Assets`. Throws `Conflict` on
+ * a key two sources derive and `BadRequest` on a selection or a Mapping that
+ * leaves a derived collection unreadable.
  *
  * @see ../../docs/usage.md
  */

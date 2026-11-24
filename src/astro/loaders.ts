@@ -379,17 +379,13 @@ interface EntriesPlan {
 
 /**
  * Astro content loader for elek.io Collection Entries, which also supplies
- * Astro with the Collection's schema and its generated `Entry` type. Both are
- * built from the content model once, when Astro loads the content config.
- * A Single Entry's one Entry goes under `single`, nothing while it holds none.
- *
- * A Project declared with a `destination` is read in the shape of the site's
- * own Contract, and every Collection, field and Entry that does not fit it
- * stops the build.
- *
- * In dev it reloads Entries as they change. A change to the content model
- * stops it instead, with a log line saying the dev server has to be
- * restarted, because Astro can rebuild neither the schema nor the types.
+ * Astro with the Collection's schema and its generated `Entry` type, built
+ * from the content model once, when Astro loads the content config. A Single
+ * Entry's one Entry goes under `single`, nothing while it holds none. A
+ * Project declared with a `destination` is read in the shape of the site's
+ * own Contract, and whatever does not fit it stops the build. In dev it
+ * reloads Entries as they change, and a model change asks for a restart of
+ * the dev server instead.
  *
  * @see ../../docs/usage.md
  */

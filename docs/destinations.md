@@ -138,10 +138,22 @@ The issues are spelled like the ones a field definition change raises, so an app
 - A copy is never rewritten. A version already kept is the one a Destination keeps using.
 - No credential of any kind goes into the Project. An address carrying one is refused.
 
+## What a site's build reads
+
+A site built with Core's Astro integration reads a Project's Entries through its website's Mapping, in the shape of its own Contract, and stops the build on everything that does not fit.
+
+- The site names its website in `elek.config.ts` and imports its own `elek.contract.json` beside it.
+- Its collections, schemas and types come from that Contract, so the theme's code never names one Project's Collections or fields.
+- The Contract's name is read from the Project's own copy and never from the theme's address, so a build needs no access to the theme.
+- A site one Contract version behind the website still builds, and one whose code moved ahead stops the build.
+
+See [the Astro integration](./usage.md#building-on-the-sites-own-contract) for the config, what a failing build prints and what a pipeline of your own needs.
+
 ## See also
 
 - [`concepts.md`](./concepts.md) - Collections, Components and Entries, which a Contract is made of
 - [`fields.md`](./fields.md) - the field types a Contract's field definitions carry
 - [`git-and-sync.md`](./git-and-sync.md#reading-an-address-with-your-own-git-access) - the git access reading a theme's address takes
 - [`usage.md`](./usage.md#the-cli) - `elek generate:contract`
+- [`usage.md`](./usage.md#building-on-the-sites-own-contract) - the Astro site that builds on its Contract
 - [`error-handling.md`](./error-handling.md) - `CoreError`, its types and its reasons

@@ -12,6 +12,7 @@ Design notes and invariants behind `@elek-io/core/astro`. The consumer-facing do
 | `elekConfig.ts` | `defineElekConfig`, the config schema, alias resolution |
 | `loaders.ts` | `elekAssetsLoader`, `elekEntriesLoader` |
 | `collections.ts` | `elekCollections` |
+| `siteContract.ts` | the Destination and the Contract a site reads through |
 | `mdastRender.ts` | the Astro binding of the mdast renderer |
 
 The split is not cosmetic. `collections.ts` builds its collections from the loaders, so leaving the loaders in the entry would make the entry and `collections.ts` import each other. Keeping `getCore()` in its own module also keeps the "one Core per process" promise honest, a second copy of that module would mean a second Core.
@@ -55,6 +56,13 @@ So a model change has no good outcome. Reloading against the previous schema sil
 
 `buildModelDigest` ([`schema.ts`](../src/astro/schema.ts)) fingerprints exactly the inputs of `buildEntryValuesSchema`, the field definitions, the languages and the Components. `createSchema` records it, every reload compares it, and a mismatch logs the restart and returns without touching the store.
 
+A site reading through a Destination adds two more things to that fingerprint, through the digest's fourth argument:
+
+- Its Mapping, which decides which Value fills which field of the Contract.
+- The Collection of the Project the Mapping names, which decides where those Values come from and so which directory the watcher is pointed at for the life of the dev server.
+
+Neither changes the schema, and both change what a reload would read against it.
+
 Two consequences for what is watched:
 
 - The Entries loader watches `pathTo.components(projectId)` even though it never reloads a Component. Without it, editing a Component that no Entry embeds yet changes nothing on disk that anyone watches, and the developer gets silence instead of the message.
@@ -81,6 +89,17 @@ Two details of the schema:
 - `ref` stays a plain `string` on the declaration rather than a channel union, because `contentRefSchema` validates it anyway and `ELEK_IO_CHANNEL` can override it at runtime, so a narrower type would promise a precision the value does not have.
 
 The config is found by import, never by discovery. `elek.config.ts` is a convention the docs state, and the imports are what connect `astro.config.mjs` and the content config. That astro.config can import a sibling `.ts` file at all was the design's riskiest assumption and is covered by [`src/index.astro.config.test.ts`](../src/index.astro.config.test.ts).
+
+### The site's own Contract
+
+`contract` is typed as `unknown` on `ElekConfig` and validated by the schema, because TypeScript types a JSON import from the file rather than from Core's schemas: `fieldType: "text"` widens to `string`, which no field definition union admits. Typing it as `Contract` would therefore need a cast in the consumer's own config.
+
+The file reaches the config by import for the same reason the config itself does, and that also decides what the build may read:
+
+- The schema, the types and the check come from the site's own file, so the theme's code and the shape it reads are the same thing at the same version.
+- Only the Contract's name comes from the Project, out of `contracts/<id>/contract.json`, so a site whose file is another theme's stops with one line naming both.
+- The theme's git address is never read in a build. A pipeline needs the site's repository and the content remote, nothing else.
+- `destination` and `contract` refuse each other's absence, because a site with one of them would read the Project's own Collections while its code expects the Contract's.
 
 ## Derived collection keys
 
@@ -130,6 +149,18 @@ Three cases throw, all for one reason: each would otherwise produce exactly what
 That last check is the tractable half of "derive only the Assets that are actually referenced". The full version is not available to us: loaders are independent and Astro decides their order, so the Assets loader cannot wait on every Entries loader, and it would silently drop Assets a template uses without any Entry referencing them.
 
 The keys a consumer autocompletes against come from the types Astro generates after a sync, not from what `elekCollections` returns. Its return type is honestly string-keyed, and making it more precise would not help, Astro reads the collection object at sync time either way.
+
+## Where the Contract check runs
+
+The check runs in two places on purpose, once over the Mapping and once over the Entries.
+
+- `elekCollections` checks the Mapping of the Collections it derives, before an Entry is read, so one error names every Collection and field the Project leaves unfilled. Astro's content layer loads its collections with `Promise.all` and surfaces the first rejection, so a check only in the loaders would name the Mapping one collection at a time.
+- Every loader checks its own Collection's Mapping again and then its Entries, because a collection declared by hand never passes through `elekCollections`, and the loader is what writes the store.
+- The Entries stay in the loader. Checking them in `elekCollections` as well would read every Entry of the site twice per sync.
+
+A loader collects every issue of its Collection before it throws, and throws before it stores anything, so no page renders half a Collection.
+
+The issues come out of [`destinationCheck.ts`](../src/util/destinationCheck.ts), the same functions `core.destinations.check()` composes, so a build and a Release word the same problem the same way. What differs is the Contract each reads: a Release reads the Project's kept copy of the version in use, a build reads the site's own file.
 
 ## The generated schema and the generated types
 
