@@ -62,6 +62,17 @@ describe('ContractService', function () {
       expect((await generated()).languages).toEqual(['en', 'de']);
     });
 
+    it('writes nothing into the Project', async function () {
+      const before = await core.contracts.count({ projectId });
+
+      await generated();
+
+      expect(await core.contracts.count({ projectId })).toEqual(before);
+      expect(
+        (await core.git.status(core.util.pathTo.project(projectId))).files
+      ).toEqual([]);
+    });
+
     it('writes the languages it is given instead', async function () {
       const contract = await core.contracts.generate({
         projectId,
@@ -394,6 +405,32 @@ describe('ContractService', function () {
   });
 
   describe('a Project with no Contract', function () {
+    it('gets a contracts and a destinations folder like every other', async function () {
+      const project = await createProject('Foldered Project');
+      const projectPath = core.util.pathTo.project(project.id);
+
+      const folders = (await Fs.readdir(projectPath, { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory() && entry.name !== '.git')
+        .map((entry) => entry.name)
+        .toSorted();
+
+      expect(folders).toEqual([
+        'assets',
+        'collections',
+        'components',
+        'contracts',
+        'destinations',
+        'lfs',
+      ]);
+      expect(
+        await Fs.pathExists(
+          core.util.pathTo.contracts(project.id) + '/.gitkeep'
+        )
+      ).toEqual(true);
+
+      await project.destroy();
+    });
+
     it('releases, synchronizes and upgrades as one without the folders does', async function () {
       const project = await createProject('Untouched Project');
       await createCollection(project.id);

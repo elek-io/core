@@ -418,6 +418,30 @@ describe('DestinationService', function () {
       ).toEqual([]);
     });
 
+    it("reads Values against the Project's languages rather than the Contract's", async function () {
+      // The Contract serves German alone and the Project holds English and
+      // German, which is recorded and not checked, because which language
+      // fills a field belongs to a Mapping
+      const german: Contract = {
+        ...contract,
+        languages: ['de'],
+        version: '3.0.0',
+      };
+      const theme = await createFakeTheme();
+      await theme.release({ tag: 'v3.0.0', files: contractFileOf(german) });
+      const germanSite = await core.destinations.addWebsite({
+        projectId,
+        name: 'german.example',
+        url: theme.url,
+      });
+
+      expect(
+        await core.destinations.checkAll({ projectId, id: germanSite.id })
+      ).toEqual([]);
+
+      await core.destinations.delete({ projectId, id: germanSite.id });
+    });
+
     it('names the Collection nothing fills', async function () {
       const unmapped = await core.destinations.update({
         projectId,
