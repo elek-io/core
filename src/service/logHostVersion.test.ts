@@ -64,8 +64,8 @@ describe('log.hostVersion', function () {
  * macrotask is not always enough for it to drain, which left the read empty
  * and the assertion below it reading `undefined`.
  *
- * The wait carries the measured drain budget rather than vitest's 1,000ms
- * default, which is under it on the slowest runner.
+ * The wait takes the measured drain budget, which is above vitest's
+ * 1,000ms default, rather than that default.
  */
 async function recordsHolding(
   dataDir: string,

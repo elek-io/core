@@ -147,7 +147,7 @@ So every step of a cleanup is bounded, and none of the bounds is a test's or a h
 | `slowestLogDrainMs`, 399ms | one log record reaching the file a test reads it from | [`src/test/budgets.ts`](../src/test/budgets.ts) |
 | `logDrainTimeoutMs`, 1,197ms | the wait for that drain in [`logHostVersion.test.ts`](../src/service/logHostVersion.test.ts) | [`src/test/budgets.ts`](../src/test/budgets.ts) |
 
-- The drain is measured like the cleanup, on Linux and scaled to the slowest runner, because nothing in CI reports it either. Three runs of 25 rounds on 2026-11-24 put it at 18.8ms at its slowest and at 4ms or less at each run's median.
+- The drain is measured like the cleanup, on Linux and scaled to the slowest runner, because nothing in CI reports it either. Four runs of 25 rounds on 2026-11-24 put it at 18.8ms at its slowest and at 4ms or less at each run's median.
 - [`cleanup.test.ts`](../src/test/cleanup.test.ts) waits `hungTeardownMs` for the record of a stalled teardown, and [`loaders.test.ts`](../src/astro/loaders.test.ts) 10,000ms for an Astro loader to reload.
 - [`timeout-budgets.test.ts`](../src/timeout-budgets.test.ts) reads a `vi.waitFor` as `vi` and leaves its bound alone, because the bound is neither a test's nor a hook's, so no check compares it against a global.
 

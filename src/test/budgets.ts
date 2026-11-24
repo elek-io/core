@@ -94,7 +94,7 @@ export const cleanupTimeoutMs = slowestCleanupMs * budgetMultiple;
  * slowest runner, in milliseconds.
  *
  * Nothing in CI reports that duration, so like the cleanup one above this
- * is a Linux measurement scaled by 21, rounded up from the 18.8ms three
+ * is a Linux measurement scaled by 21, rounded up from the 18.8ms four
  * runs of 25 rounds put it at.
  *
  * @see ../../contributing/testing.md
