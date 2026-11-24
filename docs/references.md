@@ -20,7 +20,7 @@ An Entry reference always carries the target's `collectionId` alongside its `id`
 
 The same reference can sit in three different places inside an Entry's values. Any feature that reads or protects references has to look in all three.
 
-```
+```text
 Entry "article-42"
 └─ values
    ├─ author     flat reference field          ──► entry  a1c3…  (Collection "authors")
@@ -40,7 +40,7 @@ Entry "article-42"
 
 Core protects reference integrity at two moments. Write time stops you from creating a broken reference. Delete time stops you from breaking an existing one.
 
-```
+```text
    ┌──────────────────────────┐          ┌──────────────────────────┐
    │   WRITE  (create/update) │          │          DELETE          │
    ├──────────────────────────┤          ├──────────────────────────┤
@@ -72,7 +72,7 @@ Removing content that something still points at would leave a dangling reference
 
 The rule for the value-level deletes is one on-demand scan:
 
-```
+```text
 delete an Asset / Entry / Collection
             │
             ▼
@@ -103,7 +103,7 @@ Core scans every Entry in the Project. If a surviving Entry still references the
 
 A Collection delete removes the Collection and every Entry inside it at once. The hazard is only the references that point **into** the Collection from Entries that **survive**. References between Entries that are all being deleted together vanish cleanly and must not block. This is the same idea as the self-reference rule, widened from one Entry to the whole Collection.
 
-```
+```text
         Collection C  (being deleted)            other Collections  (surviving)
 
         ┌───────────────────────────┐            ┌──────────────────────────┐

@@ -21,7 +21,7 @@ The User file is global, not per-Project. There is one `user.json` per data dire
 
 Each Project is a self-contained git repository:
 
-```
+```text
 ~/elek.io/projects/{projectId}/
 |-- .git/
 |-- .gitignore

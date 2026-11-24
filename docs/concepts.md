@@ -2,7 +2,7 @@
 
 The data model behind elek.io Core: Projects, Collections, Components, Entries, Values, Assets and Releases, and how they relate.
 
-```
+```text
 |-- Project - e.g. "Website"
 |   |-- Component - e.g. "Author"
 |   |   Reusable, named groups of field definitions that can be referenced by Collections.

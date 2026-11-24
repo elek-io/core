@@ -232,6 +232,81 @@ describe('documentation', () => {
     });
   });
 
+  describe('prose/fence-language', () => {
+    const rule = rules.find(
+      (candidate) => candidate.id === 'prose/fence-language'
+    );
+
+    /** The set the message offers, as a reader of the failure reads it. */
+    const allowed =
+      'typescript, tsx, javascript, astro, html, bash, json, jsonc, yaml, http, diff, markdown, mermaid, text';
+
+    /** What the rule reports for a doc somebody just wrote a block into. */
+    const messagesOf = (content: string) =>
+      (rule?.check('docs/usage.md', content) ?? []).map(
+        (violation) => violation.message
+      );
+
+    it('reads the docs, the README and the contributing docs', () => {
+      const files = rule?.files() ?? [];
+
+      expect(files).toContain('docs/usage.md');
+      expect(files).toContain('README.md');
+      expect(files).toContain('contributing/documentation.md');
+    });
+
+    it('reports a block that names no language', () => {
+      const messages = messagesOf('```\njust text\n```\n');
+
+      expect(messages).toStrictEqual([
+        `fence names no language, use one of ${allowed}`,
+      ]);
+    });
+
+    it('reports one indented inside a list item', () => {
+      const messages = messagesOf('- a step:\n\n  ```\n  just text\n  ```\n');
+
+      expect(messages).toStrictEqual([
+        `fence names no language, use one of ${allowed}`,
+      ]);
+    });
+
+    it('reports a language neither GitHub nor the site colors', () => {
+      const messages = messagesOf('```nosuchlang\na line of it\n```\n');
+
+      expect(messages).toStrictEqual([
+        `fence language "nosuchlang" is not allowed, use one of ${allowed}`,
+      ]);
+    });
+
+    it('takes the languages a block that names a file needs', () => {
+      const messages = messagesOf(
+        [
+          '```yaml',
+          '# .github/workflows/deploy.yml',
+          'name: Deploy website',
+          '```',
+          '',
+          '```jsonc',
+          '// package.json',
+          '{ "name": "site" }',
+          '```',
+          '',
+          '```http',
+          'GET /content/v1/projects',
+          '```',
+          '',
+          '```html',
+          '<p>Pay the rent</p>',
+          '```',
+          '',
+        ].join('\n')
+      );
+
+      expect(messages).toStrictEqual([]);
+    });
+  });
+
   it('baseline holds no stale entries', () => {
     const stale: string[] = [];
     for (const [id, files] of Object.entries(baseline)) {

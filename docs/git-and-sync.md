@@ -63,7 +63,7 @@ The User reaches git through the environment of each command, never through the 
 
 Commit messages are structured: a human-readable subject line followed by git trailers that record what changed.
 
-```
+```text
 Create project 550e8400-e29b-41d4-a716-446655440000
 
 Method: create

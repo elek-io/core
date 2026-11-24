@@ -184,6 +184,7 @@ Declare the accumulator in the frontmatter, override the handler to fill it and 
 
 ```astro
 ---
+// src/pages/posts/[slug].astro
 import { mdastRender } from '@elek-io/core/astro';
 
 const footnotes: astroHTML.JSX.Element[] = [];
@@ -233,7 +234,8 @@ A parent's handler is given its children already rendered, so three placements a
 | A task item's checkbox | inside a `<label>` that opens the item's text, on one line with it |
 | A footnote's way back | at the end of the note's last paragraph |
 
-```text
+<!-- prettier-ignore -->
+```html
 <ul><li><label><input type="checkbox" checked disabled> Pay the rent</label></li></ul>
 <div id="fn-1"><p>The note. <a href="#fnref-1" aria-label="Back to content">↩</a></p></div>
 ```
@@ -322,7 +324,8 @@ A handler that does not need it declares fewer parameters, which is why every re
 
 A table's header is its first row, which is all mdast records. The defaults turn that into the markup a screen reader needs:
 
-```text
+<!-- prettier-ignore -->
+```html
 <table>
   <thead><tr><th scope="col">Field</th><th scope="col">Type</th></tr></thead>
   <tbody><tr><td>slug</td><td>string</td></tr></tbody>
@@ -398,6 +401,7 @@ The primitive is the same typed fold the Astro binding wraps. `T` is your framew
 The example below uses React (`T = ReactNode`). For Vue bind `T = VNode`, for Solid `T = JSX.Element`. Only the element factory changes, the structure stays identical.
 
 ```tsx
+// src/components/MdastContent.tsx
 import {
   extractText,
   footnoteWayBackIdentifier,

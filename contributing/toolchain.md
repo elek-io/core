@@ -84,7 +84,7 @@ So it was one prettier minor behind, measured on oxfmt 0.61.0. It is at 0.78.0 t
 
 oxlint can report TypeScript compiler diagnostics alongside lint results, through the same tsgolint binary the type-aware rules use. The output matches `tsc` including the error codes:
 
-```
+```text
 tsc:    src/util/probe.ts(2,9): error TS2322: Type 'number' is not assignable to type 'string'.
 oxlint: src/util/probe.ts:2:9: error typescript(TS2322): Type 'number' is not assignable to type 'string'.
 ```

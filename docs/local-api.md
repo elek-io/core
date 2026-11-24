@@ -76,7 +76,7 @@ List endpoints take `limit` and `offset` query parameters. Both are passed strai
 }
 ```
 
-```
+```http
 GET /content/v1/projects/3f2504e0-4f89-41d3-9a0c-0305e82c3301/collections/blog-posts/entries?limit=10&offset=20
 ```
 
@@ -176,7 +176,7 @@ So open the reference at `http://localhost:31310`, where the request is same-ori
 
 Requests are logged through Core's logger, never as the URL. A log file can be handed to someone else, and both a `{collectionIdOrSlug}` segment and a query parameter carry whatever the caller sent. What a record holds instead is the matched route pattern and the ids the request addressed, so:
 
-```
+```http
 GET /content/v1/projects/<project-uuid>/collections/blog-posts
 ```
 

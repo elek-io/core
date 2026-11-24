@@ -58,7 +58,7 @@ const indexUrl = import.meta.resolve('@elek-io/core/docs/index.md');
 
 elek.io Core organises content into a small set of nested concepts:
 
-```
+```text
 |-- Project - e.g. "Website" - a git-versioned container for everything below
 |   |-- Component - e.g. "Author" - reusable group of field definitions
 |   |-- Collection - e.g. "Blog" - Field definitions Entries must follow
@@ -190,7 +190,7 @@ When working with `@elek-io/core`, read the relevant doc under `node_modules/@el
 
 ## Source structure
 
-```
+```text
 |-- src
 |   |-- api
 |   |   Local REST API built on Hono with OpenAPI documentation.

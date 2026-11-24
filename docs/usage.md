@@ -710,6 +710,7 @@ An Asset that Astro's image pipeline understands (`jpeg`, `jpg`, `png`, `tiff`, 
 
 ```astro
 ---
+// src/pages/assets.astro
 import { getCollection } from 'astro:content';
 import { Image } from 'astro:assets';
 
@@ -739,7 +740,7 @@ await elekCollections(config, {
 
 These binaries are derived from the Project, so they do not belong in your site's repository:
 
-```
+```text
 # .gitignore
 src/elek/
 public/elek/
@@ -788,7 +789,7 @@ Each loader watches only what it reads, so a Collection reloads when one of its 
 
 The loaders notice all but the last and stop rather than pretend. Instead of reloading Entries against a schema that no longer describes them, which would silently drop a new field or fail on a removed one, the build log says what happened:
 
-```
+```text
 [elek-entries] The content model of Collection "posts" of Project "website" changed.
 Astro builds a collection's schema and types once, when it loads the content config,
 so restart the dev server to pick them up. Entries are not reloaded until then.
