@@ -685,10 +685,11 @@ describe('a site reading its Entries through its own Contract', function () {
     );
 
     expect(
-      lines.slice(before).filter((line) => line.level === 'warn')
-    ).toMatchObject([
-      { message: expect.stringContaining('restart the dev server') },
-    ]);
+      lines
+        .slice(before)
+        .filter((line) => line.level === 'warn')
+        .map((line) => line.message)
+    ).toEqual([expect.stringContaining('restart the dev server')]);
   });
 
   it('derives the Collections of the Contract rather than the Project', async function () {
