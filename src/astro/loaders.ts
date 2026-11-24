@@ -473,14 +473,14 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     }
 
     // A Single Entry holds one Entry, which the site reads without knowing
-    // its id. Core refuses a second one, so a Collection carrying more was
-    // written outside Core and the rest is left out rather than overwriting
-    // the one the site reads
+    // its id. `entries.create` refuses a second one while the Collection
+    // holds one, which a pull, a merge or two unserialized creates get past,
+    // so the rest is left out rather than overwriting the one the site reads
     const { isSingleEntry } = model.collection;
     const loaded = isSingleEntry ? entries.slice(0, 1) : entries;
     if (loaded.length < entries.length) {
       context.logger.warn(
-        `Collection "${props.collectionIdOrSlug}" of Project "${alias}" is a Single Entry holding ${entries.length} Entries, of which the site reads the first. Delete the others through elek.io, which never writes a second one.`
+        `Collection "${props.collectionIdOrSlug}" of Project "${alias}" is a Single Entry holding ${entries.length} Entries, of which the site reads the first. Creating an Entry there is refused while it holds one, so a sync of two editors' work can leave two, as can two creates at once. Delete the ones the site should not read.`
       );
     }
 

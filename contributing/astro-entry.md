@@ -104,7 +104,12 @@ Two alternatives were rejected:
 
 So a reference pointing into a Single Entry does not resolve by the id it carries. A page reads `single` there, which [`../docs/usage.md`](../docs/usage.md#reading-a-single-entry) says.
 
-A Collection carrying more than one Entry is unreachable through Core, which refuses the second. The loader still takes the first and warns, rather than letting the loop's last write decide what the site shows.
+`entries.create` refuses a second Entry while the Collection holds one, and that check is a scan-then-write like the one for `isUnique`, [`../docs/fields.md`](../docs/fields.md#uniqueness). Two routes reach a Collection holding more, neither of them a writer outside Core:
+
+- Two Project copies that each fill the same empty Single Entry hold two after a sync.
+- Two creates nobody serialized both pass the check.
+
+The loader takes the first and warns, naming both routes, rather than letting the loop's last write decide what the site shows.
 
 ## Selecting what is derived
 

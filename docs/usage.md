@@ -317,7 +317,9 @@ const collection = await core.collections.create({
 
 Passing `isSingleEntry: true` to `create()` limits the Collection to one Entry, a Single Entry, which is where one-off content such as contact details belongs. Left out, the Collection holds a list, which is what every Collection created before this option did.
 
-- `core.entries.create()` throws `Conflict` naming the Entry the Single Entry already holds, so update that Entry rather than adding one.
+- `core.entries.create()` throws `Conflict` naming the Entry the Single Entry already holds, so update that Entry rather than adding one. It counts the Entries on disk, so one a pull or merge brought in holds the place too.
+- That count is a scan-then-write, the assumption uniqueness makes as well, see [`fields.md`](./fields.md#uniqueness). Two `create()` calls at once can both pass it, so a caller that writes in parallel serializes them itself.
+- A Single Entry can therefore end up holding two, and so can two Project copies that each filled the same empty one before a sync. Core refuses a third, an Astro site reads the first, and the build log warns.
 - `core.collections.update()` throws `Conflict` for any other value than the one the Collection was created with. It takes that value, so sending back a Collection you read changes nothing.
 - A Collection never turns into a Single Entry or back. Create the Collection you need and add its Entries there.
 
@@ -559,6 +561,8 @@ An Entry carries no `body` and no rendered HTML, so Astro's `render()` and `<Con
 A Collection limited to one Entry, a Single Entry, derives its Astro collection like every other one, under the alias plus its plural slug. Its one Entry is stored under the id `single`, so the site reads it as one item without knowing which Entry it is:
 
 ```typescript
+import { getEntry } from 'astro:content';
+
 const contact = await getEntry('websiteContactDetails', 'single');
 const phone = contact?.data.phone.en ?? null;
 ```
@@ -710,7 +714,7 @@ The `project` of a loader and the aliases in `elekCollections()`'s options accep
 
 ### Routing by slug
 
-Entries are keyed by their UUID in Astro's store, which is what `getEntry()` and every reference between Entries uses. For public URLs you usually want a [`slug` field](./fields.md) instead, and `elekSlugPaths()` turns a collection into the paths `getStaticPaths` expects:
+Entries are keyed by their UUID in Astro's store, outside a Single Entry, which is what `getEntry()` and every reference between Entries uses. A Single Entry uses `single`, see [reading a Single Entry](#reading-a-single-entry). For public URLs you usually want a [`slug` field](./fields.md) instead, and `elekSlugPaths()` turns a collection into the paths `getStaticPaths` expects:
 
 ```astro
 ---

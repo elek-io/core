@@ -337,8 +337,9 @@ describe('the Entries loader on a Single Entry', function () {
       collectionId: collection.id,
       values: singleEntryValues('+493012345678'),
     });
-    // Core refuses a second Entry, so only another writer can put one
-    // there. The first one's Values, under an id of its own
+    // Core refuses a second Entry while the Collection holds one, so a
+    // second one comes from a pull, a merge, two unserialized creates or
+    // another writer, as here. The first one's Values, under an id of its own
     const second = uuid();
     await Fs.outputJson(
       core.util.pathTo.entryFile(project.id, collection.id, second),
@@ -347,10 +348,17 @@ describe('the Entries loader on a Single Entry', function () {
 
     const { store, lines } = await loadOnce(project.id, collection.id);
 
+    const warnings = lines
+      .filter((line) => line.level === 'warn')
+      .map((line) => line.message);
+
     expect([...store.keys()]).toEqual([SINGLE_ENTRY_ID]);
-    expect(
-      lines.filter((line) => line.level === 'warn').map((line) => line.message)
-    ).toEqual([expect.stringContaining('is a Single Entry holding 2 Entries')]);
+    expect(warnings).toEqual([
+      expect.stringContaining('is a Single Entry holding 2 Entries'),
+    ]);
+    // The warning is all a developer has to go on, so it says how a second
+    // Entry gets there rather than denying that one can
+    expect(warnings[0]).toContain("a sync of two editors' work can leave two");
   });
 });
 

@@ -114,7 +114,9 @@ const body = post.data.body[language];
 
 The object is checked against `MdastAstroRenderers` by the call itself, so a missing required key or a mistyped node property is an error without annotating it.
 
-`entryReference` nodes carry the referenced Entry's UUID, which is also its store id, so `getEntry('posts', node.entryId)` resolves a reference from anywhere without a map. The map above exists only to turn that UUID into the same URL the routes were built from.
+`entryReference` nodes carry the referenced Entry's UUID, which outside a Single Entry is also its store id, so `getEntry('posts', node.entryId)` resolves a reference from anywhere without a map. The map above exists only to turn that UUID into the same URL the routes were built from.
+
+- A reference into a Single Entry is the exception: `node.entryId` finds nothing in the store, because the one Entry is kept under `single` there, see [`usage.md`](./usage.md#reading-a-single-entry).
 
 A Collection without a slug field routes by UUID instead, with a `getStaticPaths` that returns:
 
