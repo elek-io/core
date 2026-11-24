@@ -131,15 +131,14 @@ export class ContractService extends AbstractEntityService {
   /**
    * The Contract a theme states at a git address, read at the newest version
    * it tagged or at the one given, with the version and the commit it came
-   * from.
+   * from. Core reads it with the person's own git access alone.
    *
-   * Core reads the address with the person's own git access and never with
-   * `ELEK_IO_REMOTE_ACCESS_TOKEN`, and refuses one carrying a credential,
-   * one git would run as a command and a path that is not absolute. Throws
-   * `BadRequest` for such an address and for a Contract that does not parse
-   * or carries another version, `PreconditionFailed` when the address tagged
-   * no version, `NotFound` when the version holds no Contract, `Unauthorized`
-   * without access and `Internal` when the address cannot be read at all.
+   * Throws `BadRequest` for an address it refuses and for a Contract that
+   * does not parse or carries another version, `PreconditionFailed` for an
+   * address that tagged none, `NotFound` when the version holds no Contract,
+   * `Unauthorized` without access and `Internal` for one it cannot read.
+   *
+   * @see ../../docs/destinations.md
    */
   public async readFromTheme(
     props: ReadThemeContractProps
@@ -223,14 +222,13 @@ export class ContractService extends AbstractEntityService {
    * Keeps a Contract in the Project and commits: `contract.json` once per
    * origin, and the copy of the given version beside it.
    *
-   * An origin the Project already keeps is returned as it is, with the copy
+   * An origin the Project already keeps comes back as it is, with the copy
    * added when it is new, so a second Destination on one theme shares the
-   * Contract rather than a copy of its own. The name follows the Contract
-   * read at the origin.
+   * Contract. The name follows the Contract read at the origin.
    *
-   * Throws `BadRequest` for an origin carrying a credential or one git would
-   * run as a command, because the origin is written into the Project, and
-   * `PreconditionFailed` in read-only mode and on a provisioned copy.
+   * Throws `BadRequest` for an origin `readFromTheme` refuses, which is
+   * written into the Project here, and `PreconditionFailed` while read-only
+   * or on a provisioned copy.
    */
   public async keep(props: CreateContractProps): Promise<KeptContract> {
     this.assertNotReadOnly('keep');

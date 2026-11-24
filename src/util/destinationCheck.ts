@@ -67,13 +67,10 @@ export function mappingByMatchingIds(props: {
  * definition, and every mapped reference field pointing at a Collection of
  * the Contract that is itself unmapped.
  *
- * A Mapping entry naming a Collection or field definition the Project no
- * longer holds fills nothing, so it is reported the same way rather than
- * read as mapped. `collections` is what the Project holds now, which is what
- * the Mapping is measured against.
- *
- * These hold whatever the Entries say, so they are reported once per
- * Destination rather than per Entry.
+ * Measured against `collections`, which is what the Project holds now, so an
+ * entry of the Mapping naming a Collection or field definition that is gone
+ * fills nothing and is reported rather than read as mapped. These hold
+ * whatever the Entries say, so each is reported once per Destination.
  */
 export function mappingIssuesOf(props: {
   destinationId: Uuid;
@@ -170,12 +167,9 @@ export function mappingIssuesOf(props: {
  * Its Values are read against the Contract's own field definitions, with
  * every Entry reference moved onto the Contract's Collection ids. A
  * `dynamic` field is checked by the Components its items name, their count
- * and whether one is there at all, and never inside an item, because no
- * Mapping maps a Component's own fields yet.
- *
- * A field the Mapping fills from a field definition this Collection no
- * longer holds is left to `mappingIssuesOf`, which reports it once for the
- * whole Destination rather than once per Entry.
+ * and whether one is there at all, never inside an item. A field filled
+ * from a field definition this Collection no longer holds is left to
+ * `mappingIssuesOf`, which reports it once rather than once per Entry.
  */
 export function entryIssuesOf(props: {
   destinationId: Uuid;
