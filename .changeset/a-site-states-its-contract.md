@@ -43,6 +43,13 @@ const website = await core.destinations.addWebsite({
 
 - The Project keeps each Contract once per address, with a copy of every version a website uses, so it stays self-contained and offline. A second website on one theme shares that Contract, and removing one leaves it to the others.
 - The Mapping starts out filling every field of the Contract whose id one of the Project's own field definitions carries, which is what a Contract generated from that Project gives. Nothing is guessed.
+- The CLI does it too, and prints what the website cannot take yet. It exits non-zero while anything is left, and the website stays so you can map the rest. It writes and commits in the data directory, on the branch the Project is checked out on, and a synchronize takes it to the remote.
+
+```bash
+elek website:add --project <id> --name autohaus-ebersfelde.de --theme https://github.com/acme/dealer-site.git
+```
+
+- `--theme-version` pins a version rather than taking the newest tagged one. It is not `--version`, which answers with the CLI's own version.
 - `read()`, `update()`, `delete()`, `list()` and `count()` complete the set. An update replaces the Mapping, renames the website, or both, and never changes the version in use.
 - A name another Destination already carries throws `Conflict`, and every refusal happens before anything is written.
 

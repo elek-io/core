@@ -10,6 +10,7 @@ import {
   generateTypesAction,
   provisionAction,
   startApiAction,
+  websiteAddAction,
 } from './cli/index.js';
 import {
   apiStartSchema,
@@ -18,6 +19,7 @@ import {
   generateContractSchema,
   generateTypesSchema,
   provisionSchema,
+  websiteAddSchema,
 } from './schema/index.js';
 import { CoreError } from './util/shared.js';
 
@@ -206,6 +208,38 @@ program
     const props = provisionSchema.parse(options);
 
     await provisionAction(props);
+  });
+
+program
+  .command('website:add')
+  .description(
+    "Adds a website to a Project from its theme's git address, and says what it cannot take yet"
+  )
+  .requiredOption(
+    '-p, --project <id>',
+    'The ID of the Project to add the website to'
+  )
+  .requiredOption(
+    '-n, --name <name>',
+    'The name of the website, such as "autohaus-ebersfelde.de"'
+  )
+  .requiredOption(
+    '-t, --theme <address>',
+    'The git address of the theme the website runs on. Core reads it with your own git access and refuses one carrying a credential.'
+  )
+  // Not `--version`, which the program's own version option answers first
+  .option(
+    '--theme-version <version>',
+    'The version of the theme to use. Defaults to the newest version tagged at the address.'
+  )
+  .action(async (options) => {
+    const { themeVersion, ...rest } = options;
+    const props = websiteAddSchema.parse({
+      ...rest,
+      ...(themeVersion === undefined ? {} : { version: themeVersion }),
+    });
+
+    await websiteAddAction(props);
   });
 
 // Error presentation for every command in one place: actions throw,

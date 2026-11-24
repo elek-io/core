@@ -165,3 +165,20 @@ export const generateContractSchema = z.object({
   languages: contractLanguagesArgumentSchema.optional(),
 });
 export type GenerateContractProps = z.infer<typeof generateContractSchema>;
+
+export const websiteAddSchema = z.object({
+  /**
+   * The ID of the Project to add the website to
+   */
+  project: uuidSchema,
+  name: z.string().trim().min(1).max(128),
+  /**
+   * The git address of the theme the website runs on
+   */
+  theme: z.string().trim().min(1),
+  /**
+   * The newest version the theme tagged when left out
+   */
+  version: versionSchema.optional(),
+});
+export type WebsiteAddProps = z.infer<typeof websiteAddSchema>;

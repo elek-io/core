@@ -71,7 +71,15 @@ const website = await core.destinations.addWebsite({
 });
 ```
 
-It reads the theme, keeps the Contract in the Project and writes the website, in one commit on the current branch. A second website on the same address shares the Contract the Project already keeps rather than a copy of its own, and removing one leaves that Contract to the others.
+The CLI does the same in one command, which also prints what the website cannot take yet:
+
+```bash
+elek website:add --project <id> --name autohaus-ebersfelde.de --theme https://github.com/acme/dealer-site.git
+```
+
+Either way it reads the theme, keeps the Contract in the Project and writes the website, in one commit on the branch the Project is checked out on, which is `draft` for a working copy. Synchronize the Project to take it to its remote.
+
+A second website on the same address shares the Contract the Project already keeps rather than a copy of its own, and removing one leaves that Contract to the others.
 
 - The Mapping starts out filling every field of the Contract whose id one of the Project's own field definitions carries, which is what a Contract generated from this Project gives. Nothing is guessed.
 - A name another Destination of the Project already carries throws `Conflict`.
