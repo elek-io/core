@@ -298,6 +298,42 @@ describe('ContractService', function () {
       expect(renamed.updated).not.toBeNull();
     });
 
+    it('refuses an origin carrying a credential, and keeps nothing', async function () {
+      const before = await core.contracts.count({ projectId });
+
+      await expectCoreError(
+        core.contracts.keep({
+          projectId,
+          origin: {
+            kind: 'git',
+            url: 'https://nils:ghp_secret@github.com/acme/dealer-site.git',
+          },
+          contract: await generated(),
+          commit: 'a1b2c3d',
+        }),
+        'BadRequest',
+        'carries a credential'
+      );
+
+      expect(await core.contracts.count({ projectId })).toEqual(before);
+      expect(
+        (await core.git.status(core.util.pathTo.project(projectId))).files
+      ).toEqual([]);
+    });
+
+    it('refuses an origin git would run as a command', async function () {
+      await expectCoreError(
+        core.contracts.keep({
+          projectId,
+          origin: { kind: 'git', url: 'ext::sh -c id' },
+          contract: await generated(),
+          commit: 'a1b2c3d',
+        }),
+        'BadRequest',
+        'remote helper'
+      );
+    });
+
     it('refuses to keep one while Core is read-only', async function () {
       const readOnly = new (await import('../index.node.js')).default({
         dataDir: core.options.dataDir,

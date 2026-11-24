@@ -81,8 +81,8 @@ describe('classifyUnsafeAddress', function () {
     'git://git.example.test/acme/dealer-site.git',
     'git@github.com:acme/dealer-site.git',
     '/srv/themes/dealer-site.git',
-    './dealer-site.git',
     'C:\\themes\\dealer-site.git',
+    '\\\\server\\themes\\dealer-site.git',
     'file:///srv/themes/dealer-site.git',
   ];
   for (const address of safe) {
@@ -141,6 +141,21 @@ describe('classifyUnsafeAddress', function () {
       'a percent encoded credential',
       'https://nils%40acme:ghp_secret@github.com/acme/site.git',
       'carries a credential',
+    ],
+    [
+      'a path relative to wherever it is read from',
+      './dealer-site.git',
+      'has to be absolute',
+    ],
+    [
+      'a path relative to the parent directory',
+      '../themes/dealer-site.git',
+      'has to be absolute',
+    ],
+    [
+      'a bare name, which git reads as a path too',
+      'dealer-site.git',
+      'has to be absolute',
     ],
   ];
   for (const [label, address, text] of refused) {

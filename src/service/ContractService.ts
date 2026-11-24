@@ -149,10 +149,15 @@ export class ContractService extends AbstractEntityService {
           throw unsafe;
         }
 
-        const refNames = await this.gitService.lsRemote(validatedProps.url, {
-          tags: true,
-          isOwnGitAccess: true,
-        });
+        let refNames: string[];
+        try {
+          refNames = await this.gitService.lsRemote(validatedProps.url, {
+            tags: true,
+            isOwnGitAccess: true,
+          });
+        } catch (error) {
+          throw this.asUnreadableAddress(error);
+        }
         const version = validatedProps.version ?? newestThemeVersion(refNames);
         if (version === null) {
           throw CoreError.preconditionFailed(
@@ -176,7 +181,18 @@ export class ContractService extends AbstractEntityService {
             filePath: Path.join(scratchPath, CONTRACT_FILE_NAME),
             scratchPath,
           });
-          const parsed = contractSchema.safeParse(JSON.parse(read.content));
+          let read_: unknown;
+          try {
+            read_ = JSON.parse(read.content);
+          } catch (error) {
+            // The file rather than what V8 quoted out of it, which is the
+            // theme's own text. See contributing/logging.md
+            throw CoreError.badRequest(
+              `The ${CONTRACT_FILE_NAME} of the theme at "${tag}" is no Contract: it does not parse as JSON.`,
+              error
+            );
+          }
+          const parsed = contractSchema.safeParse(read_);
           if (parsed.success === false) {
             throw CoreError.badRequest(
               `The ${CONTRACT_FILE_NAME} of the theme at "${tag}" is no Contract: ${parsed.error.message}`,
@@ -207,7 +223,9 @@ export class ContractService extends AbstractEntityService {
    * Contract rather than a copy of its own. The name follows the Contract
    * read at the origin.
    *
-   * Throws `PreconditionFailed` in read-only mode and on a provisioned copy.
+   * Throws `BadRequest` for an origin carrying a credential or one git would
+   * run as a command, because the origin is written into the Project, and
+   * `PreconditionFailed` in read-only mode and on a provisioned copy.
    */
   public async keep(props: CreateContractProps): Promise<KeptContract> {
     this.assertNotReadOnly('keep');
@@ -224,6 +242,12 @@ export class ContractService extends AbstractEntityService {
       props,
       async (validatedProps) => {
         const { projectId: id_, contract, origin, commit } = validatedProps;
+        // Here as well as in `readFromTheme`, because this is what writes the
+        // origin into the Project and a caller may reach it on its own
+        const unsafe = classifyUnsafeAddress(origin.url);
+        if (unsafe) {
+          throw unsafe;
+        }
         const kept = await this.findByOrigin(id_, origin);
         const hasVersion = kept?.versions.includes(contract.version) === true;
         const isNameChanged = kept !== undefined && kept.name !== contract.name;
@@ -453,6 +477,27 @@ export class ContractService extends AbstractEntityService {
   private withoutVersions(kept: KeptContract): ContractFile {
     const { versions: _, ...contractFile } = kept;
     return contractFile;
+  }
+
+  /**
+   * Turns a git failure at the address itself into words a person can act
+   * on, and leaves every refusal Core already typed as it is, the
+   * `Unauthorized` of an address needing access first.
+   *
+   * It stays `Internal`, because what git failed at is between the two: a
+   * repository that is not there, a host that is not answering and a git
+   * that would not run all arrive as the same exit code, and git's own
+   * words are localized, so they are no basis for telling them apart. They
+   * stay on the cause.
+   */
+  private asUnreadableAddress(error: unknown): unknown {
+    if (error instanceof CoreError && error.type !== 'Internal') {
+      return error;
+    }
+    return CoreError.internal(
+      'Could not read the theme at that address. Check that it names a git repository this machine can reach, and that you have access to it.',
+      error
+    );
   }
 
   /**

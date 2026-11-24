@@ -56,10 +56,12 @@ theme.commit; // the commit the Contract was read from
 | What is wrong | What it throws |
 | --- | --- |
 | The address carries a credential, such as a password or a token, or git would run it as a command | `BadRequest` |
+| The address is a path on this machine and not an absolute one | `BadRequest` |
 | The address needs authentication you do not have | `Unauthorized` |
+| The address cannot be read at all, because nothing is there or this machine cannot reach it | `Internal`, with git's own words on the `cause` |
 | The address tagged no version | `PreconditionFailed`, reason `theme_without_version` |
 | The version is not tagged there, or holds no `elek.contract.json` | `NotFound` |
-| The `elek.contract.json` is no Contract, or carries another version than its tag | `BadRequest` |
+| The `elek.contract.json` is no Contract, does not parse as JSON, or carries another version than its tag | `BadRequest` |
 
 ## Adding a website
 
@@ -85,6 +87,7 @@ A second website on the same address shares the Contract the Project already kee
 - A name another Destination of the Project already carries throws `Conflict`.
 - `core.destinations.update()` replaces the Mapping, renames the website, or both. The version in use never changes there.
 - `core.destinations.delete()` removes the website and leaves every Contract as it is.
+- `core.contracts.keep()` puts a Contract into the Project under its own origin, which `addWebsite()` does for you. It refuses an address carrying a credential or one git would run as a command, the same way, because the origin is written into the Project.
 
 A Project with no website behaves exactly as one did before Destinations existed, and `list()` and `count()` answer with nothing for a Project whose folders predate them.
 

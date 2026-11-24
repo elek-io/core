@@ -41,7 +41,7 @@ A command the `isOwnGitAccess` option of `GitService.git()` marks gets the first
 
 Reading a theme's Contract is the one caller, because that address is kept in a Project. The decision is the owner's, in the Destinations design, and the consumer side is [`../docs/git-and-sync.md`](../docs/git-and-sync.md#reading-an-address-with-your-own-git-access). Two rules hold with it:
 
-- The address is checked by `classifyUnsafeAddress` in [`git.ts`](../src/util/git.ts) before git runs. A credential in it would be committed, and a remote helper address such as `ext::` is a command git executes, which `--` does not stop.
+- The address is checked by `classifyUnsafeAddress` in [`git.ts`](../src/util/git.ts) before git runs, and by `ContractService.keep()` before the origin is written into the Project. A credential in it would be committed, a remote helper address such as `ext::` is a command git executes, which `--` does not stop, and a relative path names a different repository in each of the two directories Core reads it from.
 - `lsRemote` passes the address after `--` regardless, so git reads one starting with a dash as an address rather than as its own option. That is hardening on top of the refusal, not a substitute for it.
 
 ## The decisions

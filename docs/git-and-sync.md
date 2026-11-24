@@ -124,16 +124,17 @@ Core reads a theme's git address with your own git access and nothing else, beca
 
 So a public theme needs nothing, and a private one answers to your own SSH key or git credential helper. Prompts stay off, so an address you have no access to fails with `Unauthorized` naming your own access rather than hanging.
 
-Two shapes of address are refused before git runs, both with `BadRequest`:
+Three shapes of address are refused before git runs, each with `BadRequest`:
 
 | Refused | Why |
 | --- | --- |
 | A password under any scheme, and a user alone under http or https, as in `https://user:token@host/org/repo.git` | A credential in the address would be committed into the Project |
 | `ext::sh -c ...`, and anything starting with `-` | git runs a remote helper address as a command, and reads a leading dash as its own option |
+| A path on the machine that is not absolute, such as `./dealer-site.git` or `dealer-site.git` | Core lists the tags from one directory and fetches the commit from another, so a relative path would name two different repositories, and the Project keeps the address |
 
 `ssh://git@host/org/repo.git` is accepted, because an SSH user is part of the address rather than a credential, as it is in the shorthand `git@host:org/repo.git`.
 
-Everything a Project's remote accepts is accepted otherwise, a local path included, which only works on the machine holding it. An address Core could read but that states no version of itself is refused too:
+Everything a Project's remote accepts is accepted otherwise, an absolute local path included, which only works on the machine holding it. An address Core could read but that states no version of itself is refused too:
 
 | What stopped it | `reason` | What gets past it |
 | --- | --- | --- |

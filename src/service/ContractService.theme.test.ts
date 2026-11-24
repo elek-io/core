@@ -157,6 +157,20 @@ describe('reading a Contract from a theme', function () {
     );
   });
 
+  it('says a Contract that is no JSON at all is no Contract', async function () {
+    const theme = await createFakeTheme();
+    await theme.release({
+      tag: 'v1.0.0',
+      files: { [CONTRACT_FILE_NAME]: 'export default { name: "theme" }' },
+    });
+
+    await expectCoreError(
+      core.contracts.readFromTheme({ url: theme.url }),
+      'BadRequest',
+      'does not parse as JSON'
+    );
+  });
+
   it('says the Contract carries another version than its tag', async function () {
     const theme = await createFakeTheme();
     await theme.release({ tag: 'v1.0.0', files: contractFileOf(at('9.9.9')) });
@@ -173,7 +187,16 @@ describe('reading a Contract from a theme', function () {
       core.contracts.readFromTheme({
         url: Path.join(core.util.pathTo.tmp, 'no-theme-here.git'),
       }),
-      'Internal'
+      'Internal',
+      'Could not read the theme at that address'
+    );
+  });
+
+  it('refuses a relative address, which every directory reads differently', async function () {
+    await expectCoreError(
+      core.contracts.readFromTheme({ url: './no-theme-here.git' }),
+      'BadRequest',
+      'has to be absolute'
     );
   });
 

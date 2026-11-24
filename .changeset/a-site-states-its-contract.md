@@ -22,14 +22,15 @@ const theme = await core.contracts.readFromTheme({
 });
 ```
 
-Core lists the tags, then fetches the one commit into a scratch repository under `tmp/`, which it removes again. Nothing is checked out and no Project is touched. An address that tagged no version throws `PreconditionFailed` with the reason `theme_without_version`, one whose version holds no `elek.contract.json` throws `NotFound`, and a file that is no Contract or carries another version than its tag throws `BadRequest`.
+Core lists the tags, then fetches the one commit into a scratch repository under `tmp/`, which it removes again. Nothing is checked out and no Project is touched. An address that tagged no version throws `PreconditionFailed` with the reason `theme_without_version`, one whose version holds no `elek.contract.json` throws `NotFound`, and a file that is no Contract, does not parse as JSON or carries another version than its tag throws `BadRequest`. An address nothing answers at throws `Internal` saying the theme could not be read there, with git's own words on the `cause`.
 
 **Core reads a theme's address with your own git access and never with `ELEK_IO_REMOTE_ACCESS_TOKEN`.** It is the one git call that gets no token of Core's, because the address is kept in the Project and a credential must not be. A public theme needs nothing, and a private one answers to your own SSH key or git credential helper, with prompts off so a theme you have no access to fails with `Unauthorized` rather than hanging. The message names your own access and sends you to whoever maintains the address.
 
-Two shapes of address are refused before git runs, both `BadRequest`:
+Three shapes of address are refused before git runs, each `BadRequest`, by `core.contracts.keep()` as well, because that is what writes the address into the Project:
 
 - A password under any scheme, and a user alone under http or https, as in `https://user:token@host/org/repo.git`. `ssh://git@host/org/repo.git` is accepted, because an SSH user is part of the address rather than a credential, as it is in `git@host:org/repo.git`.
 - A remote helper address such as `ext::sh -c ...`, which git runs as a command, and anything starting with `-`, which git reads as one of its own options.
+- A path on the machine that is not absolute, such as `./dealer-site.git`. Core lists the tags from one directory and fetches the commit from another, so a relative path would name two different repositories.
 
 **`core.destinations` adds a website to a Project from its theme's git address.** A Destination is one place a Project's content goes, a website first, shown by its own name such as `autohaus-ebersfelde.de`.
 

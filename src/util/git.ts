@@ -1,4 +1,5 @@
 import { GitError, parseError } from 'dugite';
+import Path from 'node:path';
 import type { GitFileStatus } from '../schema/index.js';
 import { CoreError } from './shared.js';
 
@@ -177,6 +178,32 @@ function carriesCredential(address: string): boolean {
 }
 
 /**
+ * Whether git reads an address as a path on this machine: everything that
+ * names no scheme and is not the SSH shorthand, whose colon comes before any
+ * slash. A drive letter is a path rather than a host.
+ */
+function isLocalPath(address: string): boolean {
+  if (/^[\w+.-]+:\/\//.test(address)) {
+    return false;
+  }
+  if (/^[A-Za-z]:[\\/]/.test(address)) {
+    return true;
+  }
+  const colon = address.indexOf(':');
+  const slash = address.search(/[/\\]/);
+  return colon === -1 || (slash !== -1 && slash < colon);
+}
+
+/**
+ * Whether a path leads to one place wherever it is read from. Both path
+ * flavors answer, so one address is refused or taken the same way on every
+ * platform rather than by the one Core happens to run on.
+ */
+function isAbsolutePath(address: string): boolean {
+  return Path.posix.isAbsolute(address) || Path.win32.isAbsolute(address);
+}
+
+/**
  * Why an address must not be handed to git, or null when it may be. Core
  * keeps the address of a theme in the Project, where a credential would
  * become a committed secret, and reads it with the person's own git access.
@@ -206,6 +233,11 @@ export function classifyUnsafeAddress(address: string): CoreError | null {
   if (carriesCredential(address)) {
     return CoreError.badRequest(
       `Refusing the git address "${redactUrlCredentials(address)}", because it carries a credential, which must not be kept in a Project. Use an address without one and let your own git access answer for it`
+    );
+  }
+  if (isLocalPath(address) && isAbsolutePath(address) === false) {
+    return CoreError.badRequest(
+      `Refusing the git address "${redactUrlCredentials(address)}", because a path on this machine has to be absolute. A relative one leads somewhere else for every directory it is read from, and the Project keeps the address. Give its absolute path`
     );
   }
   return null;
