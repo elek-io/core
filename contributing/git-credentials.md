@@ -35,6 +35,15 @@ Every invocation that runs a git command gets `GIT_TERMINAL_PROMPT=0`, an empty 
 
 The scoped reset comes last, so a Cloud host never sees the remote token while Core holds a session. `--version` and `--exec-path` get the first two variables only. They run no command and so never ask, and the constructor fires them unawaited, so installing the helper for them raced a test removing the data directory.
 
+### An invocation on the person's own access
+
+A command the `isOwnGitAccess` option of `GitService.git()` marks gets the first two variables and no helper at all, so neither the remote token nor a Cloud token can reach the address and the person's own helpers answer it. `classifyAuthError` is told the same thing, so its message names their own access rather than a token they never got.
+
+Reading a theme's Contract is the one caller, because that address is kept in a Project. The decision is the owner's, in the Destinations design, and the consumer side is [`../docs/git-and-sync.md`](../docs/git-and-sync.md#reading-an-address-with-your-own-git-access). Two rules hold with it:
+
+- The address is checked by `classifyUnsafeAddress` in [`git.ts`](../src/util/git.ts) before git runs. A credential in it would be committed, and a remote helper address such as `ext::` is a command git executes, which `--` does not stop.
+- `lsRemote` passes the address after `--` regardless, so git reads one starting with a dash as an address rather than as its own option. That is hardening on top of the refusal, not a substitute for it.
+
 ## The decisions
 
 The owner decided the design below. Each part names what it replaced.

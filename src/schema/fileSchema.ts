@@ -2,8 +2,9 @@ import { z } from '@hono/zod-openapi';
 import { objectTypeSchema, uuidSchema, versionSchema } from './baseSchema.js';
 
 /**
- * The envelope every object file shares, the five that carry an `objectType`.
- * `user.json` and the log files are not object files and do not extend it.
+ * The envelope every object file shares, each of them carrying an
+ * `objectType`. `user.json`, the log files and the copy of a Contract at one
+ * version are not object files and do not extend it.
  *
  * `objectType` also carries `value`, which never names a file of its own, it
  * lives inside an Entry file.

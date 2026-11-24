@@ -288,6 +288,40 @@ describe('DestinationService', function () {
     });
   });
 
+  describe('a Project that has a website', function () {
+    it('releases as one without a website does', async function () {
+      const project = await createProject('Released Project');
+      const released = await createCollection(project.id);
+      const asset = await createAsset(project.id);
+      await createEntry(project.id, released.id, asset.id);
+      const theme = await createFakeTheme();
+      await theme.release({
+        tag: 'v1.0.0',
+        files: contractFileOf(
+          await core.contracts.generate({
+            projectId: project.id,
+            name: '@acme/released-site',
+            version: '1.0.0',
+          })
+        ),
+      });
+      await core.destinations.addWebsite({
+        projectId: project.id,
+        name: 'released.example',
+        url: theme.url,
+      });
+
+      const release = await core.releases.create({ projectId: project.id });
+
+      expect(release.version).toBeDefined();
+      expect(
+        (await core.releases.list({ projectId: project.id })).list.length
+      ).toEqual(1);
+
+      await project.destroy();
+    });
+  });
+
   describe('read, update, delete, list and count', function () {
     it('throws NotFound for a website the Project does not hold', async function () {
       await expectCoreError(

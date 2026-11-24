@@ -90,7 +90,8 @@ Core also reads `ELEK_IO_CLOUD_URL`, `ELEK_IO_CLOUD_TOKEN` and `ELEK_IO_CLOUD_GI
 - It never becomes part of a command line, a remote URL, the repository config or git's environment, so it cannot leak into logs or caches.
 - Prompts and askpass programs are disabled, `SSH_ASKPASS` included. A missing token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it.
 - A token the remote refuses fails the operation with `Unauthorized` after one attempt, a Git LFS transfer included.
-- While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before.
+- While the token is set, configured git credential helpers are bypassed for a Project's remote, so the token is authoritative there. Without a token, ambient credential helpers keep working as before.
+- A theme's git address never gets it. That one read installs no helper of Core's, so your own helpers and SSH keys answer for it, see [reading an address with your own git access](./git-and-sync.md#reading-an-address-with-your-own-git-access).
 - It applies to HTTP(S) remotes only. SSH remotes authenticate through the ambient SSH setup like ssh-agent.
 
 On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room.
