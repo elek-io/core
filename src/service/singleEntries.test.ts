@@ -188,6 +188,19 @@ describe('A Collection limited to one Entry', function () {
       description: { en: 'How to reach us today', de: 'Wie man uns erreicht' },
     });
     expect(updated.isSingleEntry).toBe(true);
+
+    // And leaving it out keeps it too, which is what a caller sending only
+    // the fields it edits does
+    const kept = await core.collections.update({
+      projectId: project.id,
+      id: single.id,
+      icon: single.icon,
+      name: single.name,
+      description: single.description,
+      slug: single.slug,
+      fieldDefinitions: single.fieldDefinitions,
+    });
+    expect(kept.isSingleEntry).toBe(true);
     expect(
       (await core.collections.read({ projectId: project.id, id: list.id }))
         .isSingleEntry
