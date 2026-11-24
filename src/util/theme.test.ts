@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isNewerVersion,
+  isPreReleaseVersion,
   newestThemeVersion,
   themeVersions,
   themeVersionTag,
@@ -54,9 +56,18 @@ describe('themeVersions', function () {
         'refs/tags/1.0.0',
         'refs/tags/v1',
         'refs/tags/v1.0',
+        'refs/tags/vv1.0.0',
+        'refs/tags/v01.1.0',
+        'refs/tags/v1.0.0-beta_1',
         'refs/tags/v1.0.0',
       ])
     ).toEqual(['1.0.0']);
+  });
+
+  it('reads a pre-release identifier holding a dash', function () {
+    expect(themeVersions(['refs/tags/v1.1.0-rc-hotfix.1'])).toEqual([
+      '1.1.0-rc-hotfix.1',
+    ]);
   });
 
   it('reads a bare tag name as well as a full ref name', function () {
@@ -101,5 +112,34 @@ describe('newestThemeVersion', function () {
 describe('themeVersionTag', function () {
   it('names the tag a version is read from', function () {
     expect(themeVersionTag('1.2.0')).toEqual('v1.2.0');
+  });
+});
+
+describe('isNewerVersion', function () {
+  it('reads what a version means rather than its text', function () {
+    expect(isNewerVersion('1.10.0', '1.9.0')).toBe(true);
+    expect(isNewerVersion('1.9.0', '1.10.0')).toBe(false);
+  });
+
+  it('reads a pre-release as older than the release it leads to', function () {
+    expect(isNewerVersion('2.0.0-beta.1', '2.0.0')).toBe(false);
+    expect(isNewerVersion('2.0.0', '2.0.0-beta.1')).toBe(true);
+    expect(isNewerVersion('2.0.0-beta.2', '2.0.0-beta.1')).toBe(true);
+  });
+
+  it('is false for one version against itself', function () {
+    expect(isNewerVersion('1.0.0', '1.0.0')).toBe(false);
+  });
+});
+
+describe('isPreReleaseVersion', function () {
+  it('is true for a version a theme tags ahead of a release', function () {
+    expect(isPreReleaseVersion('2.0.0-beta.1')).toBe(true);
+    expect(isPreReleaseVersion('2.0.0-0')).toBe(true);
+  });
+
+  it('is false for the release it leads to, build metadata included', function () {
+    expect(isPreReleaseVersion('2.0.0')).toBe(false);
+    expect(isPreReleaseVersion('2.0.0+build.1')).toBe(false);
   });
 });

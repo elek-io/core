@@ -1,9 +1,11 @@
+import Semver from 'semver';
 import { describe, expect, it } from 'vitest';
 import {
   partialTranslatableStringSchema,
   slugSchema,
   reservedSlugs,
   supportedIconSchema,
+  versionSchema,
 } from './baseSchema.js';
 
 describe('translatableStringSchema', () => {
@@ -191,5 +193,68 @@ describe('supportedIconSchema', () => {
     expect(supportedIconSchema.safeParse(null).success).toBe(false);
     expect(supportedIconSchema.safeParse(undefined).success).toBe(false);
     expect(supportedIconSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('versionSchema', () => {
+  it('accepts a release, a pre-release and build metadata', () => {
+    expect(versionSchema.safeParse('1.0.0').success).toBe(true);
+    expect(versionSchema.safeParse('0.0.1').success).toBe(true);
+    expect(versionSchema.safeParse('1.10.0').success).toBe(true);
+    expect(versionSchema.safeParse('2.0.0-beta.1').success).toBe(true);
+    expect(versionSchema.safeParse('1.0.0+build.1').success).toBe(true);
+    expect(versionSchema.safeParse('1.0.0-rc.1+build.1').success).toBe(true);
+  });
+
+  it('accepts a pre-release identifier holding a dash', () => {
+    expect(versionSchema.safeParse('1.1.0-rc-hotfix.1').success).toBe(true);
+  });
+
+  it('rejects a leading zero, which SemVer forbids', () => {
+    expect(versionSchema.safeParse('01.1.0').success).toBe(false);
+    expect(versionSchema.safeParse('1.0.0-01').success).toBe(false);
+  });
+
+  it('rejects what is no version at all', () => {
+    expect(versionSchema.safeParse('1.0').success).toBe(false);
+    expect(versionSchema.safeParse('1.0.0.0').success).toBe(false);
+    expect(versionSchema.safeParse('latest').success).toBe(false);
+    expect(versionSchema.safeParse('').success).toBe(false);
+    // The tag a theme releases a version under, which is not the version
+    expect(versionSchema.safeParse('v1.0.0').success).toBe(false);
+  });
+
+  it('takes no version semver cannot read, so each one compares', () => {
+    // Core orders and compares every version it keeps through semver, so one
+    // it took and semver refuses would throw rather than compare
+    const taken = [
+      '1.0.0',
+      '0.0.1',
+      '1.10.0',
+      '2.0.0-beta.1',
+      '1.1.0-rc-hotfix.1',
+      '1.0.0+build.1',
+      '1.0.0-rc.1+build.1',
+      '01.1.0',
+      '1.0.0-beta_1',
+      '1.0.0+build_1',
+      '1.0.0-01',
+      '1.0.0-',
+      '1.0',
+      'latest',
+    ].filter((version) => versionSchema.safeParse(version).success);
+
+    expect(taken).toEqual([
+      '1.0.0',
+      '0.0.1',
+      '1.10.0',
+      '2.0.0-beta.1',
+      '1.1.0-rc-hotfix.1',
+      '1.0.0+build.1',
+      '1.0.0-rc.1+build.1',
+    ]);
+    expect(taken.filter((version) => Semver.valid(version) === null)).toEqual(
+      []
+    );
   });
 });
