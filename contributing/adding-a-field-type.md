@@ -12,8 +12,9 @@ To add a field type:
    - Narrowing an inherited key, a stricter `defaultValue` for example, needs `.safeExtend()`, because those rules are refinements and zod refuses to overwrite a key on a refined schema through `.extend()`.
 3. Add the new schema to the relevant union (`stringFieldDefinitionSchema` / `directFieldDefinitionSchema` / `referenceFieldDefinitionSchema`) and to `fieldDefinitionSchema` if it introduces a new top-level branch.
 4. Update `src/schema/schemaFromFieldDefinition.ts` to handle the new field type when generating runtime value validation.
-5. Add a migration step if existing Projects need their field definitions transformed (see [`migration-and-history-flow.md`](./migration-and-history-flow.md)).
-6. Update CLI/Astro generators if the new field type changes the emitted client types.
+5. Decide whether a Value of the new type can title an Entry, and add the identifier to `entryTitleFieldTypeSchema` where it can. It is extracted from `fieldTypeSchema`, so a new type stays out until it is listed, and the list is documented in [`../docs/fields.md`](../docs/fields.md#titling-an-entry).
+6. Add a migration step if existing Projects need their field definitions transformed (see [`migration-and-history-flow.md`](./migration-and-history-flow.md)).
+7. Update CLI/Astro generators if the new field type changes the emitted client types.
 
 ## See also
 
