@@ -321,6 +321,44 @@ describe('a theme that tagged a new version', function () {
       ).toBeNull();
     });
 
+    it('refuses a version whose copy in the Project carries another name', async function () {
+      // A second website keeps 2.0.0 under a name of its own, so the Project
+      // holds a copy of that version carrying it
+      const renamed = at('2.0.0');
+      renamed.name = '@acme/other-site';
+      const theme = await themeWith([at('1.0.0'), renamed]);
+      const website = await websiteOn(theme, { version: '1.0.0' });
+      await websiteOn(theme, { version: '2.0.0' });
+      // The theme moves the tag onto a Contract carrying the name this
+      // website follows. The copy the Project keeps is the Contract a switch
+      // would put it on, so that is the name the version is read by
+      await theme.release({
+        tag: 'v2.0.0',
+        files: contractFileOf(at('2.0.0')),
+        isMoved: true,
+      });
+
+      await expectCoreError(
+        core.destinations.keepVersion({
+          projectId,
+          id: website.id,
+          version: '2.0.0',
+        }),
+        'BadRequest',
+        'own copy of version "2.0.0" carries the Contract "@acme/other-site"'
+      );
+
+      expect(
+        (await core.destinations.read({ projectId, id: website.id })).waiting
+      ).toBeNull();
+      // Nothing is written, so the Contract the other website follows keeps
+      // its name and its site goes on building
+      expect(
+        (await core.contracts.read({ projectId, id: website.contract.id })).name
+      ).toEqual('@acme/other-site');
+      expect(await isCommitted()).toBe(true);
+    });
+
     it('replaces the version that waits and keeps what was mapped for it', async function () {
       const second = withRequiredField('2.0.0');
       const third = withRequiredField('3.0.0');

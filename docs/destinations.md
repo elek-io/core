@@ -158,7 +158,7 @@ switched.outcome; // 'switched', or 'kept' while switched.issues names what is l
 | What is wrong | What it throws |
 | --- | --- |
 | The version named is older than the one the website uses | `PreconditionFailed` |
-| The Contract at that version carries another name than the version the website uses | `BadRequest` |
+| The Contract at that version carries another name than the version the website uses, at the theme or in the copy the Project keeps of it | `BadRequest` |
 | No version waits, for a switch, a waiting Mapping or a check of one | `PreconditionFailed` |
 
 Each of these is refused before anything is written, so the Project stays as it was and the website keeps the version it uses.

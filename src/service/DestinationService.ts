@@ -503,9 +503,9 @@ export class DestinationService extends AbstractEntityService {
    * unless one is given, and the website stays on the version it uses.
    *
    * Every version newer than the one in use replaces the one that waits, and
-   * the one that already waits is built again. Both keep what was mapped and
-   * fill what the Project carries by id. Throws `PreconditionFailed` for an
-   * older version and `BadRequest` for one named differently.
+   * one already waiting is built again. Both keep what was mapped and fill what
+   * the Project carries by id. Throws `PreconditionFailed` for an older version
+   * and `BadRequest` for one the theme or the Project's copy names differently.
    *
    * @see ../../docs/destinations.md
    */
@@ -559,27 +559,37 @@ export class DestinationService extends AbstractEntityService {
           id: destination.contract.id,
           version: destination.contract.version,
         });
-        if (theme.contract.name !== inUse.contract.name) {
+        // The Contract a switch would put the website on, resolved before the
+        // name is checked and before anything is written. A copy is never
+        // rewritten, so a version the Project already holds a copy of keeps
+        // that Contract whatever the theme answers at its tag now, and only a
+        // version no copy exists for takes what the theme just answered
+        const hasCopy = kept.versions.includes(theme.version);
+        const copy = hasCopy
+          ? (
+              await this.contractService.readVersion({
+                projectId: validatedProps.projectId,
+                id: destination.contract.id,
+                version: theme.version,
+              })
+            ).contract
+          : theme.contract;
+        if (copy.name !== inUse.contract.name) {
           throw CoreError.badRequest(
-            `Version "${theme.version}" of the theme carries the Contract "${theme.contract.name}" while Destination "${destination.id}" follows "${inUse.contract.name}". Keep the name the Contract had, or add a website for the other theme.`
+            hasCopy
+              ? `The Project's own copy of version "${theme.version}" carries the Contract "${copy.name}" while Destination "${destination.id}" follows "${inUse.contract.name}". A copy is never rewritten, so keep a version the Project holds no copy of, or add a website for the other Contract.`
+              : `Version "${theme.version}" of the theme carries the Contract "${copy.name}" while Destination "${destination.id}" follows "${inUse.contract.name}". Keep the name the Contract had, or add a website for the other theme.`
           );
         }
 
-        await this.contractService.keep({
-          projectId: validatedProps.projectId,
-          origin: kept.origin,
-          contract: theme.contract,
-          commit: theme.commit,
-        });
-        // Through the copy the Project keeps rather than what the theme just
-        // answered. A copy is never rewritten, so a theme that moved the tag
-        // leaves the kept one in place, and that is the Contract a switch
-        // would put the website on
-        const copy = await this.contractService.readVersion({
-          projectId: validatedProps.projectId,
-          id: destination.contract.id,
-          version: theme.version,
-        });
+        if (hasCopy === false) {
+          await this.contractService.keep({
+            projectId: validatedProps.projectId,
+            origin: kept.origin,
+            contract: theme.contract,
+            commit: theme.commit,
+          });
+        }
         const carryFrom =
           destination.waiting === null
             ? [destination.mapping]
@@ -587,7 +597,7 @@ export class DestinationService extends AbstractEntityService {
         const waiting = {
           version: theme.version,
           mapping: mappingForVersion({
-            contract: copy.contract,
+            contract: copy,
             collections: await this.readCollections(validatedProps.projectId),
             carryFrom,
           }),
