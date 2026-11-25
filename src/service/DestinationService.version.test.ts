@@ -1,5 +1,5 @@
 import Fs from 'fs-extra';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type {
   Contract,
   Mapping,
@@ -356,6 +356,71 @@ describe('a theme that tagged a new version', function () {
       expect(
         (await core.contracts.read({ projectId, id: website.contract.id })).name
       ).toEqual('@acme/other-site');
+      expect(await isCommitted()).toBe(true);
+    });
+
+    it('reads the copy of a version saved while the theme was read', async function () {
+      // The theme tagged 2.0.0 under another name, which one call read there,
+      // and then moved the tag onto a Contract carrying the name this website
+      // follows
+      const renamed = at('2.0.0');
+      renamed.name = '@acme/other-site';
+      const theme = await themeWith([at('1.0.0'), renamed]);
+      const website = await websiteOn(theme, { version: '1.0.0' });
+      const other = await core.contracts.readFromTheme({
+        url: theme.url,
+        version: '2.0.0',
+      });
+      await theme.release({
+        tag: 'v2.0.0',
+        files: contractFileOf(at('2.0.0')),
+        isMoved: true,
+      });
+      const { origin } = await core.contracts.read({
+        projectId,
+        id: website.contract.id,
+      });
+      // That call saves its copy while `keepVersion` reads the theme, which
+      // is the long part of it. Which versions the Project holds is read
+      // after that, so the copy is what the name is checked against
+      const readFromTheme = core.contracts.readFromTheme.bind(core.contracts);
+      vi.spyOn(core.contracts, 'readFromTheme').mockImplementationOnce(
+        async (props) => {
+          const read = await readFromTheme(props);
+          await core.contracts.keep({
+            projectId,
+            origin,
+            contract: other.contract,
+            commit: other.commit,
+          });
+          return read;
+        }
+      );
+
+      await expectCoreError(
+        core.destinations.keepVersion({
+          projectId,
+          id: website.id,
+          version: '2.0.0',
+        }),
+        'BadRequest',
+        'own copy of version "2.0.0" carries the Contract "@acme/other-site"'
+      );
+
+      vi.restoreAllMocks();
+      // The copy landed, so the refusal read it rather than the theme
+      expect(
+        (
+          await core.contracts.readVersion({
+            projectId,
+            id: website.contract.id,
+            version: '2.0.0',
+          })
+        ).contract.name
+      ).toEqual('@acme/other-site');
+      expect(
+        (await core.destinations.read({ projectId, id: website.id })).waiting
+      ).toBeNull();
       expect(await isCommitted()).toBe(true);
     });
 

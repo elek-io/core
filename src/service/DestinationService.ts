@@ -563,8 +563,15 @@ export class DestinationService extends AbstractEntityService {
         // name is checked and before anything is written. A copy is never
         // rewritten, so a version the Project already holds a copy of keeps
         // that Contract whatever the theme answers at its tag now, and only a
-        // version no copy exists for takes what the theme just answered
-        const hasCopy = kept.versions.includes(theme.version);
+        // version no copy exists for takes what the theme just answered.
+        // Which versions the Project holds is read again here rather than
+        // taken from the read above, because reading the theme takes long
+        // enough for another call's copy of this version to land in between
+        const held = await this.contractService.read({
+          projectId: validatedProps.projectId,
+          id: destination.contract.id,
+        });
+        const hasCopy = held.versions.includes(theme.version);
         const copy = hasCopy
           ? (
               await this.contractService.readVersion({
