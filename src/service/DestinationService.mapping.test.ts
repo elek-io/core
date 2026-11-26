@@ -6,6 +6,7 @@ import {
   expect,
   it,
   onTestFinished,
+  vi,
 } from 'vitest';
 import core, {
   CoreError,
@@ -1342,6 +1343,247 @@ describe('a Mapping with an editor’s options', function () {
           })
         ).map(({ slug }) => slug.plural)
       ).toEqual(['pages', 'landings']);
+    });
+  });
+
+  /**
+   * A create from a theme writes its Components, its Collection and the
+   * Mapping one commit at a time, so a write that does not land leaves part
+   * of it behind. What is left may not refuse the same call made again.
+   */
+  describe('a create from the theme that does not finish', function () {
+    let halfwayId = '';
+    let halfway: Contract;
+
+    beforeAll(async function () {
+      const themeProject = await createProject('Theme of a halfway create');
+      destroy.push(themeProject.destroy);
+      const banner = await core.components.create({
+        projectId: themeProject.id,
+        name: { en: 'Banner', de: 'Banner' },
+        slug: 'banner',
+        description: null,
+        fieldDefinitions: [textField('heading'), entryField('about-hall')],
+      });
+      const halls = await createCollectionOf({
+        projectId: themeProject.id,
+        slug: { singular: 'hall', plural: 'halls' },
+        fieldDefinitions: [
+          textField('name', { isRequired: true }),
+          dynamicField('parts', [banner.id]),
+        ],
+      });
+      // The Component of the theme points at the Collection it comes with
+      await core.components.update({
+        projectId: themeProject.id,
+        id: banner.id,
+        name: banner.name,
+        slug: banner.slug,
+        description: banner.description,
+        fieldDefinitions: banner.fieldDefinitions.map((field) =>
+          'ofCollections' in field
+            ? { ...field, ofCollections: [halls.id] }
+            : field
+        ),
+      });
+      const badge = await core.components.create({
+        projectId: themeProject.id,
+        name: { en: 'Badge', de: 'Badge' },
+        slug: 'badge',
+        description: null,
+        fieldDefinitions: [textField('caption')],
+      });
+      await createCollectionOf({
+        projectId: themeProject.id,
+        slug: { singular: 'wing', plural: 'wings' },
+        fieldDefinitions: [
+          textField('label'),
+          dynamicField('bits', [badge.id]),
+        ],
+      });
+      await createCollectionOf({
+        projectId: themeProject.id,
+        slug: { singular: 'note', plural: 'notes' },
+        fieldDefinitions: [textField('body')],
+      });
+      halfway = await core.contracts.generate({
+        projectId: themeProject.id,
+        name: '@acme/halfway-theme',
+        version: '1.0.0',
+      });
+      halfwayId = (
+        await addWebsite({
+          projectId: siteProjectId,
+          name: 'halfway.test',
+          contract: halfway,
+        })
+      ).website.id;
+    });
+
+    /** The Collection of the Contract under the plural slug given */
+    function contractCollection(plural: string) {
+      const found = halfway.collections.find((one) => {
+        return one.slug.plural === plural;
+      });
+      if (found === undefined) {
+        throw new Error('No Collection in the Contract');
+      }
+      return found;
+    }
+
+    /** Creates one Collection of the Contract from the theme */
+    async function create(contractCollectionId: string) {
+      return core.destinations.createCollection({
+        projectId: siteProjectId,
+        id: halfwayId,
+        contractCollectionId,
+      });
+    }
+
+    /** The website that creates from its theme, as it stands */
+    async function halfwayWebsite() {
+      return core.destinations.read({
+        projectId: siteProjectId,
+        id: halfwayId,
+      });
+    }
+
+    /** The Collections of the Project under the plural slug given */
+    async function collectionsUnder(plural: string) {
+      return (
+        await core.collections.list({ projectId: siteProjectId, limit: 0 })
+      ).list.filter((one) => one.slug.plural === plural);
+    }
+
+    /**
+     * Lets every commit through but the next one of a Destination, which is
+     * how a write of the record or of the Mapping does not land
+     */
+    function failTheNextDestinationCommit() {
+      const commit = core.git.commit.bind(core.git);
+      let failed = false;
+      vi.spyOn(core.git, 'commit').mockImplementation(async (path, message) => {
+        if (
+          failed === false &&
+          message.reference.objectType === 'destination'
+        ) {
+          failed = true;
+          throw CoreError.internal('Simulated commit failure');
+        }
+        return commit(path, message);
+      });
+      onTestFinished(function () {
+        vi.restoreAllMocks();
+      });
+    }
+
+    it('points a Component it left behind at the Collection made next', async function () {
+      const halls = contractCollection('halls');
+      const before = await core.components.count({ projectId: siteProjectId });
+      vi.spyOn(core.collections, 'create').mockRejectedValueOnce(
+        CoreError.internal('Simulated Collection failure')
+      );
+      onTestFinished(function () {
+        vi.restoreAllMocks();
+      });
+
+      await expectCoreError(
+        create(halls.id),
+        'Internal',
+        'Simulated Collection failure'
+      );
+      // The Component is written and recorded before the Collection exists,
+      // so it is left pointing at nothing in particular
+      const banner = await core.components.readBySlug({
+        projectId: siteProjectId,
+        slug: 'banner',
+      });
+      expect(
+        banner.fieldDefinitions.find(({ slug }) => slug === 'about-hall')
+      ).toMatchObject({ ofCollections: [] });
+      expect((await halfwayWebsite()).createdFromTheme.componentIds).toContain(
+        banner.id
+      );
+
+      const website = await create(halls.id);
+      const created = website.mapping.collections[halls.id]?.from.collectionId;
+
+      // The call made again uses that Component and restores the one
+      // reference it could not carry
+      expect(
+        (
+          await core.components.read({
+            projectId: siteProjectId,
+            id: banner.id,
+          })
+        ).fieldDefinitions.find(({ slug }) => slug === 'about-hall')
+      ).toMatchObject({ ofCollections: [created] });
+      expect(await core.components.count({ projectId: siteProjectId })).toEqual(
+        before + 1
+      );
+    });
+
+    it('leaves no Component behind when the record of one does not land', async function () {
+      const wings = contractCollection('wings');
+      const before = await core.components.count({ projectId: siteProjectId });
+      const recorded = (await halfwayWebsite()).createdFromTheme.componentIds;
+      failTheNextDestinationCommit();
+
+      await expectCoreError(
+        create(wings.id),
+        'Internal',
+        'Simulated commit failure'
+      );
+      expect((await halfwayWebsite()).createdFromTheme.componentIds).toEqual(
+        recorded
+      );
+
+      // The Component went with the record that did not land, so the call
+      // made again writes it rather than asking for it to be renamed
+      vi.restoreAllMocks();
+      const website = await create(wings.id);
+      const badge = await core.components.readBySlug({
+        projectId: siteProjectId,
+        slug: 'badge',
+      });
+
+      expect(
+        website.mapping.collections[wings.id]?.from.collectionId
+      ).toBeDefined();
+      expect(website.createdFromTheme.componentIds).toEqual([
+        ...recorded,
+        badge.id,
+      ]);
+      // One Component under the theme's slug, not the one left behind twice
+      expect(await core.components.count({ projectId: siteProjectId })).toEqual(
+        before + 1
+      );
+    });
+
+    it('leaves no Collection behind when the Mapping does not land', async function () {
+      const notes = contractCollection('notes');
+      failTheNextDestinationCommit();
+
+      await expectCoreError(
+        create(notes.id),
+        'Internal',
+        'Simulated commit failure'
+      );
+      expect(
+        (await halfwayWebsite()).mapping.collections[notes.id]
+      ).toBeUndefined();
+
+      // The Collection went with the Mapping that did not land, so the slug
+      // check of the call made again has nothing to refuse on
+      vi.restoreAllMocks();
+      const website = await create(notes.id);
+      const created = website.mapping.collections[notes.id]?.from.collectionId;
+
+      expect(created).toBeDefined();
+      expect((await collectionsUnder('notes')).map(({ id }) => id)).toEqual([
+        created,
+      ]);
+      expect(website.createdFromTheme.collectionIds).toContain(created);
     });
   });
 

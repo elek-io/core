@@ -999,63 +999,69 @@ export class DestinationService extends AbstractEntityService {
           collectionIds,
           componentIds: components.of,
         });
-        const created = await this.collectionService.create({
-          projectId: validatedProps.projectId,
-          name: contractCollection.name,
-          slug: contractCollection.slug,
-          description: contractCollection.description,
-          icon: contractCollection.icon,
-          isSingleEntry: contractCollection.isSingleEntry,
-          fieldDefinitions: fields.fieldDefinitions,
-        });
-        const itself = selfReferencingIds(
-          contractCollection.fieldDefinitions,
-          contractCollection.id,
-          fields.fieldDefinitionIds
-        );
-        if (itself.size > 0) {
-          await this.collectionService.update({
-            ...created,
+        // The Collection, what points at it and the Mapping filled from it
+        // are undone together, so a failure between them leaves nothing the
+        // slug check of a call made again refuses on
+        return this.undoneOnFailure(validatedProps.projectId, async () => {
+          const created = await this.collectionService.create({
             projectId: validatedProps.projectId,
-            fieldDefinitions: withSelfReferences(
-              created.fieldDefinitions,
-              itself,
-              created.id
-            ),
+            name: contractCollection.name,
+            slug: contractCollection.slug,
+            description: contractCollection.description,
+            icon: contractCollection.icon,
+            isSingleEntry: contractCollection.isSingleEntry,
+            fieldDefinitions: fields.fieldDefinitions,
           });
-        }
-        await this.pointComponentsAtCollection({
-          projectId: validatedProps.projectId,
-          created: components.created,
-          contractCollectionId: contractCollection.id,
-          collectionId: created.id,
-        });
+          const itself = selfReferencingIds(
+            contractCollection.fieldDefinitions,
+            contractCollection.id,
+            fields.fieldDefinitionIds
+          );
+          if (itself.size > 0) {
+            await this.collectionService.update({
+              ...created,
+              projectId: validatedProps.projectId,
+              fieldDefinitions: withSelfReferences(
+                created.fieldDefinitions,
+                itself,
+                created.id
+              ),
+            });
+          }
+          await this.pointComponentsAtCollection({
+            projectId: validatedProps.projectId,
+            needed: plan.needed,
+            of: components.of,
+            contractCollectionId: contractCollection.id,
+            collectionId: created.id,
+          });
 
-        return this.writeWithMapping({
-          projectId: validatedProps.projectId,
-          destination: components.destination,
-          isWaitingVersion: validatedProps.isWaitingVersion === true,
-          mapping: {
-            collections: {
-              ...mapping.collections,
-              [contractCollection.id]: {
-                from: { collectionId: created.id, where: [] },
-                fields: Object.fromEntries(
-                  [...fields.fieldDefinitionIds].map(([contractId, own]) => [
-                    contractId,
-                    { fill: 'field' as const, fieldDefinitionId: own },
-                  ])
-                ),
+          return this.writeWithMapping({
+            projectId: validatedProps.projectId,
+            destination: components.destination,
+            isWaitingVersion: validatedProps.isWaitingVersion === true,
+            mapping: {
+              collections: {
+                ...mapping.collections,
+                [contractCollection.id]: {
+                  from: { collectionId: created.id, where: [] },
+                  fields: Object.fromEntries(
+                    [...fields.fieldDefinitionIds].map(([contractId, own]) => [
+                      contractId,
+                      { fill: 'field' as const, fieldDefinitionId: own },
+                    ])
+                  ),
+                },
               },
             },
-          },
-          createdFromTheme: {
-            ...components.destination.createdFromTheme,
-            collectionIds: [
-              ...components.destination.createdFromTheme.collectionIds,
-              created.id,
-            ],
-          },
+            createdFromTheme: {
+              ...components.destination.createdFromTheme,
+              collectionIds: [
+                ...components.destination.createdFromTheme.collectionIds,
+                created.id,
+              ],
+            },
+          });
         });
       }
     );
@@ -1282,6 +1288,44 @@ export class DestinationService extends AbstractEntityService {
     return issues;
   }
 
+  /**
+   * Runs a step that commits more than once and, when it throws, moves the
+   * Project back to the commit the step started on, because
+   * `withGitRollback` resets to `HEAD`, which those commits are already in.
+   * A step of a create from a theme that does not finish then leaves no
+   * Collection and no Component for the next call to refuse on. A failure
+   * of the reset itself is logged and swallowed.
+   *
+   * @see ../../contributing/error-handling-internals.md
+   */
+  private async undoneOnFailure<T>(
+    projectId: Uuid,
+    step: () => Promise<T>
+  ): Promise<T> {
+    const projectPath = this.pathTo.project(projectId);
+    const started = await this.gitService.revParse(projectPath, 'HEAD');
+    try {
+      return await step();
+    } catch (error) {
+      try {
+        if ((await this.gitService.revParse(projectPath, 'HEAD')) !== started) {
+          await this.gitService.reset(projectPath, 'hard', started);
+        }
+      } catch (undoing) {
+        this.logService.error({
+          source: 'core',
+          message: `Failed to undo a half written create from a theme, manual git reset may be needed: ${undoing instanceof Error ? undoing.message : String(undoing)}`,
+          meta: {
+            'elek.project.id': projectId,
+            'exception.message':
+              undoing instanceof Error ? undoing.message : String(undoing),
+          },
+        });
+      }
+      throw error;
+    }
+  }
+
   /** Writes a changed Destination file, stamps `updated` and commits */
   private async write(
     projectId: Uuid,
@@ -1483,7 +1527,8 @@ export class DestinationService extends AbstractEntityService {
 
   /**
    * Which Component of the Project each Component of the Contract the given
-   * field definitions need is, and which of them are not there yet.
+   * field definitions need is, which of them are not there yet, and every
+   * one of them as the Contract states it, dependencies first.
    *
    * A Component this website created from its theme before is one of them,
    * so creating a second Collection needing it works. One the Project holds
@@ -1497,7 +1542,11 @@ export class DestinationService extends AbstractEntityService {
     destination: DestinationFile;
     contract: Contract;
     fieldDefinitions: readonly FieldDefinitionOrGroup[];
-  }): Promise<{ held: Map<Uuid, Uuid>; toCreate: ComponentFile[] }> {
+  }): Promise<{
+    needed: ComponentFile[];
+    held: Map<Uuid, Uuid>;
+    toCreate: ComponentFile[];
+  }> {
     const needed = contractComponentsNeeded({
       fieldDefinitions: props.fieldDefinitions,
       contract: props.contract,
@@ -1534,7 +1583,7 @@ export class DestinationService extends AbstractEntityService {
       }
       held.set(component.id, own);
     }
-    return { held, toCreate };
+    return { needed: needed.components, held, toCreate };
   }
 
   /**
@@ -1542,11 +1591,12 @@ export class DestinationService extends AbstractEntityService {
    * name, and answers which Component of the Project each one of the
    * Contract is now, beside the Destination as it now stands.
    *
-   * Each Component is recorded under `createdFromTheme` the moment it is
-   * written, because whatever comes after it may refuse. A Component this
+   * Each Component and its record under `createdFromTheme` stand or fall
+   * together, because whatever comes after them may refuse. A Component this
    * website created is used again, so recording it is what makes the retry
    * of a refused create work rather than meet its own Component as the
-   * editor's own.
+   * editor's own, and a record that does not land takes its Component with
+   * it so that retry does not meet an unrecorded one either.
    */
   private async createComponents(props: {
     projectId: Uuid;
@@ -1556,18 +1606,8 @@ export class DestinationService extends AbstractEntityService {
   }): Promise<{
     of: Map<Uuid, Uuid>;
     destination: DestinationFile;
-    created: Array<{
-      id: Uuid;
-      of: ComponentFile;
-      fieldDefinitionIds: Map<Uuid, Uuid>;
-    }>;
   }> {
     const of = new Map<Uuid, Uuid>(props.plan.held);
-    const created: Array<{
-      id: Uuid;
-      of: ComponentFile;
-      fieldDefinitionIds: Map<Uuid, Uuid>;
-    }> = [];
     let destination = props.destination;
     for (const component of props.plan.toCreate) {
       const fields = fieldDefinitionsFromContract({
@@ -1575,60 +1615,87 @@ export class DestinationService extends AbstractEntityService {
         collectionIds: props.collectionIds,
         componentIds: of,
       });
-      const own = await this.componentService.create({
-        projectId: props.projectId,
-        name: component.name,
-        slug: component.slug,
-        description: component.description,
-        fieldDefinitions: fields.fieldDefinitions.flatMap((fieldOrGroup) => {
-          return 'isGroup' in fieldOrGroup ? [] : [fieldOrGroup];
-        }),
+      const written = await this.undoneOnFailure(props.projectId, async () => {
+        const own = await this.componentService.create({
+          projectId: props.projectId,
+          name: component.name,
+          slug: component.slug,
+          description: component.description,
+          fieldDefinitions: fields.fieldDefinitions.flatMap((fieldOrGroup) => {
+            return 'isGroup' in fieldOrGroup ? [] : [fieldOrGroup];
+          }),
+        });
+        return {
+          id: own.id,
+          destination: await this.write(props.projectId, {
+            ...destination,
+            createdFromTheme: {
+              ...destination.createdFromTheme,
+              componentIds: [
+                ...destination.createdFromTheme.componentIds,
+                own.id,
+              ],
+            },
+          }),
+        };
       });
-      of.set(component.id, own.id);
-      created.push({
-        id: own.id,
-        of: component,
-        fieldDefinitionIds: fields.fieldDefinitionIds,
-      });
-      destination = await this.write(props.projectId, {
-        ...destination,
-        createdFromTheme: {
-          ...destination.createdFromTheme,
-          componentIds: [...destination.createdFromTheme.componentIds, own.id],
-        },
-      });
+      of.set(component.id, written.id);
+      destination = written.destination;
     }
-    return { of, destination, created };
+    return { of, destination };
   }
 
   /**
-   * Points the fields of the Components just created at the Collection they
-   * were created with, which is the one reference nothing could fill while
-   * they were written, because the Collection had no id of its own yet.
+   * Points the fields of the Components a Collection was created with at it,
+   * which is the one reference nothing could fill while they were written,
+   * because the Collection had no id of its own yet.
+   *
+   * Every Component the create needs is read, the ones written with the
+   * Collection and the ones this website created from its theme before
+   * alike, because a Component of a create that did not finish carries that
+   * reference empty until the Collection it waits for exists. The fields are
+   * found by the slug the theme gave them, and one already pointing at the
+   * Collection is left as it is.
    */
   private async pointComponentsAtCollection(props: {
     projectId: Uuid;
-    created: ReadonlyArray<{
-      id: Uuid;
-      of: ComponentFile;
-      fieldDefinitionIds: Map<Uuid, Uuid>;
-    }>;
+    needed: readonly ComponentFile[];
+    of: ReadonlyMap<Uuid, Uuid>;
     contractCollectionId: Uuid;
     collectionId: Uuid;
   }): Promise<void> {
-    for (const one of props.created) {
-      const ids = selfReferencingIds(
-        one.of.fieldDefinitions,
-        props.contractCollectionId,
-        one.fieldDefinitionIds
+    for (const one of props.needed) {
+      const own = props.of.get(one.id);
+      if (own === undefined) {
+        continue;
+      }
+      const slugs = new Set(
+        selfReferencingFields(
+          one.fieldDefinitions,
+          props.contractCollectionId
+        ).map((field) => field.slug)
       );
-      if (ids.size === 0) {
+      if (slugs.size === 0) {
         continue;
       }
       const component = await this.componentService.read({
         projectId: props.projectId,
-        id: one.id,
+        id: own,
       });
+      const ids = new Set(
+        flattenFieldDefinitions([...component.fieldDefinitions])
+          .filter((field) => {
+            return (
+              slugs.has(field.slug) &&
+              'ofCollections' in field &&
+              field.ofCollections.includes(props.collectionId) === false
+            );
+          })
+          .map((field) => field.id)
+      );
+      if (ids.size === 0) {
+        continue;
+      }
       await this.componentService.update({
         projectId: props.projectId,
         id: component.id,
@@ -1776,29 +1843,40 @@ function sourceFieldDefinitionIds(
 }
 
 /**
- * The field definitions of the Project, by id, that point at the Collection
- * of the Contract being created, which is the one reference a create can
- * only fill once that Collection exists. Read for the Collection's own
- * fields and for those of every Component created with it.
+ * The field definitions of the Contract that point at the Collection of the
+ * Contract being created, which is the one reference a create can only fill
+ * once that Collection exists. Read for the Collection's own fields and for
+ * those of every Component it needs.
+ */
+function selfReferencingFields(
+  fieldDefinitions: readonly FieldDefinitionOrGroup[],
+  contractCollectionId: Uuid
+): FieldDefinition[] {
+  return flattenFieldDefinitions([...fieldDefinitions]).filter((field) => {
+    return (
+      'ofCollections' in field &&
+      field.ofCollections.includes(contractCollectionId)
+    );
+  });
+}
+
+/**
+ * The field definitions of the Project, by id, that fill the ones of the
+ * Contract pointing at the Collection being created.
  */
 function selfReferencingIds(
   fieldDefinitions: readonly FieldDefinitionOrGroup[],
   contractCollectionId: Uuid,
   fieldDefinitionIds: ReadonlyMap<Uuid, Uuid>
 ): Set<Uuid> {
-  const ids = new Set<Uuid>();
-  for (const field of flattenFieldDefinitions([...fieldDefinitions])) {
-    if (
-      'ofCollections' in field &&
-      field.ofCollections.includes(contractCollectionId)
-    ) {
-      const own = fieldDefinitionIds.get(field.id);
-      if (own !== undefined) {
-        ids.add(own);
+  return new Set(
+    selfReferencingFields(fieldDefinitions, contractCollectionId).flatMap(
+      (field) => {
+        const own = fieldDefinitionIds.get(field.id);
+        return own === undefined ? [] : [own];
       }
-    }
-  }
-  return ids;
+    )
+  );
 }
 
 /**
