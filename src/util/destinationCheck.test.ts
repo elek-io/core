@@ -913,6 +913,37 @@ describe('contractValuesOf, the ways one field is filled', function () {
     ).toEqual({ status: stringValue({ en: null }) });
   });
 
+  it('fills an option matched twice from the first of the two rows', function () {
+    const contractCars = collection(ids.cars, [
+      selectFieldOf(ids.titleField, 'status', ['available', 'sold']),
+    ]);
+    const projectCars = collection(ids.cars, [
+      selectFieldOf(more.statusField, 'zustand', ['frei']),
+    ]);
+
+    expect(
+      contractValuesOf({
+        contract: contractOf({ collections: [contractCars] }),
+        mapping: mappingFilling({
+          fields: {
+            [ids.titleField]: {
+              fill: 'options',
+              fieldDefinitionId: more.statusField,
+              options: [
+                { from: 'frei', to: 'available' },
+                { from: 'frei', to: 'sold' },
+              ],
+            },
+          },
+        }),
+        contractCollectionId: ids.cars,
+        collection: projectCars,
+        entry: entryOf({ zustand: stringValue({ en: 'frei' }) }),
+        languages,
+      })
+    ).toEqual({ status: stringValue({ en: 'available' }) });
+  });
+
   it('matches an option onto a number the Contract offers', function () {
     const contractCars = collection(ids.cars, [
       numberSelectFieldOf(ids.titleField, 'seats', [2, 5]),

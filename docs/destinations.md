@@ -96,7 +96,7 @@ A Project with no website behaves exactly as one did before Destinations existed
 
 ## What a Mapping can do
 
-A Mapping fills each field of the Contract in one of four ways, named by `fill`. Left out, `fill` reads as `field`, which is what a Mapping written before the other three existed fills by.
+A Mapping fills each field of the Contract in one of four ways, named by `fill`. A caller writing a Mapping names it, and a `destination.json` that leaves it out reads as `field`, the way `where` left out reads as no condition and `separator` as a space.
 
 | `fill` | Fills the field from | Takes a `language` order |
 | --- | --- | --- |
@@ -140,19 +140,19 @@ The four ways in detail:
 
 - A fixed `value` is a Value of the kind the field takes, in every language of the Project, and the field's own rules are read against it. A reference and Component items cannot be fixed, because their ids belong to one Project.
 - `combined` joins the Values of two field definitions or more into one text per language, leaving out the ones holding nothing there. Its sources are the fields whose Value is text or a number, whatever kind of field that is, and the field it fills takes text.
-- `options` matches each option of a `select` field onto an option of the Contract's own field, once in the Mapping rather than per Entry. An option without a match fills nothing.
+- `options` matches each option of a `select` field onto an option of the Contract's own field, once in the Mapping rather than per Entry. An option without a match fills nothing, and where two rows match the same option the first of them is the one that fills it.
 - `language` takes the Value of the first language of `order` holding one and puts it into every language of the Project, which is how a theme serving one language takes what an editor wrote in another. Component items are not kept per language and are left as they are.
-- `separator` defaults to a space, and a `language` order left out reads each language from itself.
+- `separator` is a space where a stored Mapping leaves it out, and a `language` order left out reads each language from itself.
 
 ## Which Entries a website takes
 
-Each Collection of the Mapping takes the Entries meeting every condition under `from.where`, and all of them without one, which is what a Mapping written before conditions existed takes.
+Each Collection of the Mapping takes the Entries meeting every condition under `from.where`, and all of them where it holds none, which is what a `destination.json` without it reads as.
 
 ```typescript
-from: {
+const from = {
   collectionId: vehicles.id,
   where: [{ fieldDefinitionId: status.id, equals: ['for-sale', 'reserved'] }],
-},
+};
 ```
 
 - A condition is met by an Entry whose Value for that field definition is one of the ones it lists, in any language of the Project. An Entry holding none of them raises nothing in a check and reaches no site.
@@ -194,7 +194,7 @@ The issues are spelled like the ones a field definition change raises, so an app
 
 ## Checking a Mapping before it is saved, and the Values it fills
 
-An app that lets an editor map a website checks the Mapping it is building, and shows the Value each field would take from one of the editor's own Entries, before any of it is saved.
+An app that lets an editor map a website checks the Mapping it is building before any of it is saved, and shows the Value each field takes from one of the editor's own Entries under the Mapping the website has saved.
 
 ```typescript
 const issues = await core.destinations.checkMapping({
@@ -220,11 +220,12 @@ const values = await core.destinations.values({
 A theme needs a Collection or a field the Project has nothing for, and the editor creates it from the theme rather than building it by hand. The Mapping fills itself with what was created.
 
 ```typescript
-const website = await core.destinations.createCollection({
+const updated = await core.destinations.createCollection({
   projectId: project.id,
   id: website.id,
   contractCollectionId: contractCarsId,
 });
+updated.mapping; // fills the Collection of the Contract with what was created
 await core.destinations.createFieldDefinition({
   projectId: project.id,
   id: website.id,
@@ -235,8 +236,9 @@ await core.destinations.createFieldDefinition({
 
 - `createCollection()` writes the Collection the theme states, with the Components its `dynamic` fields need, and fills the Mapping with every field of it. `createFieldDefinition()` adds one field of the theme to the Collection of the Project filling its Collection, and fills that one row of the Mapping.
 - Every id is the Project's own, and the names, slugs, labels, descriptions, default values and rules are the theme's. A field pointing at another Collection of the Contract points at the Collection of the Project filling it, and one pointing at its own Collection at the created one.
-- Nothing the Project holds is changed. A Collection under the theme's plural slug, a Component under the theme's slug and a field definition under the theme's slug each throw `Conflict` naming it, and so does a Collection or field of the Contract something already fills.
-- A Collection of the Contract the theme's fields point at that nothing fills throws `PreconditionFailed`, so fill or create that one first. A Component this website created from its theme before is used again rather than created twice.
+- No Collection, Component or field definition the Project already holds is replaced. A Collection under the theme's plural slug, a Component under the theme's slug and a field definition under the theme's slug each throw `Conflict` naming it, and so does a Collection or field of the Contract something already fills. What a create does write is the new field definition on the Collection of the Project filling it, and the Value `resolutions` carries into each of its Entries.
+- A Collection of the Contract the theme's fields point at that nothing fills throws `PreconditionFailed`, so fill or create that one first. A Component this website created from its theme before is used again rather than created twice, and one of a Contract whose Components point at each other throws `BadRequest`.
+- A Component written for the create points at the Collection created with it where the theme points it there, and it is recorded as this website's the moment it is written. So a create that refuses afterwards, such as one asking for `resolutions`, leaves a call made again that Component to use rather than one to rename.
 - The labels and descriptions of the theme have to cover the Project's languages, because a Collection of the Project carries them in all of them. A theme that does not serve one of them throws `BadRequest` naming the label.
 - Adding a required field of the theme to a Collection that already holds Entries throws `Conflict`, the way a field definition change does, and its `cause` names every Entry needing the Value. Send that Value per Entry under `resolutions`, keyed by Entry id and then by the field's own slug, see [`schema-changes.md`](./schema-changes.md#the-resolution-workflow).
 - `core.destinations.createdCollections()` answers which Collections this website created from its theme, in the order they were created, so an app groups them under the website. A Collection deleted since is left out.

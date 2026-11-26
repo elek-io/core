@@ -42,7 +42,6 @@ await core.destinations.update({
 - `combined` joins the Values of two field definitions or more into one text per language, leaving out the ones holding nothing there.
 - `options` matches each option of a `select` field onto an option of the Contract's own, once in the Mapping rather than per Entry.
 - `language` takes the Value of the first language of `order` holding one into every language of the Project, which is how a theme serving one language takes what an editor wrote in another.
-- A Mapping written before these existed reads as the one field it names per field, with no conditions and nothing created from its theme, and a Project's build is unchanged by all of it.
 
 **A website takes the Entries its Mapping's conditions let through, such as only the cars for sale.** `from.where` holds the conditions an Entry has to meet, all of them, and a Collection without one gives the website every Entry of it. An Entry the website leaves out raises nothing in a check and reaches no site, and one it takes while pointing at an Entry it leaves out is reported, because a page of it would link to something the website does not hold.
 
@@ -76,7 +75,7 @@ await core.destinations.createCollection({
 
 - `createCollection()` writes the Collection the theme states with the Components its `dynamic` fields need, and `createFieldDefinition()` adds one field of the theme to the Collection of the Project filling its Collection.
 - Every id is the Project's own, and the names, slugs, labels, descriptions, default values and rules are the theme's. A field pointing at another Collection of the Contract points at the Collection of the Project filling it.
-- Nothing the Project holds is changed. A Collection, Component or field definition the Project already carries under the theme's slug throws `Conflict` naming it, and so does a Collection or field of the Contract something already fills. A Component this website created from its theme before is used again rather than created twice.
+- No Collection, Component or field definition the Project already holds is replaced. One the Project already carries under the theme's slug throws `Conflict` naming it, and so does a Collection or field of the Contract something already fills. A Component this website created from its theme before is used again rather than created twice, and it is recorded as this website's the moment it is written, so a create that refuses afterwards leaves a call made again that Component to use.
 - `createdCollections()` answers which Collections the website created from its theme, so an app groups them under the website, and leaves out one deleted since.
 - Adding a required field of the theme to a Collection that already holds Entries throws `Conflict`, the way a field definition change does, naming every Entry needing the Value. Send that Value per Entry under `resolutions`.
 

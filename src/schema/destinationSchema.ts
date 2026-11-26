@@ -33,6 +33,9 @@ export type OptionValue = z.infer<typeof optionValueSchema>;
  * Which option of the Contract's field one option of the Project's field
  * becomes. Matched once here rather than per Entry, so an option without a
  * match is named while the Mapping is made.
+ *
+ * Where two rows match the same option, the first of them is the one that
+ * fills it.
  */
 export const optionMatchSchema = z.object({
   from: optionValueSchema,
@@ -59,8 +62,8 @@ export type FixedValue = z.infer<typeof fixedValueSchema>;
  *
  * `fill` says which way: one field of the Project, a fixed Value, several
  * fields joined by `separator`, or one field whose options are matched onto
- * the Contract's. It defaults to `field`, so a Mapping written before the
- * other three existed reads as the one field it names.
+ * the Contract's. A caller names it, and a stored Mapping that leaves it out
+ * reads as `field`, the one field it names.
  */
 export const fieldMappingSchema = z.union([
   z.object({
@@ -103,9 +106,9 @@ export type EntryCondition = z.infer<typeof entryConditionSchema>;
  * its Entries the website takes, and which of its field definitions fills
  * each field, keyed by the Contract's own ids.
  *
- * `where` holds the conditions an Entry has to meet, all of them. It
- * defaults to none, which takes every Entry of the Collection, and is what a
- * Mapping written before conditions existed reads as.
+ * `where` holds the conditions an Entry has to meet, all of them. A caller
+ * names it, and a stored Mapping that leaves it out reads as none, which
+ * takes every Entry of the Collection.
  */
 export const collectionMappingSchema = z.object({
   from: z.object({
