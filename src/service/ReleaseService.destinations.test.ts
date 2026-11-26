@@ -494,11 +494,13 @@ describe('Releasing a Project that has a website', function () {
         commit: read.commit,
       });
 
-      expect(
-        (await core.releases.prepare({ projectId: project.id })).contractChanges
-      ).toEqual([
-        { contractId: kept.id, changeType: 'nameChanged', bump: 'patch' },
+      // A site reads its own Contract by name, so the rename takes its
+      // build away the way the Project dropping the Contract would
+      const renamed = await core.releases.prepare({ projectId: project.id });
+      expect(renamed.contractChanges).toEqual([
+        { contractId: kept.id, changeType: 'nameChanged', bump: 'major' },
       ]);
+      expect(renamed.bump).toEqual('major');
       await core.releases.create({ projectId: project.id });
 
       // A Contract that is gone, which no call of Core does and a working
@@ -786,15 +788,17 @@ describe('Releasing a Project that has a website', function () {
       const released = await core.releases.create({ projectId: project.id });
 
       expect(prepared.destinationIssues).toEqual([]);
+      // A site names its website by the name the editor gave it, so the
+      // rename takes that site's build away and the Release is a major
       expect(prepared.destinationChanges.toSorted(byChangeType)).toEqual([
         {
           destinationId: website.id,
           changeType: 'mappingChanged',
           bump: 'patch',
         },
-        { destinationId: website.id, changeType: 'nameChanged', bump: 'patch' },
+        { destinationId: website.id, changeType: 'nameChanged', bump: 'major' },
       ]);
-      expect(released.diff.bump).toEqual('patch');
+      expect(released.diff.bump).toEqual('major');
     });
 
     it('names a Collection created from a version that waits', async function () {

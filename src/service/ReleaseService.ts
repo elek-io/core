@@ -1170,8 +1170,8 @@ export class ReleaseService extends AbstractService {
    *
    * A Destination is read by a site's build rather than by a consumer of the
    * generated client, so what it holds about itself is a patch. One that is
-   * gone takes the build naming it with it, which is major, and one added is
-   * minor like every other object.
+   * gone and one renamed both take the build naming it with them, which is
+   * major, and one added is minor like every other object.
    */
   private diffDestinations(
     currentDestinations: FileAtRef<DestinationFile>[],
@@ -1214,11 +1214,13 @@ export class ReleaseService extends AbstractService {
       const to = current.file;
       const from = released.file;
 
+      // A site names its website by the name the editor gave it, so a
+      // rename takes that site's build away the way a deletion does
       if (to.name !== from.name) {
         destinationChanges.push({
           destinationId: id,
           changeType: 'nameChanged',
-          bump: 'patch',
+          bump: 'major',
         });
       }
 
@@ -1271,7 +1273,9 @@ export class ReleaseService extends AbstractService {
    * bump it contributes.
    *
    * A copy is never rewritten, so a version one side holds and the other
-   * does not is the only change inside a Contract besides its name.
+   * does not is the only change inside a Contract besides its name. One the
+   * Project keeps no longer and one renamed are both major, because a site
+   * building on that Contract reads it by its name.
    */
   private diffContracts(
     currentContracts: KeptContractAtRef[],
@@ -1322,11 +1326,13 @@ export class ReleaseService extends AbstractService {
       // What changed inside an object cannot be read where either side's
       // file fails this Core's schema, so only its presence is reported
       if (current.file === null || released.file === null) continue;
+      // A site reads its Contract by name, so a rename takes its build away
+      // the way the Project keeping the Contract no longer does
       if (current.file.name !== released.file.name) {
         contractChanges.push({
           contractId: id,
           changeType: 'nameChanged',
-          bump: 'patch',
+          bump: 'major',
         });
       }
     }

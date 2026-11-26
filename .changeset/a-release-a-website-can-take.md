@@ -19,4 +19,4 @@ prepared.destinationIssues; // each Entry a website cannot take, and why
 
 - `destinationChanges` reports a website added, gone or renamed, the version of its theme's Contract it uses, its Mapping, the version waiting beside it and what it created from its theme.
 - `contractChanges` reports a Contract the Project keeps, one it keeps no longer, its name and each copy of a version it gained.
-- A website or a Contract that is gone is a major bump, because a site that names it cannot build. Everything else either of them holds is a patch, and both of them added are a minor.
+- A website or a Contract that is gone, and either of them renamed, is a major bump, because a site that names it by the name it carries cannot build. Everything else either of them holds is a patch, while either of them added and a copy of a version the Project gained are a minor.
