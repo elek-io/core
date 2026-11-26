@@ -499,8 +499,8 @@ describe('Releasing a Project that has a website', function () {
         commit: read.commit,
       });
 
-      // A site reads its own Contract by name, so the rename takes its
-      // build away the way the Project dropping the Contract would
+      // A site's build checks its own Contract's name against the kept
+      // one, so the rename takes its build away the way dropping it would
       const renamed = await core.releases.prepare({ projectId: project.id });
       expect(renamed.contractChanges).toEqual([
         { contractId: kept.id, changeType: 'nameChanged', bump: 'major' },
@@ -793,8 +793,8 @@ describe('Releasing a Project that has a website', function () {
       const released = await core.releases.create({ projectId: project.id });
 
       expect(prepared.destinationIssues).toEqual([]);
-      // A site names its website by the name the editor gave it, so the
-      // rename takes that site's build away and the Release is a major
+      // A site may name its website by the name the editor gave it, so the
+      // rename takes such a site's build away and the Release is a major
       expect(prepared.destinationChanges.toSorted(byChangeType)).toEqual([
         {
           destinationId: website.id,

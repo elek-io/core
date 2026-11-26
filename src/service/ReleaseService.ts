@@ -1170,8 +1170,8 @@ export class ReleaseService extends AbstractService {
    *
    * A Destination is read by a site's build rather than by a consumer of the
    * generated client, so what it holds about itself is a patch. One that is
-   * gone and one renamed both take the build naming it with them, which is
-   * major, and one added is minor like every other object.
+   * gone and one renamed both take a site naming it by that name with them,
+   * which is major, and one added is minor like every other object.
    */
   private diffDestinations(
     currentDestinations: FileAtRef<DestinationFile>[],
@@ -1214,8 +1214,8 @@ export class ReleaseService extends AbstractService {
       const to = current.file;
       const from = released.file;
 
-      // A site names its website by the name the editor gave it, so a
-      // rename takes that site's build away the way a deletion does
+      // A site may name its website by the name the editor gave it, so a
+      // rename takes such a site's build away the way a deletion does
       if (to.name !== from.name) {
         destinationChanges.push({
           destinationId: id,
@@ -1326,8 +1326,8 @@ export class ReleaseService extends AbstractService {
       // What changed inside an object cannot be read where either side's
       // file fails this Core's schema, so only its presence is reported
       if (current.file === null || released.file === null) continue;
-      // A site reads its Contract by name, so a rename takes its build away
-      // the way the Project keeping the Contract no longer does
+      // A site's build checks its own Contract's name against this one, so
+      // a rename takes its build away the way dropping the Contract does
       if (current.file.name !== released.file.name) {
         contractChanges.push({
           contractId: id,

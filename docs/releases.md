@@ -134,7 +134,7 @@ Every change `prepare()` can report is below, with the bump it contributes. The 
 | `entryChanges` | `modified` | patch | The Entry's Values. Where either side is a file this Core cannot read, its whole file, see [A Release an older Core made](#a-release-an-older-core-made) |
 | `destinationChanges` | `deleted` | major | The website is gone, and a site that names it in its `elek.config.ts` can no longer build at all |
 | `destinationChanges` | `added` | minor | A website the released state does not hold |
-| `destinationChanges` | `nameChanged` | major | The website's own name, which is what a site names it by in its `elek.config.ts`, so a site naming the old name can no longer build at all |
+| `destinationChanges` | `nameChanged` | major | The website's own name, which a site may name it by in its `elek.config.ts`, so a site naming it that way can no longer build at all. One naming it by its id is unaffected |
 | `destinationChanges` | `versionChanged` | patch | The version of its theme's Contract the website uses, which the change carries as `version` |
 | `destinationChanges` | `mappingChanged` | patch | Its Mapping: which Collection fills which Collection of the Contract, which Entries it takes, or how a field is filled |
 | `destinationChanges` | `waitingVersionChanged` | patch | The version waiting beside the one in use, or its Mapping. A waiting version reaches no site |
@@ -142,13 +142,13 @@ Every change `prepare()` can report is below, with the bump it contributes. The 
 | `contractChanges` | `deleted` | major | The Project keeps that Contract no longer, so no website can follow it |
 | `contractChanges` | `added` | minor | A Contract the released state does not keep |
 | `contractChanges` | `versionAdded` | minor | A copy of another version of a Contract the Project already keeps, which the change carries as `version` |
-| `contractChanges` | `nameChanged` | major | The name the kept Contract goes by, which a site's build reads its own Contract by, so a site on the old name can no longer build at all |
+| `contractChanges` | `nameChanged` | major | The name the kept Contract goes by, which a site's build checks its own Contract's name against, so every site whose Contract states the old name can no longer build at all |
 
 Every row compares the released state against the current `draft`, never the commits in between, so a rename and its undo inside one `draft` is no change at all. A Collection or Component added since the last Release is reported as `added` alone, whatever its slug did afterwards.
 
 A Component's field definition can be neither unique nor a `slug` field, so the four rows that need one of those reach `fieldChanges` alone.
 
-A website and a Contract are read by a site's build rather than by a consumer of the generated client and types, so what either holds about itself is a patch. The rows that take a build away are major instead: a website that is gone, a Contract the Project keeps no longer, and either of them renamed, because a site names both by the name they carry. A website added, a Contract added and a copy of a version the Project gained are minor, like every other addition.
+A website and a Contract are read by a site's build rather than by a consumer of the generated client and types, so what either holds about itself is a patch. The rows that take a build away are major instead: a website that is gone, a Contract the Project keeps no longer, and either of them renamed. A site names its website by that name or by its id, and states its Contract's name in its own Contract, so a renamed website stops the sites naming it by name and a renamed Contract stops every site on it. A website added, a Contract added and a copy of a version the Project gained are minor, like every other addition.
 
 ## What a major Release asks of a consumer
 
