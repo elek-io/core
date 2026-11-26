@@ -1,6 +1,6 @@
 import type ElekIoCore from '../index.node.js';
 import type { DestinationFile, WebsiteUpdateProps } from '../schema/index.js';
-import { isValueIssue } from '../util/destinationCheck.js';
+import { issueCountsOf, isValueIssue } from '../util/destinationCheck.js';
 import type { DestinationIssue } from '../util/destinationIssue.js';
 import { CoreError } from '../util/shared.js';
 import { getCore } from './util.js';
@@ -81,13 +81,9 @@ export const websiteUpdateAction = async ({
     });
   }
 
-  const entries = new Set(
-    switched.issues.filter(isValueIssue).map((issue) => issue.entryId)
-  );
-  const unmapped =
-    switched.issues.length - switched.issues.filter(isValueIssue).length;
+  const { unmapped, entries } = issueCountsOf(switched.issues);
   throw CoreError.preconditionFailed(
-    `Version ${kept.version} waits beside version ${website.contract.version}, which website ${website.id} of Project ${project} keeps using: ${whatIsLeft(unmapped, entries.size)}. Each is named above. Map the rest and run this again.`
+    `Version ${kept.version} waits beside version ${website.contract.version}, which website ${website.id} of Project ${project} keeps using: ${whatIsLeft(unmapped, entries)}. Each is named above. Map the rest and run this again.`
   );
 };
 

@@ -629,6 +629,24 @@ export function contractValuesOf(props: {
   return values;
 }
 
+/**
+ * What is left before a Destination takes the Project: how much of its
+ * Mapping does not fill, and how many Entries do not fit.
+ *
+ * An Entry is counted once however many of its Values are refused, because
+ * one Entry is one thing to open.
+ */
+export function issueCountsOf(issues: readonly DestinationIssue[]): {
+  unmapped: number;
+  entries: number;
+} {
+  const values = issues.filter(isValueIssue);
+  return {
+    unmapped: issues.length - values.length,
+    entries: new Set(values.map((issue) => issue.entryId)).size,
+  };
+}
+
 /** Every issue of `issues` that is about an Entry rather than the Mapping */
 export function isValueIssue(
   issue: DestinationIssue
