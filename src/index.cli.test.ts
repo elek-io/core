@@ -16,6 +16,7 @@ import {
   createEntry,
   createProject,
   execCommand,
+  execGit,
   seedRemoteWithRelease,
 } from './test/util.js';
 import core from './test/setup.js';
@@ -43,6 +44,39 @@ const defaultCwd = out('default-cwd');
 /** A path inside the default output directory of a run started in defaultCwd */
 function defaultOut(...segments: string[]): string {
   return Path.join(defaultCwd, '.elek.io', ...segments);
+}
+
+/**
+ * A theme as a bare repository holding one tagged version, built from a
+ * directory `generate:contract` wrote into
+ */
+async function bareThemeOf(themeDir: string): Promise<string> {
+  const barePath = out(`${Path.basename(themeDir)}-bare.git`);
+  await execGit(themeDir, ['init', '--quiet', '--initial-branch=main', '.']);
+  await execGit(themeDir, ['config', 'user.name', 'Theme Author']);
+  await execGit(themeDir, ['config', 'user.email', 'author@theme.test']);
+  await execGit(themeDir, ['add', '--all']);
+  await execGit(themeDir, ['commit', '--quiet', '--message=Release v1.0.0']);
+  await execGit(themeDir, ['tag', '--annotate', 'v1.0.0', '--message=v1.0.0']);
+  await execGit(themeDir, ['clone', '--quiet', '--bare', themeDir, barePath]);
+  return barePath;
+}
+
+/** Releases another version of a theme into the bare repository behind it */
+async function releaseThemeVersion(
+  themeDir: string,
+  barePath: string,
+  tag: string
+): Promise<void> {
+  await execGit(themeDir, ['add', '--all']);
+  await execGit(themeDir, [
+    'commit',
+    '--quiet',
+    '--allow-empty',
+    `--message=Release ${tag}`,
+  ]);
+  await execGit(themeDir, ['tag', '--annotate', tag, `--message=${tag}`]);
+  await execGit(themeDir, ['push', '--quiet', barePath, 'main', '--tags']);
 }
 
 describe('CLI', function () {
@@ -516,6 +550,201 @@ describe('CLI', function () {
           seed.remotePath,
           '--ref',
           '9.9.9',
+        ],
+      })
+    ).rejects.toThrow();
+  });
+
+  it("should write a theme's Contract via the generate:contract command", async function () {
+    const themeDir = out('contract-theme');
+
+    await execCommand({
+      command: 'node',
+      args: [
+        cliBinary,
+        'generate:contract',
+        themeDir,
+        '--project',
+        project1.id,
+        '--name',
+        '@acme/dealer-site',
+        '--contract-version',
+        '1.0.0',
+      ],
+    });
+
+    const contract = JSON.parse(
+      await fs.readFile(Path.join(themeDir, 'elek.contract.json'), 'utf-8')
+    );
+    expect(contract.name).toEqual('@acme/dealer-site');
+    expect(contract.version).toEqual('1.0.0');
+    expect(
+      contract.collections.map((written: Collection) => written.id)
+    ).toContain(collection.id);
+  });
+
+  it('should keep the name and the version on a second generate:contract run', async function () {
+    const themeDir = out('contract-theme-again');
+    const args = [
+      cliBinary,
+      'generate:contract',
+      themeDir,
+      '--project',
+      project1.id,
+    ];
+
+    await execCommand({
+      command: 'node',
+      args: [
+        ...args,
+        '--name',
+        '@acme/dealer-site',
+        '--contract-version',
+        '2.3.4',
+      ],
+    });
+    await execCommand({ command: 'node', args });
+
+    const contract = JSON.parse(
+      await fs.readFile(Path.join(themeDir, 'elek.contract.json'), 'utf-8')
+    );
+    expect(contract.name).toEqual('@acme/dealer-site');
+    expect(contract.version).toEqual('2.3.4');
+  });
+
+  it('should add a website via the website:add command', async function () {
+    const themeDir = out('website-theme');
+    await execCommand({
+      command: 'node',
+      args: [
+        cliBinary,
+        'generate:contract',
+        themeDir,
+        '--project',
+        project1.id,
+        '--name',
+        '@acme/website-site',
+        '--contract-version',
+        '1.0.0',
+      ],
+    });
+    const themeUrl = await bareThemeOf(themeDir);
+
+    await expect(
+      execCommand({
+        command: 'node',
+        args: [
+          cliBinary,
+          'website:add',
+          '--project',
+          project1.id,
+          '--name',
+          'added.example',
+          '--theme',
+          themeUrl,
+        ],
+      })
+    ).resolves.toBeDefined();
+
+    const page = await core.destinations.list({
+      projectId: project1.id,
+      limit: 0,
+    });
+    expect(page.list.map((website) => website.name)).toContain('added.example');
+  });
+
+  it('should switch a website to a new theme version via the website:update command', async function () {
+    const themeDir = out('website-update-theme');
+    const contractArgs = [
+      cliBinary,
+      'generate:contract',
+      themeDir,
+      '--project',
+      project1.id,
+    ];
+    await execCommand({
+      command: 'node',
+      args: [
+        ...contractArgs,
+        '--name',
+        '@acme/update-site',
+        '--contract-version',
+        '1.0.0',
+      ],
+    });
+    const themeUrl = await bareThemeOf(themeDir);
+    await execCommand({
+      command: 'node',
+      args: [
+        cliBinary,
+        'website:add',
+        '--project',
+        project1.id,
+        '--name',
+        'updated.example',
+        '--theme',
+        themeUrl,
+      ],
+    });
+    // The theme tags its next version, which the Project knows nothing of
+    await execCommand({
+      command: 'node',
+      args: [...contractArgs, '--contract-version', '1.1.0'],
+    });
+    await releaseThemeVersion(themeDir, themeUrl, 'v1.1.0');
+
+    await expect(
+      execCommand({
+        command: 'node',
+        args: [
+          cliBinary,
+          'website:update',
+          '--project',
+          project1.id,
+          '--name',
+          'updated.example',
+        ],
+      })
+    ).resolves.toBeDefined();
+
+    const page = await core.destinations.list({
+      projectId: project1.id,
+      limit: 0,
+    });
+    expect(
+      page.list.find((website) => website.name === 'updated.example')?.contract
+        .version
+    ).toEqual('1.1.0');
+  });
+
+  it('should fail loudly when website:add gets an address with a credential', async function () {
+    await expect(
+      execCommand({
+        command: 'node',
+        args: [
+          cliBinary,
+          'website:add',
+          '--project',
+          project1.id,
+          '--name',
+          'refused.example',
+          '--theme',
+          'https://nils:ghp_secret@github.com/acme/site.git',
+        ],
+      })
+    ).rejects.toThrow();
+  });
+
+  it('should fail loudly when generate:contract has no name and no version', async function () {
+    await expect(
+      execCommand({
+        command: 'node',
+        args: [
+          cliBinary,
+          'generate:contract',
+          out('contract-theme-first'),
+          '--project',
+          project1.id,
         ],
       })
     ).rejects.toThrow();

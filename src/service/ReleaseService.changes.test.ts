@@ -8,6 +8,7 @@ import {
   createComponent,
   createLocalRemoteRepository,
   createProject,
+  createSingleEntryCollection,
   createTmpCore,
   expectCoreError,
 } from '../test/util.js';
@@ -209,7 +210,12 @@ describe('Reading what each Release changed', function () {
     expect(changes.nextVersion).toEqual('0.1.0');
     expect(changes.bump).toEqual('minor');
     expect(changes.collectionChanges).toEqual([
-      { collectionId: collection.id, changeType: 'added', bump: 'minor' },
+      {
+        collectionId: collection.id,
+        changeType: 'added',
+        bump: 'minor',
+        isSingleEntry: false,
+      },
     ]);
     expect(changes.entryChanges).toEqual([]);
     // The Project as that Release holds it, not as it is named now
@@ -254,6 +260,56 @@ describe('Reading what each Release changed', function () {
     expect(majorChanges.entryChanges).toEqual([]);
   });
 
+  it('should say of an added and a deleted Collection whether it is a Single Entry', async function () {
+    // A Collection one of the two states does not hold cannot be read
+    // there, so whoever lists the changes reads it off the change itself
+    const project = await createProject('Single Entries Released');
+    onTestFinished(project.destroy);
+    const single = await createSingleEntryCollection(project.id);
+    const list = await createTextCollection(core, project.id);
+    await core.releases.create({ projectId: project.id });
+
+    const added = await releaseOf(core, project.id, '0.1.0');
+    const addedChanges = await core.releases.changes({
+      projectId: project.id,
+      tagId: added.tagId,
+    });
+
+    expect(addedChanges.collectionChanges).toEqual(
+      expect.arrayContaining([
+        {
+          collectionId: single.id,
+          changeType: 'added',
+          bump: 'minor',
+          isSingleEntry: true,
+        },
+        {
+          collectionId: list.id,
+          changeType: 'added',
+          bump: 'minor',
+          isSingleEntry: false,
+        },
+      ])
+    );
+
+    await core.collections.delete({ projectId: project.id, id: single.id });
+    await core.releases.create({ projectId: project.id });
+    const deleted = await releaseOf(core, project.id, '1.0.0');
+    const deletedChanges = await core.releases.changes({
+      projectId: project.id,
+      tagId: deleted.tagId,
+    });
+
+    expect(deletedChanges.collectionChanges).toEqual([
+      {
+        collectionId: single.id,
+        changeType: 'deleted',
+        bump: 'major',
+        isSingleEntry: true,
+      },
+    ]);
+  });
+
   it('should compare a preview Release against the last full Release before it', async function () {
     const { project } = await createReleasedProject();
     const preview = await releaseOf(core, project.id, '0.2.1-preview.1');
@@ -284,8 +340,13 @@ describe('Reading what each Release changed', function () {
       projectId: project.id,
       tagId: latest.tagId,
     });
-    const prepared = await core.releases.prepare({ projectId: project.id });
+    const { destinationIssues, ...prepared } = await core.releases.prepare({
+      projectId: project.id,
+    });
 
+    // What stops the next Release is `prepare()`'s own, and the changes are
+    // the same shape whichever Release they are read for
+    expect(destinationIssues).toEqual([]);
     expect(Object.keys(changes).toSorted()).toEqual(
       Object.keys(prepared).toSorted()
     );
@@ -412,6 +473,46 @@ describe('Reading what each Release changed', function () {
     expect(changes.collectionChanges).toEqual([]);
     expect(changes.fieldChanges).toEqual([]);
     expect(changes.bump).toEqual('patch');
+  });
+
+  it('should say nothing of a Single Entry for an added Collection this Core cannot read', async function () {
+    const project = await createProject('Added unreadable Collection');
+    onTestFinished(project.destroy);
+    await createTextCollection(core, project.id);
+    await core.releases.create({ projectId: project.id });
+
+    // A Single Entry whose file this Core cannot parse, as one a newer
+    // Core wrote would be
+    const added = await createSingleEntryCollection(project.id);
+    const projectPath = core.util.pathTo.project(project.id);
+    const collectionFilePath = core.util.pathTo.collectionFile(
+      project.id,
+      added.id
+    );
+    await Fs.writeJson(collectionFilePath, {
+      ...added,
+      coreVersion: '0.1.0',
+      fieldDefinitions: { phone: { valueType: 'string' } },
+    });
+    await core.git.add(projectPath, [collectionFilePath]);
+    await core.git.commit(projectPath, {
+      method: 'update',
+      reference: { objectType: 'collection', id: added.id },
+    });
+    const second = await core.releases.create({ projectId: project.id });
+
+    const changes = await core.releases.changes({
+      projectId: project.id,
+      tagId: (await releaseOf(core, project.id, second.version)).tagId,
+    });
+
+    // Whether it is a Single Entry is a property of a file nothing can
+    // read, so the change says it is there and no more. Strictly, because a
+    // caller asking with `in` or `Object.keys` tells an absent key from one
+    // carrying undefined
+    expect(changes.collectionChanges).toStrictEqual([
+      { collectionId: added.id, changeType: 'added', bump: 'minor' },
+    ]);
   });
 
   it('should report an Asset and a Component whose files this Core cannot read as present, without what changed inside them', async function () {

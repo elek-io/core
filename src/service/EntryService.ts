@@ -28,6 +28,7 @@ import {
   type ComponentResolver,
   type Value,
   type UniqueValueConflict,
+  type Collection,
   collectionScopeSchema,
 } from '../schema/index.js';
 import type { PathTo } from '../util/node.js';
@@ -104,8 +105,9 @@ export class EntryService
    * Throws `PreconditionFailed` in read-only mode and on a provisioned copy,
    * `BadRequest` when a Value fails the Collection's field definitions or
    * points at something that is not there, and `Conflict` when a unique field
-   * repeats a value another Entry already holds. Nothing is written unless
-   * all three pass, and a failure mid-write rolls the working tree back.
+   * repeats a value another Entry already holds or when the Collection is a
+   * Single Entry that holds one. Nothing is written unless all of them pass,
+   * and a failure mid-write rolls the working tree back.
    *
    * @see ../../contributing/error-handling-internals.md
    */
@@ -139,6 +141,11 @@ export class EntryService
       ),
       props,
       async (validatedProps) => {
+        await this.assertSingleEntryIsFree(
+          collection,
+          validatedProps.projectId
+        );
+
         const refIssues = await this.referenceService.validateValueReferences(
           validatedProps.values,
           fieldDefinitions,
@@ -521,6 +528,33 @@ export class EntryService
     return {
       ...entryFile,
     };
+  }
+
+  /**
+   * Throws `Conflict` when the Collection is a Single Entry that already
+   * holds one, naming the Entry to update instead.
+   *
+   * Reads the Collection folder the way `count` does rather than any index,
+   * so an Entry a pull or merge brought in holds the place as much as one
+   * this service wrote.
+   */
+  private async assertSingleEntryIsFree(
+    collection: Collection,
+    projectId: string
+  ): Promise<void> {
+    if (collection.isSingleEntry === false) {
+      return;
+    }
+    const [held] = await this.listReferences(
+      objectTypeSchema.enum.entry,
+      projectId,
+      collection.id
+    );
+    if (held) {
+      throw CoreError.conflict(
+        `Collection "${collection.id}" is a Single Entry and already holds Entry "${held.id}", so it takes no second one. Update that Entry, or keep this content in a Collection that holds a list.`
+      );
+    }
   }
 
   /**

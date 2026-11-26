@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { uuidSchema } from './baseSchema.js';
+import {
+  supportedLanguageSchema,
+  uuidSchema,
+  versionSchema,
+} from './baseSchema.js';
+import { contractNameSchema } from './contractSchema.js';
 import { contentRefSchema } from './projectSchema.js';
 
 const outDirSchema = z.string().default('./.elek.io');
@@ -113,3 +118,83 @@ export const provisionSchema = z.object({
   ref: contentRefSchema.optional(),
 });
 export type ProvisionProps = z.infer<typeof provisionSchema>;
+
+/**
+ * The languages a generated Contract serves, as the command takes them:
+ * `any`, or the codes of the languages separated by commas. Left out, the
+ * Project's own supported languages are written.
+ */
+const contractLanguagesArgumentSchema = z
+  .string()
+  .transform((value, context) => {
+    if (value.trim() === 'any') {
+      return 'any' as const;
+    }
+    const languages = value
+      .split(',')
+      .map((code) => code.trim())
+      .filter((code) => code !== '');
+    const parsed = z
+      .array(supportedLanguageSchema)
+      .nonempty()
+      .safeParse(languages);
+    if (parsed.success === false) {
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Languages must be "any" or the codes of at least one supported language, separated by commas',
+        input: value,
+      });
+      return z.NEVER;
+    }
+    return parsed.data;
+  });
+
+export const generateContractSchema = z.object({
+  /**
+   * The ID of the Project to write the Contract of
+   */
+  project: uuidSchema,
+  outDir: z.string().default('.'),
+  /**
+   * Kept from the Contract already at the path when left out, which the
+   * first run has none of
+   */
+  name: contractNameSchema.optional(),
+  version: versionSchema.optional(),
+  languages: contractLanguagesArgumentSchema.optional(),
+});
+export type GenerateContractProps = z.infer<typeof generateContractSchema>;
+
+export const websiteAddSchema = z.object({
+  /**
+   * The ID of the Project to add the website to
+   */
+  project: uuidSchema,
+  name: z.string().trim().min(1).max(128),
+  /**
+   * The git address of the theme the website runs on
+   */
+  theme: z.string().trim().min(1),
+  /**
+   * The newest version the theme tagged when left out
+   */
+  version: versionSchema.optional(),
+});
+export type WebsiteAddProps = z.infer<typeof websiteAddSchema>;
+
+export const websiteUpdateSchema = z.object({
+  /**
+   * The ID of the Project the website belongs to
+   */
+  project: uuidSchema,
+  /**
+   * The name of the website, or its ID
+   */
+  name: z.string().trim().min(1).max(128),
+  /**
+   * The newest version the theme tagged when left out
+   */
+  version: versionSchema.optional(),
+});
+export type WebsiteUpdateProps = z.infer<typeof websiteUpdateSchema>;

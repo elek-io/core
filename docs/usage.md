@@ -90,7 +90,8 @@ Core also reads `ELEK_IO_CLOUD_URL`, `ELEK_IO_CLOUD_TOKEN` and `ELEK_IO_CLOUD_GI
 - It never becomes part of a command line, a remote URL, the repository config or git's environment, so it cannot leak into logs or caches.
 - Prompts and askpass programs are disabled, `SSH_ASKPASS` included. A missing token fails the operation with a `CoreError` of type `Unauthorized` instead of hanging it.
 - A token the remote refuses fails the operation with `Unauthorized` after one attempt, a Git LFS transfer included.
-- While the token is set, configured git credential helpers are bypassed, so the token is authoritative. Without a token, ambient credential helpers keep working as before.
+- While the token is set, configured git credential helpers are bypassed for a Project's remote, so the token is authoritative there. Without a token, ambient credential helpers keep working as before.
+- A theme's git address never gets it. That one read installs no helper of Core's, so your own helpers and SSH keys answer for it, see [reading an address with your own git access](./git-and-sync.md#reading-an-address-with-your-own-git-access).
 - It applies to HTTP(S) remotes only. SSH remotes authenticate through the ambient SSH setup like ssh-agent.
 
 On Windows, keep the data directory short. Windows resolves paths against a 260 character limit unless long paths are enabled, and Core needs about 137 characters below the data directory for its deepest file, so a data directory beyond roughly 120 characters runs out of room.
@@ -314,6 +315,15 @@ const collection = await core.collections.create({
 });
 ```
 
+Passing `isSingleEntry: true` to `create()` limits the Collection to one Entry, a Single Entry, which is where one-off content such as contact details belongs. Left out, the Collection holds a list, which is what every Collection created before this option did.
+
+- `core.entries.create()` throws `Conflict` naming the Entry the Single Entry already holds, so update that Entry rather than adding one. It counts the Entries on disk, so one a pull or merge brought in holds the place too.
+- That count is a scan-then-write, the assumption uniqueness makes as well, see [`fields.md`](./fields.md#uniqueness). Two `create()` calls at once can both pass it, so a caller that writes in parallel serializes them itself.
+- A Single Entry can therefore end up holding two, and so can two Project copies that each filled the same empty one before a sync. Core refuses a third, an Astro site reads the first, and the build log warns.
+  - A site reading through a Contract stops its build there instead, see [what a build on a Contract receives](#what-a-build-on-a-contract-receives).
+- `core.collections.update()` throws `Conflict` for any other value than the one the Collection was created with. It takes that value, so sending back a Collection you read changes nothing.
+- A Collection never turns into a Single Entry or back. Create the Collection you need and add its Entries there.
+
 Field-definition `id`s are caller-supplied (hence the `uuid()` calls) - Core does not generate them. Each `id` is the stable identity Core uses to match field definitions when you update the Collection later, so reuse the same `id` for a field rather than minting a new one. See [`schema-changes.md`](./schema-changes.md#the-golden-rule-field-definitions-are-matched-by-id).
 
 Translatable fields (`label`, `description`, and Entry Values) must carry a value for every language the Project supports. With `supported: ['en', 'de']`, omitting `de` fails validation.
@@ -441,6 +451,21 @@ The package installs an `elek` binary. Run a command with `--help` to see all ar
 
 - `elek generate:client [outDir] [language] [format] [target]` - generate a JS/TS API client. `--watch` regenerates on content changes.
 - `elek generate:types [outDir] [language] [projects]` - generate TypeScript type definitions from Project content models. `--watch` supported. Both generators emit TypeScript by default. Passing `js` compiles it, which needs `tsdown` and `typescript` installed as dev dependencies of your project, see [compiling to JavaScript](./api-clients.md#compiling-to-javascript).
+- `elek generate:contract --project <id> [outDir]` - write a theme's `elek.contract.json` from a Project's Collections and Components, into `outDir`, which defaults to the current directory.
+  - `--name` and `--contract-version` are kept from the Contract already in the directory when left out, so a rerun after the Project changed follows it without repeating them. The first run has no file to read them from and needs both. It is not `--version`, which answers with the CLI's own version.
+  - `--languages` takes `any` or the codes of the languages separated by commas, and defaults to the Project's own supported languages.
+  - See [`destinations.md`](./destinations.md#a-contract).
+- `elek website:add --project <id> --name <website> --theme <address>` - add a website to a Project from its theme's git address, at the newest version tagged there, and print what the website cannot take yet.
+  - `--theme-version` pins a version instead. It is not `--version`, which answers with the CLI's own version.
+  - It commits, so it needs a User set with [`core.user.set()`](#setting-the-user-required-before-writing), which no `elek` command does, and a Project that is a working copy in the data directory rather than a provisioned copy. elek.io Desktop is both.
+  - It writes and commits in the Project of the data directory, on the branch it is checked out on, which is `draft` for a working copy. Synchronize the Project to take it to its remote.
+  - It exits non-zero while anything is unmapped or any Entry does not fit, naming each. The website stays, so you can map the rest.
+  - Core reads the address with your own git access, see [reading an address with your own git access](./git-and-sync.md#reading-an-address-with-your-own-git-access).
+- `elek website:update --project <id> --name <website>` - bring the theme's newest version to a website and switch to it. `<website>` is the name the website was given, or its ID.
+  - `--theme-version` switches to that version instead of the newest tagged one. It is not `--version`, which answers with the CLI's own version.
+  - It keeps the version beside the one in use first, so a run that cannot switch leaves it waiting with whatever is mapped for it. Every run fills what the Project has gained into that Mapping, so a field definition carrying the id the new version's Contract names covers what an earlier run left unmapped and the next run switches.
+  - It exits non-zero while anything the new version needs is unmapped or any Entry does not fit, naming each. The website keeps the version it uses, so the site goes on building.
+  - A website already on the version asked for is left alone. It writes and commits in the data directory and reads the theme's address with your own git access, the way `website:add` does, see [`destinations.md`](./destinations.md#following-a-themes-new-version).
 - `elek api:start [port]` - start the local REST API (default port `31310`).
 - `elek export [outDir] [projects] [template]` - export Projects to JSON (`nested` or `separate` template). `--watch` supported.
 - `elek provision --project <id> --url <url>` - provision a copy of a Project from its remote into the data directory, for example in CI. It runs read-only, so no User is required, and private remotes authenticate through `ELEK_IO_REMOTE_ACCESS_TOKEN`.
@@ -523,7 +548,7 @@ entry.data.related.en; // Array<{ id: string; objectType: 'entry'; collectionId:
 
 A `reference` field is an array, empty rather than null when nothing is referenced. The field definition decides what it points at, so the type does too: an Asset reference carries an id, an Entry reference carries the id and the `collectionId` of the Collection the Entry lives in.
 
-That id is also the Astro store id, so following a reference is a `getEntry` away. An Asset resolves against the Project's Assets collection:
+That id is also the Astro store id, outside a Single Entry, so following a reference is a `getEntry` away. An Asset resolves against the Project's Assets collection:
 
 ```typescript
 const cover = await getEntry('websiteAssets', entry.data.cover.en[0].id);
@@ -536,6 +561,21 @@ const post = await getEntry('websitePosts', entry.data.related.en[0].id);
 ```
 
 An Entry carries no `body` and no rendered HTML, so Astro's `render()` and `<Content />` produce an empty page rather than an error. A `markdown` field arrives on `entry.data` as a tree, which [`markdown-content.md`](./markdown-content.md#rendering-markdown-content-in-astro) renders with `mdastRender`.
+
+### Reading a Single Entry
+
+A Collection limited to one Entry, a Single Entry, derives its Astro collection like every other one, under the alias plus its plural slug. Its one Entry is stored under the id `single`, so the site reads it as one item without knowing which Entry it is:
+
+```typescript
+import { getEntry } from 'astro:content';
+
+const contact = await getEntry('websiteContactDetails', 'single');
+const phone = contact?.data.phone.en ?? null;
+```
+
+`getEntry` answers `undefined` while the Single Entry holds no Entry yet, which is what it answers for a Project whose editor has not filled it in. The build runs either way, so the page decides what an empty one shows, as the `??` above does.
+
+A reference pointing into a Single Entry carries the referenced Entry's own id, which is no store id there, so read it with `single` too. Nothing outside the loaders changes: `core.entries.list()` answers a Single Entry with a list of one, as it does for every other Collection, and so do the local API and the generated client that read through it.
 
 ### Rendering a dynamic field
 
@@ -654,6 +694,79 @@ Three mistakes fail the build rather than passing quietly, because each would ot
 - A selection that derives nothing at all, including `elekCollections(config, {})`.
 - A derived Collection that can reference Assets, through a reference field or a markdown field with `assetReferences` enabled, while that Project's Assets are left out. Following such a reference is `getEntry('websiteAssets', ref.id)`, so without the collection it would break while a page renders, far from the config that caused it.
 
+A site whose theme states a Contract takes its Collections from that instead, see [building on the site's own Contract](#building-on-the-sites-own-contract).
+
+### Building on the site's own Contract
+
+A theme states what it needs as a Contract, the `elek.contract.json` of its own repository, see [`destinations.md`](./destinations.md). Name the website that follows it and the site reads every Entry in the shape of that Contract, whatever the Project's own Collections and fields are called:
+
+```typescript
+// elek.config.ts
+import { defineElekConfig } from '@elek-io/core/astro';
+import contract from './elek.contract.json';
+
+export const config = defineElekConfig({
+  projects: {
+    website: {
+      id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+      destination: 'autohaus-ebersfelde.de',
+    },
+  },
+  contract,
+});
+```
+
+- `destination` is the website's own name, the one the editor gave it, or its id.
+- `contract` is this site's own `elek.contract.json`, imported rather than discovered, so the file the theme ships is the one the build reads.
+- The two go together. Either one alone fails the config where you wrote it.
+
+`elekCollections()` then derives one collection per Collection of the Contract, so a Project aliased `website` on a Contract with a `posts` Collection produces `websitePosts`, however that Project's own Collection is named. Under `collections` a Collection is named by the Contract's plural slug or its id, the same two as before.
+
+```typescript
+import { getCollection } from 'astro:content';
+
+const posts = await getCollection('websitePosts');
+posts[0]?.data.title.en; // the Contract's own field slug
+```
+
+Everything else reads as it does without a Contract. Values are keyed by the Project's languages, an Entry reference carries the `collectionId` of the Contract Collection it landed in, and a Single Entry of the Contract is read under `single`.
+
+- An optional field of the Contract nothing fills is empty, `null` in every language or an empty list, which is what a field the editor left empty holds too. A required one stops the build, see [what a build on a Contract receives](#what-a-build-on-a-contract-receives).
+- A Value of the Project the Contract does not ask for is left out, so a site one Contract version behind builds what its own Contract names.
+- Mapping a Project's content onto a Contract is the editor's work in elek.io Desktop. The build reads that Mapping and never guesses.
+- The build takes the Entries the Mapping's conditions let through and reads each Value the way the Mapping fills it, be that one field, a fixed Value, several fields joined or matched options. An Entry the website does not take reaches no page, and one that is taken while pointing at it stops the build.
+
+### What a build on a Contract receives
+
+The build stops on everything the website cannot fill. The Mapping comes first, naming every Collection and every required field of the Contract the Project leaves unfilled in one error:
+
+```text
+Destination "autohaus-ebersfelde.de" of Project "website" does not fill the
+Contract "@acme/dealer-site" at version 1.1.0 while the website uses 1.0.0:
+- No Collection of the Project fills "pages"
+- No field of the Project fills the required field "author" of "posts"
+```
+
+The same error names a field the Mapping fills in a way that cannot work, an option of the Project's field that becomes none of the Contract's, and a Single Entry of the Contract filled from a Collection holding a list, see [what a Mapping can do](./destinations.md#what-a-mapping-can-do).
+
+Then every Entry a Collection of the Contract refuses, naming the Entry, the field and the language:
+
+```text
+Collection "posts" of the Contract "@acme/dealer-site" at version 1.0.0 is not
+filled by Project "website" through Destination "autohaus-ebersfelde.de":
+- Entry "0b1f...", field "title" in "en": Too big: expected string to have <=10 characters
+```
+
+Nothing of that collection is stored while it does not fit, so no page renders half a Collection. Astro loads its collections together and stops on the first one that fails, so the Entries of one Collection are named at a time.
+
+A Single Entry of the Contract filled from a Collection of the Project holding several Entries is named there too, because which of them the site would read is arbitrary.
+
+A pipeline of your own needs this site's repository and read access to the Project's content remote, and nothing else:
+
+- The Contract comes from this site's own file and its name from the Project's own copy, never from the theme's git address, so no build needs access to the theme.
+- The version in use is the Project's. A site one version behind builds what its own Contract names, and a site whose code moved ahead stops the build naming the Collections and required fields the Project does not fill yet. Either way the Mapping has to fill what this site's own Contract requires.
+- No elek.io Cloud takes part. [`provisioning.md`](./provisioning.md) covers fetching the Project itself, and [`elek()`](#provisioning-in-ci-with-elek) does it in the build.
+
 ### Declaring collections explicitly
 
 `elekCollections()` returns a plain object, so individual collections can be added next to it, and the loaders behind it are exported for when you want to name a collection yourself or give it a key of your own:
@@ -680,7 +793,7 @@ The `project` of a loader and the aliases in `elekCollections()`'s options accep
 
 ### Routing by slug
 
-Entries are keyed by their UUID in Astro's store, which is what `getEntry()` and every reference between Entries uses. For public URLs you usually want a [`slug` field](./fields.md) instead, and `elekSlugPaths()` turns a collection into the paths `getStaticPaths` expects:
+Entries are keyed by their UUID in Astro's store, outside a Single Entry, which is what `getEntry()` and every reference between Entries uses. A Single Entry uses `single`, see [reading a Single Entry](#reading-a-single-entry). For public URLs you usually want a [`slug` field](./fields.md) instead, and `elekSlugPaths()` turns a collection into the paths `getStaticPaths` expects:
 
 ```astro
 ---
@@ -784,6 +897,7 @@ Each loader watches only what it reads, so a Collection reloads when one of its 
 - Adding, removing or editing a **Component**, or the fields of one
 - Changing a Project's **supported languages**, which every translatable Value is keyed by
 - Renaming a **Collection's plural slug**, which Astro names the collection after
+- Changing the **Mapping** of a website the site reads through, or the **Collection of the Project** that fills one of its Contract's, both of which decide which Value arrives under which field of the Contract
 - Adding or removing a **Collection or Project**, which changes the set of collections `elekCollections()` returns
 
 The loaders notice all but the last and stop rather than pretend. Instead of reloading Entries against a schema that no longer describes them, which would silently drop a new field or fail on a removed one, the build log says what happened:
@@ -793,6 +907,8 @@ The loaders notice all but the last and stop rather than pretend. Instead of rel
 Astro builds a collection's schema and types once, when it loads the content config,
 so restart the dev server to pick them up. Entries are not reloaded until then.
 ```
+
+A site reading through a Contract is named by it, `Collection "posts" of the Contract "@acme/dealer-site" of Project "website"`, because that Collection is the one its own code reads and the Project holds none of that name.
 
 Content editing carries on as normal after the restart. Adding or removing a whole Collection is not detected, because the set of collections is decided before any loader runs.
 
@@ -831,4 +947,5 @@ For rendering `markdown` field Values (including the required `html`, `assetRefe
 - [`api-clients.md`](./api-clients.md) - generating typed clients and TypeScript types
 - [`export.md`](./export.md) - exporting Projects to JSON
 - [`error-handling.md`](./error-handling.md) - `CoreError` and error patterns
+- [`destinations.md`](./destinations.md) - Contracts, websites and what a Destination can take
 - [`markdown-content.md`](./markdown-content.md) - rendering rich `markdown` Values

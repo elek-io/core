@@ -1,6 +1,6 @@
 # Releases against a remote
 
-Why a clone lands on `draft`, which `main` a Release compares against, why it pushes atomically, what the first `synchronize()` sends to a new remote, and how a change finds the Release that first included it. The consumer side is in [`../docs/releases.md`](../docs/releases.md#what-a-release-compares-against) and [`../docs/git-and-sync.md`](../docs/git-and-sync.md#the-first-push).
+Why a clone lands on `draft`, which `main` a Release compares against, why it pushes atomically, what the first `synchronize()` sends to a new remote, how a change finds its own Release, and where the Destination check runs. The consumer side is in [`../docs/releases.md`](../docs/releases.md#what-a-release-compares-against) and [`../docs/git-and-sync.md`](../docs/git-and-sync.md#the-first-push).
 
 Read it before changing `clone()` or `synchronize()` in [`ProjectService`](../src/service/ProjectService.ts), or the remote checks, the push or `withFirstRelease()` in [`ReleaseService`](../src/service/ReleaseService.ts) and [`GitService`](../src/service/GitService.ts).
 
@@ -152,6 +152,17 @@ What is then reported of such an object:
 
 - An Entry, whose only change inside itself is that its Values moved. An unreadable side has no Values to read, so the whole file is compared there instead, which counts a Release that rewrote such a file's shape alone as `modified`. Reporting no change was rejected: the Values of an unreadable file may well have moved, and an approximation beats a wrong answer.
 - A Collection, a Component or an Asset, whose change types each name a part of the file an unreadable one cannot answer, so its presence alone is reported. Inventing a change type was rejected: `metadataChanged` on an Asset whose binary moved is a wrong answer where no answer is an honest one.
+
+## The check against every Destination
+
+`diff()` runs it beside the change diff, so all three operations read one answer and `prepare()` is the preview of the other two. It reads the working copy through `DestinationService.checkAll()`, which is the side the change diff takes too.
+
+- Per Destination rather than per Entry of the Project, because `checkAll()` reads the Mapping once and every Entry of the Collections it fills. A Project without a Destination costs one look at the folder.
+- A refusal is a `Conflict` carrying the issues on its `cause`, the way a field definition change carries its `EntryIssue[]`, so one shape of `cause` answers both.
+- In `create()` and `createPreview()` it sits after the no-changes refusal, so the two keep that order: nothing to release first, then what a Destination cannot take.
+- The version a Destination uses is checked, never one waiting beside it. A waiting version reaches no site, and `switchVersion()` is what reads it.
+
+Checking only a Destination whose Mapping once covered everything was rejected. Deleting a mapped field then makes a Destination incomplete again, and the Release that breaks the live site is exactly the one that goes through.
 
 ## Invariants
 

@@ -10,11 +10,11 @@ For the branch model these build on, see [`git-and-sync.md`](./git-and-sync.md).
 
 | Method | What it does | Touches `main`? |
 | --- | --- | --- |
-| `prepare()` | Read-only. Diffs `draft` against the released `main` and returns the computed bump and per-object changes. | No |
+| `prepare()` | Read-only. Diffs `draft` against the released `main` and returns the computed bump, the per-object changes and what stops the Release. | No |
 | `create()` | Fetches `origin` if set, promotes `draft` into the released `main`, bumps the version, tags it, merges back into `draft` and pushes `main`, `draft` and the tag in one atomic push. | Yes |
 | `createPreview()` | Fetches `origin` if set, tags a pre-release snapshot on `draft` (for example `1.1.0-preview.3`) without promoting, pushes `draft` and the tag in one atomic push. | No |
 
-All three take `{ projectId }`. `prepare()` returns a `ReleaseDiff`. `create()` and `createPreview()` return a `ReleaseResult` (`{ version, diff }`).
+All three take `{ projectId }`. `prepare()` returns a `ReleasePreparation`, which is a `ReleaseDiff` plus the `destinationIssues` that stop the Release. `create()` and `createPreview()` return a `ReleaseResult` (`{ version, diff }`).
 
 Two more read what was released: [`list()`](#reading-releases) and [`changes()`](#what-one-release-changed).
 
@@ -43,6 +43,19 @@ All three throw `PreconditionFailed` rather than guess when:
 
 A Project's first Release compares against the commit `core.projects.create()` made on `main`, so everything added since counts.
 
+## The check before a Release
+
+A Project with a website releases only what that website can take. Every Destination of the Project is checked against what `draft` holds, the way [`checkAll()`](./destinations.md#asking-what-a-website-cannot-take) answers it, before a Release is tagged.
+
+- `prepare()` returns what the check found as `destinationIssues`, so an app names each Entry and each unmapped field before the editor starts the Release.
+- `create()` and `createPreview()` run the same check and throw `Conflict` while anything is left. Every item is on the error's `cause`, in the shape `checkAll()` answers, and the message carries the websites and the counts.
+- The check runs before anything is written, so a refused Release leaves the Project as it was. Map the rest, or remove the website, and call it again.
+- It holds from the moment a website is added. A Collection of the theme that nothing fills stops a Release the same way a Mapping pointing at a deleted field definition does.
+- The version a website uses is checked, never a version waiting beside it, so a theme's new version never stops a Release. A Contract the Project keeps that no website follows is not checked either.
+- A Project without a Destination is checked for nothing and releases as it did before Destinations existed. Its `destinationIssues` is an empty array.
+
+A preview Release is checked the same way, because a preview build reads the Mapping a Release does.
+
 ## prepare(): the diff and the bump
 
 `prepare()` must be run while the Project is on the `draft` branch (otherwise it throws `PreconditionFailed`). It is read-only: it changes nothing, it just reports what a release would do.
@@ -58,6 +71,8 @@ const diff = await core.releases.prepare({ projectId: project.id });
 //   nextVersion,         // e.g. '1.1.0', or null if nothing changed
 //   projectChanges, collectionChanges, fieldChanges,
 //   componentChanges, componentFieldChanges, assetChanges, entryChanges,
+//   destinationChanges, contractChanges,
+//   destinationIssues,  // what stops the Release, empty when nothing does
 // }
 ```
 
@@ -117,10 +132,27 @@ Every change `prepare()` can report is below, with the bump it contributes. The 
 | `entryChanges` | `deleted` | major | The Entry is gone |
 | `entryChanges` | `added` | minor | An Entry the released state does not hold |
 | `entryChanges` | `modified` | patch | The Entry's Values. Where either side is a file this Core cannot read, its whole file, see [A Release an older Core made](#a-release-an-older-core-made) |
+| `destinationChanges` | `deleted` | major | The website is gone, and a site that names it in its `elek.config.ts` can no longer build at all |
+| `destinationChanges` | `added` | minor | A website the released state does not hold |
+| `destinationChanges` | `nameChanged` | major | The website's own name, which a site may name it by in its `elek.config.ts`, so a site naming it that way can no longer build at all. One naming it by its id is unaffected |
+| `destinationChanges` | `versionChanged` | patch | The version of its theme's Contract the website uses, which the change carries as `version` |
+| `destinationChanges` | `mappingChanged` | patch | Its Mapping: which Collection fills which Collection of the Contract, which Entries it takes, or how a field is filled |
+| `destinationChanges` | `waitingVersionChanged` | patch | The version waiting beside the one in use, or its Mapping. A waiting version reaches no site |
+| `destinationChanges` | `createdFromThemeChanged` | patch | What the website records as created from its theme, which the created Collection or Component is reported beside |
+| `contractChanges` | `deleted` | major | The Project keeps that Contract no longer, so no website can follow it |
+| `contractChanges` | `added` | minor | A Contract the released state does not keep |
+| `contractChanges` | `versionAdded` | minor | A copy of another version of a Contract the Project already keeps, which the change carries as `version` |
+| `contractChanges` | `nameChanged` | major | The name the kept Contract goes by, which a site's build checks its own Contract's name against, so every site whose Contract states the old name can no longer build at all |
 
 Every row compares the released state against the current `draft`, never the commits in between, so a rename and its undo inside one `draft` is no change at all. A Collection or Component added since the last Release is reported as `added` alone, whatever its slug did afterwards.
 
 A Component's field definition can be neither unique nor a `slug` field, so the four rows that need one of those reach `fieldChanges` alone.
+
+A website and a Contract are read by a site's build rather than by a consumer of the generated client and types, so what either holds about itself is a patch. The rows that are not:
+
+- A website that is gone, and a Contract the Project keeps no longer, are major, because a build naming either has nothing left to read.
+- A renamed website is major for a site that names it by that name, and one naming it by its id builds on. A renamed Contract is major for every site, because each states its Contract's name in its own.
+- A website added, a Contract added and a copy of a version the Project gained are minor, like every other addition.
 
 ## What a major Release asks of a consumer
 
@@ -131,12 +163,15 @@ A major Release says something your build depends on changed, either a name or a
 - Run `elek generate:types` and `elek generate:client` against the new Release and fix what stops compiling.
 - `elekCollections()` names each Astro collection after the alias you chose for the Project in `defineElekConfig()` and the Collection's plural slug, so a renamed Collection renames the name `getCollection()` takes. The alias is not the Project's name, so renaming the Project changes no collection name, see [`usage.md`](./usage.md#astro-integration).
 - A deleted Entry or Asset and a changed default language are major as well, and none of the three changes a generated type or a generated client, so nothing stops compiling. A page built from a deleted Entry is no longer generated at all, so compare the pages the build emitted rather than only what it compiled.
+- A website that is gone, a Contract the Project keeps no longer, and either of them renamed, are major too. A site that names a website the Project no longer holds stops with `NotFound` rather than failing to compile, and one whose Contract the Project keeps under another name stops with `BadRequest`, see [`destinations.md`](./destinations.md#what-a-sites-build-reads).
 
 `prepare()` reports every change behind the bump before the Release is published. It runs on the `draft` branch, so whoever cuts the Release reads it rather than you. A Collection or Component change carries the id of what changed, so the name is yours to look up, see [`usage.md`](./usage.md#reading-from-history). A field change carries its `fieldSlug` as well.
 
+An `added` or `deleted` Collection carries `isSingleEntry`, because the state the other side holds has no Collection to read it from. It is absent on a `slugChanged`, whose Collection both sides hold, and on a Collection whose file this Core cannot read.
+
 ## create(): cutting a release
 
-`create()` fetches `origin` if set, computes what `prepare()` would and refuses to proceed if there is nothing to release (`PreconditionFailed`). Otherwise it:
+`create()` fetches `origin` if set, computes what `prepare()` would, refuses to proceed if there is nothing to release (`PreconditionFailed`) and refuses a Release a website cannot take (`Conflict`), see [the check before a Release](#the-check-before-a-release). Otherwise it:
 
 1. switches to `main`, first moving it to the remote's `main` when that is the released state,
 2. merges `draft` into `main`,
@@ -157,7 +192,7 @@ After a full release, the Project's `version` field is identical on `draft` and 
 
 ## createPreview(): pre-release snapshots
 
-`createPreview()` also fetches `origin` if set, computes what `prepare()` would and requires changes, but it never touches `main`. It computes a pre-release version by counting the existing `preview` tags for the same target version since the last full release, then:
+`createPreview()` also fetches `origin` if set, computes what `prepare()` would, requires changes and runs [the check before a Release](#the-check-before-a-release), but it never touches `main`. It computes a pre-release version by counting the existing `preview` tags for the same target version since the last full release, then:
 
 1. writes the preview version (for example `1.1.0-preview.3`) into `project.json` on `draft` and commits it,
 2. creates an annotated tag carrying `Type: preview` and `Version: <previewVersion>`,
@@ -260,7 +295,7 @@ A Release commits `project.json` alone and tags that commit, so the Release of a
 
 ## What one Release changed
 
-`core.releases.changes()` reports what one Release or preview Release changed, in the `ReleaseDiff` shape `prepare()` returns, so one piece of code renders a past Release and the next one:
+`core.releases.changes()` reports what one Release or preview Release changed, in the `ReleaseDiff` shape, which is what `prepare()` answers without the `destinationIssues` beside it, so one piece of code renders a past Release and the next one:
 
 ```typescript
 const { list } = await core.releases.list({ projectId: project.id });
@@ -305,4 +340,5 @@ The Project's `version` field follows [Semantic Versioning](https://semver.org/)
 
 - [`git-and-sync.md`](./git-and-sync.md) - the `main` / `draft` branch model and tags
 - [`schema-changes.md`](./schema-changes.md) - how the field-definition changes a release reports actually transform content
+- [`destinations.md`](./destinations.md#asking-what-a-website-cannot-take) - what a website cannot take, which every Release is checked against
 - [`concepts.md`](./concepts.md) - Releases in the overall data model

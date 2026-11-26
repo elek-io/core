@@ -9,7 +9,23 @@ import {
   CoreError,
   flattenFieldDefinitions,
 } from '../index.node.js';
-import { makeComponentsContext } from '../schema/componentSchema.js';
+import type { CollectionFile } from '../schema/collectionSchema.js';
+import {
+  makeComponentsContext,
+  type Component,
+} from '../schema/componentSchema.js';
+import type { Entry } from '../schema/entrySchema.js';
+import type { FieldDefinition } from '../schema/fieldSchema.js';
+import type { ProjectLanguages } from '../schema/projectSchema.js';
+import {
+  conditionsBySource,
+  contractValuesOf,
+  entryIssuesOf,
+  isValueIssue,
+  mappingIssuesOf,
+  takesEntry,
+} from '../util/destinationCheck.js';
+import type { DestinationIssue } from '../util/destinationIssue.js';
 import {
   buildEntryValuesSchema,
   buildEntryValuesTypeString,
@@ -21,6 +37,11 @@ import {
   readDeclaration,
   type ElekConfig,
 } from './elekConfig.js';
+import {
+  contractCollectionOf,
+  readSiteContract,
+  type SiteContract,
+} from './siteContract.js';
 import { getCore, ensureProjectAvailable, logReadingProject } from './core.js';
 import { watchContent } from './watch.js';
 import { toPascalCase } from '../cli/util.js';
@@ -119,6 +140,16 @@ const imageExtensions: Record<ImageInputFormat, boolean> &
 export function hasImageExtension(extension: string): boolean {
   return imageExtensions[extension.toLowerCase()] === true;
 }
+
+/**
+ * The store id the one Entry of a Single Entry is kept under, so a site
+ * reads it with `getEntry("<alias><Slug>", "single")` rather than looking an
+ * id up. A Collection holding a list keeps every Entry under its own id.
+ *
+ * Exported for this file's tests. Nothing re-exports it, so it is not part of
+ * the astro entry's surface, and `docs/usage.md` names the string itself.
+ */
+export const SINGLE_ENTRY_ID = 'single';
 
 /**
  * Astro's marker for "resolve this string as an image import". Astro's
@@ -323,13 +354,52 @@ export function elekAssetsLoader<const T extends ElekConfig>(
 }
 
 /**
+ * What a reload follows while `astro dev` runs: the Collection of the Project
+ * the Entries come from, and the Destination whose Mapping decides which
+ * Value fills which field of the Contract. The Collection is undefined where
+ * nothing fills the collection, the Destination for a site that reads a
+ * Project's own Collections.
+ */
+interface WatchedSources {
+  collectionId: string | undefined;
+  destinationId: string | undefined;
+}
+
+/**
+ * What one sync of a collection reads: where the Entries come from, what the
+ * schema and the types describe, and what the site reads them through.
+ */
+interface EntriesPlan {
+  /**
+   * The Collection of the Project the Entries come from, undefined where a
+   * Mapping fills the Contract's Collection from nothing
+   */
+  source: CollectionFile | undefined;
+  /** Whether the collection holds the one Entry a site reads under `single` */
+  isSingleEntry: boolean;
+  /** The field definitions the schema and the types describe */
+  fieldDefinitions: FieldDefinition[];
+  /** The Components those field definitions name */
+  components: readonly Component[];
+  /** The languages every translatable Value is keyed by */
+  languages: ProjectLanguages;
+  /** The plural slug Astro names the collection and its `Entry` type after */
+  pluralSlug: string;
+  /** What the site reads through, absent where it reads a Project's own */
+  through: (SiteContract & { collection: CollectionFile }) | undefined;
+  /** Fingerprint of everything a reload cannot rebuild */
+  digest: string;
+}
+
+/**
  * Astro content loader for elek.io Collection Entries, which also supplies
- * Astro with the Collection's schema and its generated `Entry` type. Both are
- * built from the content model once, when Astro loads the content config.
- *
- * In dev it reloads Entries as they change. A change to the content model
- * stops it instead, with a log line saying the dev server has to be
- * restarted, because Astro can rebuild neither the schema nor the types.
+ * Astro with the Collection's schema and its generated `Entry` type, built
+ * from the content model once, when Astro loads the content config. A Single
+ * Entry's one Entry goes under `single`, nothing while it holds none. A
+ * Project declared with a `destination` is read in the shape of the site's
+ * own Contract, and whatever does not fit it stops the build. In dev it
+ * reloads Entries as they change, and a model change asks for a restart of
+ * the dev server instead.
  *
  * @see ../../docs/usage.md
  */
@@ -338,7 +408,23 @@ export function elekEntriesLoader<const T extends ElekConfig>(
 ): Loader {
   assertElekConfig(props.config);
   const alias = props.project;
-  const { id: projectId } = readDeclaration(props.config, alias);
+  const { id: projectId, destination } = readDeclaration(props.config, alias);
+  /**
+   * Whether the site reads this Project through a Destination, which takes
+   * the collection's slug from the site's own Contract and the Project's
+   * Collection from the Mapping rather than from a slug of the Project.
+   */
+  const readsContract = destination !== undefined;
+  /**
+   * How every line of this loader names the collection it reports on, set by
+   * the last plan that was read. A site reading through a Destination is told
+   * the Collection of the Contract, the one its own code names, because the
+   * Project holds no Collection of that name.
+   */
+  let holding = `Collection "${props.collectionIdOrSlug}" of Project "${alias}"`;
+  const restartMessage = (): string => {
+    return `The content model of ${holding} changed. Astro builds a collection's schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.`;
+  };
 
   /**
    * Fingerprint of the content model the schema and types were built
@@ -347,22 +433,75 @@ export function elekEntriesLoader<const T extends ElekConfig>(
    */
   let modelDigest: string | undefined;
   /**
-   * The Collection the schema was built for. Astro names the collection
-   * after its plural slug, so a reload that resolves to another Collection,
-   * or to none, needs a restart just like a model change.
+   * The Collection of the Project the schema was built against. Astro names
+   * the collection after a plural slug, so a reload that resolves to another
+   * Collection, or to none, needs a restart just like a model change.
    */
   let collectionId: string | undefined;
+  /**
+   * The Destination the schema was built through, so a reload watches its
+   * Mapping beside the Entries. Undefined for a site reading a Project's own
+   * Collections, which has none.
+   */
+  let destinationId: string | undefined;
 
   /**
-   * Reads the Collection, the Project's languages and the Components,
-   * which is everything the schema is built from. Takes the resolved
-   * Collection id of a caller that resolved it already, which also keeps
-   * this from throwing `NotFound` on a Collection renamed since.
+   * Everything one sync reads, which is the Collection, the Project's
+   * languages and the Components without a Destination, and the site's own
+   * Contract and the Mapping with one.
+   *
+   * Takes the resolved Collection id of a caller that resolved it already,
+   * which also keeps this from throwing `NotFound` on a Collection renamed
+   * since.
    */
-  const readModel = async (
+  const readPlan = async (
     core: ReturnType<typeof getCore>,
     knownCollectionId?: string
-  ) => {
+  ): Promise<EntriesPlan> => {
+    const project = await core.projects.read({ id: projectId });
+    const languages = project.settings.language.supported;
+    const site = await readSiteContract({ core, config: props.config, alias });
+
+    if (site !== undefined) {
+      const collection = contractCollectionOf(
+        site.contract,
+        props.collectionIdOrSlug
+      );
+      const mapped = site.destination.mapping.collections[collection.id];
+      // A Mapping naming a Collection the Project dropped fills nothing,
+      // which the check reports rather than failing to read here
+      const source =
+        mapped === undefined
+          ? undefined
+          : await core.collections
+              .read({ projectId, id: mapped.from.collectionId })
+              .catch((error: unknown) => {
+                if (error instanceof CoreError && error.type === 'NotFound') {
+                  return undefined;
+                }
+                throw error;
+              });
+      const fieldDefinitions = flattenFieldDefinitions(
+        collection.fieldDefinitions
+      );
+      holding = `Collection "${collection.slug.plural}" of the Contract "${site.contract.name}" of Project "${alias}"`;
+      return {
+        source,
+        isSingleEntry: collection.isSingleEntry,
+        fieldDefinitions,
+        components: site.contract.components,
+        languages,
+        pluralSlug: collection.slug.plural,
+        through: { ...site, collection },
+        digest: buildModelDigest(
+          fieldDefinitions,
+          languages,
+          site.contract.components,
+          { mapped, source }
+        ),
+      };
+    }
+
     const resolvedId =
       knownCollectionId ??
       (await core.collections.resolveCollectionId({
@@ -373,7 +512,6 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       projectId,
       id: resolvedId,
     });
-    const project = await core.projects.read({ id: projectId });
     const { list: components } = await core.components.list({
       projectId,
       limit: 0,
@@ -381,22 +519,139 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     const fieldDefinitions = flattenFieldDefinitions(
       collection.fieldDefinitions
     );
-    const languages = project.settings.language.supported;
-
     return {
-      resolvedId,
-      collection,
-      components,
+      source: collection,
+      isSingleEntry: collection.isSingleEntry,
       fieldDefinitions,
+      components,
       languages,
+      pluralSlug: collection.slug.plural,
+      through: undefined,
       digest: buildModelDigest(fieldDefinitions, languages, components),
     };
   };
 
   /**
+   * The Entries of the Project the website does not take, by id, over every
+   * Collection its Mapping reads through a condition, so an Entry pointing
+   * at one of them is named rather than left pointing at nothing.
+   */
+  const readEntryIdsNotTaken = async (
+    core: ReturnType<typeof getCore>,
+    through: NonNullable<EntriesPlan['through']>
+  ): Promise<Set<string>> => {
+    const notTaken = new Set<string>();
+    for (const [sourceId, lists] of conditionsBySource(
+      through.destination.mapping
+    )) {
+      const collection = await core.collections
+        .read({ projectId, id: sourceId })
+        .catch((error: unknown) => {
+          if (error instanceof CoreError && error.type === 'NotFound') {
+            return undefined;
+          }
+          throw error;
+        });
+      if (collection === undefined) {
+        continue;
+      }
+      const { list } = await core.entries.list({
+        projectId,
+        collectionId: sourceId,
+        limit: 0,
+      });
+      for (const entry of list) {
+        const isTaken = lists.some((where) => {
+          return takesEntry({ where, collection, entry });
+        });
+        if (isTaken === false) {
+          notTaken.add(entry.id);
+        }
+      }
+    }
+    return notTaken;
+  };
+
+  /**
+   * Throws `BadRequest` naming every Collection, required field and Entry the
+   * site's Contract does not find in the Project, and why, in one error
+   * rather than on the first one it meets. A Collection of the Contract
+   * holding one Entry that is filled from several is named too, and so is an
+   * Entry pointing at one the website does not take.
+   *
+   * Only this Collection's half of the Mapping is read, because every other
+   * Collection of the Contract is its own derived collection's to report.
+   */
+  const assertFits = (
+    through: NonNullable<EntriesPlan['through']>,
+    source: CollectionFile | undefined,
+    entries: readonly Entry[],
+    languages: ProjectLanguages,
+    entryIdsNotTaken: ReadonlySet<string>
+  ): void => {
+    const mine = (issue: DestinationIssue): boolean => {
+      return issue.contractCollectionId === through.collection.id;
+    };
+    const issues: DestinationIssue[] = mappingIssuesOf({
+      destinationId: through.destination.id,
+      contract: through.contract,
+      mapping: through.destination.mapping,
+      collections: source === undefined ? [] : [source],
+      languages,
+    }).filter(mine);
+    if (source !== undefined) {
+      for (const entry of entries) {
+        issues.push(
+          ...entryIssuesOf({
+            destinationId: through.destination.id,
+            contract: through.contract,
+            mapping: through.destination.mapping,
+            collection: source,
+            entry,
+            languages,
+            entryIdsNotTaken,
+          }).filter(mine)
+        );
+      }
+    }
+    // A Value issue carries zod's own wording, which says what is wrong
+    // without saying where, so the field and the language go in front of it
+    const named = issues.map((issue) => {
+      if (isValueIssue(issue) === false) {
+        return `- ${issue.message}`;
+      }
+      const language =
+        issue.language === undefined ? '' : ` in "${issue.language}"`;
+      return `- Entry "${issue.entryId}", field "${issue.contractFieldSlug}"${language}: ${issue.message}`;
+    });
+    // The Contract states how many Entries a Collection holds as well as
+    // what they hold, so several of them filling one Entry fits no better
+    // than a missing field. Which one the site would read is arbitrary.
+    if (
+      through.collection.isSingleEntry &&
+      source !== undefined &&
+      entries.length > 1
+    ) {
+      named.push(
+        `- Collection "${source.slug.plural}" of Project "${alias}" fills the Single Entry "${through.collection.slug.plural}" of the Contract with ${entries.length} Entries, of which the site would read an arbitrary one. Leave one Entry there, or fill it from a Collection that holds one.`
+      );
+    }
+    if (named.length === 0) {
+      return;
+    }
+    const at =
+      through.versionInUse === through.contract.version
+        ? `version ${through.contract.version}`
+        : `version ${through.contract.version} while the website uses ${through.versionInUse}`;
+    throw CoreError.badRequest(
+      `Collection "${through.collection.slug.plural}" of the Contract "${through.contract.name}" at ${at} is not filled by Project "${alias}" through Destination "${through.destination.name}":\n${named.join('\n')}`
+    );
+  };
+
+  /**
    * Reads every Entry of the Collection into the store, returning the
-   * resolved Collection id. Runs on load and again on every change in
-   * dev.
+   * Collection of the Project they came from. Runs on load and again on
+   * every change in dev.
    *
    * Stops short when the content model no longer matches the schema
    * Astro built at startup. Reloading would validate Entries against a
@@ -404,19 +659,17 @@ export function elekEntriesLoader<const T extends ElekConfig>(
    * new field silently or fails on a removed one. Neither is worth
    * doing, and neither is fixable without a restart, so it says so.
    */
-  const syncEntries = async (context: LoaderContext): Promise<string> => {
+  const syncEntries = async (
+    context: LoaderContext,
+    isReload = false
+  ): Promise<WatchedSources> => {
     const core = getCore();
     await ensureProjectAvailable(core, alias, projectId);
     await logReadingProject(core, projectId, (message) =>
       context.logger.info(message)
     );
-    let resolvedCollectionId: string;
-    if (collectionId === undefined) {
-      resolvedCollectionId = await core.collections.resolveCollectionId({
-        projectId,
-        idOrSlug: props.collectionIdOrSlug,
-      });
-    } else {
+    let knownCollectionId: string | undefined;
+    if (readsContract === false && collectionId !== undefined) {
       const current = await core.collections
         .resolveCollectionId({ projectId, idOrSlug: props.collectionIdOrSlug })
         .catch((error: unknown) => {
@@ -427,56 +680,125 @@ export function elekEntriesLoader<const T extends ElekConfig>(
         });
       if (current !== collectionId) {
         context.logger.warn(
-          `Collection "${props.collectionIdOrSlug}" of Project "${alias}" was renamed or replaced. Astro names a collection after the plural slug when it loads the content config, so restart the dev server to pick it up. Entries are not reloaded until then.`
+          `${holding} was renamed or replaced. Astro names a collection after the plural slug when it loads the content config, so restart the dev server to pick it up. Entries are not reloaded until then.`
         );
-        return collectionId;
+        return { collectionId, destinationId };
       }
-      resolvedCollectionId = collectionId;
+      knownCollectionId = collectionId;
     }
 
     // Read after the guard above, never before: transforming an Entry
     // needs the Components to name each item's Component, and resolving
     // the Collection again here would throw rather than warn
-    const model = await readModel(core, resolvedCollectionId);
-    if (modelDigest !== undefined && model.digest !== modelDigest) {
-      context.logger.warn(
-        `The content model of Collection "${props.collectionIdOrSlug}" of Project "${alias}" changed. Astro builds a collection's schema and types once, when it loads the content config, so restart the dev server to pick them up. Entries are not reloaded until then.`
-      );
-      return resolvedCollectionId;
+    let plan: EntriesPlan;
+    try {
+      plan = await readPlan(core, knownCollectionId);
+    } catch (error) {
+      // On a reload the Destination or the site's own Contract moved under
+      // the schema and the types Astro built once, which needs a restart
+      // just as a model change does
+      if (isReload && error instanceof CoreError && error.type === 'NotFound') {
+        context.logger.warn(restartMessage());
+        return { collectionId, destinationId };
+      }
+      throw error;
     }
-    const componentsContext = makeComponentsContext(model.components);
+    if (modelDigest !== undefined && plan.digest !== modelDigest) {
+      context.logger.warn(restartMessage());
+      return { collectionId, destinationId };
+    }
+    const componentsContext = makeComponentsContext(plan.components);
 
-    context.logger.info(
-      `Loading elek.io Entries of Collection "${props.collectionIdOrSlug}" of Project "${alias}"`
-    );
+    context.logger.info(`Loading elek.io Entries of ${holding}`);
 
-    const { list: entries, total } = await core.entries.list({
-      projectId,
-      collectionId: resolvedCollectionId,
-      limit: 0,
-    });
-    if (total === 0) {
+    const source = plan.source;
+    const all =
+      source === undefined
+        ? { list: [], total: 0 }
+        : await core.entries.list({
+            projectId,
+            collectionId: source.id,
+            limit: 0,
+          });
+    const read = all.list;
+    if (all.total === 0) {
       context.logger.warn('No Entries found');
     } else {
-      context.logger.info(`Found ${total} Entries`);
+      context.logger.info(`Found ${all.total} Entries`);
+    }
+
+    // The website takes what its Mapping's conditions let through, so the
+    // rest is neither stored nor checked. A site reads a website's content,
+    // not the Project's
+    const through = plan.through;
+    const where =
+      through === undefined
+        ? []
+        : (through.destination.mapping.collections[through.collection.id]?.from
+            .where ?? []);
+    const entries: Entry[] =
+      source === undefined || where.length === 0
+        ? read
+        : read.filter((entry) =>
+            takesEntry({ where, collection: source, entry })
+          );
+    if (entries.length < read.length) {
+      context.logger.info(
+        `The website takes ${entries.length} of them, as its Mapping says`
+      );
+    }
+
+    // Before anything is stored, so a site never goes live with half a
+    // Collection the website cannot take
+    if (through !== undefined) {
+      assertFits(
+        through,
+        source,
+        entries,
+        plan.languages,
+        await readEntryIdsNotTaken(core, through)
+      );
+    }
+
+    // A Single Entry holds one Entry, which the site reads without knowing
+    // its id. `entries.create` refuses a second one while the Collection
+    // holds one, which a pull, a merge or two unserialized creates get past,
+    // so the rest is left out rather than overwriting the one the site reads
+    const loaded = plan.isSingleEntry ? entries.slice(0, 1) : entries;
+    if (loaded.length < entries.length) {
+      context.logger.warn(
+        `Collection "${props.collectionIdOrSlug}" of Project "${alias}" is a Single Entry holding ${entries.length} Entries, of which the site reads the first. Creating an Entry there is refused while it holds one, so a sync of two editors' work can leave two, as can two creates at once. Delete the ones the site should not read.`
+      );
     }
 
     const seen = new Set<string>();
-    for (const entry of entries) {
-      seen.add(entry.id);
+    for (const entry of loaded) {
+      const storeId = plan.isSingleEntry ? SINGLE_ENTRY_ID : entry.id;
+      seen.add(storeId);
+      // Read in the Contract's shape where the site names a Destination, so
+      // the site's code never names the Project's own slugs
       const values = transformEntryValues(
-        entry.values,
+        through === undefined || source === undefined
+          ? entry.values
+          : contractValuesOf({
+              contract: through.contract,
+              mapping: through.destination.mapping,
+              contractCollectionId: through.collection.id,
+              collection: source,
+              entry,
+              languages: plan.languages,
+            }),
         componentsContext,
         entry.id
       );
       const digest = context.generateDigest(values);
 
       // Skip re-validating Entries whose data has not changed.
-      const existing = context.store.get(entry.id);
+      const existing = context.store.get(storeId);
       if (existing?.digest === digest) continue;
 
-      const parsed = await context.parseData({ id: entry.id, data: values });
-      context.store.set({ id: entry.id, data: parsed, digest });
+      const parsed = await context.parseData({ id: storeId, data: values });
+      context.store.set({ id: storeId, data: parsed, digest });
     }
 
     // Remove store entries for Entries that no longer exist in the Collection.
@@ -485,7 +807,10 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     }
 
     context.logger.info('Finished loading Entries');
-    return resolvedCollectionId;
+    return {
+      collectionId: source?.id,
+      destinationId: plan.through?.destination.id,
+    };
   };
 
   return {
@@ -493,49 +818,62 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     createSchema: async () => {
       const core = getCore();
       await ensureProjectAvailable(core, alias, projectId);
-      const model = await readModel(core);
+      const plan = await readPlan(core);
 
       // Remembered so a reload can tell that the model moved on
-      modelDigest = model.digest;
-      collectionId = model.resolvedId;
+      modelDigest = plan.digest;
+      collectionId = plan.source?.id;
+      destinationId = plan.through?.destination.id;
 
       return {
         schema: buildEntryValuesSchema(
-          model.fieldDefinitions,
-          model.languages,
-          model.components
+          plan.fieldDefinitions,
+          plan.languages,
+          plan.components
         ),
         types: buildEntryValuesTypeString(
-          model.fieldDefinitions,
-          model.languages,
-          model.components,
-          toPascalCase(model.collection.slug.plural)
+          plan.fieldDefinitions,
+          plan.languages,
+          plan.components,
+          toPascalCase(plan.pluralSlug)
         ),
       };
     },
     load: async (context) => {
-      const resolvedCollectionId = await syncEntries(context);
+      const watched = await syncEntries(context);
 
       // In dev the Desktop app keeps editing the Project, so reload
       // when this Collection's Entries change instead of waiting for a
       // restart. The Components are watched too, not to reload them but
       // to notice a model change that never touches an Entry, like
-      // renaming a Component field. Neither path covers .git, so a
-      // commit does not trigger a reload by itself.
+      // renaming a Component field. The Destination goes with them, so a
+      // Mapping edited in the app reaches the digest check rather than
+      // leaving the page on the Mapping it was built with. No path covers
+      // .git, so a commit does not trigger a reload by itself.
       if (context.watcher) {
         const core = getCore();
         watchContent({
           watcher: context.watcher,
           paths: [
-            core.util.pathTo.entries(projectId, resolvedCollectionId),
+            ...(watched.collectionId === undefined
+              ? []
+              : [core.util.pathTo.entries(projectId, watched.collectionId)]),
+            ...(watched.destinationId === undefined
+              ? []
+              : [
+                  core.util.pathTo.destination(
+                    projectId,
+                    watched.destinationId
+                  ),
+                ]),
             core.util.pathTo.components(projectId),
           ],
           onChange: async () => {
-            await syncEntries(context);
+            await syncEntries(context, true);
           },
           onError: (error) =>
             context.logger.error(
-              `Reloading the Entries of Collection "${props.collectionIdOrSlug}" of Project "${alias}" failed: ${String(error)}`
+              `Reloading the Entries of ${holding} failed: ${String(error)}`
             ),
         });
       }

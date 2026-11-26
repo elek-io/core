@@ -14,6 +14,8 @@ The data model behind elek.io Core: Projects, Collections, Components, Entries, 
 |   |   |   |-- Asset - a reference to a previously added Asset like image, PDF or ZIP
 |   |   |   |-- Entry - a reference to another Entry e.g. to show the user related posts
 |   |-- Release - e.g. "v1.0.0" - a tagged snapshot of the Project at a specific point in time
+|   |-- Contract - e.g. "@acme/dealer-site" - what a theme needs, as Collections and Components
+|   |-- Destination - e.g. "autohaus-ebersfelde.de" - one place content goes, and the Mapping that fills it
 ```
 
 ## Projects
@@ -32,6 +34,8 @@ Contains field definitions (a schema) for possible Values each Entry can or has 
 - an author that wrote the post (Entry reference), which lets the user pick an Entry of another Collection
 
 A definition says more than the type. It also says what the input field looks like and what a Value has to satisfy.
+
+A Collection can be limited to one Entry, which makes it a Single Entry. That is where one-off content lives, such as contact details or the logo, and a site reads it as one item rather than a list. Whether a Collection is one is decided when it is created, see [`usage.md`](./usage.md#creating-a-collection).
 
 For the full catalogue of field types and their constraints, see [`fields.md`](./fields.md).
 
@@ -59,8 +63,15 @@ Are files / blobs like images (png, jpeg etc.), documents (excel sheets etc.), m
 
 Are tagged snapshots of a Project at a specific point in time, managed through git tags. They allow you to mark stable versions of your content that can be deployed or exported.
 
+## Contracts and Destinations
+
+A Destination is one place a Project's content goes, a website first, shown by its own name. A Contract is what the place it goes to needs, as Collections and Components in Core's own schemas, and a theme states one in its own repository. A Mapping says which Project Collection fills which Collection of the Contract, which of its Entries the website takes, and how each field of it is filled.
+
+A Project keeps each Contract once, with where it comes from and a copy of every version a Destination uses, so it stays self-contained. See [`destinations.md`](./destinations.md).
+
 ## See also
 
+- [`destinations.md`](./destinations.md) - Contracts, websites and the Mapping between them
 - [`fields.md`](./fields.md) - full field type reference and the Value structure
 - [`schema-changes.md`](./schema-changes.md) - how editing field definitions cascades into existing Entries
 - [`markdown-content.md`](./markdown-content.md) - how rich `markdown` Values are stored and rendered

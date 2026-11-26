@@ -104,14 +104,21 @@ export class GitCredentialRelay {
    * fails rather than ask a person. The helper is installed for a Cloud
    * pattern or a remote token, unless the invocation runs no git command
    * and so can never ask, and the person's own helpers keep the rest.
+   *
+   * `isOwnGitAccess` installs no helper at all, so neither the remote token
+   * nor a Cloud token can reach the address and the person's own helpers
+   * answer for it.
    */
-  public async begin(hasCommand = true): Promise<GitCredentialInvocation> {
+  public async begin(
+    options: { hasCommand?: boolean; isOwnGitAccess?: boolean } = {}
+  ): Promise<GitCredentialInvocation> {
     const env: Record<string, string> = {
       GIT_TERMINAL_PROMPT: '0',
       GIT_ASKPASS: '',
     };
     if (
-      hasCommand === false ||
+      options.hasCommand === false ||
+      options.isOwnGitAccess === true ||
       (this.cloudGitUrl === null && this.remoteToken === null)
     ) {
       return { env, finish: () => emptyOutcome() };

@@ -279,6 +279,35 @@ export function createPathTo(dataDir: string) {
       return Path.join(pathTo.collection(projectId, id), 'collection.json');
     },
 
+    contracts: (projectId: string): string => {
+      return Path.join(
+        pathTo.project(projectId),
+        projectFolderSchema.enum.contracts
+      );
+    },
+    contract: (projectId: string, id: string) => {
+      return Path.join(pathTo.contracts(projectId), id);
+    },
+    contractFile: (projectId: string, id: string) => {
+      return Path.join(pathTo.contract(projectId, id), 'contract.json');
+    },
+    contractVersionFile: (projectId: string, id: string, version: string) => {
+      return Path.join(pathTo.contract(projectId, id), `${version}.json`);
+    },
+
+    destinations: (projectId: string): string => {
+      return Path.join(
+        pathTo.project(projectId),
+        projectFolderSchema.enum.destinations
+      );
+    },
+    destination: (projectId: string, id: string) => {
+      return Path.join(pathTo.destinations(projectId), id);
+    },
+    destinationFile: (projectId: string, id: string) => {
+      return Path.join(pathTo.destination(projectId, id), 'destination.json');
+    },
+
     entries: (projectId: string, collectionId: string): string => {
       return Path.join(pathTo.collection(projectId, collectionId));
     },

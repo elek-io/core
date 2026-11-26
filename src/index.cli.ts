@@ -6,16 +6,22 @@ import {
   configureCore,
   exportAction,
   generateApiClientAction,
+  generateContractAction,
   generateTypesAction,
   provisionAction,
   startApiAction,
+  websiteAddAction,
+  websiteUpdateAction,
 } from './cli/index.js';
 import {
   apiStartSchema,
   exportSchema,
   generateApiClientSchema,
+  generateContractSchema,
   generateTypesSchema,
   provisionSchema,
+  websiteAddSchema,
+  websiteUpdateSchema,
 } from './schema/index.js';
 import { CoreError } from './util/shared.js';
 
@@ -107,6 +113,44 @@ program
   });
 
 program
+  .command('generate:contract')
+  .description(
+    "Generates a theme's elek.contract.json from the Collections and Components of a Project"
+  )
+  .requiredOption(
+    '-p, --project <id>',
+    'The ID of the Project to write the Contract of'
+  )
+  .argument(
+    '[outDir]',
+    "The directory to write the Contract in, which is the theme's repository",
+    '.'
+  )
+  .option(
+    '-n, --name <name>',
+    'The name of the Contract, such as "@acme/dealer-site". Kept from the Contract already in the directory when left out, which the first run has none of.'
+  )
+  // Not `--version`, which the program's own version option answers first
+  .option(
+    '--contract-version <version>',
+    'The version of the Contract, such as "1.2.0". Kept from the Contract already in the directory when left out, which the first run has none of.'
+  )
+  .option(
+    '-l, --languages <languages>',
+    'The languages the theme serves: "any", or the codes of the languages separated by commas. Defaults to the Project\'s own supported languages.'
+  )
+  .action(async (outDir, options) => {
+    const { contractVersion, ...rest } = options;
+    const props = generateContractSchema.parse({
+      outDir,
+      ...rest,
+      ...(contractVersion === undefined ? {} : { version: contractVersion }),
+    });
+
+    await generateContractAction(props);
+  });
+
+program
   .command('api:start')
   .description('Starts the local API')
   .argument('[port]', 'The port to run the local API on', '31310')
@@ -166,6 +210,66 @@ program
     const props = provisionSchema.parse(options);
 
     await provisionAction(props);
+  });
+
+program
+  .command('website:add')
+  .description(
+    "Adds a website to a Project from its theme's git address, and says what it cannot take yet"
+  )
+  .requiredOption(
+    '-p, --project <id>',
+    'The ID of the Project to add the website to'
+  )
+  .requiredOption(
+    '-n, --name <name>',
+    'The name of the website, such as "autohaus-ebersfelde.de"'
+  )
+  .requiredOption(
+    '-t, --theme <address>',
+    'The git address of the theme the website runs on. Core reads it with your own git access and refuses one carrying a credential.'
+  )
+  // Not `--version`, which the program's own version option answers first
+  .option(
+    '--theme-version <version>',
+    'The version of the theme to use. Defaults to the newest version tagged at the address.'
+  )
+  .action(async (options) => {
+    const { themeVersion, ...rest } = options;
+    const props = websiteAddSchema.parse({
+      ...rest,
+      ...(themeVersion === undefined ? {} : { version: themeVersion }),
+    });
+
+    await websiteAddAction(props);
+  });
+
+program
+  .command('website:update')
+  .description(
+    "Brings a theme's newer version to a website of a Project and switches to it, or says what the new version cannot take yet"
+  )
+  .requiredOption(
+    '-p, --project <id>',
+    'The ID of the Project the website belongs to'
+  )
+  .requiredOption(
+    '-n, --name <website>',
+    'The name of the website, such as "autohaus-ebersfelde.de", or its ID'
+  )
+  // Not `--version`, which the program's own version option answers first
+  .option(
+    '--theme-version <version>',
+    'The version of the theme to switch to. Defaults to the newest version tagged at its address.'
+  )
+  .action(async (options) => {
+    const { themeVersion, ...rest } = options;
+    const props = websiteUpdateSchema.parse({
+      ...rest,
+      ...(themeVersion === undefined ? {} : { version: themeVersion }),
+    });
+
+    await websiteUpdateAction(props);
   });
 
 // Error presentation for every command in one place: actions throw,

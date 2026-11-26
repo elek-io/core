@@ -1,4 +1,5 @@
 import { GitError, parseError } from 'dugite';
+import Path from 'node:path';
 import type { GitFileStatus } from '../schema/index.js';
 import { CoreError } from './shared.js';
 
@@ -7,12 +8,14 @@ import { CoreError } from './shared.js';
  * missing credential surfaces as a typed `Unauthorized` naming the fix
  * instead of raw git output. Returns null for everything else.
  *
- * SSH remotes authenticate through keys, not the token, so their
- * failures name the SSH setup instead of the token env vars.
+ * SSH remotes authenticate through keys, not the token, so their failures
+ * name the SSH setup instead of the token env vars. With `isOwnGitAccess`
+ * no message names the token either, because the command never got it.
  */
 export function classifyAuthError(
   stderr: string,
-  hasToken: boolean
+  hasToken: boolean,
+  isOwnGitAccess = false
 ): CoreError | null {
   const parsed = parseError(stderr);
 
@@ -26,6 +29,11 @@ export function classifyAuthError(
     (parsed === GitError.SSHPermissionDenied &&
       /permission denied/i.test(stderr))
   ) {
+    if (isOwnGitAccess) {
+      return CoreError.unauthorized(
+        'The address rejected SSH authentication. Core reads it with your own git access, so provide a valid SSH key, for example through ssh-agent. Ask whoever maintains the address for access to it.'
+      );
+    }
     return CoreError.unauthorized(
       'The remote rejected SSH authentication. Provide a valid SSH key, for example through ssh-agent. ELEK_IO_REMOTE_ACCESS_TOKEN only applies to HTTP(S) remotes.'
     );
@@ -43,6 +51,11 @@ export function classifyAuthError(
     /Git credentials for .+ not found/i.test(stderr);
   if (!isAuthError) {
     return null;
+  }
+  if (isOwnGitAccess) {
+    return CoreError.unauthorized(
+      'The address needs authentication. Core reads it with your own git access and never with ELEK_IO_REMOTE_ACCESS_TOKEN, so sign in with your own git credential helper or SSH key. Ask whoever maintains the address for access to it.'
+    );
   }
   if (hasToken) {
     return CoreError.unauthorized(
@@ -133,6 +146,101 @@ function hasSchemeBefore(value: string, end: number): boolean {
     }
   }
   return false;
+}
+
+/**
+ * A remote helper address, `<helper>::<argument>`. git hands the argument to
+ * the program `git-remote-<helper>`, and the `ext` helper of them runs it as
+ * a command.
+ */
+const REMOTE_HELPER_ADDRESS = /^[A-Za-z0-9][A-Za-z0-9+.-]*::/;
+
+/**
+ * The scheme and the userinfo of an address, up to the last `@` of its
+ * authority, which is the one every client reads as the delimiter.
+ */
+const ADDRESS_USERINFO = /^([\w+.-]+):\/\/([^/?#\s]*)@/;
+
+/**
+ * Whether the userinfo of an address is a credential rather than part of the
+ * address: a password under any scheme, and a user alone under http or
+ * https, where that is how a token is handed over. `ssh://git@host/repo`
+ * carries its user the way the shorthand `git@host:repo` does.
+ */
+function carriesCredential(address: string): boolean {
+  const match = ADDRESS_USERINFO.exec(address);
+  if (match === null) {
+    return false;
+  }
+  const scheme = (match[1] ?? '').toLowerCase();
+  const userinfo = match[2] ?? '';
+  return userinfo.includes(':') || scheme === 'http' || scheme === 'https';
+}
+
+/**
+ * Whether git reads an address as a path on this machine: everything that
+ * names no scheme and is not the SSH shorthand, whose colon comes before any
+ * slash. A drive letter is a path rather than a host.
+ */
+function isLocalPath(address: string): boolean {
+  if (/^[\w+.-]+:\/\//.test(address)) {
+    return false;
+  }
+  if (/^[A-Za-z]:[\\/]/.test(address)) {
+    return true;
+  }
+  const colon = address.indexOf(':');
+  const slash = address.search(/[/\\]/);
+  return colon === -1 || (slash !== -1 && slash < colon);
+}
+
+/**
+ * Whether a path leads to one place wherever it is read from. Both path
+ * flavors answer, so one address is refused or taken the same way on every
+ * platform rather than by the one Core happens to run on.
+ */
+function isAbsolutePath(address: string): boolean {
+  return Path.posix.isAbsolute(address) || Path.win32.isAbsolute(address);
+}
+
+/**
+ * Why an address must not be handed to git, or null when it may be. Core
+ * keeps the address of a theme in the Project, where a credential would
+ * become a committed secret, and reads it with the person's own git access.
+ *
+ * @see ../../contributing/git-credentials.md
+ */
+export function classifyUnsafeAddress(address: string): CoreError | null {
+  if (address.trim() === '') {
+    return CoreError.badRequest('A git address must not be empty');
+  }
+  if (/\p{Cc}/u.test(address)) {
+    return CoreError.badRequest(
+      'A git address must not hold a control character'
+    );
+  }
+  if (address.startsWith('-')) {
+    return CoreError.badRequest(
+      `Refusing the git address "${redactUrlCredentials(address)}", because git would read an address starting with "-" as one of its own options`
+    );
+  }
+  const helper = REMOTE_HELPER_ADDRESS.exec(address)?.[0];
+  if (helper !== undefined) {
+    return CoreError.badRequest(
+      `Refusing the git address "${redactUrlCredentials(address)}", because git runs a "${helper}" address through a remote helper, which can execute a command`
+    );
+  }
+  if (carriesCredential(address)) {
+    return CoreError.badRequest(
+      `Refusing the git address "${redactUrlCredentials(address)}", because it carries a credential, which must not be kept in a Project. Use an address without one and let your own git access answer for it`
+    );
+  }
+  if (isLocalPath(address) && isAbsolutePath(address) === false) {
+    return CoreError.badRequest(
+      `Refusing the git address "${redactUrlCredentials(address)}", because a path on this machine has to be absolute. A relative one leads somewhere else for every directory it is read from, and the Project keeps the address. Give its absolute path`
+    );
+  }
+  return null;
 }
 
 /**

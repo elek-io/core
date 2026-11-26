@@ -50,6 +50,14 @@ export const collectionChangeSchema = z.object({
   collectionId: uuidSchema,
   changeType: collectionChangeTypeSchema,
   bump: semverBumpSchema,
+  /**
+   * Whether the added or deleted Collection is a Single Entry, so a caller
+   * can name it without reading a Collection one side does not hold.
+   *
+   * Absent on a `slugChanged`, whose Collection is there to read, and on a
+   * Collection whose file this Core cannot parse.
+   */
+  isSingleEntry: z.boolean().optional(),
 });
 export type CollectionChange = z.infer<typeof collectionChangeSchema>;
 
@@ -117,6 +125,50 @@ export const componentFieldChangeSchema = z.object({
 });
 export type ComponentFieldChange = z.infer<typeof componentFieldChangeSchema>;
 
+export const destinationChangeTypeSchema = z.enum([
+  'added',
+  'deleted',
+  'nameChanged',
+  'versionChanged',
+  'mappingChanged',
+  'waitingVersionChanged',
+  'createdFromThemeChanged',
+]);
+export type DestinationChangeType = z.infer<typeof destinationChangeTypeSchema>;
+
+export const destinationChangeSchema = z.object({
+  destinationId: uuidSchema,
+  changeType: destinationChangeTypeSchema,
+  bump: semverBumpSchema,
+  /**
+   * The version of its theme's Contract the Destination uses now, on a
+   * `versionChanged`, so a caller names it without reading the released
+   * side. Absent on every other change of a Destination.
+   */
+  version: versionSchema.optional(),
+});
+export type DestinationChange = z.infer<typeof destinationChangeSchema>;
+
+export const contractChangeTypeSchema = z.enum([
+  'added',
+  'deleted',
+  'nameChanged',
+  'versionAdded',
+]);
+export type ContractChangeType = z.infer<typeof contractChangeTypeSchema>;
+
+export const contractChangeSchema = z.object({
+  contractId: uuidSchema,
+  changeType: contractChangeTypeSchema,
+  bump: semverBumpSchema,
+  /**
+   * The version the copy that was added carries, on a `versionAdded`.
+   * Absent on every other change of a Contract.
+   */
+  version: versionSchema.optional(),
+});
+export type ContractChange = z.infer<typeof contractChangeSchema>;
+
 export const releaseDiffSchema = z.object({
   project: projectSchema,
   bump: semverBumpSchema.nullable(),
@@ -129,6 +181,8 @@ export const releaseDiffSchema = z.object({
   entryChanges: z.array(entryChangeSchema),
   componentChanges: z.array(componentChangeSchema),
   componentFieldChanges: z.array(componentFieldChangeSchema),
+  destinationChanges: z.array(destinationChangeSchema),
+  contractChanges: z.array(contractChangeSchema),
 });
 export type ReleaseDiff = z.infer<typeof releaseDiffSchema>;
 

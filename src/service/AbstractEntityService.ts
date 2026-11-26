@@ -198,6 +198,18 @@ export abstract class AbstractEntityService extends AbstractService {
         }
         return this.getFolderReferences(this.pathTo.components(projectId));
 
+      case objectTypeSchema.enum.contract:
+        if (!projectId) {
+          throw CoreError.badRequest('Missing required parameter "projectId"');
+        }
+        return this.getFolderReferences(this.pathTo.contracts(projectId));
+
+      case objectTypeSchema.enum.destination:
+        if (!projectId) {
+          throw CoreError.badRequest('Missing required parameter "projectId"');
+        }
+        return this.getFolderReferences(this.pathTo.destinations(projectId));
+
       case objectTypeSchema.enum.entry:
         if (!projectId) {
           throw CoreError.badRequest('Missing required parameter "projectId"');

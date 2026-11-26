@@ -74,9 +74,14 @@ const capitalizedWords = new Set([
   'Component',
   'Entry',
   'Entries',
+  // Of "Single Entry", a Collection limited to one Entry
+  'Single',
   'Value',
   'Asset',
   'Release',
+  'Contract',
+  'Destination',
+  'Mapping',
   'User',
   'Core',
   'Astro',
@@ -372,27 +377,45 @@ function changeTypesOf(): Map<string, string[]> {
 
 /**
  * The bump `ReleaseService` gives each change type, read out of the literals
- * it pushes. Every push writes `bump` directly after `changeType`, and this
- * looks for that pair anywhere in the file. It establishes neither which
- * array the pair is pushed into nor which push wrote it, so a change type
- * pushed in several places answers for every row naming it, which is 19 of
- * the 58 declared pairs, see contributing/documentation.md.
+ * it pushes, under the array it is pushed into where the push names one and
+ * under the change type alone besides.
+ *
+ * Every push writes `bump` directly after `changeType`. A push naming an
+ * array of the diff answers for that array alone, so one change type can
+ * carry a different bump in two of them. A push into a local array, which is
+ * how a field change reaches both `fieldChanges` and `componentFieldChanges`,
+ * is read under its change type instead and answers for every row naming it.
  */
-function changeBumpsOf(
-  changeTypes: Iterable<string>
-): Map<string, Set<string>> {
+function changeBumpsOf(declared: Map<string, string[]>): {
+  byArray: Map<string, Set<string>>;
+  byType: Map<string, Set<string>>;
+} {
   const source = readFile('src/service/ReleaseService.ts').replaceAll(
     /\s+/g,
     ' '
   );
-  const bumps = new Map<string, Set<string>>();
-  for (const changeType of changeTypes) {
-    const classified = semverBumpSchema.options.filter((bump) =>
-      source.includes(`changeType: '${changeType}', bump: '${bump}'`)
-    );
-    bumps.set(changeType, new Set(classified));
+  const byArray = new Map<string, Set<string>>();
+  const byType = new Map<string, Set<string>>();
+  for (const [array, changeTypes] of declared) {
+    for (const changeType of changeTypes) {
+      const pair = `changeType: '${changeType}', bump: `;
+      const classified = semverBumpSchema.options.filter((bump) =>
+        source.includes(`${pair}'${bump}'`)
+      );
+      byType.set(changeType, new Set(classified));
+      // Nothing but keys of the pushed literal between the array and the
+      // pair, so a pair of the push after it is never read as this one's
+      const pushed = semverBumpSchema.options.filter((bump) =>
+        new RegExp(`\\b${array}\\.push\\(\\{[^})]*${pair}'${bump}'`).test(
+          source
+        )
+      );
+      if (pushed.length > 0) {
+        byArray.set(`${array}.${changeType}`, new Set(pushed));
+      }
+    }
   }
-  return bumps;
+  return { byArray, byType };
 }
 
 /** What the coverage rule reads. A test documents nobody, so it is left out. */
@@ -1277,7 +1300,7 @@ export const rules: Rule[] = [
       }
 
       const declared = changeTypesOf();
-      const bumps = changeBumpsOf([...declared.values()].flat());
+      const bumps = changeBumpsOf(declared);
       const documented = new Set<string>();
       const violations: Violation[] = [];
       let inSection = false;
@@ -1301,9 +1324,18 @@ export const rules: Rule[] = [
         );
         if (arrays.length === 0) continue;
 
-        // A change type no array declares has no bump to look for, and the
-        // per-array check below reports it where the truth about it is
-        const classified = bumps.get(changeType);
+        // The bumps the arrays of this row are pushed with, or the ones
+        // every push of the change type carries where no push names one of
+        // them. A change type no array declares has no bump to look for,
+        // and the per-array check below reports it where the truth about it
+        // is
+        const pushedPerArray = arrays
+          .map((array) => bumps.byArray.get(`${array}.${changeType}`))
+          .filter((set): set is Set<string> => set !== undefined);
+        const classified =
+          pushedPerArray.length === 0
+            ? bumps.byType.get(changeType)
+            : new Set(pushedPerArray.flatMap((set) => [...set]));
         if (classified !== undefined) {
           if (classified.size === 0) {
             violations.push({

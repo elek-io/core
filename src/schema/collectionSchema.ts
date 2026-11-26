@@ -27,6 +27,15 @@ export const collectionFileSchema = baseFileSchema.extend({
   }),
   description: partialTranslatableStringSchema,
   icon: supportedIconSchema,
+  /**
+   * Whether the Collection is limited to one Entry, a Single Entry, which is
+   * what one-off content such as contact details is kept in.
+   *
+   * Set when the Collection is created and never changed afterwards. It
+   * defaults to false, so a Collection written before Single Entries existed
+   * reads as the list it is.
+   */
+  isSingleEntry: z.boolean().default(false),
   fieldDefinitions: z
     .array(fieldDefinitionOrGroupSchema)
     .superRefine(fieldDefinitionSlugUniquenessSuperRefinement)
@@ -58,6 +67,11 @@ export const createCollectionSchema = collectionFileSchema
   })
   .extend({
     projectId: uuidSchema.readonly(),
+    /**
+     * Limits the Collection to one Entry. Left out, it holds a list, which
+     * is what every Collection was before Single Entries existed.
+     */
+    isSingleEntry: z.boolean().optional(),
   });
 export type CreateCollectionProps = z.infer<typeof createCollectionSchema>;
 
@@ -88,6 +102,12 @@ export const updateCollectionSchema = collectionFileSchema
   })
   .extend({
     projectId: uuidSchema.readonly(),
+    /**
+     * Whether the Collection is a Single Entry, which `update` can only
+     * repeat. Another value than the one it was created with throws
+     * `Conflict`, and leaving it out keeps what the Collection holds.
+     */
+    isSingleEntry: z.boolean().optional(),
     resolutions: z
       .record(uuidSchema, z.record(slugSchema, valueSchema))
       .optional(),

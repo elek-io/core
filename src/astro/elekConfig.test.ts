@@ -17,6 +17,17 @@ function expectBadRequest(fn: () => unknown, contains: string): void {
   expect(error instanceof CoreError && error.message).toContain(contains);
 }
 
+/** The smallest Contract a theme can state, which needs no Collection */
+function contract() {
+  return {
+    name: '@acme/dealer-site',
+    version: '1.0.0',
+    languages: ['en'],
+    collections: [],
+    components: [],
+  };
+}
+
 describe('defineElekConfig', function () {
   it('should return the very same object it validated', function () {
     const input = {
@@ -114,6 +125,47 @@ describe('defineElekConfig', function () {
     expectBadRequest(
       () => defineElekConfig({ projects: {}, prjects: {} }),
       'prjects'
+    );
+  });
+
+  it('should accept a Destination with the site own Contract beside it', function () {
+    expect(() =>
+      defineElekConfig({
+        projects: { website: { id: projectId, destination: 'acme.example' } },
+        contract: contract(),
+      })
+    ).not.toThrow();
+  });
+
+  it('should reject a Destination without the Contract that fills it', function () {
+    expectBadRequest(
+      () =>
+        defineElekConfig({
+          projects: { website: { id: projectId, destination: 'acme.example' } },
+        }),
+      'names a Destination, so add'
+    );
+  });
+
+  it('should reject a Contract no declared Project reads', function () {
+    expectBadRequest(
+      () =>
+        defineElekConfig({
+          projects: { website: { id: projectId } },
+          contract: contract(),
+        }),
+      'nothing reads this Contract'
+    );
+  });
+
+  it('should reject a contract that is no Contract', function () {
+    expectBadRequest(
+      () =>
+        defineElekConfig({
+          projects: { website: { id: projectId, destination: 'acme.example' } },
+          contract: { name: 'Not A Contract' },
+        }),
+      'contract'
     );
   });
 

@@ -19,7 +19,7 @@ Allowed, and wanted:
 Never:
 
 - the content of an Entry, an Asset or any other authored value
-- **a name, or the slug made from one**: of a Project, Collection, Component, Entry or Asset. Anything a User typed that identifies one object, not only what they wrote into a field
+- **a name, or the slug made from one**: of a Project, Collection, Component, Entry, Asset, Contract or Destination. Anything a User typed that identifies one object, not only what they wrote into a field
 - a User's name or email, including inside a git command line
 - **a path the User chose**, such as the file an Asset was created from, which carries the name they gave it
 - a credential: the remote access token, the elek.io Cloud token or a git token elek.io Cloud minted, which travel in memory, by argument or through Core's credential relay and never inside a file Core writes. A git host's name may appear, as `server.address`

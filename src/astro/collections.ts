@@ -5,10 +5,12 @@ import {
   flattenFieldDefinitions,
   type FieldDefinition,
 } from '../schema/fieldSchema.js';
-import type { Collection } from '../schema/collectionSchema.js';
+import type { CollectionFile } from '../schema/collectionSchema.js';
+import { mappingIssuesOf } from '../util/destinationCheck.js';
 import { assertElekConfig, type ElekConfig } from './elekConfig.js';
 import { elekAssetsLoader, elekEntriesLoader } from './loaders.js';
 import { getCore, ensureProjectAvailable } from './core.js';
+import { readSiteContract, type SiteContract } from './siteContract.js';
 
 type ElekCollection = ReturnType<typeof defineCollection>;
 
@@ -61,19 +63,19 @@ function optionFor<V>(
 }
 
 /**
- * Narrows a Project's Collections to the selection, matching each name
- * against the plural slug and the id, the same two a loader's
- * `collectionIdOrSlug` accepts.
+ * Narrows the Collections to the selection, matching each name against the
+ * plural slug and the id, the same two a loader's `collectionIdOrSlug`
+ * accepts.
  *
  * A name that matches nothing throws rather than being skipped. The
  * selection exists to leave Collections out, so a silently dropped one
  * is indistinguishable from the feature working.
  */
 function selectCollections(
-  list: Collection[],
+  list: readonly CollectionFile[],
   selection: string[],
-  alias: string
-): Collection[] {
+  holder: string
+): CollectionFile[] {
   const unknown = selection.filter(
     (name) =>
       !list.some(
@@ -83,7 +85,7 @@ function selectCollections(
   );
   if (unknown.length > 0) {
     throw CoreError.notFound(
-      `Project "${alias}" has no Collection ${unknown
+      `${holder} has no Collection ${unknown
         .map((name) => `"${name}"`)
         .join(', ')}. It has ${list
         .map((collection) => `"${collection.slug.plural}"`)
@@ -122,9 +124,10 @@ function canReferenceAssets(fieldDefinition: FieldDefinition): boolean {
  * the build says it up front too.
  */
 function assertAssetsReachable(
-  selected: Collection[],
+  selected: readonly CollectionFile[],
   hasAssets: boolean,
-  alias: string
+  alias: string,
+  holder: string
 ): void {
   if (hasAssets) {
     return;
@@ -135,7 +138,7 @@ function assertAssetsReachable(
     ).filter(canReferenceAssets);
     if (referencing.length > 0) {
       throw CoreError.badRequest(
-        `Collection "${collection.slug.plural}" of Project "${alias}" can reference Assets through ${referencing
+        `Collection "${collection.slug.plural}" of ${holder} can reference Assets through ${referencing
           .map((fieldDefinition) => `"${fieldDefinition.slug}"`)
           .join(
             ', '
@@ -146,14 +149,77 @@ function assertAssetsReachable(
 }
 
 /**
- * Derives Astro content collections from the elek.io Collections the options
- * name. That object is the complete list, nothing outside it is derived, and
- * with no options at all it derives everything and warns. Keys are the alias
- * plus the plural slug in PascalCase (`websitePosts`), Assets `${alias}Assets`.
+ * Refuses a Mapping that leaves a Collection or a required field of the
+ * derived Contract Collections unfilled, naming every one of them at once.
  *
- * Reads the content model from disk. Throws `Conflict` on a key two sources
- * derive, `BadRequest` on a selection naming nothing, deriving nothing, or
- * leaving out Assets a derived Collection can reference.
+ * Here rather than only in the loaders, because Astro loads its collections
+ * together and stops on the first that fails, which would name the Mapping
+ * one collection at a time. Every loader checks its own again, so a
+ * collection declared by hand is checked too.
+ */
+async function assertMappingFills(props: {
+  core: ReturnType<typeof getCore>;
+  projectId: string;
+  alias: string;
+  site: SiteContract;
+  selected: readonly CollectionFile[];
+}): Promise<void> {
+  const { destination, contract } = props.site;
+  const derived = new Set(props.selected.map(({ id }) => id));
+  const sources = new Set(
+    Object.values(destination.mapping.collections).map((collection) => {
+      return collection.from.collectionId;
+    })
+  );
+  const collections: CollectionFile[] = [];
+  for (const id of sources) {
+    // A Mapping naming a Collection the Project dropped fills nothing,
+    // which is reported below rather than failing to read here
+    const collection = await props.core.collections
+      .read({ projectId: props.projectId, id })
+      .catch((error: unknown) => {
+        if (error instanceof CoreError && error.type === 'NotFound') {
+          return undefined;
+        }
+        throw error;
+      });
+    if (collection !== undefined) {
+      collections.push(collection);
+    }
+  }
+
+  const project = await props.core.projects.read({ id: props.projectId });
+  const issues = mappingIssuesOf({
+    destinationId: destination.id,
+    contract,
+    mapping: destination.mapping,
+    collections,
+    languages: project.settings.language.supported,
+  }).filter((issue) => derived.has(issue.contractCollectionId));
+  if (issues.length === 0) {
+    return;
+  }
+  const at =
+    destination.contract.version === contract.version
+      ? `version ${contract.version}`
+      : `version ${contract.version} while the website uses ${destination.contract.version}`;
+  throw CoreError.badRequest(
+    `Destination "${destination.name}" of Project "${props.alias}" does not fill the Contract "${contract.name}" at ${at}:\n${issues
+      .map((issue) => `- ${issue.message}`)
+      .join(
+        '\n'
+      )}\nMap them onto the Project's own Collections and fields, or leave the Collection out of elekCollections().`
+  );
+}
+
+/**
+ * Derives Astro content collections from the elek.io Collections the options
+ * name, or from the site's own Contract where a Project declares a
+ * `destination`. The options are the complete list, and without them it
+ * derives everything and warns. Keys are the alias plus the plural slug in
+ * PascalCase (`websitePosts`), Assets `${alias}Assets`. Throws `Conflict` on
+ * a key two sources derive and `BadRequest` on a selection or a Mapping that
+ * leaves a derived collection unreadable.
  *
  * @see ../../docs/usage.md
  */
@@ -184,10 +250,23 @@ export async function elekCollections<const T extends ElekConfig>(
   for (const [alias, declaration] of Object.entries(declared.projects)) {
     await ensureProjectAvailable(core, alias, declaration.id);
 
-    const { list } = await core.collections.list({
-      projectId: declaration.id,
-      limit: 0,
-    });
+    // A Project declared with a Destination contributes the Collections of
+    // the site's own Contract, so every derived key, schema and type is the
+    // site's rather than one Project's
+    const site = await readSiteContract({ core, config: declared, alias });
+    const holder =
+      site === undefined
+        ? `Project "${alias}"`
+        : `the Contract "${site.contract.name}" of Project "${alias}"`;
+    const list =
+      site === undefined
+        ? (
+            await core.collections.list({
+              projectId: declaration.id,
+              limit: 0,
+            })
+          ).list
+        : site.contract.collections;
     // No options at all derives everything, which is the exploration
     // step. Any options object is the complete list instead.
     const selected =
@@ -196,17 +275,26 @@ export async function elekCollections<const T extends ElekConfig>(
         : selectCollections(
             list,
             optionFor(options.collections, alias) ?? [],
-            alias
+            holder
           );
 
     const assets =
       options === undefined ? true : optionFor(options.assets, alias);
-    assertAssetsReachable(selected, assets !== undefined, alias);
+    assertAssetsReachable(selected, assets !== undefined, alias, holder);
+    if (site !== undefined) {
+      await assertMappingFills({
+        core,
+        projectId: declaration.id,
+        alias,
+        site,
+        selected,
+      });
+    }
 
     for (const collection of selected) {
       add(
         `${alias}${toPascalCase(collection.slug.plural)}`,
-        `Collection "${collection.slug.plural}" of Project "${alias}"`,
+        `Collection "${collection.slug.plural}" of ${holder}`,
         defineCollection({
           loader: elekEntriesLoader({
             config: declared,

@@ -58,16 +58,29 @@ export const objectTypeSchema = z.enum([
   'component',
   'entry',
   'value',
+  'contract',
+  'destination',
 ]);
 export type ObjectType = z.infer<typeof objectTypeSchema>;
 
 export const logLevelSchema = z.enum(['error', 'warn', 'info', 'debug']);
 export type LogLevel = z.infer<typeof logLevelSchema>;
 
+/**
+ * What a version is: the grammar of Semantic Versioning 2.0.0, which is the
+ * one `semver` reads, so every version Core accepts can be compared and
+ * ordered. It carries no anchors, so a pattern around a version, such as the
+ * tag a theme releases one under, builds on it.
+ */
+export const SEMANTIC_VERSION =
+  /(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][\dA-Za-z-]*))*)?(?:\+[\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*)?/;
+
+const VERSION_ONLY = new RegExp(`^${SEMANTIC_VERSION.source}$`);
+
 export const versionSchema = z
   .string()
   .refine(
-    (version) => /^\d+\.\d+\.\d+(?:-[\w.]+)?(?:\+[\w.]+)?$/.test(version),
+    (version) => VERSION_ONLY.test(version),
     'String must follow the Semantic Versioning format (https://semver.org/)'
   );
 export type Version = z.infer<typeof versionSchema>;

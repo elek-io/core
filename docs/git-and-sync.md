@@ -112,6 +112,36 @@ A branch on the remote holds this Project when it shares history with the local 
 
 A remote's `main` holding commits the local `main` lacks, with no `draft` beside it, throws `PreconditionFailed` as well. Synchronize the working copy that pushed that `main` instead.
 
+### Reading an address with your own git access
+
+Core reads a theme's git address with your own git access and nothing else, because that address is kept in the Project and a credential must never be. It is the one git call that gets no token of Core's.
+
+| What answers for it | A Project's remote | A theme's address |
+| --- | --- | --- |
+| `ELEK_IO_REMOTE_ACCESS_TOKEN` | yes, through Core's credential helper | no, Core installs no helper for it |
+| elek.io Cloud's git tokens | yes, for Cloud's git hosts | no |
+| Your own credential helpers and SSH keys | only without a token set | yes |
+
+So a public theme needs nothing, and a private one answers to your own SSH key or git credential helper. Prompts stay off, so an address you have no access to fails with `Unauthorized` naming your own access rather than hanging.
+
+Three shapes of address are refused before git runs, each with `BadRequest`:
+
+| Refused | Why |
+| --- | --- |
+| A password under any scheme, and a user alone under http or https, as in `https://user:token@host/org/repo.git` | A credential in the address would be committed into the Project |
+| `ext::sh -c ...`, and anything starting with `-` | git runs a remote helper address as a command, and reads a leading dash as its own option |
+| A path on the machine that is not absolute, such as `./dealer-site.git` or `dealer-site.git` | Core lists the tags from one directory and fetches the commit from another, so a relative path would name two different repositories, and the Project keeps the address |
+
+`ssh://git@host/org/repo.git` is accepted, because an SSH user is part of the address rather than a credential, as it is in the shorthand `git@host:org/repo.git`.
+
+Everything a Project's remote accepts is accepted otherwise, an absolute local path included, which only works on the machine holding it. An address Core could read but that states no version of itself is refused too:
+
+| What stopped it | `reason` | What gets past it |
+| --- | --- | --- |
+| The address has tagged no version | `theme_without_version` | tag a version there as `v<version>` |
+
+See [`destinations.md`](./destinations.md#reading-a-themes-contract) for what is read and [`error-handling.md`](./error-handling.md) for the full error model.
+
 ## Inspecting changes against the remote
 
 `getChanges()` requires an `origin` (throws `PreconditionFailed` if none is set). It fetches, then returns the commits the local branch is `behind` and `ahead` of its remote counterpart.
@@ -312,3 +342,4 @@ The dangling references of step 4 raise `Conflict` instead, carrying each refere
 - [`releases.md`](./releases.md) - promoting `draft` into `main` as tagged, versioned snapshots
 - [`concepts.md`](./concepts.md) - Projects, Releases and the rest of the data model
 - [`error-handling.md`](./error-handling.md) - `CoreError` types and patterns
+- [`destinations.md`](./destinations.md) - Contracts, websites and the git address a theme is read from

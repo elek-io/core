@@ -759,13 +759,80 @@ export class GitService {
   }
 
   /**
-   * Lists the ref names a remote repository advertises, without cloning
+   * Lists the ref names a remote repository advertises, without cloning.
+   * `tags` asks for the tags alone, and `isOwnGitAccess` reads the address
+   * with the person's own git access and no token of Core's.
+   *
+   * The address follows `--`, so git reads one starting with `-` as an
+   * address rather than as an option of its own. That is no substitute for
+   * `classifyUnsafeAddress`, which also refuses an address git would run
+   * through a remote helper.
    *
    * @see https://git-scm.com/docs/git-ls-remote
    */
-  public async lsRemote(url: string): Promise<string[]> {
-    const result = await this.git('', ['ls-remote', '--quiet', url]);
+  public async lsRemote(
+    url: string,
+    options?: Partial<{ tags: boolean; isOwnGitAccess: boolean }>
+  ): Promise<string[]> {
+    const args = ['ls-remote', '--quiet'];
+    if (options?.tags === true) {
+      args.push('--tags');
+    }
+    const result = await this.git(
+      '',
+      [...args, '--', url],
+      options?.isOwnGitAccess === undefined
+        ? {}
+        : { isOwnGitAccess: options.isOwnGitAccess }
+    );
     return this.advertisedRefNames(result.stdout);
+  }
+
+  /**
+   * Reads one file of a remote repository at one tag, with the person's own
+   * git access and no token of Core's, and returns it with the commit the
+   * tag points at.
+   *
+   * `scratchPath` becomes a fresh repository holding the one fetched commit
+   * and nothing else, so no Project is touched and nothing is checked out.
+   * The caller owns that path and removes it. A missing tag or file throws
+   * `Internal`, and an address needing authentication `Unauthorized`.
+   */
+  public async readFileAtRemoteTag(props: {
+    url: string;
+    tag: string;
+    filePath: string;
+    scratchPath: string;
+  }): Promise<{ content: string; commit: string }> {
+    const ownAccess = { isOwnGitAccess: true };
+    // Not `init()`, which installs Git LFS and the commit behavior config a
+    // Project needs, and refuses while Core is read-only. Reading an address
+    // mutates no Project, so a read-only Core reads a theme too
+    await this.git('', ['init', '--quiet', props.scratchPath]);
+    await this.git(
+      props.scratchPath,
+      [
+        'fetch',
+        '--quiet',
+        '--depth',
+        '1',
+        '--',
+        props.url,
+        `refs/tags/${props.tag}`,
+      ],
+      ownAccess
+    );
+    // An annotated tag resolves to its own object, so the commit is asked
+    // for by name rather than taken from FETCH_HEAD
+    const commit = (
+      await this.git(props.scratchPath, ['rev-parse', 'FETCH_HEAD^{commit}'])
+    ).stdout.trim();
+    const content = await this.getFileContentAtCommit(
+      props.scratchPath,
+      props.filePath,
+      commit
+    );
+    return { content, commit };
   }
 
   /**
@@ -1403,7 +1470,13 @@ export class GitService {
     args: string[],
     options: GitCommandOptions = {}
   ): Promise<IGitStringResult> {
-    const { tolerateNonZero, attributes, user, ...execOptions } = options;
+    const {
+      tolerateNonZero,
+      attributes,
+      user,
+      isOwnGitAccess,
+      ...execOptions
+    } = options;
     const identity = recordsGitIdentity(args)
       ? identityEnv(user === undefined ? await this.userService.get() : user)
       : {};
@@ -1416,7 +1489,10 @@ export class GitService {
         // Every other git invocation gets the credential environment, so
         // remote operations and on-demand LFS smudges authenticate the same
         // way and never prompt
-        const invocation = await this.credentialRelay.begin(hasCommand);
+        const invocation = await this.credentialRelay.begin({
+          hasCommand,
+          ...(isOwnGitAccess === undefined ? {} : { isOwnGitAccess }),
+        });
         execOptions.env = { ...invocation.env, ...identity, ...callerEnv };
         const start = Date.now();
         let gitResult: IGitResult;
@@ -1491,7 +1567,8 @@ export class GitService {
     if (result.gitResult.exitCode !== 0 && tolerateNonZero !== true) {
       const authError = classifyAuthError(
         result.gitResult.stderr.toString(),
-        this.credentialRelay.hasRemoteToken
+        this.credentialRelay.hasRemoteToken,
+        isOwnGitAccess
       );
       if (authError) {
         throw authError;
@@ -1532,6 +1609,13 @@ type GitCommandOptions = IGitExecutionOptions & {
    * time. Stripped before the options reach dugite.
    */
   user?: User | null;
+  /**
+   * Runs the command with the person's own git access alone: Core installs
+   * no credential helper, so neither the remote token nor a Cloud token can
+   * reach the address, and a failure names their own access rather than a
+   * token. Stripped before the options reach dugite.
+   */
+  isOwnGitAccess?: boolean;
 };
 
 /**

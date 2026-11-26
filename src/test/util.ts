@@ -18,6 +18,7 @@ import type {
   ConstructorElekIoCoreProps,
   EntryFieldDefinition,
   MarkdownFeatures,
+  Value,
 } from './setup.js';
 import core, {
   flattenFieldDefinitions,
@@ -735,6 +736,52 @@ export async function createPagesCollection(
       },
     ],
   });
+}
+
+/**
+ * Collection limited to one Entry, slug `contact-details`, with one required
+ * text field `phone`. One per Project, the slug is fixed.
+ */
+export async function createSingleEntryCollection(
+  projectId: string
+): Promise<Collection> {
+  return core.collections.create({
+    projectId,
+    icon: 'phone',
+    isSingleEntry: true,
+    name: {
+      singular: { en: 'Contact details', de: 'Kontaktdaten' },
+      plural: { en: 'Contact details', de: 'Kontaktdaten' },
+    },
+    slug: { singular: 'contact-details', plural: 'contact-details' },
+    description: { en: 'How to reach us', de: 'Wie man uns erreicht' },
+    fieldDefinitions: [
+      {
+        id: uuid(),
+        slug: 'phone',
+        valueType: 'string',
+        fieldType: 'telephone',
+        label: { en: 'Phone', de: 'Telefon' },
+        description: null,
+        inputWidth: '12',
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
+        defaultValue: null,
+      },
+    ],
+  });
+}
+
+/** The one Value an Entry of `createSingleEntryCollection` holds. */
+export function singleEntryValues(phone: string): Record<string, Value> {
+  return {
+    phone: {
+      objectType: 'value',
+      valueType: 'string',
+      content: { en: phone, de: phone },
+    },
+  };
 }
 
 /**

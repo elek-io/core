@@ -224,7 +224,12 @@ describe('ReleaseService against a remote', function () {
     // version commit applies cleanly
     const own = await addCollection(core, b.project.id);
     const ownChanges = [
-      { collectionId: own.id, changeType: 'added', bump: 'minor' },
+      {
+        collectionId: own.id,
+        changeType: 'added',
+        bump: 'minor',
+        isSingleEntry: false,
+      },
     ];
 
     const a = await otherWorkingCopy(remotePath);

@@ -113,7 +113,8 @@ export type CoreErrorReason =
   | 'remote_names_no_project'
   | 'project_on_another_host'
   | 'cloud_unreachable'
-  | 'git_host_unreachable';
+  | 'git_host_unreachable'
+  | 'theme_without_version';
 
 /**
  * The only error a service method throws, so `error instanceof CoreError` is
