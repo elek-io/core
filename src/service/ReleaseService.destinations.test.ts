@@ -8,7 +8,12 @@ import core, {
   uuid,
   type Collection,
   type Entry,
+  type EntryFieldDefinition,
+  type FieldDefinition,
+  type NumberFieldDefinition,
   type StringFieldDefinition,
+  type StringSelectFieldDefinition,
+  type TextFieldDefinition,
 } from '../test/setup.js';
 import { contractFileOf, createFakeTheme } from '../test/theme.js';
 import {
@@ -883,6 +888,498 @@ describe('Releasing a Project that has a website', function () {
       }
       expect(error instanceof CoreError && error.message).toContain(
         'Destinations "'
+      );
+    });
+  });
+
+  describe('a Project whose fields changed under its website', function () {
+    let project: Awaited<ReturnType<typeof createProject>>;
+    let parts: Collection;
+    let specs: Collection;
+    let labels: Collection;
+    let website: DestinationFile;
+    let draftPart: Entry;
+    let firstSpec: Entry;
+    let secondSpec: Entry;
+    const field = {
+      status: uuid(),
+      vin: uuid(),
+      colour: uuid(),
+      related: uuid(),
+      kind: uuid(),
+      caption: uuid(),
+    };
+
+    /**
+     * The fields of the Specs, with the width the Project gives the one the
+     * theme needs and the options it offers, so a test states what changed
+     * by stating the Collection again
+     */
+    function specFields(props: {
+      max: number;
+      options: string[];
+    }): FieldDefinition[] {
+      const vin: TextFieldDefinition = {
+        id: field.vin,
+        slug: 'vin',
+        valueType: 'string',
+        fieldType: 'text',
+        label: { en: 'VIN', de: 'FIN' },
+        description: null,
+        defaultValue: null,
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        min: null,
+        max: props.max,
+      };
+      const colour: StringSelectFieldDefinition = {
+        id: field.colour,
+        slug: 'colour',
+        valueType: 'string',
+        fieldType: 'select',
+        label: { en: 'Colour', de: 'Farbe' },
+        description: null,
+        defaultValue: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        options: props.options.map((value) => ({
+          value,
+          label: { en: value, de: value },
+        })),
+      };
+      const related: EntryFieldDefinition = {
+        id: field.related,
+        slug: 'related',
+        valueType: 'reference',
+        fieldType: 'entry',
+        label: { en: 'Related', de: 'Verwandt' },
+        description: null,
+        isRequired: false,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        ofCollections: [parts.id],
+        min: null,
+        max: null,
+      };
+      return [vin, colour, related];
+    }
+
+    /** The field the theme reads as text, as the Project first held it */
+    const textKind: TextFieldDefinition = {
+      id: field.kind,
+      slug: 'kind',
+      valueType: 'string',
+      fieldType: 'text',
+      label: { en: 'Kind', de: 'Art' },
+      description: null,
+      defaultValue: null,
+      isRequired: true,
+      isDisabled: false,
+      isUnique: false,
+      inputWidth: '12',
+      min: null,
+      max: null,
+    };
+
+    /** The same field after the editor made it hold a number instead */
+    const numberKind: NumberFieldDefinition = {
+      id: field.kind,
+      slug: 'kind',
+      valueType: 'number',
+      fieldType: 'number',
+      label: { en: 'Kind', de: 'Art' },
+      description: null,
+      defaultValue: null,
+      isRequired: true,
+      isDisabled: false,
+      isUnique: false,
+      inputWidth: '12',
+      min: null,
+      max: null,
+    };
+
+    /** The fields of the Labels, around the kind field it is given */
+    function labelFields(
+      kind: TextFieldDefinition | NumberFieldDefinition
+    ): FieldDefinition[] {
+      const caption: TextFieldDefinition = {
+        id: field.caption,
+        slug: 'caption',
+        valueType: 'string',
+        fieldType: 'text',
+        label: { en: 'Caption', de: 'Beschriftung' },
+        description: null,
+        defaultValue: null,
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+        min: null,
+        max: null,
+      };
+      return [kind, caption];
+    }
+
+    /** One string in both languages */
+    function text(content: string | null): Value {
+      return {
+        objectType: 'value',
+        valueType: 'string',
+        content: { en: content, de: content },
+      };
+    }
+
+    /** A reference to one Entry, in both languages */
+    function pointsAt(entryId: string, collectionId: string): Value {
+      const content = [
+        { objectType: 'entry' as const, id: entryId, collectionId },
+      ];
+      return {
+        objectType: 'value',
+        valueType: 'reference',
+        content: { en: content, de: content },
+      };
+    }
+
+    /** The Mapping of the website as it stands, to change one entry of */
+    async function mappingNow() {
+      return (
+        await core.destinations.read({ projectId: project.id, id: website.id })
+      ).mapping;
+    }
+
+    beforeAll(async function () {
+      project = await createProject();
+      parts = await core.collections.create({
+        projectId: project.id,
+        icon: 'home',
+        name: {
+          singular: { en: 'Part', de: 'Teil' },
+          plural: { en: 'Parts', de: 'Teile' },
+        },
+        slug: { singular: 'part', plural: 'parts' },
+        description: { en: 'The parts', de: 'Die Teile' },
+        fieldDefinitions: [
+          {
+            id: field.status,
+            slug: 'status',
+            valueType: 'string',
+            fieldType: 'select',
+            label: { en: 'Status', de: 'Status' },
+            description: null,
+            defaultValue: null,
+            isRequired: false,
+            isDisabled: false,
+            isUnique: false,
+            inputWidth: '12',
+            options: ['published', 'draft'].map((value) => ({
+              value,
+              label: { en: value, de: value },
+            })),
+          },
+        ],
+      });
+      specs = await core.collections.create({
+        projectId: project.id,
+        icon: 'home',
+        name: {
+          singular: { en: 'Spec', de: 'Spec' },
+          plural: { en: 'Specs', de: 'Specs' },
+        },
+        slug: { singular: 'spec', plural: 'specs' },
+        description: { en: 'The specs', de: 'Die Specs' },
+        fieldDefinitions: specFields({ max: 10, options: ['red', 'blue'] }),
+      });
+      // No Entry holds a Value of this Collection, so a field of it is
+      // changed without any stored content being lost
+      labels = await core.collections.create({
+        projectId: project.id,
+        icon: 'home',
+        name: {
+          singular: { en: 'Label', de: 'Label' },
+          plural: { en: 'Labels', de: 'Labels' },
+        },
+        slug: { singular: 'label', plural: 'labels' },
+        description: { en: 'The labels', de: 'Die Labels' },
+        fieldDefinitions: labelFields(textKind),
+      });
+
+      await core.entries.create({
+        projectId: project.id,
+        collectionId: parts.id,
+        values: { status: text('published') },
+      });
+      draftPart = await core.entries.create({
+        projectId: project.id,
+        collectionId: parts.id,
+        values: { status: text('draft') },
+      });
+      firstSpec = await core.entries.create({
+        projectId: project.id,
+        collectionId: specs.id,
+        values: {
+          vin: text('WVW1'),
+          colour: text('red'),
+          related: pointsAt(draftPart.id, parts.id),
+        },
+      });
+      secondSpec = await core.entries.create({
+        projectId: project.id,
+        collectionId: specs.id,
+        values: {
+          vin: text('WVW2'),
+          colour: text('blue'),
+          related: pointsAt(draftPart.id, parts.id),
+        },
+      });
+
+      const theme = await themeWith([
+        await core.contracts.generate({
+          projectId: project.id,
+          name: '@acme/changed-site',
+          version: '1.0.0',
+        }),
+      ]);
+      website = await core.destinations.addWebsite({
+        projectId: project.id,
+        name: 'changed.example',
+        url: theme.url,
+      });
+      // Everything fits when the website is added, so every refusal below
+      // is what a change to the Project did
+      expect(
+        await core.destinations.checkAll({
+          projectId: project.id,
+          id: website.id,
+        })
+      ).toEqual([]);
+      await core.releases.create({ projectId: project.id });
+    });
+
+    afterAll(async function () {
+      await project.destroy();
+    });
+
+    afterEach(async function ({ task }) {
+      await ensureCleanGitStatus(task, project.id);
+    });
+
+    it('refuses the Release on a field the Project widened, naming the gap and both Entries at once', async function () {
+      // The editor widens the field the theme needs and types Values the
+      // theme's own rules refuse, in both languages
+      await core.collections.update({
+        ...(await core.collections.read({
+          projectId: project.id,
+          id: specs.id,
+        })),
+        projectId: project.id,
+        fieldDefinitions: specFields({ max: 100, options: ['red', 'blue'] }),
+      });
+      for (const entry of [firstSpec, secondSpec]) {
+        await core.entries.update({
+          projectId: project.id,
+          collectionId: specs.id,
+          id: entry.id,
+          values: {
+            vin: text('WVWZZZ1KZAW000001'),
+            colour: text('red'),
+            related: pointsAt(draftPart.id, parts.id),
+          },
+        });
+      }
+      // One required field of the Contract left unmapped beside them, so
+      // the refusal names a Mapping gap and refused Entries together
+      const mapping = await mappingNow();
+      const mapped = mapping.collections[labels.id];
+      if (mapped === undefined) {
+        throw new Error('The Mapping does not fill the labels');
+      }
+      await core.destinations.update({
+        projectId: project.id,
+        id: website.id,
+        mapping: {
+          collections: {
+            ...mapping.collections,
+            [labels.id]: {
+              ...mapped,
+              fields: Object.fromEntries(
+                Object.entries(mapped.fields).filter(([id]) => {
+                  return id !== field.caption;
+                })
+              ),
+            },
+          },
+        },
+      });
+
+      const prepared = await core.releases.prepare({ projectId: project.id });
+
+      // An Entry is named once per Value the website refuses, which is one
+      // per language here, and counted once in the refusal below
+      const refused = prepared.destinationIssues.filter((issue) => {
+        return issue.issue === 'constraint_violation';
+      });
+      expect(refused).toHaveLength(4);
+      expect(refused).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            entryId: firstSpec.id,
+            fieldSlug: 'vin',
+            language: 'en',
+          }),
+          expect.objectContaining({
+            entryId: firstSpec.id,
+            fieldSlug: 'vin',
+            language: 'de',
+          }),
+          expect.objectContaining({
+            entryId: secondSpec.id,
+            fieldSlug: 'vin',
+            language: 'en',
+          }),
+          expect.objectContaining({
+            entryId: secondSpec.id,
+            fieldSlug: 'vin',
+            language: 'de',
+          }),
+        ])
+      );
+      expect(
+        prepared.destinationIssues.filter((issue) => {
+          return issue.issue === 'field_not_mapped';
+        })
+      ).toMatchObject([
+        {
+          contractCollectionId: labels.id,
+          contractFieldDefinitionId: field.caption,
+        },
+      ]);
+
+      const error = await core.releases.create({ projectId: project.id }).then(
+        () => null,
+        (caught: unknown) => caught
+      );
+
+      expect(error instanceof CoreError && error.message).toEqual(
+        `Cannot create a release: Destination "${website.id}" of this Project cannot take what "draft" holds, 1 item is unmapped and 2 Entries do not fit. Each is named on the cause. Map the rest, or remove the Destination.`
+      );
+      expect((await core.releases.list({ projectId: project.id })).total).toBe(
+        1
+      );
+    });
+
+    it('refuses the Release on a field whose type changed, an option it gained and an Entry pointing at one the website leaves out', async function () {
+      // The theme's field takes text and the Project's field now holds a
+      // number, so nothing fills it any more
+      await core.collections.update({
+        ...(await core.collections.read({
+          projectId: project.id,
+          id: labels.id,
+        })),
+        projectId: project.id,
+        fieldDefinitions: labelFields(numberKind),
+      });
+      // An option the theme's field does not offer, beside the width the
+      // Specs' field keeps from the test above
+      await core.collections.update({
+        ...(await core.collections.read({
+          projectId: project.id,
+          id: specs.id,
+        })),
+        projectId: project.id,
+        fieldDefinitions: specFields({
+          max: 100,
+          options: ['red', 'blue', 'teal'],
+        }),
+      });
+      // The website takes the Parts that are published, and a Spec it takes
+      // points at one it leaves out
+      const mapping = await mappingNow();
+      const mapped = mapping.collections[parts.id];
+      if (mapped === undefined) {
+        throw new Error('The Mapping does not fill the parts');
+      }
+      await core.destinations.update({
+        projectId: project.id,
+        id: website.id,
+        mapping: {
+          collections: {
+            ...mapping.collections,
+            [parts.id]: {
+              ...mapped,
+              from: {
+                ...mapped.from,
+                where: [
+                  { fieldDefinitionId: field.status, equals: ['published'] },
+                ],
+              },
+            },
+          },
+        },
+      });
+
+      const prepared = await core.releases.prepare({ projectId: project.id });
+
+      expect(prepared.destinationIssues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            issue: 'does_not_fit',
+            contractCollectionId: labels.id,
+            contractFieldDefinitionId: field.kind,
+          }),
+          expect.objectContaining({
+            issue: 'option_not_matched',
+            contractCollectionId: specs.id,
+            contractFieldDefinitionId: field.colour,
+          }),
+          expect.objectContaining({
+            issue: 'reference_not_taken',
+            entryId: firstSpec.id,
+            contractFieldSlug: 'related',
+          }),
+        ])
+      );
+      await expectCoreError(
+        core.releases.create({ projectId: project.id }),
+        'Conflict',
+        'cannot take'
+      );
+    });
+
+    it('refuses the Release while a mapped reference points at a Collection nothing fills', async function () {
+      const mapping = await mappingNow();
+      const withoutParts = structuredClone(mapping);
+      delete withoutParts.collections[parts.id];
+      await core.destinations.update({
+        projectId: project.id,
+        id: website.id,
+        mapping: withoutParts,
+      });
+
+      const prepared = await core.releases.prepare({ projectId: project.id });
+
+      expect(prepared.destinationIssues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            issue: 'reference_not_mapped',
+            contractCollectionId: specs.id,
+            contractFieldDefinitionId: field.related,
+          }),
+          expect.objectContaining({
+            issue: 'collection_not_mapped',
+            contractCollectionId: parts.id,
+          }),
+        ])
+      );
+      await expectCoreError(
+        core.releases.create({ projectId: project.id }),
+        'Conflict',
+        'cannot take'
       );
     });
   });
