@@ -96,6 +96,12 @@ Two things about the reset decide what may go inside the wrapper:
 - **It is repository wide.** `git reset --hard HEAD` restores the whole working tree rather than the paths the operation touched, so it also discards an uncommitted change made outside the call. Core's own writes always commit, so losing something means a caller edited a Project folder by hand while a write was in flight.
 - **It resets to `HEAD`, not to where the call started.** A body that commits twice keeps the first commit, because `HEAD` has already moved. An operation that has to be all-or-nothing therefore makes exactly one commit, which is why the cascades collect `filesToGitAdd` and stage them together.
 
+An operation that cannot make one commit resets to the commit it started on instead, which is what `DestinationService.undoneOnFailure` does for creating from a theme. That create writes a Component, its record on the Destination, the Collection and the Mapping through three services, each committing its own file.
+
+- **It wraps one step at a time**, not the whole create. A refused create keeps the Components it wrote and recorded, which is what the `resolutions` round trip retries with, while the step that did not finish leaves no Collection and no Component for the next call to refuse on.
+- **The reset's own failure is logged and swallowed**, the way `ReleaseService.unwind` handles its steps, so the caller is told what made the step fail rather than what failed while undoing it.
+- **It reaches further back than `HEAD`**, and is repository wide the same way, so a commit another call landed during the step would go with it.
+
 Two `ProjectService` methods cannot use it:
 
 - `create` runs `ensureDir`, then `git init`, then the first commit, so for most of its window there is no `HEAD` to reach. It removes the folder it made instead.
