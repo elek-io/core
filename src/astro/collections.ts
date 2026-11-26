@@ -188,11 +188,13 @@ async function assertMappingFills(props: {
     }
   }
 
+  const project = await props.core.projects.read({ id: props.projectId });
   const issues = mappingIssuesOf({
     destinationId: destination.id,
     contract,
     mapping: destination.mapping,
     collections,
+    languages: project.settings.language.supported,
   }).filter((issue) => derived.has(issue.contractCollectionId));
   if (issues.length === 0) {
     return;

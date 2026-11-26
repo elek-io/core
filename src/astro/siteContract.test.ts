@@ -256,20 +256,28 @@ describe('a site reading its Entries through its own Contract', function () {
       [themeTeaser.id, siteStandfirst.id],
       [themeRelated.id, siteSeeAlso.id],
     ];
-    const fields: Record<string, { fieldDefinitionId: string }> = {};
+    const fields: Mapping['collections'][string]['fields'] = {};
     for (const [contractField, projectField] of pairs) {
       if (contractField === omit?.field) continue;
-      fields[contractField] = { fieldDefinitionId: projectField };
+      fields[contractField] = {
+        fill: 'field',
+        fieldDefinitionId: projectField,
+      };
     }
     const collections: Mapping['collections'] = {
       [themeContacts.id]: {
-        from: { collectionId: siteImprint.id },
-        fields: { [themePhone.id]: { fieldDefinitionId: siteTelephone.id } },
+        from: { collectionId: siteImprint.id, where: [] },
+        fields: {
+          [themePhone.id]: {
+            fill: 'field',
+            fieldDefinitionId: siteTelephone.id,
+          },
+        },
       },
     };
     if (omit?.collection !== themePosts.id) {
       collections[themePosts.id] = {
-        from: { collectionId: siteArticles.id },
+        from: { collectionId: siteArticles.id, where: [] },
         fields,
       };
     }
@@ -532,8 +540,10 @@ describe('a site reading its Entries through its own Contract', function () {
     // The Contract holds one Entry there, this Collection of the Project is
     // no Single Entry and holds two
     narrowed.collections[themeContacts.id] = {
-      from: { collectionId: siteArticles.id },
-      fields: { [themePhone.id]: { fieldDefinitionId: siteHeadline.id } },
+      from: { collectionId: siteArticles.id, where: [] },
+      fields: {
+        [themePhone.id]: { fill: 'field', fieldDefinitionId: siteHeadline.id },
+      },
     };
 
     await withMapping(narrowed, async function () {
@@ -910,8 +920,10 @@ describe('a site reading its Entries through its own Contract', function () {
       mapping: {
         collections: {
           [themePosts.id]: {
-            from: { collectionId: offers.id },
-            fields: { [themeTitle.id]: { fieldDefinitionId: caption.id } },
+            from: { collectionId: offers.id, where: [] },
+            fields: {
+              [themeTitle.id]: { fill: 'field', fieldDefinitionId: caption.id },
+            },
           },
         },
       },
@@ -1190,7 +1202,7 @@ describe('a site reading its Entries through its own Contract', function () {
   it('names every Collection and required field of the Contract the Mapping leaves unfilled', async function () {
     const narrowed = mappingWithout({ collection: themePosts.id });
     narrowed.collections[themeContacts.id] = {
-      from: { collectionId: siteImprint.id },
+      from: { collectionId: siteImprint.id, where: [] },
       fields: {},
     };
 

@@ -131,10 +131,16 @@ describe('a site built on its Contract through astro sync', function () {
     return {
       collections: {
         [themePosts.id]: {
-          from: { collectionId: siteArticles.id },
+          from: { collectionId: siteArticles.id, where: [] },
           fields: {
-            [themeTitle.id]: { fieldDefinitionId: siteHeadline.id },
-            [themeTeaser.id]: { fieldDefinitionId: siteStandfirst.id },
+            [themeTitle.id]: {
+              fill: 'field',
+              fieldDefinitionId: siteHeadline.id,
+            },
+            [themeTeaser.id]: {
+              fill: 'field',
+              fieldDefinitionId: siteStandfirst.id,
+            },
           },
         },
       },

@@ -216,7 +216,7 @@ describe('a theme that tagged a new version', function () {
       expect(kept.destination.waiting?.version).toEqual('2.0.0');
       expect(
         kept.destination.waiting?.mapping.collections[collection.id]?.from
-      ).toEqual({ collectionId: collection.id });
+      ).toEqual({ collectionId: collection.id, where: [] });
       // The Project keeps a copy of it, so it needs the theme no more
       expect(
         (
@@ -253,7 +253,7 @@ describe('a theme that tagged a new version', function () {
         kept.destination.waiting?.mapping.collections[collection.id]?.fields[
           dropped.id
         ]
-      ).toEqual({ fieldDefinitionId: dropped.id });
+      ).toEqual({ fill: 'field', fieldDefinitionId: dropped.id });
     });
 
     it('keeps the version it is given instead', async function () {
@@ -462,7 +462,7 @@ describe('a theme that tagged a new version', function () {
         kept.destination.waiting?.mapping.collections[collection.id]?.fields[
           second.field.id
         ]
-      ).toEqual({ fieldDefinitionId: textFieldId });
+      ).toEqual({ fill: 'field', fieldDefinitionId: textFieldId });
     });
 
     it('replaces the version that waits with one older than it', async function () {
@@ -526,7 +526,7 @@ describe('a theme that tagged a new version', function () {
         after.destination.waiting?.mapping.collections[collection.id]?.fields[
           second.field.id
         ]
-      ).toEqual({ fieldDefinitionId: second.field.id });
+      ).toEqual({ fill: 'field', fieldDefinitionId: second.field.id });
       // So the switch the run before was refused goes through, without the
       // theme tagging anything else
       expect(
@@ -805,7 +805,7 @@ describe('a theme that tagged a new version', function () {
         switched.destination.mapping.collections[collection.id]?.fields[
           second.field.id
         ]
-      ).toEqual({ fieldDefinitionId: textFieldId });
+      ).toEqual({ fill: 'field', fieldDefinitionId: textFieldId });
     });
   });
 
@@ -911,6 +911,7 @@ function mappingFilling(
   const next = structuredClone(mapping);
   for (const collectionMapping of Object.values(next.collections)) {
     collectionMapping.fields[contractFieldDefinitionId] = {
+      fill: 'field',
       fieldDefinitionId,
     };
   }

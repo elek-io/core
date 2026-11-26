@@ -257,7 +257,10 @@ describe('websiteUpdateAction', function () {
     }
     const mapping = structuredClone(waiting.mapping);
     for (const collectionMapping of Object.values(mapping.collections)) {
-      collectionMapping.fields[added.id] = { fieldDefinitionId: filled.id };
+      collectionMapping.fields[added.id] = {
+        fill: 'field',
+        fieldDefinitionId: filled.id,
+      };
     }
     await cli.destinations.update({
       projectId,

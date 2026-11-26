@@ -18,10 +18,12 @@ import type { Entry } from '../schema/entrySchema.js';
 import type { FieldDefinition } from '../schema/fieldSchema.js';
 import type { ProjectLanguages } from '../schema/projectSchema.js';
 import {
+  conditionsBySource,
   contractValuesOf,
   entryIssuesOf,
   isValueIssue,
   mappingIssuesOf,
+  takesEntry,
 } from '../util/destinationCheck.js';
 import type { DestinationIssue } from '../util/destinationIssue.js';
 import {
@@ -530,10 +532,52 @@ export function elekEntriesLoader<const T extends ElekConfig>(
   };
 
   /**
+   * The Entries of the Project the website does not take, by id, over every
+   * Collection its Mapping reads through a condition, so an Entry pointing
+   * at one of them is named rather than left pointing at nothing.
+   */
+  const readEntryIdsNotTaken = async (
+    core: ReturnType<typeof getCore>,
+    through: NonNullable<EntriesPlan['through']>
+  ): Promise<Set<string>> => {
+    const notTaken = new Set<string>();
+    for (const [sourceId, lists] of conditionsBySource(
+      through.destination.mapping
+    )) {
+      const collection = await core.collections
+        .read({ projectId, id: sourceId })
+        .catch((error: unknown) => {
+          if (error instanceof CoreError && error.type === 'NotFound') {
+            return undefined;
+          }
+          throw error;
+        });
+      if (collection === undefined) {
+        continue;
+      }
+      const { list } = await core.entries.list({
+        projectId,
+        collectionId: sourceId,
+        limit: 0,
+      });
+      for (const entry of list) {
+        const isTaken = lists.some((where) => {
+          return takesEntry({ where, collection, entry });
+        });
+        if (isTaken === false) {
+          notTaken.add(entry.id);
+        }
+      }
+    }
+    return notTaken;
+  };
+
+  /**
    * Throws `BadRequest` naming every Collection, required field and Entry the
    * site's Contract does not find in the Project, and why, in one error
    * rather than on the first one it meets. A Collection of the Contract
-   * holding one Entry that is filled from several is named too.
+   * holding one Entry that is filled from several is named too, and so is an
+   * Entry pointing at one the website does not take.
    *
    * Only this Collection's half of the Mapping is read, because every other
    * Collection of the Contract is its own derived collection's to report.
@@ -542,7 +586,8 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     through: NonNullable<EntriesPlan['through']>,
     source: CollectionFile | undefined,
     entries: readonly Entry[],
-    languages: ProjectLanguages
+    languages: ProjectLanguages,
+    entryIdsNotTaken: ReadonlySet<string>
   ): void => {
     const mine = (issue: DestinationIssue): boolean => {
       return issue.contractCollectionId === through.collection.id;
@@ -552,6 +597,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
       contract: through.contract,
       mapping: through.destination.mapping,
       collections: source === undefined ? [] : [source],
+      languages,
     }).filter(mine);
     if (source !== undefined) {
       for (const entry of entries) {
@@ -563,6 +609,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
             collection: source,
             entry,
             languages,
+            entryIdsNotTaken,
           }).filter(mine)
         );
       }
@@ -665,7 +712,7 @@ export function elekEntriesLoader<const T extends ElekConfig>(
     context.logger.info(`Loading elek.io Entries of ${holding}`);
 
     const source = plan.source;
-    const read =
+    const all =
       source === undefined
         ? { list: [], total: 0 }
         : await core.entries.list({
@@ -673,18 +720,44 @@ export function elekEntriesLoader<const T extends ElekConfig>(
             collectionId: source.id,
             limit: 0,
           });
-    const entries: Entry[] = read.list;
-    if (read.total === 0) {
+    const read = all.list;
+    if (all.total === 0) {
       context.logger.warn('No Entries found');
     } else {
-      context.logger.info(`Found ${read.total} Entries`);
+      context.logger.info(`Found ${all.total} Entries`);
+    }
+
+    // The website takes what its Mapping's conditions let through, so the
+    // rest is neither stored nor checked. A site reads a website's content,
+    // not the Project's
+    const through = plan.through;
+    const where =
+      through === undefined
+        ? []
+        : (through.destination.mapping.collections[through.collection.id]?.from
+            .where ?? []);
+    const entries: Entry[] =
+      source === undefined || where.length === 0
+        ? read
+        : read.filter((entry) =>
+            takesEntry({ where, collection: source, entry })
+          );
+    if (entries.length < read.length) {
+      context.logger.info(
+        `The website takes ${entries.length} of them, as its Mapping says`
+      );
     }
 
     // Before anything is stored, so a site never goes live with half a
     // Collection the website cannot take
-    const through = plan.through;
     if (through !== undefined) {
-      assertFits(through, source, entries, plan.languages);
+      assertFits(
+        through,
+        source,
+        entries,
+        plan.languages,
+        await readEntryIdsNotTaken(core, through)
+      );
     }
 
     // A Single Entry holds one Entry, which the site reads without knowing

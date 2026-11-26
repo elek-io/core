@@ -240,7 +240,9 @@ export default class ElekIoCore {
       this.gitService,
       this.jsonFileService,
       this.cacheService,
-      this.contractService
+      this.contractService,
+      this.collectionService,
+      this.componentService
     );
     this.entryService = new EntryService(
       this.coreVersion,
@@ -455,8 +457,8 @@ export default class ElekIoCore {
 
   /**
    * Destinations, each one place a Project's content goes. Add a website
-   * from its theme's git address, map the Project onto it, and ask what it
-   * cannot take.
+   * from its theme's git address, map the Project onto it, create what its
+   * theme needs and the Project lacks, and ask what it cannot take.
    *
    * @see ../docs/destinations.md
    */
