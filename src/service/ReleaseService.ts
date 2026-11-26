@@ -226,8 +226,8 @@ export class ReleaseService extends AbstractService {
    * null when nothing changed and `patch` when `draft` is merely ahead in
    * commits. Writes nothing.
    *
-   * Throws `PreconditionFailed` exactly where `create()` would: off `draft`,
-   * with no `main` anywhere, or where a branch lacks another's commits.
+   * Throws `PreconditionFailed` off `draft`, with no `main` anywhere, or
+   * where a branch lacks another's commits, exactly as `create()` would.
    *
    * @see ../../docs/releases.md
    */
