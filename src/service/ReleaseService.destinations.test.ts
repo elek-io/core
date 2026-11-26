@@ -190,12 +190,18 @@ describe('Releasing a Project that has a website', function () {
 
     it('refuses the Release, names each Entry on the cause and releases nothing', async function () {
       const before = await versionOf(project.id);
+      const shown = await core.releases.prepare({ projectId: project.id });
       const error = await core.releases.create({ projectId: project.id }).then(
         () => null,
         (caught: unknown) => caught
       );
 
       expect(error).toBeInstanceOf(CoreError);
+      // What the app showed before the Release was started is what the
+      // refusal names
+      expect(error instanceof CoreError && error.cause).toEqual(
+        shown.destinationIssues
+      );
       expect(error instanceof CoreError && error.type).toEqual('Conflict');
       expect(error instanceof CoreError && error.message).toContain(
         `Destination "${website.id}"`
