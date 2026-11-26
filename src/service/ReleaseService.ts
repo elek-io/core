@@ -140,7 +140,7 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * What one Release or preview Release changed, in the shape `prepare()`
+   * What one Release or preview Release changed, in the changes `prepare()`
    * reports, worked out for that Release alone. A Release compares against
    * the full Release it built on, a preview against the last full Release
    * before it, and one with neither against the Project's creation.
