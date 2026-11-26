@@ -272,7 +272,7 @@ describe('contractComponentsNeeded', function () {
         fieldDefinitions: [dynamicField(ids.blocks, [ids.hero])],
         contract: contractOf([hero, gallery]),
       })
-    ).toEqual({ components: [gallery, hero], unfilled: [] });
+    ).toEqual({ components: [gallery, hero], unfilled: [], cyclic: [] });
   });
 
   it('needs none for a field naming no Component in particular', function () {
@@ -281,7 +281,7 @@ describe('contractComponentsNeeded', function () {
         fieldDefinitions: [dynamicField(ids.blocks, [])],
         contract: contractOf([component(ids.hero, 'hero', [])]),
       })
-    ).toEqual({ components: [], unfilled: [] });
+    ).toEqual({ components: [], unfilled: [], cyclic: [] });
   });
 
   it('names a Component the Contract does not hold', function () {
@@ -299,6 +299,42 @@ describe('contractComponentsNeeded', function () {
           fieldDefinitionId: ids.blocks,
         },
       ],
+      cyclic: [],
     });
+  });
+
+  it('names Components pointing at each other', function () {
+    const hero = component(ids.hero, 'hero', [
+      dynamicField(ids.blocks, [ids.gallery]),
+    ]);
+    const gallery = component(ids.gallery, 'gallery', [
+      dynamicField(ids.blocks, [ids.hero]),
+    ]);
+
+    // No order writes the two with the lists they name, so they are named
+    // rather than written with a list short of one
+    expect(
+      contractComponentsNeeded({
+        fieldDefinitions: [dynamicField(ids.blocks, [ids.hero])],
+        contract: contractOf([hero, gallery]),
+      })
+    ).toEqual({
+      components: [gallery, hero],
+      unfilled: [],
+      cyclic: ['hero'],
+    });
+  });
+
+  it('names a Component naming itself', function () {
+    const hero = component(ids.hero, 'hero', [
+      dynamicField(ids.blocks, [ids.hero]),
+    ]);
+
+    expect(
+      contractComponentsNeeded({
+        fieldDefinitions: [dynamicField(ids.blocks, [ids.hero])],
+        contract: contractOf([hero]),
+      }).cyclic
+    ).toEqual(['hero']);
   });
 });

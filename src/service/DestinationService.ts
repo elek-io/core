@@ -988,15 +988,16 @@ export class DestinationService extends AbstractEntityService {
           });
         }
 
-        const componentIds = await this.createComponents({
+        const components = await this.createComponents({
           projectId: validatedProps.projectId,
+          destination,
           plan,
           collectionIds,
         });
         const fields = fieldDefinitionsFromContract({
           fieldDefinitions: contractCollection.fieldDefinitions,
           collectionIds,
-          componentIds: componentIds.of,
+          componentIds: components.of,
         });
         const created = await this.collectionService.create({
           projectId: validatedProps.projectId,
@@ -1008,7 +1009,8 @@ export class DestinationService extends AbstractEntityService {
           fieldDefinitions: fields.fieldDefinitions,
         });
         const itself = selfReferencingIds(
-          contractCollection,
+          contractCollection.fieldDefinitions,
+          contractCollection.id,
           fields.fieldDefinitionIds
         );
         if (itself.size > 0) {
@@ -1022,10 +1024,16 @@ export class DestinationService extends AbstractEntityService {
             ),
           });
         }
+        await this.pointComponentsAtCollection({
+          projectId: validatedProps.projectId,
+          created: components.created,
+          contractCollectionId: contractCollection.id,
+          collectionId: created.id,
+        });
 
         return this.writeWithMapping({
           projectId: validatedProps.projectId,
-          destination,
+          destination: components.destination,
           isWaitingVersion: validatedProps.isWaitingVersion === true,
           mapping: {
             collections: {
@@ -1042,13 +1050,10 @@ export class DestinationService extends AbstractEntityService {
             },
           },
           createdFromTheme: {
+            ...components.destination.createdFromTheme,
             collectionIds: [
-              ...destination.createdFromTheme.collectionIds,
+              ...components.destination.createdFromTheme.collectionIds,
               created.id,
-            ],
-            componentIds: [
-              ...destination.createdFromTheme.componentIds,
-              ...componentIds.created,
             ],
           },
         });
@@ -1151,15 +1156,16 @@ export class DestinationService extends AbstractEntityService {
           });
         }
 
-        const componentIds = await this.createComponents({
+        const components = await this.createComponents({
           projectId: validatedProps.projectId,
+          destination,
           plan,
           collectionIds,
         });
         const fields = fieldDefinitionsFromContract({
           fieldDefinitions: [contractField],
           collectionIds,
-          componentIds: componentIds.of,
+          componentIds: components.of,
           fieldDefinitionIds,
         });
         const own = fields.fieldDefinitionIds.get(contractField.id);
@@ -1183,7 +1189,7 @@ export class DestinationService extends AbstractEntityService {
 
         return this.writeWithMapping({
           projectId: validatedProps.projectId,
-          destination,
+          destination: components.destination,
           isWaitingVersion: validatedProps.isWaitingVersion === true,
           mapping: {
             collections: {
@@ -1199,13 +1205,6 @@ export class DestinationService extends AbstractEntityService {
                 },
               },
             },
-          },
-          createdFromTheme: {
-            collectionIds: destination.createdFromTheme.collectionIds,
-            componentIds: [
-              ...destination.createdFromTheme.componentIds,
-              ...componentIds.created,
-            ],
           },
         });
       }
@@ -1487,6 +1486,10 @@ export class DestinationService extends AbstractEntityService {
    * under the same slug and this website did not create throws `Conflict`,
    * because a theme's Component and an editor's own under one slug are two
    * different sets of fields. Nothing is written.
+   *
+   * Throws `BadRequest` for a Component the Contract does not hold and for
+   * Components pointing at each other, because no order writes those with
+   * the Components they name.
    */
   private async planComponents(props: {
     projectId: Uuid;
@@ -1501,6 +1504,11 @@ export class DestinationService extends AbstractEntityService {
     if (needed.unfilled.length > 0) {
       throw CoreError.badRequest(
         `The Contract "${props.contract.name}" at version ${props.contract.version} names ${unfilledMessage(needed.unfilled)}, so nothing can be created from it`
+      );
+    }
+    if (needed.cyclic.length > 0) {
+      throw CoreError.badRequest(
+        `The Contract "${props.contract.name}" at version ${props.contract.version} holds the Component "${needed.cyclic.join('", "')}" in a ring of Components pointing at each other, so nothing can be created from it`
       );
     }
     const held = new Map<Uuid, Uuid>();
@@ -1531,15 +1539,35 @@ export class DestinationService extends AbstractEntityService {
   /**
    * Creates the Components of a plan, each after the ones its own fields
    * name, and answers which Component of the Project each one of the
-   * Contract is now.
+   * Contract is now, beside the Destination as it now stands.
+   *
+   * Each Component is recorded under `createdFromTheme` the moment it is
+   * written, because whatever comes after it may refuse. A Component this
+   * website created is used again, so recording it is what makes the retry
+   * of a refused create work rather than meet its own Component as the
+   * editor's own.
    */
   private async createComponents(props: {
     projectId: Uuid;
+    destination: DestinationFile;
     plan: { held: Map<Uuid, Uuid>; toCreate: ComponentFile[] };
     collectionIds: ReadonlyMap<Uuid, Uuid>;
-  }): Promise<{ of: Map<Uuid, Uuid>; created: Uuid[] }> {
+  }): Promise<{
+    of: Map<Uuid, Uuid>;
+    destination: DestinationFile;
+    created: Array<{
+      id: Uuid;
+      of: ComponentFile;
+      fieldDefinitionIds: Map<Uuid, Uuid>;
+    }>;
+  }> {
     const of = new Map<Uuid, Uuid>(props.plan.held);
-    const created: Uuid[] = [];
+    const created: Array<{
+      id: Uuid;
+      of: ComponentFile;
+      fieldDefinitionIds: Map<Uuid, Uuid>;
+    }> = [];
+    let destination = props.destination;
     for (const component of props.plan.toCreate) {
       const fields = fieldDefinitionsFromContract({
         fieldDefinitions: component.fieldDefinitions,
@@ -1556,9 +1584,65 @@ export class DestinationService extends AbstractEntityService {
         }),
       });
       of.set(component.id, own.id);
-      created.push(own.id);
+      created.push({
+        id: own.id,
+        of: component,
+        fieldDefinitionIds: fields.fieldDefinitionIds,
+      });
+      destination = await this.write(props.projectId, {
+        ...destination,
+        createdFromTheme: {
+          ...destination.createdFromTheme,
+          componentIds: [...destination.createdFromTheme.componentIds, own.id],
+        },
+      });
     }
-    return { of, created };
+    return { of, destination, created };
+  }
+
+  /**
+   * Points the fields of the Components just created at the Collection they
+   * were created with, which is the one reference nothing could fill while
+   * they were written, because the Collection had no id of its own yet.
+   */
+  private async pointComponentsAtCollection(props: {
+    projectId: Uuid;
+    created: ReadonlyArray<{
+      id: Uuid;
+      of: ComponentFile;
+      fieldDefinitionIds: Map<Uuid, Uuid>;
+    }>;
+    contractCollectionId: Uuid;
+    collectionId: Uuid;
+  }): Promise<void> {
+    for (const one of props.created) {
+      const ids = selfReferencingIds(
+        one.of.fieldDefinitions,
+        props.contractCollectionId,
+        one.fieldDefinitionIds
+      );
+      if (ids.size === 0) {
+        continue;
+      }
+      const component = await this.componentService.read({
+        projectId: props.projectId,
+        id: one.id,
+      });
+      await this.componentService.update({
+        projectId: props.projectId,
+        id: component.id,
+        name: component.name,
+        slug: component.slug,
+        description: component.description,
+        fieldDefinitions: withSelfReferences(
+          component.fieldDefinitions,
+          ids,
+          props.collectionId
+        ).flatMap((fieldOrGroup) => {
+          return 'isGroup' in fieldOrGroup ? [] : [fieldOrGroup];
+        }),
+      });
+    }
   }
 
   /**
@@ -1691,21 +1775,21 @@ function sourceFieldDefinitionIds(
 }
 
 /**
- * The field definitions of the Project, by id, whose Collection of the
- * Contract points at itself, which is the one reference a create can only
- * fill once the Collection exists.
+ * The field definitions of the Project, by id, that point at the Collection
+ * of the Contract being created, which is the one reference a create can
+ * only fill once that Collection exists. Read for the Collection's own
+ * fields and for those of every Component created with it.
  */
 function selfReferencingIds(
-  contractCollection: CollectionFile,
+  fieldDefinitions: readonly FieldDefinitionOrGroup[],
+  contractCollectionId: Uuid,
   fieldDefinitionIds: ReadonlyMap<Uuid, Uuid>
 ): Set<Uuid> {
   const ids = new Set<Uuid>();
-  for (const field of flattenFieldDefinitions(
-    contractCollection.fieldDefinitions
-  )) {
+  for (const field of flattenFieldDefinitions([...fieldDefinitions])) {
     if (
       'ofCollections' in field &&
-      field.ofCollections.includes(contractCollection.id)
+      field.ofCollections.includes(contractCollectionId)
     ) {
       const own = fieldDefinitionIds.get(field.id);
       if (own !== undefined) {

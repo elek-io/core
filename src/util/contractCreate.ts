@@ -38,6 +38,12 @@ export interface ContractComponentsNeeded {
   components: ComponentFile[];
   /** Empty where every Component these field definitions name is held */
   unfilled: UnfilledContractReference[];
+  /**
+   * The Components of a ring that point at each other, by slug, empty where
+   * none does. No order creates them with the list each one names, so they
+   * are refused rather than written with a list short of it.
+   */
+  cyclic: string[];
 }
 
 /**
@@ -47,7 +53,8 @@ export interface ContractComponentsNeeded {
  *
  * A `dynamic` field naming no Component in particular needs none, because
  * an empty list takes whatever the Project holds. A Component the Contract
- * itself does not hold is named in `unfilled`.
+ * itself does not hold is named in `unfilled`, and one of a ring pointing
+ * at each other in `cyclic`.
  */
 export function contractComponentsNeeded(props: {
   fieldDefinitions: readonly FieldDefinitionOrGroup[];
@@ -58,7 +65,11 @@ export function contractComponentsNeeded(props: {
   );
   const components: ComponentFile[] = [];
   const unfilled: UnfilledContractReference[] = [];
+  const cyclic: string[] = [];
   const seen = new Set<Uuid>();
+  // The Components the walk is inside of, which is what tells a ring from a
+  // Component two others name
+  const walking = new Set<Uuid>();
 
   const walk = (fieldDefinitions: readonly FieldDefinitionOrGroup[]): void => {
     for (const field of flattenFieldDefinitions([...fieldDefinitions])) {
@@ -66,11 +77,15 @@ export function contractComponentsNeeded(props: {
         continue;
       }
       for (const id of field.ofComponents) {
+        const component = held.get(id);
+        if (component !== undefined && walking.has(id)) {
+          cyclic.push(component.slug);
+          continue;
+        }
         if (seen.has(id)) {
           continue;
         }
         seen.add(id);
-        const component = held.get(id);
         if (component === undefined) {
           unfilled.push({
             objectType: 'component',
@@ -81,14 +96,16 @@ export function contractComponentsNeeded(props: {
         }
         // Depth first, so a Component is created after the ones its own
         // dynamic fields name
+        walking.add(id);
         walk(component.fieldDefinitions);
+        walking.delete(id);
         components.push(component);
       }
     }
   };
   walk(props.fieldDefinitions);
 
-  return { components, unfilled };
+  return { components, unfilled, cyclic: [...new Set(cyclic)] };
 }
 
 /**

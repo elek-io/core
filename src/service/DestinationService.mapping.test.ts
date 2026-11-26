@@ -102,7 +102,11 @@ function entryField(slug: string): FieldDefinition {
   };
 }
 
-function dynamicField(slug: string, ofComponents: string[]): FieldDefinition {
+function dynamicField(
+  slug: string,
+  ofComponents: string[],
+  props: { isRequired?: boolean } = {}
+): FieldDefinition {
   return {
     id: uuid(),
     slug,
@@ -110,13 +114,22 @@ function dynamicField(slug: string, ofComponents: string[]): FieldDefinition {
     fieldType: 'dynamic',
     label: { en: slug, de: slug },
     description: null,
-    isRequired: false,
+    isRequired: props.isRequired ?? false,
     isDisabled: false,
     isUnique: false,
     inputWidth: '12',
     ofComponents,
     min: null,
     max: null,
+  };
+}
+
+/** One Component item of the Component given, in both languages */
+function items(componentId: string, values: Record<string, Value>): Value {
+  return {
+    objectType: 'value',
+    valueType: 'component',
+    content: [{ id: uuid(), componentId, values }],
   };
 }
 
@@ -250,6 +263,7 @@ describe('a Mapping with an editor’s options', function () {
   let contract: Contract;
   let creatingContract: Contract;
   let demandingContract: Contract;
+  let blockingContract: Contract;
   let themePosts: Collection;
   let themeContacts: Collection;
   let creating: {
@@ -262,6 +276,7 @@ describe('a Mapping with an editor’s options', function () {
   let websiteId = '';
   let creatingId = '';
   let demandingId = '';
+  let blockingId = '';
   let golf = '';
   let polo = '';
   let theme: FakeTheme;
@@ -303,7 +318,7 @@ describe('a Mapping with an editor’s options', function () {
       name: { en: 'Hero', de: 'Hero' },
       slug: 'hero',
       description: null,
-      fieldDefinitions: [textField('heading')],
+      fieldDefinitions: [textField('heading'), entryField('about-page')],
     });
     const gallery = await core.components.create({
       projectId: creatingProject.id,
@@ -319,6 +334,20 @@ describe('a Mapping with an editor’s options', function () {
         textField('heading', { isRequired: true }),
         dynamicField('sections', [hero.id]),
       ],
+    });
+    // The Component of the theme points at the Collection it comes with,
+    // which only exists once that Collection is created
+    await core.components.update({
+      projectId: creatingProject.id,
+      id: hero.id,
+      name: hero.name,
+      slug: hero.slug,
+      description: hero.description,
+      fieldDefinitions: hero.fieldDefinitions.map((field) =>
+        'ofCollections' in field
+          ? { ...field, ofCollections: [pages.id] }
+          : field
+      ),
     });
     const landings = await createCollectionOf({
       projectId: creatingProject.id,
@@ -362,6 +391,30 @@ describe('a Mapping with an editor’s options', function () {
     demandingContract = await core.contracts.generate({
       projectId: demandingProject.id,
       name: '@acme/vin-site',
+      version: '1.0.0',
+    });
+
+    // A theme needing a required field whose Component comes with it
+    const blockingProject = await createProject('Theme that demands blocks');
+    destroy.push(blockingProject.destroy);
+    const teaser = await core.components.create({
+      projectId: blockingProject.id,
+      name: { en: 'Teaser', de: 'Teaser' },
+      slug: 'teaser',
+      description: null,
+      fieldDefinitions: [textField('heading')],
+    });
+    await createCollectionOf({
+      projectId: blockingProject.id,
+      slug: { singular: 'room', plural: 'rooms' },
+      fieldDefinitions: [
+        textField('title'),
+        dynamicField('blocks', [teaser.id], { isRequired: true }),
+      ],
+    });
+    blockingContract = await core.contracts.generate({
+      projectId: blockingProject.id,
+      name: '@acme/blocks-theme',
       version: '1.0.0',
     });
 
@@ -435,6 +488,13 @@ describe('a Mapping with an editor’s options', function () {
         projectId: siteProjectId,
         name: 'vin.example',
         contract: demandingContract,
+      })
+    ).website.id;
+    blockingId = (
+      await addWebsite({
+        projectId: siteProjectId,
+        name: 'blocks.test',
+        contract: blockingContract,
       })
     ).website.id;
   });
@@ -1016,6 +1076,26 @@ describe('a Mapping with an editor’s options', function () {
       ]);
     });
 
+    it('points a Component of the theme at the Collection it came with', async function () {
+      const pages = creating['pages'];
+      if (pages === undefined) {
+        throw new Error('No Collection to create');
+      }
+      const component = await core.components.readBySlug({
+        projectId: siteProjectId,
+        slug: 'hero',
+      });
+      const about = component.fieldDefinitions.find(
+        ({ slug }) => slug === 'about-page'
+      );
+
+      // The theme points it at its own Collection, so the Component of the
+      // Project points at the one created from it rather than at anything
+      expect(about).toMatchObject({
+        ofCollections: [(await filledFrom(pages.id)).id],
+      });
+    });
+
     it('points a reference at what fills it and reuses a Component it created', async function () {
       const landings = creating['landings'];
       const pages = creating['pages'];
@@ -1040,6 +1120,68 @@ describe('a Mapping with an editor’s options', function () {
       expect(await core.components.count({ projectId: siteProjectId })).toEqual(
         before
       );
+    });
+
+    it('refuses a Contract whose Components point at each other', async function () {
+      const rooms = blockingContract.collections[0];
+      if (rooms === undefined) {
+        throw new Error('No Collection in the Contract');
+      }
+      const alpha = uuid();
+      const beta = uuid();
+      const ringOf = (
+        id: string,
+        slug: string,
+        names: string
+      ): Contract['components'][number] => ({
+        objectType: 'component',
+        id,
+        coreVersion: '0.28.0',
+        created: '2026-11-26T00:00:00.000Z',
+        updated: null,
+        name: { en: slug, de: slug },
+        slug,
+        description: null,
+        fieldDefinitions: [dynamicField('inner', [names])],
+      });
+      // A ring Core's own generate() cannot write, because a Project refuses
+      // a Component naming one that names it back
+      const ring = await addWebsite({
+        projectId: siteProjectId,
+        name: 'ring.test',
+        contract: {
+          ...blockingContract,
+          name: '@acme/ring-theme',
+          collections: [
+            {
+              ...rooms,
+              slug: { singular: 'ring-room', plural: 'ring-rooms' },
+              fieldDefinitions: [dynamicField('blocks', [alpha])],
+            },
+          ],
+          components: [
+            ringOf(alpha, 'alpha', beta),
+            ringOf(beta, 'beta', alpha),
+          ],
+        },
+      });
+
+      await expectCoreError(
+        core.destinations.createCollection({
+          projectId: siteProjectId,
+          id: ring.website.id,
+          contractCollectionId: rooms.id,
+        }),
+        'BadRequest',
+        'in a ring of Components pointing at each other'
+      );
+      expect(
+        (
+          await core.components.list({ projectId: siteProjectId, limit: 0 })
+        ).list
+          .map(({ slug }) => slug)
+          .filter((slug) => slug === 'alpha' || slug === 'beta')
+      ).toEqual([]);
     });
 
     it('refuses a Collection of the Contract something already fills', async function () {
@@ -1379,6 +1521,92 @@ describe('a Mapping with an editor’s options', function () {
         'PreconditionFailed',
         'so there is nothing to add the field'
       );
+    });
+
+    it('creates a required field whose Component comes with it, on the retry', async function () {
+      const rooms = blockingContract.collections[0];
+      const blocks = flattenFieldDefinitions(
+        rooms?.fieldDefinitions ?? []
+      ).find(({ slug }) => slug === 'blocks');
+      const title = flattenFieldDefinitions(rooms?.fieldDefinitions ?? []).find(
+        ({ slug }) => slug === 'title'
+      );
+      if (rooms === undefined || blocks === undefined || title === undefined) {
+        throw new Error('No field to create');
+      }
+      await core.destinations.update({
+        projectId: siteProjectId,
+        id: blockingId,
+        mapping: {
+          collections: {
+            [rooms.id]: {
+              from: { collectionId: articles.id, where: [] },
+              fields: {
+                [title.id]: {
+                  fill: 'field',
+                  fieldDefinitionId: siteHeadline.id,
+                },
+              },
+            },
+          },
+        },
+      });
+      const created = () =>
+        core.destinations.createFieldDefinition({
+          projectId: siteProjectId,
+          id: blockingId,
+          contractCollectionId: rooms.id,
+          contractFieldDefinitionId: blocks.id,
+        });
+
+      // The Entries hold no Value for it, so the first call refuses, and the
+      // Component it wrote for the field is recorded as this website's
+      await expectCoreError(created(), 'Conflict', 'require entry resolutions');
+      const teaser = await core.components.readBySlug({
+        projectId: siteProjectId,
+        slug: 'teaser',
+      });
+      expect(
+        (
+          await core.destinations.read({
+            projectId: siteProjectId,
+            id: blockingId,
+          })
+        ).createdFromTheme.componentIds
+      ).toEqual([teaser.id]);
+
+      const website = await core.destinations.createFieldDefinition({
+        projectId: siteProjectId,
+        id: blockingId,
+        contractCollectionId: rooms.id,
+        contractFieldDefinitionId: blocks.id,
+        resolutions: {
+          [golf]: { blocks: items(teaser.id, { heading: text('Golf') }) },
+          [polo]: { blocks: items(teaser.id, { heading: text('Polo') }) },
+        },
+      });
+      const collection = await core.collections.read({
+        projectId: siteProjectId,
+        id: articles.id,
+      });
+      const added = flattenFieldDefinitions(collection.fieldDefinitions).find(
+        ({ slug }) => slug === 'blocks'
+      );
+
+      // The field lands on the retry and the Component is there once
+      expect(website.mapping.collections[rooms.id]?.fields[blocks.id]).toEqual({
+        fill: 'field',
+        fieldDefinitionId: added?.id,
+      });
+      expect(added).toMatchObject({ ofComponents: [teaser.id] });
+      expect(website.createdFromTheme.componentIds).toEqual([teaser.id]);
+      expect(
+        (
+          await core.components.list({ projectId: siteProjectId, limit: 0 })
+        ).list
+          .filter((one) => one.slug === 'teaser')
+          .map(({ id }) => id)
+      ).toEqual([teaser.id]);
     });
 
     it('needs the Value of a required field the Entries have nothing for', async function () {
