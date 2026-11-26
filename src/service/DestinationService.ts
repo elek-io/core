@@ -1127,8 +1127,12 @@ export class DestinationService extends AbstractEntityService {
           collection.fieldDefinitions
         ).find(({ slug }) => slug === contractField.slug);
         if (clashing !== undefined) {
+          // The Collection of the Project is named by id, never by the slug
+          // an editor typed, which the service boundary logs. A field slug
+          // names a position in the content model and stays. See
+          // contributing/logging.md
           throw CoreError.conflict(
-            `The Collection "${collection.slug.plural}" of the Project holds the field "${clashing.slug}" already. Fill the field ${named} from it, or rename one of the two.`
+            `The Collection "${collection.id}" of the Project holds the field "${clashing.slug}" already. Fill the field ${named} from it, or rename one of the two.`
           );
         }
         const collectionIds = sourceCollectionIds(mapping);
@@ -1472,7 +1476,7 @@ export class DestinationService extends AbstractEntityService {
     });
     if (unknown !== undefined) {
       throw CoreError.badRequest(
-        `The Mapping fills the Collection "${unknown}", which the Contract "${kept.contract.name}" at version ${version} does not hold. Key every Collection of a Mapping by the Contract's own Collection id.`
+        `The Mapping fills the Collection "${unknown}", which the Contract at version ${version} does not hold. Key every Collection of a Mapping by the Contract's own Collection id.`
       );
     }
   }
@@ -1503,12 +1507,12 @@ export class DestinationService extends AbstractEntityService {
     });
     if (needed.unfilled.length > 0) {
       throw CoreError.badRequest(
-        `The Contract "${props.contract.name}" at version ${props.contract.version} names ${unfilledMessage(needed.unfilled)}, so nothing can be created from it`
+        `The Contract at version ${props.contract.version} names ${unfilledMessage(needed.unfilled)}, so nothing can be created from it`
       );
     }
     if (needed.cyclic.length > 0) {
       throw CoreError.badRequest(
-        `The Contract "${props.contract.name}" at version ${props.contract.version} holds the Component "${needed.cyclic.join('", "')}" in a ring of Components pointing at each other, so nothing can be created from it`
+        `The Contract at version ${props.contract.version} holds the Component "${needed.cyclic.join('", "')}" in a ring of Components pointing at each other, so nothing can be created from it`
       );
     }
     const held = new Map<Uuid, Uuid>();
@@ -1737,7 +1741,7 @@ function contractCollectionOf(contract: Contract, id: Uuid): CollectionFile {
   });
   if (collection === undefined) {
     throw CoreError.notFound(
-      `The Contract "${contract.name}" at version ${contract.version} has no Collection "${id}"`
+      `The Contract at version ${contract.version} has no Collection "${id}"`
     );
   }
   return collection;

@@ -1483,16 +1483,22 @@ describe('a Mapping with an editor’s options', function () {
     });
 
     it('refuses to overwrite a field the Collection already holds', async function () {
-      await expectCoreError(
-        core.destinations.createFieldDefinition({
+      const refused = await core.destinations
+        .createFieldDefinition({
           projectId: siteProjectId,
           id: websiteId,
           contractCollectionId: themePosts.id,
           contractFieldDefinitionId: themeHeadline.id,
-        }),
-        'Conflict',
-        'holds the field "headline" already'
-      );
+        })
+        .catch((error: unknown) => error);
+
+      expect(refused).toBeInstanceOf(CoreError);
+      const message = refused instanceof CoreError ? refused.message : '';
+      expect(message).toContain('holds the field "headline" already');
+      // The Collection of the Project is named by its id, because the
+      // service boundary logs the message, see contributing/logging.md
+      expect(message).toContain(articles.id);
+      expect(message).not.toContain(articles.slug.plural);
       expect(
         (
           await core.destinations.read({
