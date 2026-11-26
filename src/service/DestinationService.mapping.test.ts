@@ -8,6 +8,7 @@ import {
   onTestFinished,
 } from 'vitest';
 import core, {
+  CoreError,
   flattenFieldDefinitions,
   uuid,
   type Collection,
@@ -17,7 +18,11 @@ import core, {
   type Mapping,
   type Value,
 } from '../test/setup.js';
-import { contractFileOf, createFakeTheme } from '../test/theme.js';
+import {
+  contractFileOf,
+  createFakeTheme,
+  type FakeTheme,
+} from '../test/theme.js';
 import { createProject, expectCoreError } from '../test/util.js';
 
 function textField(
@@ -215,7 +220,7 @@ async function createCollectionOf(props: {
   });
 }
 
-/** A website on a theme that released the Contract given */
+/** A website on a theme that released the Contract given, and that theme */
 async function addWebsite(props: {
   projectId: string;
   name: string;
@@ -226,11 +231,12 @@ async function addWebsite(props: {
     tag: `v${props.contract.version}`,
     files: contractFileOf(props.contract),
   });
-  return core.destinations.addWebsite({
+  const website = await core.destinations.addWebsite({
     projectId: props.projectId,
     name: props.name,
     url: theme.url,
   });
+  return { website, theme };
 }
 
 /**
@@ -258,6 +264,7 @@ describe('a Mapping with an editor’s options', function () {
   let demandingId = '';
   let golf = '';
   let polo = '';
+  let theme: FakeTheme;
   const destroy: Array<() => Promise<void>> = [];
 
   beforeAll(async function () {
@@ -409,27 +416,27 @@ describe('a Mapping with an editor’s options', function () {
       values: { telephone: text('030 123456') },
     });
 
-    websiteId = (
-      await addWebsite({
-        projectId: siteProjectId,
-        name: 'autohaus-ebersfelde.de',
-        contract,
-      })
-    ).id;
+    const added = await addWebsite({
+      projectId: siteProjectId,
+      name: 'autohaus-ebersfelde.de',
+      contract,
+    });
+    websiteId = added.website.id;
+    theme = added.theme;
     creatingId = (
       await addWebsite({
         projectId: siteProjectId,
         name: 'blocks.example',
         contract: creatingContract,
       })
-    ).id;
+    ).website.id;
     demandingId = (
       await addWebsite({
         projectId: siteProjectId,
         name: 'vin.example',
         contract: demandingContract,
       })
-    ).id;
+    ).website.id;
   });
 
   afterAll(async function () {
@@ -1163,6 +1170,141 @@ describe('a Mapping with an editor’s options', function () {
     });
   });
 
+  describe('the version that waits beside the one in use', function () {
+    it('gets every way of filling a field, the Values and the check', async function () {
+      await withMapping(
+        mappingOf({
+          fields: {
+            [themeTitle.id]: {
+              fill: 'field',
+              fieldDefinitionId: siteHeadline.id,
+            },
+          },
+        })
+      );
+      // The theme tags a version holding a Collection the Project lacks
+      const offers: Collection = {
+        ...structuredClone(creating['news']),
+        id: uuid(),
+        name: {
+          singular: { en: 'offer', de: 'offer' },
+          plural: { en: 'offers', de: 'offers' },
+        },
+        slug: { singular: 'offer', plural: 'offers' },
+        fieldDefinitions: [textField('caption')],
+      };
+      const next: Contract = {
+        ...contract,
+        version: '1.1.0',
+        collections: [...contract.collections, offers],
+      };
+      await theme.release({ tag: 'v1.1.0', files: contractFileOf(next) });
+      const kept = await core.destinations.keepVersion({
+        projectId: siteProjectId,
+        id: websiteId,
+      });
+      const waiting = kept.destination.waiting;
+      if (waiting === null) {
+        throw new Error('No version waits');
+      }
+
+      expect(waiting.version).toEqual('1.1.0');
+      // What the waiting version needs and nothing fills yet
+      expect(
+        await core.destinations.checkMapping({
+          projectId: siteProjectId,
+          id: websiteId,
+          mapping: waiting.mapping,
+          isWaitingVersion: true,
+        })
+      ).toMatchObject([
+        { issue: 'collection_not_mapped', contractCollectionId: offers.id },
+      ]);
+      // The Values its Mapping fills, read against its own Contract copy
+      expect(
+        await core.destinations.values({
+          projectId: siteProjectId,
+          id: websiteId,
+          contractCollectionId: themePosts.id,
+          entryId: golf,
+          isWaitingVersion: true,
+        })
+      ).toMatchObject({ title: text('Golf GTI') });
+
+      const website = await core.destinations.createCollection({
+        projectId: siteProjectId,
+        id: websiteId,
+        contractCollectionId: offers.id,
+        isWaitingVersion: true,
+      });
+
+      // Created for the version that waits, and the one in use is as it was
+      expect(
+        website.waiting?.mapping.collections[offers.id]?.from.collectionId
+      ).toBeDefined();
+      expect(website.mapping.collections[offers.id]).toBeUndefined();
+      expect(
+        await core.destinations.checkMapping({
+          projectId: siteProjectId,
+          id: websiteId,
+          mapping: website.waiting?.mapping ?? { collections: {} },
+          isWaitingVersion: true,
+        })
+      ).toEqual([]);
+    });
+  });
+
+  describe('a theme whose words do not cover the Project', function () {
+    it('refuses to create from it, naming what it lacks', async function () {
+      const oneLanguage = await createProject('Theme in one language', {
+        language: { default: 'en', supported: ['en'] },
+      });
+      destroy.push(oneLanguage.destroy);
+      await core.collections.create({
+        projectId: oneLanguage.id,
+        icon: 'home',
+        name: { singular: { en: 'listing' }, plural: { en: 'listings' } },
+        slug: { singular: 'listing', plural: 'listings' },
+        description: { en: 'listings' },
+        fieldDefinitions: [
+          { ...textField('caption'), label: { en: 'caption' } },
+        ],
+      });
+      const narrow = await core.contracts.generate({
+        projectId: oneLanguage.id,
+        name: '@acme/english-site',
+        version: '1.0.0',
+      });
+      const { website } = await addWebsite({
+        projectId: siteProjectId,
+        name: 'english.example',
+        contract: narrow,
+      });
+      const listings = narrow.collections[0];
+      if (listings === undefined) {
+        throw new Error('No Collection in the Contract');
+      }
+
+      await expectCoreError(
+        core.destinations.createCollection({
+          projectId: siteProjectId,
+          id: website.id,
+          contractCollectionId: listings.id,
+        }),
+        'BadRequest',
+        '"name"'
+      );
+      expect(
+        (
+          await core.destinations.read({
+            projectId: siteProjectId,
+            id: website.id,
+          })
+        ).createdFromTheme.collectionIds
+      ).toEqual([]);
+    });
+  });
+
   describe('creating a field from the theme', function () {
     it('adds it to the Collection filling its Collection of the Contract', async function () {
       await withMapping(
@@ -1281,15 +1423,26 @@ describe('a Mapping with an editor’s options', function () {
           contractFieldDefinitionId: demandedVin.id,
         },
       ]);
-      await expectCoreError(
-        core.destinations.createFieldDefinition({
+      const refused = await core.destinations
+        .createFieldDefinition({
           projectId: siteProjectId,
           id: demandingId,
           contractCollectionId: vehicles.id,
           contractFieldDefinitionId: demandedVin.id,
-        }),
-        'Conflict'
-      );
+        })
+        .catch((error: unknown) => error);
+      if (refused instanceof CoreError === false) {
+        throw new Error('The field was added without a Value for it');
+      }
+
+      expect(refused.type).toEqual('Conflict');
+      // Its cause names every Entry that needs the Value, the way a field
+      // definition change does
+      expect(
+        (Array.isArray(refused.cause) ? refused.cause : []).map(
+          (issue: { entryId: string }) => issue.entryId
+        )
+      ).toEqual(expect.arrayContaining([golf, polo]));
 
       const website = await core.destinations.createFieldDefinition({
         projectId: siteProjectId,

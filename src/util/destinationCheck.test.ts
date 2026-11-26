@@ -1070,6 +1070,31 @@ describe('mappingIssuesOf, a Mapping that cannot fill', function () {
     ]);
   });
 
+  it('names a fixed Value leaving a language of the Project empty', function () {
+    const contractCars = collection(ids.cars, [
+      { ...textFieldOf(ids.titleField, 'title'), isRequired: true },
+    ]);
+
+    expect(
+      mappingIssuesOf({
+        languages: twoLanguages,
+        destinationId: ids.destination,
+        contract: contractOf({ collections: [contractCars] }),
+        mapping: mappingFilling({
+          fields: {
+            [ids.titleField]: {
+              fill: 'fixed',
+              value: stringValue({ en: 'Aus Ebersfelde' }),
+            },
+          },
+        }),
+        collections: [collection(ids.cars, [])],
+      })
+    ).toMatchObject([
+      { issue: 'does_not_fit', contractFieldDefinitionId: ids.titleField },
+    ]);
+  });
+
   it('names fields joined into a field that takes no text', function () {
     expect(
       issuesOf({
@@ -1375,6 +1400,52 @@ describe('which Entries a website takes', function () {
           { fieldDefinitionId: ids.titleField, equals: ['Polo'] },
         ],
         collection: projectCars,
+        entry,
+      })
+    ).toEqual(false);
+  });
+
+  it('takes an Entry by what a toggle or a number holds', function () {
+    const toggle: FieldDefinition = {
+      id: more.priceField,
+      slug: 'is-published',
+      valueType: 'boolean',
+      fieldType: 'toggle',
+      label: { en: 'Published' },
+      description: null,
+      defaultValue: false,
+      isRequired: true,
+      isDisabled: false,
+      isUnique: false,
+      inputWidth: '12',
+    };
+    const published = collection(ids.cars, [
+      toggle,
+      numberFieldOf(more.seatsField, 'seats'),
+    ]);
+    const entry = entryOf({
+      'is-published': {
+        objectType: 'value',
+        valueType: 'boolean',
+        content: { en: true },
+      },
+      seats: numberValue({ en: 5 }),
+    });
+
+    expect(
+      takesEntry({
+        where: [
+          { fieldDefinitionId: more.priceField, equals: [true] },
+          { fieldDefinitionId: more.seatsField, equals: [5, 7] },
+        ],
+        collection: published,
+        entry,
+      })
+    ).toEqual(true);
+    expect(
+      takesEntry({
+        where: [{ fieldDefinitionId: more.priceField, equals: [false] }],
+        collection: published,
         entry,
       })
     ).toEqual(false);

@@ -62,7 +62,7 @@ const values = await core.destinations.values({
 });
 ```
 
-`checkMapping()` answers what a Mapping that is not saved yet leaves the Contract without and reads no Entry, so an app checks what an editor is building before it saves it. `values()` answers one Entry's Values keyed by the field slugs of one Collection of the Contract, every way of filling applied, which is the shape a site reads and what an editor mapping a field sees of their own content. `update()` saves whatever a Mapping leaves unfilled, so an editor maps in steps, and refuses only a Mapping filling a Collection its Contract does not hold.
+`checkMapping()` answers what a Mapping that is not saved yet leaves the Contract without and reads no Entry, so an app checks what an editor is building before it saves it. `values()` answers one Entry's Values keyed by the field slugs of one Collection of the Contract, every way of filling applied, which is the shape a site reads and what an editor mapping a field sees of their own content. `update()` saves whatever a Mapping leaves unfilled, so an editor maps in steps, and the one Mapping it refuses is one filling a Collection its Contract does not hold.
 
 **A website creates the Collection or the field its theme needs and the Project has nothing for, and the Mapping points at it right away.**
 
@@ -78,6 +78,6 @@ await core.destinations.createCollection({
 - Every id is the Project's own, and the names, slugs, labels, descriptions, default values and rules are the theme's. A field pointing at another Collection of the Contract points at the Collection of the Project filling it.
 - Nothing the Project holds is changed. A Collection, Component or field definition the Project already carries under the theme's slug throws `Conflict` naming it, and so does a Collection or field of the Contract something already fills. A Component this website created from its theme before is used again rather than created twice.
 - `createdCollections()` answers which Collections the website created from its theme, so an app groups them under the website, and leaves out one deleted since.
-- Adding a required field of the theme to a Collection that already holds Entries throws `Conflict` with one issue per Entry, the way a field definition change does. Send its Value per Entry under `resolutions`.
+- Adding a required field of the theme to a Collection that already holds Entries throws `Conflict`, the way a field definition change does, naming every Entry needing the Value. Send that Value per Entry under `resolutions`.
 
 An Astro site reads all of it: the Values the way the Mapping fills them and the Entries its conditions let through. A site whose website leaves an Entry out never renders a page for it, and the build stops naming an Entry it takes that points at one it does not.
