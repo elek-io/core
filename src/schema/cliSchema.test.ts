@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { exportSchema, apiStartSchema, provisionSchema } from './cliSchema.js';
+import {
+  exportSchema,
+  apiStartSchema,
+  generateContractSchema,
+  provisionSchema,
+} from './cliSchema.js';
 import { v4 } from 'uuid';
 
 const baseInput = {
@@ -153,6 +158,39 @@ describe('provisionSchema', () => {
         url: 'https://example.com/repo.git',
         ref: 'not a ref',
       })
+    ).toThrow();
+  });
+});
+
+describe('generateContractSchema languages', () => {
+  const base = { project: v4() };
+
+  it('leaves the languages out when the command does not name them', () => {
+    expect(generateContractSchema.parse(base).languages).toBeUndefined();
+  });
+
+  it('parses "any" as the literal string "any"', () => {
+    expect(
+      generateContractSchema.parse({ ...base, languages: ' any ' }).languages
+    ).toEqual('any');
+  });
+
+  it('parses comma-separated language codes, trimming each', () => {
+    expect(
+      generateContractSchema.parse({ ...base, languages: ' en , de ' })
+        .languages
+    ).toEqual(['en', 'de']);
+  });
+
+  it('throws on a code no language of elek.io carries', () => {
+    expect(() =>
+      generateContractSchema.parse({ ...base, languages: 'en,zz' })
+    ).toThrow(/at least one supported language/);
+  });
+
+  it('throws on a value holding no code at all', () => {
+    expect(() =>
+      generateContractSchema.parse({ ...base, languages: ' , ' })
     ).toThrow();
   });
 });

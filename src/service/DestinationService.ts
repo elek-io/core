@@ -1488,12 +1488,9 @@ export class DestinationService extends AbstractEntityService {
    * A Component this website created from its theme before is one of them,
    * so creating a second Collection needing it works. One the Project holds
    * under the same slug and this website did not create throws `Conflict`,
-   * because a theme's Component and an editor's own under one slug are two
-   * different sets of fields. Nothing is written.
-   *
-   * Throws `BadRequest` for a Component the Contract does not hold and for
-   * Components pointing at each other, because no order writes those with
-   * the Components they name.
+   * because those are two sets of fields under one slug. A Component the
+   * Contract does not hold, and Components pointing at each other, throw
+   * `BadRequest`. Nothing is written.
    */
   private async planComponents(props: {
     projectId: Uuid;

@@ -45,14 +45,10 @@ export function mappingByMatchingIds(props: {
  * that does per Collection, and otherwise what `mappingByMatchingIds` gives.
  *
  * So a version put beside the one in use keeps what the editor mapped, which
- * Entries the website takes included, and a Collection or field the new
- * version added is filled by its id where the Project carries it. An entry
- * naming a Collection or field definition that is gone is dropped rather
- * than carried, so no Mapping keeps what the check would only report.
- *
- * A condition is the one thing carried whatever it reads, because a Mapping
- * without it takes every Entry of its Collection. One on a field definition
- * that is gone is reported instead, and the editor replaces it.
+ * Entries the website takes included. An entry naming a Collection or field
+ * definition that is gone is dropped rather than carried, while a condition
+ * is carried whatever it reads, because a Mapping without one takes every
+ * Entry of its Collection rather than leaving the check what to report.
  */
 export function mappingForVersion(props: {
   contract: Contract;

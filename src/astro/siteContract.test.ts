@@ -1464,7 +1464,7 @@ describe('a site reading its Entries through its own Contract', function () {
         await expectCoreError(
           site.load(),
           'BadRequest',
-          `field "related": The field "related" points at the Entry "${firstEntryId}" of the Collection "${siteArticles.id}" of the Project, which the website does not take`
+          `field "related" in "en": The field "related" points at the Entry "${firstEntryId}" of the Collection "${siteArticles.id}" of the Project, which the website does not take`
         );
         expect([...site.store.keys()]).toEqual([]);
       });

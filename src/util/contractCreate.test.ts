@@ -10,6 +10,7 @@ import { flattenFieldDefinitions } from '../schema/index.js';
 import {
   contractComponentsNeeded,
   fieldDefinitionsFromContract,
+  unfilledMessage,
 } from './contractCreate.js';
 
 const ids = {
@@ -325,6 +326,20 @@ describe('contractComponentsNeeded', function () {
     });
   });
 
+  it('needs a Component two fields name once', function () {
+    const hero = component(ids.hero, 'hero', []);
+
+    expect(
+      contractComponentsNeeded({
+        fieldDefinitions: [
+          dynamicField(ids.blocks, [ids.hero]),
+          dynamicField(ids.title, [ids.hero]),
+        ],
+        contract: contractOf([hero]),
+      }).components
+    ).toEqual([hero]);
+  });
+
   it('names a Component naming itself', function () {
     const hero = component(ids.hero, 'hero', [
       dynamicField(ids.blocks, [ids.hero]),
@@ -336,5 +351,27 @@ describe('contractComponentsNeeded', function () {
         contract: contractOf([hero]),
       }).cyclic
     ).toEqual(['hero']);
+  });
+});
+
+describe('unfilledMessage', function () {
+  it('says of each kind what nothing fills it', function () {
+    expect(
+      unfilledMessage([
+        { objectType: 'field', id: ids.title, fieldDefinitionId: ids.slug },
+        {
+          objectType: 'component',
+          id: ids.hero,
+          fieldDefinitionId: ids.blocks,
+        },
+        {
+          objectType: 'collection',
+          id: ids.gallery,
+          fieldDefinitionId: ids.dealer,
+        },
+      ])
+    ).toEqual(
+      `the field "${ids.title}", which no field definition of the Project fills, the Component "${ids.hero}", which the Contract does not hold, the Collection "${ids.gallery}", which no Collection of the Project fills`
+    );
   });
 });

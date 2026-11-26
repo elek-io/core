@@ -1184,6 +1184,39 @@ describe('a Mapping with an editor’s options', function () {
       ).toEqual([]);
     });
 
+    it('refuses a Contract naming a Component it does not hold', async function () {
+      const rooms = blockingContract.collections[0];
+      if (rooms === undefined) {
+        throw new Error('No Collection in the Contract');
+      }
+      const missing = await addWebsite({
+        projectId: siteProjectId,
+        name: 'missing.test',
+        contract: {
+          ...blockingContract,
+          name: '@acme/missing-theme',
+          collections: [
+            {
+              ...rooms,
+              slug: { singular: 'missing-room', plural: 'missing-rooms' },
+              fieldDefinitions: [dynamicField('blocks', [uuid()])],
+            },
+          ],
+          components: [],
+        },
+      });
+
+      await expectCoreError(
+        core.destinations.createCollection({
+          projectId: siteProjectId,
+          id: missing.website.id,
+          contractCollectionId: rooms.id,
+        }),
+        'BadRequest',
+        'which the Contract does not hold'
+      );
+    });
+
     it('refuses a Collection of the Contract something already fills', async function () {
       await expectCoreError(
         core.destinations.createCollection({
@@ -1507,6 +1540,32 @@ describe('a Mapping with an editor’s options', function () {
           })
         ).mapping.collections[themePosts.id]?.fields[themeHeadline.id]
       ).toBeUndefined();
+    });
+
+    it('refuses a field the Collection of the Contract does not hold', async function () {
+      await expectCoreError(
+        core.destinations.createFieldDefinition({
+          projectId: siteProjectId,
+          id: websiteId,
+          contractCollectionId: themePosts.id,
+          contractFieldDefinitionId: uuid(),
+        }),
+        'NotFound',
+        'has no field'
+      );
+    });
+
+    it('refuses a field something already fills', async function () {
+      await expectCoreError(
+        core.destinations.createFieldDefinition({
+          projectId: siteProjectId,
+          id: websiteId,
+          contractCollectionId: themePosts.id,
+          contractFieldDefinitionId: themeTitle.id,
+        }),
+        'Conflict',
+        'is filled already'
+      );
     });
 
     it('refuses a field of a Collection of the Contract nothing fills', async function () {

@@ -975,6 +975,267 @@ describe('contractValuesOf, the ways one field is filled', function () {
     ).toEqual({ seats: numberValue({ en: 5 }) });
   });
 
+  it('takes a reference, a number and a toggle through a language order', function () {
+    const toggle: FieldDefinition = {
+      id: more.priceField,
+      slug: 'is-published',
+      valueType: 'boolean',
+      fieldType: 'toggle',
+      label: { en: 'Published' },
+      description: null,
+      defaultValue: false,
+      isRequired: true,
+      isDisabled: false,
+      isUnique: false,
+      inputWidth: '12',
+    };
+    const contractCars = collection(ids.cars, [
+      entryField([ids.cars]),
+      numberFieldOf(ids.titleField, 'seats'),
+      toggle,
+    ]);
+    const projectCars = collection(ids.cars, [
+      entryField([ids.cars]),
+      numberFieldOf(ids.titleField, 'seats'),
+      toggle,
+    ]);
+    const reference = {
+      objectType: 'entry' as const,
+      id: ids.other,
+      collectionId: ids.cars,
+    };
+
+    // Every kind of Value reads the first language of the order holding
+    // something, and fills both languages with it
+    expect(
+      contractValuesOf({
+        contract: contractOf({ collections: [contractCars] }),
+        mapping: {
+          collections: {
+            [ids.cars]: {
+              from: { collectionId: ids.cars, where: [] },
+              fields: {
+                [ids.dealerField]: {
+                  fill: 'field',
+                  fieldDefinitionId: ids.dealerField,
+                  language: { order: ['de', 'en'] },
+                },
+                [ids.titleField]: {
+                  fill: 'field',
+                  fieldDefinitionId: ids.titleField,
+                  language: { order: ['de', 'en'] },
+                },
+                [more.priceField]: {
+                  fill: 'field',
+                  fieldDefinitionId: more.priceField,
+                  language: { order: ['de', 'en'] },
+                },
+              },
+            },
+          },
+        },
+        contractCollectionId: ids.cars,
+        collection: projectCars,
+        entry: entryOf({
+          dealer: {
+            objectType: 'value',
+            valueType: 'reference',
+            content: { en: [], de: [reference] },
+          },
+          seats: numberValue({ en: null, de: 7 }),
+          'is-published': {
+            objectType: 'value',
+            valueType: 'boolean',
+            content: { en: false, de: true },
+          },
+        }),
+        languages: twoLanguages,
+      })
+    ).toEqual({
+      dealer: {
+        objectType: 'value',
+        valueType: 'reference',
+        content: { en: [reference], de: [reference] },
+      },
+      seats: numberValue({ en: 7, de: 7 }),
+      'is-published': {
+        objectType: 'value',
+        valueType: 'boolean',
+        content: { en: true, de: true },
+      },
+    });
+  });
+
+  it('leaves Component items as they are under a language order', function () {
+    const contractCars = collection(ids.cars, [dynamicField([ids.hero])]);
+    const items = {
+      objectType: 'value' as const,
+      valueType: 'component' as const,
+      content: [{ id: ids.item, componentId: ids.hero, values: {} }],
+    };
+
+    // Items are not kept per language, so a language order has nothing to
+    // read them from and they come back as they are
+    expect(
+      contractValuesOf({
+        contract: contractOf({
+          collections: [contractCars],
+          components: [component(ids.hero)],
+        }),
+        mapping: mappingFilling({
+          fields: {
+            [ids.blocksField]: {
+              fill: 'field',
+              fieldDefinitionId: ids.blocksField,
+              language: { order: ['de', 'en'] },
+            },
+          },
+        }),
+        contractCollectionId: ids.cars,
+        collection: collection(ids.cars, [dynamicField([ids.hero])]),
+        entry: entryOf({ blocks: items }),
+        languages: twoLanguages,
+      })
+    ).toEqual({ blocks: items });
+  });
+
+  it('answers nothing for a Collection of the Contract it does not hold', function () {
+    expect(
+      contractValuesOf({
+        contract: contractOf({ collections: [] }),
+        mapping: mappingFilling({ fields: {} }),
+        contractCollectionId: ids.cars,
+        collection: collection(ids.cars, []),
+        entry: entryOf({}),
+        languages,
+      })
+    ).toEqual({});
+  });
+
+  it('leaves every kind of field the Mapping does not fill empty', function () {
+    const contractCars = collection(ids.cars, [
+      dynamicField([ids.hero]),
+      entryField([ids.cars]),
+      numberFieldOf(more.seatsField, 'seats'),
+      {
+        id: more.priceField,
+        slug: 'is-published',
+        valueType: 'boolean',
+        fieldType: 'toggle',
+        label: { en: 'Published' },
+        description: null,
+        defaultValue: false,
+        isRequired: true,
+        isDisabled: false,
+        isUnique: false,
+        inputWidth: '12',
+      },
+    ]);
+
+    // The shape is the Contract's whatever the Mapping holds, so each kind
+    // answers with the Value an editor leaving the field empty writes
+    expect(
+      contractValuesOf({
+        contract: contractOf({
+          collections: [contractCars],
+          components: [component(ids.hero)],
+        }),
+        mapping: mappingFilling({ fields: {} }),
+        contractCollectionId: ids.cars,
+        collection: collection(ids.cars, []),
+        entry: entryOf({}),
+        languages,
+      })
+    ).toEqual({
+      blocks: { objectType: 'value', valueType: 'component', content: [] },
+      dealer: {
+        objectType: 'value',
+        valueType: 'reference',
+        content: { en: [] },
+      },
+      seats: numberValue({ en: null }),
+      // A toggle is always required, so the check reports the Mapping
+      // rather than a site reading this
+      'is-published': {
+        objectType: 'value',
+        valueType: 'boolean',
+        content: {},
+      },
+    });
+  });
+
+  it('fills nothing where the options it matches cannot be read', function () {
+    const contractCars = collection(ids.cars, [
+      selectFieldOf(ids.titleField, 'status', ['frei']),
+      entryField([ids.cars]),
+    ]);
+    const projectCars = collection(ids.cars, [
+      selectFieldOf(more.statusField, 'zustand', ['frei']),
+    ]);
+    const values = (fields: Mapping['collections'][string]['fields']) =>
+      contractValuesOf({
+        contract: contractOf({ collections: [contractCars] }),
+        mapping: mappingFilling({ fields }),
+        contractCollectionId: ids.cars,
+        collection: projectCars,
+        entry: entryOf({ zustand: stringValue({ en: 'frei' }) }),
+        languages,
+      });
+
+    // The Collection no longer holds the field whose options are matched
+    expect(
+      values({
+        [ids.titleField]: {
+          fill: 'options',
+          fieldDefinitionId: more.makeField,
+          options: [{ from: 'frei', to: 'frei' }],
+        },
+      })['status']
+    ).toEqual(stringValue({ en: null }));
+    // The field of the Contract takes no option at all
+    expect(
+      values({
+        [ids.dealerField]: {
+          fill: 'options',
+          fieldDefinitionId: more.statusField,
+          options: [{ from: 'frei', to: 'frei' }],
+        },
+      })['dealer']
+    ).toEqual({
+      objectType: 'value',
+      valueType: 'reference',
+      content: { en: [] },
+    });
+  });
+
+  it('fills nothing for an option no row of the Mapping matches', function () {
+    const contractCars = collection(ids.cars, [
+      numberSelectFieldOf(ids.titleField, 'seats', [2]),
+    ]);
+    const projectCars = collection(ids.cars, [
+      selectFieldOf(more.seatsField, 'sitze', ['zwei', 'fuenf']),
+    ]);
+
+    expect(
+      contractValuesOf({
+        contract: contractOf({ collections: [contractCars] }),
+        mapping: mappingFilling({
+          fields: {
+            [ids.titleField]: {
+              fill: 'options',
+              fieldDefinitionId: more.seatsField,
+              options: [{ from: 'zwei', to: 2 }],
+            },
+          },
+        }),
+        contractCollectionId: ids.cars,
+        collection: projectCars,
+        entry: entryOf({ sitze: stringValue({ en: 'fuenf' }) }),
+        languages,
+      })
+    ).toEqual({ seats: numberValue({ en: null }) });
+  });
+
   it('takes the first language of the order that holds something', function () {
     const contractCars = collection(ids.cars, [
       textFieldOf(ids.titleField, 'title'),
@@ -1058,6 +1319,45 @@ describe('mappingIssuesOf, a Mapping that cannot fill', function () {
         contractFieldDefinitionId: ids.titleField,
         message:
           'The field "title" takes a Value of type "string" and the field "price" of the Project holds one of type "number"',
+      },
+    ]);
+  });
+
+  it('names a field referencing an Asset where the Contract wants an Entry', function () {
+    const asset: FieldDefinition = {
+      id: more.makeField,
+      slug: 'photo',
+      valueType: 'reference',
+      fieldType: 'asset',
+      label: { en: 'Photo' },
+      description: null,
+      isRequired: false,
+      isDisabled: false,
+      isUnique: false,
+      inputWidth: '12',
+      ofAssetMimeTypes: [],
+      min: null,
+      max: null,
+    };
+
+    expect(
+      issuesOf({
+        contractFields: [entryField([ids.cars])],
+        projectFields: [asset],
+        mapping: mappingFilling({
+          fields: {
+            [ids.dealerField]: {
+              fill: 'field',
+              fieldDefinitionId: more.makeField,
+            },
+          },
+        }),
+      })
+    ).toMatchObject([
+      {
+        issue: 'does_not_fit',
+        message:
+          'The field "dealer" references an Entry and the field "photo" of the Project references an Asset',
       },
     ]);
   });
@@ -1267,6 +1567,30 @@ describe('mappingIssuesOf, a Mapping that cannot fill', function () {
         issue: 'option_not_matched',
         message:
           'The option "reserved" of the field "status" of the Project matches no option of the field "status". Match the options, or pick another field.',
+      },
+    ]);
+  });
+
+  it('names a field whose options are matched while it has none', function () {
+    expect(
+      issuesOf({
+        contractFields: [selectFieldOf(ids.titleField, 'status', ['frei'])],
+        projectFields: [textFieldOf(more.statusField, 'zustand')],
+        mapping: mappingFilling({
+          fields: {
+            [ids.titleField]: {
+              fill: 'options',
+              fieldDefinitionId: more.statusField,
+              options: [{ from: 'frei', to: 'frei' }],
+            },
+          },
+        }),
+      })
+    ).toMatchObject([
+      {
+        issue: 'does_not_fit',
+        message:
+          'The field "status" matches the options of the field "zustand" of the Project, which has none. Match the options of a select field.',
       },
     ]);
   });
@@ -1604,6 +1928,25 @@ describe('which Entries a website takes', function () {
     ]);
     const first = issues[0];
     expect(first !== undefined && isValueIssue(first)).toEqual(true);
+  });
+
+  it('reads no Value for an entry of the Mapping the Contract does not hold', function () {
+    const contractCars = collection(ids.cars, [textField()]);
+
+    // Such an entry fills nothing of the Contract, so no Value of it is
+    // read and nothing about it is reported here
+    expect(
+      entryIssuesOf({
+        destinationId: ids.destination,
+        contract: contractOf({ collections: [contractCars] }),
+        mapping: mappingOf({
+          [ids.elsewhere]: { from: ids.cars, fields: [ids.titleField] },
+        }),
+        collection: collection(ids.cars, [textField()]),
+        entry: entryOf({}),
+        languages,
+      })
+    ).toEqual([]);
   });
 
   it('names the language whose reference the website does not take', function () {
