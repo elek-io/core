@@ -49,6 +49,10 @@ export function mappingByMatchingIds(props: {
  * version added is filled by its id where the Project carries it. An entry
  * naming a Collection or field definition that is gone is dropped rather
  * than carried, so no Mapping keeps what the check would only report.
+ *
+ * A condition is the one thing carried whatever it reads, because a Mapping
+ * without it takes every Entry of its Collection. One on a field definition
+ * that is gone is reported instead, and the editor replaces it.
  */
 export function mappingForVersion(props: {
   contract: Contract;
@@ -114,13 +118,15 @@ export function mappingForVersion(props: {
         };
       }
     }
-    // A condition on a field definition that is gone chooses nothing, so it
-    // is dropped the way a field mapping naming one is
-    const where = (first?.from.where ?? []).filter((condition) => {
-      return projectFieldIds.has(condition.fieldDefinitionId);
-    });
     mapping.collections[contractCollection.id] = {
-      from: { collectionId: projectCollection.id, where },
+      // A condition reading a field definition that is gone is carried as it
+      // is, unlike a field mapping naming one, because dropping it would
+      // take every Entry of the Collection rather than leave the check
+      // something to report
+      from: {
+        collectionId: projectCollection.id,
+        where: first?.from.where ?? [],
+      },
       fields,
     };
   }

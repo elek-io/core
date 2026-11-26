@@ -1615,8 +1615,41 @@ describe('mappingForVersion, what a new version carries over', function () {
       fieldDefinitionIds: [more.makeField, more.modelField],
       separator: ' ',
     });
-    // The condition reading a field definition that is gone is dropped
-    expect(carried.collections[ids.cars]?.from.where).toEqual([forSale[0]]);
+    // Both conditions are carried, the one reading a field definition that
+    // is gone included, because a Mapping without it would take every Entry
+    expect(carried.collections[ids.cars]?.from.where).toEqual(forSale);
+  });
+
+  it('carries a condition the Project leaves nothing to read, so it is reported', function () {
+    const carried = mappingForVersion({
+      contract: contractOf({ collections: [contractCars] }),
+      collections: [projectCars],
+      carryFrom: [
+        {
+          collections: {
+            [ids.cars]: {
+              from: {
+                collectionId: ids.cars,
+                where: [
+                  { fieldDefinitionId: more.statusField, equals: ['frei'] },
+                ],
+              },
+              fields: {},
+            },
+          },
+        },
+      ],
+    });
+
+    expect(
+      mappingIssuesOf({
+        destinationId: ids.destination,
+        contract: contractOf({ collections: [contractCars] }),
+        mapping: carried,
+        collections: [projectCars],
+        languages,
+      })
+    ).toMatchObject([{ issue: 'does_not_fit' }]);
   });
 
   it('drops a field whose source the Project no longer holds', function () {
