@@ -148,7 +148,11 @@ Every row compares the released state against the current `draft`, never the com
 
 A Component's field definition can be neither unique nor a `slug` field, so the four rows that need one of those reach `fieldChanges` alone.
 
-A website and a Contract are read by a site's build rather than by a consumer of the generated client and types, so what either holds about itself is a patch. The rows that take a build away are major instead: a website that is gone, a Contract the Project keeps no longer, and either of them renamed. A site names its website by that name or by its id, and states its Contract's name in its own Contract, so a renamed website stops the sites naming it by name and a renamed Contract stops every site on it. A website added, a Contract added and a copy of a version the Project gained are minor, like every other addition.
+A website and a Contract are read by a site's build rather than by a consumer of the generated client and types, so what either holds about itself is a patch. The rows that are not:
+
+- A website that is gone, and a Contract the Project keeps no longer, are major, because a build naming either has nothing left to read.
+- A renamed website is major for a site that names it by that name, and one naming it by its id builds on. A renamed Contract is major for every site, because each states its Contract's name in its own.
+- A website added, a Contract added and a copy of a version the Project gained are minor, like every other addition.
 
 ## What a major Release asks of a consumer
 
