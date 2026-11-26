@@ -183,7 +183,7 @@ const issues = await core.destinations.checkAll({
 | `reference_not_taken` | The Entry points at one the website does not take |
 
 - The first five are about the Mapping and come back whatever the Entries hold, so `checkAll()` reports each once, and `checkMapping()` reports them without reading an Entry at all.
-- The last three name both sides: the Contract's field and the Project's own `collectionId`, `fieldDefinitionId` and `fieldSlug`, so an app can open the Entry at the field that raised it.
+- The last three name both sides: the Contract's field and the Project's own `collectionId`, `fieldDefinitionId` and `fieldSlug`, so an app can open the Entry at the field that raised it. One about a single language names it in `language`, a reference the website does not take included.
 - The Mapping is read against the Collections the Project holds now. An entry of it naming a Collection or field definition that is gone fills nothing, so it is reported rather than taken as mapped, which is what a Project changing under a Mapping leaves behind.
 - A field the Mapping fills in a way that cannot work is reported once as `does_not_fit` and left out of every Entry's check, so one wrong row of a Mapping is one issue rather than one per Entry.
 - Values are read the way the Mapping fills them and against the Contract's own field definitions. An Entry reference is moved onto the Contract's Collection ids through the Mapping first, and one pointing into a Collection of the Project that fills nothing is refused, whatever the Contract's field allows.

@@ -1568,10 +1568,43 @@ describe('which Entries a website takes', function () {
         entryId: ids.entry,
         contractFieldDefinitionId: ids.dealerField,
         message: `The field "dealer" points at the Entry "${ids.other}" of the Collection "${ids.cars}" of the Project, which the website does not take`,
+        language: 'en',
       },
     ]);
     const first = issues[0];
     expect(first !== undefined && isValueIssue(first)).toEqual(true);
+  });
+
+  it('names the language whose reference the website does not take', function () {
+    const contractCars = collection(ids.cars, [entryField([ids.cars])]);
+    const reference = (id: string) => ({
+      objectType: 'entry' as const,
+      id,
+      collectionId: ids.cars,
+    });
+    const issues = entryIssuesOf({
+      destinationId: ids.destination,
+      contract: contractOf({ collections: [contractCars] }),
+      mapping: mappingOf({
+        [ids.cars]: { from: ids.cars, fields: [ids.dealerField] },
+      }),
+      collection: collection(ids.cars, [entryField([ids.cars])]),
+      entry: entryOf({
+        dealer: {
+          objectType: 'value',
+          valueType: 'reference',
+          content: { en: [reference(ids.entry)], de: [reference(ids.other)] },
+        },
+      }),
+      languages: ['en', 'de'],
+      entryIdsNotTaken: new Set([ids.other]),
+    });
+
+    // The German Value is the one to open, and the English one raises
+    // nothing, so the issue says which translation it is about
+    expect(issues).toMatchObject([
+      { issue: 'reference_not_taken', language: 'de' },
+    ]);
   });
 });
 

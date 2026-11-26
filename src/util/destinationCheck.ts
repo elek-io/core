@@ -437,6 +437,7 @@ export function entryIssuesOf(props: {
       field: FieldDefinition;
       entryId: Uuid;
       collectionId: Uuid;
+      language: string;
     }> = [];
 
     for (const contractField of contractFields) {
@@ -510,11 +511,17 @@ export function entryIssuesOf(props: {
     // The website leaves the Entry out, so a page of it would have nothing
     // to link to. Named here rather than dropped, because which Entries a
     // website takes is the editor's choice and this one contradicts it
-    for (const { field, entryId, collectionId } of referencesNotTaken) {
+    for (const {
+      field,
+      entryId,
+      collectionId,
+      language,
+    } of referencesNotTaken) {
       place(
         field,
         'reference_not_taken',
-        `The field "${field.slug}" points at the Entry "${entryId}" of the Collection "${collectionId}" of the Project, which the website does not take`
+        `The field "${field.slug}" points at the Entry "${entryId}" of the Collection "${collectionId}" of the Project, which the website does not take`,
+        props.languages.find((supported) => supported === language)
       );
     }
 
@@ -643,8 +650,16 @@ interface FilledField {
   value: Value | undefined;
   /** The Collections of the Project it points at that fill nothing */
   unfilled: Uuid[];
-  /** The Entries of the Project it points at, as the Project names them */
-  references: Array<{ entryId: Uuid; collectionId: Uuid }>;
+  /**
+   * The Entries of the Project it points at, as the Project names them, with
+   * the language of the Value pointing at each, so an issue about one names
+   * the translation to open
+   */
+  references: Array<{
+    entryId: Uuid;
+    collectionId: Uuid;
+    language: string;
+  }>;
 }
 
 /** The field definitions of the Project one field mapping reads */
@@ -1158,14 +1173,18 @@ function onContractCollections(
 ): {
   value: Value;
   unfilled: Uuid[];
-  references: Array<{ entryId: Uuid; collectionId: Uuid }>;
+  references: Array<{ entryId: Uuid; collectionId: Uuid; language: string }>;
 } {
   if (value.valueType !== 'reference') {
     return { value, unfilled: [], references: [] };
   }
   const allowed = 'ofCollections' in field ? field.ofCollections : [];
   const unfilled: Uuid[] = [];
-  const references: Array<{ entryId: Uuid; collectionId: Uuid }> = [];
+  const references: Array<{
+    entryId: Uuid;
+    collectionId: Uuid;
+    language: string;
+  }> = [];
   const content = Object.fromEntries(
     Object.entries(value.content).map(([language, entries]) => [
       language,
@@ -1176,6 +1195,7 @@ function onContractCollections(
         references.push({
           entryId: reference.id,
           collectionId: reference.collectionId,
+          language,
         });
         const targets = contractCollectionsOf.get(reference.collectionId) ?? [];
         const onContract =
