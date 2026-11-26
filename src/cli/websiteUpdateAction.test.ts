@@ -393,6 +393,7 @@ describe('websiteUpdateAction', function () {
     expect(after.contract.version).toEqual('2.0.0');
     expect(after.waiting).toBeNull();
     expect(after.mapping.collections[collection.id]?.fields[added.id]).toEqual({
+      fill: 'field',
       fieldDefinitionId: added.id,
     });
   });
