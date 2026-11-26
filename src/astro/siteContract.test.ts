@@ -1260,6 +1260,152 @@ describe('a site reading its Entries through its own Contract', function () {
     });
   });
 
+  describe('the way a Mapping fills each field of the Contract', function () {
+    /** The full Mapping, with the Contract's teaser filled the way given */
+    function teaserFilledBy(
+      fieldMapping: Mapping['collections'][string]['fields'][string]
+    ): Mapping {
+      const mapping = fullMapping();
+      const posts = mapping.collections[themePosts.id];
+      if (posts === undefined) {
+        throw new Error('The Mapping does not fill the posts of the Contract');
+      }
+      posts.fields[themeTeaser.id] = fieldMapping;
+      return mapping;
+    }
+
+    /** The full Mapping, taking the Entries the condition lets through */
+    function postsWhere(headline: string): Mapping {
+      const mapping = fullMapping();
+      const posts = mapping.collections[themePosts.id];
+      if (posts === undefined) {
+        throw new Error('The Mapping does not fill the posts of the Contract');
+      }
+      posts.from.where = [
+        { fieldDefinitionId: siteHeadline.id, equals: [headline] },
+      ];
+      return mapping;
+    }
+
+    /** The site built through its website, loaded */
+    async function loadPosts() {
+      const site = await buildSite({
+        collectionIdOrSlug: 'posts',
+        contract,
+        destination: 'autohaus-ebersfelde.de',
+      });
+      await site.load();
+      return site;
+    }
+
+    it('gives the site a fixed Value', async function () {
+      await withMapping(
+        teaserFilledBy({
+          fill: 'fixed',
+          value: {
+            objectType: 'value',
+            valueType: 'string',
+            content: { en: 'From Ebersfelde', de: 'Aus Ebersfelde' },
+          },
+        }),
+        async function () {
+          const site = await loadPosts();
+
+          expect(site.store.get(firstEntryId)?.data).toMatchObject({
+            teaser: { en: 'From Ebersfelde', de: 'Aus Ebersfelde' },
+          });
+        }
+      );
+    });
+
+    it('gives the site several fields joined into one', async function () {
+      await withMapping(
+        teaserFilledBy({
+          fill: 'combined',
+          fieldDefinitionIds: [siteHeadline.id, siteStandfirst.id],
+          separator: ' - ',
+        }),
+        async function () {
+          const site = await loadPosts();
+
+          expect(site.store.get(secondEntryId)?.data).toMatchObject({
+            teaser: {
+              en: 'Polo - Small and cheap',
+              de: 'Polo - Small and cheap',
+            },
+          });
+          // The Entry holding nothing in the second field keeps the first
+          expect(site.store.get(firstEntryId)?.data).toMatchObject({
+            teaser: { en: 'Golf GTI', de: 'Golf GTI' },
+          });
+        }
+      );
+    });
+
+    it('gives the site another language where the first holds nothing', async function () {
+      const third = await core.entries.create({
+        projectId: siteProjectId,
+        collectionId: siteArticles.id,
+        values: {
+          headline: text('Up'),
+          standfirst: {
+            objectType: 'value',
+            valueType: 'string',
+            content: { en: null, de: 'Nur auf Deutsch' },
+          },
+          'see-also': references(siteArticles.id, []),
+        },
+      });
+      onTestFinished(async function () {
+        await core.entries.delete({
+          projectId: siteProjectId,
+          collectionId: siteArticles.id,
+          id: third.id,
+        });
+      });
+
+      await withMapping(
+        teaserFilledBy({
+          fill: 'field',
+          fieldDefinitionId: siteStandfirst.id,
+          language: { order: ['en', 'de'] },
+        }),
+        async function () {
+          const site = await loadPosts();
+
+          expect(site.store.get(third.id)?.data).toMatchObject({
+            teaser: { en: 'Nur auf Deutsch', de: 'Nur auf Deutsch' },
+          });
+        }
+      );
+    });
+
+    it('loads only the Entries the Mapping lets through', async function () {
+      await withMapping(postsWhere('Golf GTI'), async function () {
+        const site = await loadPosts();
+
+        expect([...site.store.keys()]).toEqual([firstEntryId]);
+      });
+    });
+
+    it('stops the build when an Entry points at one the website does not take', async function () {
+      await withMapping(postsWhere('Polo'), async function () {
+        const site = await buildSite({
+          collectionIdOrSlug: 'posts',
+          contract,
+          destination: 'autohaus-ebersfelde.de',
+        });
+
+        await expectCoreError(
+          site.load(),
+          'BadRequest',
+          `field "related": The field "related" points at the Entry "${firstEntryId}" of the Collection "${siteArticles.id}" of the Project, which the website does not take`
+        );
+        expect([...site.store.keys()]).toEqual([]);
+      });
+    });
+  });
+
   it('names the Contract when a selection names a Collection it does not hold', async function () {
     await expectCoreError(
       elekCollections(

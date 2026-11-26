@@ -30,6 +30,7 @@ import {
   type Collection,
   type CollectionFile,
   type CollectionMapping,
+  type ComponentFile,
   type Contract,
   type CountDestinationsProps,
   type CreateContractFieldProps,
@@ -960,11 +961,36 @@ export class DestinationService extends AbstractEntityService {
           );
         }
         const collectionIds = sourceCollectionIds(mapping);
-        const componentIds = await this.componentsFromContract({
+        const plan = await this.planComponents({
           projectId: validatedProps.projectId,
           destination,
           contract,
           fieldDefinitions: contractCollection.fieldDefinitions,
+        });
+        // A field pointing at the Collection being created is filled by it
+        // the moment it exists, which is the one reference nothing fills
+        // beforehand. Everything else is refused here, before a Component
+        // or the Collection itself is written
+        this.assertReferencesAreFilled({
+          named: `The Collection ${named}`,
+          fieldDefinitions: contractCollection.fieldDefinitions,
+          collectionIds,
+          plan,
+          itself: contractCollection.id,
+        });
+        for (const component of plan.toCreate) {
+          this.assertReferencesAreFilled({
+            named: `The Component "${component.slug}" of the Contract`,
+            fieldDefinitions: component.fieldDefinitions,
+            collectionIds,
+            plan,
+            itself: contractCollection.id,
+          });
+        }
+
+        const componentIds = await this.createComponents({
+          projectId: validatedProps.projectId,
+          plan,
           collectionIds,
         });
         const fields = fieldDefinitionsFromContract({
@@ -972,20 +998,6 @@ export class DestinationService extends AbstractEntityService {
           collectionIds,
           componentIds: componentIds.of,
         });
-        // A field pointing at the Collection being created is filled by it
-        // the moment it exists, which is the one reference the Mapping
-        // cannot answer for beforehand
-        const unfilled = fields.unfilled.filter((one) => {
-          return (
-            one.objectType !== 'collection' || one.id !== contractCollection.id
-          );
-        });
-        if (unfilled.length > 0) {
-          throw CoreError.preconditionFailed(
-            `The Collection ${named} points at ${unfilledMessage(unfilled)}. Fill it, or create it from the theme, and create this one after it.`
-          );
-        }
-
         const created = await this.collectionService.create({
           projectId: validatedProps.projectId,
           name: contractCollection.name,
@@ -1115,24 +1127,41 @@ export class DestinationService extends AbstractEntityService {
           );
         }
         const collectionIds = sourceCollectionIds(mapping);
-        const componentIds = await this.componentsFromContract({
+        const fieldDefinitionIds = sourceFieldDefinitionIds(collectionMapping);
+        const plan = await this.planComponents({
           projectId: validatedProps.projectId,
           destination,
           contract,
           fieldDefinitions: [contractField],
+        });
+        // Before a Component or the field itself is written
+        this.assertReferencesAreFilled({
+          named: `The field ${named}`,
+          fieldDefinitions: [contractField],
+          collectionIds,
+          plan,
+          fieldDefinitionIds,
+        });
+        for (const component of plan.toCreate) {
+          this.assertReferencesAreFilled({
+            named: `The Component "${component.slug}" of the Contract`,
+            fieldDefinitions: component.fieldDefinitions,
+            collectionIds,
+            plan,
+          });
+        }
+
+        const componentIds = await this.createComponents({
+          projectId: validatedProps.projectId,
+          plan,
           collectionIds,
         });
         const fields = fieldDefinitionsFromContract({
           fieldDefinitions: [contractField],
           collectionIds,
           componentIds: componentIds.of,
-          fieldDefinitionIds: sourceFieldDefinitionIds(collectionMapping),
+          fieldDefinitionIds,
         });
-        if (fields.unfilled.length > 0) {
-          throw CoreError.preconditionFailed(
-            `The field ${named} points at ${unfilledMessage(fields.unfilled)}. Fill it, or create it from the theme, and create this field after it.`
-          );
-        }
         const own = fields.fieldDefinitionIds.get(contractField.id);
         if (own === undefined) {
           throw CoreError.internal(
@@ -1450,23 +1479,21 @@ export class DestinationService extends AbstractEntityService {
   }
 
   /**
-   * The Components of the Project the Contract's Components became, creating
-   * every one these field definitions need and the Project does not hold
-   * yet, dependencies first.
+   * Which Component of the Project each Component of the Contract the given
+   * field definitions need is, and which of them are not there yet.
    *
-   * A Component this website created from its theme before is reused, so
-   * creating a second Collection needing it works. One the Project holds
+   * A Component this website created from its theme before is one of them,
+   * so creating a second Collection needing it works. One the Project holds
    * under the same slug and this website did not create throws `Conflict`,
    * because a theme's Component and an editor's own under one slug are two
-   * different sets of fields.
+   * different sets of fields. Nothing is written.
    */
-  private async componentsFromContract(props: {
+  private async planComponents(props: {
     projectId: Uuid;
     destination: DestinationFile;
     contract: Contract;
     fieldDefinitions: readonly FieldDefinitionOrGroup[];
-    collectionIds: ReadonlyMap<Uuid, Uuid>;
-  }): Promise<{ of: Map<Uuid, Uuid>; created: Uuid[] }> {
+  }): Promise<{ held: Map<Uuid, Uuid>; toCreate: ComponentFile[] }> {
     const needed = contractComponentsNeeded({
       fieldDefinitions: props.fieldDefinitions,
       contract: props.contract,
@@ -1476,37 +1503,49 @@ export class DestinationService extends AbstractEntityService {
         `The Contract "${props.contract.name}" at version ${props.contract.version} names ${unfilledMessage(needed.unfilled)}, so nothing can be created from it`
       );
     }
-    const of = new Map<Uuid, Uuid>();
-    const created: Uuid[] = [];
+    const held = new Map<Uuid, Uuid>();
+    const toCreate: ComponentFile[] = [];
     for (const component of needed.components) {
-      const held = await this.componentService
+      const own = await this.componentService
         .resolveComponentId({
           projectId: props.projectId,
           idOrSlug: component.slug,
         })
         .catch(notFoundAsUndefined);
-      if (held !== undefined) {
-        if (
-          props.destination.createdFromTheme.componentIds.includes(held) ===
-          false
-        ) {
-          throw CoreError.conflict(
-            `The Project holds the Component "${held}" under the slug "${component.slug}" already, and this website did not create it from its theme. Rename one of the two.`
-          );
-        }
-        of.set(component.id, held);
+      if (own === undefined) {
+        toCreate.push(component);
         continue;
       }
+      if (
+        props.destination.createdFromTheme.componentIds.includes(own) === false
+      ) {
+        throw CoreError.conflict(
+          `The Project holds the Component "${own}" under the slug "${component.slug}" already, and this website did not create it from its theme. Rename one of the two.`
+        );
+      }
+      held.set(component.id, own);
+    }
+    return { held, toCreate };
+  }
+
+  /**
+   * Creates the Components of a plan, each after the ones its own fields
+   * name, and answers which Component of the Project each one of the
+   * Contract is now.
+   */
+  private async createComponents(props: {
+    projectId: Uuid;
+    plan: { held: Map<Uuid, Uuid>; toCreate: ComponentFile[] };
+    collectionIds: ReadonlyMap<Uuid, Uuid>;
+  }): Promise<{ of: Map<Uuid, Uuid>; created: Uuid[] }> {
+    const of = new Map<Uuid, Uuid>(props.plan.held);
+    const created: Uuid[] = [];
+    for (const component of props.plan.toCreate) {
       const fields = fieldDefinitionsFromContract({
         fieldDefinitions: component.fieldDefinitions,
         collectionIds: props.collectionIds,
         componentIds: of,
       });
-      if (fields.unfilled.length > 0) {
-        throw CoreError.preconditionFailed(
-          `The Component "${component.slug}" of the Contract points at ${unfilledMessage(fields.unfilled)}. Fill it, or create it from the theme, first.`
-        );
-      }
       const own = await this.componentService.create({
         projectId: props.projectId,
         name: component.name,
@@ -1520,6 +1559,46 @@ export class DestinationService extends AbstractEntityService {
       created.push(own.id);
     }
     return { of, created };
+  }
+
+  /**
+   * Throws `PreconditionFailed` naming everything the field definitions
+   * point at that nothing of the Project fills, the Components of a plan
+   * counted as filled, so a create refuses before it writes anything.
+   *
+   * `itself` is the Collection of the Contract being created, which its own
+   * fields may point at, because it fills itself the moment it exists.
+   */
+  private assertReferencesAreFilled(props: {
+    named: string;
+    fieldDefinitions: readonly FieldDefinitionOrGroup[];
+    collectionIds: ReadonlyMap<Uuid, Uuid>;
+    plan: { held: Map<Uuid, Uuid>; toCreate: ComponentFile[] };
+    fieldDefinitionIds?: ReadonlyMap<Uuid, Uuid>;
+    itself?: Uuid;
+  }): void {
+    const planned = new Map<Uuid, Uuid>([
+      ...props.plan.held,
+      ...props.plan.toCreate.map((component): [Uuid, Uuid] => [
+        component.id,
+        uuid(),
+      ]),
+    ]);
+    const unfilled = fieldDefinitionsFromContract({
+      fieldDefinitions: props.fieldDefinitions,
+      collectionIds: props.collectionIds,
+      componentIds: planned,
+      ...(props.fieldDefinitionIds === undefined
+        ? {}
+        : { fieldDefinitionIds: props.fieldDefinitionIds }),
+    }).unfilled.filter((one) => {
+      return one.objectType !== 'collection' || one.id !== props.itself;
+    });
+    if (unfilled.length > 0) {
+      throw CoreError.preconditionFailed(
+        `${props.named} points at ${unfilledMessage(unfilled)}. Fill it, or create it from the theme, first.`
+      );
+    }
   }
 
   /**
