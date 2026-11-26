@@ -38,6 +38,32 @@ describe('Releasing a Project that has a website', function () {
     return theme;
   }
 
+  /**
+   * A Collection of a Contract under ids and a slug the Project does not
+   * hold, so nothing of the Project fills it and it can be created from the
+   * theme instead
+   */
+  function spareCollection(of: Contract, slug: string) {
+    const cloned = structuredClone(of.collections[0]);
+    if (cloned === undefined) {
+      throw new Error('The Contract holds no Collection');
+    }
+    cloned.id = uuid();
+    cloned.slug = { singular: slug, plural: `${slug}s` };
+    for (const field of flattenFieldDefinitions(cloned.fieldDefinitions)) {
+      field.id = uuid();
+    }
+    return cloned;
+  }
+
+  /** Orders changes by what they are, so a list of them compares */
+  function byChangeType(
+    a: { changeType: string },
+    b: { changeType: string }
+  ): number {
+    return a.changeType.localeCompare(b.changeType);
+  }
+
   /** A Collection whose one text field is optional, so an Entry can skip it */
   async function optionalCollection(projectId: string, slug: string) {
     const fieldDefinitionId = uuid();
@@ -432,6 +458,65 @@ describe('Releasing a Project that has a website', function () {
       expect(result.diff.destinationChanges).toEqual([]);
     });
 
+    it('names a Contract the Project keeps, its name and one it keeps no longer', async function () {
+      const theme = await themeWith([
+        await core.contracts.generate({
+          projectId: project.id,
+          name: '@acme/kept-site',
+          version: '1.0.0',
+        }),
+      ]);
+      const read = await core.contracts.readFromTheme({ url: theme.url });
+      const origin = { kind: 'git' as const, url: theme.url };
+      const kept = await core.contracts.keep({
+        projectId: project.id,
+        origin,
+        contract: read.contract,
+        commit: read.commit,
+      });
+
+      expect(
+        (await core.releases.prepare({ projectId: project.id })).contractChanges
+      ).toEqual([{ contractId: kept.id, changeType: 'added', bump: 'minor' }]);
+      await core.releases.create({ projectId: project.id });
+
+      // The same origin under another name renames what the Project keeps
+      await core.contracts.keep({
+        projectId: project.id,
+        origin,
+        contract: { ...read.contract, name: '@acme/renamed-site' },
+        commit: read.commit,
+      });
+
+      expect(
+        (await core.releases.prepare({ projectId: project.id })).contractChanges
+      ).toEqual([
+        { contractId: kept.id, changeType: 'nameChanged', bump: 'patch' },
+      ]);
+      await core.releases.create({ projectId: project.id });
+
+      // A Contract that is gone, which no call of Core does and a working
+      // copy can still arrive at
+      const projectPath = core.util.pathTo.project(project.id);
+      const folder = core.util.pathTo.contract(project.id, kept.id);
+      await Fs.remove(folder);
+      await core.git.add(projectPath, [folder]);
+      await core.git.commit(projectPath, {
+        method: 'delete',
+        reference: { objectType: 'project', id: project.id },
+      });
+
+      const prepared = await core.releases.prepare({ projectId: project.id });
+      // Released again, so the next test starts from a Project that keeps
+      // no Contract rather than from one that just lost its own
+      const released = await core.releases.create({ projectId: project.id });
+
+      expect(prepared.contractChanges).toEqual([
+        { contractId: kept.id, changeType: 'deleted', bump: 'major' },
+      ]);
+      expect(released.diff.bump).toEqual('major');
+    });
+
     it('releases without the folders a Project written before them lacks', async function () {
       // What a Project written before Destinations existed holds, which
       // Core itself has no call for
@@ -453,9 +538,12 @@ describe('Releasing a Project that has a website', function () {
       expect(prepared.destinationChanges).toEqual([]);
       expect(prepared.contractChanges).toEqual([]);
 
+      const result = await core.releases.create({ projectId: project.id });
       expect(
-        (await core.releases.create({ projectId: project.id })).version
-      ).toEqual('0.2.0');
+        result.diff.entryChanges.filter((change) => {
+          return change.changeType === 'added';
+        })
+      ).toHaveLength(1);
     });
   });
 
@@ -518,7 +606,18 @@ describe('Releasing a Project that has a website', function () {
     });
 
     it('names the website and its Contract as added, in the Release and afterwards', async function () {
+      // Released before anything is asserted, so a failure here leaves the
+      // next test the state it expects
       const prepared = await core.releases.prepare({ projectId: project.id });
+      const released = await core.releases.create({ projectId: project.id });
+      const { list } = await core.releases.list({ projectId: project.id });
+      // By its version rather than by the order, because two Releases of
+      // one second order by the tagged commit's date alone
+      const tag = list.find((item) => item.version === released.version);
+      const changes = await core.releases.changes({
+        projectId: project.id,
+        tagId: tag?.tagId ?? '',
+      });
 
       expect(prepared.destinationIssues).toEqual([]);
       expect(prepared.destinationChanges).toEqual([
@@ -531,14 +630,6 @@ describe('Releasing a Project that has a website', function () {
           bump: 'minor',
         },
       ]);
-
-      await core.releases.create({ projectId: project.id });
-      const { list } = await core.releases.list({ projectId: project.id });
-      const changes = await core.releases.changes({
-        projectId: project.id,
-        tagId: list[0]?.tagId ?? '',
-      });
-
       expect(changes.destinationChanges).toEqual(prepared.destinationChanges);
       expect(changes.contractChanges).toEqual(prepared.contractChanges);
     });
@@ -560,6 +651,7 @@ describe('Releasing a Project that has a website', function () {
       ).not.toEqual([]);
 
       const prepared = await core.releases.prepare({ projectId: project.id });
+      const released = await core.releases.create({ projectId: project.id });
 
       expect(prepared.destinationIssues).toEqual([]);
       expect(prepared.destinationChanges).toEqual([
@@ -577,9 +669,7 @@ describe('Releasing a Project that has a website', function () {
           version: '2.0.0',
         },
       ]);
-      expect(
-        (await core.releases.create({ projectId: project.id })).version
-      ).toEqual('0.3.0');
+      expect(released.version).toEqual('0.3.0');
     });
 
     it("names the theme's version the website moved to", async function () {
@@ -610,6 +700,180 @@ describe('Releasing a Project that has a website', function () {
       ]);
       expect(prepared.destinationIssues).toEqual([]);
       await core.releases.create({ projectId: project.id });
+    });
+  });
+
+  describe('a website the editor changed', function () {
+    let project: Awaited<ReturnType<typeof createProject>>;
+    let collection: Collection;
+    let website: DestinationFile;
+    let spareId = '';
+
+    beforeAll(async function () {
+      project = await createProject();
+      collection = await createCollection(project.id);
+      await createComponent(project.id);
+      const asset = await createAsset(project.id);
+      await createEntry(project.id, collection.id, asset.id);
+      const contract = await core.contracts.generate({
+        projectId: project.id,
+        name: '@acme/changing-site',
+        version: '1.0.0',
+      });
+      // 1.1.0 names a Collection nothing of the Project fills, which is
+      // what the editor creates from the theme
+      const next: Contract = { ...structuredClone(contract), version: '1.1.0' };
+      const spare = spareCollection(contract, 'spare');
+      spareId = spare.id;
+      next.collections.push(spare);
+      const theme = await themeWith([contract, next]);
+      website = await core.destinations.addWebsite({
+        projectId: project.id,
+        name: 'changing.example',
+        url: theme.url,
+        version: '1.0.0',
+      });
+      await core.releases.create({ projectId: project.id });
+    });
+
+    afterAll(async function () {
+      await project.destroy();
+    });
+
+    afterEach(async function ({ task }) {
+      await ensureCleanGitStatus(task, project.id);
+    });
+
+    it('names a renamed website and a replaced Mapping', async function () {
+      const optional = flattenFieldDefinitions(
+        collection.fieldDefinitions
+      ).find((field) => field.isRequired === false);
+      const current = await core.destinations.read({
+        projectId: project.id,
+        id: website.id,
+      });
+      const mapped = current.mapping.collections[collection.id];
+      if (optional === undefined || mapped === undefined) {
+        throw new Error('The Mapping does not fill an optional field');
+      }
+
+      await core.destinations.update({
+        projectId: project.id,
+        id: website.id,
+        name: 'renamed.example',
+        mapping: {
+          collections: {
+            ...current.mapping.collections,
+            [collection.id]: {
+              ...mapped,
+              fields: Object.fromEntries(
+                Object.entries(mapped.fields).filter(([id]) => {
+                  return id !== optional.id;
+                })
+              ),
+            },
+          },
+        },
+      });
+
+      const prepared = await core.releases.prepare({ projectId: project.id });
+      const released = await core.releases.create({ projectId: project.id });
+
+      expect(prepared.destinationIssues).toEqual([]);
+      expect(prepared.destinationChanges.toSorted(byChangeType)).toEqual([
+        {
+          destinationId: website.id,
+          changeType: 'mappingChanged',
+          bump: 'patch',
+        },
+        { destinationId: website.id, changeType: 'nameChanged', bump: 'patch' },
+      ]);
+      expect(released.diff.bump).toEqual('patch');
+    });
+
+    it('names a Collection created from a version that waits', async function () {
+      await core.destinations.keepVersion({
+        projectId: project.id,
+        id: website.id,
+      });
+      const created = await core.destinations.createCollection({
+        projectId: project.id,
+        id: website.id,
+        contractCollectionId: spareId,
+        isWaitingVersion: true,
+      });
+      expect(created.createdFromTheme.collectionIds).toHaveLength(1);
+
+      const prepared = await core.releases.prepare({ projectId: project.id });
+      const released = await core.releases.create({ projectId: project.id });
+
+      // What the website created from its theme is a change of the website,
+      // and the Collection it wrote is reported beside it
+      expect(prepared.destinationIssues).toEqual([]);
+      expect(
+        prepared.destinationChanges
+          .map((change) => change.changeType)
+          .toSorted()
+      ).toEqual(['createdFromThemeChanged', 'waitingVersionChanged']);
+      expect(prepared.contractChanges).toEqual([
+        {
+          contractId: website.contract.id,
+          changeType: 'versionAdded',
+          bump: 'minor',
+          version: '1.1.0',
+        },
+      ]);
+      expect(prepared.collectionChanges).toEqual([
+        {
+          collectionId: created.createdFromTheme.collectionIds[0],
+          changeType: 'added',
+          bump: 'minor',
+          isSingleEntry: false,
+        },
+      ]);
+      expect(released.diff.bump).toEqual('minor');
+    });
+
+    it('names every website of the Project that cannot take it', async function () {
+      // Two more websites, each on a theme of its own naming a Collection
+      // nothing of the Project fills
+      const added: DestinationFile[] = [];
+      for (const name of ['first.example', 'second.example']) {
+        const needs = await core.contracts.generate({
+          projectId: project.id,
+          name: `@acme/${name.split('.')[0] ?? 'needy'}-site`,
+          version: '1.0.0',
+        });
+        needs.collections.push(spareCollection(needs, 'wanted'));
+        added.push(
+          await core.destinations.addWebsite({
+            projectId: project.id,
+            name,
+            url: (await themeWith([needs])).url,
+          })
+        );
+      }
+
+      const prepared = await core.releases.prepare({ projectId: project.id });
+
+      expect(
+        prepared.destinationIssues
+          .map((issue) => issue.destinationId)
+          .toSorted()
+      ).toEqual(added.map(({ id }) => id).toSorted());
+      const error = await core.releases.create({ projectId: project.id }).then(
+        () => null,
+        (caught: unknown) => caught
+      );
+      expect(error instanceof CoreError && error.message).toContain(
+        '2 items are unmapped'
+      );
+      for (const one of added) {
+        expect(error instanceof CoreError && error.message).toContain(one.id);
+      }
+      expect(error instanceof CoreError && error.message).toContain(
+        'Destinations "'
+      );
     });
   });
 });

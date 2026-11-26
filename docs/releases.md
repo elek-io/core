@@ -50,7 +50,7 @@ A Project with a website releases only what that website can take. Every Destina
 - `prepare()` returns what the check found as `destinationIssues`, so an app names each Entry and each unmapped field before the editor starts the Release.
 - `create()` and `createPreview()` run the same check and throw `Conflict` while anything is left. Every item is on the error's `cause`, in the shape `checkAll()` answers, and the message carries the websites and the counts.
 - The check runs before anything is written, so a refused Release leaves the Project as it was. Map the rest, or remove the website, and call it again.
-- It holds from the moment a website is added. A Mapping that fills nothing stops a Release the same way one pointing at a deleted field definition does.
+- It holds from the moment a website is added. A Collection of the theme that nothing fills stops a Release the same way a Mapping pointing at a deleted field definition does.
 - The version a website uses is checked, never a version waiting beside it, so a theme's new version never stops a Release. A Contract the Project keeps that no website follows is not checked either.
 - A Project without a Destination is checked for nothing and releases as it did before Destinations existed. Its `destinationIssues` is an empty array.
 
