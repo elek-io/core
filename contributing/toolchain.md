@@ -1,6 +1,6 @@
 # Toolchain
 
-What Core builds, tests, lints, formats and type checks with, and why each tool was picked individually rather than taken as a bundle. The two swaps at the end were evaluated in July 2026 and each says what it was measured on.
+What Core builds, tests, lints, formats and type checks with, and why each tool was picked individually rather than taken as a bundle. The two swaps at the end were evaluated in July 2026, re-measured since, and each says what it was measured on.
 
 | Job | Tool | Notes |
 | --- | --- | --- |
@@ -22,16 +22,16 @@ Cost is not the question. Vite+ is MIT licensed and free. VoidZero [dropped the 
 
 ### It would move the toolchain backwards and take the pins
 
-`vite-plus` depends on its tools with exact pins, not ranges. As of 1.5.1:
+`vite-plus` depends on its tools with exact pins, not ranges. As of 1.8.0:
 
 | Tool              | Pinned by vite-plus | Available standalone |
 | ----------------- | ------------------- | -------------------- |
-| `oxlint`          | `=1.91.0`           | 1.93.0               |
-| `oxfmt`           | `=0.76.0`           | 0.78.0               |
-| `vitest`          | `5.1.0`             | 5.1.0                |
-| `oxlint-tsgolint` | `=7.0.2005`         | 7.0.2006             |
+| `oxlint`          | `=1.94.0`           | 1.95.0               |
+| `oxfmt`           | `=0.79.0`           | 0.80.0               |
+| `vitest`          | `5.1.1`             | 5.1.2                |
+| `oxlint-tsgolint` | not a dependency    | 7.0.2008             |
 
-Adopting it today downgrades oxlint, oxfmt and oxlint-tsgolint, and which tool the downgrade lands on moves with every release on either side.
+Adopting it today downgrades oxlint, oxfmt and vitest, and which tool the downgrade lands on moves with every release on either side. It also stopped pinning `oxlint-tsgolint`, which 1.5.1 held at `=7.0.2005`, so the type-aware half of `pnpm lint` would be Core's own install either way.
 
 More importantly it hands the upgrade cadence of the whole toolchain to vite-plus releases. Core pins every dependency exactly and records why each range was chosen, which is the point of [`peer-dependencies.md`](./peer-dependencies.md). Putting a wrapper between Core and those versions gives that up for nothing.
 
@@ -78,7 +78,7 @@ On defaults it wanted to rewrite 202 files. After `--migrate=prettier` that fell
 +  | AssetMimeMismatchIssue;
 ```
 
-So it was one prettier minor behind, measured on oxfmt 0.61.0. It is at 0.78.0 today and still before 1.0. Stable output is the entire value of a formatter, and a pre-1.0 one means repo-wide churn every time it converges or diverges. Formatting is also not slow enough to be worth risk. Re-check at 1.0, and specifically re-run the `--migrate=prettier` measurement above.
+So it was one prettier minor behind, measured on oxfmt 0.61.0. It is at 0.80.0 today and still before 1.0. Stable output is the entire value of a formatter, and a pre-1.0 one means repo-wide churn every time it converges or diverges. Formatting is also not slow enough to be worth risk. Re-check at 1.0, and specifically re-run the `--migrate=prettier` measurement above.
 
 ### oxlint `--type-check` instead of `tsc --noEmit`
 
@@ -93,13 +93,19 @@ Coverage matches too, because [`tsconfig.json`](../tsconfig.json) is `include: [
 
 | Command                                       | Time |
 | --------------------------------------------- | ---- |
-| `tsc --noEmit`                                | 6.4s |
-| `oxlint` (lint only, what `pnpm lint` runs)   | 2.4s |
-| `oxlint --type-check` (lint plus diagnostics) | 2.8s |
+| `tsc --noEmit`                                | 6.3s |
+| `oxlint` (lint only, what `pnpm lint` runs)   | 1.7s |
+| `oxlint --type-check` (lint plus diagnostics) | 2.4s |
 
-That is roughly 8.8s of `lint` plus `check-types` down to 2.8s. It was still turned down, because oxlint's own configuration schema describes the option as "Enable **experimental** type checking".
+That is roughly 8.0s of `lint` plus `check-types` down to 2.4s, measured on oxlint 1.95.0 and typescript 6.0.3, where both report the same 0 errors over `src`.
 
-Core publishes `.d.ts` files, so type correctness is not the place to depend on a flag its authors label experimental. `tsc` stays the authority. Re-check when the experimental label is dropped, since this is the more attractive of the two.
+It was turned down over one word, which is gone:
+
+- oxlint's configuration schema described `typeCheck` as "Enable experimental type checking (includes TypeScript compiler diagnostics)".
+- Core publishes `.d.ts` files, so type correctness is not the place to depend on a flag its authors label experimental.
+- oxlint 1.94.0 dropped that word. The schema reads "Enable type checking (includes TypeScript compiler diagnostics)".
+
+So the reason to defer is gone and the swap is its own change rather than part of a dependency bump: it moves the authority behind every published declaration, and `tsc` stays it until that change is made.
 
 ## See also
 
