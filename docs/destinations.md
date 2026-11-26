@@ -163,6 +163,8 @@ switched.outcome; // 'switched', or 'kept' while switched.issues names what is l
 
 Each of these is refused before anything is written, so the Project stays as it was and the website keeps the version it uses.
 
+`keepVersion()` reads which copies the Project keeps before it writes, and a call running at the same time can save a copy of that version in between, through `contracts.keep()` for one. Another name in such a copy is not refused, and the waiting Mapping is read against what the theme answers rather than that copy. A caller that writes to one Project in parallel serializes those calls itself.
+
 The CLI does both steps in one command. While anything is left it prints each item, leaves the website on the version it uses and exits non-zero:
 
 ```bash
