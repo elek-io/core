@@ -1383,4 +1383,83 @@ describe('Releasing a Project that has a website', function () {
       );
     });
   });
+
+  describe('a website and a Contract this Core cannot read', function () {
+    let project: Awaited<ReturnType<typeof createProject>>;
+    let website: DestinationFile;
+
+    beforeAll(async function () {
+      project = await createProject();
+      const collection = await createCollection(project.id);
+      const asset = await createAsset(project.id);
+      await createEntry(project.id, collection.id, asset.id);
+      const theme = await themeWith([
+        await core.contracts.generate({
+          projectId: project.id,
+          name: '@acme/unreadable-site',
+          version: '1.0.0',
+        }),
+      ]);
+      website = await core.destinations.addWebsite({
+        projectId: project.id,
+        name: 'unreadable.example',
+        url: theme.url,
+      });
+      await core.releases.create({ projectId: project.id });
+    });
+
+    afterAll(async function () {
+      await project.destroy();
+    });
+
+    afterEach(async function ({ task }) {
+      await ensureCleanGitStatus(task, project.id);
+    });
+
+    it('reports both by their presence alone, and never as gone or renamed', async function () {
+      // Both files as a Core that wrote another shape left them: a kind of
+      // Destination and an origin of a Contract this Core does not know
+      const projectPath = core.util.pathTo.project(project.id);
+      const destinationFilePath = core.util.pathTo.destinationFile(
+        project.id,
+        website.id
+      );
+      const contractFilePath = core.util.pathTo.contractFile(
+        project.id,
+        website.contract.id
+      );
+      await Fs.writeJson(destinationFilePath, {
+        ...(await Fs.readJson(destinationFilePath)),
+        coreVersion: '0.1.0',
+        kind: 'inbox',
+      });
+      await Fs.writeJson(contractFilePath, {
+        ...(await Fs.readJson(contractFilePath)),
+        coreVersion: '0.1.0',
+        origin: { kind: 'registry', package: '@acme/unreadable-site' },
+      });
+      await core.git.add(projectPath, [destinationFilePath, contractFilePath]);
+      await core.git.commit(projectPath, {
+        method: 'update',
+        reference: { objectType: 'project', id: project.id },
+      });
+
+      // Neither file is one this Core reads, so the website is not among
+      // the ones it lists and the check reads nothing about it
+      expect(
+        (await core.destinations.list({ projectId: project.id, limit: 0 })).list
+      ).toEqual([]);
+
+      const prepared = await core.releases.prepare({ projectId: project.id });
+      const released = await core.releases.create({ projectId: project.id });
+
+      // Which part of either changed cannot be read, so the Release reports
+      // no change inside them, and never that one is gone
+      expect(prepared.destinationIssues).toEqual([]);
+      expect(prepared.destinationChanges).toEqual([]);
+      expect(prepared.contractChanges).toEqual([]);
+      expect(prepared.bump).toEqual('patch');
+      expect(released.version).toEqual('0.1.1');
+    });
+  });
 });
