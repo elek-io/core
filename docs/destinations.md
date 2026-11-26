@@ -10,7 +10,7 @@ Where a Project's content goes, and what the place it goes to needs. A Destinati
 | Contract | What a theme needs, as Collections and Components | `elek.contract.json` in the theme, copied into the Project |
 | website | The kind of Destination an editor adds, shown by its own name | The Project |
 | Destination | One place content goes: its name, kind, Contract, version in use, Mapping and the newer version waiting for it | The Project |
-| Mapping | Which Project Collection and field definition fills which field of the Contract | Inside the Destination |
+| Mapping | Which Project Collection fills which Collection of the Contract, which of its Entries the website takes, and how each field is filled | Inside the Destination |
 
 One theme runs many websites, and one Project keeps each Contract once however many Destinations follow it.
 
@@ -88,11 +88,77 @@ A second website on the same address shares the Contract the Project already kee
 
 - The Mapping starts out filling every field of the Contract whose id one of the Project's own field definitions carries, which is what a Contract generated from this Project gives. Nothing is guessed.
 - A name another Destination of the Project already carries throws `Conflict`.
-- `core.destinations.update()` replaces the Mapping, renames the website, or both. No version in use changes there.
+- `core.destinations.update()` replaces the Mapping, renames the website, or both. No version in use changes there. Whatever the Mapping leaves unfilled is saved, so an editor maps in steps, and it refuses a Mapping filling a Collection the Contract does not hold with `BadRequest`.
 - `core.destinations.delete()` removes the website and leaves every Contract as it is.
 - `core.contracts.keep()` puts a Contract into the Project under its own origin, which `addWebsite()` does for you. It refuses an address carrying a credential or one git would run as a command, the same way, because the origin is written into the Project.
 
 A Project with no website behaves exactly as one did before Destinations existed, and `list()` and `count()` answer with nothing for a Project whose folders predate them.
+
+## What a Mapping can do
+
+A Mapping fills each field of the Contract in one of four ways, named by `fill`. Left out, `fill` reads as `field`, which is what a Mapping written before the other three existed fills by.
+
+| `fill` | Fills the field from | Takes a `language` order |
+| --- | --- | --- |
+| `field` | one field definition of the Project, `fieldDefinitionId` | yes |
+| `fixed` | `value`, a Value typed into the Mapping | no |
+| `combined` | the `fieldDefinitionIds` joined by `separator` | yes |
+| `options` | one field definition whose options are matched onto the Contract's | yes |
+
+```typescript
+await core.destinations.update({
+  projectId: project.id,
+  id: website.id,
+  mapping: {
+    collections: {
+      [contractCarsId]: {
+        from: { collectionId: vehicles.id, where: [] },
+        fields: {
+          [contractTitleId]: {
+            fill: 'combined',
+            fieldDefinitionIds: [make.id, model.id],
+            separator: ' ',
+          },
+          [contractStatusId]: {
+            fill: 'options',
+            fieldDefinitionId: status.id,
+            options: [{ from: 'for-sale', to: 'available' }],
+          },
+          [contractBodyId]: {
+            fill: 'field',
+            fieldDefinitionId: body.id,
+            language: { order: ['de', 'en'] },
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+The four ways in detail:
+
+- A fixed `value` is a Value of the kind the field takes, in every language of the Project, and the field's own rules are read against it. A reference and Component items cannot be fixed, because their ids belong to one Project.
+- `combined` joins the Values of two field definitions or more into one text per language, leaving out the ones holding nothing there. Its sources are text and number fields, and the field it fills takes text.
+- `options` matches each option of a `select` field onto an option of the Contract's own field, once in the Mapping rather than per Entry. An option without a match fills nothing.
+- `language` takes the Value of the first language of `order` holding one and puts it into every language of the Project, which is how a theme serving one language takes what an editor wrote in another. Component items are not kept per language and are left as they are.
+- `separator` defaults to a space, and a `language` order left out reads each language from itself.
+
+## Which Entries a website takes
+
+Each Collection of the Mapping takes the Entries meeting every condition under `from.where`, and all of them without one, which is what a Mapping written before conditions existed takes.
+
+```typescript
+from: {
+  collectionId: vehicles.id,
+  where: [{ fieldDefinitionId: status.id, equals: ['for-sale', 'reserved'] }],
+},
+```
+
+- A condition is met by an Entry whose Value for that field definition is one of the ones it lists, in any language of the Project. An Entry holding none of them raises nothing in a check and reaches no site.
+- It reads a text, number or toggle field. One on a field of another kind, or on a field definition the Collection does not hold, takes no Entry at all and is reported.
+- An Entry the website takes that points at one it leaves out is reported as `reference_not_taken`, because a page of it would link to something the website does not hold.
+- Where two Collections of the Contract read one Collection of the Project and only one of them carries a condition, the website takes every Entry of it, because the other one takes them all.
 
 ## Asking what a website cannot take
 
@@ -110,16 +176,71 @@ const issues = await core.destinations.checkAll({
 | `collection_not_mapped` | No Collection of the Project fills a Collection the Contract names, or the Mapping fills it from a Collection the Project no longer holds |
 | `field_not_mapped` | No field definition fills a required field of the Contract, or the Mapping fills it from a field definition its Collection no longer holds |
 | `reference_not_mapped` | A mapped reference field points at a Collection of the Contract that nothing fills |
+| `does_not_fit` | What fills a field cannot: a Value of another kind, a fixed Value the field refuses, fields joined into a field taking no text, a condition on a Value there is nothing to compare, or a Single Entry of the Contract filled from a Collection holding a list |
+| `option_not_matched` | An option of the Project's field becomes no option of the Contract's, because nothing matches it, the match names an option one of the two does not hold, or the two fields are filled onto each other without matching |
 | `missing_required` | The Entry holds no Value for a required field of the Contract |
 | `constraint_violation` | The Entry's Value does not satisfy the Contract's field definition |
+| `reference_not_taken` | The Entry points at one the website does not take |
 
-- The first three are about the Mapping and come back whatever the Entries hold, so `checkAll()` reports each once.
-- The last two name both sides: the Contract's field and the Project's own `collectionId`, `fieldDefinitionId` and `fieldSlug`, so an app can open the Entry at the field that raised it.
+- The first five are about the Mapping and come back whatever the Entries hold, so `checkAll()` reports each once, and `checkMapping()` reports them without reading an Entry at all.
+- The last three name both sides: the Contract's field and the Project's own `collectionId`, `fieldDefinitionId` and `fieldSlug`, so an app can open the Entry at the field that raised it.
 - The Mapping is read against the Collections the Project holds now. An entry of it naming a Collection or field definition that is gone fills nothing, so it is reported rather than taken as mapped, which is what a Project changing under a Mapping leaves behind.
-- Values are read against the Contract's own field definitions. An Entry reference is moved onto the Contract's Collection ids through the Mapping first, and one pointing into a Collection of the Project that fills nothing is refused, whatever the Contract's field allows.
+- A field the Mapping fills in a way that cannot work is reported once as `does_not_fit` and left out of every Entry's check, so one wrong row of a Mapping is one issue rather than one per Entry.
+- Values are read the way the Mapping fills them and against the Contract's own field definitions. An Entry reference is moved onto the Contract's Collection ids through the Mapping first, and one pointing into a Collection of the Project that fills nothing is refused, whatever the Contract's field allows.
+- An Entry the website does not take raises nothing of its own, and neither does an optional field of the Contract nothing fills.
 - A `dynamic` field is checked by the Components its items name, their count and whether one is there at all, never inside an item, because no Mapping maps a Component's own fields yet. A Value holding something other than Component items is refused, required or not.
 
 The issues are spelled like the ones a field definition change raises, so an app words both the same way, see [`schema-changes.md`](./schema-changes.md#the-issues-an-update-reports).
+
+## Checking a Mapping before it is saved, and the Values it fills
+
+An app that lets an editor map a website checks the Mapping it is building, and shows the Value each field would take from one of the editor's own Entries, before any of it is saved.
+
+```typescript
+const issues = await core.destinations.checkMapping({
+  projectId: project.id,
+  id: website.id,
+  mapping: edited,
+});
+const values = await core.destinations.values({
+  projectId: project.id,
+  id: website.id,
+  contractCollectionId: contractCarsId,
+  entryId: entry.id,
+});
+```
+
+- `checkMapping()` answers what the Mapping given leaves the Contract without, the first five issues of the table above, and reads no Entry. It saves nothing, and throws `BadRequest` for a Mapping filling a Collection the Contract does not hold.
+- `values()` answers one Entry's Values keyed by the field slugs of one Collection of the Contract, which is the shape a site reads. Every way of filling a field is applied, whether or not the website takes that Entry.
+- A field of the Contract nothing fills is empty there rather than absent, so the shape is the Contract's whatever the Mapping holds.
+- Both take `isWaitingVersion: true` for the version that waits beside the one in use.
+
+## Creating a Collection or a field from the theme
+
+A theme needs a Collection or a field the Project has nothing for, and the editor creates it from the theme rather than building it by hand. The Mapping fills itself with what was created.
+
+```typescript
+const website = await core.destinations.createCollection({
+  projectId: project.id,
+  id: website.id,
+  contractCollectionId: contractCarsId,
+});
+await core.destinations.createFieldDefinition({
+  projectId: project.id,
+  id: website.id,
+  contractCollectionId: contractCarsId,
+  contractFieldDefinitionId: contractVinId,
+});
+```
+
+- `createCollection()` writes the Collection the theme states, with the Components its `dynamic` fields need, and fills the Mapping with every field of it. `createFieldDefinition()` adds one field of the theme to the Collection of the Project filling its Collection, and fills that one row of the Mapping.
+- Every id is the Project's own, and the names, slugs, labels, descriptions, default values and rules are the theme's. A field pointing at another Collection of the Contract points at the Collection of the Project filling it, and one pointing at its own Collection at the created one.
+- Nothing the Project holds is changed. A Collection under the theme's plural slug, a Component under the theme's slug and a field definition under the theme's slug each throw `Conflict` naming it, and so does a Collection or field of the Contract something already fills.
+- A Collection of the Contract the theme's fields point at that nothing fills throws `PreconditionFailed`, so fill or create that one first. A Component this website created from its theme before is used again rather than created twice.
+- The labels and descriptions of the theme have to cover the Project's languages, because a Collection of the Project carries them in all of them. A theme that does not serve one of them throws `BadRequest` naming the label.
+- Adding a required field of the theme to a Collection that already holds Entries throws `Conflict` with one issue per Entry, the way a field definition change does. Send its Value per Entry under `resolutions`, keyed by Entry id and then by the field's own slug, see [`schema-changes.md`](./schema-changes.md#the-resolution-workflow).
+- `core.destinations.createdCollections()` answers which Collections this website created from its theme, in the order they were created, so an app groups them under the website. A Collection deleted since is left out.
+- Both take `isWaitingVersion: true` to create for the version that waits, against the Contract copy of that version.
 
 ## Following a theme's new version
 
@@ -188,6 +309,7 @@ elek website:update --project <id> --name autohaus-ebersfelde.de
 - A `{version}.json` copy carries the Contract as it was read and the commit of its origin it came from, so the Project stays self-contained and offline.
 - A copy is never rewritten. A version already kept is the one a Destination keeps using.
 - A Destination holds a copy's version under `contract.version` for the one it uses, and under `waiting.version` with a Mapping of its own for a newer one that waits.
+- It holds what it created from its theme under `createdFromTheme`, so an app groups those Collections under the website and a second create uses the Components the first one made.
 - No credential of any kind goes into the Project. An address carrying one is refused.
 
 ## What a site's build reads
@@ -198,6 +320,7 @@ A site built with Core's Astro integration reads a Project's Entries through its
 - Its collections, schemas and types come from that Contract, so the theme's code never names one Project's Collections or fields.
 - The Contract's name is read from the Project's own copy and never from the theme's address, so a build needs no access to the theme.
 - A site one Contract version behind the website builds what its own Contract names, as long as the Mapping fills every Collection and required field of it, and one whose code moved ahead stops the build.
+- It reads the Values the way the Mapping fills them, and the Entries the Mapping's conditions let through. An Entry the website does not take reaches no page, and one that is taken while pointing at it stops the build.
 - A build reads the version the website uses, never one that waits beside it, so a theme's new version changes nothing until the website switches to it.
 
 See [the Astro integration](./usage.md#building-on-the-sites-own-contract) for the config, what a failing build prints and what a pipeline of your own needs.

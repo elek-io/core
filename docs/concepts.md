@@ -65,7 +65,7 @@ Are tagged snapshots of a Project at a specific point in time, managed through g
 
 ## Contracts and Destinations
 
-A Destination is one place a Project's content goes, a website first, shown by its own name. A Contract is what the place it goes to needs, as Collections and Components in Core's own schemas, and a theme states one in its own repository. A Mapping says which Project Collection and field definition fills which field of the Contract.
+A Destination is one place a Project's content goes, a website first, shown by its own name. A Contract is what the place it goes to needs, as Collections and Components in Core's own schemas, and a theme states one in its own repository. A Mapping says which Project Collection fills which Collection of the Contract, which of its Entries the website takes, and how each field of it is filled.
 
 A Project keeps each Contract once, with where it comes from and a copy of every version a Destination uses, so it stays self-contained. See [`destinations.md`](./destinations.md).
 

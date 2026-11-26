@@ -734,6 +734,7 @@ Everything else reads as it does without a Contract. Values are keyed by the Pro
 - An optional field of the Contract nothing fills is empty, `null` in every language or an empty list, which is what a field the editor left empty holds too. A required one stops the build, see [what a build on a Contract receives](#what-a-build-on-a-contract-receives).
 - A Value of the Project the Contract does not ask for is left out, so a site one Contract version behind builds what its own Contract names.
 - Mapping a Project's content onto a Contract is the editor's work in elek.io Desktop. The build reads that Mapping and never guesses.
+- The build takes the Entries the Mapping's conditions let through and reads each Value the way the Mapping fills it, be that one field, a fixed Value, several fields joined or matched options. An Entry the website does not take reaches no page, and one that is taken while pointing at it stops the build.
 
 ### What a build on a Contract receives
 
@@ -745,6 +746,8 @@ Contract "@acme/dealer-site" at version 1.1.0 while the website uses 1.0.0:
 - No Collection of the Project fills "pages"
 - No field of the Project fills the required field "author" of "posts"
 ```
+
+The same error names a field the Mapping fills in a way that cannot work, an option of the Project's field that becomes none of the Contract's, and a Single Entry of the Contract filled from a Collection holding a list, see [what a Mapping can do](./destinations.md#what-a-mapping-can-do).
 
 Then every Entry a Collection of the Contract refuses, naming the Entry, the field and the language:
 
