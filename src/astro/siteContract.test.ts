@@ -49,6 +49,27 @@ function textField(
   };
 }
 
+/** An optional select field, whose options a Mapping matches */
+function selectField(slug: string, options: string[]): StringFieldDefinition {
+  return {
+    id: uuid(),
+    slug,
+    valueType: 'string',
+    fieldType: 'select',
+    label: { en: slug, de: slug },
+    description: null,
+    defaultValue: null,
+    isRequired: false,
+    isDisabled: false,
+    isUnique: false,
+    inputWidth: '12',
+    options: options.map((value) => ({
+      value,
+      label: { en: value, de: value },
+    })),
+  };
+}
+
 /** An optional Entry reference, pointed at its own Collection after creation */
 function entryField(slug: string): EntryFieldDefinition {
   return {
@@ -70,10 +91,12 @@ function entryField(slug: string): EntryFieldDefinition {
 
 const themeTitle = textField('title', true, 10);
 const themeTeaser = textField('teaser', false);
+const themeStatus = selectField('status', ['available', 'sold']);
 const themeRelated = entryField('related');
 const themePhone = textField('phone', true);
 const siteHeadline = textField('headline', true, 200);
 const siteStandfirst = textField('standfirst', false);
+const siteZustand = selectField('zustand', ['frei', 'verkauft']);
 const siteSeeAlso = entryField('see-also');
 const siteTelephone = textField('telephone', true);
 
@@ -168,7 +191,7 @@ describe('a site reading its Entries through its own Contract', function () {
     themePosts = await createCollectionOf({
       projectId: themeProject.id,
       slug: { singular: 'post', plural: 'posts' },
-      fieldDefinitions: [themeTitle, themeTeaser, themeRelated],
+      fieldDefinitions: [themeTitle, themeTeaser, themeStatus, themeRelated],
     });
     themeContacts = await createCollectionOf({
       projectId: themeProject.id,
@@ -188,7 +211,12 @@ describe('a site reading its Entries through its own Contract', function () {
     siteArticles = await createCollectionOf({
       projectId: siteProjectId,
       slug: { singular: 'article', plural: 'articles' },
-      fieldDefinitions: [siteHeadline, siteStandfirst, siteSeeAlso],
+      fieldDefinitions: [
+        siteHeadline,
+        siteStandfirst,
+        siteZustand,
+        siteSeeAlso,
+      ],
     });
     siteImprint = await createCollectionOf({
       projectId: siteProjectId,
@@ -203,6 +231,7 @@ describe('a site reading its Entries through its own Contract', function () {
       values: {
         headline: text('Golf GTI'),
         standfirst: text(null),
+        zustand: text('frei'),
         'see-also': references(siteArticles.id, []),
       },
     });
@@ -213,6 +242,7 @@ describe('a site reading its Entries through its own Contract', function () {
       values: {
         headline: text('Polo'),
         standfirst: text('Small and cheap'),
+        zustand: text('verkauft'),
         'see-also': references(siteArticles.id, [first.id]),
       },
     });
@@ -448,6 +478,8 @@ describe('a site reading its Entries through its own Contract', function () {
     expect(site.store.get(secondEntryId)?.data).toEqual({
       title: { en: 'Polo', de: 'Polo' },
       teaser: { en: 'Small and cheap', de: 'Small and cheap' },
+      // The Mapping fills no option onto it, so it is empty rather than absent
+      status: { en: null, de: null },
       // Moved onto the Collection of the Contract the Project's own fills,
       // so the site follows it with the collection key it derived
       related: {
@@ -480,6 +512,7 @@ describe('a site reading its Entries through its own Contract', function () {
     expect(site.store.get(secondEntryId)?.data).toEqual({
       headline: { en: 'Polo', de: 'Polo' },
       standfirst: { en: 'Small and cheap', de: 'Small and cheap' },
+      zustand: { en: 'verkauft', de: 'verkauft' },
       'see-also': {
         en: [
           {
@@ -661,6 +694,7 @@ describe('a site reading its Entries through its own Contract', function () {
       values: {
         headline: text('Tiguan Allspace R-Line'),
         standfirst: text(null),
+        zustand: text(null),
         'see-also': references(siteArticles.id, []),
       },
     });
@@ -672,6 +706,7 @@ describe('a site reading its Entries through its own Contract', function () {
       values: {
         headline: text('Arteon Shooting Brake'),
         standfirst: text(null),
+        zustand: text(null),
         'see-also': references(siteArticles.id, []),
       },
     });
@@ -1353,6 +1388,7 @@ describe('a site reading its Entries through its own Contract', function () {
             valueType: 'string',
             content: { en: null, de: 'Nur auf Deutsch' },
           },
+          zustand: text(null),
           'see-also': references(siteArticles.id, []),
         },
       });
@@ -1378,6 +1414,35 @@ describe('a site reading its Entries through its own Contract', function () {
           });
         }
       );
+    });
+
+    it('gives the site the option the Contract offers', async function () {
+      const mapping = fullMapping();
+      const posts = mapping.collections[themePosts.id];
+      if (posts === undefined) {
+        throw new Error('The Mapping does not fill the posts of the Contract');
+      }
+      posts.fields[themeStatus.id] = {
+        fill: 'options',
+        fieldDefinitionId: siteZustand.id,
+        options: [
+          { from: 'frei', to: 'available' },
+          { from: 'verkauft', to: 'sold' },
+        ],
+      };
+
+      await withMapping(mapping, async function () {
+        const site = await loadPosts();
+
+        // The option of the Project's own field reaches the site as the one
+        // the Contract offers, which is the Value its schema takes
+        expect(site.store.get(firstEntryId)?.data).toMatchObject({
+          status: { en: 'available', de: 'available' },
+        });
+        expect(site.store.get(secondEntryId)?.data).toMatchObject({
+          status: { en: 'sold', de: 'sold' },
+        });
+      });
     });
 
     it('loads only the Entries the Mapping lets through', async function () {

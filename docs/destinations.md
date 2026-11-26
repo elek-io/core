@@ -139,7 +139,7 @@ await core.destinations.update({
 The four ways in detail:
 
 - A fixed `value` is a Value of the kind the field takes, in every language of the Project, and the field's own rules are read against it. A reference and Component items cannot be fixed, because their ids belong to one Project.
-- `combined` joins the Values of two field definitions or more into one text per language, leaving out the ones holding nothing there. Its sources are text and number fields, and the field it fills takes text.
+- `combined` joins the Values of two field definitions or more into one text per language, leaving out the ones holding nothing there. Its sources are the fields whose Value is text or a number, whatever kind of field that is, and the field it fills takes text.
 - `options` matches each option of a `select` field onto an option of the Contract's own field, once in the Mapping rather than per Entry. An option without a match fills nothing.
 - `language` takes the Value of the first language of `order` holding one and puts it into every language of the Project, which is how a theme serving one language takes what an editor wrote in another. Component items are not kept per language and are left as they are.
 - `separator` defaults to a space, and a `language` order left out reads each language from itself.
@@ -156,7 +156,7 @@ from: {
 ```
 
 - A condition is met by an Entry whose Value for that field definition is one of the ones it lists, in any language of the Project. An Entry holding none of them raises nothing in a check and reaches no site.
-- It reads a text, number or toggle field. One on a field of another kind, or on a field definition the Collection does not hold, takes no Entry at all and is reported.
+- It reads a field whose Value is text, a number or a toggle, whatever kind of field that is, a `select` among them. One on a field whose Value is of another kind, or on a field definition the Collection does not hold, takes no Entry at all and is reported.
 - An Entry the website takes that points at one it leaves out is reported as `reference_not_taken`, because a page of it would link to something the website does not hold.
 - Where two Collections of the Contract read one Collection of the Project and only one of them carries a condition, the website takes every Entry of it, because the other one takes them all.
 

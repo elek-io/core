@@ -1145,7 +1145,7 @@ describe('mappingIssuesOf, a Mapping that cannot fill', function () {
       {
         issue: 'does_not_fit',
         message:
-          'The field "title" is filled from the field "dealer" of the Project among others, whose Value of type "reference" has no text to join. Join text and number fields only.',
+          'The field "title" is filled from the field "dealer" of the Project among others, whose Value of type "reference" has no text to join. Join fields whose Value is text or a number.',
       },
     ]);
   });
@@ -1272,9 +1272,26 @@ describe('mappingIssuesOf, a Mapping that cannot fill', function () {
       {
         issue: 'does_not_fit',
         message:
-          'Which Entries the website takes of the Collection "cars" is read from its field "dealer", whose Value of type "reference" is nothing to compare. Read a text, number or toggle field.',
+          'Which Entries the website takes of the Collection "cars" is read from its field "dealer", whose Value of type "reference" is nothing to compare. Read a field whose Value is text, a number or a toggle.',
       },
     ]);
+  });
+
+  it('takes a condition on a select field, whose Value is text', function () {
+    // The Value decides, not the kind of field, so only the cars for sale
+    // reads a select field
+    expect(
+      issuesOf({
+        contractFields: [],
+        projectFields: [
+          selectFieldOf(more.statusField, 'status', ['frei', 'verkauft']),
+        ],
+        mapping: mappingFilling({
+          where: [{ fieldDefinitionId: more.statusField, equals: ['frei'] }],
+          fields: {},
+        }),
+      })
+    ).toEqual([]);
   });
 
   it('names a condition listing a Value of another type', function () {

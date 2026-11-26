@@ -929,7 +929,7 @@ function fitProblemOf(props: {
       });
       return other === undefined
         ? undefined
-        : `The field ${named} is filled from the field "${other.slug}" of the Project among others, whose Value of type "${other.valueType}" has no text to join. Join text and number fields only.`;
+        : `The field ${named} is filled from the field "${other.slug}" of the Project among others, whose Value of type "${other.valueType}" has no text to join. Join fields whose Value is text or a number.`;
     }
     case 'options': {
       const source = sourceFields[0];
@@ -1065,7 +1065,8 @@ function optionProblemsOf(props: {
 /**
  * Why one condition on which Entries the website takes cannot be met, or
  * undefined where it can. A condition reads one Value of the Project, so a
- * field definition that is gone, a Value that is no text, number or toggle,
+ * field definition that is gone, a Value that is no text, number or toggle
+ * however the field is typed,
  * and a listed Value of another type each stop it.
  */
 function conditionProblemOf(
@@ -1083,7 +1084,7 @@ function conditionProblemOf(
     field.valueType !== 'number' &&
     field.valueType !== 'boolean'
   ) {
-    return `Which Entries the website takes of ${named} is read from its field "${field.slug}", whose Value of type "${field.valueType}" is nothing to compare. Read a text, number or toggle field.`;
+    return `Which Entries the website takes of ${named} is read from its field "${field.slug}", whose Value of type "${field.valueType}" is nothing to compare. Read a field whose Value is text, a number or a toggle.`;
   }
   const other = condition.equals.find((wanted) => {
     return (
