@@ -192,6 +192,8 @@ const issues = await core.destinations.checkAll({
 
 The issues are spelled like the ones a field definition change raises, so an app words both the same way, see [`schema-changes.md`](./schema-changes.md#the-issues-an-update-reports).
 
+Every Release of the Project asks the same question of every website it holds, and is refused while anything is left, see [the check before a Release](./releases.md#the-check-before-a-release).
+
 ## Checking a Mapping before it is saved, and the Values it fills
 
 An app that lets an editor map a website checks the Mapping it is building before any of it is saved, and shows the Value each field takes from one of the editor's own Entries under the Mapping the website has saved.
@@ -336,4 +338,5 @@ See [the Astro integration](./usage.md#building-on-the-sites-own-contract) for t
 - [`git-and-sync.md`](./git-and-sync.md#reading-an-address-with-your-own-git-access) - the git access reading a theme's address takes
 - [`usage.md`](./usage.md#the-cli) - `elek generate:contract`
 - [`usage.md`](./usage.md#building-on-the-sites-own-contract) - the Astro site that builds on its Contract
+- [`releases.md`](./releases.md#the-check-before-a-release) - the check every Release of the Project passes
 - [`error-handling.md`](./error-handling.md) - `CoreError`, its types and its reasons

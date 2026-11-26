@@ -16,6 +16,12 @@ import {
   type ComponentChange,
   type ComponentFieldChange,
   type ComponentFile,
+  contractFileSchema,
+  type ContractChange,
+  type ContractFile,
+  destinationFileSchema,
+  type DestinationChange,
+  type DestinationFile,
   type ElekIoCoreOptions,
   type EntryChange,
   type EntryFile,
@@ -42,6 +48,9 @@ import {
   INITIAL_PROJECT_VERSION,
   type ReleaseVersion,
 } from '../util/release.js';
+import type { DestinationIssue } from '../util/destinationIssue.js';
+import { issueCountsOf } from '../util/destinationCheck.js';
+import type { ReleasePreparation } from '../util/releasePreparation.js';
 import { CoreError, datetime } from '../util/shared.js';
 import { AbstractService } from './AbstractService.js';
 import {
@@ -50,6 +59,7 @@ import {
   migrateComponentFile,
   migrateEntryFile,
 } from './migrations/index.js';
+import type { DestinationService } from './DestinationService.js';
 import type { GitService } from './GitService.js';
 import type { JsonFileService } from './JsonFileService.js';
 import type { LogService } from './LogService.js';
@@ -70,6 +80,7 @@ export class ReleaseService extends AbstractService {
   private gitService: GitService;
   private jsonFileService: JsonFileService;
   private projectService: ProjectService;
+  private destinationService: DestinationService;
 
   constructor(
     coreVersion: string,
@@ -78,7 +89,8 @@ export class ReleaseService extends AbstractService {
     logService: LogService,
     gitService: GitService,
     jsonFileService: JsonFileService,
-    projectService: ProjectService
+    projectService: ProjectService,
+    destinationService: DestinationService
   ) {
     super(serviceTypeSchema.enum.Release, options, pathTo, logService);
 
@@ -86,6 +98,7 @@ export class ReleaseService extends AbstractService {
     this.gitService = gitService;
     this.jsonFileService = jsonFileService;
     this.projectService = projectService;
+    this.destinationService = destinationService;
   }
 
   /**
@@ -208,20 +221,20 @@ export class ReleaseService extends AbstractService {
 
   /**
    * Diffs `draft` against the released `main`, the remote's as last fetched
-   * when there is one, since this call never fetches. Returns the changes and
-   * the next version, `bump` and `nextVersion` null when nothing changed and
-   * `patch` when `draft` is merely ahead in commits. Writes nothing.
+   * when there is one, since this call never fetches. Returns the changes,
+   * the next version and what stops the Release, `bump` and `nextVersion`
+   * null when nothing changed and `patch` when `draft` is merely ahead in
+   * commits. Writes nothing.
    *
-   * Throws `PreconditionFailed` off `draft`, with no `main` anywhere, when
-   * `draft` lacks commits of the remote's `draft` or `main`, or the local
-   * `main` holds commits the remote's lacks, exactly as `create()` would.
+   * Throws `PreconditionFailed` exactly where `create()` would: off `draft`,
+   * with no `main` anywhere, or where a branch lacks another's commits.
    *
    * @see ../../docs/releases.md
    */
-  public prepare(props: PrepareReleaseProps): Promise<ReleaseDiff> {
+  public prepare(props: PrepareReleaseProps): Promise<ReleasePreparation> {
     return this.validated('prepare', prepareReleaseSchema, props, async () => {
-      const { diff } = await this.diff(props.projectId);
-      return diff;
+      const { diff, destinationIssues } = await this.diff(props.projectId);
+      return { ...diff, destinationIssues };
     });
   }
 
@@ -232,8 +245,8 @@ export class ReleaseService extends AbstractService {
    * remote it releases locally.
    *
    * Throws `PreconditionFailed` when nothing changed, where `prepare()` does
-   * and when the remote does not support atomic pushes. A failure at any
-   * step unwinds every one before it, so the call can simply be retried.
+   * and on a remote without atomic pushes, and `Conflict` while a Destination
+   * cannot take `draft`. A failure unwinds its steps, so retry the call.
    *
    * @see ../../docs/releases.md
    */
@@ -245,13 +258,17 @@ export class ReleaseService extends AbstractService {
       const projectFilePath = this.pathTo.projectFile(props.projectId);
 
       const hasOrigin = await this.fetchOrigin(projectPath);
-      const { diff, released } = await this.diff(props.projectId);
+      const { diff, destinationIssues, released } = await this.diff(
+        props.projectId
+      );
 
       if (!diff.bump || !diff.nextVersion) {
         throw CoreError.preconditionFailed(
           'Cannot create a release: no changes detected since the last full release'
         );
       }
+
+      this.assertDestinationsTake('release', destinationIssues);
 
       const nextVersion = diff.nextVersion;
 
@@ -354,8 +371,9 @@ export class ReleaseService extends AbstractService {
    * tag in one atomic push. It never touches `main`, so only `create`
    * promotes content.
    *
-   * Throws where `create()` does. A failure unwinds the version commit and
-   * the tag, so a failed preview leaves `draft` where it was.
+   * Throws where `create()` does, a Destination that cannot take `draft`
+   * included, because a preview build reads the same Mapping. A failure
+   * unwinds the version commit and the tag, so `draft` is left as it was.
    *
    * @see ../../docs/releases.md
    */
@@ -373,13 +391,15 @@ export class ReleaseService extends AbstractService {
         const projectFilePath = this.pathTo.projectFile(props.projectId);
 
         const hasOrigin = await this.fetchOrigin(projectPath);
-        const { diff } = await this.diff(props.projectId);
+        const { diff, destinationIssues } = await this.diff(props.projectId);
 
         if (!diff.bump || !diff.nextVersion) {
           throw CoreError.preconditionFailed(
             'Cannot create a preview release: no changes detected since the last full release'
           );
         }
+
+        this.assertDestinationsTake('preview release', destinationIssues);
 
         const previewNumber = await this.countPreviewsSinceLastRelease(
           projectPath,
@@ -537,13 +557,15 @@ export class ReleaseService extends AbstractService {
   }
 
   /**
-   * The diff behind prepare(), create() and createPreview(), plus the
-   * released commit it was taken against, so create() builds on exactly
-   * that commit.
+   * The diff behind prepare(), create() and createPreview(), what every
+   * Destination of the Project cannot take about `draft`, and the released
+   * commit it was taken against, so create() builds on exactly that commit.
    */
-  private async diff(
-    projectId: string
-  ): Promise<{ diff: ReleaseDiff; released: ReleasedSide }> {
+  private async diff(projectId: string): Promise<{
+    diff: ReleaseDiff;
+    destinationIssues: DestinationIssue[];
+    released: ReleasedSide;
+  }> {
     const projectPath = this.pathTo.project(projectId);
     const currentRef = projectBranchSchema.enum.draft;
 
@@ -594,8 +616,66 @@ export class ReleaseService extends AbstractService {
         nextVersion,
         ...changes,
       },
+      destinationIssues: await this.destinationIssues(projectId),
       released,
     };
+  }
+
+  /**
+   * What every Destination of the Project cannot take about the working
+   * copy, which is `draft`, each issue the way `checkAll()` reports it.
+   *
+   * Empty for a Project without a Destination, which costs one look at the
+   * folder and reads nothing, so such a Project releases as it did before
+   * Destinations existed. The version a Destination uses is read, never one
+   * that waits beside it, because a Release is what a site builds on.
+   *
+   * @see ../../docs/releases.md
+   */
+  private async destinationIssues(
+    projectId: string
+  ): Promise<DestinationIssue[]> {
+    const { list } = await this.destinationService.list({
+      projectId,
+      limit: 0,
+    });
+    const issues: DestinationIssue[] = [];
+    for (const destination of list) {
+      issues.push(
+        ...(await this.destinationService.checkAll({
+          projectId,
+          id: destination.id,
+        }))
+      );
+    }
+    return issues;
+  }
+
+  /**
+   * Refuses a Release while a Destination cannot take what `draft` holds,
+   * with every item on the `cause` as `checkAll()` reports it.
+   *
+   * It runs before anything is written, so the Project stays as it was and
+   * the call is retried once the Mapping covers the rest. The message
+   * carries ids and counts, the items stay on the cause. See
+   * contributing/logging.md
+   */
+  private assertDestinationsTake(
+    what: string,
+    issues: DestinationIssue[]
+  ): void {
+    if (issues.length === 0) {
+      return;
+    }
+    const ids = [...new Set(issues.map((issue) => issue.destinationId))];
+    const named =
+      ids.length === 1
+        ? `Destination "${ids[0]}"`
+        : `Destinations ${ids.map((id) => `"${id}"`).join(', ')}`;
+    throw CoreError.conflict(
+      `Cannot create a ${what}: ${named} of this Project cannot take what "${projectBranchSchema.enum.draft}" holds, ${whatIsLeftOf(issues)}. Each is named on the cause. Map the rest, or remove the Destination.`,
+      issues
+    );
   }
 
   /**
@@ -643,6 +723,16 @@ export class ReleaseService extends AbstractService {
       await this.getComponentsAtRef(projectId, projectPath, fromRef)
     );
 
+    const destinationDiff = this.diffDestinations(
+      await this.getDestinationsAtRef(projectId, projectPath, toRef),
+      await this.getDestinationsAtRef(projectId, projectPath, fromRef)
+    );
+
+    const contractDiff = this.diffContracts(
+      await this.getContractsAtRef(projectId, projectPath, toRef),
+      await this.getContractsAtRef(projectId, projectPath, fromRef)
+    );
+
     const allCollectionIds = new Set([
       ...toCollections.map((c) => c.id),
       ...fromCollections.map((c) => c.id),
@@ -663,6 +753,8 @@ export class ReleaseService extends AbstractService {
       componentDiff.bump,
       assetDiff.bump,
       entryDiff.bump,
+      destinationDiff.bump,
+      contractDiff.bump,
     ]) {
       if (candidate) {
         bump = bump ? this.higherBump(bump, candidate) : candidate;
@@ -679,6 +771,8 @@ export class ReleaseService extends AbstractService {
         componentFieldChanges: componentDiff.componentFieldChanges,
         assetChanges: assetDiff.assetChanges,
         entryChanges: entryDiff.entryChanges,
+        destinationChanges: destinationDiff.destinationChanges,
+        contractChanges: contractDiff.contractChanges,
       },
     };
   }
@@ -984,6 +1078,260 @@ export class ReleaseService extends AbstractService {
     }
 
     return components;
+  }
+
+  /**
+   * Reads Destination files as they exist at a given git ref, through
+   * `fileAtRef` the way `getAssetsAtRef` does.
+   *
+   * A Destination has no migration chain, so parsing it is the whole read,
+   * and one this Core cannot parse is compared by its content alone.
+   */
+  private async getDestinationsAtRef(
+    projectId: string,
+    projectPath: string,
+    ref: string
+  ): Promise<FileAtRef<DestinationFile>[]> {
+    const folderNames = await this.gitService.listTreeAtCommit(
+      projectPath,
+      this.pathTo.destinations(projectId),
+      ref
+    );
+    const destinations: FileAtRef<DestinationFile>[] = [];
+
+    for (const folderName of folderNames) {
+      const destination = await this.fileAtRef(
+        projectPath,
+        this.pathTo.destinationFile(projectId, folderName),
+        ref,
+        folderName,
+        'destination',
+        (file) => destinationFileSchema.parse(file)
+      );
+      if (destination) {
+        destinations.push(destination);
+      }
+    }
+
+    return destinations;
+  }
+
+  /**
+   * Reads the Contracts the Project keeps at a given git ref, each with the
+   * versions it holds a copy of there, which are the files beside
+   * `contract.json`.
+   *
+   * A folder whose `contract.json` cannot be read there is left out, the way
+   * every other read at a ref leaves out what the ref does not hold.
+   */
+  private async getContractsAtRef(
+    projectId: string,
+    projectPath: string,
+    ref: string
+  ): Promise<KeptContractAtRef[]> {
+    const folderNames = await this.gitService.listTreeAtCommit(
+      projectPath,
+      this.pathTo.contracts(projectId),
+      ref
+    );
+    const contracts: KeptContractAtRef[] = [];
+
+    for (const folderName of folderNames) {
+      const contract = await this.fileAtRef(
+        projectPath,
+        this.pathTo.contractFile(projectId, folderName),
+        ref,
+        folderName,
+        'contract',
+        (file) => contractFileSchema.parse(file)
+      );
+      if (contract === null) {
+        continue;
+      }
+      const fileNames = await this.gitService.listTreeAtCommit(
+        projectPath,
+        this.pathTo.contract(projectId, folderName),
+        ref
+      );
+      contracts.push({
+        ...contract,
+        versions: fileNames
+          .filter((name) => name.endsWith('.json') && name !== 'contract.json')
+          .map((name) => name.slice(0, -'.json'.length)),
+      });
+    }
+
+    return contracts;
+  }
+
+  /**
+   * Diffs two sets of Destinations and returns every change with the bump it
+   * contributes.
+   *
+   * A Destination is read by a site's build rather than by a consumer of the
+   * generated client, so what it holds about itself is a patch. One that is
+   * gone takes the build naming it with it, which is major, and one added is
+   * minor like every other object.
+   */
+  private diffDestinations(
+    currentDestinations: FileAtRef<DestinationFile>[],
+    releasedDestinations: FileAtRef<DestinationFile>[]
+  ): {
+    bump: SemverBump | null;
+    destinationChanges: DestinationChange[];
+  } {
+    const destinationChanges: DestinationChange[] = [];
+    const currentById = new Map(currentDestinations.map((d) => [d.id, d]));
+    const releasedById = new Map(releasedDestinations.map((d) => [d.id, d]));
+
+    for (const [id] of releasedById) {
+      if (!currentById.has(id)) {
+        destinationChanges.push({
+          destinationId: id,
+          changeType: 'deleted',
+          bump: 'major',
+        });
+      }
+    }
+
+    for (const [id] of currentById) {
+      if (!releasedById.has(id)) {
+        destinationChanges.push({
+          destinationId: id,
+          changeType: 'added',
+          bump: 'minor',
+        });
+      }
+    }
+
+    // Matched Destinations - what the file says about one
+    for (const [id, current] of currentById) {
+      const released = releasedById.get(id);
+      if (!released) continue;
+      // What changed inside an object cannot be read where either side's
+      // file fails this Core's schema, so only its presence is reported
+      if (current.file === null || released.file === null) continue;
+      const to = current.file;
+      const from = released.file;
+
+      if (to.name !== from.name) {
+        destinationChanges.push({
+          destinationId: id,
+          changeType: 'nameChanged',
+          bump: 'patch',
+        });
+      }
+
+      if (to.contract.version !== from.contract.version) {
+        destinationChanges.push({
+          destinationId: id,
+          changeType: 'versionChanged',
+          bump: 'patch',
+          version: to.contract.version,
+        });
+      }
+
+      if (isDeepStrictEqual(to.mapping, from.mapping) === false) {
+        destinationChanges.push({
+          destinationId: id,
+          changeType: 'mappingChanged',
+          bump: 'patch',
+        });
+      }
+
+      // A version waiting beside the one in use reaches no site, so it is a
+      // change of the Project rather than one of what a Release carries
+      if (isDeepStrictEqual(to.waiting, from.waiting) === false) {
+        destinationChanges.push({
+          destinationId: id,
+          changeType: 'waitingVersionChanged',
+          bump: 'patch',
+        });
+      }
+
+      if (
+        isDeepStrictEqual(to.createdFromTheme, from.createdFromTheme) === false
+      ) {
+        destinationChanges.push({
+          destinationId: id,
+          changeType: 'createdFromThemeChanged',
+          bump: 'patch',
+        });
+      }
+    }
+
+    return {
+      bump: this.highestBumpOf(destinationChanges),
+      destinationChanges,
+    };
+  }
+
+  /**
+   * Diffs the Contracts the Project keeps and returns every change with the
+   * bump it contributes.
+   *
+   * A copy is never rewritten, so a version one side holds and the other
+   * does not is the only change inside a Contract besides its name.
+   */
+  private diffContracts(
+    currentContracts: KeptContractAtRef[],
+    releasedContracts: KeptContractAtRef[]
+  ): {
+    bump: SemverBump | null;
+    contractChanges: ContractChange[];
+  } {
+    const contractChanges: ContractChange[] = [];
+    const currentById = new Map(currentContracts.map((c) => [c.id, c]));
+    const releasedById = new Map(releasedContracts.map((c) => [c.id, c]));
+
+    for (const [id] of releasedById) {
+      if (!currentById.has(id)) {
+        contractChanges.push({
+          contractId: id,
+          changeType: 'deleted',
+          bump: 'major',
+        });
+      }
+    }
+
+    for (const [id] of currentById) {
+      if (!releasedById.has(id)) {
+        contractChanges.push({
+          contractId: id,
+          changeType: 'added',
+          bump: 'minor',
+        });
+      }
+    }
+
+    // Matched Contracts - the copies kept of it, and its name
+    for (const [id, current] of currentById) {
+      const released = releasedById.get(id);
+      if (!released) continue;
+
+      for (const version of current.versions) {
+        if (released.versions.includes(version)) continue;
+        contractChanges.push({
+          contractId: id,
+          changeType: 'versionAdded',
+          bump: 'minor',
+          version,
+        });
+      }
+
+      // What changed inside an object cannot be read where either side's
+      // file fails this Core's schema, so only its presence is reported
+      if (current.file === null || released.file === null) continue;
+      if (current.file.name !== released.file.name) {
+        contractChanges.push({
+          contractId: id,
+          changeType: 'nameChanged',
+          bump: 'patch',
+        });
+      }
+    }
+
+    return { bump: this.highestBumpOf(contractChanges), contractChanges };
   }
 
   /**
@@ -1877,6 +2225,17 @@ export class ReleaseService extends AbstractService {
     return count;
   }
 
+  /** The highest bump among a list of changes, and null for an empty one */
+  private highestBumpOf(
+    changes: readonly { bump: SemverBump }[]
+  ): SemverBump | null {
+    let highest: SemverBump | null = null;
+    for (const change of changes) {
+      highest = this.higherBump(highest, change.bump);
+    }
+    return highest;
+  }
+
   /**
    * Returns the higher of two bumps (major > minor > patch)
    */
@@ -1889,6 +2248,30 @@ export class ReleaseService extends AbstractService {
     if (a === null) return b;
     return order[a] >= order[b] ? a : b;
   }
+}
+
+/**
+ * What is left before every Destination takes the Project, in words: how
+ * much of a Mapping does not fill, and how many Entries do not fit.
+ *
+ * Only what is there is named, because a count of zero says nothing about
+ * what to do next, and one of the two is always there while a Release is
+ * refused.
+ */
+function whatIsLeftOf(issues: DestinationIssue[]): string {
+  const { unmapped, entries } = issueCountsOf(issues);
+  const left: string[] = [];
+  if (unmapped > 0) {
+    left.push(
+      unmapped === 1 ? '1 item is unmapped' : `${unmapped} items are unmapped`
+    );
+  }
+  if (entries > 0) {
+    left.push(
+      entries === 1 ? '1 Entry does not fit' : `${entries} Entries do not fit`
+    );
+  }
+  return left.join(' and ');
 }
 
 /**
@@ -1926,6 +2309,15 @@ interface FileAtRef<T> {
   file: T | null;
 }
 
+/**
+ * One Contract the Project keeps at a git ref, with the versions it holds a
+ * copy of there. A copy is never rewritten, so the names of those files are
+ * the whole of what can change inside the folder.
+ */
+interface KeptContractAtRef extends FileAtRef<ContractFile> {
+  versions: string[];
+}
+
 /** Every change a `ReleaseDiff` carries, without the version it belongs to. */
 interface ReleaseChanges {
   projectChanges: ProjectChange[];
@@ -1935,4 +2327,6 @@ interface ReleaseChanges {
   componentFieldChanges: ComponentFieldChange[];
   assetChanges: AssetChange[];
   entryChanges: EntryChange[];
+  destinationChanges: DestinationChange[];
+  contractChanges: ContractChange[];
 }

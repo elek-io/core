@@ -52,6 +52,8 @@ export type * from './util/entryIssue.js';
 export type * from './util/destinationIssue.js';
 // What following a theme's new version left a website with
 export type * from './util/destinationVersion.js';
+// What a Release would change and what stops it, as `prepare()` answers it
+export type * from './util/releasePreparation.js';
 // Which of a theme's versions is a pre-release, so a consumer offering one
 // reads it the way Core does rather than deriving the rule again
 export { isPreReleaseVersion } from './util/theme.js';
@@ -287,7 +289,8 @@ export default class ElekIoCore {
       this.logService,
       this.gitService,
       this.jsonFileService,
-      this.projectService
+      this.projectService,
+      this.destinationService
     );
     this.reportService = new ReportService(
       this.coreVersion,

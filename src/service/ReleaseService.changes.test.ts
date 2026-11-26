@@ -340,8 +340,13 @@ describe('Reading what each Release changed', function () {
       projectId: project.id,
       tagId: latest.tagId,
     });
-    const prepared = await core.releases.prepare({ projectId: project.id });
+    const { destinationIssues, ...prepared } = await core.releases.prepare({
+      projectId: project.id,
+    });
 
+    // What stops the next Release is `prepare()`'s own, and the changes are
+    // the same shape whichever Release they are read for
+    expect(destinationIssues).toEqual([]);
     expect(Object.keys(changes).toSorted()).toEqual(
       Object.keys(prepared).toSorted()
     );
