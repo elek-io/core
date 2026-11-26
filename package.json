@@ -54,12 +54,12 @@
     "release": "changeset publish"
   },
   "dependencies": {
-    "@hono/node-server": "2.1.6",
+    "@hono/node-server": "2.1.11",
     "@hono/zod-openapi": "1.6.3",
-    "@scalar/hono-api-reference": "0.12.18",
+    "@scalar/hono-api-reference": "0.12.25",
     "@sindresorhus/slugify": "4.0.1",
     "fs-extra": "11.4.1",
-    "hono": "4.13.17",
+    "hono": "4.13.22",
     "mime": "4.1.2",
     "p-queue": "10.0.0",
     "semver": "7.8.6",
@@ -71,28 +71,28 @@
     "@changesets/cli": "3.0.3",
     "@commander-js/extra-typings": "15.1.0",
     "@faker-js/faker": "10.6.0",
-    "@scalar/api-reference": "1.77.0",
-    "@tsconfig/node24": "24.0.5",
-    "@tsconfig/strictest": "2.0.8",
+    "@scalar/api-reference": "1.84.0",
+    "@tsconfig/node24": "24.0.6",
+    "@tsconfig/strictest": "2.0.9",
     "@types/fs-extra": "11.0.4",
     "@types/mdast": "4.0.4",
-    "@types/node": "24.19.2",
+    "@types/node": "24.19.4",
     "@types/semver": "7.8.0",
-    "@vitest/coverage-v8": "5.1.0",
-    "astro": "7.4.8",
+    "@vitest/coverage-v8": "5.1.2",
+    "astro": "7.4.13",
     "chokidar": "6.0.0",
     "code-block-writer": "13.0.3",
     "commander": "15.1.0",
-    "dugite": "3.3.2",
+    "dugite": "3.3.3",
     "jiti": "2.7.0",
-    "jsdom": "31.0.0",
+    "jsdom": "31.0.1",
     "mermaid": "12.3.0",
-    "oxlint": "1.93.0",
-    "oxlint-tsgolint": "7.0.2006",
-    "prettier": "3.9.10",
+    "oxlint": "1.95.0",
+    "oxlint-tsgolint": "7.0.2008",
+    "prettier": "3.10.1",
     "tsdown": "0.23.7",
     "typescript": "6.0.3",
-    "vitest": "5.1.0",
+    "vitest": "5.1.2",
     "zod": "4.6.7"
   },
   "peerDependencies": {
@@ -113,5 +113,5 @@
       "optional": true
     }
   },
-  "packageManager": "pnpm@12.18.0"
+  "packageManager": "pnpm@12.23.0"
 }
