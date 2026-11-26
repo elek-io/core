@@ -2,7 +2,7 @@
 '@elek-io/core': minor
 ---
 
-**A Release is refused while a website of the Project cannot take one of its Entries, so a Release never breaks a site.** Every Destination is checked against what `draft` holds before a Release is tagged, and `prepare()` answers the same items before the editor starts one.
+**A Release is refused while a website of the Project cannot take one of its Entries, so a Release never ships content a website cannot take.** Every Destination is checked against what `draft` holds before a Release is tagged, and `prepare()` answers the same items before the editor starts one.
 
 ```typescript
 const prepared = await core.releases.prepare({ projectId: project.id });
