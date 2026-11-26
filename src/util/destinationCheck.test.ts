@@ -16,6 +16,7 @@ import {
   entryIssuesOf,
   isValueIssue,
   mappingByMatchingIds,
+  mappingForVersion,
   mappingIssuesOf,
   takesEntry,
 } from './destinationCheck.js';
@@ -1554,5 +1555,102 @@ describe('which Entries a website takes', function () {
     ]);
     const first = issues[0];
     expect(first !== undefined && isValueIssue(first)).toEqual(true);
+  });
+});
+
+describe('mappingForVersion, what a new version carries over', function () {
+  const contractCars = collection(ids.cars, [
+    textFieldOf(ids.titleField, 'title'),
+  ]);
+  const projectCars = collection(ids.cars, [
+    textFieldOf(more.makeField, 'make'),
+    textFieldOf(more.modelField, 'model'),
+  ]);
+  const forSale = [
+    { fieldDefinitionId: more.makeField, equals: ['VW'] },
+    { fieldDefinitionId: more.statusField, equals: ['frei'] },
+  ];
+
+  it('carries a field filled another way, and which Entries are taken', function () {
+    const carried = mappingForVersion({
+      contract: contractOf({ collections: [contractCars] }),
+      collections: [projectCars],
+      carryFrom: [
+        {
+          collections: {
+            [ids.cars]: {
+              from: { collectionId: ids.cars, where: forSale },
+              fields: {
+                [ids.titleField]: {
+                  fill: 'combined',
+                  fieldDefinitionIds: [more.makeField, more.modelField],
+                  separator: ' ',
+                },
+              },
+            },
+          },
+        },
+      ],
+    });
+
+    expect(carried.collections[ids.cars]?.fields[ids.titleField]).toEqual({
+      fill: 'combined',
+      fieldDefinitionIds: [more.makeField, more.modelField],
+      separator: ' ',
+    });
+    // The condition reading a field definition that is gone is dropped
+    expect(carried.collections[ids.cars]?.from.where).toEqual([forSale[0]]);
+  });
+
+  it('drops a field whose source the Project no longer holds', function () {
+    const carried = mappingForVersion({
+      contract: contractOf({ collections: [contractCars] }),
+      collections: [
+        collection(ids.cars, [textFieldOf(more.makeField, 'make')]),
+      ],
+      carryFrom: [
+        {
+          collections: {
+            [ids.cars]: {
+              from: { collectionId: ids.cars, where: [] },
+              fields: {
+                [ids.titleField]: {
+                  fill: 'combined',
+                  fieldDefinitionIds: [more.makeField, more.modelField],
+                  separator: ' ',
+                },
+              },
+            },
+          },
+        },
+      ],
+    });
+
+    expect(carried.collections[ids.cars]?.fields).toEqual({});
+  });
+
+  it('carries a fixed Value, which reads no field of the Project at all', function () {
+    const fixed = {
+      fill: 'fixed' as const,
+      value: stringValue({ en: 'Aus Ebersfelde' }),
+    };
+    const carried = mappingForVersion({
+      contract: contractOf({ collections: [contractCars] }),
+      collections: [collection(ids.cars, [])],
+      carryFrom: [
+        {
+          collections: {
+            [ids.cars]: {
+              from: { collectionId: ids.cars, where: [] },
+              fields: { [ids.titleField]: fixed },
+            },
+          },
+        },
+      ],
+    });
+
+    expect(carried.collections[ids.cars]?.fields[ids.titleField]).toEqual(
+      fixed
+    );
   });
 });
