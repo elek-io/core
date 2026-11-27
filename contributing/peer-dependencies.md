@@ -42,7 +42,7 @@ A peer's row is read at the version `devDependencies` pins, which is the newest 
 | `@hono/zod-validator` | `^3.25.0 \|\| ^4.0.0` | a dependency of `@hono/zod-openapi` |
 | `@asteasolutions/zod-to-openapi` | `^4.0.0` | a dependency of `@hono/zod-openapi` |
 | `@scalar/types` | `^4.6.7` | via `@scalar/hono-api-reference`, a runtime dependency. `@scalar/api-reference` pulls the same copy, and being a devDependency it cannot reach a consumer anyway, see [`api-reference.md`](./api-reference.md) |
-| `astro` | `^4.6.7` | the `/astro` entry's peer, read at the dev pin 7.4.8 |
+| `astro` | `^4.6.7` | the `/astro` entry's peer, read at the dev pin 7.4.13 |
 
 The maximum is `4.6.7`, so the peer range is `^4.6.7`. `devDependencies` pins the latest 4.x (`zod@4.6.7`) so Core develops against the newest patch. Floor and dev pin coincide here, because `@scalar/types` and astro both ask for that same patch, and they part again at the next zod release nothing in the graph requires.
 
@@ -85,7 +85,7 @@ dugite-native changed the link in v2.53.0-4 ([desktop/dugite-native#554](https:/
 
 A git that cannot load a shared library throws `PreconditionFailed` naming the library, so an older build or a mismatched `libcurl.so.4` says what is missing rather than `Internal`.
 
-- Each dugite release ships an embedded git binary. 3.2.3 bundles git 2.53.0 and git-lfs 3.7.1, and the dev pin 3.3.2 bundles git 2.56.0 and git-lfs 3.8.1, so the test suite, which runs real git and Git LFS, is the real check.
+- Each dugite release ships an embedded git binary. 3.2.3 bundles git 2.53.0 and git-lfs 3.7.1, and the dev pin 3.3.3 bundles git 2.56.1 and git-lfs 3.8.1, so the test suite, which runs real git and Git LFS, is the real check.
 - `devDependencies` pins the latest 3.x for development, like the other peers.
 
 To re-verify the floor, pin the dev version to it and run the suite:
@@ -145,13 +145,13 @@ Raising the floor to the release where astro fixed it is the honest fix, and it 
 
 Naming the verified majors explicitly makes a consumer on the next one get a peer warning that prompts that re-check, instead of silently claiming an untested major works. When a new astro major is verified, widen the range to include it.
 
-astro 7 was verified this way in July 2026 and the range widened to include it, and the 6 floor moved to 6.1.3 afterward for the reason above. It is a speed release: Rust compiler, a Rust markdown pipeline replacing remark and rehype, Vite 8 on Rolldown, queued rendering. The content layer itself is untouched, verified again at the dev pin 7.4.8:
+astro 7 was verified this way in July 2026 and the range widened to include it, and the 6 floor moved to 6.1.3 afterward for the reason above. It is a speed release: Rust compiler, a Rust markdown pipeline replacing remark and rehype, Vite 8 on Rolldown, queued rendering. The content layer itself is untouched, verified again at the dev pin 7.4.13:
 
 - `Loader.createSchema` and `LoaderContext` (including `config: AstroConfig` and `DataEntry.filePath`) are unchanged from 6.4.8.
 - `astro/loaders`, `astro/jsx-runtime` and `astro/content/config` all exist with the same shapes.
 - The `__ASTRO_IMAGE_` marker is unchanged, and programmatic `sync` is unchanged.
 
-New in v7 is an optional `@astrojs/markdown-remark` peer for the opt-in remark pipeline, which adds no install friction. Engines require Node >= 22.23.4 at 7.4.8, and CI runs the version in `.node-version`. There is still no integration API for injecting content collections, so nothing in v7 changes how the `/astro` entry is designed.
+New in v7 is an optional `@astrojs/markdown-remark` peer for the opt-in remark pipeline, which adds no install friction. Engines require Node >= 22.23.4 at 7.4.13, and CI runs the version in `.node-version`. There is still no integration API for injecting content collections, so nothing in v7 changes how the `/astro` entry is designed.
 
 Two things did move inside the 7 line, and both are handled rather than pinned away:
 
@@ -170,7 +170,7 @@ pnpm 12 holds freshly published versions back for a cooldown period. `pnpm-works
 - `pnpm config get minimumReleaseAge` reports it inside the repository and nothing in an empty directory, so an install reads the committed value.
 - `.github/dependabot.yml` sets `cooldown.default-days: 2` to stay above it. Keep the Dependabot side the higher of the two, or its pull requests fail at `pnpm install --frozen-lockfile` on every platform before the suite runs.
 
-`pnpm add -D astro@<version>` on a release younger than the cooldown writes a `minimumReleaseAgeExclude` entry into the same file to bypass it. Do not commit that entry.
+`pnpm add -D astro@<version>` on a release younger than the cooldown refuses to add it, with `ERR_PNPM_NO_MATURE_MATCHING_VERSION` naming the version and the cutoff. Its help offers an approval, a `minimumReleaseAgeExclude` entry in the same file, or waiting. Do not commit that entry.
 
 It is a permanent opt-out of a supply chain protection for a condition that lasts a day, and it turns into stale cruft at the next bump. Pin the newest version that is past the cooldown instead, and pick the newer one up with the next routine bump.
 
