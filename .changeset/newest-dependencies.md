@@ -2,7 +2,7 @@
 '@elek-io/core': minor
 ---
 
-**Every dependency is up to date.** Three of Core's own dependencies moved:
+**Three of Core's own dependencies moved:**
 
 | Dependency                   | From    | To      |
 | ---------------------------- | ------- | ------- |
@@ -21,7 +21,7 @@ No export of any entry point was added, removed or renamed, and no public type c
 - The version of the API description is shown as it is written, so Core's `0.1.0` reads `0.1.0` where it read `v0.1.0`.
 - Scalar redesigned the cards the request example and the example responses sit in, so the page's markup moved. Nothing else it displays did.
 
-**The fixes in the five hono and five node-server releases are in paths the local API does not take.** Its 15 routes are all `GET` and validate a path parameter or a query string, and nothing in it mounts another app, serves a static file or asks for a WebSocket upgrade.
+**The fixes in the five hono and five node-server releases are in paths the local API does not take.** Its 15 content routes are all `GET`. Fourteen of them validate a path parameter or a query string, and the fifteenth takes no input at all. None of them reads a JSON or form body, the API calls neither `mount()` nor `serveStatic()`, and it asks for no WebSocket upgrade.
 
 One of them does reach it. From `@hono/node-server` 2.1.8 on, a response whose reader has disconnected is cancelled rather than read to the end.
 
